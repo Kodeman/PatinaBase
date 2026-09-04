@@ -268,7 +268,7 @@ struct DesignerSeatTests {
         let seat = DesignerSeat.make(
             liveLead: matched, projects: [], nextMoveDetail: nextMoveDetail
         )
-        #expect(nextMoveDetail == "You're matched with Leah Hartwell")
+        #expect(nextMoveDetail == "You’re matched with Leah Hartwell")
         #expect(seat?.meta == "Hartwell Studio · Designer matched")
     }
 
@@ -282,12 +282,12 @@ struct DesignerSeatTests {
         #expect(seat?.meta == "Designer matched")
     }
 
-    @Test("a Next Move saying something else leaves the seat's own line alone")
+    @Test("a Next Move saying something else leaves the seat’s own line alone")
     func adifferentNextMoveLeavesTheSeatAlone() {
         let seat = DesignerSeat.make(
             liveLead: lead(status: "accepted"), projects: [],
             nextMoveDetail: "There is an update waiting for you."
         )
-        #expect(seat?.meta == "You're matched with Leah Hartwell")
+        #expect(seat?.meta == "You’re matched with Leah Hartwell")
     }
 }

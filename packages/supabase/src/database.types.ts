@@ -9501,6 +9501,7 @@ export type Database = {
         Row: {
           created_at: string
           first_document_opened_at: string | null
+          handoff_note: string | null
           id: string
           invitation_expires_at: string | null
           invitation_token: string | null
@@ -9518,6 +9519,7 @@ export type Database = {
         Insert: {
           created_at?: string
           first_document_opened_at?: string | null
+          handoff_note?: string | null
           id?: string
           invitation_expires_at?: string | null
           invitation_token?: string | null
@@ -9535,6 +9537,7 @@ export type Database = {
         Update: {
           created_at?: string
           first_document_opened_at?: string | null
+          handoff_note?: string | null
           id?: string
           invitation_expires_at?: string | null
           invitation_token?: string | null
@@ -29346,6 +29349,8 @@ export type Database = {
         }
         Returns: {
           created_at: string
+          first_document_opened_at: string | null
+          handoff_note: string | null
           id: string
           invitation_expires_at: string | null
           invitation_token: string | null
@@ -29422,6 +29427,8 @@ export type Database = {
         }
         Returns: {
           created_at: string
+          first_document_opened_at: string | null
+          handoff_note: string | null
           id: string
           invitation_expires_at: string | null
           invitation_token: string | null

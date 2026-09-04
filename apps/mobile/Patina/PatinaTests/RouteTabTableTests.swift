@@ -233,9 +233,12 @@ struct RouteTabTableTests {
     @Test
     func everyUniversalLinkLandsOnItsTab() throws {
         let host = PatinaDeepLinks.clientHost
+        // W1-C-12: `pieces` is deliberately absent. AASA publishes `/piece/*`
+        // only and client-portal serves `/piece`; the plural alias claimed a
+        // path the app could never be handed, and the app is now exactly the
+        // set of paths the association carries.
         let cases: [(String, PatinaTab)] = [
             ("piece", .pieces),
-            ("pieces", .pieces),
             ("invoices", .studio),
             ("invoice", .studio),
             ("proposals", .studio),

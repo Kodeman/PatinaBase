@@ -18,7 +18,11 @@ struct ProfileView: View {
     @Environment(\.isTabRoot) private var isTabRoot
     @State private var viewModel = ProfileViewModel()
     /// Drives the contextual help-panel sheet attached to the Profile surface.
-    /// Toggled by the `?` button in the top-right corner of the header.
+    ///
+    /// C5-02: nothing sets this in round one — the `?` triggers are removed
+    /// because zero `ios-app/*` help articles exist in production Sanity, so
+    /// every door opened on an empty panel. The sheet wiring stays as a seam
+    /// W2 restores the buttons to; it is deliberately unreachable, not live.
     @State private var isHelpPanelPresented: Bool = false
 
     /// Shared formatter for room-card "Scanned" dates. `static let` so we
@@ -34,28 +38,17 @@ struct ProfileView: View {
             VStack(spacing: 0) {
                 // Header
                 VStack(spacing: 0) {
-                    // Top-right `?` help-panel trigger. Placed in a leading-
-                    // edge HStack so it lives in the corner of the profile
-                    // header without disturbing the centered avatar layout.
-                    HStack {
-                        Spacer()
-                        Button {
-                            isHelpPanelPresented = true
-                        } label: {
-                            Image(systemName: "questionmark.circle")
-                                .font(.system(size: 17, weight: .regular))
-                                .foregroundStyle(PatinaColors.Text.secondary)
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Help")
-                        .accessibilityHint("Opens the help panel for your profile.")
-                        .accessibilityIdentifier("ProfileView.HelpButton")
-                    }
-                    .padding(.horizontal, 24)
-
                     // Avatar
+                    //
+                    // C-L04-4 took the 44 pt `?` row that used to sit above
+                    // this, and it was the screen's only top spacing: pushed,
+                    // the avatar would start under the floating chevron
+                    // (top 8 + 36); as the Studio tab root, `patinaScreen`'s
+                    // title band now supplies most of it.
+                    // The top inset belongs to the column, not to the disc:
+                    // `.overlay` centres inside the bounds it is applied to, so
+                    // padding the circle first drew the initial half the padding
+                    // above its centre — 6 pt on the tab root, 22 pt pushed.
                     Circle()
                         .fill(PatinaGradients.earth)
                         .frame(width: 80, height: 80)
@@ -64,6 +57,7 @@ struct ProfileView: View {
                                 .font(PatinaTypography.displaySmall)
                                 .foregroundStyle(PatinaColors.offWhite)
                         )
+                        .padding(.top, isTabRoot ? 12 : 44)
                         .padding(.bottom, 16)
                         .accessibilityHidden(true)
 
@@ -80,7 +74,7 @@ struct ProfileView: View {
                     if let memberSince = viewModel.memberSince {
                         HelpTooltip(
                             surfaceKey: SurfaceKeys.IOSApp.Profile.designJournal,
-                            fallback: "Your profile is a Design Journal — Patina tracks the style you've taught it, the rooms you've captured, and the pieces you've saved. Everything here informs your recommendations."
+                            fallback: "Your profile is a Design Journal — Patina tracks the style you’ve taught it, the rooms you’ve captured, and the pieces you’ve saved. Everything here informs your recommendations."
                         ) {
                             MonoLabel(text: "Member since \(memberSince)")
                                 .accessibilityLabel("Member since \(memberSince). More information available.")
@@ -92,7 +86,7 @@ struct ProfileView: View {
                     // (it blends the quiz, teaching turns, and saved items).
                     HelpTooltip(
                         surfaceKey: SurfaceKeys.IOSApp.Profile.styleBadge,
-                        fallback: "Your style signature is the label Patina has resolved for your taste — it blends the style quiz, every teaching turn, and the pieces you've saved into a single descriptor."
+                        fallback: "Your style signature is the label Patina has resolved for your taste — it blends the style quiz, every teaching turn, and the pieces you’ve saved into a single descriptor."
                     ) {
                         HStack(spacing: 6) {
                             Text("✦")
@@ -145,13 +139,13 @@ struct ProfileView: View {
 
                 // Actions
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("YOUR PROFILE")
+                    Text("MORE")
                         .font(PatinaTypography.monoMedium)
                         .foregroundStyle(PatinaColors.Text.secondary)
                         .tracking(1)
                         .accessibilityAddTraits(.isHeader)
 
-                    profileActionRow(icon: "paintpalette", label: "Retake Style Quiz") {
+                    profileActionRow(icon: "paintpalette", label: "Retake your style quiz") {
                         coordinator.navigate(to: .styleQuiz)
                     }
                     profileActionRow(icon: "bubble.left", label: "Get design help") {
@@ -163,9 +157,8 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 28)
-
-                Spacer().frame(height: 120)
             }
+            .companionBottomClearance()
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the avatar/name block above
@@ -175,6 +168,15 @@ struct ProfileView: View {
         // `PatinaTab`, never re-typed (B-7 a).
         .patinaScreen(title: isTabRoot ? PatinaTab.studio.canonicalName : nil)
         .onAppear {
+            viewModel.loadData(context: modelContext)
+        }
+        // C4-12 / R-03 (L1-B's note, verbatim). `loadData(context:)` alone is a
+        // synchronous fetch over local SwiftData — it answers instantly and
+        // touches no network, so the one gesture meant to recover a failed
+        // backend read could not. `StudioHubViewModel.load()` is what the
+        // screen's own `.task` runs.
+        .refreshable {
+            await StudioHubViewModel.shared.load()
             viewModel.loadData(context: modelContext)
         }
         // Contextual help panel — surfaces every Sanity article whose
@@ -198,13 +200,13 @@ struct ProfileView: View {
     private var stats: some View {
         if dynamicTypeSize.isAccessibilitySize {
             VStack(spacing: 14) {
-                statItem(value: "\(viewModel.roomCount)", label: "Rooms")
+                statItem(value: "\(viewModel.roomCount)", label: viewModel.roomCount == 1 ? "Room" : "Rooms")
                 statHorizontalDivider
                 savedStat
             }
         } else {
             HStack(spacing: 0) {
-                statItem(value: "\(viewModel.roomCount)", label: "Rooms")
+                statItem(value: "\(viewModel.roomCount)", label: viewModel.roomCount == 1 ? "Room" : "Rooms")
                 statDivider
                 savedStat
             }
@@ -214,10 +216,10 @@ struct ProfileView: View {
     private var savedStat: some View {
         HelpTooltip(
             surfaceKey: SurfaceKeys.IOSApp.Profile.savedItems,
-            fallback: "Saved counts every piece you've hearted across the app — from the daily feed, room views, and product details. They flow into your style signature."
+            fallback: "Saved counts every piece you’ve hearted across the app — from the daily feed, room views, and product details. They flow into your style signature."
         ) {
             statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
-                .accessibilityLabel("Saved items: \(viewModel.savedItemCount). More information available.")
+                .accessibilityLabel("Saved pieces: \(viewModel.savedItemCount). More information available.")
         }
     }
 
@@ -298,7 +300,15 @@ struct ProfileView: View {
                         .accessibilityHidden(true)
                 }
 
-                MonoLabel(text: "Scanned \(Self.scannedDateFormatter.string(from: room.createdAt))", size: PatinaTypography.monoLabel)
+                // W1-B-06: this card said "SCANNED SEP 3" about a room Your
+                // Spaces was calling "TYPED, NOT SCANNED" in the same session.
+                // It asked the date, never `hasBeenScanned`.
+                MonoLabel(
+                    text: room.provenanceLine(
+                        on: room.createdAt, formattedBy: Self.scannedDateFormatter
+                    ),
+                    size: PatinaTypography.monoLabel
+                )
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

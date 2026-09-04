@@ -217,7 +217,7 @@ struct OrderSheet: View {
                 .overlay(alignment: .top) {
                     Rectangle()
                         .frame(height: 1)
-                        .foregroundStyle(PatinaColors.pearl)
+                        .foregroundStyle(PatinaColors.Border.hairline)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("OrderSheet.Money.\(row.label)")
@@ -259,7 +259,7 @@ struct OrderSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(failure.sentence)
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.error)
+                        .foregroundStyle(PatinaColors.Text.error)
                         .fixedSize(horizontal: false, vertical: true)
                     Button(failure.retryLabel) { handoff.reset() }
                         .font(PatinaTypography.uiSmall)

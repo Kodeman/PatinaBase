@@ -16,8 +16,10 @@
 import SwiftUI
 import Supabase
 
-struct ThreadDetailView: View {
+struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
     let threadId: String
+    @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel: ThreadDetailViewModel
 
     init(threadId: String) {
@@ -27,6 +29,7 @@ struct ThreadDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            header
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -39,23 +42,55 @@ struct ThreadDetailView: View {
                                 action: { Task { await viewModel.load() } }
                             )
                             .padding(.top, 60)
+                        } else if viewModel.visibleMessages.isEmpty {
+                            emptyState
                         } else {
                             ForEach(chatItems()) { item in
                                 row(for: item)
                             }
+                        }
+                        // L07-03, first clause: for up to `URLSession.shared`'s
+                        // 60 s the person's own text had left the composer and
+                        // arrived nowhere. It is on the screen now, where they
+                        // put it, until it lands or the banner says it didn't.
+                        if let sending = viewModel.sendingBody {
+                            unsentBubble(sending)
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 12)
                 }
-                .onChange(of: viewModel.messages.count) { _, _ in
-                    if let last = viewModel.messages.last?.id {
+                // C4-12: the fourth of the five Studio detail screens; the
+                // invoice detail is the in-repo pattern. Calls exactly what
+                // `.task` calls.
+                .refreshable { await viewModel.load() }
+                // Keyed on what is DRAWN, not on what was fetched. After C-14
+                // the transcript renders `visibleMessages`; an anchor taken
+                // from `messages.last` resolves to a view that is not in the
+                // hierarchy the moment the backend appends an audit row (the
+                // RPC re-emits one), and the scroll then silently does nothing.
+                .onChange(of: viewModel.visibleMessages.count) { _, _ in
+                    if let last = viewModel.visibleMessages.last?.id {
                         withAnimation { proxy.scrollTo(last, anchor: .bottom) }
                     }
                 }
             }
+            sendFailureBanner
             composer
+                // L07-02, blocker: on the four-tab root the composer was the
+                // last child of a plain VStack with no bottom clearance, so the
+                // bar was drawn over it and won the hit test — a tap at the
+                // text field's own centre selected the Pieces tab. One owner,
+                // one seam: the metric the money screens already read.
+                //
+                // `coordinator.isHouseFirstRoot` rather than a live
+                // `FeatureFlags` read, per `MoneyScreenMetrics`' own note: the
+                // root is resolved once at launch and a late PostHog payload
+                // must not move a screen under someone's thumb.
+                .padding(.bottom, CompanionHearthMetrics.pinnedFooterClearance(
+                    houseFirst: coordinator.isHouseFirstRoot
+                ))
         }
         .background(PatinaColors.Background.primary)
         .task {
@@ -63,11 +98,149 @@ struct ThreadDetailView: View {
             viewModel.startLiveUpdates()
         }
         .onDisappear { viewModel.stopLiveUpdates() }
-        // U18: standard pushed-screen chrome. This screen has no in-body
-        // header to source a title from (Group B before this change: system
-        // bar, no navigationTitle) — chrome title left nil rather than
-        // inventing unsanctioned copy; a per-thread title is a follow-up.
+        // U18: standard pushed-screen chrome. The in-body header below carries
+        // the conversation's name, so the chrome adds only the back chevron —
+        // the same shape `NotificationFeedView` takes.
         .patinaScreen(title: nil)
+    }
+
+    // MARK: - Header (C-13)
+
+    /// `PatinaScreenChrome` overlays its back chevron top-leading at
+    /// `.padding(.leading, 18)`, and `BackChevronButton` measures 36.5 pt — so
+    /// the chrome owns x ∈ [18, 54.5] of this screen's first row. The header
+    /// starts after it. The number is written here rather than read from
+    /// `Design/Components/PatinaScreenChrome.swift` because that file is
+    /// another lane's this wave; `ThreadHeaderTests.theHeaderClearsTheBackChevron`
+    /// holds both to the same arithmetic.
+    private static let backChevronClearance: CGFloat = 18 + 36.5 + 1.5
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            avatar
+            VStack(alignment: .leading, spacing: 2) {
+                // C-13's whole point is that the tester is told who they are
+                // messaging. At `.accessibility3` a one-line name read
+                // "Leah Hart…", which names a different person — so the name
+                // gets a second line and a scale floor before it is ever cut.
+                Text(viewModel.header?.title ?? ThreadHeader.unnamed)
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                // The project is context, not identity. Past `.accessibility1`
+                // the row is already taller than the screen can spare, so the
+                // context goes and the name stays whole — the shape L1-C's
+                // `P-34` note prescribes for Welcome.
+                if let projectName = viewModel.header?.projectName,
+                   !projectName.isEmpty,
+                   dynamicTypeSize < .accessibility1 {
+                    Text(projectName)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, Self.backChevronClearance)
+        .padding(.trailing, 16)
+        // 8 pt puts the 34 pt avatar's centre within 1 pt of the 36.5 pt
+        // chevron's, which is what makes the row read as one bar.
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("ThreadDetailView.Header")
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
+        }
+    }
+
+    /// Initials when the thread names someone, the app's own mark when it does
+    /// not — never an invented letter.
+    private var avatar: some View {
+        ZStack {
+            Circle()
+                .fill(PatinaColors.Background.secondary)
+                .frame(width: 34, height: 34)
+            let initials = viewModel.header?.initials ?? ""
+            if initials.isEmpty {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 14))
+                    .foregroundStyle(PatinaColors.Text.muted)
+            } else {
+                Text(initials)
+                    .font(PatinaTypography.monoLabel)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    // MARK: - Empty state (C-14)
+
+    private var emptyState: some View {
+        PatinaEmptyState(
+            icon: "bubble.left.and.bubble.right",
+            title: ThreadTranscript.emptyTitle(counterpart: viewModel.header?.name),
+            message: ThreadTranscript.emptyMessage
+        )
+        .padding(.top, 48)
+        .accessibilityIdentifier("ThreadDetailView.EmptyState")
+    }
+
+    // MARK: - The failed send (C4-04, L07-03)
+
+    @ViewBuilder
+    private var sendFailureBanner: some View {
+        if let sendError = viewModel.sendError {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(sendError)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Try again") {
+                    Task { await viewModel.retrySend() }
+                }
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .disabled(viewModel.isSending)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(PatinaColors.Background.secondary)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("ThreadDetailView.SendFailure")
+        }
+    }
+
+    // MARK: - The message still in the air (L07-03)
+
+    /// The person's own text, in their own bubble, dimmed until it lands.
+    ///
+    /// `send()` clears the draft before the `await`, so between the tap and
+    /// `URLSession.shared`'s 60 s timeout the screen showed nothing at all —
+    /// no bubble, no spinner, no banner. The disabled Send glyph is not a
+    /// signal either: `canSend` is already false because the draft is empty.
+    private func unsentBubble(_ body: String) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 48)
+            Text(body)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(PatinaColors.clay.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .frame(maxWidth: 280, alignment: .trailing)
+                .opacity(0.55)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.top, 14)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("You, \(body), sending")
+        .accessibilityIdentifier("ThreadDetailView.Sending")
     }
 
     // MARK: - Transcript rows
@@ -99,7 +272,8 @@ struct ThreadDetailView: View {
     /// on the last, and spacing tightens inside the group.
     private func chatItems() -> [ChatItem] {
         let calendar = Calendar.current
-        let messages = viewModel.messages
+        // C-14: the studio's own bookkeeping is not the client's transcript.
+        let messages = viewModel.visibleMessages
         var items: [ChatItem] = []
         var previousDate: Date?
 
@@ -275,20 +449,30 @@ struct ThreadDetailView: View {
             Button {
                 Task { await viewModel.send() }
             } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(canSend ? PatinaColors.Text.interactive : PatinaColors.Text.muted.opacity(0.6))
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
+                Group {
+                    if viewModel.isSending {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(
+                                canSend
+                                    ? PatinaColors.Text.interactive
+                                    : PatinaColors.Text.muted.opacity(0.6)
+                            )
+                    }
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
             .disabled(!canSend)
-            .accessibilityLabel("Send message")
+            .accessibilityLabel(viewModel.isSending ? "Sending message" : "Send message")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(PatinaColors.Background.primary.opacity(0.98))
         .overlay(alignment: .top) {
-            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+            Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
         }
     }
 

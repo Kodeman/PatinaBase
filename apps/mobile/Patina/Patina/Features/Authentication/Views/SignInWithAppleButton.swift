@@ -22,6 +22,33 @@ public struct PatinaSignInWithAppleButton: View {
     /// flow reference the same value. Rotated after each attempt.
     @State private var rawNonce: String = AppleSignInNonce.random()
 
+    /// P-35 / C3-03: the button was hard-coded `.black`. Against the warm
+    /// near-black canvas that is 1.27:1 — on the app's first screen, its first
+    /// tap target reads as a hole while the two outlined buttons beneath it
+    /// become the most visible things on the page. Apple's HIG asks for
+    /// `.white` on a dark ground.
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// W1-A-05 / D-L1A-1 — `ASAuthorizationAppleIDButton` derives its title
+    /// size from its own frame height, and the frame was pinned at 50 pt. At
+    /// `accessibility-extra-large` every neighbour on the Welcome screen
+    /// scaled — "Continue with email" wrapped to two lines inside its button —
+    /// while "Sign in with Apple" stayed at its default size and became the
+    /// SMALLEST text on the screen, directly above them. `@ScaledMetric` ties
+    /// the height to the reader's text size, which is the only lever the
+    /// system button exposes.
+    @ScaledMetric(relativeTo: .body) private var scaledHeight: CGFloat = 50
+
+    /// Ceiling on that growth. At `accessibility5` the metric reaches ~155 pt,
+    /// which would make the first control on the screen taller than the two
+    /// beneath it put together; 84 pt is the height at which the Apple label
+    /// matches "Continue with email" at the same size.
+    private static let maximumHeight: CGFloat = 84
+
+    private var buttonHeight: CGFloat {
+        min(max(scaledHeight, 50), Self.maximumHeight)
+    }
+
     public init(
         onCompletion: @escaping (Result<ASAuthorization, Error>, _ rawNonce: String) -> Void
     ) {
@@ -38,8 +65,14 @@ public struct PatinaSignInWithAppleButton: View {
             // fresh nonce.
             rawNonce = AppleSignInNonce.random()
         }
-        .signInWithAppleButtonStyle(.black)
-        .frame(maxWidth: .infinity, minHeight: 50, maxHeight: 50)
+        .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+        // `SignInWithAppleButton` wraps `ASAuthorizationAppleIDButton`, whose
+        // style is fixed when the UIView is made. Sim-verified: a cold launch
+        // picks the right style, but flipping the system appearance while the
+        // screen is up left the old one. Changing the view's identity with the
+        // scheme is what rebuilds it.
+        .id(colorScheme)
+        .frame(maxWidth: .infinity, minHeight: buttonHeight, maxHeight: buttonHeight)
         .fixedSize(horizontal: false, vertical: true)
         .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
     }

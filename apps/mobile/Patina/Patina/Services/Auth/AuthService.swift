@@ -40,9 +40,47 @@ public final class AuthService {
     /// Error message
     public private(set) var errorMessage: String?
 
-    /// Clear any existing error message
+    /// Where the last error was raised (P-29).
+    ///
+    /// The Welcome root and the sign-in sheets share one `errorMessage`, so
+    /// "Invalid login credentials" typed into the password SHEET rendered on
+    /// the auth ROOT after Cancel, pushed the button stack down 33 pt, and the
+    /// mis-tap at the remembered position dropped the tester into a guest flow
+    /// they could not get out of. The root now reads `rootErrorMessage`, which
+    /// is nil for anything a sheet raised.
+    public private(set) var errorScope: AuthErrorScope = .root
+
+    /// The message the Welcome root may render: only what the root itself
+    /// raised (the Apple / Google paths and `reportExternalError`).
+    public var rootErrorMessage: String? {
+        errorScope == .root ? errorMessage : nil
+    }
+
+    /// The mirror of `rootErrorMessage`: what a presented sheet may render.
+    /// Without it a root-scoped failure — an Apple exchange raised behind the
+    /// sheet — painted the sheet's own status region, which is the same leak
+    /// P-29 closed, pointing the other way.
+    public var sheetErrorMessage: String? {
+        errorScope == .sheet ? errorMessage : nil
+    }
+
+    /// Clear any existing error message.
+    ///
+    /// The scope goes back with it. Leaving a stale `.sheet` behind a nil
+    /// message meant the next reader of `errorScope` was answering about an
+    /// error that no longer existed.
     public func clearError() {
         errorMessage = nil
+        errorScope = .root
+    }
+
+    /// Record an error against the surface that raised it. Not `private`:
+    /// `AuthErrorRoutingTests` drives it, because a test that compares two
+    /// enum cases to each other has not exercised the routing at all.
+    @MainActor
+    func setError(_ message: String?, scope: AuthErrorScope) {
+        errorScope = scope
+        errorMessage = message
     }
 
     /// Whether initial auth state has been determined
@@ -68,15 +106,81 @@ public final class AuthService {
     /// all but the last continuation, leaking the others' tasks forever.
     private var authReadyContinuations: [CheckedContinuation<Void, Never>] = []
 
+    /// A3-16 / D7 — the test-account-login fallback, injectable for tests.
+    var testAccountLogin: TestAccountLoginFallback = .live
+
+    /// The GoTrue code exchange, as a seam. `true` when a session landed.
+    ///
+    /// RL3A-02: the session-less resolve is the branch the finding is about
+    /// and `supabase.auth.verifyOTP` cannot be driven from a test, so the one
+    /// line that talks to the network moves behind a closure — the shape
+    /// `relabelProfile` already uses.
+    @ObservationIgnored
+    var verifyOtpTransport: @Sendable (String, String) async throws -> Bool = AuthService.liveVerifyOtp
+
+    /// `EmailOTPType.email` matches the supabase-js `type: 'email'` used by
+    /// the web portals' verify-otp flow — GoTrue accepts this for codes
+    /// issued by `signInWithOTP(email:)`.
+    static let liveVerifyOtp: @Sendable (String, String) async throws -> Bool = { email, token in
+        let response = try await SupabaseClientManager.shared.client.auth.verifyOTP(
+            email: email,
+            token: token,
+            type: .email
+        )
+        return response.session != nil
+    }
+
+    /// B-21 — onboarding is a fact about the account, resolved once per
+    /// sign-in. Injectable for tests.
+    var onboardingCompletion: OnboardingCompletion = .shared
+
+    /// The account `onboardingCompletion` has already been resolved for this
+    /// launch. See the call site for why `accountChanged` cannot do this job.
+    private var onboardingResolvedForUserId: String?
+
     /// The account the in-memory singletons currently hold data for. Compared
     /// against every auth-state event so a token refresh — which yields the
     /// same user several times a session — costs nothing, and a real change of
     /// account costs exactly one reset.
+    ///
+    /// Seeded at `init` from `settledAccountOnDisk()` — see that method for
+    /// why a cold launch is not an account change (`R-02`).
     private var settledUserId: String?
+
+    /// Whether the session fan-out has already run for this process. See its
+    /// call site in the auth-state listener (`R-02`). Named rather than quoted
+    /// there because `SessionIsolationTests` reads the raw source for the
+    /// ORDER of that call and a mention in a doc comment is an earlier match.
+    private var hasFannedSessionRefresh = false
+
+    /// The account this DEVICE last settled on, read back across launches.
+    ///
+    /// `R-02`, the designer-seat half. `settledUserId` used to start `nil`, so
+    /// GoTrue restoring a session on a cold launch read as `nil → A` — an
+    /// account CHANGE — and fired `SessionScope.reset()`. That wipes
+    /// `BadgeCountService`'s retained rows AND deletes
+    /// `patina.badge_counts.last_successful.v1`, the persisted floor R-02 put
+    /// there. Online nobody noticed: the refetch that followed refilled it.
+    /// **Offline it is the whole defect** — the floor was deleted, every fetch
+    /// failed, `projects` stayed `[]`, and `DesignerSeat.make` had nothing to
+    /// name, so "Leah Hartwell · Aspen Loft Refresh · Message" vanished from a
+    /// cold offline Today while the Record's own rows (a different store,
+    /// untouched by the reset) survived beside it.
+    ///
+    /// `localStoreOwnerKey` is already the device's record of whose data is on
+    /// this phone — `reconcileLocalStoreOwner` writes it on every settle and
+    /// `shouldWipeLocalStore` reads it — so the same fact answers this
+    /// question. A different account still reads as a change and still resets;
+    /// a fresh install has no owner and its `nil → A` still resets, over
+    /// nothing.
+    static func settledAccountOnDisk(_ defaults: UserDefaults = .standard) -> String? {
+        defaults.string(forKey: localStoreOwnerKey)
+    }
 
     // MARK: - Initialization
 
     private init() {
+        settledUserId = Self.settledAccountOnDisk()
         startAuthStateListener()
     }
 
@@ -111,6 +215,35 @@ public final class AuthService {
         return accountChanged
     }
 
+    /// Install a session, with `B-21` resolved FIRST.
+    ///
+    /// `applySession` publishing `session` is what wakes the phase observer,
+    /// and `derivePhase` reads `AppSettings.hasCompletedOnboarding` the moment
+    /// it does. Resolving from the auth-state listener instead put the resolve
+    /// ~130 ms late: signing in as an account that has already onboarded
+    /// logged `phase auth → onboarding (onboarded=false)` and then
+    /// `phase onboarding → main (onboarded=true)`, and `ContentView` animates
+    /// phase changes over 0.5 s — so it was a visible cross-fade through the
+    /// intro carousel, not a dropped frame.
+    ///
+    /// The resolve costs nothing on the repeat path (`hasCompletedOnboarding`
+    /// already true, or the account already recorded on this device); only a
+    /// genuinely unknown account pays the budgeted server read, which is
+    /// exactly the case `B-21` is about. `nil` sessions do not come through
+    /// here — there is nothing to resolve for a sign-out.
+    @MainActor
+    @discardableResult
+    private func establishSession(_ session: Session) async -> Bool {
+        let userId = session.user.id.uuidString
+        // Stamped before the await so a second install landing during the read
+        // cannot double-run it.
+        if onboardingResolvedForUserId != userId {
+            onboardingResolvedForUserId = userId
+            await onboardingCompletion.resolve(userId: userId)
+        }
+        return applySession(session)
+    }
+
     /// Mark auth state as ready after the first event and fan out to every
     /// awaiting caller. Its own function so the listener stays under the
     /// branch budget `cyclomatic_complexity` sets.
@@ -132,7 +265,21 @@ public final class AuthService {
                 // hydration a few lines down, and `settleLocalStore`'s room
                 // reconcile, both read singletons that are still holding the
                 // previous account's rows until the reset inside this runs.
-                let accountChanged = self.applySession(session)
+                //
+                // B-21's resolve is inside `establishSession`, not here: it has
+                // to precede the assignment that wakes the phase observer, and
+                // the observer wakes on `applySession`, wherever it is called
+                // from. Its own watermark means the six call sites that install
+                // a session BEFORE GoTrue emits the matching event have already
+                // paid for it by the time this arrives.
+                let accountChanged: Bool
+                if let session {
+                    accountChanged = await self.establishSession(session)
+                } else {
+                    accountChanged = self.applySession(nil)
+                    // Signed out: the next sign-in resolves again.
+                    onboardingResolvedForUserId = nil
+                }
 
                 if let user = session?.user {
                     Self.settleLocalStore(for: user.id.uuidString)
@@ -193,7 +340,15 @@ public final class AuthService {
                 }
 
                 // And after: the two services nothing else will ask for.
-                if accountChanged, incomingUserId != nil {
+                //
+                // `R-02`: `accountChanged` alone stopped being enough once
+                // `settledUserId` is seeded from disk — a cold launch
+                // restoring the SAME account is deliberately not a change any
+                // more, and this fan-out is what asked for its rows. The
+                // once-per-process leg keeps that ask exactly where it was
+                // while the reset above no longer fires.
+                if incomingUserId != nil, accountChanged || !hasFannedSessionRefresh {
+                    hasFannedSessionRefresh = true
                     SessionScope.refresh()
                 }
             }
@@ -302,7 +457,7 @@ public final class AuthService {
     public func signIn(email: String, password: String) async throws {
         lastAttemptedSignInMethod = "password"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -310,7 +465,7 @@ public final class AuthService {
                 email: email,
                 password: password
             )
-            applySession(session)
+            await establishSession(session)
         } catch {
             // GoTrue returns `email_not_confirmed` when a fresh signup tries
             // to sign in before clicking the verification link. Surface this
@@ -324,8 +479,66 @@ public final class AuthService {
                 // red flash before the view model calls clearError().
                 throw AuthServiceError.emailNotConfirmed(email: email)
             }
-            errorMessage = error.localizedDescription
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
+        }
+    }
+
+    /// RL2A-07 — one voice on failure. Modelled on `MoneyFailureCopy` and
+    /// `OrderFailureCopy`: a typed error becomes a fixed, app-authored
+    /// sentence, and the server's own words are logged, never rendered.
+    ///
+    /// L1-A's W1 exit criterion is "no raw server string anywhere", and the
+    /// two paths every round-one tester walks broke it: the password sheet
+    /// rendered GoTrue's "Invalid login credentials", the code sheet its
+    /// "Token has expired or is invalid".
+    ///
+    /// The five sentences are sent to L1-E as a deck addendum
+    /// (`l1a-notes-out-round3.md`); L1-E merges last and owns the words.
+    /// `W1-A-06` — GoTrue answers `otp_expired` for a code that is WRONG as
+    /// well as for one that is spent, and the app took the expiry branch for
+    /// both: `999999`, typed seconds after a real code was issued, was
+    /// reported as "That sign-in code has expired. Send yourself a new one."
+    /// That asserts something false about a mistyped code and sends the reader
+    /// to Resend instead of back to the code they already have. Nothing on the
+    /// wire distinguishes the two, so the sentence must not claim to.
+    static let badSignInCodeSentence = "That code didn’t work. Check it, or send yourself a new one."
+
+    static func authErrorSentence(
+        _ error: any Error,
+        surface: AuthFailureSurface = .emailForm
+    ) -> String {
+        PatinaLog.auth.debug("AuthService: \(error.localizedDescription)")
+        if error is AuthVerificationFailure {
+            // RL3A-02: a code GoTrue accepted but would not exchange is a
+            // spent or expired code, which is exactly `.otpExpired`'s sentence.
+            return Self.badSignInCodeSentence
+        }
+        guard let code = (error as? AuthError)?.errorCode else {
+            return "Something went wrong on our side. Try again, or write to hello@patina.cloud."
+        }
+        switch code {
+        case .invalidCredentials:
+            return "That email and password don’t match. Try again, or ask for a sign-in code instead."
+        case .otpExpired:
+            return Self.badSignInCodeSentence
+        case .overEmailSendRateLimit, .overRequestRateLimit:
+            return "That’s a few tries in a row. Give it a minute, then try again."
+        case .emailNotConfirmed:
+            return "This email hasn’t been confirmed yet. Check your inbox for the code we sent."
+        case .validationFailed:
+            // RL3A-17: GoTrue answers `validation_failed` for "Unsupported
+            // provider: provider is not enabled" as well as for a malformed
+            // address (PROGRAM.md §6 · D3), and the provider buttons have no
+            // email field on their screen.
+            switch surface {
+            case .emailForm:
+                return "Check the email address and try again."
+            case .provider:
+                return "That sign-in method isn’t available right now. Try Apple or a sign-in code instead."
+            }
+        default:
+            return "Something went wrong on our side. Try again, or write to hello@patina.cloud."
         }
     }
 
@@ -353,16 +566,17 @@ public final class AuthService {
     @MainActor
     public func signInWithApple(
         credential: ASAuthorizationAppleIDCredential,
-        rawNonce: String?
+        rawNonce: String?,
+        scope: AuthErrorScope = .root
     ) async throws {
         lastAttemptedSignInMethod = "apple"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         guard let identityToken = credential.identityToken,
               let tokenString = String(data: identityToken, encoding: .utf8) else {
-            errorMessage = "Failed to get Apple ID token"
+            setError("Failed to get Apple ID token", scope: scope)
             throw NetworkError.unauthorized
         }
 
@@ -374,10 +588,12 @@ public final class AuthService {
                     nonce: rawNonce
                 )
             )
-            applySession(session)
+            await establishSession(session)
             await captureAppleName(from: credential)
+            // B2 v3(c) / A3-07 — see `applyHomeownerRoleAfterOAuth`.
+            await applyHomeownerRoleAfterOAuth(userId: session.user.id)
         } catch {
-            errorMessage = error.localizedDescription
+            setError(Self.authErrorSentence(error, surface: .provider), scope: scope)
             throw error
         }
     }
@@ -395,26 +611,86 @@ public final class AuthService {
         )
     }
 
+    /// A3-07 / ruling B2 v3(c) — relabel this account's own profile row
+    /// `role = 'homeowner'` after an OAuth sign-in.
+    ///
+    /// `handle_new_user` (00313) honours exactly one client-supplied role
+    /// string, the literal `'homeowner'` in `raw_user_meta_data.role`, and
+    /// otherwise falls to the 00013 default, `'designer'`. The email and OTP
+    /// paths send the hint; `signInWithIdToken` and `signInWithOAuth` take no
+    /// `data:` parameter, so an Apple tester was created labelled `designer`
+    /// and nothing corrected it. B2 v3 kept the trigger at 00313 verbatim —
+    /// which button somebody tapped is not which kind of account they are —
+    /// and moved the correction to the two callers that know the answer. This
+    /// app is one of them.
+    ///
+    /// The own-row UPDATE policy (00555 §a2(i-a)) is a one-way ratchet:
+    /// `role` may become `'homeowner'` and `is_designer` may become `false`,
+    /// never the reverse. So:
+    ///
+    /// * scoped to `id = self`, from the session this sign-in just returned;
+    /// * `role` only — one key in the body. `is_designer` is already false for
+    ///   a fresh sign-up, and writing it would make a label write look like an
+    ///   authority write;
+    /// * idempotent, and run after EVERY Apple/Google sign-in, because the app
+    ///   cannot tell a first sign-in from a returning one and a returning user
+    ///   whose relabel failed must still get it;
+    /// * once per sign-in, here — not in a view's `onAppear`, not in a retry;
+    /// * never fatal. The person is signed in; a wrong label is cosmetic (it
+    ///   changes the word `comms_resolve_role` renders beside their name) and
+    ///   the next sign-in retries it. A sign-in that failed because a cosmetic
+    ///   PATCH 4xx'd would be the worse bug.
+    ///
+    /// Deliberately NOT on the email/OTP paths: they already send the hint and
+    /// the trigger honours it. A second write there would make the app look
+    /// like it writes its own role unconditionally.
+    @MainActor
+    func applyHomeownerRoleAfterOAuth(userId: UUID) async {
+        do {
+            try await relabelProfile(userId)
+        } catch {
+            PatinaLog.auth.debug(
+                "AuthService: homeowner relabel deferred — \(error.localizedDescription)"
+            )
+        }
+    }
+
+    /// RL2A-09 — the one-key PATCH, behind the same injectable-seam shape
+    /// `testAccountLogin` and `onboardingCompletion` already use, so the five
+    /// rules above are tested by driving them rather than by reading the file.
+    @ObservationIgnored
+    var relabelProfile: @Sendable (UUID) async throws -> Void = AuthService.liveRelabelProfile
+
+    static let liveRelabelProfile: @Sendable (UUID) async throws -> Void = { userId in
+        try await supabase.database
+            .from("profiles")
+            .update(["role": "homeowner"])
+            .eq("id", value: userId)
+            .execute()
+    }
+
     /// Sign in with Google via OAuth (opens ASWebAuthenticationSession)
     @MainActor
     public func signInWithGoogle() async throws {
         lastAttemptedSignInMethod = "google"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
-            try await supabase.auth.signInWithOAuth(
+            let session = try await supabase.auth.signInWithOAuth(
                 provider: .google,
                 redirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback")
             )
+            // B2 v3(c) / A3-07 — see `applyHomeownerRoleAfterOAuth`.
+            await applyHomeownerRoleAfterOAuth(userId: session.user.id)
         } catch {
             // Backing out of the OAuth web sheet is a user cancellation, not an
             // error — mirror the Apple `.canceled` filter so the welcome
             // screen's error banner stays silent instead of showing a raw
             // "WebAuthenticationSession error 1" string.
             if (error as? ASWebAuthenticationSessionError)?.code != .canceledLogin {
-                errorMessage = error.localizedDescription
+                setError(Self.authErrorSentence(error, surface: .provider), scope: .root)
             }
             throw error
         }
@@ -430,7 +706,7 @@ public final class AuthService {
     @MainActor
     public func signUp(email: String, password: String, displayName: String?) async throws {
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -444,7 +720,7 @@ public final class AuthService {
                 data: metadata
             )
             if let session = response.session {
-                applySession(session)
+                await establishSession(session)
             } else {
                 // Production has email confirmation on, so GoTrue returns a
                 // user but NO session here. Surface the same case `signIn`
@@ -458,7 +734,7 @@ public final class AuthService {
             // generic error banner (the view model routes it to the panel).
             throw error
         } catch {
-            errorMessage = error.localizedDescription
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -467,9 +743,12 @@ public final class AuthService {
     /// authorization callback) on the shared auth error banner. Used by the
     /// welcome screen, which otherwise has no way to report a pre-service
     /// failure. User-cancellation should NOT be reported here.
+    /// `scope` names the surface the button lives on. The Apple button exists
+    /// on the Welcome root AND inside the sign-in sheet; a failure belongs to
+    /// whichever one the reader is looking at.
     @MainActor
-    public func reportExternalError(_ message: String) {
-        errorMessage = message
+    public func reportExternalError(_ message: String, scope: AuthErrorScope = .root) {
+        setError(message, scope: scope)
     }
 
     // MARK: - Sign Out
@@ -478,7 +757,7 @@ public final class AuthService {
     @MainActor
     public func signOut() async throws {
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         // Push: delete this device's token row BEFORE the session dies —
@@ -491,9 +770,42 @@ public final class AuthService {
             try await supabase.auth.signOut()
             applySession(nil)
         } catch {
-            errorMessage = error.localizedDescription
+            // W1-C-09. The SDK clears the stored session BEFORE it revokes the
+            // token, so a throw here does not mean the person is still signed
+            // in — a revoke that 401s on an already-expired refresh token, or
+            // that never reaches the network, still ends the session. The
+            // Welcome screen then said "Something went wrong on our side. Try
+            // again, or write to hello@patina.cloud." about a sign-out that
+            // worked, and because `AuthStatusSlot` ranks `errorMessage` above
+            // `pendingLinkNotice` that one banner also occupied the slot
+            // `C2-21`'s "We'll open what you tapped once you're in." needs.
+            //
+            // So: ask what actually happened before saying anything.
+            let sessionRemains = (try? await supabase.auth.session) != nil
+            guard Self.signOutOutcome(sessionRemains: sessionRemains) == .failed else {
+                applySession(nil)
+                return
+            }
+            // Root scope: a failed sign-out leaves the reader looking at the
+            // Welcome screen, which is where this has to be readable.
+            setError(Self.authErrorSentence(error), scope: .root)
             throw error
         }
+    }
+
+    /// What a throw out of `signOut()` means. Pure, so the rule is a testable
+    /// fact rather than something only a live GoTrue can exercise (`W1-C-09`).
+    enum SignOutOutcome: Equatable {
+        /// The session is gone. Whatever the network said, this was a
+        /// sign-out and nothing is owed to the reader.
+        case signedOut
+        /// A session survived the attempt: the person is still signed in and
+        /// the failure is worth saying.
+        case failed
+    }
+
+    static func signOutOutcome(sessionRemains: Bool) -> SignOutOutcome {
+        sessionRemains ? .failed : .signedOut
     }
 
     // MARK: - Email Verification
@@ -507,7 +819,7 @@ public final class AuthService {
     @MainActor
     public func resendVerificationEmail(_ email: String) async throws {
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -517,7 +829,7 @@ public final class AuthService {
                 emailRedirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback")
             )
         } catch {
-            errorMessage = error.localizedDescription
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -528,13 +840,13 @@ public final class AuthService {
     @MainActor
     public func resetPassword(email: String) async throws {
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
             try await supabase.auth.resetPasswordForEmail(email)
         } catch {
-            errorMessage = error.localizedDescription
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -552,7 +864,7 @@ public final class AuthService {
     public func sendMagicLink(email: String) async throws {
         lastAttemptedSignInMethod = "magic-link"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -563,7 +875,7 @@ public final class AuthService {
                 data: ["role": .string("homeowner")]
             )
         } catch {
-            errorMessage = error.localizedDescription
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -583,24 +895,49 @@ public final class AuthService {
     public func verifyOtp(email: String, token: String) async throws {
         lastAttemptedSignInMethod = "otp"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
+        // RL4A-02: the `do` covers the network call and nothing else. When the
+        // session-less branch below lived inside it, its own throw fell into
+        // the general `catch`, which asked the fallback a SECOND time — a
+        // second burn of 00551's rate limiter on one tap — and, if that second
+        // ask happened to land, returned success with the "expired code"
+        // sentence still standing in the sheet's status slot. Each leg now
+        // gets exactly one turn at the fallback.
+        let hasSession: Bool
         do {
-            // `EmailOTPType.email` matches the supabase-js `type: 'email'`
-            // used by the web portals' verify-otp flow — GoTrue accepts
-            // this for codes issued by `signInWithOTP(email:)`.
-            try await supabase.auth.verifyOTP(
-                email: email,
-                token: token,
-                type: .email
-            )
-            // Session is set by the auth state change listener; nothing
-            // else to do here.
+            hasSession = try await verifyOtpTransport(email, token)
         } catch {
-            errorMessage = error.localizedDescription
+            // A3-16 / ruling D7 — the advertised tester credential. Tried
+            // ONLY from here, after the ordinary path has already failed, so
+            // it can never intercept a real sign-in. Fails closed: anything
+            // other than a redeemed session falls through to the error below.
+            if await testAccountLogin.attempt(email: email, code: token) {
+                clearError()
+                return
+            }
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
+
+        // A3-16: GoTrue can resolve WITHOUT a session for a spent or
+        // expired code. The portal treats that as a miss too — and so
+        // does this, on BOTH legs (RL3A-02): the fallback gets its turn,
+        // and when it declines the reader gets the same sentence and the
+        // same throw the catch path above produces, rather than a cleared
+        // status region under six digits that did nothing.
+        if !hasSession {
+            if await testAccountLogin.attempt(email: email, code: token) {
+                clearError()
+                return
+            }
+            let failure = AuthVerificationFailure.resolvedWithoutSession
+            setError(Self.authErrorSentence(failure), scope: .sheet)
+            throw failure
+        }
+        // Session is set by the auth state change listener; nothing
+        // else to do here.
     }
 
     /// Handle magic link URL callback. GoTrue's `/verify` endpoint
@@ -616,7 +953,7 @@ public final class AuthService {
         // after an app relaunch, which loses the transient send-time stamp.
         lastAttemptedSignInMethod = "magic-link"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         // Try implicit-flow first: tokens live in the URL fragment.
@@ -629,10 +966,12 @@ public final class AuthService {
                         accessToken: accessToken,
                         refreshToken: refreshToken
                     )
-                    applySession(session)
+                    await establishSession(session)
                     return
                 } catch {
-                    errorMessage = error.localizedDescription
+                    // Root scope: the emailed link is opened against the auth
+                    // root, often on a cold launch with no sheet in sight.
+                    setError(Self.authErrorSentence(error), scope: .root)
                     throw error
                 }
             }
@@ -641,9 +980,9 @@ public final class AuthService {
         // PKCE / code-exchange flow — let the SDK handle it.
         do {
             let session = try await supabase.auth.session(from: url)
-            applySession(session)
+            await establishSession(session)
         } catch {
-            errorMessage = error.localizedDescription
+            setError(Self.authErrorSentence(error), scope: .root)
             throw error
         }
     }
@@ -670,7 +1009,7 @@ public final class AuthService {
 
         do {
             let newSession = try await supabase.auth.refreshSession()
-            applySession(newSession)
+            await establishSession(newSession)
         } catch {
             // If refresh fails, user needs to re-authenticate
             applySession(nil)
@@ -683,7 +1022,7 @@ public final class AuthService {
     public func getSession() async -> Session? {
         do {
             let session = try await supabase.auth.session
-            applySession(session)
+            await establishSession(session)
             return session
         } catch {
             return nil
@@ -692,6 +1031,38 @@ public final class AuthService {
 }
 
 // MARK: - Errors
+
+/// Which auth surface raised the current error (P-29).
+///
+/// The Welcome root and the sign-in sheets share one `AuthService`, and one
+/// `errorMessage` with them. Without this, "Invalid login credentials" typed
+/// into the password sheet survived its Cancel and rendered on the root.
+public enum AuthErrorScope: Sendable, Equatable {
+    /// Raised by the Welcome screen itself — the Apple and Google paths.
+    case root
+    /// Raised inside a presented sheet. Never rendered on the root.
+    case sheet
+}
+
+/// Which surface raised the failure, for the one GoTrue code whose right
+/// sentence depends on it (`validation_failed`, RL3A-17). Threaded the way
+/// `AuthErrorScope` already is rather than inferred from the error.
+public enum AuthFailureSurface: Sendable, Equatable {
+    /// An email/password/code form — the address is on screen and editable.
+    case emailForm
+    /// A provider button (Apple, Google). There is no email field here.
+    case provider
+}
+
+/// RL3A-02 — GoTrue answers 200 with no session for a spent or expired code
+/// on the OTP path. Round two's `if response.session == nil, await
+/// fallback.attempt(…)` treated that as a miss only when the fallback took
+/// it; when the fallback declined, nothing was raised and nothing was thrown.
+/// This is what the nil-session branch throws now, so the sheet's status slot
+/// and `verifyOtp`'s caller both learn the code did not work.
+public enum AuthVerificationFailure: Error, Equatable {
+    case resolvedWithoutSession
+}
 
 /// Errors surfaced by `AuthService` that need distinct UI handling.
 ///

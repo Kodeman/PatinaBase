@@ -43,7 +43,7 @@ struct RecordIdentityTests {
         #expect(RecordIdentity.decide(stampedOwner: "a", session: "a") == .paint)
     }
 
-    @Test("another account's record is discarded, never merely hidden")
+    @Test("another account’s record is discarded, never merely hidden")
     func aDifferentAccountIsDiscarded() {
         #expect(RecordIdentity.decide(stampedOwner: "a", session: "b") == .discard)
     }

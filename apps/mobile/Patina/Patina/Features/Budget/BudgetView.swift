@@ -156,7 +156,7 @@ struct BudgetProjectSectionView: View {
                     .foregroundStyle(PatinaColors.Text.primary)
                 // SP-16: the designer's figure, said to be the designer's.
                 if let budget = section.designerBudgetCents {
-                    Text("Project budget \(PatinaCurrency.formatWholeDollars(cents: budget)) · your designer's figure")
+                    Text("Project budget \(PatinaCurrency.formatWholeDollars(cents: budget)) · your designer’s figure")
                         .font(PatinaTypography.caption)
                         .foregroundStyle(PatinaColors.Text.muted)
                 }

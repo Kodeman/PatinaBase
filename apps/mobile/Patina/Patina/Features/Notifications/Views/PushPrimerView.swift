@@ -16,16 +16,29 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 struct PushPrimerView: View {
 
-    /// Ruling Q7, verbatim. Do not reword: it is the promise the app makes in
+    /// Ruling Q7's sentence. Do not reword: it is the promise the app makes in
     /// exchange for the permission, and it names exactly three things.
-    static let sentence = "We'll tell you when your designer sends something that needs you — a decision, a proposal, or an invoice. Nothing else."
+    ///
+    /// `W1-A-01` — Q7 was transcribed with a straight apostrophe (U+0027) and
+    /// a test pinned that byte, while `A-06` rules the app's apostrophe as
+    /// U+2019 and every other sentence on screen types it. Two rules, one
+    /// glyph, and the primer was the only place they met. The WORDS are Q7's
+    /// and unchanged; the glyph is the app's. Q7's U+0027 is superseded.
+    static let sentence = "We’ll tell you when your designer sends something that needs you — a decision, a proposal, or an invoice. Nothing else."
 
     static let title = "Before we interrupt you"
 
     let onDecided: () -> Void
+
+    /// Set when the ask came back `.denied` — here or in a session before this
+    /// one. The screen then says so and offers Settings instead of dismissing
+    /// as though something had happened (`C2-09`).
+    @State private var isDenied = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(alignment: .leading, spacing: PatinaSpacing.lg) {
@@ -45,16 +58,43 @@ struct PushPrimerView: View {
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if isDenied {
+                Text(PushTokenService.deniedLine)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("PushPrimerView.DeniedLine")
+            }
+
             Spacer(minLength: 0)
 
             VStack(spacing: PatinaSpacing.sm) {
-                PatinaButton("Turn on notifications", style: .primary) {
-                    Task {
-                        await PushTokenService.shared.requestAuthorizationAndRegister()
+                if isDenied {
+                    PatinaButton("Open Settings", style: .primary) {
+                        if let url = PushTokenService.settingsURL { openURL(url) }
                         onDecided()
                     }
+                    .accessibilityIdentifier("PushPrimerView.OpenSettings")
+                } else {
+                    PatinaButton("Turn on notifications", style: .primary) {
+                        Task {
+                            let outcome = await PushTokenService.shared.requestAuthorizationAndRegister()
+                            // A silent no-op was the bug. When the system will
+                            // never show its alert again, the screen stays and
+                            // says why, with the only door that still works.
+                            if outcome == .denied {
+                                isDenied = true
+                                return
+                            }
+                            // A throw decided nothing, so nothing is claimed:
+                            // the screen is left exactly as it was and the
+                            // button can be tapped again.
+                            if outcome == .failed { return }
+                            onDecided()
+                        }
+                    }
+                    .accessibilityIdentifier("PushPrimerView.Allow")
                 }
-                .accessibilityIdentifier("PushPrimerView.Allow")
 
                 Button("Not now") { onDecided() }
                     .font(PatinaTypography.bodySmall)
@@ -68,6 +108,16 @@ struct PushPrimerView: View {
         .padding(.vertical, PatinaSpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PatinaColors.Background.primary)
+        // C2-09's fix line is "read the status BEFORE asking". The service
+        // does; this screen did not — so a tester who refused in an earlier
+        // session (or whose one system alert `InvoiceReminderService` already
+        // consumed) was offered "Turn on notifications" and learned it was
+        // inert by tapping it. The screen opens in the state it is in.
+        .task {
+            let status = await UNUserNotificationCenter.current()
+                .notificationSettings().authorizationStatus
+            isDenied = PushTokenService.outcome(for: status) == .denied
+        }
     }
 }
 

@@ -69,7 +69,7 @@ extension DesignRequestFlowView {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                            .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                     )
                 }
             }
@@ -144,8 +144,8 @@ extension DesignRequestFlowView {
     private var offlineCard: some View {
         infoCard(
             icon: "wifi.slash",
-            title: "You're offline",
-            body: "We'll save your request. Reconnect and it will pick up right where you left off."
+            title: "You’re offline",
+            body: "We’ll save your request. Reconnect and it will pick up right where you left off."
         )
     }
 
@@ -167,7 +167,10 @@ extension DesignRequestFlowView {
                 }
 
                 if let error = coordinator?.lastError {
-                    Text(error.errorDescription ?? "Something went wrong.")
+                    // C4-09/C5-11: `errorDescription` is now always one of
+                    // `DesignServicesError`'s fixed sentences (no raw arm
+                    // left), so this `??` branch is a defensive default only.
+                    Text(error.errorDescription ?? "Something went wrong. Try again.")
                         .font(PatinaTypography.caption)
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
@@ -195,14 +198,14 @@ extension DesignRequestFlowView {
                 // branch above; reaching here means we're idle — a fresh entry
                 // or a RESUMED draft (submit never auto-fires on resume). Always
                 // offer an explicit submit so a resumed roomless request can't
-                // strand on a dead spinner; "Let's try that again" once an
+                // strand on a dead spinner; "Let’s try that again" once an
                 // attempt failed.
-                PatinaButton(coordinator.lastError != nil ? "Let's try that again" : "Send request",
+                PatinaButton(coordinator.lastError != nil ? "Let’s try that again" : "Send request",
                              style: .primary) {
                     Task { await coordinator.submit() }
                 }
             } else if hasFailedUpload {
-                PatinaButton("Let's try that again", style: .primary) {
+                PatinaButton("Let’s try that again", style: .primary) {
                     Task { await coordinator.retryAllFailed(); await maybeSubmit() }
                 }
             } else if allUploaded {
@@ -261,12 +264,12 @@ extension DesignRequestFlowView {
         // Push (W3-push): pairs with the authorization prompt this screen
         // triggers — names what the notification is FOR, not that one
         // exists.
-        let pushNote = " We'll tell you the instant a designer takes this in hand."
+        let pushNote = " We’ll tell you the instant a designer takes this in hand."
         guard let result = coordinator?.result else {
             return "A designer will reach out soon." + followUp + pushNote
         }
         let lead = result.pooled
-            ? "We're matching you with a designer. You'll hear back soon."
+            ? "We’re matching you with a designer. You’ll hear back soon."
             : "Your designer has your request and will reach out soon."
         return lead + followUp + pushNote
     }
@@ -328,7 +331,7 @@ extension DesignRequestFlowView {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(PatinaColors.Background.secondary))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(PatinaColors.pearl, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(PatinaColors.Border.hairline, lineWidth: 1))
     }
 
     private func pickerSection<T: Hashable>(
@@ -375,13 +378,23 @@ extension DesignRequestFlowView {
         Button(action: action) {
             Text(text)
                 .font(PatinaTypography.caption)
-                .foregroundStyle(isSelected ? .white : PatinaColors.Text.secondary)
+                // C3-05: a bare `.white` on a `clay` fill is 2.18:1.
+                // `Interactive.active` + `Text.inverse` is the pair the kit
+                // publishes for a filled control — 13.53:1 light, 14.24:1 dark
+                // — and the one `PatinaButton(.primary)` and the room-type
+                // chips take. `clayInk` is the *static* filled accent and pairs
+                // only with a static light ink; under `Text.inverse` it drops
+                // to 2.92:1 in dark, which is the finding over again.
+                .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.secondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(isSelected ? PatinaColors.clay : PatinaColors.Background.secondary)
+                .background(isSelected ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                 .clipShape(Capsule())
                 .overlay(
-                    Capsule().stroke(isSelected ? PatinaColors.clay : PatinaColors.pearl, lineWidth: 1.5)
+                    Capsule().stroke(
+                        isSelected ? PatinaColors.Interactive.active : PatinaColors.Border.strong,
+                        lineWidth: 1.5
+                    )
                 )
         }
         .buttonStyle(.plain)

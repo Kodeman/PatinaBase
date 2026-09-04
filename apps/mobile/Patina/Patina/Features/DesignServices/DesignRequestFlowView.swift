@@ -295,7 +295,7 @@ struct DesignRequestFlowView: View {
     var sendingHeadline: String {
         if coordinator?.isSubmitting == true { return "Submitting your request…" }
         if isRoomless { return "Sending your request…" }
-        if hasFailedUpload { return "Some scans didn't upload" }
+        if hasFailedUpload { return "Some scans didn’t upload" }
         if !syncService.isNetworkAvailable { return "Saved — waiting for a connection" }
         return "Sending your scans…"
     }

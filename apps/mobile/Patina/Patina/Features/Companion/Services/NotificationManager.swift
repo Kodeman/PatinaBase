@@ -150,13 +150,13 @@ public enum MockNotifications {
     public static let insights: [String] = [
         "I notice the chair and bookshelf have been on your table longest. They speak to each other well.",
         "Your collection seems drawn to natural materials — wood and ceramic dominate.",
-        "There's a warmth to everything you've gathered. A consistent palette emerging.",
+        "There’s a warmth to everything you’ve gathered. A consistent palette emerging.",
         "Three pieces from makers in the Northeast. Is that intentional?"
     ]
 
     /// Sample resonance messages
     public static let resonances: [String] = [
-        "These two pieces share something — maybe the era, or the maker's approach.",
+        "These two pieces share something — maybe the era, or the maker’s approach.",
         "The walnut in these pieces would age together beautifully.",
         "I see a conversation happening between these three."
     ]

@@ -104,7 +104,7 @@ struct RoomBudgetTests {
         #expect(space.budgetLine == "budget $9,000")
     }
 
-    @Test("the room's figure line labels the pieces total and never reads as spend")
+    @Test("the room’s figure line labels the pieces total and never reads as spend")
     func theFigureLineIsLabelled() {
         let space = room()
         #expect(space.savedPiecesFigureLine == nil)
@@ -203,7 +203,7 @@ struct RoomBudgetTests {
             == "TYPED, NOT SCANNED")
     }
 
-    @Test("the room screen's figures and dated state line are the room's own")
+    @Test("the room screen’s figures and dated state line are the room’s own")
     func theRoomScreenFiguresAndState() {
         let space = room()
         space.budgetCents = 900_000
@@ -271,7 +271,7 @@ struct RoomBudgetTests {
         #expect(RoomScreenLines.make(room: space).meta.hasPrefix("20 × 15 ft"))
     }
 
-    @Test("the Spaces gallery card's Budget cell is the budget, not the pieces total")
+    @Test("the Spaces gallery card’s Budget cell is the budget, not the pieces total")
     func theGalleryCardPrintsTheBudget() {
         let space = room()
         saved("Brass Arc Floor Lamp", cents: 89_000, at: Self.day(8, 25), in: space)
@@ -280,7 +280,10 @@ struct RoomBudgetTests {
         #expect(RoomGalleryCard.budgetString(for: space) == nil)
 
         space.budgetCents = 900_000
-        #expect(RoomGalleryCard.budgetString(for: space) == "$9.0K")
+        // C5-14: the compact form is gone — `PatinaCurrency` publishes none,
+        // and the same figure read `$9,000` on the room screen and `$9.0K`
+        // on the card.
+        #expect(RoomGalleryCard.budgetString(for: space) == "$9,000")
     }
 
     @Test("no budget on the Spaces card draws no Budget cell at all — never a dash")
@@ -295,7 +298,7 @@ struct RoomBudgetTests {
         space.budgetCents = 900_000
         let set = RoomGalleryCard.statCells(for: space)
         #expect(set.map(\.label) == ["Items", "Budget", "Match"])
-        #expect(set.first { $0.label == "Budget" }?.value == "$9.0K")
+        #expect(set.first { $0.label == "Budget" }?.value == "$9,000")
     }
 
     // MARK: - T8 · steward §4a — the saved row's note and its price at save
@@ -326,7 +329,7 @@ struct RoomBudgetTests {
 
     // MARK: - The bar measures the budget its owner set (integration.md §6.3)
 
-    @Test("the bar measures against the room's own budget")
+    @Test("the bar measures against the room’s own budget")
     func theBarMeasuresAgainstTheStoredBudget() {
         #expect(BudgetAssessment.level(totalCents: 100_000, budgetCents: 900_000) == .below50)
         #expect(BudgetAssessment.level(totalCents: 600_000, budgetCents: 900_000) == .approaching)
@@ -342,7 +345,7 @@ struct RoomBudgetTests {
 
     @Test("the bar prints both figures and no third")
     func theBarPrintsBothFigures() {
-        #expect(RoomBudgetBar.figure(totalCents: 240_000, budgetCents: 900_000) == "$2.4K of $9.0K")
+        #expect(RoomBudgetBar.figure(totalCents: 240_000, budgetCents: 900_000) == "$2,400 of $9,000")
         #expect(RoomBudgetBar.figure(totalCents: 0, budgetCents: 45_000) == "$0 of $450")
     }
 

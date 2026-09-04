@@ -25,7 +25,7 @@ struct ConversationHeaderView: View {
             }
 
             Text(question)
-                .font(.custom("PlayfairDisplay-Italic", size: 26, relativeTo: .title2))
+                .font(PatinaTypography.voiceLead)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
@@ -57,7 +57,7 @@ struct ConversationHeaderView: View {
 #Preview {
     VStack {
         ConversationHeaderView(
-            whisperTop: "Your room is captured · Let's discover your style",
+            whisperTop: "Your room is captured · Let’s discover your style",
             question: "Which room speaks to you?",
             subtext: "Choose one that pulls you in"
         )

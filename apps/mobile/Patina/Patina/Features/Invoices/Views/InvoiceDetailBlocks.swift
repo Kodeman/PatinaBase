@@ -20,7 +20,7 @@ struct InvoiceLineItemsBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MonoLabel(text: "What's included")
+            MonoLabel(text: "What’s included")
                 .padding(.horizontal, 24)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in
@@ -94,7 +94,7 @@ struct InvoiceLineItemsBlock: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(PatinaColors.pearl)
+            .fill(PatinaColors.Border.hairline)
             .frame(height: 1)
     }
 }
@@ -130,7 +130,7 @@ struct InvoicePaymentsBlock: View {
                         row(payment)
                         if index < visible.count - 1 {
                             Rectangle()
-                                .fill(PatinaColors.pearl)
+                                .fill(PatinaColors.Border.hairline)
                                 .frame(height: 1)
                         }
                     }

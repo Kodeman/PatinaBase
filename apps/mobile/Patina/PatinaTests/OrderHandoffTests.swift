@@ -146,7 +146,7 @@ struct OrderHandoffTests {
         )
         await machine.begin(productId: PurchaseFixture.productId)
 
-        #expect(machine.failure?.sentence == "We don't have this piece's size yet.")
+        #expect(machine.failure?.sentence == "We don’t have this piece’s size yet.")
         #expect(events.properties(of: "order_failed")?["reason"] == "dimensions")
         #expect(!events.names.contains("order_checkout_opened"))
     }
@@ -167,7 +167,7 @@ struct OrderHandoffTests {
         await machine.begin(productId: PurchaseFixture.productId)
 
         let sentence = try? #require(machine.failure?.sentence)
-        #expect(sentence == "We couldn't start this payment. Nothing has been charged.")
+        #expect(sentence == "We couldn’t start this payment. Nothing has been charged.")
         #expect(sentence?.contains("sk_test") == false)
         #expect(events.properties(of: "order_failed")?["reason"] == "checkout_unavailable")
     }
@@ -206,7 +206,7 @@ struct OrderHandoffTests {
 
         let sentence = try? #require(machine.failure?.sentence)
         #expect(sentence == "A payment on this order is already going through. "
-                + "We'll update this as soon as it clears.")
+                + "We’ll update this as soon as it clears.")
         #expect(sentence?.contains("Nothing has been charged") == false)
         #expect(sentence?.contains("bank transfer") == false)
         #expect(events.properties(of: "order_failed")?["reason"] == "payment_processing")
@@ -276,7 +276,7 @@ struct OrderHandoffTests {
 
     // MARK: - The guest
 
-    @Test("a guest's tap goes to the wall, on every act that would write")
+    @Test("a guest’s tap goes to the wall, on every act that would write")
     func aGuestMeetsTheWallBeforeAnythingIsWritten() {
         // The previous version of this test built a machine, never called
         // `begin`, and asserted the phase was `.idle` — which would pass with
@@ -334,8 +334,15 @@ struct OrderHandoffTests {
 
     // MARK: - Helpers
 
+    /// The budget is wall time on a machine running 180 other suites, not a
+    /// property of the code under test: the condition is `@MainActor`, so
+    /// every main-actor test elsewhere in the tier is time this poll cannot
+    /// use. Three seconds was already marginal and went red once the tier
+    /// grew (review `RL1B-01`); a settled condition still returns on the
+    /// first pass, so the only thing a longer ceiling costs is the wait
+    /// before a genuine failure is reported.
     private func waitFor(
-        timeout: Duration = .seconds(3),
+        timeout: Duration = .seconds(20),
         _ condition: @MainActor () -> Bool
     ) async throws {
         let start = ContinuousClock.now

@@ -146,14 +146,14 @@ struct InvoicesMoneyRailTests {
 
     // MARK: - SP-15 · the failure speaks Patina, never the vendor
 
-    @Test("an unknown checkout failure never carries the vendor's words")
+    @Test("an unknown checkout failure never carries the vendor’s words")
     func unknownCheckoutErrorDropsTheVendorDetail() {
         let vendor = "Invalid API Key provided: sk_test_********************alls"
         let failure = MoneyFailureCopy.checkout(CheckoutError.from(code: nil, detail: vendor))
         #expect(!failure.sentence.contains("sk_test"))
         #expect(!failure.sentence.contains("API Key"))
-        #expect(failure.sentence == "We couldn't start this payment. Nothing has been charged.")
-        #expect(failure.retryLabel == "Let's try that again")
+        #expect(failure.sentence == "We couldn’t start this payment. Nothing has been charged.")
+        #expect(failure.retryLabel == "Let’s try that again")
         #expect(failure.offersDesignerMessage)
     }
 
@@ -177,21 +177,21 @@ struct InvoicesMoneyRailTests {
             #expect(!failure.sentence.lowercased().contains("stripe"))
             #expect(!failure.sentence.lowercased().contains("http"))
             #expect(failure.sentence.hasSuffix("."))
-            #expect(failure.retryLabel == "Let's try that again")
+            #expect(failure.retryLabel == "Let’s try that again")
         }
     }
 
     @Test("every checkout code has its own true sentence")
     func mappedCheckoutCodesKeepTheirOwnCopy() {
         #expect(MoneyFailureCopy.checkout(CheckoutError.notConfigured).sentence
-                == "Online payment isn't set up for this invoice yet. Your designer can sort it out.")
+                == "Online payment isn’t set up for this invoice yet. Your designer can sort it out.")
         #expect(MoneyFailureCopy.checkout(CheckoutError.nothingDue).offersDesignerMessage == false)
         // B-3: `payment_processing` covers a card in the webhook gap as well as
         // a settling ACH debit, so this branch must not name a bank transfer.
         // Only the settle banner, which reads the payment row's own method,
         // may print that sentence.
         #expect(MoneyFailureCopy.checkout(CheckoutError.paymentProcessing).sentence
-                == "A payment on this invoice is already going through. We'll update this as soon as it clears.")
+                == "A payment on this invoice is already going through. We’ll update this as soon as it clears.")
         #expect(!MoneyFailureCopy.checkout(CheckoutError.paymentProcessing).sentence
                 .contains("3–5 business days"))
         // No checkout branch may guess at the method behind a payment.
@@ -216,7 +216,7 @@ struct InvoicesMoneyRailTests {
         ))
         if case .unexpected = mapped {} else { Issue.record("expected .unexpected") }
         #expect(MoneyFailureCopy.sign(mapped).sentence
-                == "We couldn't record your signature. Nothing has been signed.")
+                == "We couldn’t record your signature. Nothing has been signed.")
     }
 
     // MARK: - SP-15 · the settle banner tells the truth
@@ -229,7 +229,7 @@ struct InvoicesMoneyRailTests {
                          "stripe_payment_intent_id": "pi_1" }] }
         """)
         #expect(InvoiceSettleCopy.unconfirmed(card)
-                == "We haven't seen this payment yet. We'll update this as soon as it clears.")
+                == "We haven’t seen this payment yet. We’ll update this as soon as it clears.")
         #expect(!InvoiceSettleCopy.processing(card).contains("3–5 business days"))
 
         let bank = try decode(RemoteInvoice.self, """
@@ -268,7 +268,7 @@ struct InvoicesMoneyRailTests {
     /// The dock height is the sum of what `CompanionHearthView.collapsedView`
     /// and the overlay actually draw. Pinned here so a change to either one
     /// fails this instead of silently re-colliding with the Pay button.
-    @Test("the dock's height matches what the Companion draws")
+    @Test("the dock’s height matches what the Companion draws")
     func dockHeightTracksTheCompanion() {
         #expect(CompanionHearthMetrics.collapsedDiameter == CompanionConstants.buttonSize)
         #expect(CompanionHearthMetrics.captionRowHeight == CompanionConstants.minimumTouchTarget)
@@ -277,7 +277,7 @@ struct InvoicesMoneyRailTests {
 
     /// The money clearance is measured against the dock, not against
     /// `reservedHeight` — which is 20 points shorter than the dock draws.
-    @Test("a money screen's bottom inset clears the dock, not just the Hearth")
+    @Test("a money screen’s bottom inset clears the dock, not just the Hearth")
     func moneyClearanceClearsTheDock() {
         #expect(MoneyScreenMetrics.bottomClearance(houseFirst: false)
                 >= CompanionHearthMetrics.dockHeight)

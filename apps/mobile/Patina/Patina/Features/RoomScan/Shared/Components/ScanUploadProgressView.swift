@@ -54,9 +54,11 @@ public struct ScanUploadProgressView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if let err = package.lastError, !err.isEmpty,
-               package.status == .failed || package.status == .pending {
-                Text(err)
+            // C4-09: this printed `package.lastError` verbatim — storage and
+            // Postgres text — to somebody looking at a photograph of their own
+            // living room. The column stays; the sentence is ours.
+            if let message = ScanUploadFailureCopy.message(for: package) {
+                Text(message)
                     .font(PatinaTypography.caption)
                     .foregroundStyle(.orange)
                     .lineLimit(2)
@@ -99,7 +101,7 @@ public struct ScanUploadProgressView: View {
         case .synced:    return "Uploaded"
         case .failed:    return "Upload failed — will retry"
         case .heldLocal: return "Saved on this phone"
-        case .quarantined: return package.lastError ?? "Saved on this phone — we couldn't read it"
+        case .quarantined: return package.lastError ?? "Saved on this phone — we couldn’t read it"
         }
     }
 

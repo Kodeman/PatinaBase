@@ -36,6 +36,28 @@ final class BadgeCountService {
     /// Comms threads with an unread counterpart message.
     private(set) var unreadMessageCount: Int = 0
 
+    /// Unread DELIVERED updates in the bell — the number the bell badge draws.
+    ///
+    /// It lives here, and only here, because it used to live in two places:
+    /// Today held its own `NotificationsViewModel` in `@State` and computed the
+    /// badge from it, while the feed held a second one, and `markRead` mutated
+    /// only the feed's. So a client read every row, popped back, and the bell
+    /// still badged three (`C2-07`). A badge that lies is the fastest way to
+    /// teach someone to stop looking at it.
+    ///
+    /// Studio-composed fallback rows never count: they were never delivered,
+    /// so they have no arrival and no read state to report (`C5`). They are
+    /// already spoken for by `attentionCount`, which is the OTHER half of
+    /// VISION's one-number rule — this is the delivered half, on one surface.
+    private(set) var unreadNotificationCount: Int = 0
+
+    /// Publish the feed's own rows into the one count every surface reads.
+    /// Called by `NotificationsViewModel` on load and after each mark-read, so
+    /// the bell can never disagree with the list behind it.
+    func applyNotificationRows(_ rows: [AppNotification]) {
+        unreadNotificationCount = rows.filter { !$0.isStudioFallback && !$0.isRead }.count
+    }
+
     /// Proposals still awaiting the client's signature (sent/viewed, not
     /// expired). Wave 2 / D.1 money rail.
     private(set) var proposalsAwaitingSignatureCount: Int = 0
@@ -143,15 +165,122 @@ final class BadgeCountService {
     /// refresh could reintroduce it.
     private var refreshToken = 0
 
+    /// R-02: what the last successful refresh knew, kept across launches.
+    ///
+    /// Without it a cold launch on a dead network does not degrade, it
+    /// DELETES: the counts start at zero, the pill loses its number and the
+    /// bell tells VoiceOver "No unread notifications" — all of it asserted,
+    /// none of it fetched.
+    private struct PersistedCounts: Codable {
+        let pendingDecisionCount: Int
+        let unreadMessageCount: Int
+        let proposalsAwaitingSignatureCount: Int
+        let payableInvoiceCount: Int
+        let projectCount: Int
+        /// R-02, second half. The counts alone restore the numbers and lose the
+        /// SEAT: `DesignerSeat.make` reads these rows, not `projectCount`, so
+        /// an offline cold launch drew a house with no designer in it — the
+        /// walk's shots 36/37. Decoded as `[]` on a payload written before this
+        /// field existed, which is the same floor the counts already have.
+        /// Optional so a payload written before this field existed still
+        /// decodes — an absent key is `nil`, not a decode failure that would
+        /// throw the whole floor away.
+        let projects: [RemoteProject]?
+        /// `R-02`, the seat's PROJECT. `projects` alone brings the seat back
+        /// but not the one it named: `DesignerSeat.activeProject` resolves the
+        /// urgent NEEDS YOU row against these three collections — the only
+        /// place a row's `project_id` survives — and with them empty it falls
+        /// through to `active.first`, so a cold offline Today seated Leah on
+        /// the most-recently-updated project instead of the one the Record is
+        /// about. Restored for the same reason `projects` is, and under the
+        /// same contract: a floor to draw, never a claim that a fetch
+        /// answered. Optional for the same forward-compatibility reason.
+        let pendingDecisions: [RemoteClientDecision]?
+        let pendingProposals: [RemoteProposal]?
+        let payableInvoices: [RemoteInvoice]?
+        let storedAt: Date
+    }
+
+    private static let persistedCountsKey = "patina.badge_counts.last_successful.v1"
+
+    private let defaults: UserDefaults
+
     /// Private on purpose: this service exists because two surfaces read two
     /// different objects and printed two different numbers. A second instance
     /// reproduces that by accident.
-    private init() {}
+    private init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        restorePersistedCounts()
+    }
 
     #if DEBUG
     /// A detached instance for tests, which need to `apply(…)` fixtures
     /// without touching the singleton every other surface reads.
-    static func makeForTests() -> BadgeCountService { BadgeCountService() }
+    ///
+    /// The omitted argument is a **private, empty suite**, never `.standard`:
+    /// `init` now calls `restorePersistedCounts()`, so a `.standard` default
+    /// would read the running simulator's own
+    /// `patina.badge_counts.last_successful.v1` into five of the six counts and
+    /// make every suite that omits it clone-dependent (`RL1F-33`). The suites
+    /// that need the counts to persist across two instances pass their own.
+    static func makeForTests(defaults: UserDefaults? = nil) -> BadgeCountService {
+        BadgeCountService(
+            defaults: defaults
+                ?? UserDefaults(suiteName: "patina.tests.badges.\(UUID().uuidString)")
+                ?? .standard
+        )
+    }
+    #endif
+
+    /// Draw the last numbers that answered, with `hasLoaded` and
+    /// `projectsLoaded` left **false**: they are a floor to draw, not a claim
+    /// that a fetch answered. `unreadNotificationCount` is deliberately not
+    /// among them — the bell's count is the feed's own rows, and a restored
+    /// number would badge updates this process has never seen.
+    private func restorePersistedCounts() {
+        guard let data = defaults.data(forKey: Self.persistedCountsKey) else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let stored = try? decoder.decode(PersistedCounts.self, from: data) else { return }
+        pendingDecisionCount = stored.pendingDecisionCount
+        unreadMessageCount = stored.unreadMessageCount
+        proposalsAwaitingSignatureCount = stored.proposalsAwaitingSignatureCount
+        payableInvoiceCount = stored.payableInvoiceCount
+        projectCount = stored.projectCount
+        // `projectsLoaded` stays FALSE: these rows are a floor to draw, not a
+        // claim that `listProjects()` answered. Everything that gates on a
+        // fetch having landed still waits for one.
+        projects = stored.projects ?? []
+        pendingDecisions = stored.pendingDecisions ?? []
+        pendingProposals = stored.pendingProposals ?? []
+        payableInvoices = stored.payableInvoices ?? []
+    }
+
+    private func persistCounts(now: Date = Date()) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let stored = PersistedCounts(
+            pendingDecisionCount: pendingDecisionCount,
+            unreadMessageCount: unreadMessageCount,
+            proposalsAwaitingSignatureCount: proposalsAwaitingSignatureCount,
+            payableInvoiceCount: payableInvoiceCount,
+            projectCount: projectCount,
+            projects: projects,
+            pendingDecisions: pendingDecisions,
+            pendingProposals: pendingProposals,
+            payableInvoices: payableInvoices,
+            storedAt: now
+        )
+        guard let data = try? encoder.encode(stored) else { return }
+        defaults.set(data, forKey: Self.persistedCountsKey)
+    }
+
+    #if DEBUG
+    /// The R-02 write, reachable without the six network round trips
+    /// `performRefresh(token:)` takes to get to it. Production calls it from
+    /// that method's `hasLoaded = true` branch and nowhere else — which
+    /// `BadgeCountPersistenceTests` pins in source.
+    func persistCountsForTesting() { persistCounts() }
     #endif
 
     /// Fetch both counts. Guests resolve to zero without a network round
@@ -177,6 +306,7 @@ final class BadgeCountService {
         guard AuthService.shared.isAuthenticated else {
             pendingDecisionCount = 0
             unreadMessageCount = 0
+            unreadNotificationCount = 0
             proposalsAwaitingSignatureCount = 0
             payableInvoiceCount = 0
             projectCount = 0
@@ -215,6 +345,10 @@ final class BadgeCountService {
             || invoices != nil || fetchedProjects != nil {
             hasLoaded = true
             lastRefreshFailed = false
+            // R-02: only a refresh that answered leaves a floor behind. A run
+            // where every fetch failed must not overwrite the last numbers
+            // that were true with the zeros it did not learn.
+            persistCounts()
         } else {
             lastRefreshFailed = true
         }
@@ -291,6 +425,7 @@ final class BadgeCountService {
         inFlightRefresh = nil
         pendingDecisionCount = 0
         unreadMessageCount = 0
+        unreadNotificationCount = 0
         proposalsAwaitingSignatureCount = 0
         payableInvoiceCount = 0
         projectCount = 0
@@ -303,6 +438,9 @@ final class BadgeCountService {
         hasLoaded = false
         projectsLoaded = false
         lastRefreshFailed = false
+        // R-02: the floor is the PREVIOUS account's. Without this, account B's
+        // first launch paints account A's numbers.
+        defaults.removeObject(forKey: Self.persistedCountsKey)
     }
 
     /// Debounced refresh for bursty triggers (push receipt can deliver a

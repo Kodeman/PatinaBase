@@ -28,7 +28,7 @@ struct MoneyAndStudioCopyTests {
 
     // MARK: - SP-05 · the project screen stops talking to the designer
 
-    @Test("the client's project screen never prints the visibility tier")
+    @Test("the client’s project screen never prints the visibility tier")
     func overviewFactsDropTheClientViewTile() throws {
         let project = try decode(RemoteProject.self, """
         { "id": "pr-1", "name": "Aspen Loft Refresh", "status": "in_progress",
@@ -40,7 +40,7 @@ struct MoneyAndStudioCopyTests {
         #expect(labels == ["Budget", "Status", "Started"])
     }
 
-    @Test("empty project sections speak to the client, not the designer's portal")
+    @Test("empty project sections speak to the client, not the designer’s portal")
     func missingSectionsUseClientVoice() {
         let lines = ProjectDetailCopy.missingSectionLines(phases: true, payments: true, ffe: true)
         #expect(lines == [
@@ -116,14 +116,17 @@ struct MoneyAndStudioCopyTests {
         )
         #expect(invoices.contains("DateDisplay.due(invoice.due_date)"))
         #expect(!invoices.contains("\"Due \\("))
-        #expect(invoices.contains("due.isPastDue ? PatinaColors.error"))
+        // A-73: the past-due ink moved from `PatinaColors.error` (3.03:1 on
+        // the light canvas) to `PatinaColors.Text.error`. The rule this test
+        // pins is unchanged — a list row colours on `isPastDue`.
+        #expect(invoices.contains("due.isPastDue ? PatinaColors.Text.error"))
 
         let proposals = try String(
             contentsOf: Self.sourceURL("Patina/Features/Proposals/Views/ProposalListView.swift"),
             encoding: .utf8
         )
         #expect(proposals.contains("DateDisplay.expiry(proposal.valid_until)"))
-        #expect(proposals.contains("expiry.isPastDue ? PatinaColors.error"))
+        #expect(proposals.contains("expiry.isPastDue ? PatinaColors.Text.error"))
     }
 
     @Test("every money detail carries the date its list already printed")
@@ -171,7 +174,7 @@ struct MoneyAndStudioCopyTests {
         #expect(source.contains("decisionDetail.failure"))
     }
 
-    @Test("no money view model prints a thrown error's own description")
+    @Test("no money view model prints a thrown error’s own description")
     func moneyViewModelsNeverPrintErrorDescription() throws {
         let files = [
             "Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift",
@@ -198,7 +201,7 @@ struct MoneyAndStudioCopyTests {
         )
         #expect(source.contains("\"Billed to date\""))
         #expect(!source.contains("\"Your budget\""))
-        #expect(source.contains("your designer's figure"))
+        #expect(source.contains("your designer’s figure"))
     }
 
     @Test("the Studio row says what the screen holds, and keeps its id")
@@ -217,7 +220,7 @@ struct MoneyAndStudioCopyTests {
             snapshot.section(.moneyAndDocuments).rows.first { $0.id == "records.budget" }
         )
         #expect(row.title == "Budget")
-        #expect(row.detail == "What's been billed, and what's been paid")
+        #expect(row.detail == "What’s been billed, and what’s been paid")
     }
 
     // MARK: - SP-19 (money half) · the status bar and the Hearth
@@ -266,7 +269,7 @@ struct MoneyAndStudioCopyTests {
     /// (`shots/w3-n1-13-piece-footer-under-bar-dark-xxl.png`). It takes the
     /// money screens' house-first clearance rather than a second hand-rolled
     /// number, and keeps W2's on the root where nothing is over that edge.
-    @Test("the piece screen's pinned act clears the bar too")
+    @Test("the piece screen’s pinned act clears the bar too")
     func theAddToRoomCapsuleClearsTheBar() throws {
         let source = try SourcePin.read("Patina/Features/ProductDetail/Views/ProductDetailView.swift")
         #expect(source.contains("MoneyScreenMetrics.bottomClearance(houseFirst: true)"))

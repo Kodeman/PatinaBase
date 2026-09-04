@@ -19,7 +19,7 @@ struct DocumentListView: View {
                 header
                 content
             }
-            .padding(.bottom, 120)
+            .companionBottomClearance()
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
@@ -34,7 +34,7 @@ struct DocumentListView: View {
             .ignoresSafeArea()
         }
         .alert(
-            "Couldn't open this file",
+            "Couldn’t open this file",
             isPresented: Binding(
                 get: { viewModel.openError != nil },
                 set: { if !$0 { viewModel.openError = nil } }
@@ -122,7 +122,7 @@ private struct DocumentGroupSection: View {
                     .buttonStyle(.plain)
                     .disabled(viewModel.downloadingDocumentId != nil)
                     if index < group.documents.count - 1 {
-                        Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                        Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
                     }
                 }
             }

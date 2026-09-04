@@ -54,13 +54,22 @@ struct DesignServicesErrorMappingTests {
         #expect(DesignServicesError.map(original) == .alreadySubmitted)
     }
 
+    /// `RL1E2-12`: `.networkError`'s sentence is "Check your connection and
+    /// try again.", so only a real transport failure may map to it. A
+    /// decoding failure, an expired auth error or a keychain error takes the
+    /// same catch-all an unrecognised Postgres message does.
     @Test
-    func mapErrorWrapsUnknownAsNetworkError() {
+    func mapErrorOnlyClaimsAConnectionForARealOne() {
         struct Boom: Error {}
-        if case .networkError = DesignServicesError.map(Boom()) {
+        #expect(DesignServicesError.map(Boom()) == .submissionFailed)
+        #expect(
+            DesignServicesError.map(Boom()).errorDescription?.contains("connection") == false,
+            "a non-transport failure tells the reader to check their connection"
+        )
+        if case .networkError = DesignServicesError.map(URLError(.notConnectedToInternet)) {
             // ok
         } else {
-            Issue.record("expected .networkError")
+            Issue.record("expected .networkError for a real URLError")
         }
     }
 }

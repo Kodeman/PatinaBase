@@ -232,6 +232,7 @@ public final class CompanionAPIClient {
 
         case 400:
             let message = parseErrorMessage(from: data)
+            PatinaLog.companion.error("Bad request: \(message)")
             throw CompanionAPIError.badRequest(message: message)
 
         case 429:
@@ -239,6 +240,7 @@ public final class CompanionAPIClient {
             throw CompanionAPIError.rateLimited(retryAfter: retryAfter)
 
         default:
+            PatinaLog.companion.error("Server error: HTTP \(httpResponse.statusCode)")
             throw CompanionAPIError.serverError(statusCode: httpResponse.statusCode)
         }
     }

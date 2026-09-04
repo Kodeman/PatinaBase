@@ -13,7 +13,7 @@ public enum PatinaCardStyle {
     case surface
     /// Off-white fill with a lift shadow — for content that floats.
     case elevated
-    /// Transparent fill with a pearl hairline border.
+    /// Transparent fill with a hairline border.
     case outline
 }
 
@@ -55,7 +55,7 @@ public struct PatinaCard<Content: View>: View {
     private var borderColor: Color {
         switch style {
         case .outline:
-            return PatinaColors.pearl
+            return PatinaColors.Border.hairline
         default:
             return .clear
         }

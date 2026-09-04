@@ -71,7 +71,8 @@ extension CompanionActionProvider {
 
     static func discoveryItems(
         _ screen: AppRoute,
-        context: CompanionContext
+        context: CompanionContext,
+        isAuthenticated: Bool
     ) -> [CompanionActionItem] {
         switch screen {
         case .emergence, .roomEmergence:
@@ -92,7 +93,8 @@ extension CompanionActionProvider {
             }
             // Exactly one suggested row per panel: once the piece has an act,
             // the act is it and "Save" steps back.
-            return [saveRow(label: "Save", suggested: false), pieceActRow(act)]
+            return [saveRow(label: "Save", suggested: false),
+                    pieceActRow(act, isAuthenticated: isAuthenticated)]
         default: // .arPlacement
             return [
                 item("camera", "Save photo", "Capture this view",
@@ -126,13 +128,13 @@ extension CompanionActionProvider {
                 item("sparkles", "Recommendations for this room", "Pieces for this space",
                      route: .roomEmergence(roomId: roomId), id: "room_recommendations", suggested: true),
                 designerRow(roomId: roomId, context: context),
-                item("heart", "All saved items", "Everything you've saved",
+                item("heart", "All saved items", "Everything you’ve saved",
                      route: .table, id: "collections")
             ]
         default: // .crossRoom
             return [
                 spacesOrScanRow(context: context, suggested: true),
-                item("heart", "Saved", "Everything you've saved",
+                item("heart", "Saved", "Everything you’ve saved",
                      route: .table, id: "collections"),
                 designerRow(roomId: nil, context: context)
             ]
@@ -373,7 +375,7 @@ extension CompanionActionProvider {
         case .proposalDetail:
             return [
                 messageDesignerRow(label: "Questions? Message your designer", suggested: true),
-                budgetRow(label: "See what's been billed"),
+                budgetRow(label: "See what’s been billed"),
                 item("doc.text", "All proposals", "Back to the list",
                      route: .proposalList, id: "proposals")
             ]

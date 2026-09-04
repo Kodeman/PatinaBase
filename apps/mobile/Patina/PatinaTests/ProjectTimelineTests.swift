@@ -26,7 +26,7 @@ struct ProjectTimelineTests {
        "status": "pending", "sort_order": 3 }]
     """
 
-    @Test("the designer's own current_phase names the current row")
+    @Test("the designer’s own current_phase names the current row")
     func currentPhaseKeyWins() throws {
         let rows = try phases(threePhases)
         #expect(
@@ -154,7 +154,7 @@ struct ProjectTimelineTests {
         #expect(rows[0].target_end_date == "2026-09-11")
     }
 
-    @Test("the timeline keeps the server's order and invents no phase")
+    @Test("the timeline keeps the server’s order and invents no phase")
     func orderIsTheServersOwn() throws {
         // `listPhases` orders `sort_order.asc,start_date.asc`
         // (`ProjectsAPIClient.swift:223`); the view draws the array it was

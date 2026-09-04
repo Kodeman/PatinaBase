@@ -44,6 +44,24 @@ public final class SupabaseClientManager {
     /// The Supabase client instance
     public let client: SupabaseClient
 
+    /// The session every supabase-swift read runs on.
+    ///
+    /// Without it the SDK falls back to `URLSession.shared`, whose defaults
+    /// are 60 s per request and **seven days** per resource — so a proposal,
+    /// an invoice, a decision or a thread fetched through the SDK inherited a
+    /// budget four times the one the raw-URLSession clients apply, and a
+    /// tester on a dead backend watched "One moment…" for a full minute with
+    /// nothing to cancel (C4-16; the mechanism behind R-05's measured 65–185 s).
+    /// `static` and read by `NetworkBudgetTests`, which is the only way to
+    /// assert a timeout the SDK does not expose back.
+    public static let sessionConfiguration: URLSessionConfiguration = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = APIConfiguration.requestTimeout
+        configuration.timeoutIntervalForResource = APIConfiguration.resourceTimeout
+        configuration.waitsForConnectivity = false
+        return configuration
+    }()
+
     private init() {
         #if DEBUG
         let logger: (any SupabaseLogger)? = SupabaseDiagnosticsLogger()
@@ -58,7 +76,10 @@ public final class SupabaseClientManager {
                 auth: SupabaseClientOptions.AuthOptions(
                     emitLocalSessionAsInitialSession: true
                 ),
-                global: SupabaseClientOptions.GlobalOptions(logger: logger)
+                global: SupabaseClientOptions.GlobalOptions(
+                    session: URLSession(configuration: Self.sessionConfiguration),
+                    logger: logger
+                )
             )
         )
     }

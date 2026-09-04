@@ -149,10 +149,10 @@ struct DecisionConsentValidationTests {
     @MainActor
     func deferralFailureIsNotCalledAChoice() {
         #expect(MoneyFailureCopy.deferral.sentence
-                == "We couldn't send that note. Your designer hasn't seen it yet.")
+                == "We couldn’t send that note. Your designer hasn’t seen it yet.")
         #expect(!MoneyFailureCopy.deferral.sentence.contains("choice"))
         #expect(MoneyFailureCopy.decision.sentence
-                == "We couldn't send your choice. Your designer hasn't seen it yet.")
+                == "We couldn’t send your choice. Your designer hasn’t seen it yet.")
     }
 
     /// m-2: the decision failure banner offered zero-or-one act where the
@@ -175,7 +175,7 @@ struct DecisionConsentValidationTests {
         viewModel.retrySelection()
         #expect(viewModel.pendingOptionId == "o-1")
         #expect(viewModel.submitFailure == nil)
-        #expect(MoneyFailureCopy.decision.retryLabel == "Let's try that again")
+        #expect(MoneyFailureCopy.decision.retryLabel == "Let’s try that again")
 
         // A retry after the decision resolved would re-open a consent step on
         // a settled decision.

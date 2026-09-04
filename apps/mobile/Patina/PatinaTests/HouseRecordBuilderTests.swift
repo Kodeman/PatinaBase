@@ -526,7 +526,7 @@ struct HouseRecordBuilderTests {
         #expect(record.moved.last?.kind == .matchedDesigner)
     }
 
-    @Test("the match ceremony's own date is preferred to the lead's last write")
+    @Test("the match ceremony’s own date is preferred to the lead’s last write")
     func theMatchedRowPrefersTheCeremonyDate() throws {
         let ceremony = day("2026-08-24T09:00:00Z")
         let anyLaterWrite = day("2026-08-26T18:00:00Z")
@@ -833,7 +833,7 @@ struct HouseRecordDecisionCopyTests {
         )
     }
 
-    @Test("a decision with a question names it, with the designer's first name")
+    @Test("a decision with a question names it, with the designer’s first name")
     func aTitledDecisionNamesTheQuestion() {
         let item = row(title: "Rug color — Natural vs Sand", designerName: "Leah Hartwell")
         #expect(HouseRecordBuilder.title(for: item)
@@ -900,7 +900,7 @@ struct HouseRecordDecisionCopyTests {
         #expect(StudioQueueBuilder.naming(full, fallback: nil, fallbackIsPerson: false).isPerson)
     }
 
-    @Test("the studio's own decision row reads with the whole studio name")
+    @Test("the studio’s own decision row reads with the whole studio name")
     func theRowBuiltFromAStudioEmbedIsWhole() throws {
         let decision = try decode(RemoteClientDecision.self, """
         {

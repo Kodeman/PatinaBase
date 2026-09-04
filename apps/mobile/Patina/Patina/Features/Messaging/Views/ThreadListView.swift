@@ -41,7 +41,7 @@ struct ThreadListView: View {
                 }
                 content
             }
-            .padding(.bottom, 120)
+            .companionBottomClearance()
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
@@ -126,7 +126,7 @@ struct ThreadListView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
-                .stroke(PatinaColors.pearl, lineWidth: 1)
+                .stroke(PatinaColors.Border.strong, lineWidth: 1)
         )
         .accessibilityLabel("Search conversations")
     }
@@ -172,7 +172,7 @@ struct ThreadListView: View {
         .padding(.horizontal, 16)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
-            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+            Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(item.accessibilityLabel)
@@ -186,7 +186,7 @@ struct ThreadListView: View {
         PatinaEmptyState(
             icon: "bubble.left.and.bubble.right",
             title: "No conversations yet",
-            message: "Messages with your designer land here once you're working together.",
+            message: "Messages with your designer land here once you’re working together.",
             ctaTitle: isOpeningThread ? "Opening\u{2026}" : emptyCTATitle,
             ctaAction: performEmptyCTA
         )

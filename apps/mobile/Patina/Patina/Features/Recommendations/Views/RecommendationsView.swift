@@ -142,6 +142,11 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
 
             content
         }
+        // R-06: the root VStack claimed only its content's height, so the
+        // cream ground stopped where the content stopped and the loading,
+        // error and empty states floated as a band in white (y=296…613 on an
+        // 874 pt window). Claim the screen BEFORE painting the ground.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the "Browse pieces" header
         // above carries the title, so the chrome adds only the back chevron.
@@ -160,6 +165,10 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             async let seed: Void = viewModel.seedSavedState(context: modelContext)
             async let load: Void = viewModel.loadRecommendations(roomId: roomRemoteId)
             _ = await (seed, load)
+        }
+        // C4-12 / R-03 (L1-B's note).
+        .refreshable {
+            await viewModel.loadRecommendations(roomId: roomRemoteId)
         }
         // SP-11: the loop the app invited and then closed — a piece can now be
         // put into a room from the card menu.
@@ -255,14 +264,25 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                 .padding(.top, 80)
                 .padding(.horizontal, 24)
         } else if viewModel.filteredProducts.isEmpty {
-            PatinaEmptyState(
-                icon: "sparkles",
-                title: "Nothing here yet",
-                message: "Save pieces you love or take the style quiz to tune what shows up.",
-                ctaTitle: "Take the style quiz",
-                ctaAction: { coordinator.navigate(to: .styleQuiz) }
-            )
-            .padding(.top, 60)
+            // A3-01: `filteredProducts` IS `products`, so an empty list here
+            // means the fetch came back with nothing — which on production it
+            // does, for every tester. The old copy blamed the reader ("save
+            // pieces you love or take the style quiz") and pointed at a door
+            // with nothing behind it: tuning taste cannot conjure rows that
+            // are not in the catalogue.
+            //
+            // But the chip goes to the RPC as `p_category` (SP-02), so a
+            // category with no rows also lands here — and "your designer is
+            // still choosing pieces for you" over a catalogue that is fine
+            // tells the tester who tapped "Lighting" something false. The
+            // honest-empty sentence is claimed only for the unfiltered case.
+            if viewModel.activeFilter == "All" {
+                PatinaEmptyState(PatinaEmptyStateContent.stillChoosingPieces)
+                    .padding(.top, 60)
+            } else {
+                PatinaEmptyState(PatinaEmptyStateContent.noPiecesInThisCategory)
+                    .padding(.top, 60)
+            }
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: [
@@ -275,7 +295,7 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 120)
+                .companionBottomClearance()
             }
         }
     }
@@ -364,12 +384,17 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             // column stays the width the grid gave it.
             Color.clear
                 .aspectRatio(Self.cardImageAspect, contentMode: .fit)
+                // A-36 / C-27 / B-18: the no-URL arm used to fall through to
+                // a bare category gradient, so a piece with no photograph
+                // rendered as a flat colour slab carrying a heart, a ⋯ and a
+                // "45% match" pill over nothing. `PatinaAsyncImage` says which
+                // of the three things it is, and names the piece while it says
+                // it.
                 .overlay {
-                    if let imageURL = product.imageURL, let url = URL(string: imageURL) {
-                        PatinaAsyncImage(url: url)
-                    } else {
-                        product.placeholderGradient
-                    }
+                    PatinaAsyncImage(
+                        url: product.imageURL.flatMap(URL.init(string:)),
+                        caption: product.name
+                    )
                 }
                 .clipped()
                 // The card's combined label already names the piece; the photo
@@ -377,27 +402,39 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                 // uncropped bounds into the union.
                 .accessibilityHidden(true)
 
+            // W1-C-04: the badge and the two chrome buttons used to be two
+            // independent overlays in one ZStack, so at XXXL the pill grew
+            // under the heart ("Good matc" with the heart drawn on top of it)
+            // and at AX3XL it overflowed the card entirely. One row instead:
+            // the pill takes what is left after the buttons have their lane,
+            // and scales rather than clipping.
+            //
             // Match badge
-            Text(product.matchLabel)
-                .font(PatinaTypography.monoSmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .tracking(0.3)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .padding(8)
-
+            // C-27: the translucent material this used to ride on inverts to a
+            // light-on-light wash over a light tile — the pill measured 1.86:1
+            // and the heart and ⋯ measured 2.01:1. A material's contrast is a
+            // function of what is behind it; a scrim's is not.
+            //
             // Save (accelerator) + ⋯ menu (U14: every card's actions
             // must be visible, not just reachable via long-press).
-            VStack {
-                HStack(spacing: 6) {
-                    Spacer()
-                    saveButton(product)
-                    menuButton(product)
-                }
-                .padding(8)
+            HStack(alignment: .top, spacing: 6) {
+                Text(product.matchLabel)
+                    .font(PatinaTypography.monoSmall)
+                    .foregroundStyle(PatinaColors.OnDark.primary)
+                    .tracking(0.3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .allowsTightening(true)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .patinaChromeScrim(RoundedRectangle(cornerRadius: 6))
+
+                Spacer(minLength: 4)
+
+                saveButton(product)
+                menuButton(product)
             }
+            .padding(8)
         }
     }
 
@@ -415,9 +452,8 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
         if let tastePortrait {
             return tastePortrait.recommendationRationale(for: product, roomName: scopedRoomName)
         }
-        if let scopedRoomName {
-            return "Selected from Patina's room-aware edit for \(scopedRoomName)."
-        }
+        // C-38: the same truncated boilerplate under every card in a
+        // room-scoped grid. The Pieces tab already prints nothing here.
         return nil
     }
 
@@ -504,12 +540,12 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             }
         } label: {
             Circle()
-                .fill(.ultraThinMaterial)
+                .fill(PatinaColors.Scrim.chrome)
                 .frame(width: 30, height: 30)
                 .overlay(
                     Image(systemName: isSaved ? "heart.fill" : "heart")
                         .font(.system(size: 14))
-                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .foregroundStyle(PatinaColors.OnDark.primary)
                 )
                 .contentShape(Rectangle())
         }
@@ -524,12 +560,12 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             cardMenuActions(product)
         } label: {
             Circle()
-                .fill(.ultraThinMaterial)
+                .fill(PatinaColors.Scrim.chrome)
                 .frame(width: 30, height: 30)
                 .overlay(
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14))
-                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .foregroundStyle(PatinaColors.OnDark.primary)
                 )
                 .contentShape(Rectangle())
         }

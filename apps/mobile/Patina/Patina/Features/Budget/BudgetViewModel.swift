@@ -194,7 +194,7 @@ final class BudgetViewModel {
         if projects == nil, proposals == nil, invoices == nil {
             // SP-16: the screen is "Billed to date"; the load error named a
             // screen that no longer exists.
-            self.error = "Couldn't load what's been billed"
+            self.error = "Couldn’t load what’s been billed"
             self.isLoading = false
             #if DEBUG
             PatinaLog.ui.error("[Budget] all sources failed")

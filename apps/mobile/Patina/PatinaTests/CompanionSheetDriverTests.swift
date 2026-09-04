@@ -73,14 +73,18 @@ struct CompanionSheetDriverTests {
         let source = try SourcePin.read(
             "Patina/Features/Companion/Views/CompanionOverlay.swift"
         )
-        #expect(source.contains("presented = .help"))
+        // C5-02: `onHelp: nil` retires the chip that set `presented = .help`
+        // for round one, because no ios-app/companion article exists and the
+        // panel opened empty. The arm, the sheet and the surface key stay
+        // mounted; W2 restores the trigger.
+        #expect(source.contains("case .help:"))
         #expect(source.contains("HelpPanelSheet("))
         #expect(source.contains("SurfaceKeys.IOSApp.Companion.root"))
     }
 
     /// The claim's own decision is unchanged by the collapse: only a real
     /// account taking over a store no account has owned, with guest work in it.
-    @Test("collapsing the driver did not move the claim's own rule")
+    @Test("collapsing the driver did not move the claim’s own rule")
     func theClaimRuleIsUnchanged() {
         #expect(LocalStoreClaim.shouldAsk(previousOwner: nil, hasGuestWork: true))
         #expect(LocalStoreClaim.shouldAsk(previousOwner: nil, hasGuestWork: false) == false)
@@ -89,7 +93,7 @@ struct CompanionSheetDriverTests {
 
     // MARK: - The column that would not scroll at XXL
 
-    @Test("the Companion panel's rows scroll at an accessibility text size")
+    @Test("the Companion panel’s rows scroll at an accessibility text size")
     func theCompanionPanelScrollsAtAccessibilitySizes() throws {
         let source = try SourcePin.read(
             "Patina/Features/Companion/Components/CompanionHearthView.swift"
@@ -128,7 +132,7 @@ struct CompanionSheetDriverTests {
 
     /// Cause (b). The inset has to travel WITH the rows: applied to the
     /// container instead, it is a strip of panel that does not scroll.
-    @Test("the panel's inset scrolls with the rows, leaving no dead strip")
+    @Test("the panel’s inset scrolls with the rows, leaving no dead strip")
     func thePanelInsetRidesInsideTheScrollingColumn() throws {
         let source = try SourcePin.read(
             "Patina/Features/Companion/Components/CompanionHearthView.swift"
@@ -220,14 +224,14 @@ struct CompanionSheetDriverTests {
     /// enclosing VStack while its text drew past it, so it overlapped the house
     /// rail above it by ~13pt at XXL and — being the later sibling — hit-tested
     /// on top, making the covered portion of the room cards untappable.
-    @Test("the story card's height is a minimum, not a fixed frame")
+    @Test("the story card’s height is a minimum, not a fixed frame")
     func theStoryCardGrowsWithItsContent() throws {
         let source = try SourcePin.read("Patina/Features/Home/Views/DailyStoryCard.swift")
         #expect(source.contains(".frame(minHeight: height)"))
         #expect(source.contains(".frame(height: height)") == false)
     }
 
-    @Test("a house-rail card's height is a minimum too")
+    @Test("a house-rail card’s height is a minimum too")
     func theRailCardGrowsWithItsContent() throws {
         let source = try SourcePin.read("Patina/Features/Home/Views/YourHouseRail.swift")
         #expect(source.contains(".frame(minHeight: 150, alignment: .topLeading)"))

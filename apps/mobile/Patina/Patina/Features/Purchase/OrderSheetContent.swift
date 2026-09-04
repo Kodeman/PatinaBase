@@ -61,7 +61,7 @@ struct OrderSheetContent: Equatable {
     static let safariNoteText = "Payment opens securely in Safari."
 
     static let taxEnabledLine =
-        "Delivery and tax are added at payment. You'll see the full total before you pay."
+        "Delivery and tax are added at payment. You’ll see the full total before you pay."
     static let taxDisabledLine = "Delivery and tax are not included yet."
 
     /// - Parameters:
@@ -161,7 +161,7 @@ struct OrderSheetContent: Equatable {
     static func creditedInset(order: DirectOrder?, designerFirstName: String?) -> String? {
         guard let order, order.designerId != nil else { return nil }
         let who = designerFirstName.flatMap { $0.isEmpty ? nil : $0 } ?? "Your designer"
-        return "Ordered in your name. \(who) sees it and is credited at the piece's trade rate. "
-            + "This doesn't change your price."
+        return "Ordered in your name. \(who) sees it and is credited at the piece’s trade rate. "
+            + "This doesn’t change your price."
     }
 }

@@ -52,7 +52,7 @@ struct SavedNoteSheet: View {
                     }
                     .overlay(alignment: .topLeading) {
                         if draft.isEmpty {
-                            Text("Why you saved it, what it's for, what to check.")
+                            Text("Why you saved it, what it’s for, what to check.")
                                 .font(PatinaTypography.bodySmall)
                                 .foregroundStyle(PatinaColors.Text.muted)
                                 .padding(.horizontal, 15)

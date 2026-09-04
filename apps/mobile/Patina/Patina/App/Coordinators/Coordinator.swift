@@ -132,7 +132,7 @@ public enum AppRoute: Hashable {
         case .yourSpaces: return "Your Spaces"
         case .roomProject: return "Room"
         case .roomSettings: return "Room Settings"
-        case .crossRoom: return "All Items"
+        case .crossRoom: return "All pieces"
         case .manualRoomEntry: return "Room Details"
         case .roomSavedItems: return "Saved"
         case .emergence: return "Emergence"
@@ -196,6 +196,11 @@ public extension AppRoute {
             return "Your Table"
         case .roomSavedItems:
             return "Saved Items"
+        // C5-09 renamed `displayName` to "All pieces" for the UI and the
+        // companion context; the PostHog screen name stays put for the
+        // same reason `.table` and `.roomSavedItems` do, one row above.
+        case .crossRoom:
+            return "All Items"
         default:
             return displayName
         }

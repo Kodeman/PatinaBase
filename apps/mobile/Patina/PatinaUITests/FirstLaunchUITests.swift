@@ -37,7 +37,7 @@ final class FirstLaunchUITests: XCTestCase {
         // 2. Walk Invitation - verify elements appear
         XCTAssertTrue(app.walkInvitationMessage.waitForExistence(timeout: 5),
                       "Walk invitation message should appear")
-        XCTAssertTrue(app.letsWalkButton.exists, "Let's walk button should be visible")
+        XCTAssertTrue(app.letsWalkButton.exists, "Let’s walk button should be visible")
         XCTAssertTrue(app.notYetButton.exists, "Not yet button should be visible")
 
         // 3. Tap "Let's walk"
@@ -145,12 +145,12 @@ final class FirstLaunchUITests: XCTestCase {
         let questionText = app.staticTexts["Shall we walk your space together?"]
         XCTAssertTrue(questionText.exists, "Question text should be visible")
 
-        let subText = app.staticTexts["I'd love to see where you live."]
+        let subText = app.staticTexts["I’d love to see where you live."]
         XCTAssertTrue(subText.exists, "Sub text should be visible")
 
         // Verify buttons
-        XCTAssertTrue(app.letsWalkButton.exists, "Let's walk button should be visible")
-        XCTAssertTrue(app.letsWalkButton.isHittable, "Let's walk button should be tappable")
+        XCTAssertTrue(app.letsWalkButton.exists, "Let’s walk button should be visible")
+        XCTAssertTrue(app.letsWalkButton.isHittable, "Let’s walk button should be tappable")
 
         XCTAssertTrue(app.notYetButton.exists, "Not yet button should be visible")
         XCTAssertTrue(app.notYetButton.isHittable, "Not yet button should be tappable")

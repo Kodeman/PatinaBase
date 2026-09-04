@@ -15,7 +15,13 @@ public struct QRScannerView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = QRScannerViewModel()
     /// Drives the contextual help-panel sheet attached to the QR-auth surface.
-    /// Toggled by the `?` button in the top bar.
+    ///
+    /// PARKED, not dead (RL3A-13). L0.4 removed the `?` button that set it —
+    /// the Sanity articles behind it are not published for round one and a
+    /// door onto an empty room is worse than no door — and `l1-c-notes.md`'s
+    /// integration note is explicit that the `.helpPanel(…)` mount below
+    /// stays. `C5-05` (the Help Center 404) is the finding that puts the door
+    /// back; nothing writes this binding until it does.
     @State private var isHelpPanelPresented: Bool = false
 
     public init() {}
@@ -53,28 +59,12 @@ public struct QRScannerView: View {
                 errorOverlay
             }
 
-            // Top bar — help button on the left, close on the right.
+            // Top bar — close on the right. L0.4 took the `?` door out
+            // (integration note from L1-C): the Sanity articles behind it are
+            // not published for round one, and a door onto an empty room is
+            // worse than no door. `.helpPanel(...)` below stays mounted.
             VStack {
                 HStack {
-                    // `?` help-panel trigger — surfaces the QR sign-in
-                    // articles (what is QR sign-in, security model, etc.).
-                    Button {
-                        isHelpPanelPresented = true
-                    } label: {
-                        Image(systemName: "questionmark")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(PatinaColors.Text.primary)
-                            .frame(width: 36, height: 36)
-                            .background(
-                                Circle()
-                                    .fill(PatinaColors.Background.secondary.opacity(0.8))
-                            )
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Help")
-                    .accessibilityHint("Opens the help panel for QR sign-in.")
-                    .accessibilityIdentifier("QRScannerView.HelpButton")
                     Spacer()
                     closeButton
                 }
@@ -99,6 +89,9 @@ public struct QRScannerView: View {
         }
         // Contextual help panel — surfaces every Sanity article whose
         // surfaceKey is `ios-app/qr-auth` or a child of it.
+        //
+        // Mounted with no door on purpose: L0.4 took the `?` out for round one
+        // and L1-C's note says to keep this. `C5-05` re-opens it.
         .helpPanel(
             isPresented: $isHelpPanelPresented,
             surfaceKey: SurfaceKeys.IOSApp.QRAuth.root
@@ -198,7 +191,7 @@ public struct QRScannerView: View {
 
             if viewModel.hasRequestedPermission {
                 // Permission was denied - show settings button
-                PatinaButton("Open Settings", style: .primary, action: viewModel.openSettings)
+                PatinaButton("Open settings", style: .primary, action: viewModel.openSettings)
             } else {
                 // Permission not yet requested
                 PatinaButton("Allow Camera Access", style: .primary) {

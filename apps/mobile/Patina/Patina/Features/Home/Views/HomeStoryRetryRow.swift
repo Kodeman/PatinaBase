@@ -21,14 +21,14 @@ struct HomeStoryRetryRow: View {
 
     var body: some View {
         HStack(spacing: PatinaSpacing.sm) {
-            Text("Today's story couldn't load")
+            Text("Today’s story couldn’t load")
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
 
             Spacer(minLength: PatinaSpacing.xs)
 
             Button(action: onRetry) {
-                Text("Let's try that again")
+                Text("Let’s try that again")
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.interactive)
                     .contentShape(Rectangle())

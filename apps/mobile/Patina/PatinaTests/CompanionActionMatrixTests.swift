@@ -201,7 +201,7 @@ struct CompanionActionMatrixTests {
     /// No menu offers the screen the reader is already standing on. The tail's
     /// PROFILE row is the one that can: R2 minted `.studio` over the same
     /// `ProfileView` composition and the tail's exclusion still named only
-    /// `.profile`, so the Studio tab offered "Your profile" — a second copy of
+    /// `.profile`, so the Studio tab offered "Your studio" — a second copy of
     /// its own root, pushed on top of itself with a back chevron. The row count
     /// stayed inside C8's six, which is why only this pin catches it.
     @Test
@@ -331,7 +331,7 @@ struct CompanionActionMatrixTests {
 
     @Test
     func heroFrameSignedInWithRoomsExemplar() {
-        // No "Your studio": signed-in is no longer enough for that door — this
+        // No "Your projects": signed-in is no longer enough for that door — this
         // context has no resolved tier, which reads as `.discovering` (U20).
         // No "Add another space" and no quiz row either: home is the fixed
         // priority list now, and scanning lives atop Your Spaces.
@@ -341,7 +341,7 @@ struct CompanionActionMatrixTests {
             "Your recommendations",
             "Saved",
             "Your spaces",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -359,11 +359,11 @@ struct CompanionActionMatrixTests {
         ).map(\.label)
         #expect(labels == [
             "Message your designer",
-            "Your studio",
+            "Your projects",
             "Your recommendations",
             "Saved",
             "Your spaces",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -375,10 +375,10 @@ struct CompanionActionMatrixTests {
         ).map(\.label)
         #expect(labels == [
             "Questions? Message your designer",
-            "See what's been billed",
+            "See what’s been billed",
             "All proposals",
             "Home",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -394,7 +394,7 @@ struct CompanionActionMatrixTests {
             "Get design help",
             "Rescan room",
             "Home",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -431,11 +431,11 @@ struct CompanionTierAndFreshnessTests {
         let ctx = Fixture.context(for: .heroFrame, roomCount: 2, active: false, tier: .engaged)
         let labels = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true).map(\.label)
         #expect(labels == [
-            "Your studio",
+            "Your projects",
             "Your recommendations",
             "Saved",
             "Your spaces",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -443,7 +443,7 @@ struct CompanionTierAndFreshnessTests {
     func homeStudioRowHiddenAtDiscovering() {
         // Signed in, but nothing behind the door yet — in BOTH home arms.
         for roomCount in [0, 2] {
-            #expect(!Self.homeLabels(roomCount: roomCount, tier: .discovering).contains("Your studio"))
+            #expect(!Self.homeLabels(roomCount: roomCount, tier: .discovering).contains("Your projects"))
         }
     }
 
@@ -452,7 +452,7 @@ struct CompanionTierAndFreshnessTests {
         for roomCount in [0, 2] {
             for tier in [EngagementTier.engaged, .activeProject] {
                 #expect(
-                    Self.homeLabels(roomCount: roomCount, tier: tier).contains("Your studio"),
+                    Self.homeLabels(roomCount: roomCount, tier: tier).contains("Your projects"),
                     "rooms=\(roomCount) tier=\(tier) should offer the Studio door"
                 )
             }
@@ -463,7 +463,7 @@ struct CompanionTierAndFreshnessTests {
     func homeStudioRowHiddenWhenTierUnknown() {
         // An unresolved tier must fail closed — never open the door on a guess.
         for roomCount in [0, 2] {
-            #expect(!Self.homeLabels(roomCount: roomCount, tier: nil).contains("Your studio"))
+            #expect(!Self.homeLabels(roomCount: roomCount, tier: nil).contains("Your projects"))
         }
     }
 
@@ -648,7 +648,7 @@ struct CompanionTierAndFreshnessTests {
     /// over under `All items`.
     @Test
     func savedDefaultsToTheTabHoldingThePieces() {
-        #expect(CollectionsViewModel.defaultTab(boardCount: 0) == "All items")
+        #expect(CollectionsViewModel.defaultTab(boardCount: 0) == "All pieces")
         #expect(CollectionsViewModel.defaultTab(boardCount: 2) == "Boards")
     }
 }
@@ -778,5 +778,40 @@ struct CompanionHomeMenuMatrixTests {
             let suggested = items.filter(\.isSuggested).count
             #expect(suggested == 1, "\(suggested) suggested: \(Self.describe(ctx, signedIn, items))")
         }
+    }
+
+    // MARK: - A-52 · the two rows that promised a guest something they had not got
+
+    @Test
+    func theHomeRowDoesNotPromiseAGuestASpaceTheyHaveNotMade() {
+        // "Back to your space" was drawn identically for a guest who has never
+        // scanned a room. It is true the moment there is local work, and only
+        // then.
+        #expect(CompanionActionProvider.homeRow(isAuthenticated: false, hasLocalWork: false).hint
+                == "See what’s on Patina")
+        for (signedIn, local) in [(true, false), (true, true), (false, true)] {
+            #expect(CompanionActionProvider.homeRow(isAuthenticated: signedIn,
+                                                    hasLocalWork: local).hint
+                    == "Back to your space",
+                    "signedIn=\(signedIn) local=\(local)")
+        }
+    }
+
+    @Test
+    func theAskRowTellsAGuestWhatItActuallyTakes() {
+        // `PieceActResolver` auth-walls the tap; this is what the guest reads
+        // BEFORE the wall, and it used to assert a designer would come back to
+        // someone with no account for one to reach.
+        #expect(CompanionActionProvider.pieceActRow(.askAboutPiece(reason: nil),
+                                                    isAuthenticated: false).hint
+                == "Sign in and a designer will get back to you")
+        #expect(CompanionActionProvider.pieceActRow(.askAboutPiece(reason: nil),
+                                                    isAuthenticated: true).hint
+                == "A designer will get back to you")
+        // `.askDesigner` is only reachable on a live relationship, which a
+        // guest cannot have, so it reads the same either way.
+        let designer = PieceAct.askDesigner(firstName: "Leah")
+        #expect(CompanionActionProvider.pieceActRow(designer, isAuthenticated: true).hint
+                == CompanionActionProvider.pieceActRow(designer, isAuthenticated: false).hint)
     }
 }

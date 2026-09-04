@@ -101,7 +101,7 @@ struct ReleaseConfigurationTests {
     /// nested, empty `UILaunchScreen`), so the dictionary is declared in
     /// `Patina/Info.plist` and generation is off. This assertion is what keeps
     /// that from silently reverting.
-    @Test("the launch screen declares the app's own ground colour")
+    @Test("the launch screen declares the app’s own ground colour")
     func launchScreenHasTheAppGround() throws {
         let launch = try #require(appInfo["UILaunchScreen"] as? [String: Any])
         #expect(launch["UIColorName"] as? String == "LaunchBackground")

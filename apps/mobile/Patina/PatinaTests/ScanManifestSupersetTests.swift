@@ -383,7 +383,7 @@ struct ScanManifestSupersetTests {
     @Test
     func fieldPhotoEntryShapeIsNotTheClientPhotoEntry() throws {
         let text = try fixtureText("field_manifest_instrument_layer")
-        #expect(text.contains("\"photos\":[]"), "fixture's photos[] is expected to be empty")
+        #expect(text.contains("\"photos\":[]"), "fixture’s photos[] is expected to be empty")
 
         let fieldPhoto = """
         {"filename":"auto_001.50.jpg","thumbnailFilename":"thumb_auto_001.50.jpg",\

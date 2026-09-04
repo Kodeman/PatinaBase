@@ -228,7 +228,7 @@ private struct ScanPickerRow: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(isSelected ? PatinaColors.clay.opacity(0.5) : PatinaColors.pearl, lineWidth: 1)
+                .stroke(isSelected ? PatinaColors.clay.opacity(0.5) : PatinaColors.Border.hairline, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggle)
@@ -242,7 +242,7 @@ private struct ScanPickerRow: View {
     private var thumbnailView: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10)
-                .fill(PatinaColors.pearl.opacity(0.5))
+                .fill(PatinaColors.Background.secondary)
             if let thumbnail {
                 Image(uiImage: thumbnail)
                     .resizable()

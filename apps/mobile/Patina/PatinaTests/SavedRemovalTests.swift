@@ -70,7 +70,7 @@ struct SavedRemovalTests {
 
     // MARK: - Entry point 1 — the piece screen (M-1's own surface, unchanged)
 
-    @Test("the piece screen's un-save clears the room's copy")
+    @Test("the piece screen’s un-save clears the room’s copy")
     func thePieceScreenClearsTheRoom() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
@@ -89,7 +89,7 @@ struct SavedRemovalTests {
 
     // MARK: - Entry point 2 — Pieces → Saved, the row's own Remove
 
-    @Test("the Saved row's Remove clears the room's copy")
+    @Test("the Saved row’s Remove clears the room’s copy")
     func theSavedRowClearsTheRoom() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
@@ -112,7 +112,7 @@ struct SavedRemovalTests {
 
     // MARK: - Entry point 3 — a recommendation's ⋯ menu
 
-    @Test("a recommendation's un-save clears the room's copy")
+    @Test("a recommendation’s un-save clears the room’s copy")
     func theRecommendationMenuClearsTheRoom() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
@@ -130,7 +130,7 @@ struct SavedRemovalTests {
 
     // MARK: - What must survive
 
-    @Test("un-saving from the Saved row leaves the room's other pieces alone")
+    @Test("un-saving from the Saved row leaves the room’s other pieces alone")
     func theSavedRowLeavesTheOtherPieces() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)

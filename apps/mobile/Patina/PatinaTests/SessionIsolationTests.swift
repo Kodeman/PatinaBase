@@ -46,7 +46,10 @@ struct SessionIsolationTests {
     @Test("the reset runs before anything fetches for the new account")
     func theResetPrecedesTheFirstFetch() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
-        let apply = try #require(source.range(of: "self.applySession(session)"))
+        // `establishSession` resolves B-21 and then calls `applySession`, so
+        // it is the listener's one install point and the reset happens inside
+        // it.
+        let apply = try #require(source.range(of: "await self.establishSession(session)"))
         let settle = try #require(source.range(of: "Self.settleLocalStore(for:"))
         let hydrate = try #require(source.range(of: "await ProfileService.shared.fetchProfile"))
         let refresh = try #require(source.range(of: "SessionScope.refresh()"))
@@ -100,14 +103,14 @@ struct SessionIsolationTests {
     @Test("the participant list is not empty and holds no duplicates")
     func theParticipantsAreDistinct() {
         let participants = SessionScope.participants()
-        #expect(participants.count == 11)
+        #expect(participants.count == 13)
         let identities = Set(participants.map { ObjectIdentifier($0) })
         #expect(identities.count == participants.count)
     }
 
     // MARK: - The service that caused the defect
 
-    @Test("the badge service really does drop the previous account's rows")
+    @Test("the badge service really does drop the previous account’s rows")
     func badgeCountsAreCleared() throws {
         let service = BadgeCountService.makeForTests()
         let projects = try JSONDecoder().decode([RemoteProject].self, from: Data("""
@@ -233,7 +236,9 @@ struct SessionIsolationTests {
         "NotificationManager.swift",
         "RoomSyncCoordinator.swift",
         "CompanionService.swift",
-        "PieceActChannel.swift"
+        "PieceActChannel.swift",
+        "MatchScoreResolver.swift",
+        "LocalRoomSignal.swift"
     ]
 
     /// Every other `static let shared` in the app, and why it is not one.
@@ -268,7 +273,7 @@ struct SessionIsolationTests {
             "RecordOwner.swift", "ContextMemoryStore.swift", "ConversationStorageService.swift",
             "FirstLaunchDataStore.swift",
             "firstLaunchTourState.swift", "UserDefaultsBacked.swift"
-        ] { out[file] = "on disk, owner-keyed or device-scoped — LocalStoreReset's boundary" }
+        ] { out[file] = "on disk, owner-keyed or device-scoped — LocalStoreReset’s boundary" }
 
         // Its two `UserDefaults.standard` keys carry no account, so unlike its
         // neighbours above it was NOT covered by anything: `wipeUserScopedData`
@@ -278,6 +283,29 @@ struct SessionIsolationTests {
         // which also fires `nil → A` at every cold launch and would wipe the
         // account's own portrait on launch.
         out["StyleProfileStore.swift"] = "on disk — cleared by LocalStoreReset.wipeUserScopedData"
+
+        // The record of a store this launch had to start over. A device fact
+        // about this process, not a cache of the account, and it is cleared
+        // by the person reading the notice — resetting it on an account
+        // change would swallow the one sentence that explains the loss.
+        out["LocalStoreRecovery.swift"] = "a device fact about this launch, acknowledged by the reader"
+
+        // W1 · L1-A. Neither holds a row belonging to an account.
+        //
+        // `AuthProviderCatalog` (A3-06 / D3) holds the answer to "which sign-in
+        // providers does THIS GoTrue deployment have enabled" — a fact about
+        // the server, identical for everybody, and only ever read while signed
+        // OUT. Resetting it on a session change would re-fetch the same list.
+        out["AuthProviderCatalog.swift"] = "server configuration, not session state — same list for everyone"
+
+        // `OnboardingCompletion` (B-21) is deliberately account-keyed and
+        // deliberately survives a sign-out: its whole job is to remember that
+        // account A finished onboarding on this phone, so A does not meet the
+        // intro again on the next sign-in. Clearing it on the SessionScope seam
+        // would re-create the finding it closes. Nothing in it is readable as
+        // another account's data — the record is a set of user ids, and every
+        // read is `hasCompleted(userId:)` against the id that just signed in.
+        out["OnboardingCompletion.swift"] = "account-keyed by design; surviving sign-out is the fix (B-21)"
 
         // Scan pipeline. Its rows are SwiftData, wiped by `LocalStoreReset`;
         // the in-memory parts are queue mechanics and file bookkeeping.
@@ -309,7 +337,7 @@ struct SessionIsolationTests {
         out["AuthService.swift"] = "the seam — it decides the reset, it is not reset by it"
         out["GuestSessionStore.swift"] = "cleared by AuthService on every real session"
         out["LocalStoreClaim.swift"] = "drives the SP-06 claim sheet across the same boundary"
-        out["FeatureFlags.swift"] = "resolved once per launch; a device answer, not an account's"
+        out["FeatureFlags.swift"] = "resolved once per launch; a device answer, not an account’s"
         return out
     }()
 

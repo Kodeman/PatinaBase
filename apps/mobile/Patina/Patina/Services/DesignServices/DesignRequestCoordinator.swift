@@ -51,6 +51,13 @@ public final class DesignRequestCoordinator {
         case failed(String)
     }
 
+    /// The one sentence a failed upload carries when nothing better is known.
+    /// The catch arm below sets it outright; `uploadScan`'s post-upload branch
+    /// and `livePhase(for:)` fall back to it. Three sites, one string, so a
+    /// thrown system or Postgres message can no longer become the payload
+    /// `ScanUploadProgressView` renders (`RL1E4-03`).
+    static let uploadFailureLine = "Upload didn’t finish"
+
     // MARK: - Dependencies
 
     @ObservationIgnored private let modelContext: ModelContext
@@ -312,7 +319,7 @@ public final class DesignRequestCoordinator {
         guard let bundleURL = package.absoluteBundleURL,
               let manifest = try? ScanBundleWriter.readManifest(at: bundleURL) else {
             scanPhases[scanId] = .failed("Scan files are missing")
-            draft.lastError = "A scan's files are missing"
+            draft.lastError = "A scan’s files are missing"
             try? modelContext.save()
             return
         }
@@ -334,11 +341,20 @@ public final class DesignRequestCoordinator {
             if package.status == .synced {
                 scanPhases[scanId] = .uploaded
             } else {
-                scanPhases[scanId] = .failed(package.lastError ?? "Upload didn't finish")
+                scanPhases[scanId] = .failed(package.lastError ?? Self.uploadFailureLine)
             }
         } catch {
-            scanPhases[scanId] = .failed(error.localizedDescription)
-            draft.lastError = error.localizedDescription
+            // `RL1E4-03`: the thrown error used to land in both a phase
+            // payload and a persisted column. `.failed`'s payload is read by
+            // `livePhase(for:)` and rendered through `ScanUploadProgressView`,
+            // which is one `Text(err)` away from putting
+            // "The operation couldn't be completed. (Patina.RoomsAPIError
+            // error 2.)" in front of a homeowner — `C4-08` on a second
+            // surface. The cause is logged instead, at the level that
+            // survives into a Release archive.
+            PatinaLog.sync.error("[DesignServices] scan upload failed: \(error)")
+            scanPhases[scanId] = .failed(Self.uploadFailureLine)
+            draft.lastError = Self.uploadFailureLine
             try? modelContext.save()
         }
     }
@@ -361,7 +377,7 @@ public final class DesignRequestCoordinator {
         // An upload actively owned by this coordinator stays .uploading.
         if case .uploading = snapshot { return snapshot }
         if pkg?.status == .failed {
-            return .failed(pkg?.lastError ?? "Upload didn't finish")
+            return .failed(pkg?.lastError ?? Self.uploadFailureLine)
         }
         return snapshot
     }

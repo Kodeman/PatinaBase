@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 // W1b integration: the plank work grew this past the SwiftLint size floor.
 // Scoped so lint-delta still catches every other class of regression here;
@@ -35,6 +36,14 @@ struct SettingsView: View {
     /// Wave 3 dark-mode: appearance override (System / Light / Dark).
     /// PatinaApp reads the same key and applies `.preferredColorScheme`.
     @AppStorage(AppearanceSetting.storageKey) private var appearanceRaw = AppearanceSetting.system.rawValue
+    /// `W1-C-08`: whether iOS itself will deliver a notification for Patina.
+    /// The Notifications row used to bind a local `AppSettings` bool alone, so
+    /// on the very launch where `PushPrimerView` had just said "Notifications
+    /// are off for Patina" this screen showed the switch ON. Read from
+    /// `UNUserNotificationCenter` on appear, the way `C2-09`'s primer now
+    /// does; `nil` until that read lands, so the row never asserts either
+    /// answer before it has one.
+    @State private var systemNotificationsDenied: Bool?
 
     var body: some View {
         // PT-0-5: this is the real settings sheet (was previously
@@ -44,21 +53,60 @@ struct SettingsView: View {
         NavigationStack {
             settingsContent
         }
+        // A-99: `PatinaApp` applies this at the window, but a sheet is its own
+        // presentation and did not follow it back — choosing Dark and then
+        // Light left a black sheet over a light window (shots/A/60, 63, 64).
+        .preferredColorScheme(appearance.colorScheme)
+        // C-23: one sheet chrome. Help had a grabber and an ✕; this had
+        // neither.
+        .presentationDragIndicator(.visible)
+    }
+
+    private var appearance: AppearanceSetting {
+        AppearanceSetting(rawValue: appearanceRaw) ?? .system
     }
 
     private var settingsContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                // Header
-                Text("Settings")
-                    .font(PatinaTypography.h3)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                    .padding(.top, 56)
-                    .padding(.horizontal, PatinaSpacing.lg)
-                    .padding(.bottom, PatinaSpacing.lg)
+                // Header. A-100 / C-23: the sheet had no dismiss control at
+                // all — the only exit was a drag from its very top edge, and a
+                // swipe started 48 pt lower scrolled the list instead. Done
+                // sits in the header the screen already draws rather than in a
+                // navigation bar it otherwise hides.
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Settings")
+                        .font(PatinaTypography.h3)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                    Spacer()
+                    // `minHeight` alone left the width to the glyph: measured
+                    // 38 × 44 on the clone, in the lane that is enforcing the
+                    // 44 pt floor everywhere else.
+                    Button("Done") { dismiss() }
+                        .font(PatinaTypography.uiAction)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("SettingsView.DoneButton")
+                }
+                .padding(.top, 56)
+                .padding(.horizontal, PatinaSpacing.lg)
+                .padding(.bottom, PatinaSpacing.lg)
 
                 // Account group
                 settingsGroup(title: "Account") {
+                    // C1-14: a guest saw a QR row that cannot work without the
+                    // session they have not got, and no way to sign in at all.
+                    if !authService.isAuthenticated {
+                        settingsButtonRow(
+                            icon: "person.crop.circle.badge.plus",
+                            iconColor: PatinaColors.clay,
+                            label: "Sign in or create your account"
+                        ) {
+                            coordinator.presentedSheet = .auth
+                        }
+                        .accessibilityIdentifier("SettingsView.SignInButton")
+                    }
                     NavigationLink {
                         // AccountView is presentation-agnostic (no inner
                         // NavigationStack) so this push works inside the
@@ -68,17 +116,19 @@ struct SettingsView: View {
                         settingsRow(icon: "person.circle", iconColor: PatinaColors.clay, label: "Account")
                     }
                     .buttonStyle(.plain)
-                    settingsButtonRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Sign in on the web") {
-                        // Swap the active sheet from Settings → QR scanner.
-                        // `.sheet(item:)` in ContentView animates the change;
-                        // same pattern as AccountView's "Sign in to Web".
-                        coordinator.presentedSheet = .qr
-                    }
                     if authService.isAuthenticated {
+                        // C1-14: this approves a PORTAL sign-in with THIS
+                        // device's session, so it belongs inside the guard.
+                        settingsButtonRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Sign in on the web") {
+                            // Swap the active sheet from Settings → QR scanner.
+                            // `.sheet(item:)` in ContentView animates the change;
+                            // same pattern as AccountView's "Sign in to Web".
+                            coordinator.presentedSheet = .qr
+                        }
                         settingsButtonRow(
                             icon: "rectangle.portrait.and.arrow.right",
                             iconColor: PatinaColors.agedOak,
-                            label: "Sign Out"
+                            label: "Sign out"
                         ) {
                             showingSignOutConfirmation = true
                         }
@@ -106,19 +156,11 @@ struct SettingsView: View {
 
                 // Preferences group
                 settingsGroup(title: "Preferences") {
-                    settingsToggleRow(
-                        icon: "bell",
-                        iconColor: PatinaColors.terracotta,
-                        label: "Notifications",
-                        isOn: Binding(
-                            get: { settings.notificationsEnabled },
-                            set: { settings.setNotificationsEnabled($0) }
-                        )
-                    )
+                    notificationsRow
                     settingsToggleRow(
                         icon: "hand.tap",
                         iconColor: PatinaColors.agedOak,
-                        label: "Haptic Feedback",
+                        label: "Haptic feedback",
                         isOn: Binding(
                             get: { settings.hapticsEnabled },
                             set: { settings.setHapticsEnabled($0) }
@@ -150,24 +192,25 @@ struct SettingsView: View {
 
                 // Support group
                 settingsGroup(title: "Support") {
-                    settingsButtonRow(icon: "questionmark.circle", iconColor: PatinaColors.sage, label: "Help Center") {
-                        openLink("https://patina.cloud/help")
-                    }
-                    settingsButtonRow(icon: "envelope", iconColor: PatinaColors.clay, label: "Contact Us") {
+                    settingsButtonRow(icon: "envelope", iconColor: PatinaColors.clay, label: "Contact us") {
                         openLink("mailto:hello@patina.cloud")
                     }
-                    settingsButtonRow(icon: "doc.text", iconColor: PatinaColors.agedOak, label: "Terms & Privacy") {
+                    settingsButtonRow(icon: "doc.text", iconColor: PatinaColors.agedOak, label: "Terms & privacy") {
                         openLink("https://patina.cloud/terms")
                     }
                 }
-
-                Spacer().frame(height: 120)
             }
+            .companionBottomClearance()
         }
         .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
         .task {
             await settings.load()
+            // C2-09's rule — read the status, do not assume it — applied to
+            // the row that asserts it (`W1-C-08`).
+            let status = await UNUserNotificationCenter.current()
+                .notificationSettings().authorizationStatus
+            systemNotificationsDenied = PushTokenService.outcome(for: status) == .denied
         }
         .alert("Forget recent context?", isPresented: $showingForgetContextConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -189,9 +232,9 @@ struct SettingsView: View {
         } message: {
             Text("This removes your local taste portrait and its tuning. Rooms, scans, saved pieces, and projects are not changed.")
         }
-        .alert("Sign Out", isPresented: $showingSignOutConfirmation) {
+        .alert("Sign out?", isPresented: $showingSignOutConfirmation) {
             Button("Cancel", role: .cancel) {}
-            Button("Sign Out") { signOut() }
+            Button("Sign out") { signOut() }
         } message: {
             Text("Are you sure you want to sign out?")
         }
@@ -387,6 +430,34 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
+        }
+    }
+
+    /// `W1-C-08`. With iOS authorization denied the app's own preference is not
+    /// the truth about whether anything arrives, and a switch reading ON over a
+    /// denied authorization is a straightforward lie. There the row stops being
+    /// a switch and becomes the one door that works — `PushPrimerView`'s shape.
+    @ViewBuilder
+    private var notificationsRow: some View {
+        if systemNotificationsDenied == true {
+            settingsButtonRow(
+                icon: "bell.slash",
+                iconColor: PatinaColors.terracotta,
+                label: "Notifications are off in iOS Settings"
+            ) {
+                if let url = PushTokenService.settingsURL { openURL(url) }
+            }
+            .accessibilityIdentifier("SettingsView.NotificationsDenied")
+        } else {
+            settingsToggleRow(
+                icon: "bell",
+                iconColor: PatinaColors.terracotta,
+                label: "Notifications",
+                isOn: Binding(
+                    get: { settings.notificationsEnabled },
+                    set: { settings.setNotificationsEnabled($0) }
+                )
+            )
         }
     }
 

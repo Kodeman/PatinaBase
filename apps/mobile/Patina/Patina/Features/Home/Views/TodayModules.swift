@@ -29,7 +29,7 @@ struct TodayNextMoveCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(move.title). \(move.detail)")
-        .accessibilityHint("Opens today's recommended next step.")
+        .accessibilityHint("Opens today’s recommended next step.")
         .accessibilityIdentifier("DailyRoomView.TodayNextMove")
     }
 

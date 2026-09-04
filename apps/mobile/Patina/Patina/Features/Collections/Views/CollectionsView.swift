@@ -108,7 +108,7 @@ struct CollectionsView: View {
             }
             .padding(.horizontal, 24)
             .overlay(alignment: .bottom) {
-                Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
             }
 
             // Content
@@ -132,7 +132,7 @@ struct CollectionsView: View {
         .onAppear {
             viewModel.loadData(context: modelContext)
         }
-        .alert("New Board", isPresented: $viewModel.isCreatingBoard) {
+        .alert("New board", isPresented: $viewModel.isCreatingBoard) {
             TextField("Board name", text: $viewModel.newBoardName)
             Button("Create") { viewModel.createBoard(context: modelContext) }
             Button("Cancel", role: .cancel) { viewModel.newBoardName = "" }
@@ -145,10 +145,25 @@ struct CollectionsView: View {
 
     private var allItemsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if scopedSavedItems.isEmpty {
+            // C4-03: three states, not two. An empty list used to mean both
+            // "you have saved nothing" and "we could not read your saves",
+            // and the copy asserted the first.
+            if scopedSavedItems.isEmpty && viewModel.loadState == .loading {
+                PatinaLoadingState()
+                    .padding(.top, 40)
+                    .accessibilityIdentifier("CollectionsView.Loading")
+            } else if scopedSavedItems.isEmpty && viewModel.loadState == .failed {
+                PatinaErrorState(
+                    message: "We couldn’t reach your saved pieces. "
+                        + "Check your connection and try again.",
+                    action: { viewModel.loadData(context: modelContext) }
+                )
+                .padding(.top, 40)
+                .accessibilityIdentifier("CollectionsView.ErrorState")
+            } else if scopedSavedItems.isEmpty {
                 VStack(spacing: 12) {
                     Spacer().frame(height: 40)
-                    Text("No saved items yet")
+                    Text("No saved pieces yet")
                         .font(PatinaTypography.h5)
                         .foregroundStyle(PatinaColors.Text.primary)
                     Text("Browse recommendations and save pieces you love")
@@ -185,7 +200,7 @@ struct CollectionsView: View {
             }
         }
         .padding(24)
-        .padding(.bottom, 100)
+        .companionBottomClearance()
         .sheet(isPresented: Binding(
             get: { notePieceId != nil },
             set: { if !$0 { notePieceId = nil } }
@@ -288,7 +303,7 @@ private extension CollectionsView {
             }
         }
         .padding(24)
-        .padding(.bottom, 100)
+        .companionBottomClearance()
     }
 
     var emptyBoardsState: some View {
@@ -311,7 +326,7 @@ private extension CollectionsView {
             Button {
                 viewModel.isCreatingBoard = true
             } label: {
-                Text("Create Board")
+                Text("Create board")
                     .font(PatinaTypography.uiAction)
                     .foregroundStyle(PatinaColors.Text.inverse)
                     .padding(.horizontal, 24)
@@ -331,10 +346,10 @@ private extension CollectionsView {
                     .font(PatinaTypography.h5)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
-                MonoLabel(text: "\(board.itemCount) items")
+                MonoLabel(text: "\(board.itemCount) piece\(board.itemCount == 1 ? "" : "s")")
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(board.name), \(board.itemCount) item\(board.itemCount == 1 ? "" : "s")")
+            .accessibilityLabel("\(board.name), \(board.itemCount) piece\(board.itemCount == 1 ? "" : "s")")
 
             // Grid placeholder (items would show product thumbnails)
             let columns = [

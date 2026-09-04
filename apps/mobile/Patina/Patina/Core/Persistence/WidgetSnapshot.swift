@@ -19,11 +19,33 @@
 //  Two more rules live in the shape:
 //   • `refreshedAt` is when the APP wrote the file, never "now". Q8 permits the
 //     widget to sit one open behind; it must be able to SAY so.
-//   • There is no owner id. The payload is CLEARED on sign-out instead —
-//     `RecordSnapshotStore.remove()` takes this file with the record, and that
-//     is already the one choke point the auth boundary and the foreign-record
-//     discard both go through. A widget process cannot ask who is signed in,
-//     so nothing is left for it to judge.
+//   • `ownerId` names the account the payload was built for (B-16). It was
+//     omitted on the theory that the file is CLEARED on sign-out instead — but
+//     nothing on the sign-out path removed it. `RecordSnapshotStore.remove()`
+//     has three callers — `LocalStoreReset.wipeUserScopedData()`,
+//     `RecordIdentity.admits` and `RecordRefresh.run` — and every one of them
+//     runs on an ARRIVAL: a different account signing in, or a record that
+//     turns out to belong to nobody. `AuthService.signOut()` calls none of
+//     them, so a signed-out phone kept a named designer and "Leah Hartwell
+//     picked up your request." on its Home Screen. Two things close it: the
+//     sign-out seam writes a placeholder (`clearForSignedOut()`), and that
+//     placeholder is recognisable BECAUSE it carries no owner.
+//
+//     In practice a sign-out usually ends with NO file at all: clearing the
+//     stamp is what makes an in-flight `RecordRefresh` for the ended session
+//     decide `.discard`, and its `remove()` deletes the placeholder moments
+//     later. Both states draw the same card, which is why the placeholder is
+//     still worth writing — it covers the window before the delete, and the
+//     delete that fails (`RL1F-24`).
+//
+//     What `ownerId` buys is exactly that, and no more: **nil is the
+//     placeholder**. Nothing compares a non-nil owner against the live session,
+//     and nothing here can — the widget process cannot ask who is signed in,
+//     and by the time the app writes the file it has already decided. The stamp
+//     is retired on the same seam that writes the placeholder
+//     (`RecordSnapshotStore.clearForSignedOut()` clears `RecordOwnerStamp`), so
+//     a save between a sign-out and the next account's first stamp carries no
+//     owner rather than the previous account's.
 //
 //  The contract with W6's X1 lane is the JSON on disk, published in
 //  `waves/w6/x2-tasks.md` §0: the keys below are the property names verbatim,
@@ -97,21 +119,38 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// When the app last wrote this file. The widget says this when the
     /// snapshot is stale.
     let refreshedAt: Date
-    /// `house-widget`, as the app last resolved it. False — including a
-    /// missing mirror on a first-ever launch — means the widget draws its
-    /// no-data state, never a stale row.
+    /// `house-widget`, as the app last resolved it.
+    ///
+    /// **D5 (2026-09-02) changed what this gates.** It used to decide whether a
+    /// placed widget drew anything at all, which meant a round-one tester —
+    /// `house-widget` off, and staying off — read "Open Patina to see your
+    /// house." forever with two real rows sitting in this file (GAP7B-02). It
+    /// is still written, because W2 may gate in-app *promotion* with it, and it
+    /// no longer reaches the render path.
     let flagOn: Bool
+
+    /// The account this payload was built for. nil is the signed-out
+    /// placeholder, and the only payload the widget refuses to draw (B-16).
+    let ownerId: String?
 
     /// The projection. MOVED rows only, and nothing derived from `needsYou`
     /// reaches it — not its contents, not its count, not whether it is empty.
-    init(record: HouseRecord, houseLine: String?, refreshedAt: Date, flagOn: Bool) {
-        self.movedRows = record.moved.map {
-            WidgetRow(id: $0.id, title: $0.title, date: $0.date, route: $0.route.flatMap(WidgetRouteToken.init))
+    ///
+    /// A row with no route is dropped here rather than drawn with the plain
+    /// door underneath it: the widget carries an id, the app resolves it, and a
+    /// row whose id resolves to nothing sends every tap to Today with no
+    /// explanation. A story has no destination in this app, so it has no place
+    /// on a surface whose only affordance is a tap (GAP7B-05).
+    init(record: HouseRecord, houseLine: String?, refreshedAt: Date, flagOn: Bool, ownerId: String?) {
+        self.movedRows = record.moved.compactMap { row in
+            guard let route = row.route.flatMap(WidgetRouteToken.init) else { return nil }
+            return WidgetRow(id: row.id, title: row.title, date: row.date, route: route)
         }
         self.houseLine = houseLine
         self.sinceDate = record.window.start
         self.refreshedAt = refreshedAt
         self.flagOn = flagOn
+        self.ownerId = ownerId
     }
 
     init(
@@ -119,12 +158,14 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         houseLine: String?,
         sinceDate: Date?,
         refreshedAt: Date,
-        flagOn: Bool
+        flagOn: Bool,
+        ownerId: String?
     ) {
         self.movedRows = movedRows
         self.houseLine = houseLine
         self.sinceDate = sinceDate
         self.refreshedAt = refreshedAt
         self.flagOn = flagOn
+        self.ownerId = ownerId
     }
 }

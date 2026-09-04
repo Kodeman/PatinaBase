@@ -163,6 +163,17 @@ public struct CompanionMarkView: View {
             if surface == .disc {
                 Circle()
                     .fill(PatinaColors.Background.dark)
+                    // C-01. The fill alone cannot reach the 3:1 the charter
+                    // asks of the orb against the page: `surfaceDark` is
+                    // 1.93:1 on the dark canvas, and lifting it to 3:1 drops
+                    // `OnDark.secondary` on the panel to 3.54:1, below the
+                    // 4.5:1 bar C-02 holds. The finding's fix line offers
+                    // "adaptive fill OR border"; `Border.onDark` exists for
+                    // exactly this and is 3.18:1 dark / 4.87:1 light, so the
+                    // disc's edge reads as an object in both appearances.
+                    .overlay(
+                        Circle().strokeBorder(PatinaColors.Border.onDark, lineWidth: 1)
+                    )
                     .frame(width: 52, height: 52)
                     .patinaShadow(PatinaShadows.companion)
             }

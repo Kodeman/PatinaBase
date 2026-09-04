@@ -37,8 +37,8 @@ enum ClientOrderCopy {
 
     /// No painted tracker (build-plan W5, direction B §5's M8 sheet).
     private static func paidNotOnRailLine(_ order: ClientOrder) -> String {
-        guard let paid = order.placedAt else { return "Paid. We'll email you when it ships." }
-        return "Paid \(DateDisplay.short(paid)). We'll email you when it ships."
+        guard let paid = order.placedAt else { return "Paid. We’ll email you when it ships." }
+        return "Paid \(DateDisplay.short(paid)). We’ll email you when it ships."
     }
 
     private static func confirmedLine(_ order: ClientOrder) -> String {

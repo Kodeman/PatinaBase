@@ -38,7 +38,12 @@ struct RoomSettingsView: View {
 
     /// The face both typed fields wear — the room's name and each dimension.
     /// One declaration so the two cannot drift apart.
-    private static let fieldFont = Font.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body)
+    ///
+    /// C3-15: this was `Font.custom("PlayfairDisplay-Regular", size: 16,
+    /// relativeTo: .body)` — an inline face declaration bound to a property,
+    /// which is the one spelling the sweep's `.font(.custom(` pattern could not
+    /// see. `bodySerif` is that expression, in the type system.
+    private static let fieldFont = PatinaTypography.bodySerif
 
     var body: some View {
         ScrollView {
@@ -54,6 +59,9 @@ struct RoomSettingsView: View {
             }
             .padding(20)
         }
+        // C9-08 (B-L1A-2): swiping the form puts the pad away, which is
+        // what the rest of iOS does.
+        .dismissKeyboardOnScroll()
         .background(PatinaColors.Background.primary.ignoresSafeArea())
         // U18: standard pushed-screen chrome — resolves the prior conflict
         // where ContentView styled this destination as a system bar while
@@ -116,7 +124,7 @@ struct RoomSettingsView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .onSubmit { saveIfChanged() }
                 .onChange(of: name) { _, _ in
@@ -168,7 +176,7 @@ struct RoomSettingsView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
                     .background(Capsule().fill(PatinaColors.Background.primary))
-                    .overlay(Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5))
+                    .overlay(Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1.5))
             }
             .buttonStyle(.plain)
             .disabled(!hasUsableDimensions)
@@ -191,6 +199,7 @@ struct RoomSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             TextField("", text: text)
                 .keyboardType(.decimalPad)
+                .keyboardDoneToolbar()
                 .multilineTextAlignment(.center)
                 .font(Self.fieldFont)
                 .foregroundStyle(PatinaColors.Text.primary)
@@ -202,7 +211,7 @@ struct RoomSettingsView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .accessibilityLabel("\(title) in \(unit.label.lowercased())")
             Text("\(title.uppercased()) (\(unit.rawValue))")
@@ -235,12 +244,16 @@ struct RoomSettingsView: View {
     private func scanCard(_ room: RoomModel) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Scan Data")
+                // W1-B-06: this block headed itself "Scan Data" and summarised
+                // "2 windows detected" for a room the person TYPED. Nothing was
+                // scanned and nothing was detected; the words belong to a real
+                // scan. Same source as every other surface — `hasBeenScanned`.
+                Text(room.hasBeenScanned ? "Scan Data" : "Room measurements")
                     .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 Text(scanDate(room))
-                    .font(.custom("DMMono-Regular", size: 8, relativeTo: .caption2))
+                    .font(PatinaTypography.monoLabel)
                     .tracking(0.3)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
@@ -261,7 +274,7 @@ struct RoomSettingsView: View {
                         Capsule().fill(PatinaColors.Background.primary)
                     )
                     .overlay(
-                        Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                     )
             }
             .buttonStyle(.plain)
@@ -288,7 +301,7 @@ struct RoomSettingsView: View {
             .frame(height: 46)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(PatinaColors.clay)
+                    .fill(PatinaColors.clayInk)
             )
         }
         .buttonStyle(.plain)
@@ -303,6 +316,11 @@ struct RoomSettingsView: View {
                 .foregroundStyle(PatinaColors.terracotta)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
+                // Review RL1B2-17: `describe_screen` measured this control's
+                // hit area at 100.7 × 14.7 pt — the glyph box, not the 46 pt
+                // row — on the one irreversible action on the screen. A tap
+                // at its visual centre selected the tab behind it.
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -328,9 +346,32 @@ struct RoomSettingsView: View {
 
     private func deleteRoom() {
         guard let room else { return }
+        // B-03: the delete was local only — `RoomsAPIClient.deleteRoom(id:)`
+        // had no callers at all — so the server row stayed and the next
+        // reconcile put the room back. `RoomStore.delete` writes the
+        // tombstone that keeps it off the screen until this lands; a failure
+        // here is retried from the next reconcile.
+        let remoteId = room.remoteId
         RoomStore(context: modelContext).delete(room)
+        if let remoteId { RoomRemoteDelete.mirror(remoteId) }
+        // B-04: one `goBack()` popped onto the room's own detail, whose
+        // lookup now misses — so a second after confirming the delete the
+        // person was told "This room isn't on this phone / It may have been
+        // removed." about a room they had just deliberately removed. The
+        // detail is the only screen that pushes this one, so leaving it
+        // behind too is what lands them back on the list they came from.
+        coordinator.goBack()
         coordinator.goBack()
     }
+}
+
+// MARK: - The measurement card's own lines
+
+/// `W1-B-06` grew both of these — the card is headed by what the room IS,
+/// and its summary no longer claims a scan detected anything — which took
+/// the struct past SwiftLint's 300-line `type_body_length`. Neither is view
+/// composition, so they move rather than buying a scoped disable.
+extension RoomSettingsView {
 
     private func scanDate(_ room: RoomModel) -> String {
         Self.scanDateFormatter.string(from: room.updatedAt)
@@ -349,7 +390,17 @@ struct RoomSettingsView: View {
         if !room.lastScanConfidenceRaw.isEmpty {
             parts.append("\(room.lastScanConfidenceRaw.capitalized) confidence")
         }
-        if room.windowCount > 0 { parts.append("\(room.windowCount) windows detected") }
+        // W1-B-06: "detected" is a claim about a scan. A typed room's windows
+        // were typed by the person reading this line.
+        if room.windowCount > 0 {
+            let plural = room.windowCount == 1 ? "window" : "windows"
+            parts.append(
+                room.hasBeenScanned
+                    ? "\(room.windowCount) \(plural) detected"
+                    : "\(room.windowCount) \(plural)"
+            )
+        }
+        parts.append(room.provenanceLine())
         return parts.joined(separator: " · ")
     }
 }

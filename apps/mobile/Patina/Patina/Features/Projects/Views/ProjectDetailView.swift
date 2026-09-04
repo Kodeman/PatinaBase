@@ -55,6 +55,10 @@ struct ProjectDetailView: View {
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task { await viewModel.load(projectId: projectId) }
+        // C4-12: the same work the `.task` above does. Without it the
+        // only way to recover a failed load is to leave the screen and
+        // come back.
+        .refreshable { await viewModel.load(projectId: projectId) }
     }
 
     // MARK: - Header
@@ -141,7 +145,7 @@ struct ProjectDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(PatinaColors.pearl, lineWidth: 1)
+                .stroke(PatinaColors.Border.hairline, lineWidth: 1)
         )
         .padding(.horizontal, 24)
         .accessibilityIdentifier("projectDetail.notReadyYet")
@@ -237,7 +241,7 @@ struct ProjectDetailView: View {
             // 14 pt — the content's own top padding, so the dot lands beside
             // the phase name and the rail meets the row above with no gap.
             Rectangle()
-                .fill(isFirst ? Color.clear : PatinaColors.pearl)
+                .fill(isFirst ? Color.clear : PatinaColors.Border.hairline)
                 .frame(width: 1, height: 14)
             ZStack {
                 if isCurrent {
@@ -251,7 +255,7 @@ struct ProjectDetailView: View {
             }
             .frame(width: 16, height: 16)
             Rectangle()
-                .fill(isLast ? Color.clear : PatinaColors.pearl)
+                .fill(isLast ? Color.clear : PatinaColors.Border.hairline)
                 .frame(width: 1)
                 .frame(maxHeight: .infinity)
         }
@@ -301,7 +305,7 @@ struct ProjectDetailView: View {
         .padding(.horizontal, 16)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.hairline)
                 .frame(height: 1)
         }
     }
@@ -330,7 +334,7 @@ struct ProjectDetailView: View {
                     .padding(.horizontal, 16)
                     .overlay(alignment: .bottom) {
                         Rectangle()
-                            .fill(PatinaColors.pearl)
+                            .fill(PatinaColors.Border.hairline)
                             .frame(height: 1)
                     }
                 }
@@ -350,8 +354,8 @@ struct ProjectDetailView: View {
     }
 
     private func formatPrice(_ cents: Int) -> String {
-        let dollars = cents / 100
-        return "$\(dollars.formatted())"
+        // C5-14
+        PatinaCurrency.formatWholeDollars(cents: cents)
     }
 }
 

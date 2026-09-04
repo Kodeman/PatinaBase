@@ -116,7 +116,7 @@ struct BrowseGridContractTests {
         let plain = Self.infoHeight(name: "Chair", rationale: "Picked for your warm palette.")
         let long = Self.infoHeight(
             name: "Chair",
-            rationale: "Picked for your warm palette, your oak preference, and the room's own proportions, which would run long."
+            rationale: "Picked for your warm palette, your oak preference, and the room’s own proportions, which would run long."
         )
         #expect(plain == long, "plain \(plain) vs long \(long)")
 

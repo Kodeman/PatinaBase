@@ -34,8 +34,12 @@ nonisolated enum FirstLaunchTourPopoverPlacement {
     struct AnchorGeometry: Equatable, Sendable {
         var midY: CGFloat
         var containerHeight: CGFloat
+        /// B-10: the anchor's whole frame in the tour root's space, which is
+        /// what the scrim's cut-out is punched from. `.zero` while unmeasured —
+        /// no host above this view, or a layout pass that has not run.
+        var rect: CGRect = .zero
 
-        static let unmeasured = AnchorGeometry(midY: 0, containerHeight: 0)
+        static let unmeasured = AnchorGeometry(midY: 0, containerHeight: 0, rect: .zero)
     }
 
     /// An anchor in the lower half of the tour's root presents its card above

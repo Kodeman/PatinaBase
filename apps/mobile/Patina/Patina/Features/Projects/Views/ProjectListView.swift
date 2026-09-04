@@ -43,7 +43,7 @@ struct ProjectListView: View {
                 }
                 content
             }
-            .padding(.bottom, 120)
+            .companionBottomClearance()
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
@@ -123,7 +123,7 @@ struct ProjectListView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
-                .stroke(PatinaColors.pearl, lineWidth: 1)
+                .stroke(PatinaColors.Border.hairline, lineWidth: 1)
         )
         .accessibilityLabel("Search projects")
     }
@@ -227,8 +227,8 @@ struct ProjectListView: View {
     }
 
     private func formatPrice(_ cents: Int) -> String {
-        let dollars = cents / 100
-        return "$\(dollars.formatted())"
+        // C5-14
+        PatinaCurrency.formatWholeDollars(cents: cents)
     }
 }
 

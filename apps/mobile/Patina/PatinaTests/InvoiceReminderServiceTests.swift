@@ -193,7 +193,7 @@ struct InvoiceReminderServiceTests {
     /// The system's queue is the only record. A reminder cleared in Settings,
     /// or one that has already fired, must not leave the row claiming it is
     /// still set.
-    @Test("the row reads the system's queue rather than a second copy")
+    @Test("the row reads the system’s queue rather than a second copy")
     func refreshReadsTheSystemQueue() async throws {
         let scheduler = StubScheduler()
         let subject = service(scheduler)

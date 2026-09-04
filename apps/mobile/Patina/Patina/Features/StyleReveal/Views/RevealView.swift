@@ -29,6 +29,27 @@ struct RevealView: View {
     ]
 
     var body: some View {
+        content
+            // GAP4-16: the Reveal paints its own permanently-charcoal ground,
+            // and every semantic token on it was resolving on its LIGHT side —
+            // so in light mode `StyleContinueButton`'s charcoal capsule sat on
+            // a charcoal ground and the screen's only CTA disappeared. Telling
+            // the subtree it is a dark surface resolves the whole token set on
+            // the side that matches the ground, which is what "paint the Reveal
+            // with the semantic inverse-surface tokens" means in one line.
+            //
+            // Two things the override does NOT cover. Every token added to this
+            // screen from here on resolves on its dark side whether or not its
+            // author meant it to. And the status bar is outside the environment:
+            // the Reveal hides the nav bar but not the status bar, so on a light
+            // system appearance the clock stays dark-on-light over a charcoal
+            // ground. That is a device-pass item, not something this line can
+            // reach — it needs `preferredColorScheme` or a status-bar style, and
+            // both are decisions about the whole flow rather than this view.
+            .environment(\.colorScheme, .dark)
+    }
+
+    private var content: some View {
         ZStack {
             PatinaColors.charcoal.ignoresSafeArea()
 
@@ -54,6 +75,7 @@ struct RevealView: View {
                     StyleContinueButton(
                         title: profile.aestheticName.isEmpty ? "See What Fits Your Space" : primaryTitle,
                         isEnabled: true,
+                        ground: .charcoal,
                         action: onPrimaryAction
                     )
                     .padding(.horizontal, 24)
@@ -82,8 +104,25 @@ struct RevealView: View {
         return HStack(spacing: 0) {
             ForEach(chars.indices, id: \.self) { i in
                 Text(String(chars[i]))
-                    .font(.custom("PlayfairDisplay-Light", size: 42))
-                    .foregroundStyle(PatinaColors.offWhite)
+                    // C3-15: this was an inline 42 pt Playfair Display Light.
+                    // That weight is not vendored and there is no UIAppFonts
+                    // entry for it, so the font resolver fell back to San
+                    // Francisco without a word and the screen's hero headline
+                    // was not in the brand's typeface at all. The token also
+                    // brings the Dynamic Type relationship the inline call
+                    // omitted.
+                    .font(PatinaTypography.display2Regular)
+                    .foregroundStyle(PatinaColors.OnDark.primary)
+                    // The inline call this replaced was a FIXED 42 pt, so
+                    // Dynamic Type never reached it. A token brings the
+                    // `relativeTo: .largeTitle` relationship with it, and one
+                    // `Text` per character inside `HStack(spacing: 0)` cannot
+                    // wrap: at AX3–AX5 each glyph grows past 80 pt and an
+                    // 11-character name ("Warm Modern") runs off-canvas.
+                    // `.fixedSize(horizontal: false, …)` does not catch a
+                    // horizontal overflow; a per-glyph scale floor does.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.4)
                     .opacity(reduceMotion ? 1 : (i < revealedLetters ? 1 : 0))
             }
         }
@@ -124,8 +163,8 @@ struct RevealView: View {
         StylePillFlow(spacing: 8) {
             ForEach(Array(profile.tags.enumerated()), id: \.offset) { index, tag in
                 Text(tag)
-                    .font(.custom("Inter-Regular", size: 12))
-                    .foregroundStyle(PatinaColors.pearl)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.OnDark.secondary)
                     .padding(.vertical, 7)
                     .padding(.horizontal, 16)
                     .overlay(

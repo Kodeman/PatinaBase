@@ -44,11 +44,11 @@ public final class CompanionVoice {
         case .dawn:
             return "Good morning. The early light is kind to beautiful things."
         case .morning:
-            return "Good morning. I'm Patina — here to help you find pieces that belong."
+            return "Good morning. I’m Patina — here to help you find pieces that belong."
         case .day:
-            return "Hello. I'm Patina — here to help you find pieces that belong in your space."
+            return "Hello. I’m Patina — here to help you find pieces that belong in your space."
         case .afternoon:
-            return "Good afternoon. I'm Patina — here to help you discover what belongs in your space."
+            return "Good afternoon. I’m Patina — here to help you discover what belongs in your space."
         case .evening:
             return "Good evening. This is a nice time to think about the things we live with."
         case .night:
@@ -69,7 +69,7 @@ public final class CompanionVoice {
         case .evening:
             return "Evening. Something surfaced while you were away."
         case .night:
-            return "Hello again. I've been thinking about your collection."
+            return "Hello again. I’ve been thinking about your collection."
         }
     }
 
@@ -79,24 +79,24 @@ public final class CompanionVoice {
     public func walkResponse(progress: Float?, roomName: String?) -> String {
         if let progress = progress {
             if progress < 0.3 {
-                return "We're just getting started. Take your time — every angle matters."
+                return "We’re just getting started. Take your time — every angle matters."
             } else if progress < 0.7 {
-                return "The space is revealing itself. I'm noticing the light here."
+                return "The space is revealing itself. I’m noticing the light here."
             } else if progress < 1.0 {
-                return "Almost there. A few more moments and I'll know this room well."
+                return "Almost there. A few more moments and I’ll know this room well."
             } else {
                 return "Beautiful. I have a sense of this space now. Shall I show you what might belong here?"
             }
         }
-        return "Ready to walk? I'll guide you through capturing your space."
+        return "Ready to walk? I’ll guide you through capturing your space."
     }
 
     /// Response for Emergence context
     public func emergenceResponse(pieceName: String, maker: String) -> String {
         let templates = [
             "This piece caught my attention for you. \(pieceName) by \(maker).",
-            "\(pieceName) — there's something about this one. \(maker) made it with intention.",
-            "Something surfaced. \(maker)'s \(pieceName). Would you like to know why?",
+            "\(pieceName) — there’s something about this one. \(maker) made it with intention.",
+            "Something surfaced. \(maker)’s \(pieceName). Would you like to know why?",
             "\(pieceName). From \(maker). It might speak to your space."
         ]
         return templates.randomElement()!
@@ -110,7 +110,7 @@ public final class CompanionVoice {
             return "One piece on your table. Every collection starts somewhere."
         } else if agedItemCount > 0 {
             let aged = agedItemCount == 1 ? "One has been gathering here" : "\(agedItemCount) have been gathering here"
-            return "\(aged) for a while. They're developing patina in your collection."
+            return "\(aged) for a while. They’re developing patina in your collection."
         } else {
             return "\(itemCount) pieces gathering. I see threads connecting them."
         }
@@ -134,7 +134,7 @@ public final class CompanionVoice {
         let templates = [
             "\(pieceName) will gather here now. Give it time.",
             "Invited to your table. \(pieceName) joins the gathering.",
-            "\(pieceName) stays. Let's see how it ages alongside the others."
+            "\(pieceName) stays. Let’s see how it ages alongside the others."
         ]
         return templates.randomElement()!
     }
@@ -164,7 +164,7 @@ public final class CompanionVoice {
     /// Generate an observation about lingering
     public func lingerObservation(pieceName: String, material: String?) -> String {
         if let material = material {
-            return "I noticed you lingered on \(pieceName). There's something about \(material) that wants to be touched."
+            return "I noticed you lingered on \(pieceName). There’s something about \(material) that wants to be touched."
         }
         return "You paused on \(pieceName). Something caught your eye."
     }
@@ -173,8 +173,8 @@ public final class CompanionVoice {
     public func resonanceObservation(piece1: String, piece2: String) -> String {
         let templates = [
             "\(piece1) and \(piece2) seem to speak to each other. Both on your table now.",
-            "There's a conversation between \(piece1) and \(piece2). Can you see it?",
-            "I notice \(piece1) and \(piece2) share something — maybe the era, or the maker's approach."
+            "There’s a conversation between \(piece1) and \(piece2). Can you see it?",
+            "I notice \(piece1) and \(piece2) share something — maybe the era, or the maker’s approach."
         ]
         return templates.randomElement()!
     }
@@ -184,8 +184,8 @@ public final class CompanionVoice {
     /// Gentle encouragement when user seems stuck
     public func encouragement() -> String {
         let templates = [
-            "Take your time. The right pieces aren't going anywhere.",
-            "No rush. I'm here whenever you're ready.",
+            "Take your time. The right pieces aren’t going anywhere.",
+            "No rush. I’m here whenever you’re ready.",
             "Sometimes the best discoveries happen slowly.",
             "Ready when you are. No rush."
         ]
@@ -198,7 +198,7 @@ public final class CompanionVoice {
             "Still here if you need me.",
             "Anything I can help with?",
             "The pieces are patient. So am I.",
-            "Whenever you're ready."
+            "Whenever you’re ready."
         ]
         return templates.randomElement()!
     }

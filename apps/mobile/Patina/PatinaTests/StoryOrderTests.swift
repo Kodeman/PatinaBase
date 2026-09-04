@@ -43,7 +43,7 @@ struct StoryOrderTests {
         #expect(HomeComposition.storyWeight(for: quiet) == .hero)
     }
 
-    @Test("the unread dot is still the reader's own record, not a constant")
+    @Test("the unread dot is still the reader’s own record, not a constant")
     func theUnreadDotComesFromTheReadStore() throws {
         let source = try SourcePin.read("Patina/Core/Network/EditorialStoriesAPIClient.swift")
         #expect(source.contains("isUnread: Bool"))

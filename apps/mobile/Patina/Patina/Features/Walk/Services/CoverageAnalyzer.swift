@@ -68,9 +68,9 @@ public actor CoverageAnalyzer {
 
         public var narration: String {
             switch self {
-            case .beginning: return "Let's begin"
+            case .beginning: return "Let’s begin"
             case .exploring: return "Good start"
-            case .developing: return "We're getting somewhere"
+            case .developing: return "We’re getting somewhere"
             case .refining: return "Nearly there"
             case .complete: return "I think I have it"
             }

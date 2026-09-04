@@ -22,6 +22,10 @@ struct ProposalSignSheet: View {
     @State private var signature = ""
     @Environment(\.dismiss) private var dismiss
 
+    /// C-06: the restated-terms label column. 78 pt at the default text size,
+    /// growing with it so "TOTAL" and "EXPIRY" keep a column they fit in.
+    @ScaledMetric(relativeTo: .caption) private var labelColumnWidth: CGFloat = 78
+
     private var trimmedName: String {
         signature.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -60,7 +64,7 @@ struct ProposalSignSheet: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.error)
+                        .foregroundStyle(PatinaColors.Text.error)
                         .accessibilityIdentifier("proposalSign.error")
                 }
 
@@ -94,11 +98,28 @@ struct ProposalSignSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(lines, id: \.label) { line in
                     HStack(alignment: .top, spacing: 12) {
+                        // C-06: a hard 78 pt column. At accessibility-extra-
+                        // large "TOTAL" and "EXPIRY" no longer fit it and the
+                        // label wrapped INSIDE the word — "TOTA / L", "EXPI /
+                        // RY" — on the sheet a client signs a contract from.
+                        // The column grows with the type ramp, and the label
+                        // holds one line and tightens rather than splitting.
                         MonoLabel(text: line.label)
-                            .frame(width: 78, alignment: .leading)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .allowsTightening(true)
+                            .frame(width: labelColumnWidth, alignment: .leading)
+                        // W1-B-10: `C-06`'s label fix took and the VALUE broke
+                        // instead — at accessibility-extra-large TOTAL read
+                        // "$18,500 / .00", a contract's money figure split
+                        // after the thousands group. Same treatment as the
+                        // label: one line, tightened, scaled, never split.
                         Text(line.value)
                             .font(PatinaTypography.bodySmallMedium)
                             .foregroundStyle(PatinaColors.Text.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .allowsTightening(true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }

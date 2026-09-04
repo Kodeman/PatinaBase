@@ -218,7 +218,7 @@ public struct QRApprovalView: View {
         // person at the browser is the same person holding the device.
         HelpTooltip(
             surfaceKey: SurfaceKeys.IOSApp.QRAuth.biometric,
-            fallback: "Face ID or Touch ID acts as the second factor for QR sign-in: the browser proves it's a Patina session, your phone proves it's you. Both are required to finish the handshake."
+            fallback: "Face ID or Touch ID acts as the second factor for QR sign-in: the browser proves it’s a Patina session, your phone proves it’s you. Both are required to finish the handshake."
         ) {
             HStack(spacing: PatinaSpacing.sm) {
                 Image(systemName: viewModel.biometricType.iconName)

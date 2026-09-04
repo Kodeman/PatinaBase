@@ -32,7 +32,7 @@ struct ScanSharingContractTests {
         #expect(ScanSharingService.searchDesignersRPC == "search_shareable_designers")
     }
 
-    @Test("the RPC's parameter is the one the function declares")
+    @Test("the RPC’s parameter is the one the function declares")
     func searchParamIsPQuery() throws {
         let encoded = try JSONEncoder().encode(
             ScanSharingService.SearchShareableDesignersParams(p_query: "Leah")

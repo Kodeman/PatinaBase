@@ -21,8 +21,13 @@ struct ScanFallbackEntryView: View {
     let onContinue: (RoomScanSession) -> Void
 
     @State private var selectedType: String = "living"
-    @State private var length: String = "18"
-    @State private var width: String = "14"
+    /// GAP4-03: these were seeded `"18"` and `"14"` — developer defaults that
+    /// rendered as if typed, with the clay "valid" stroke, and left
+    /// "Continue to Style Discovery" enabled on arrival. The fastest path
+    /// through the screen wrote a room measuring 18 × 14 ft that the person
+    /// never entered, and the room carried it as measured fact.
+    @State private var length: String = ""
+    @State private var width: String = ""
     @State private var windowCount: Int = 2
     @State private var doorCount: Int = 1
     @State private var unit: Unit = .feet
@@ -78,6 +83,9 @@ struct ScanFallbackEntryView: View {
                 .padding(.bottom, 42)
             }
         }
+        // C9-08 (B-L1A-2): swiping the form puts the pad away, which is
+        // what the rest of iOS does.
+        .dismissKeyboardOnScroll()
         .background(PatinaColors.Background.primary.ignoresSafeArea())
         .onAppear {
             ScanAnalytics.shared.track(.manualEntryStarted)
@@ -104,6 +112,13 @@ struct ScanFallbackEntryView: View {
                         Text(emoji).font(.system(size: 20))
                         Text(label)
                             .font(PatinaTypography.caption)
+                            // Review RL1B2-18: at
+                            // `accessibility-extra-large` a three-across grid
+                            // is narrower than the word, and the cells read
+                            // "Bedroo m". One line that shrinks is the only
+                            // honest answer for a six-cell picker.
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
                     .foregroundStyle(selectedType == id ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity)
@@ -115,7 +130,7 @@ struct ScanFallbackEntryView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                selectedType == id ? PatinaColors.Interactive.active : PatinaColors.pearl,
+                                selectedType == id ? PatinaColors.Interactive.active : PatinaColors.Border.strong,
                                 lineWidth: 1.5
                             )
                     )
@@ -169,9 +184,12 @@ struct ScanFallbackEntryView: View {
 
     private func dimensionField(title: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            TextField("", text: text)
+            TextField(title, text: text)
                 .keyboardType(.decimalPad)
-                .font(.custom("Inter-Regular", size: 15, relativeTo: .subheadline))
+                .keyboardDoneToolbar()
+                .accessibilityLabel("\(title) in \(unit.label.lowercased())")
+                .accessibilityIdentifier("ScanFallbackEntry.\(title)")
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.horizontal, 16)
                 .frame(height: 48)
@@ -182,7 +200,7 @@ struct ScanFallbackEntryView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            Float(text.wrappedValue) != nil ? PatinaColors.clay : PatinaColors.pearl,
+                            Float(text.wrappedValue) != nil ? PatinaColors.clay : PatinaColors.Border.strong,
                             lineWidth: 1.5
                         )
                 )
@@ -232,7 +250,7 @@ struct ScanFallbackEntryView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Remove one \(title.lowercased())")
             Text("\(value.wrappedValue)")
-                .font(.custom("DMMono-Regular", size: 14, relativeTo: .subheadline))
+                .font(PatinaTypography.monoLarge)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .frame(minWidth: 20)
             Button(action: { value.wrappedValue += 1 }) {
@@ -256,13 +274,20 @@ struct ScanFallbackEntryView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
         )
     }
 
     // MARK: - Validation + submit
 
     private var isValid: Bool {
+        Self.dimensionsAreValid(length: length, width: width)
+    }
+
+    /// The CTA's gate, pulled out so `ScanFallbackEntryTests` can call it.
+    /// With the fields no longer pre-seeded (GAP4-03) this is what stands
+    /// between an empty form and a room with invented measurements.
+    static func dimensionsAreValid(length: String, width: String) -> Bool {
         guard let l = Float(length), let w = Float(width), l > 0, w > 0 else { return false }
         return true
     }

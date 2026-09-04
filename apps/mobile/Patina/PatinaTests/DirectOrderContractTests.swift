@@ -81,7 +81,7 @@ struct DirectOrderContractTests {
         #expect(paid.isSettled)
     }
 
-    @Test("the RPC's masked commission_rate cannot leak through the row type")
+    @Test("the RPC’s masked commission_rate cannot leak through the row type")
     func maskedRateIsIgnored() throws {
         // `create_direct_order` RETURNS the composite, so the create call
         // carries every column — including the one it masks to NULL. The type
@@ -144,7 +144,7 @@ struct DirectOrderContractTests {
         }
     }
 
-    @Test("Stripe's own sentence is dropped, never carried into a case")
+    @Test("Stripe’s own sentence is dropped, never carried into a case")
     func stripeDetailIsNotCarried() {
         let error = OrderCheckoutError.from(
             code: "stripe_error",
@@ -152,24 +152,24 @@ struct DirectOrderContractTests {
         )
         #expect(error == .unavailable)
         let sentence = OrderFailureCopy.checkout(error).sentence
-        #expect(sentence == "We couldn't start this payment. Nothing has been charged.")
+        #expect(sentence == "We couldn’t start this payment. Nothing has been charged.")
         #expect(!sentence.contains("sk_test"))
         #expect(!sentence.contains("API Key"))
     }
 
-    @Test("a create refusal becomes the gate's sentence, and never the server's")
+    @Test("a create refusal becomes the gate’s sentence, and never the server’s")
     func createRefusalCopy() {
         let failure = OrderFailureCopy.create(
             DirectOrderError.refused(.photoVerifiedAt)
         )
-        #expect(failure.sentence == "We haven't checked this piece's photograph yet.")
+        #expect(failure.sentence == "We haven’t checked this piece’s photograph yet.")
         #expect(!failure.offersDesignerMessage)
     }
 
     @Test("the poll timeout never claims a bank transfer")
     func unconfirmedCopyDoesNotGuessTheMethod() {
         let sentence = OrderFailureCopy.unconfirmed.sentence
-        #expect(sentence == "We haven't seen this payment yet. We'll update this as soon as it clears.")
+        #expect(sentence == "We haven’t seen this payment yet. We’ll update this as soon as it clears.")
         #expect(!sentence.lowercased().contains("bank"))
         #expect(!sentence.contains("3–5"))
     }

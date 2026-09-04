@@ -39,7 +39,10 @@ struct AddedToRoomToast: View {
         .padding(.horizontal, 18)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                // Deliberately dark toast surface — charcoal in both modes.
+                // Deliberately dark toast surface in both modes. It lifts off
+                // charcoal in dark mode because a toast is an object floating
+                // on the page, and charcoal on the dark canvas is 1.15:1 —
+                // the toast had no body at all (C-01).
                 .fill(PatinaColors.Background.dark)
         )
         .shadow(color: PatinaColors.charcoal.opacity(0.25), radius: 16, x: 0, y: 8)

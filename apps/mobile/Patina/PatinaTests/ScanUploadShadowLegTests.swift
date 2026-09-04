@@ -31,7 +31,7 @@ struct ScanUploadShadowLegIsolationTests {
                     return ScanUploadShadowLeg.Outcome(uploaded: true, sha256: "x", matched: true)
                 }
             )
-            Issue.record("expected the primary's error to propagate")
+            Issue.record("expected the primary’s error to propagate")
         } catch {
             #expect(error is PrimaryFailure)
         }

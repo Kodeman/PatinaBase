@@ -14,16 +14,29 @@ struct StyleQuizView: View {
     /// Writes the completed quiz to `StylePreferenceModel` — the row Home and
     /// Profile read to decide whether a style profile exists.
     @Environment(\.modelContext) private var modelContext
-    /// R26: selection/progress springs respect Reduce Motion.
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var viewModel = StyleQuizViewModel()
+    /// R26: selection/progress springs respect Reduce Motion. Not `private`:
+    /// the question layouts read it from `StyleQuizView+Questions.swift`.
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    /// Not `private` for the same reason as `reduceMotion` above.
+    @State var viewModel = StyleQuizViewModel()
     @State private var companionPresentation: CompanionPresentationState = .resting
     @State private var hasPresentedCompanion = false
     /// R05: drives the mid-quiz "save or discard?" exit confirmation.
     @State private var showExitDialog = false
+    /// P-18: how much room the Companion pill takes at the bottom, so the
+    /// sign-in link can sit above it rather than under it.
+    @State private var pillHeight: CGFloat = 0
 
     /// Optional callback when quiz completes (for onboarding flow)
     var onComplete: ((StyleProfileResult) -> Void)?
+    /// B-21 — "I'll do this later". Set by `OnboardingFlowHost`, which is the
+    /// mount that had no exit at all: the AX tree carried no Back, Skip or
+    /// close control on any step.
+    var onDefer: (() -> Void)?
+    /// P-18 — the sign-in door, on every quiz step.
+    var onSignIn: (() -> Void)?
+    /// C1-28 — a save on backgrounding, not only on an explicit exit.
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Step labels for the journey pill
     private let stepLabels = [
@@ -39,11 +52,13 @@ struct StyleQuizView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                quizNavigationRow
+
                 // Question text
                 Text(viewModel.currentQuestionData.title)
                     .font(PatinaTypography.h3)
                     .foregroundStyle(PatinaColors.Text.primary)
-                    .padding(.top, 72)
+                    .padding(.top, 12)
                     .padding(.horizontal, 24)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -51,11 +66,34 @@ struct StyleQuizView: View {
                 questionContent(viewModel.currentQuestionData)
 
                 Spacer()
+
+                if let onSignIn {
+                    // P-18: reachable from every step, not only from Welcome.
+                    Button("I already have an account — Sign in", action: onSignIn)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("StyleQuiz.SignInButton")
+                }
             }
+            // The pill is an overlay, so the column has to reserve its height
+            // or the link is painted inside the Companion's charcoal panel —
+            // tappable, but reading as a stray label on the Companion rather
+            // than a door off the page. Measured rather than guessed, because
+            // the panel grows with Dynamic Type.
+            .padding(.bottom, pillHeight + 28 + 12)
 
             // Companion-style journey progress pill at bottom
             quizProgressPill
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    pillHeight = $0
+                }
                 .padding(.bottom, 28)
+
+            if viewModel.isSubmitting {
+                submittingOverlay
+            }
         }
         .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
@@ -92,6 +130,14 @@ struct StyleQuizView: View {
         }
         .onAppear {
             presentQuizCompanionIfNeeded()
+        }
+        // C1-28: the answers survive a call, a home swipe or a kill.
+        // RL2A-02: and only then — a discarded or submitted run stays gone.
+        .onDisappear {
+            viewModel.saveProgressIfInFlight()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { viewModel.saveProgressIfInFlight() }
         }
         .onChange(of: viewModel.currentQuestion) { _, _ in
             updateQuizCompanion()
@@ -136,7 +182,7 @@ struct StyleQuizView: View {
                 .foregroundStyle(PatinaColors.Text.primary)
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(PatinaColors.Background.primary.opacity(0.92)))
-                .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
+                .overlay(Circle().stroke(PatinaColors.Border.hairline, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Exit quiz")
@@ -148,24 +194,75 @@ struct StyleQuizView: View {
         coordinator.goBack()
     }
 
+    // MARK: - Navigation row (B-21, P-18)
+
+    /// Back on every step past the first, and an "I'll do this later" that
+    /// leaves. The quiz had neither: `onComplete == nil` was the only route to
+    /// the ✕, and during onboarding that route did not exist.
+    private var quizNavigationRow: some View {
+        HStack {
+            if viewModel.currentQuestion > 0 {
+                Button {
+                    HapticManager.shared.impact(.light)
+                    viewModel.goBack()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(PatinaColors.Text.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Previous question")
+                .accessibilityIdentifier("StyleQuiz.BackButton")
+            }
+
+            Spacer()
+
+            if let onDefer {
+                Button("I’ll do this later") {
+                    viewModel.saveProgress()
+                    onDefer()
+                }
+                .font(PatinaTypography.uiSmall)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("StyleQuiz.DeferButton")
+            }
+        }
+        .padding(.top, 52)
+        .padding(.horizontal, 18)
+    }
+
+    // MARK: - Submitting (C1-04)
+
+    /// `isSubmitting` had no reader anywhere in the app, so the fifth answer
+    /// left the reader on a highlighted Q5 for up to the RPC timeout with
+    /// nothing to look at.
+    private var submittingOverlay: some View {
+        VStack(spacing: PatinaSpacing.md) {
+            ProgressView()
+                .tint(PatinaColors.Text.secondary)
+            Text("Reading your answers…")
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(PatinaColors.Background.primary.opacity(0.96))
+        .accessibilityIdentifier("StyleQuiz.SubmittingState")
+    }
+
     // MARK: - Journey Progress Pill
 
     private var quizProgressPill: some View {
         let isMultiSelect = !viewModel.currentQuestionData.type.isSingleSelect
-        let nudge = viewModel.companionNudgeLabel
 
         return CompanionHearthView(
             presentation: companionPresentation,
             onDismiss: nil
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                if let nudge, !nudge.isEmpty {
-                    Text(nudge)
-                        .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.Text.inverse.opacity(0.78))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
                 if isMultiSelect {
                     Button {
                         guard viewModel.canAdvance else { return }
@@ -205,149 +302,9 @@ struct StyleQuizView: View {
         return Color.white.opacity(0.2)
     }
 
-    // MARK: - Question Content
-
-    @ViewBuilder
-    private func questionContent(_ question: QuizQuestion) -> some View {
-        let currentSelections = viewModel.selections[question.id] ?? []
-
-        switch question.type {
-        case let .imageGrid(options):
-            imageGridView(options: options, questionId: question.id, selections: currentSelections)
-
-        case let .iconList(options), let .budgetTiers(options):
-            listView(options: options, questionId: question.id, selections: currentSelections, isBudget: question.id == 3)
-
-        case let .materialCards(options):
-            materialCardsView(options: options, questionId: question.id, selections: currentSelections)
-        }
-    }
-
-    // MARK: - Image Grid (Q1)
-
-    private func imageGridView(options: [QuizOption], questionId: Int, selections: Set<Int>) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-                Button {
-                    selectOption(question: questionId, option: index)
-                } label: {
-                    VStack(spacing: 0) {
-                        (option.gradient ?? PatinaGradients.warm)
-                            .frame(minHeight: 120)
-                        Text(option.label)
-                            .font(PatinaTypography.uiSmall)
-                            .foregroundStyle(selections.contains(index) ? .white : PatinaColors.Text.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity)
-                            .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(selections.contains(index) ? PatinaColors.clay : Color.clear, lineWidth: 2.5)
-                    )
-                    .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
-                    .animation(reduceMotion ? nil : .spring(response: 0.3), value: selections.contains(index))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(24)
-    }
-
-    // MARK: - List View (Q2, Q4, Q5)
-
-    private func listView(options: [QuizOption], questionId: Int, selections: Set<Int>, isBudget: Bool) -> some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 10) {
-                ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-                    Button {
-                        selectOption(question: questionId, option: index)
-                    } label: {
-                        HStack(spacing: 14) {
-                            if let icon = option.icon {
-                                if isBudget {
-                                    Text(icon)
-                                        .font(.system(size: 20))
-                                        .frame(width: 44, height: 44)
-                                        .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
-                                        .clipShape(RoundedRectangle(cornerRadius: 11))
-                                } else {
-                                    Text(icon)
-                                        .font(.system(size: 24))
-                                        .frame(width: 56)
-                                }
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(option.label)
-                                    .font(PatinaTypography.uiAction)
-                                    .foregroundStyle(selections.contains(index) ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
-                                if let subtitle = option.subtitle {
-                                    Text(subtitle)
-                                        .font(PatinaTypography.caption)
-                                        .foregroundStyle(selections.contains(index) ? PatinaColors.Text.inverse.opacity(0.8) : PatinaColors.Text.muted)
-                                }
-                            }
-                            Spacer()
-                        }
-                        .padding(16)
-                        .background(selections.contains(index) ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
-                        .animation(reduceMotion ? nil : .spring(response: 0.3), value: selections.contains(index))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 12)
-        }
-    }
-
-    // MARK: - Material Cards (Q3)
-
-    private func materialCardsView(options: [QuizOption], questionId: Int, selections: Set<Int>) -> some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 10) {
-                ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-                    Button {
-                        selectOption(question: questionId, option: index)
-                    } label: {
-                        HStack(spacing: 14) {
-                            (option.gradient ?? PatinaGradients.warm)
-                                .frame(width: 52, height: 52)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(option.label)
-                                    .font(PatinaTypography.uiAction)
-                                    .foregroundStyle(selections.contains(index) ? .white : PatinaColors.Text.primary)
-                                if let subtitle = option.subtitle {
-                                    Text(subtitle)
-                                        .font(PatinaTypography.caption)
-                                        .foregroundStyle(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.Text.muted)
-                                }
-                            }
-                            Spacer()
-                        }
-                        .padding(14)
-                        .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
-                        .animation(reduceMotion ? nil : .spring(response: 0.3), value: selections.contains(index))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 12)
-        }
-    }
-
     // MARK: - Helpers
 
-    private func selectOption(question: Int, option: Int) {
+    func selectOption(question: Int, option: Int) {
         HapticManager.shared.impact(.light)
         viewModel.toggleSelection(question: question, option: option)
     }
@@ -357,7 +314,8 @@ private extension StyleQuizView {
     var currentQuizCompanionPresentation: CompanionPresentationState {
         let step = viewModel.currentQuestion + 1
         let total = viewModel.questions.count
-        let fraction = total > 0 ? Double(step) / Double(total) : 0
+        // A-21: answers recorded, not the index of the question on screen.
+        let fraction = Double(viewModel.progress)
         let label = stepLabels[min(viewModel.currentQuestion, stepLabels.count - 1)]
         let progress = CompanionProgressPresentation(
             fraction: fraction,

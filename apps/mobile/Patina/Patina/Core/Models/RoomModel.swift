@@ -283,16 +283,37 @@ public final class RoomModel {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// Average match score across saved items, or nil if empty.
+    /// Average match score across saved items, or nil when none of them
+    /// carries one.
+    ///
+    /// C-11: a piece saved from a screen that never scored it stores `0`, and
+    /// averaging that in publishes a room match the pieces do not support.
+    /// An unscored piece is left out of the average rather than counted as a
+    /// bad one.
     public var averageMatchScore: Int? {
-        guard !items.isEmpty else { return nil }
-        let total = items.reduce(0) { $0 + $1.matchScore }
-        return total / items.count
+        let scored = items.filter { $0.matchScore > 0 }
+        guard !scored.isEmpty else { return nil }
+        return scored.reduce(0) { $0 + $1.matchScore } / scored.count
     }
 
     /// Number of saved items that have an AR model.
     public var arReadyCount: Int {
         items.filter { $0.hasAR }.count
+    }
+
+    /// **The one provenance sentence.** `W1-B-06`: the same Guest Bedroom read
+    /// "180 SQ FT · TYPED, NOT SCANNED" in Your Spaces and "SCANNED SEP 3" on
+    /// the Studio's room card, because the Studio printed "Scanned \(date)"
+    /// unconditionally while every other surface asked `hasBeenScanned`. Three
+    /// surfaces, one source.
+    ///
+    /// - Parameter date: the date to name when the room WAS scanned. Nil
+    ///   prints the bare word, which is what the room screen and the Today
+    ///   hero already do.
+    public func provenanceLine(on date: Date? = nil, formattedBy formatter: DateFormatter? = nil) -> String {
+        guard hasBeenScanned else { return "Typed, not scanned" }
+        guard let date, let formatter else { return "Scanned" }
+        return "Scanned \(formatter.string(from: date))"
     }
 
     /// Spec's card meta line: "264 sq ft · South-facing · Scanned Apr 2"

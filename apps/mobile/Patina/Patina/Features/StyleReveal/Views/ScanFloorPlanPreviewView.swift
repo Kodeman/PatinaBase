@@ -29,7 +29,7 @@ struct ScanFloorPlanPreviewView: View {
             VStack(spacing: 0) {
                 ConversationHeaderView(
                     whisperTop: "Your space",
-                    question: "Here's what I see.",
+                    question: "Here’s what I see.",
                     whisperGeometryNamespace: whisperNamespace
                 )
                 .padding(.bottom, 24)
@@ -105,12 +105,12 @@ struct ScanFloorPlanPreviewView: View {
 
         return ZStack {
             Text(String(format: "%.0f ft", widthFt))
-                .font(.custom("DMMono-Regular", size: 11))
+                .font(PatinaTypography.monoLabel)
                 .foregroundStyle(PatinaColors.Text.interactive)
                 .offset(y: -(height / 2) - 16)
 
             Text(String(format: "%.0f ft", lengthFt))
-                .font(.custom("DMMono-Regular", size: 11))
+                .font(PatinaTypography.monoLabel)
                 .foregroundStyle(PatinaColors.Text.interactive)
                 .rotationEffect(.degrees(-90))
                 .offset(x: -(width / 2) - 16)

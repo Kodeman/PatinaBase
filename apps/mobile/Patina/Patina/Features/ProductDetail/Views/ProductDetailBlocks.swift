@@ -93,14 +93,19 @@ extension ProductDetailView {
         return "\(product.name) by \(maker) on Patina"
     }
 
+    /// C-27. Back / Help / Share / Save float over the 340 pt hero photograph.
+    /// `.ultraThinMaterial` inverts to a light-on-light wash over a light photo
+    /// — the same 2.01:1 the browse grid measured — and `Text.primary` resolves
+    /// near-white in dark, so the ink went with it. A material's contrast is a
+    /// function of what is behind it; a scrim's is not.
     func floatingCircleButton(icon: String) -> some View {
         Circle()
-            .fill(.ultraThinMaterial)
+            .fill(PatinaColors.Scrim.chrome)
             .frame(width: 36, height: 36)
             .overlay(
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .foregroundStyle(PatinaColors.Text.primary)
+                    .foregroundStyle(PatinaColors.OnDark.primary)
             )
     }
 

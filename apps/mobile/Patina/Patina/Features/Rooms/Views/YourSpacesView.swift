@@ -17,7 +17,11 @@ struct YourSpacesView: View {
     @Environment(\.isTabRoot) private var isTabRoot
     @Query(sort: \RoomModel.createdAt, order: .reverse) private var rooms: [RoomModel]
     /// Drives the contextual help-panel sheet attached to the Rooms surface.
-    /// Toggled by the `?` button in the header.
+    ///
+    /// C5-02: nothing sets this in round one — the `?` triggers are removed
+    /// because zero `ios-app/*` help articles exist in production Sanity, so
+    /// every door opened on an empty panel. The sheet wiring stays as a seam
+    /// W2 restores the buttons to; it is deliberately unreachable, not live.
     @State private var isHelpPanelPresented: Bool = false
 
     /// R14: scan-upload sync state. `RoomScanSyncService` is `@Observable`,
@@ -28,7 +32,23 @@ struct YourSpacesView: View {
         ZStack {
             PatinaColors.Background.primary.ignoresSafeArea()
 
-            if rooms.isEmpty {
+            if rooms.isEmpty && RoomSyncCoordinator.shared.lastLoadFailed {
+                // C4-03 (note O5): an empty list meant both "you have no
+                // rooms" and "we could not read your rooms", and the copy
+                // asserted the first to a client who has them. This branch
+                // sits BEFORE the empty one, not beside it.
+                PatinaErrorState(
+                    message: "We couldn’t reach your rooms. Check your connection and try again.",
+                    action: {
+                        Task {
+                            await RoomSyncCoordinator.shared.reconcile(
+                                store: RoomStore(context: modelContext)
+                            )
+                        }
+                    }
+                )
+                .accessibilityIdentifier("YourSpacesView.ErrorState")
+            } else if rooms.isEmpty {
                 // The populated branch draws "Your Spaces" in its own header;
                 // the empty one never did, which was invisible under a back
                 // chevron and is not invisible as a tab root — the canonical
@@ -57,23 +77,18 @@ struct YourSpacesView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 20)
 
-                        // Whole Home bar with a sibling HelpInfoIcon — the
-                        // bar itself stays a tappable navigation target, the
-                        // info icon surfaces the Patina concept explanation
-                        // (one aggregate figure across every scanned room).
-                        HStack(spacing: 6) {
-                            WholeHomeCrossRoomBar(
-                                roomCount: rooms.count,
-                                itemCount: totalItemCount,
-                                totalCents: totalInvestmentCents,
-                                onTap: { coordinator.navigate(to: .crossRoom) }
-                            )
-                            HelpInfoIcon(
-                                surfaceKey: SurfaceKeys.IOSApp.Rooms.wholeHome,
-                                fallback: "Whole Home rolls every room into one figure — total items, total investment, and a jump-off into the cross-room view for decisions that span more than one room.",
-                                size: 12
-                            )
-                        }
+                        // C-05: this bar's sibling `?` was the last of four on
+                        // one screen, and it sat OUTSIDE the card in the right
+                        // gutter, attached to nothing a reader could see. The
+                        // header's icon is the one help affordance this screen
+                        // gets; the bar's own label already says what it rolls
+                        // up.
+                        WholeHomeCrossRoomBar(
+                            roomCount: rooms.count,
+                            itemCount: totalItemCount,
+                            totalCents: totalInvestmentCents,
+                            onTap: { coordinator.navigate(to: .crossRoom) }
+                        )
                         .padding(.horizontal, 20)
 
                         ForEach(rooms) { room in
@@ -93,9 +108,8 @@ struct YourSpacesView: View {
                             }
                             .padding(.horizontal, 20)
                         }
-
-                        Spacer().frame(height: 120)
                     }
+                    .companionBottomClearance()
                 }
             }
         }
@@ -104,6 +118,10 @@ struct YourSpacesView: View {
         // rest. Debounced and owner-keyed; a guest's rooms are never merged
         // into an account (SP-06).
         .task {
+            await RoomSyncCoordinator.shared.reconcile(store: RoomStore(context: modelContext))
+        }
+        // C4-12 / R-03 (L1-B's note).
+        .refreshable {
             await RoomSyncCoordinator.shared.reconcile(store: RoomStore(context: modelContext))
         }
         // U18: standard pushed-screen chrome — this screen's own "Your
@@ -130,36 +148,15 @@ struct YourSpacesView: View {
                 // item count, plus a Whole Home aggregate at the top.
                 HelpInfoIcon(
                     surfaceKey: SurfaceKeys.IOSApp.Rooms.yourSpaces,
-                    fallback: "Your Spaces shows every room you've captured. Each card summarizes the room's items and budget. Scroll past the Whole Home bar to see them.",
-                    size: 14
+                    fallback: "Your Spaces shows every room you’ve captured. Each card summarizes the room’s items and budget. Scroll past the Whole Home bar to see them.",
+                    size: 14,
+                    accessibilityLabel: "About Your Spaces"
                 )
             }
             Spacer()
-            // Help-panel trigger — surfaces every help article for the
-            // rooms gallery in a sheet.
-            Button {
-                isHelpPanelPresented = true
-            } label: {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(PatinaColors.Text.secondary)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Help")
-            .accessibilityHint("Opens the help panel for Your Spaces.")
-            .accessibilityIdentifier("YourSpacesView.HelpButton")
-
-            // "Add a room" button — sibling HelpInfoIcon (rather than
-            // wrapping the button in HelpTooltip, which intercepts taps)
-            // so first-time users can learn what `+` does without
-            // breaking the navigation path.
-            HelpInfoIcon(
-                surfaceKey: SurfaceKeys.IOSApp.Rooms.newRoom,
-                fallback: "Add a new room — scan it with the camera for the best recommendations, or enter dimensions manually if you don't have the room in front of you.",
-                size: 12
-            )
+            // C-05: the `+` control's own help icon was the fourth `?` on
+            // this header and the third labelled "More information". The
+            // sheet it opens names both paths in full; the icon is gone.
             Button {
                 coordinator.presentedSheet = .newRoom
             } label: {
@@ -190,19 +187,13 @@ struct YourSpacesView: View {
                     .frame(width: 80, height: 80)
                 Text("⌂").font(.system(size: 32))
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("No rooms yet")
-                    .font(PatinaTypography.h4)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                // Empty-state help: explains why scanning matters. The
-                // copy below is a CTA; this tooltip explains the *why*
-                // for a designer-curious user not ready to scan yet.
-                HelpInfoIcon(
-                    surfaceKey: SurfaceKeys.IOSApp.Rooms.emptyNoRooms,
-                    fallback: "Patina builds room-aware recommendations from a scan — the LiDAR camera captures shape, light, and existing items so every suggestion fits the actual space.",
-                    size: 13
-                )
-            }
+            // C-05: as the Spaces tab's root this state draws the header too,
+            // so its own `?` was a second affordance in one viewport. The
+            // sentence directly below already says why a scan matters, in
+            // plainer words than the tooltip did.
+            Text("No rooms yet")
+                .font(PatinaTypography.h4)
+                .foregroundStyle(PatinaColors.Text.primary)
             Text("Scan a room and Patina fills it with furniture that knows your space — your light, your walls, your style.")
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
@@ -213,7 +204,11 @@ struct YourSpacesView: View {
                 coordinator.presentedSheet = .newRoom
             } label: {
                 HStack(spacing: 8) {
-                    Text("◎")
+                    // W1-B-13: `B-60` replaced the `◎` glyph with
+                    // `camera.viewfinder` on the add-room sheet, and the same
+                    // character survived one screen away on the guest / empty
+                    // Spaces CTA — the door onto that very sheet.
+                    Image(systemName: "camera.viewfinder")
                     Text("Scan Your First Room")
                 }
                 .font(PatinaTypography.bodySmallMedium)

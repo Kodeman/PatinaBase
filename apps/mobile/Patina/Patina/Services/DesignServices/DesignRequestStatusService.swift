@@ -120,7 +120,7 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
         case .finding: return "Finding your designer"
         case .held: return "In hand"
         case .inTouch: return "In touch"
-        case .introduced: return "You're matched"
+        case .introduced: return "You’re matched"
         case .booked: return "Discovery booked"
         case .matched: return "Designer matched"
         case .closed: return "Not matched"
@@ -135,7 +135,7 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
         let studio = studioName ?? designerName ?? "Your designer"
         switch self {
         case .finding:
-            return "We're matching your request with a designer."
+            return "We’re matching your request with a designer."
         case .held:
             return "\(studio) has taken your request in hand — introduction on its way."
         case .inTouch:
@@ -143,11 +143,11 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
         case .introduced:
             return "\(studio) sent you an introduction and times for your first call."
         case .booked:
-            return "You're set with \(studio). The call is on the calendar."
+            return "You’re set with \(studio). The call is on the calendar."
         case .matched:
-            return "You're working with \(designerName ?? "your designer")."
+            return "You’re working with \(designerName ?? "your designer")."
         case .closed:
-            return "This one didn't work out. Send a new request anytime."
+            return "This one didn’t work out. Send a new request anytime."
         case .expired:
             return "This request expired. Send a new request anytime."
         }
@@ -170,16 +170,16 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
         case .inTouch:
             return "Your designer reached out"
         case .introduced:
-            return "You're matched — meet \(studio)"
+            return "You’re matched — meet \(studio)"
         case .booked:
             if let bookedSlotStartsAt {
                 return "Discovery · \(Self.formatBookedSlot(bookedSlotStartsAt))"
             }
             return "Discovery call booked"
         case .matched:
-            return "You're matched with \(designerName ?? "your designer")"
+            return "You’re matched with \(designerName ?? "your designer")"
         case .closed:
-            return "Your request wasn't matched"
+            return "Your request wasn’t matched"
         case .expired:
             return "Your request expired"
         }

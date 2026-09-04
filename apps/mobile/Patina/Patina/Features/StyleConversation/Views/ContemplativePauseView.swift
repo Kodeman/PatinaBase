@@ -26,7 +26,7 @@ struct ContemplativePauseView: View {
 
             VStack(spacing: 32) {
                 Text("Let me think about this.")
-                    .font(.custom("PlayfairDisplay-Italic", size: 20, relativeTo: .title3))
+                    .font(PatinaTypography.patinaVoiceLarge)
                     .foregroundStyle(PatinaColors.Text.primary.opacity(0.6))
 
                 HStack(spacing: 6) {

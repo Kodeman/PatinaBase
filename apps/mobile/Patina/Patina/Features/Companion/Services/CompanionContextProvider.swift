@@ -104,7 +104,7 @@ enum CompanionActionProvider {
         isAuthenticated: Bool = true
     ) -> [CompanionActionItem] {
         var items = screenItems(for: screen, context: context, isAuthenticated: isAuthenticated)
-        appendTail(to: &items, screen: screen, isAuthenticated: isAuthenticated)
+        appendTail(to: &items, screen: screen, context: context, isAuthenticated: isAuthenticated)
 
         #if DEBUG
         assert(items.count <= 6, "Companion menu for \(screen) exceeds 6 rows (\(items.count))")
@@ -128,7 +128,7 @@ enum CompanionActionProvider {
         case .heroFrame:
             return homeItems(context: context)
         case .emergence, .roomEmergence, .pieceDetail, .arPlacement:
-            return discoveryItems(screen, context: context)
+            return discoveryItems(screen, context: context, isAuthenticated: isAuthenticated)
         case .table, .roomSavedItems, .crossRoom:
             return collectionsItems(screen, context: context)
         case .yourSpaces, .roomProject,
@@ -166,10 +166,12 @@ enum CompanionActionProvider {
     private static func appendTail(
         to items: inout [CompanionActionItem],
         screen: AppRoute,
+        context: CompanionContext,
         isAuthenticated: Bool
     ) {
         if screen != .heroFrame {
-            items.append(homeRow())
+            items.append(homeRow(isAuthenticated: isAuthenticated,
+                                 hasLocalWork: context.roomCount > 0))
         }
         if !isAuthenticated {
             let hasSuggested = items.contains(where: \.isSuggested)
@@ -210,7 +212,7 @@ enum CompanionActionProvider {
     private static func panelTitleDetail(for screen: AppRoute) -> String {
         switch screen {
         case .roomProject:
-            return "What's next for this room?"
+            return "What’s next for this room?"
         case .roomSettings:
             return "All set here?"
         case .manualRoomEntry:
@@ -231,9 +233,9 @@ enum CompanionActionProvider {
     private static func studioPanelTitle(for screen: AppRoute) -> String {
         switch screen {
         case .studio:
-            return "What's next?"
+            return "What’s next?"
         case .projectList:
-            return "What's on your plate?"
+            return "What’s on your plate?"
         case .projectDetail:
             return "Anything for this project?"
         case .decisionList:
@@ -243,7 +245,7 @@ enum CompanionActionProvider {
         case .threadList:
             return "Anything else?"
         case .threadDetail:
-            return "While you're here"
+            return "While you’re here"
         case .designerConsultation:
             return "Working with your designer"
         case .designRequests:

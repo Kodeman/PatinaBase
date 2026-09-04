@@ -28,7 +28,6 @@ struct InvoiceDetailView: View {
                     InvoiceLineItemsBlock(invoice: invoice)
                     memoSection(invoice)
                     InvoicePaymentsBlock(invoice: invoice)
-                    payFooter(invoice)
                 } else if let error = viewModel.error {
                     errorView(error)
                 } else {
@@ -36,7 +35,28 @@ struct InvoiceDetailView: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.bottom, MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
+            // With the act pinned below, the scroll only needs air under its
+            // last section; the bar's clearance travels with the footer.
+            .padding(.bottom, isPayFooterPinned
+                     ? 24
+                     : MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
+        }
+        // GAP2-24: on first paint the CTA frame was {y:875, h:52} on an 874 pt
+        // screen — entirely below the fold, on a screen a tester reaches from
+        // "Your invoice is due". B-28: after a failure it was pushed behind
+        // the tab bar (pay at y=812.33, bar from y=791) and the failure panel
+        // was clipped with no scroll to reveal it. This screen earns a fixed
+        // footer: the act and the sentence above it are on screen at rest, at
+        // every scroll offset, and after a failure.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let invoice = viewModel.invoice, isPayFooterPinned {
+                payFooter(invoice)
+                    .padding(.top, 12)
+                    .padding(.bottom, MoneyScreenMetrics.bottomClearance(
+                        houseFirst: coordinator.isHouseFirstRoot
+                    ))
+                    .background(PatinaColors.Background.primary)
+            }
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
@@ -68,7 +88,7 @@ struct InvoiceDetailView: View {
                 .tracking(2)
             Text(statusHeadline(invoice))
                 .font(PatinaTypography.h2)
-                .foregroundStyle(isOverdue(invoice) ? PatinaColors.error : PatinaColors.Text.primary)
+                .foregroundStyle(isOverdue(invoice) ? PatinaColors.Text.error : PatinaColors.Text.primary)
             Text(invoice.invoice_number ?? "Invoice")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.secondary)
@@ -116,14 +136,14 @@ struct InvoiceDetailView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: bannerIcon(state))
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(bannerTint(state))
+                .foregroundStyle(state.inkTint)
             Text(text)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(bannerTint(state).opacity(0.1))
+        .background(state.tint.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 24)
     }
@@ -136,14 +156,10 @@ struct InvoiceDetailView: View {
         }
     }
 
-    private func bannerTint(_ state: PatinaStatusBadge.State) -> Color {
-        switch state {
-        case .success: return PatinaColors.success
-        case .warning: return PatinaColors.warning
-        case .error: return PatinaColors.error
-        case .info: return PatinaColors.dustyBlue
-        }
-    }
+    // A-73: this re-derived the badge's palette by hand and painted the glyph
+    // with the wash value — `PatinaColors.error` at 2.65:1 on its own 10 %
+    // ground. The badge already publishes the two, split: `tint` is the wash,
+    // `inkTint` is the ink.
 
     // MARK: - Amount summary
 
@@ -167,7 +183,7 @@ struct InvoiceDetailView: View {
         if let due = DateDisplay.due(invoice.due_date), !invoice.isPaid, !invoice.isVoid {
             Text(due.text)
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
                 .padding(.horizontal, 24)
                 .accessibilityIdentifier("invoiceDetail.due")
         }
@@ -200,6 +216,13 @@ struct InvoiceDetailView: View {
     }
 
     // MARK: - Pay footer
+
+    /// True when `payFooter` draws anything — the two branches below.
+    private var isPayFooterPinned: Bool {
+        guard let invoice = viewModel.invoice else { return false }
+        return invoice.isVoid
+            || (invoice.isPayable && viewModel.confirmState != .confirming)
+    }
 
     @ViewBuilder
     private func payFooter(_ invoice: RemoteInvoice) -> some View {

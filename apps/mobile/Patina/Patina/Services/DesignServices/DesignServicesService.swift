@@ -182,29 +182,35 @@ nonisolated public enum DesignServicesError: Error, LocalizedError, Equatable, S
     public var errorDescription: String? {
         switch self {
         case .notAuthenticated:
-            return "Please sign in to request design services"
+            return "Please sign in to request design services."
         case .noScans:
-            return "Add at least one room scan to your request"
+            return "Add at least one room scan to your request."
         case .primaryNotInSet:
-            return "The primary scan must be one of the selected scans"
+            return "The primary scan must be one of the selected scans."
         case .invalidProjectType:
-            return "Choose what kind of help you'd like"
+            return "Choose what kind of help you’d like."
         case .scanNotFound:
             return "One of your scans could not be found. Try again."
         case .scanNotReady:
             return "A scan is still finishing its upload. Give it a moment and try again."
         case .designerNotFound:
-            return "We couldn't find that designer."
+            return "We couldn’t find that designer."
         case .requestNotFound:
             return "That request could not be found."
         case .alreadySubmitted:
             return "This request has already been sent."
-        case .invalidRequest(let message):
-            return message
-        case .networkError(let message):
-            return "Network error: \(message)"
+        case .invalidRequest:
+            // C5-11: was `return message` — a raw Postgres/RPC string,
+            // verbatim, to a homeowner. The associated value stays on the
+            // case (a caller may still log it) but the description is now
+            // one fixed sentence.
+            return "We couldn’t process your request. Try again."
+        case .networkError:
+            // Was `"Network error: \(message)"` — same defect, the other
+            // raw arm this finding names.
+            return "Check your connection and try again."
         case .submissionFailed:
-            return "Failed to submit your request. Please try again."
+            return "We couldn’t send your request. Nothing was lost — try again."
         }
     }
 
@@ -216,7 +222,15 @@ nonisolated public enum DesignServicesError: Error, LocalizedError, Equatable, S
         if let pg = error as? PostgrestError {
             return map(message: pg.message, detail: pg.detail)
         }
-        return .networkError(error.localizedDescription)
+        // `RL1E2-12`: this arm is the catch-all for everything that is not a
+        // PostgREST error — a decoding failure, an expired `AuthError`, a
+        // keychain error — and `.networkError` now reads "Check your
+        // connection and try again.", which sends a tester with a working
+        // connection to fix their wifi. Only a real transport failure gets
+        // the connection sentence; everything else takes the same catch-all
+        // `map(message:detail:)` already uses for an unrecognised message.
+        if error is URLError { return .networkError(error.localizedDescription) }
+        return .submissionFailed
     }
 
     /// Map the raw Postgres error message (+ optional DETAIL carrying a scan
@@ -276,8 +290,14 @@ nonisolated public enum PickIntroductionError: Error, LocalizedError, Equatable,
         switch self {
         case .alreadyPicked: return "This time was just booked on another device."
         case .slotStale: return "That time has passed. Choose another."
-        case .notFound: return "We couldn't book that time. Please try again."
-        case .failed(let message): return "Couldn't book that time: \(message)"
+        case .notFound: return "We couldn’t book that time. Try again."
+        // C5-11, same defect class as `.invalidRequest` and
+        // `CompanionAPIError.badRequest`: this arm printed the raw
+        // Postgres/system message. The associated value stays on the
+        // case for logging; the reader gets the same sentence
+        // `.notFound` gets, which is what the mapping already treats
+        // it as.
+        case .failed: return "We couldn’t book that time. Try again."
         }
     }
 
@@ -330,6 +350,7 @@ nonisolated public struct DesignServicesService: DesignRequestSubmitting {
                 .value
             return result
         } catch {
+            PatinaLog.sync.error("[DesignServices] submit_design_request failed: \(error)")
             throw DesignServicesError.map(error)
         }
     }

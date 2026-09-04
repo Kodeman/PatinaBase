@@ -54,4 +54,22 @@ enum DecisionDeferral: String, CaseIterable, Identifiable {
 enum DecisionOptionCopy {
     static let unavailableLine = "Your designer is still adding this option."
     static let allUnavailableLine = "Your designer is still adding the options."
+
+    /// `W1-B-03`. A decision can arrive with **no options row at all**, and the
+    /// detail screen then drew nothing between the header and the two deferral
+    /// acts — so the fixture's overdue "Design Development sign-off — drawing
+    /// set B" offered a client only "Not yet", "Neither of these" and "Discuss
+    /// this with your designer", and read as a screen whose approve button had
+    /// gone missing.
+    ///
+    /// It has not gone missing; there is nothing for it to submit. The one RPC
+    /// the client app has, `apply_client_decision`, takes a
+    /// `p_selected_option_id` and raises `insufficient_privilege` unless the
+    /// decision's `coordination_kind = 'selection'`; this row is `'signoff'`
+    /// with no options and no `approval_contract`, so no client-reachable path
+    /// can resolve it. Drawing an Approve button here would ship a control that
+    /// 403s. The screen says what is true instead, and leaves the two acts that
+    /// do work.
+    static let nothingToChooseYetLine =
+        "There is nothing to choose here yet — your designer has not added the options."
 }

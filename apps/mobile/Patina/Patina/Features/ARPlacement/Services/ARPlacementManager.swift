@@ -130,7 +130,7 @@ final class ARPlacementManager {
             // ARPlacementView fires `.sensoryFeedback(.success,
             // trigger: placementManager.isPlaced)` when this flips true.
         } catch {
-            self.errorMessage = "Couldn't load 3D model"
+            self.errorMessage = "We couldn’t load this piece. Try again."
             self.isLoading = false
         }
     }

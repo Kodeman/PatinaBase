@@ -152,7 +152,7 @@ public struct HelpPanelSheet: View {
             // "No help articles yet" copy as a genuinely empty surface,
             // silently swallowing the error. Surface it with a retry.
             PatinaErrorState(
-                message: "Couldn't load help for this screen.",
+                message: "Couldn’t load help for this screen.",
                 action: { Task { await loadArticles() } }
             )
             .accessibilityIdentifier("HelpPanelSheet.ErrorState")
@@ -211,9 +211,11 @@ public struct HelpPanelSheet: View {
                 self.isLoading = false
             }
         } catch {
-            // Invalid surface keys (the only throwing path) are programmer
-            // errors — log and present the empty state so the UI stays
-            // functional and the bug is caught in QA.
+            // Two throwing paths now: an invalid surface key, which is a
+            // programmer error, and `HelpArticleFetchError`, which is the
+            // request not coming back (R-10). Both belong in the error state
+            // with its retry — the empty copy below it says "on the way",
+            // which is a promise nobody can keep about a 400.
             PatinaLog.ui.error("[HelpPanelSheet] loadArticles failed: \(error)")
             await MainActor.run {
                 self.articles = []

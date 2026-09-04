@@ -151,7 +151,7 @@ struct OrderRoutingTests {
         #expect(refundedOnly?.detail == "1 past order")
     }
 
-    @Test("the Ordered row rides the Studio's Money & documents group")
+    @Test("the Ordered row rides the Studio’s Money & documents group")
     @MainActor
     func theRowLandsInMoneyAndDocuments() {
         let base = Date(timeIntervalSince1970: 1_787_000_000)

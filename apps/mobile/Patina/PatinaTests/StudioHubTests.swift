@@ -16,6 +16,23 @@ struct StudioHubTests {
     @MainActor
     func groupsRealRecordsByStateAndOrdersUrgentWorkFirst() throws {
         let now = try #require(ISO8601DateFormatter().date(from: "2026-07-29T16:00:00Z"))
+
+        // L1F→B-5, applied at merge 6: `unreadUpdateCount` and the Studio
+        // update row read `BadgeCountService.shared` rather than counting the
+        // raw table a second time (00534 writes two rows per event, which is
+        // how this screen came to say 6 while the bell said 3). The fixture's
+        // one unread row is therefore published into the service, not counted
+        // here.
+        BadgeCountService.shared.applyNotificationRows([
+            AppNotification(
+                type: .designerResponse,
+                title: "Your designer replied",
+                body: "Take a look when you have a moment.",
+                timestamp: now,
+                isRead: false
+            )
+        ])
+
         let snapshot = StudioQueueBuilder.build(
             StudioQueueInput(
                 projects: try sampleProjects(),

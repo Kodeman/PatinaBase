@@ -45,7 +45,7 @@ struct DailyRecommendation: Identifiable, Hashable {
         var label: String {
             switch self {
             case .designerSelection: return "Designer Selection"
-            case .editorPick: return "Editor's Pick"
+            case .editorPick: return "Editor’s Pick"
             case .standard: return ""
             }
         }
@@ -99,7 +99,7 @@ extension DailyRecommendation {
             product: Product.previewProducts[5],
             matchScore: 84,
             tier: .standard,
-            whyCopy: "Brass warms with age — the patina you'll watch develop year by year.",
+            whyCopy: "Brass warms with age — the patina you’ll watch develop year by year.",
             insight: nil,
             pairing: nil
         )

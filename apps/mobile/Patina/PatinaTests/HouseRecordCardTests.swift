@@ -206,11 +206,72 @@ struct HouseRecordCardTests {
         #expect(!String(body[..<end.lowerBound]).contains("See all"))
     }
 
-    @Test("the record's own event carries the gap it is reporting on")
+    @Test("the record’s own event carries the gap it is reporting on")
     func theShownEventCarriesTheGap() throws {
         let source = try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
         #expect(source.contains("\"days_since_last_seen\""))
         #expect(source.contains("\"needs_count\""))
         #expect(source.contains("\"moved_count\""))
+    }
+
+    // MARK: - R-03 · Today says when its rows are from
+
+    private static func record(moved: [HouseRecordRow], builtAt: Date) -> HouseRecord {
+        HouseRecord(
+            needsYou: [], moved: moved,
+            window: DateInterval(start: builtAt.addingTimeInterval(-7 * 24 * 3600), end: builtAt),
+            lastSeenAt: nil, hasMoreNeedsYou: false, hasMoreMoved: false
+        )
+    }
+
+    /// `R-03`'s third half. The Studio says when its numbers are from and Today
+    /// said nothing at all — the walk read a wiped record with no "last
+    /// updated" of any kind, and `grep stalenessLine` resolved only to the
+    /// Studio. A word, never a dot and never a badge.
+    @Test("a record drawn after a failed refresh says when it was last updated")
+    func aStaleRecordSaysSoInWords() throws {
+        let built = Self.day(9, 3)
+        let line = RecordStaleness.line(
+            refreshFailed: true,
+            record: Self.record(moved: [Self.row(kind: .story, date: built, state: .none)],
+                                builtAt: built),
+            now: built.addingTimeInterval(3600)
+        )
+        let text = try #require(line)
+        #expect(text.localizedCaseInsensitiveContains("last updated"))
+        #expect(text.hasSuffix("."))
+    }
+
+    @Test("a refresh that answered says nothing extra")
+    func aFreshRecordHasNoStalenessLine() {
+        let built = Self.day(9, 3)
+        #expect(RecordStaleness.line(
+            refreshFailed: false,
+            record: Self.record(moved: [Self.row(kind: .story, date: built, state: .none)],
+                                builtAt: built),
+            now: built
+        ) == nil)
+    }
+
+    /// Nothing on the card is nothing to be stale about — that is the empty
+    /// state, and its own two sentences carry it.
+    @Test("an empty record has no staleness line")
+    func anEmptyRecordHasNoStalenessLine() {
+        let built = Self.day(9, 3)
+        #expect(RecordStaleness.line(
+            refreshFailed: true,
+            record: Self.record(moved: [], builtAt: built),
+            now: built
+        ) == nil)
+    }
+
+    /// And the card draws it, above the halves, where the header is.
+    @Test("the card renders the staleness line and Today supplies it")
+    func theCardRendersTheStalenessLine() throws {
+        let card = try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
+        #expect(card.contains("DailyRoomView.RecordStaleness"))
+        let today = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+        #expect(today.contains("stalenessLine: RecordStaleness.line("))
+        #expect(today.contains("refreshFailed: badges.lastRefreshFailed"))
     }
 }

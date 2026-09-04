@@ -144,6 +144,23 @@ public final class FirstLaunchTourModel {
     /// Ordered step list. Index 0 is the first popover shown.
     public let steps: [FirstLaunchTourStep]
 
+    /// `false` while the host's surface is not on screen.
+    ///
+    /// B-10's tab half: the host's `canAutoStart` gated only the START. Once
+    /// armed, switching to the Spaces tab left step 1 — "This is your Daily
+    /// Room" — sitting on the Whole Home card it does not describe, because
+    /// `.homeGreeting` lives in `DailyRoomView`, which stays mounted at
+    /// opacity 0 behind the Spaces stack, so the popover anchored to a hidden
+    /// frame. Suspending is deliberately not `skip()`: skipping persists
+    /// `abandoned` and the tester would never see the tour again.
+    public private(set) var isSubjectOnScreen: Bool = true
+
+    /// Told by the host whenever its surface comes or goes.
+    public func setSubjectOnScreen(_ onScreen: Bool) {
+        guard isSubjectOnScreen != onScreen else { return }
+        isSubjectOnScreen = onScreen
+    }
+
     /// Zero-based active step index. When `isActive == true` the anchor
     /// matching `steps[currentStep].anchor` displays its popover.
     public private(set) var currentStep: Int = 0
@@ -591,7 +608,7 @@ public final class FirstLaunchTourModel {
     /// `anchor`. The `.firstLaunchTourAnchor` modifier reads this to decide
     /// whether to mount its popover.
     public func isShowingPopover(forAnchor anchor: FirstLaunchTourAnchor) -> Bool {
-        guard isActive else { return false }
+        guard isActive, isSubjectOnScreen else { return false }
         guard steps.indices.contains(currentStep) else { return false }
         return steps[currentStep].anchor == anchor
     }
@@ -621,6 +638,32 @@ public final class FirstLaunchTourModel {
     /// `steps.count`, NOT the display-facing `totalSteps` — otherwise a skipped
     /// step would make the final popover's button read "Next" and dead-end.
     public var isOnFinalStep: Bool { currentStep >= steps.count - 1 }
+
+    // MARK: - B-10 · the scrim's cut-out
+
+    /// Where each mounted anchor sits in the tour root's coordinate space,
+    /// reported by the anchor modifier on every layout pass.
+    private var anchorFrames: [FirstLaunchTourAnchor: CGRect] = [:]
+
+    /// Told by the anchor modifier whenever the layout moves it.
+    public func reportAnchorFrame(_ anchor: FirstLaunchTourAnchor, rect: CGRect) {
+        guard anchorFrames[anchor] != rect else { return }
+        anchorFrames[anchor] = rect
+    }
+
+    /// The frame the scrim leaves un-dimmed, or nil when nothing is showing.
+    ///
+    /// `B-10`'s other half. The card places correctly — step 1 sits below the
+    /// greeting and the greeting stays visible — but it is drawn over two live
+    /// record rows with no dim and no cut-out, so the reader is told to look at
+    /// one thing while the card sits on two others that look equally live. The
+    /// fix the finding names is a dim with the subject punched out of it.
+    public var highlightRect: CGRect? {
+        guard isActive, isSubjectOnScreen else { return nil }
+        guard steps.indices.contains(currentStep) else { return nil }
+        guard let rect = anchorFrames[steps[currentStep].anchor], rect != .zero else { return nil }
+        return rect
+    }
 }
 
 // MARK: - Orchestrator view
@@ -674,6 +717,15 @@ public struct FirstLaunchTour<Content: View>: View {
 
     public var body: some View {
         content()
+            // B-10: the dim, with the step's own subject punched out of it.
+            // Inside the named coordinate space below, so the cut-out's rect
+            // and the anchors' measurements share one origin.
+            .overlay {
+                if let rect = model.highlightRect {
+                    FirstLaunchTourScrim(highlight: rect)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: model.highlightRect)
             // Names the root the anchors measure themselves against, so each
             // one can place its card on the side of itself that has room
             // (`FirstLaunchTourPopoverPlacement`).
@@ -688,6 +740,13 @@ public struct FirstLaunchTour<Content: View>: View {
             // `id: canAutoStart` is load-bearing — a plain `.task` runs once at
             // mount and would burn the one-shot while Home sits under a pushed
             // route. Keying on the gate re-runs the check when the cover clears.
+            // The host's own "my surface is on screen" answer —
+            // `tabs.isShowingTodayRoot` on the four-tab root,
+            // `navigationPath.isEmpty` on the flag-off one. It gated only the
+            // start; it is also what decides whether a card may draw (B-10).
+            .onChange(of: canAutoStart, initial: true) { _, onScreen in
+                model.setSubjectOnScreen(onScreen)
+            }
             .task(id: canAutoStart) {
                 guard canAutoStart else { return }
                 // S4-1 — install the Supabase adapter when the user is
@@ -727,6 +786,57 @@ public struct FirstLaunchTour<Content: View>: View {
     }
 }
 
+// MARK: - The scrim (B-10)
+
+/// The dim the tour draws over everything except the thing it is naming.
+///
+/// A coach mark that sits on live content with nothing separating them asks the
+/// reader to work out which of the three cards under it is the subject. The
+/// cut-out answers that without moving anything: the anchor keeps its own
+/// pixels at full contrast and the rest of the screen recedes.
+///
+/// Deliberately not hit-testable — the popover already owns dismissal (an
+/// outside tap is a skip), and a scrim that swallowed taps would change what
+/// tapping outside the card does.
+private struct FirstLaunchTourScrim: View {
+    let highlight: CGRect
+
+    /// Breathing room around the subject, so the cut-out reads as a spotlight
+    /// rather than as a crop.
+    private static let inset: CGFloat = 8
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(Color.black.opacity(0.28))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .frame(
+                    width: highlight.width + Self.inset * 2,
+                    height: highlight.height + Self.inset * 2
+                )
+                .position(x: highlight.midX, y: highlight.midY)
+                .blendMode(.destinationOut)
+        }
+        // Without this the destination-out blend punches through the whole
+        // window instead of through the scrim alone.
+        .compositingGroup()
+        // `W1-B-15` asked for `.ignoresSafeArea()` here, so the dim reaches the
+        // screen edge instead of stopping at the top inset. **It was tried and
+        // reverted**: measured on `EDFCE6CF-…` against walk B's own shot 29,
+        // expanding this view moves the cut-out out of the coordinate space the
+        // anchors report themselves in, and step 3's un-dimmed Studio tab —
+        // x 300–340 pt, rgb (233,230,225) before — went to (157,156,152), i.e.
+        // the spotlight the tour's last step is entirely about disappeared.
+        // The bright band above the dim is a polish row; a step that no longer
+        // points at anything is not. `W1-B-15` stays open, and the fix it needs
+        // measures the inset and offsets the cut-out by it rather than widening
+        // the frame the cut-out is positioned in.
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .transition(.opacity)
+    }
+}
+
 // MARK: - Anchor modifier
 
 /// Environment key for the orchestrator model. Using `@Environment` over
@@ -753,16 +863,21 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: FirstLaunchTourPopoverPlacement.AnchorGeometry.self) { proxy in
-                FirstLaunchTourPopoverPlacement.AnchorGeometry(
-                    midY: proxy.frame(
-                        in: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
-                    ).midY,
+                let frame = proxy.frame(
+                    in: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
+                )
+                return FirstLaunchTourPopoverPlacement.AnchorGeometry(
+                    midY: frame.midY,
                     containerHeight: proxy.bounds(
                         of: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
-                    )?.height ?? 0
+                    )?.height ?? 0,
+                    rect: frame
                 )
             } action: { measured in
                 geometry = measured
+                // B-10: the scrim's cut-out. Reported for every anchor; the
+                // model draws only the one the current step names.
+                model?.reportAnchorFrame(anchor, rect: measured.rect)
             }
             // Track this anchor's presence so the orchestrator can skip a step
             // whose anchor never mounts (e.g. `.addToRoom` for a zero-room
@@ -843,34 +958,71 @@ private struct FirstLaunchTourPopoverCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Step \(stepNumber) of \(totalSteps)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(PatinaTypography.monoLabel)
+                .tracking(0.5)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .accessibilityIdentifier("FirstLaunchTour.StepIndicator")
 
+            // W1-B-09: at accessibility-extra-large the card truncated its own
+            // title — "Welcome to Pat…" — because the popover is capped at
+            // 320 pt and an `h5` serif at that size does not fit one line.
+            // Wrapping is what a title should do; the scale factor is there so
+            // a single long word cannot break inside itself the way `C-06`'s
+            // surfaces did.
             Text(resolvedHeading)
-                .font(.headline)
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .lineLimit(3)
+                .minimumScaleFactor(0.6)
+                .allowsTightening(true)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("FirstLaunchTour.Heading")
 
             Text(resolvedBody)
-                .font(.body)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("FirstLaunchTour.Body")
 
-            HStack {
+            HStack(spacing: 12) {
                 Spacer()
-                Button("Skip", role: .cancel, action: onSkip)
-                    .accessibilityIdentifier("FirstLaunchTour.SkipButton")
+                Button(action: onSkip) {
+                    Text("Skip")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("FirstLaunchTour.SkipButton")
 
                 Button(action: onNext) {
                     Text(isFinalStep ? "Done" : (resolvedCtaLabel ?? "Next"))
+                        .font(PatinaTypography.bodySmallMedium)
+                        // C3-05, at merge 6: a light label on the raw accent
+                        // measures 2.33:1. `Interactive.active` is the filled
+                        // control surface, and `Text.inverse` is its label.
+                        .foregroundStyle(PatinaColors.Text.inverse)
+                        .padding(.horizontal, 20)
+                        .frame(minHeight: 44)
+                        .background(PatinaColors.Interactive.active)
+                        .clipShape(Capsule())
+                        .contentShape(Capsule())
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
                 .accessibilityIdentifier(isFinalStep ? "FirstLaunchTour.DoneButton" : "FirstLaunchTour.NextButton")
             }
         }
         .padding(16)
         .frame(maxWidth: 320)
+        // B-09: the card is the only stock-iOS surface a tester meets — Skip
+        // was system-blue text and Next a system-blue capsule in an otherwise
+        // cream, brown and black app. The styles above are explicit, and this
+        // covers anything inside the popover they do not reach (the caret in a
+        // field, a selection handle) without depending on the global accent.
+        .tint(PatinaColors.clay)
         .accessibilityElement(children: .combine)
         .task(id: step.surfaceKey) {
             await loadContent()

@@ -121,7 +121,7 @@ struct MatchIntroductionLogicTests {
         let intro = IntroductionInfo(
             ceremonyId: UUID(),
             state: "sent",
-            introText: "Let's talk.",
+            introText: "Let’s talk.",
             credentialLine: "Principal",
             portfolioUrl: "https://example.test",
             slots: [slot(3_600, duration: 45)],

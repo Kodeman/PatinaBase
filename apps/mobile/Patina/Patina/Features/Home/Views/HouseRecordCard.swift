@@ -180,6 +180,40 @@ enum HouseRecordDates {
     static let needsYouEmpty = "Nothing needs you right now."
 }
 
+// MARK: - Staleness (R-03)
+
+/// When the Record on screen is not what the house holds, Today says so — in a
+/// word, never a dot and never a badge (VISION §6, the same constraint
+/// `StudioHubViewModel.stalenessLine` carries).
+///
+/// R-03's third half went to L1-B after merge and nothing ever produced a line:
+/// `grep stalenessLine` resolved only to the Studio. So Today drew a record
+/// composed before the network died with no signal of any kind, and the reader
+/// had no way to tell a quiet house from an unreachable one.
+enum RecordStaleness {
+
+    /// - Parameters:
+    ///   - refreshFailed: `BadgeCountService.lastRefreshFailed` — every one of
+    ///     the fetches the Record is built from came back empty-handed.
+    ///   - record: what is on screen. An empty record is not stale, it is the
+    ///     error state, and the card's own empty lines carry it.
+    static func line(
+        refreshFailed: Bool,
+        record: HouseRecord?,
+        now: Date = Date()
+    ) -> String? {
+        guard refreshFailed, let record else { return nil }
+        guard !record.needsYou.isEmpty || !record.moved.isEmpty else { return nil }
+        return "Last updated \(formatter.localizedString(for: record.window.end, relativeTo: now))."
+    }
+
+    private static let formatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
+}
+
 // MARK: - The card
 
 struct HouseRecordCard: View {
@@ -193,6 +227,8 @@ struct HouseRecordCard: View {
     /// True from engaged upward. Only there is an empty half a true answer;
     /// below it the caller does not mount the card at all.
     let drawsEmpties: Bool
+    /// R-03: `RecordStaleness.line(...)`, or nil when the last refresh answered.
+    var stalenessLine: String?
     var now: Date = Date()
     var onRow: (HouseRecordRow) -> Void = { _ in }
     var onSeeAll: (Half) -> Void = { _ in }
@@ -207,6 +243,15 @@ struct HouseRecordCard: View {
                     .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.bottom, PatinaSpacing.sm)
                     .accessibilityAddTraits(.isHeader)
+            }
+
+            if let stalenessLine {
+                Text(stalenessLine)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, PatinaSpacing.sm)
+                    .accessibilityIdentifier("DailyRoomView.RecordStaleness")
             }
 
             half(
@@ -268,7 +313,7 @@ struct HouseRecordCard: View {
             let half: Half = record.hasMoreNeedsYou ? .needsYou : .moved
             VStack(alignment: .leading, spacing: 0) {
                 Rectangle()
-                    .fill(PatinaColors.pearl)
+                    .fill(PatinaColors.Border.hairline)
                     .frame(height: 1)
                     .padding(.top, PatinaSpacing.sm)
                     .accessibilityHidden(true)
@@ -299,7 +344,7 @@ struct HouseRecordCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 if !isFirst {
                     Rectangle()
-                        .fill(PatinaColors.pearl)
+                        .fill(PatinaColors.Border.hairline)
                         .frame(height: 1)
                         .padding(.top, PatinaSpacing.sm)
                         .accessibilityHidden(true)
@@ -326,7 +371,7 @@ struct HouseRecordCard: View {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         if index > 0 {
                             Rectangle()
-                                .fill(PatinaColors.pearl)
+                                .fill(PatinaColors.Border.hairline)
                                 .frame(height: 1)
                                 .accessibilityHidden(true)
                         }
@@ -352,30 +397,52 @@ struct HouseRecordRowView: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 4) {
-                        title
-                        state
-                    }
-                } else {
-                    HStack(alignment: .center, spacing: PatinaSpacing.lg) {
-                        title
-                        Spacer(minLength: PatinaSpacing.sm)
-                        state
-                    }
-                }
+        // C-20, the half a token could not reach. This was one `Button` with
+        // `.disabled(row.route == nil)`, and SwiftUI halves a disabled plain
+        // button's ink: `Text.primary` at 0.5 over the card is 4.27:1 — the
+        // finding's own rendered number — and the meta line 3.01:1, with light
+        // mode worse than dark at 2.96:1 and 1.86:1. Raising the ramp moved the
+        // meta by a third of a point and could not move the body at all,
+        // because the dim is a modifier. A row with nowhere to go is not a
+        // broken control; it is a sentence, and it is rendered as one.
+        Group {
+            if row.route == nil {
+                rowContent
+            } else {
+                Button(action: onTap) { rowContent }
+                    .buttonStyle(.plain)
             }
-            .frame(minHeight: 56)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(row.route == nil)
+        // C-20: a row with no route was a *disabled* Button, and SwiftUI dims a
+        // disabled label to about half alpha — 12.42:1 became 4.27:1 on the
+        // app's home screen in dark mode, which no token value can fix.
+        // `.allowsHitTesting` withholds the tap without withholding the
+        // contrast; the trait line below still keeps VoiceOver from announcing
+        // it as a button.
+        .allowsHitTesting(row.route != nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityAddTraits(row.route == nil ? [] : .isButton)
+    }
+
+    private var rowContent: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    title
+                    state
+                }
+            } else {
+                HStack(alignment: .center, spacing: PatinaSpacing.lg) {
+                    title
+                    Spacer(minLength: PatinaSpacing.sm)
+                    state
+                }
+            }
+        }
+        .frame(minHeight: 56)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var title: some View {
@@ -407,7 +474,7 @@ struct HouseRecordRowView: View {
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.error)
+                    .foregroundStyle(PatinaColors.Text.error)
             }
             if shown.showsNewTick {
                 Text("· new")

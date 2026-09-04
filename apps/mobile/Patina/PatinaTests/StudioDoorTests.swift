@@ -74,7 +74,7 @@ struct StudioDoorTests {
         #expect(SourceScan.code(in: content).contains("SettingsView()"))
 
         let settings = try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
-        #expect(settings.contains("\"Sign Out\""))
+        #expect(settings.contains("\"Sign out\""))
         #expect(SourceScan.code(in: settings).contains("AccountView()"))
 
         let account = try SourcePin.read("Patina/Features/Account/AccountView.swift")

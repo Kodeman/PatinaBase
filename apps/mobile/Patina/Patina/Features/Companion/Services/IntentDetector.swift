@@ -20,8 +20,18 @@ public final class IntentDetector {
     // MARK: - Intent Detection
 
     /// Detect navigation intent from a user message
+    ///
+    /// `W1-C-06`: the pattern arrays below are needles, not copy, and four of
+    /// them carried an apostrophe ("let's walk", "what's new", "what i've
+    /// saved", "i'm stuck"). They are typed as U+2019 like the rest of the app
+    /// and the INPUT is normalised to match, so a person typing either glyph —
+    /// iOS smart quotes give U+2019, a hardware keyboard gives U+0027 — hits
+    /// the same needle. Before, only the straight one matched.
     public func detectIntent(from message: String) -> NavigationIntent {
-        let lowercased = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowercased = message
+            .lowercased()
+            .replacingOccurrences(of: "'", with: "’")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Check for walk/scan intent
         if matchesWalkIntent(lowercased) {
@@ -69,7 +79,7 @@ public final class IntentDetector {
             "walk",
             "scan",
             "capture",
-            "let's walk",
+            "let’s walk",
             "start a walk",
             "walk my",
             "scan my",
@@ -85,7 +95,7 @@ public final class IntentDetector {
 
     private func matchesEmergenceIntent(_ text: String) -> Bool {
         let patterns = [
-            "what's new",
+            "what’s new",
             "whats new",
             "surfaced",
             "emerged",
@@ -109,7 +119,7 @@ public final class IntentDetector {
             "saved",
             "favorites",
             "show me my",
-            "what i've saved",
+            "what i’ve saved",
             "what i saved",
             "gathering",
             "collected",
@@ -160,7 +170,7 @@ public final class IntentDetector {
             "help",
             "how do i",
             "what can",
-            "i'm stuck",
+            "i’m stuck",
             "confused",
             "guide me"
         ]
@@ -173,19 +183,19 @@ public final class IntentDetector {
     public func confirmationResponse(for intent: NavigationIntent) -> String {
         switch intent {
         case .walkRoom:
-            return "Let's walk through your space together. I'll guide you."
+            return "Let’s walk through your space together. I’ll guide you."
         case .showEmergence:
             return "Let me show you what surfaced for you."
         case .showTable:
-            return "Here's your table — the pieces gathering around you."
+            return "Here’s your table — the pieces gathering around you."
         case .showRooms:
-            return "These are the spaces you've walked with me."
+            return "These are the spaces you’ve walked with me."
         case .goBack:
             return "Taking you back."
         case .startOver:
-            return "Starting fresh. I'm here whenever you're ready."
+            return "Starting fresh. I’m here whenever you’re ready."
         case .showHelp:
-            return "I'm here to help. What would you like to know?"
+            return "I’m here to help. What would you like to know?"
         default:
             return ""
         }
@@ -249,9 +259,9 @@ extension NavigationIntent {
         case .letDrift:
             return "Let it drift"
         case .whatsNew:
-            return "What's new"
+            return "What’s new"
         case .whatsMissing:
-            return "What's missing"
+            return "What’s missing"
         case .seeTogether:
             return "See together"
         case .share:

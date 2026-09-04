@@ -120,7 +120,7 @@ struct ScanBucketMimeTests {
 
         // Guard against the file moving out from under this test.
         #expect(source.contains("func uploadArtifactViaBackground"),
-                "ArtifactUploader.swift not found at the expected path — fix this test's path")
+                "ArtifactUploader.swift not found at the expected path — fix this test’s path")
 
         let stripped = source.split(separator: "\n")
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }

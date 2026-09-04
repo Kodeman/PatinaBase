@@ -31,7 +31,7 @@ extension IntroductionInfo {
             state: state,
             introText: "Elena — I keep thinking about what you said: collected, "
                 + "not decorated. Your scan shows beautiful west light we can work "
-                + "with. Let's talk about how the room actually lives.",
+                + "with. Let’s talk about how the room actually lives.",
             credentialLine: "Principal, Middle Studio · 12 years in residential",
             portfolioUrl: "https://middlestudio.example/portfolio",
             slots: slots,

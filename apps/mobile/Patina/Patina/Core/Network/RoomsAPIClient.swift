@@ -292,9 +292,19 @@ public actor RoomsAPIClient {
             .appending(queryItems: [URLQueryItem(name: "id", value: "eq.\(id)")])
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        await applyHeaders(to: &request, prefer: "return=minimal")
-        let (_, response) = try await session.data(for: request)
-        try Self.ensureOK(response)
+        // B-03 / review RL1B2-09: PostgREST answers 204 for a DELETE whose
+        // row-level policy filtered the match to zero rows, so a 2xx alone
+        // does not mean the row is gone. Both callers clear the tombstone on
+        // success, and the tombstone is the only thing keeping the room off
+        // the screen — clearing it against a row that survived is exactly the
+        // resurrection it exists to prevent. Asking for the row back makes
+        // "deleted nothing" throw, which lands in the existing retry.
+        await applyHeaders(to: &request, prefer: "return=representation")
+        let (data, response) = try await session.data(for: request)
+        try Self.ensureOK(response, data: data)
+        guard try !decoder.decode([RemoteRoom].self, from: data).isEmpty else {
+            throw RoomsAPIError.emptyResponse
+        }
     }
 
     // MARK: - Scans
@@ -417,6 +427,20 @@ public enum RoomsAPIError: Error {
     case notAuthenticated
     case emptyResponse
     case http(status: Int, body: String)
+}
+
+/// C4-08: a plain `Error` renders as Swift's default description — module
+/// name, case name and, for `.http`, the response body — anywhere a caller
+/// reads `localizedDescription`. Conforming the type is what stops the next
+/// caller repeating it. The status and the body are never in the sentence.
+extension RoomsAPIError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .notAuthenticated: return "Please sign in to continue."
+        case .emptyResponse: return "We didn’t get a response. Try again."
+        case .http: return "Something went wrong. Try again."
+        }
+    }
 }
 
 // URLComponents helper: append query items to a URL

@@ -52,10 +52,10 @@ struct RoomFitLineTests {
 
     // MARK: - The numbers
 
-    @Test("the line prints the room's longest wall and the piece's longest side")
+    @Test("the line prints the room’s longest wall and the piece’s longest side")
     func theLinePrintsBothNumbers() {
         let line = RoomFitLine.make(room: room(), product: piece())
-        #expect(line?.text == "Your Living Room's longest wall is 18 ft. This table is 7 ft.")
+        #expect(line?.text == "Your Living Room’s longest wall is 18 ft. This table is 7 ft.")
     }
 
     @Test("the line names the room the reader is actually in")
@@ -64,13 +64,13 @@ struct RoomFitLineTests {
             room: room(name: "Dining Room", widthFeet: 12, lengthFeet: 20),
             product: piece()
         )
-        #expect(line?.text == "Your Dining Room's longest wall is 20 ft. This table is 7 ft.")
+        #expect(line?.text == "Your Dining Room’s longest wall is 20 ft. This table is 7 ft.")
     }
 
     @Test("the line prints numbers and never a promise")
     func theLineMakesNoPromise() throws {
         let text = try #require(RoomFitLine.make(room: room(), product: piece())).text
-        for word in ["fits", "will fit", "perfect", "room for", "just right", "won't"] {
+        for word in ["fits", "will fit", "perfect", "room for", "just right", "won’t"] {
             #expect(text.lowercased().contains(word) == false)
         }
     }
@@ -113,20 +113,20 @@ struct RoomFitLineTests {
     @Test("a metric piece converts")
     func aMetricPieceConverts() {
         let line = RoomFitLine.make(room: room(), product: piece(width: 213, depth: 97, unit: "cm"))
-        #expect(line?.text == "Your Living Room's longest wall is 18 ft. This table is 7 ft.")
+        #expect(line?.text == "Your Living Room’s longest wall is 18 ft. This table is 7 ft.")
     }
 
     @Test("height is not a wall measurement")
     func heightIsIgnored() {
         // 30″ H is the tallest axis; the footprint is 38″ D.
         let line = RoomFitLine.make(room: room(), product: piece(width: nil, depth: 38))
-        #expect(line?.text == "Your Living Room's longest wall is 18 ft. This table is 3.2 ft.")
+        #expect(line?.text == "Your Living Room’s longest wall is 18 ft. This table is 3.2 ft.")
     }
 
     @Test("a piece the app has no noun for is a piece")
     func anUnnamedCategoryIsAPiece() {
         let line = RoomFitLine.make(room: room(), product: piece(category: .seating))
-        #expect(line?.text == "Your Living Room's longest wall is 18 ft. This piece is 7 ft.")
+        #expect(line?.text == "Your Living Room’s longest wall is 18 ft. This piece is 7 ft.")
     }
 
     // MARK: - Which room (W4 fix round — the mount)

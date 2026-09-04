@@ -310,7 +310,7 @@ final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
                 guard !Task.isCancelled else { return }
                 self?.allRecommendations = []
                 self?.isFeedLoading = false
-                self?.feedError = "We couldn't load picks for this room."
+                self?.feedError = "We couldn’t load picks for this room."
             }
         }
     }

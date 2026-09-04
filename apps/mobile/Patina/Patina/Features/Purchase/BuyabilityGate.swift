@@ -96,22 +96,22 @@ enum BuyabilityGate {
             // whose vendor carries `is_patina_catalog`, which this client-side
             // gate cannot see. The honest sentence is about the app, not the
             // piece.
-            return "We can't sell this piece through the app yet."
+            return "We can’t sell this piece through the app yet."
         case .noPrice:
-            return "This piece doesn't have a price yet."
+            return "This piece doesn’t have a price yet."
         case .dimensions:
-            return "We don't have this piece's size yet."
+            return "We don’t have this piece’s size yet."
         case .leadTimeWeeks:
             // Its own sentence: the client refuses `lead_time_weeks = 0` where
             // the server tests NULL only, so this is sometimes the stricter
             // answer and must at least name the right fact.
-            return "We don't have this piece's lead time yet."
+            return "We don’t have this piece’s lead time yet."
         case .brand:
-            return "We don't know who makes this piece yet."
+            return "We don’t know who makes this piece yet."
         case .photoVerifiedAt:
-            return "We haven't checked this piece's photograph yet."
+            return "We haven’t checked this piece’s photograph yet."
         case .unknown:
-            return "We can't sell this piece through the app yet."
+            return "We can’t sell this piece through the app yet."
         }
     }
 

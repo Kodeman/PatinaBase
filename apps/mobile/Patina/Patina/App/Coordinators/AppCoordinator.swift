@@ -74,11 +74,17 @@ public final class AppCoordinator: Coordinator {
     /// instantly-restored cached session, the splash plays for at least
     /// `splashMinimumDuration` so the auth-state flicker is hidden.
     /// Reset by `beginSplashTransition()` when, e.g., the user signs out.
-    public private(set) var splashMinimumDeadline: Date = Date().addingTimeInterval(1.5)
+    ///
+    /// C1-18: ~1 s of init plus an unconditional 1.5 s floor plus a 0.5 s
+    /// crossfade is about three seconds to content, and the wordmark's own
+    /// fade was cut short of full opacity every cold launch.
+    public private(set) var splashMinimumDeadline: Date =
+        Date().addingTimeInterval(LaunchWatchdog.splashFloor(isAuthStateReady: false))
 
     /// Minimum time the splash should play. Tuned to mask cached-session
     /// restore on cold launch.
-    public static let splashMinimumDuration: TimeInterval = 1.5
+    public static let splashMinimumDuration: TimeInterval =
+        LaunchWatchdog.splashFloor(isAuthStateReady: false)
 
     /// Set when the user taps "Continue as Guest" on the auth screen.
     /// Replaces today's implicit "skip auth, still let them onboard"
@@ -91,15 +97,65 @@ public final class AppCoordinator: Coordinator {
     /// observation loop in `observePhaseInputs()` reads it.
     public var guestModeOptIn: Bool = GuestSessionStore.shared.isOptedIn
 
-    /// URL queued during `.launching` (e.g., a magic-link cold launch
-    /// arriving before the auth state stream settles). Drained on entry
-    /// to `.main` by `recomputePhase()`.
-    public var pendingDeepLink: URL?
+    /// The one line the auth screen prints when a link is being held for the
+    /// person — `C2-21` / `GAP7B-09`'s "acknowledge it on the auth screen in one
+    /// line". nil whenever nothing is waiting; retired the moment the queue
+    /// drains, so it can never outlive the thing it is about.
+    public private(set) var pendingLinkNotice: String?
+
+    /// That line, ruled here rather than in the view, so a test can hold it to
+    /// its word: it names no vendor, no URL and no error — it is a promise the
+    /// app keeps two taps later.
+    public static let pendingLinkNoticeLine = "We’ll open what you tapped once you’re in."
+
+    /// Called by `DeepLinkHandler` when an arrival had to be kept rather than
+    /// opened.
+    public func noteLinkHeld() {
+        pendingLinkNotice = Self.pendingLinkNoticeLine
+    }
+
+    /// The replay `DeepLinkHandler` registers from `configure(coordinator:)`.
+    /// A closure rather than a call to `DeepLinkHandler.shared`, so the
+    /// coordinator does not reach for a process-lifetime singleton whose queue
+    /// a test cannot substitute — and so the two objects have exactly one
+    /// direction of coupling.
+    private var deepLinkDrain: (() -> Void)?
+
+    public func attachDeepLinkDrain(_ drain: @escaping () -> Void) {
+        deepLinkDrain = drain
+    }
+
+    /// The other end of the same coupling: what a session ending does to the
+    /// links it never got to open.
+    ///
+    /// A queued link outlives the session that queued it — the FIFO is on disk
+    /// with a 15-minute life — so account A's tap could drain into account B's
+    /// first `.main`. This is the third door in the same family as `C2-06` and
+    /// `B-16`, closed on the same seam.
+    private var deepLinkClear: (() -> Void)?
+
+    public func attachDeepLinkClear(_ clear: @escaping () -> Void) {
+        deepLinkClear = clear
+    }
 
     /// Route preserved across a forced sign-out (token refresh failure
     /// mid-session). When re-auth succeeds, the phase observer can
     /// restore the user to where they were.
     public var pendingReturnRoute: AppRoute?
+
+    /// Who that route belongs to. A forced sign-out routes `.main → .auth`
+    /// directly, so the route was captured from the previous account's
+    /// `currentScreen` and replayed on the NEXT arrival at `.main` — whoever
+    /// that turned out to be. Re-authenticating as somebody else therefore
+    /// landed account B on account A's invoice, the same shape
+    /// `clearNavigationForEndedSession()` exists to close. The route is
+    /// restored only for the account it was taken from.
+    private var pendingReturnOwner: String?
+
+    /// The last account this coordinator saw signed in. By the time the phase
+    /// flips to `.auth` the session is already nil — that IS the flip — so the
+    /// id has to be remembered while it is still there.
+    private var lastKnownUserId: String?
 
     // MARK: - The house-first root (B-1, R2)
 
@@ -123,8 +179,19 @@ public final class AppCoordinator: Coordinator {
         self.init(houseFirstRoot: FeatureFlags.shared.isOn(.houseFirst))
     }
 
-    init(houseFirstRoot: Bool) {
+    /// - Parameter endSessionSideEffects: what a session ending does OUTSIDE
+    ///   this coordinator's own state. Injected because the production value
+    ///   rewrites the App Group container, and a unit tier that drove it would
+    ///   destroy whatever walk state is on the same simulator — and couple two
+    ///   suites through a file.
+    init(
+        houseFirstRoot: Bool,
+        endSessionSideEffects: @escaping @MainActor () -> Void = {
+            RecordSnapshotStore.shared.clearForSignedOut()
+        }
+    ) {
         self.isHouseFirstRoot = houseFirstRoot
+        self.endSessionSideEffects = endSessionSideEffects
 
         // Phase is now derived from `AuthService.session`, onboarding
         // completion, and guest opt-in by `recomputePhase()`. We start at
@@ -144,12 +211,40 @@ public final class AppCoordinator: Coordinator {
         // `Date()` isn't one, so without this tick we'd stay on
         // `.launching` forever when auth state lands during splash.
         scheduleSplashDeadlineRecompute()
+        // C1-19: and a second tick at the far end, for the launch that never
+        // resolves at all. Same reason the line above exists — nothing else
+        // wakes the observer, because `Date()` is not a tracked property.
+        scheduleLaunchWatchdog()
     }
 
     /// Wakes the phase observer when `splashMinimumDeadline` elapses.
     /// Re-issued by `beginSplashTransition()` so subsequent splash
     /// transitions (sign-out) get the same handling.
     private var splashDeadlineTask: Task<Void, Never>?
+
+    /// C1-19: the moment `.launching` stops being allowed to continue.
+    ///
+    /// `derivePhase()` returns `.launching` whenever `isAuthStateReady` is
+    /// false, and that flag is set only from inside the `for await` over
+    /// `supabase.auth.authStateChanges` (AuthService.swift:127-141). If the
+    /// stream never yields — a failing keychain read is the recorded
+    /// precedent — nothing else sets it and the splash is where the app ends.
+    /// A tester cannot describe that beyond "it never opened".
+    private var launchDeadline = Date().addingTimeInterval(LaunchWatchdog.stallDeadline)
+    private var launchWatchdogTask: Task<Void, Never>?
+
+    private func scheduleLaunchWatchdog() {
+        launchWatchdogTask?.cancel()
+        let deadline = launchDeadline
+        launchWatchdogTask = Task { @MainActor [weak self] in
+            let interval = deadline.timeIntervalSinceNow
+            if interval > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            }
+            guard !Task.isCancelled else { return }
+            self?.recomputePhase()
+        }
+    }
 
     private func scheduleSplashDeadlineRecompute() {
         splashDeadlineTask?.cancel()
@@ -194,6 +289,9 @@ public final class AppCoordinator: Coordinator {
     /// splash deadline). Called by the observation loop above and
     /// directly from `beginSplashTransition()` to force `.launching`.
     public func recomputePhase() {
+        if let userId = AuthService.shared.currentUserId, !userId.isEmpty {
+            lastKnownUserId = userId
+        }
         let newPhase = derivePhase()
 
         #if DEBUG
@@ -204,26 +302,7 @@ public final class AppCoordinator: Coordinator {
 
         let oldPhase = phase
         if newPhase != phase {
-            // Detect a *forced* sign-out: phase goes directly
-            // `.main → .auth` without passing through `.launching`. A
-            // voluntary sign-out routes through `beginSplashTransition`
-            // which puts us in `.launching` first, so this branch only
-            // fires for token-refresh failures and similar interruptions.
-            // Save the current screen so re-auth can drop the user back
-            // where they were.
-            if oldPhase == .main, newPhase == .auth, pendingReturnRoute == nil {
-                pendingReturnRoute = currentScreen
-            }
-
-            // PT-3-9: tear down any open modal sheet when we leave `.main`
-            // for `.auth` / `.launching`. Otherwise an open sheet (e.g. the
-            // QR scanner) re-presents itself over the auth / splash screen
-            // on the next render, since `.sheet(item:)` keys off a property
-            // that survived the phase flip.
-            if newPhase == .auth || newPhase == .launching {
-                presentedSheet = nil
-            }
-
+            applyLeavingPhase(from: oldPhase, to: newPhase)
             withAnimation(.easeInOut(duration: 0.4)) {
                 phase = newPhase
             }
@@ -236,29 +315,176 @@ public final class AppCoordinator: Coordinator {
             guestModeOptIn = false
         }
 
-        // Drain any deep link queued during `.launching` once we've
-        // arrived at `.main`. Magic-link cold launch is the canonical
-        // case — the URL arrives before the auth stream emits, so we
-        // can't act on it until the session is established.
-        if newPhase == .main, let url = pendingDeepLink {
-            pendingDeepLink = nil
-            DeepLinkHandler.shared.handle(url)
+        applyArrivingPhase(newPhase)
+    }
+
+    /// The side effects of leaving a phase, in one place so the sign-out seam
+    /// cannot be half-applied.
+    private func applyLeavingPhase(from oldPhase: AppPhase, to newPhase: AppPhase) {
+        // Detect a *forced* sign-out: phase goes directly
+        // `.main → .auth` without passing through `.launching`. A
+        // voluntary sign-out routes through `beginSplashTransition`
+        // which puts us in `.launching` first, so this branch only
+        // fires for token-refresh failures and similar interruptions.
+        // Save the current screen so re-auth can drop the user back
+        // where they were — captured here, applied AFTER the reset below,
+        // which now clears it (a stale route replayed for the next account is
+        // the leak `clearNavigationForEndedSession()` closes everywhere else).
+        let forcedSignOut = oldPhase == .main && newPhase == .auth
+        let endingScreen = currentScreen
+        let endingOwner = lastKnownUserId
+
+        // PT-3-9: tear down any open modal sheet when we leave `.main`
+        // for `.auth` / `.launching`. Otherwise an open sheet (e.g. the
+        // QR scanner) re-presents itself over the auth / splash screen
+        // on the next render, since `.sheet(item:)` keys off a property
+        // that survived the phase flip.
+        if newPhase == .auth || newPhase == .launching {
+            presentedSheet = nil
         }
 
-        // Restore the user's pre-sign-out screen after a forced sign-out
-        // is resolved by re-auth. Drained on entry to `.main`.
-        if newPhase == .main, let route = pendingReturnRoute {
-            pendingReturnRoute = nil
-            // A restore is an outside entry: the person did not walk here, so
-            // it lands on the route's own tab (no-op on the flag-off root).
-            openExternal(route)
+        // A session ended. `ContentView` swaps the root on `phase`, so the
+        // `.main` branch is torn down while this coordinator survives with
+        // every stack it had — which is how the next sign-in landed on the
+        // PREVIOUS account's invoice (C2-06). Nothing on the sign-out path
+        // cleared them: `resetToThreshold()` spells the reset out but is only
+        // reached from "start over".
+        if oldPhase == .main, newPhase == .auth || newPhase == .launching {
+            clearNavigationForEndedSession()
+        }
+
+        // Only now, and only stamped. A voluntary sign-out routes through
+        // `.launching` and keeps nothing; a forced one keeps its screen for the
+        // account it belonged to and for nobody else.
+        if forcedSignOut, let endingOwner {
+            pendingReturnRoute = endingScreen
+            pendingReturnOwner = endingOwner
         }
     }
 
-    private func derivePhase() -> AppPhase {
-        let splashStillPlaying = Date() < splashMinimumDeadline
-        if !AuthService.shared.isAuthStateReady || splashStillPlaying {
+    /// The side effects of arriving at a phase.
+    private func applyArrivingPhase(_ newPhase: AppPhase) {
+        guard newPhase == .main else { return }
+
+        // Replay every link kept while the app could not show it — a link that
+        // arrived before `configure(coordinator:)`, one tapped at the auth
+        // wall, one tapped during the splash (C2-02, C2-21, GAP7B-09). Oldest
+        // first, so the newest tap is the screen the person ends on.
+        pendingLinkNotice = nil
+        deepLinkDrain?()
+
+        // Restore the user's pre-sign-out screen after a forced sign-out
+        // is resolved by re-auth. Drained on entry to `.main`, and only for
+        // the account it was taken from — whoever arrives here is not
+        // necessarily whoever left.
+        if let route = pendingReturnRoute {
+            let owner = pendingReturnOwner
+            pendingReturnRoute = nil
+            pendingReturnOwner = nil
+            if let owner, owner == AuthService.shared.currentUserId {
+                // A restore is an outside entry: the person did not walk here,
+                // so it lands on the route's own tab (no-op on the flag-off
+                // root).
+                openExternal(route)
+            }
+        }
+    }
+
+    /// Both roots' stacks, the screen mirror and the companion context, back to
+    /// the threshold — the reset `resetToThreshold()` already spells out, on
+    /// the seam a sign-out actually crosses (C2-06).
+    ///
+    /// The widget's App-Group file goes with them: it is device-global, it
+    /// outlives the session, and `LocalStoreReset` — the only thing that
+    /// removes it — runs when a DIFFERENT account signs IN, never on sign-out.
+    /// Left alone it keeps naming the previous client's designer on a Home
+    /// Screen nobody is signed into (B-16).
+    private let endSessionSideEffects: @MainActor () -> Void
+
+    private func clearNavigationForEndedSession() {
+        screenStack = []
+        navigationPath = NavigationPath()
+        rootScreen = .heroFrame
+        for tab in PatinaTab.allCases { tabs.popToRoot(tab) }
+        tabs.selected = .today
+        currentScreen = .heroFrame
+        updateContext(for: .heroFrame)
+        pendingLinkNotice = nil
+        // The return route was captured from the PREVIOUS account's
+        // `currentScreen` two frames ago, on the forced-sign-out branch above,
+        // and is replayed on the NEXT arrival at `.main` — whoever that is. So
+        // a token-refresh failure followed by a re-auth as somebody else
+        // restored account A's invoice for account B, which is the same shape
+        // this method exists to close (C2-06). Losing the route on a forced
+        // sign-out is the correct trade: it is a convenience, and the person is
+        // one tap from the screen either way.
+        pendingReturnRoute = nil
+        pendingReturnOwner = nil
+        // A queued link is a request the PREVIOUS account made. It survives the
+        // process (App Group defaults, 15-minute life), so without this it
+        // drains into whoever signs in next.
+        deepLinkClear?()
+        endSessionSideEffects()
+    }
+
+    #if DEBUG
+    /// Test seam. `phase` is derived from `AuthService`'s auth-state stream,
+    /// which a unit test cannot stand up, so a suite that needs to prove what
+    /// happens ACROSS a transition drives it here — through the same two
+    /// side-effect methods `recomputePhase()` uses, never around them.
+    /// Test seam. `lastKnownUserId` is filled by `recomputePhase()` from
+    /// `AuthService`, whose auth-state stream a unit test cannot stand up.
+    func noteSignedInUserForTesting(_ userId: String?) {
+        lastKnownUserId = userId
+    }
+
+    /// Test seam: what the return route is stamped with.
+    var pendingReturnOwnerForTesting: String? { pendingReturnOwner }
+
+    func forcePhaseForTesting(_ newPhase: AppPhase) {
+        let oldPhase = phase
+        if newPhase != oldPhase {
+            applyLeavingPhase(from: oldPhase, to: newPhase)
+            phase = newPhase
+        }
+        applyArrivingPhase(newPhase)
+    }
+    #endif
+
+    /// The two clock rules that decide whether the splash still holds, pure so
+    /// they can be proven: a unit run cannot stand up the auth stream
+    /// `isAuthStateReady` comes from, and in the test host it has already
+    /// resolved, which is the one state neither rule is about.
+    ///
+    /// Returns nil when the splash is done and the rest of `derivePhase()`'s
+    /// inputs decide.
+    static func launchGate(
+        isAuthStateReady: Bool,
+        now: Date,
+        launchDeadline: Date,
+        splashMinimumDeadline: Date
+    ) -> AppPhase? {
+        // C1-19: an unresolved launch may not hold the splash forever. Past
+        // the deadline the app falls through to `.auth`, where the person has
+        // something to tap; `SplashView` has been saying so since the same
+        // moment.
+        if !isAuthStateReady {
+            return now >= launchDeadline ? .auth : .launching
+        }
+        if now < splashMinimumDeadline {
             return .launching
+        }
+        return nil
+    }
+
+    private func derivePhase() -> AppPhase {
+        if let held = Self.launchGate(
+            isAuthStateReady: AuthService.shared.isAuthStateReady,
+            now: Date(),
+            launchDeadline: launchDeadline,
+            splashMinimumDeadline: splashMinimumDeadline
+        ) {
+            return held
         }
         let signedIn = AuthService.shared.isAuthenticated
         if !signedIn && !guestModeOptIn {

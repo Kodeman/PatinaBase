@@ -131,11 +131,11 @@ public enum DocumentError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .missingPath:
-            return "This document isn't available to open yet."
+            return "This document isn’t available to open yet."
         case .signedURLFailed:
-            return "We couldn't open this file. Please try again."
+            return "We couldn’t open this file. Please try again."
         case .downloadFailed:
-            return "We couldn't download this file. Please try again."
+            return "We couldn’t download this file. Please try again."
         }
     }
 }

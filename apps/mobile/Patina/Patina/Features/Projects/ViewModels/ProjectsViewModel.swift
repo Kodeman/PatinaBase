@@ -20,7 +20,7 @@ final class ProjectsListViewModel {
         do {
             self.projects = try await ProjectsAPIClient.shared.listProjects()
         } catch {
-            self.error = "Couldn't load projects"
+            self.error = "Couldn’t load projects"
             #if DEBUG
             PatinaLog.ui.error("[Projects] list failed: \(error.localizedDescription)")
             #endif
@@ -74,7 +74,7 @@ final class ProjectDetailViewModel {
         self.hasDocuments = hasDocs
         self.isLoading = false
         if self.project == nil {
-            self.error = "Couldn't load this project"
+            self.error = "Couldn’t load this project"
         }
     }
 }

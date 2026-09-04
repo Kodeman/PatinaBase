@@ -35,7 +35,7 @@ struct RoomTypedCopyTests {
         #expect(room(scanned: true).galleryMetaLine.contains("Scanned"))
     }
 
-    @Test("the room's size is printed once — by the hero, not twice")
+    @Test("the room’s size is printed once — by the hero, not twice")
     func theRoomPrintsItsDimensionsOnce() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Components/SpatialMetadataRow.swift")
         #expect(!source.contains("dimensionsString"))

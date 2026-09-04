@@ -18,7 +18,7 @@ struct ItemActionMenu: View {
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.strong)
                 .frame(width: 36, height: 4)
                 .padding(.top, 10)
 
@@ -28,12 +28,12 @@ struct ItemActionMenu: View {
 
             VStack(spacing: 1) {
                 row("arkit", "View in AR",                          .viewAR)
-                row("arrow.up.right", "View Product Detail",        .viewDetail)
-                row("arrow.left.arrow.right", "Move to Another Room", .move)
-                row("plus.square.on.square", "Copy to Another Room", .copy)
-                row("xmark", "Remove from Room",                    .remove, destructive: true)
+                row("arrow.up.right", "See the piece",        .viewDetail)
+                row("arrow.left.arrow.right", "Move to another room", .move)
+                row("plus.square.on.square", "Copy to another room", .copy)
+                row("xmark", "Remove from room",                    .remove, destructive: true)
             }
-            .background(PatinaColors.pearl)
+            .background(PatinaColors.Border.hairline)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .padding(.horizontal, 20)
             .padding(.bottom, 36)
@@ -50,7 +50,8 @@ struct ItemActionMenu: View {
                 Text(item.productName)
                     .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
-                Text("\(item.makerName) · \(item.fullFormattedPrice)")
+                Text([item.resolvedMakerName, item.fullFormattedPrice]
+                    .compactMap { $0 }.joined(separator: " · "))
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.3)
                     .foregroundStyle(PatinaColors.Text.muted)

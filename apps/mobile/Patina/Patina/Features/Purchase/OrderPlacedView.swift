@@ -147,6 +147,6 @@ struct OrderPlacedView: View {
     }
 
     static let receiptLine = "A receipt is on its way to your inbox."
-    static let shipLine = "We'll email you when it ships."
-    static let notifyLine = "You'll get a notification too."
+    static let shipLine = "We’ll email you when it ships."
+    static let notifyLine = "You’ll get a notification too."
 }

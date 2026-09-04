@@ -22,9 +22,9 @@ enum InvoiceSettleCopy {
     /// The poll expired without the webhook settling the invoice.
     static func unconfirmed(_ invoice: RemoteInvoice) -> String {
         if isBankTransfer(invoice) {
-            return "Your bank transfer has started. Bank transfers take 3–5 business days to clear — we'll email your receipt as soon as it lands."
+            return "Your bank transfer has started. Bank transfers take 3–5 business days to clear — we’ll email your receipt as soon as it lands."
         }
-        return "We haven't seen this payment yet. We'll update this as soon as it clears."
+        return "We haven’t seen this payment yet. We’ll update this as soon as it clears."
     }
 
     /// A payment is pending server-side (the "processing" banner).

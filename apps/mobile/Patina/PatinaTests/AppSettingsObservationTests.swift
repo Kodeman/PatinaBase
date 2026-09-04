@@ -58,7 +58,7 @@ struct AppSettingsObservationTests {
 
         settings.hasCompletedOnboarding = true
 
-        #expect(fired.value, "Setting hasCompletedOnboarding must notify observers — AppCoordinator's phase derivation depends on it")
+        #expect(fired.value, "Setting hasCompletedOnboarding must notify observers — AppCoordinator’s phase derivation depends on it")
         #expect(settings.hasCompletedOnboarding, "The new value must still round-trip through UserDefaults")
     }
 

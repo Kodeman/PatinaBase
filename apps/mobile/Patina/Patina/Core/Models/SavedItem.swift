@@ -75,17 +75,31 @@ public final class SavedItem {
 
     // MARK: - Computed
 
+    /// C5-14: the compact form was hand-rolled here and in five other places,
+    /// so the same piece read `$4,200` on one screen and `$4.2K` on the next.
+    /// `PatinaCurrency` publishes no compact form on purpose.
     public var formattedPrice: String {
-        let dollars = priceCents / 100
-        if dollars >= 1000 {
-            return "$\(String(format: "%.1f", Double(dollars) / 1000))K"
-        }
-        return "$\(dollars)"
+        PatinaCurrency.formatWholeDollars(cents: priceCents)
     }
 
     /// SP-14: the app's one currency formatter.
     public var fullFormattedPrice: String {
         PatinaCurrency.formatWholeDollars(cents: priceCents)
+    }
+
+    /// C5-16: the maker's name, or nothing.
+    ///
+    /// SP-10 stopped the Browse grid shipping a piece under the literal
+    /// `Unknown Maker`; the room rows kept printing it in mono caps —
+    /// `UNKNOWN MAKER` — beside the reader's own saved piece. Mirrors
+    /// `Product.resolvedMakerName`; `SavedItem` carries no `brand`, so the
+    /// guard is the vendor string alone.
+    public var resolvedMakerName: String? {
+        let vendor = makerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !vendor.isEmpty,
+              vendor.caseInsensitiveCompare("Unknown Maker") != .orderedSame,
+              vendor.caseInsensitiveCompare("Unknown") != .orderedSame else { return nil }
+        return vendor
     }
 
     /// Rehydrated placeholder gradient matching the owning product's category.
@@ -112,7 +126,11 @@ public final class SavedItem {
         SavedItem(
             productId: product.id,
             productName: product.name,
-            makerName: product.makerName,
+            // C5-16: `Product.makerName` is the vendor join, which is
+            // "Unknown" for a brand-only piece — `resolvedMakerName` is the
+            // one that falls back to `brand`. Copying the raw field meant the
+            // guard below then dropped a maker the app knew (review RL1B-11).
+            makerName: product.resolvedMakerName ?? product.makerName,
             priceCents: product.priceCents,
             matchScore: matchScore,
             hasAR: product.hasARModel,
@@ -142,7 +160,7 @@ enum SavedItemMirror {
     /// two things the app actually knows — the piece is saved here, and the
     /// account copy did not get written — and neither blames a connection the
     /// app cannot see nor promises a retry that does not exist.
-    static let deferredNotice = "Saved on this phone. We couldn't reach your account just now."
+    static let deferredNotice = "Saved on this phone. We couldn’t reach your account just now."
 
     /// `saved_items.source` names **where the piece was discovered**, and the
     /// column has carried a CHECK since `00055_saved_items.sql:32`:

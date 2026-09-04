@@ -51,7 +51,7 @@ struct StyleResultView: View {
                         coordinator.navigate(to: .emergence(pieceId: nil))
                     }
                 } label: {
-                    Text("View Recommendations")
+                    Text("See your pieces")
                         .font(PatinaTypography.uiAction)
                         .foregroundStyle(PatinaColors.Text.inverse)
                         .frame(maxWidth: .infinity)
@@ -62,7 +62,7 @@ struct StyleResultView: View {
                 .padding(.top, 24)
                 .accessibilityIdentifier("StyleResultView.ViewRecommendations")
 
-                Text("Your portrait stays on this device and can be reset in Settings.")
+                Text("Your portrait is yours — reset it any time in Settings.")
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .multilineTextAlignment(.center)
@@ -150,7 +150,7 @@ struct StyleResultView: View {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(PatinaColors.pearl)
+                            .fill(PatinaColors.Border.strong)
                             .frame(height: 5)
                         Capsule()
                             .fill(PatinaColors.clay)

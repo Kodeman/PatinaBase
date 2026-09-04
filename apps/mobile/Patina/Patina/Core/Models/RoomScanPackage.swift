@@ -202,6 +202,12 @@ public final class RoomScanPackage {
         lastError = message
         lastUploadAttemptAt = Date()
         updatedAt = Date()
+        // C4-09: the raw storage/Postgres text is logged once, here, where it
+        // is written — not from the copy function a view body calls on every
+        // layout pass (review RL1B-17).
+        #if DEBUG
+        PatinaLog.sync.error("[ScanUpload] failure detail (never shown): \(message)")
+        #endif
     }
 
     /// Merge an updated artifact state back into the row.

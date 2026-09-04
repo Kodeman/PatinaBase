@@ -1,6 +1,6 @@
 # First Flight — findings by wave and lane
 
-640 findings: the 607 confirmed rows of `research/40-workflow-result.json`, minus 2 folded by root cause (GAP7-03 and GAP7-04 → GAP7B-09), plus 24 ledger-only findings from the two resumed lanes (`research/GAP1.md` → `GAP1B-*`, `research/GAP7.md` → `GAP7B-*`), plus **11 filed by W0 · L0.7's coverage walk** (`L07-01` … `L07-11`, 2026-09-02). Refuted (28) and duplicate (189) rows are out. Machine-readable source of truth: `build/findings.json`.
+689 findings: the 607 confirmed rows of `research/40-workflow-result.json`, minus 2 folded by root cause (GAP7-03 and GAP7-04 → GAP7B-09), plus 24 ledger-only findings from the two resumed lanes (`research/GAP1.md` → `GAP1B-*`, `research/GAP7.md` → `GAP7B-*`), plus **11 filed by W0 · L0.7's coverage walk** (`L07-01` … `L07-11`, 2026-09-02), plus **49 filed by W1's three acceptance walks and their four re-walks** (`W1-A-*`, `W1-B-*`, `W1-C-*`, `W1-S-01`, 2026-09-03). Refuted (28) and duplicate (189) rows are out. Machine-readable source of truth: `build/findings.json`.
 
 Wave from tier (T0 → W1, or W0 when the fix is configuration / backend / content / ASC); lane from the finding’s `where` against the owned file sets **as they stood in `build/PLAN-SKELETON.md` §4 when this file was cut**. See **Assignment notes** at the end for every judgement call.
 
@@ -33,9 +33,23 @@ Wave from tier (T0 → W1, or W0 when the fix is configuration / backend / conte
 >    line says to apply it in the same wave as `R-03`, which is T0/W1. Every row carries the reason in
 >    its `judgeNote`, `sourceLane: "L0.7"`, and `ledger` pointing at the walk.
 >
-> Current wave totals: **W0 34 · W1 137 · W2 365 · W3 100 · closed 4 = 640.**
 > The owned globs the lane column was cut against are superseded by **PROGRAM.md §3**'s glob tables
 > (which resolve four contested files, delete a directory that does not exist, and assign the residue).
+
+> ## ⚠ AMENDED AGAIN ON 2026-09-03 (W1 CLOSE) — TWO CHANGES ARE IN IT
+>
+> 5. **Every W1 row now carries a `status`.** The seven W1 lane tables gained a **W1 status** column
+>    and a `_W1 close_` line beside `_count:`. `closed` means *review-closed **and** walk-verified on
+>    glass*, and carries `closedBy` (the lane that closed it) and `closedCommit`; `open` carries an
+>    `openReason` in `findings.json` saying what the walk could not reach or what re-opened it.
+>    **97 closed · 40 open.** Wave and tier are unchanged on all 137 — a closed W1 row stays a W1 row.
+>    Two W0 · L0.4 rows (`C5-02`, `R-10`) are stamped closed too: their app-side halves are W1 code
+>    (PROGRAM.md §11.4 says so), and walk B verified both. Their Sanity halves stay open.
+> 6. **The walks filed 49 new `W1-*` rows.** 29 were fixed and walk-verified inside the wave and carry
+>    `wave: "closed"` (§ "W1 closure" lists them); 20 are open and are in the W2 lane tables. No open
+>    row is a blocker. `W1-B-03` moves to **L0.2** because its residue is a backend row.
+>
+> Current wave totals: **W0 34 · W1 137 · W2 385 · W3 100 · closed 33 = 689.**
 
 ## Totals
 
@@ -45,45 +59,45 @@ Wave from tier (T0 → W1, or W0 when the fix is configuration / backend / conte
 |---|---:|---:|---:|---:|---:|
 | **W0** Unblock (days 1–3; the long pole is content) | 34 | 8 | 19 | 7 | 0 |
 | **W1** The first five minutes and the daily surfaces (T0 in-app) | 137 | 14 | 119 | 4 | 0 |
-| **W2** Build 2, the first tester week (T1) | 365 | 0 | 130 | 195 | 40 |
+| **W2** Build 2, the first tester week (T1) | 385 | 0 | 135 | 203 | 47 |
 | **W3** After round one (T2 / cut) | 100 | 0 | 5 | 42 | 53 |
-| **Total** | 636 | 22 | 273 | 248 | 93 |
+| **Total** | 656 | 22 | 278 | 256 | 100 |
 
-_Plus 4 rows closed by the production reconciliation of 2026-09-01 (`A3-02`, `A3-03`, `A4-03`, `A4-04`; blocker 4) — 640 rows in `findings.json`. They appear in PROGRAM.md §1's reconciliation table, not in any lane table below._
+_Plus 33 rows carrying `wave: "closed"` in `findings.json` (blocker 6 · major 10 · minor 13 · polish 4) — the 4 closed by the production reconciliation of 2026-09-01 (`A3-02`, `A3-03`, `A4-03`, `A4-04`) plus the 29 rows the W1 walks filed and W1 closed inside the wave (§ "W1 closure"). 689 rows in `findings.json` in total. They appear in PROGRAM.md §1's reconciliation table and in § "W1 closure", not in any lane table below._
 
 ### By lane
 
 | Lane | W0 | W1 | W2 | W3 | Total |
 |---|---:|---:|---:|---:|---:|
 | L0.1 Build & configuration (iOS, agent) | 18 |  | 9 | 4 | **31** |
-| L0.2 Production backend (Kody-run; agent prepares and probes) | 3 | 1 | 3 | 4 | **11** |
+| L0.2 Production backend (Kody-run; agent prepares and probes) | 3 | 1 | 4 | 4 | **12** |
 | L0.3 The room is not empty (content: Kody + Leah; agent builds the seeding/image pipeline) | 3 |  | 2 | 1 | **6** |
 | L0.4 Help & tour content (Sanity; Kody authorizes the writes) | 4 |  | 1 | 1 | **6** |
 | L0.5 App Store Connect (Kody-run; agent drafts every text) | 5 |  |  | 1 | **6** |
 | L0.6 PostHog (Kody) | 1 |  |  |  | **1** |
-| L1-A Welcome, sign-in, onboarding |  | 27 | 41 | 11 | **79** |
-| L1-B Data, persistence, resilience |  | 28 | 52 | 11 | **91** |
-| L1-C Layout, Companion, Dynamic Type |  | 28 | 125 | 33 | **186** |
+| L1-A Welcome, sign-in, onboarding |  | 27 | 45 | 11 | **83** |
+| L1-B Data, persistence, resilience |  | 28 | 55 | 11 | **94** |
+| L1-C Layout, Companion, Dynamic Type |  | 28 | 135 | 33 | **196** |
 | L1-D Tokens, dark mode, contrast, iconography |  | 18 | 51 | 11 | **80** |
 | L1-E Copy |  | 18 | 48 | 10 | **76** |
-| L1-F Notifications, messaging, widget, deep links |  | 17 | 27 | 12 | **56** |
-| L2-G Tests & gates |  |  | 6 | 1 | **7** |
-| **Total** | 34 | 137 | 365 | 100 | **636** |
+| L1-F Notifications, messaging, widget, deep links |  | 17 | 28 | 12 | **57** |
+| L2-G Tests & gates |  |  | 7 | 1 | **8** |
+| **Total** | **34** | **137** | **385** | **100** | **656** |
 
 ### By tier × severity
 
 | Tier | blocker | major | minor | polish | Total |
 |---|---:|---:|---:|---:|---:|
 | **T0** | 18 | 138 | 11 | 0 | **167** |
-| **T1** | 4 | 130 | 195 | 40 | **369** |
-| **T2** | 0 | 5 | 42 | 50 | **97** |
+| **T1** | 4 | 135 | 203 | 40 | **382** |
+| **T2** | 0 | 5 | 42 | 57 | **104** |
 | **cut** | 0 | 0 | 0 | 3 | **3** |
-| **Total** | 22 | 273 | 248 | 93 | **636** |
+| **Total** | 22 | 278 | 256 | 100 | **656** |
 
 ### Tester-visible / effort
 
-- testerVisible: {'True': 521, 'False': 119}
-- effort: {'S': 465, 'M': 153, 'L': 22}
+- testerVisible: {'True': 567, 'False': 122}
+- effort: {'S': 504, 'M': 163, 'L': 22}
 
 ---
 
@@ -138,12 +152,14 @@ _count: 3 · blocker 1 · major 2 · minor 0 · polish 0_
 
 _count: 4 · blocker 0 · major 4 · minor 0 · polish 0_
 
-| id | tier/sev | eff | title | where | fix |
-|---|---|---|---|---|---|
-| `A4-01` ⇢L1-C | T0/major | S | U32: production Sanity still serves the retired tour copy on all three steps | Sanity kv3qrinl/production, three helpContent docs under surfaceKey 'ios-app/first-launch-tour… | Publish the three bodies from artifacts/ios-daily-return-2026-08-26/waves/w3/n3-sanity-copy.md to the three surface keys in Sanit… |
-| `C5-01` ⇢L1-C | T0/major | S | First-launch tour's LIVE Sanity copy describes a UI that no longer exists, and it overrides the correct in-ap… | apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:274-298 (fallbacks) + :881-905 (… | Update the three Sanity coachmarkContent docs to match defaultSteps' fallbacks (Kody's RESUME already lists this as OWED); or mak… |
-| `C5-02` ⇢L1-C | T0/major | M | All six `?` help doors open on 'No help articles yet' — zero ios-app/* help articles exist in production Sani… | DailyRoomView.swift:188, ProfileView.swift:182, YourSpacesView.swift:114, QRScannerView.swift:… | Author the six ios-app/* root articles in Sanity before the invite, or hide the `?` until fetchArticles returns non-empty. |
-| `R-10` ⇢L1-B | T0/major | M | The Help sheet renders an HTTP 400 as "No help articles yet … on the way", and tells the reader to pull down… | Today > Help; shots/R/01-preflight-after.png; app log 17:21:58.668 | Fix the malformed GROQ request (the `$sk` param is being sent as part of the query string rather than as `$sk` params), and split… |
+_W1 close (2026-09-03): closed 2 · open 0 · 2 outside W1's scope_
+
+| id | W1 status | tier/sev | eff | title | where | fix |
+|---|---|---|---|---|---|---|
+| `A4-01` ⇢L1-C | — | T0/major | S | U32: production Sanity still serves the retired tour copy on all three steps | Sanity kv3qrinl/production, three helpContent docs under surfaceKey 'ios-app/first-launch-tour… | Publish the three bodies from artifacts/ios-daily-return-2026-08-26/waves/w3/n3-sanity-copy.md to the three surface keys in Sanit… |
+| `C5-01` ⇢L1-C | — | T0/major | S | First-launch tour's LIVE Sanity copy describes a UI that no longer exists, and it overrides the correct in-ap… | apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:274-298 (fallbacks) + :881-905 (… | Update the three Sanity coachmarkContent docs to match defaultSteps' fallbacks (Kody's RESUME already lists this as OWED); or mak… |
+| `C5-02` ⇢L1-C | **closed** · W1 L1-C · `d0d5c048c` | T0/major | M | All six `?` help doors open on 'No help articles yet' — zero ios-app/* help articles exist in production Sani… | DailyRoomView.swift:188, ProfileView.swift:182, YourSpacesView.swift:114, QRScannerView.swift:… | Author the six ios-app/* root articles in Sanity before the invite, or hide the `?` until fetchArticles returns non-empty. |
+| `R-10` ⇢L1-B | **closed** · W1 L1-C · `d0d5c048c` | T0/major | M | The Help sheet renders an HTTP 400 as "No help articles yet … on the way", and tells the reader to pull down… | Today > Help; shots/R/01-preflight-after.png; app log 17:21:58.668 | Fix the malformed GROQ request (the `$sk` param is being sent as part of the query string rather than as `$sk` params), and split… |
 
 ### W0 · L0.5 App Store Connect (Kody-run; agent drafts every text) — 5 findings
 
@@ -175,193 +191,265 @@ _count: 1 · blocker 0 · major 1 · minor 0 · polish 0_
 
 _count: 1 · blocker 1 · major 0 · minor 0 · polish 0_
 
-| id | tier/sev | eff | title | where | fix |
-|---|---|---|---|---|---|
-| `L07-01` ⇢L1-E | T0/blocker | M | Signing a proposal is impossible when the designer belongs to two active studios — the client is told the sig… | supabase/migrations/00511_public_sd_hardening.sql:2418-2440 (the projects BEFORE INSERT guard'… | Give the activation an unambiguous studio: either carry designer_clients -> studio onto the proposal and pass it to the projects… |
+_W1 close (2026-09-03): closed 0 · open 1_
+
+| id | W1 status | tier/sev | eff | title | where | fix |
+|---|---|---|---|---|---|---|
+| `L07-01` ⇢L1-E | **open** | T0/blocker | M | Signing a proposal is impossible when the designer belongs to two active studios — the client is told the sig… | supabase/migrations/00511_public_sd_hardening.sql:2418-2440 (the projects BEFORE INSERT guard'… | Give the activation an unambiguous studio: either carry designer_clients -> studio onto the proposal and pass it to the projects… |
 
 ### W1 · L1-A Welcome, sign-in, onboarding — 27 findings
 
 _count: 27 · blocker 3 · major 23 · minor 1 · polish 0_
 
-| id | tier/sev | eff | title | where | fix |
-|---|---|---|---|---|---|
-| `A-101` ⇢L1-E | T0/blocker | S | Delete-account copy scopes deletion to the device only (App Review 5.1.1(v) risk) | Settings → Delete account; shots/A/59-delete-account.png | State that the Patina account and its server data are deleted, name what is retained for legal/financial reasons and for how long… |
-| `A3-06` | T0/blocker | S | "Continue with Google" is the first button on the welcome screen and Google is disabled on Strata — the teste… | Features/Authentication/Views/AuthScreenView.swift:82; Services/Auth/AuthService.swift:400-420… | Either enable the Google provider on Strata (client id + secret + redirect) or remove the button from AuthScreenView for this rel… |
-| `P-29` | T0/blocker | S | Failed-sign-in error leaks onto the Welcome root, shifts the stack 33 pt, and the mis-tap lands the tester in… | Welcome home + Sign In sheet; shots/P/34-cancel-from-password.png, 35-welcome-shifted-33pt.png… | Never render sheet errors on the auth root; if a root status is needed, reserve its space so nothing moves. Fix P-18 independentl… |
-| `A-03` | T0/major | S | Three different icon idioms in three stacked auth buttons | Welcome screen; shots/A/01-cold-t12.png, 68-universal-piece.png | Use Google's official G mark per their branding guidelines and an SF Symbol envelope; strip the glyph from the accessibility labe… |
-| `A-05` | T0/major | S | "Skip" on the onboarding carousel does not skip — it lands in the same 5-question quiz | Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift:83-85; shots/A/02,04 | Either let Skip reach browsable content (with a "take the quiz later" entry point) or rename it "Next"; keep it visible on the la… |
-| `A-13` ⇢L1-E | T0/major | S | A dead "Next question →" static text sits 26 pt above the real Continue button | Style quiz Q2; shots/A/08-quiz-q2-selected.png | Remove the static line (or make it the only affordance). |
-| `A3-07` | T0/major | S | Sign in with Apple creates the tester as profiles.role = 'designer' | Services/Auth/AuthService.swift:354-383 (signInWithApple); public.handle_new_user() | Pass the same role metadata on the Apple path — supabase-swift's signInWithIdToken has no data: parameter, so follow success with… |
-| `A3-16` | T0/major | M | The advertised tester credential (tester@patina.cloud / 000000) does not work in the iOS app — the test-login… | Services/Auth/AuthService.swift:583-601 (verifyOtp); supabase/functions/test-account-login/ind… | Either add the fallback to AuthService.verifyOtp (POST the pair, then verifyOTP with the returned token_hash when the plain path… |
-| `B-12` | T0/major | S | A guest has no in-app sign-in route at all — the only action offered is a QR scan | Settings ▸ Account as guest — shots/B/23-guest-account.png, 24-guest-signin-web.png | Add a 'Sign in' / 'Create account' row to Account and Settings for guests that re-presents the auth sheet. |
-| `B-13` ⇢L1-C | T0/major | S | The guest Studio's sign-in card offers 'Open settings' instead of a sign-in action | Studio as guest — shots/B/19-guest-studio.png, 75-guest-after-signout.png | Make the CTA 'Sign in' and present the auth sheet directly. |
-| `B-21` | T0/major | M | An existing account is forced through the first-run intro and a mandatory 5-question quiz with no back, skip… | After signing in as client@patina.dev on a fresh install — shots/B/30-post-signin.png, 31-afte… | Link onboarding/quiz completion to the account, not the install; add a Back control and an 'I'll do this later' exit on every qui… |
-| `C1-04` | T0/major | S | Quiz submit shows nothing for up to 30 seconds — isSubmitting has no reader | Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:160-199; Services/API/APIConfiguration.… | Render a 'Reading your answers…' state off isSubmitting; drop the quiz RPC timeout to ~8s (the local result is already the fallba… |
-| `C1-05` | T0/major | S | Welcome screen has no in-flight state for any of its four sign-in buttons | Features/Authentication/Views/AuthScreenView.swift:14-31; ContentView.swift:36-70 | Thread AuthService.shared.isLoading in; disable the stack and spin the pressed row. |
-| `C1-14` ⇢L1-C | T0/major | S | Settings → Account is a dead end for a guest, and Settings offers no way to sign in | Features/Settings/Views/SettingsView.swift:61-95; Features/Account/AccountView.swift:109-126,1… | A signed-out Account state that is one sentence and a 'Create your account' button raising presentedSheet = .auth; hide the QR ro… |
-| `C1-28` | T0/major | S | Quiz answers survive only an explicit "Save progress & exit" | Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:80-99; StyleQuizView.swift:81-84 | Call saveProgress() on .onDisappear / scenePhase != .active; restore already covers both mounts. |
-| `C1-30` | T0/major | S | "Privacy Policy" and "Terms of Service" open the same page | Features/Authentication/Views/AuthScreenView.swift:175-176 | Publish /privacy and point at it; until then render one link labelled 'Terms & Privacy'. |
-| `C1-37` | T0/major | S | Six digits entered does not verify, and the green success banner stays up over the red failure | Features/Authentication/Views/AuthenticationView.swift:326-347,352-377; ViewModels/AuthViewMod… | Auto-verify on the sixth digit; clear successMessage when an error lands. |
-| `C3-03` ⇢L1-D | T0/major | S | Sign in with Apple is hard-coded `.black` — 1.27:1 on the dark canvas, the button vanishes | Features/Authentication/Views/SignInWithAppleButton.swift:41 | Read @Environment(\.colorScheme) and pass `.signInWithAppleButtonStyle(scheme == .dark ? .white : .black)`. |
-| `C3-06` ⇢L1-D | T0/major | S | The auth form's DISABLED state is painted in the brand accent and ENABLED in neutral charcoal — inverted affo… | Features/Authentication/Views/AuthenticationView.swift:519 (submitButton) and :366-370 (OTP Ve… | One filled style (charcoal + Text.inverse) with .opacity(0.4) when disabled. |
-| `C5-04` ⇢L1-E | T0/major | S | 'Privacy Policy' on the first screen links to the Terms page; a real /privacy page exists and is never linked | apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:174-175 (termsURL… | privacyURL = URL(string: "https://patina.cloud/privacy")! |
-| `C9-08` | T0/major | M | No keyboard-dismiss affordance exists anywhere in the app (numeric pads have no exit) | AuthenticationView.swift:327; RoomBudgetSheet.swift:61; ManualRoomEntryView.swift:65,133; Room… | One shared .keyboardDoneToolbar() applied to every numeric field, .scrollDismissesKeyboard(.interactively) on form scroll views,… |
-| `P-02` | T0/major | S | "Continue with email" uses an emoji envelope and "Continue with Google" a plain letter G, on the app's first… | Welcome home, auth.welcome.emailButton / googleButton; shots/P/01-welcome-cold.png | SF Symbol envelope tinted to the ink token; ship the official Google G mark; strip glyphs from accessibility labels. |
-| `P-18` | T0/major | M | After one tap on "Look around first", the sign-in screen is unreachable on every later launch and the quiz re… | Guest intro / style quiz; shots/P/14-relaunch2-root.png, 15-skip-destination.png, 16-relaunch3… | Persist quiz progress; put a persistent "I already have an account — Sign in" on every guest onboarding and quiz screen; make the… |
-| `P-20` | T0/major | S | An invalid email produces no message at all — the button silently does nothing | Continue with email sheet; shots/P/20-email-malformed.png | Inline validation copy under the field plus a visibly inert disabled state. |
-| `P-22` | T0/major | S | After a failed code the success and error banners show at once, and Verify is pushed off the bottom of the sh… | Sign-in code screen; shots/P/26-verify-t0.png, 28-verify-t5.png | One status region that replaces its contents; pin the CTA. |
-| `P-30` | T0/major | S | One mechanism, three names — "Continue with email", "sign-in code", "magic link" — and "magic link" is factua… | shots/P/19-email-form.png, 23-code-requested-t0.png, 31-password-sheet.png | One name everywhere. |
-| `A-21` | T0/minor | S | The quiz progress bar reads 100 % while the last question is unanswered | Style quiz Q5; shots/A/11-quiz-q5.png, 05 | Base the fraction on answers recorded, not on the index of the question being shown. |
+_W1 close (2026-09-03): closed 20 · open 7_
+
+| id | W1 status | tier/sev | eff | title | where | fix |
+|---|---|---|---|---|---|---|
+| `A-101` ⇢L1-E | **closed** · W1 L1-A · `ce9f602c5` | T0/blocker | S | Delete-account copy scopes deletion to the device only (App Review 5.1.1(v) risk) | Settings → Delete account; shots/A/59-delete-account.png | State that the Patina account and its server data are deleted, name what is retained for legal/financial reasons and for how long… |
+| `A3-06` | **closed** · W1 L1-A · `a04b2d99b` | T0/blocker | S | "Continue with Google" is the first button on the welcome screen and Google is disabled on Strata — the teste… | Features/Authentication/Views/AuthScreenView.swift:82; Services/Auth/AuthService.swift:400-420… | Either enable the Google provider on Strata (client id + secret + redirect) or remove the button from AuthScreenView for this rel… |
+| `P-29` | **closed** · W1 L1-A · `a04b2d99b` | T0/blocker | S | Failed-sign-in error leaks onto the Welcome root, shifts the stack 33 pt, and the mis-tap lands the tester in… | Welcome home + Sign In sheet; shots/P/34-cancel-from-password.png, 35-welcome-shifted-33pt.png… | Never render sheet errors on the auth root; if a root status is needed, reserve its space so nothing moves. Fix P-18 independentl… |
+| `A-03` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | Three different icon idioms in three stacked auth buttons | Welcome screen; shots/A/01-cold-t12.png, 68-universal-piece.png | Use Google's official G mark per their branding guidelines and an SF Symbol envelope; strip the glyph from the accessibility labe… |
+| `A-05` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | "Skip" on the onboarding carousel does not skip — it lands in the same 5-question quiz | Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift:83-85; shots/A/02,04 | Either let Skip reach browsable content (with a "take the quiz later" entry point) or rename it "Next"; keep it visible on the la… |
+| `A-13` ⇢L1-E | **open** | T0/major | S | A dead "Next question →" static text sits 26 pt above the real Continue button | Style quiz Q2; shots/A/08-quiz-q2-selected.png | Remove the static line (or make it the only affordance). |
+| `A3-07` | **open** | T0/major | S | Sign in with Apple creates the tester as profiles.role = 'designer' | Services/Auth/AuthService.swift:354-383 (signInWithApple); public.handle_new_user() | Pass the same role metadata on the Apple path — supabase-swift's signInWithIdToken has no data: parameter, so follow success with… |
+| `A3-16` | **open** | T0/major | M | The advertised tester credential (tester@patina.cloud / 000000) does not work in the iOS app — the test-login… | Services/Auth/AuthService.swift:583-601 (verifyOtp); supabase/functions/test-account-login/ind… | Either add the fallback to AuthService.verifyOtp (POST the pair, then verifyOTP with the returned token_hash when the plain path… |
+| `B-12` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | A guest has no in-app sign-in route at all — the only action offered is a QR scan | Settings ▸ Account as guest — shots/B/23-guest-account.png, 24-guest-signin-web.png | Add a 'Sign in' / 'Create account' row to Account and Settings for guests that re-presents the auth sheet. |
+| `B-13` ⇢L1-C | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | The guest Studio's sign-in card offers 'Open settings' instead of a sign-in action | Studio as guest — shots/B/19-guest-studio.png, 75-guest-after-signout.png | Make the CTA 'Sign in' and present the auth sheet directly. |
+| `B-21` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | M | An existing account is forced through the first-run intro and a mandatory 5-question quiz with no back, skip… | After signing in as client@patina.dev on a fresh install — shots/B/30-post-signin.png, 31-afte… | Link onboarding/quiz completion to the account, not the install; add a Back control and an 'I'll do this later' exit on every qui… |
+| `C1-04` | **open** | T0/major | S | Quiz submit shows nothing for up to 30 seconds — isSubmitting has no reader | Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:160-199; Services/API/APIConfiguration.… | Render a 'Reading your answers…' state off isSubmitting; drop the quiz RPC timeout to ~8s (the local result is already the fallba… |
+| `C1-05` | **open** | T0/major | S | Welcome screen has no in-flight state for any of its four sign-in buttons | Features/Authentication/Views/AuthScreenView.swift:14-31; ContentView.swift:36-70 | Thread AuthService.shared.isLoading in; disable the stack and spin the pressed row. |
+| `C1-14` ⇢L1-C | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | Settings → Account is a dead end for a guest, and Settings offers no way to sign in | Features/Settings/Views/SettingsView.swift:61-95; Features/Account/AccountView.swift:109-126,1… | A signed-out Account state that is one sentence and a 'Create your account' button raising presentedSheet = .auth; hide the QR ro… |
+| `C1-28` | **open** | T0/major | S | Quiz answers survive only an explicit "Save progress & exit" | Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:80-99; StyleQuizView.swift:81-84 | Call saveProgress() on .onDisappear / scenePhase != .active; restore already covers both mounts. |
+| `C1-30` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | "Privacy Policy" and "Terms of Service" open the same page | Features/Authentication/Views/AuthScreenView.swift:175-176 | Publish /privacy and point at it; until then render one link labelled 'Terms & Privacy'. |
+| `C1-37` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | Six digits entered does not verify, and the green success banner stays up over the red failure | Features/Authentication/Views/AuthenticationView.swift:326-347,352-377; ViewModels/AuthViewMod… | Auto-verify on the sixth digit; clear successMessage when an error lands. |
+| `C3-03` ⇢L1-D | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | Sign in with Apple is hard-coded `.black` — 1.27:1 on the dark canvas, the button vanishes | Features/Authentication/Views/SignInWithAppleButton.swift:41 | Read @Environment(\.colorScheme) and pass `.signInWithAppleButtonStyle(scheme == .dark ? .white : .black)`. |
+| `C3-06` ⇢L1-D | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | The auth form's DISABLED state is painted in the brand accent and ENABLED in neutral charcoal — inverted affo… | Features/Authentication/Views/AuthenticationView.swift:519 (submitButton) and :366-370 (OTP Ve… | One filled style (charcoal + Text.inverse) with .opacity(0.4) when disabled. |
+| `C5-04` ⇢L1-E | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | 'Privacy Policy' on the first screen links to the Terms page; a real /privacy page exists and is never linked | apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:174-175 (termsURL… | privacyURL = URL(string: "https://patina.cloud/privacy")! |
+| `C9-08` | **closed** · W1 L1-A · `ea4d9d321` | T0/major | M | No keyboard-dismiss affordance exists anywhere in the app (numeric pads have no exit) | AuthenticationView.swift:327; RoomBudgetSheet.swift:61; ManualRoomEntryView.swift:65,133; Room… | One shared .keyboardDoneToolbar() applied to every numeric field, .scrollDismissesKeyboard(.interactively) on form scroll views,… |
+| `P-02` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | "Continue with email" uses an emoji envelope and "Continue with Google" a plain letter G, on the app's first… | Welcome home, auth.welcome.emailButton / googleButton; shots/P/01-welcome-cold.png | SF Symbol envelope tinted to the ink token; ship the official Google G mark; strip glyphs from accessibility labels. |
+| `P-18` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | M | After one tap on "Look around first", the sign-in screen is unreachable on every later launch and the quiz re… | Guest intro / style quiz; shots/P/14-relaunch2-root.png, 15-skip-destination.png, 16-relaunch3… | Persist quiz progress; put a persistent "I already have an account — Sign in" on every guest onboarding and quiz screen; make the… |
+| `P-20` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | An invalid email produces no message at all — the button silently does nothing | Continue with email sheet; shots/P/20-email-malformed.png | Inline validation copy under the field plus a visibly inert disabled state. |
+| `P-22` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | After a failed code the success and error banners show at once, and Verify is pushed off the bottom of the sh… | Sign-in code screen; shots/P/26-verify-t0.png, 28-verify-t5.png | One status region that replaces its contents; pin the CTA. |
+| `P-30` | **closed** · W1 L1-A · `a04b2d99b` | T0/major | S | One mechanism, three names — "Continue with email", "sign-in code", "magic link" — and "magic link" is factua… | shots/P/19-email-form.png, 23-code-requested-t0.png, 31-password-sheet.png | One name everywhere. |
+| `A-21` | **open** | T0/minor | S | The quiz progress bar reads 100 % while the last question is unanswered | Style quiz Q5; shots/A/11-quiz-q5.png, 05 | Base the fraction on answers recorded, not on the index of the question being shown. |
 
 ### W1 · L1-B Data, persistence, resilience — 28 findings
 
 _count: 28 · blocker 5 · major 22 · minor 1 · polish 0_
 
-| id | tier/sev | eff | title | where | fix |
-|---|---|---|---|---|---|
-| `C7-01` | T0/blocker | M | ModelContainer failure is fatalError — no fallback, no MigrationPlan; a build-2 schema change crash-loops eve… | apps/mobile/Patina/Patina/Core/Persistence/PersistenceController.swift:25-48 | Add a SchemaMigrationPlan; on catch, move the old store aside and open a fresh one (or in-memory) behind a designed 'we had to st… |
-| `C7-02` | T0/blocker | S | BoardModel is fetched and inserted against a container whose Schema does not contain it (Saved / Collections) | PersistenceController.swift:26-35 vs Core/Models/BoardModel.swift:12-13; Features/Collections/… | Add BoardModel.self to the schema (and to LocalStoreReset), or remove the boards feature from CollectionsView before shipping. |
-| `GAP4-02` | T1/blocker | S | The fallback entry screen is a hard dead end: no back, no cancel, and the interactive-pop gesture is dead | ScanFallbackEntryView.swift (whole view) presented from QuietConversationFlowHost.swift:195-20… | Give the host a persistent "Not now" / ✕ that calls leaveFlow(landingOn: .heroFrame), and re-enable the interactive pop for the .… |
-| `GAP4-03` | T1/blocker | S | Developer default dimensions are pre-filled and become the tester's real room data | ScanFallbackEntryView.swift:27-28 (length="18", width="14") + :283-287 (isValid); shots/GAP4/1… | Start the fields empty with real placeholders, disable Continue until both are entered, or label the row as a suggestion. |
-| `GAP4-25` | T1/blocker | S | BLOCKER: "Rescan" on the floor plan strands the tester on a permanently blank screen; only force-quitting rec… | QuietConversationFlowHost.swift:337-346 (resetForRescan) + :145-152 (bootstrap) + content rout… | Have resetForRescan() call bootstrap() (or set the step directly), and give `.initial` a real loading state instead of a bare bac… |
-| `A-34` ⇢L1-D | T0/major | M | Every recommendation scores 40–46 % match after a five-question quiz | Browse pieces; shots/A/14,15,16 | Either rescale/normalise the score so a good match reads as one, or stop showing a percentage and use a qualitative band ("Strong… |
-| `A-81` | T0/major | M | Four different counts of "what needs you" on one screen | Daily Room home; shots/A/44-home-signedin.png | Derive every badge from one "needs you" query, or label each count with what it counts. |
-| `A3-18` ⇢L0.2 | T0/major | S | Every product fetch pulls two 768-dim vectors the app never decodes — 20.7 KB per row, ~90% waste | Core/Network/ProductAPIClient.swift:113 (productSelect = "*,vendors!products_vendor_id_fkey(..… | Replace `*` with the ~24 columns RawProductWithVendor actually decodes. One-line change, ~10x smaller payload on the Record and o… |
-| `B-03` | T0/major | S | A deleted room stays in Studio and the room count never updates | Studio after deleting 'Audit Room B' — shots/B/48-signedin-studio.png, 49-studio-scroll1.png,… | Invalidate/refetch the rooms query and the profile-stats query on room deletion, or drive both from one observable store. |
-| `B-04` | T0/major | S | Deleting a room strands the user on the dead detail screen showing a hedged not-found error | Room detail immediately after Delete — shots/B/47-after-delete.png | Pop the navigation stack to the rooms list on successful delete; keep the not-found state only for genuine deep-link misses, and… |
-| `C-11` ⇢L1-D | T0/major | M | The same product shows three different match scores in one session: 73%, 57%, 50% | Heirloom Oak Dining Table — shots/C/52-flagson-pieces.png (73%), 11-dark-browse.png (57%), 12-… | Compute the match once against a single scope and pass it through, or label each score with its scope ("73% for your home / 57% f… |
-| `C1-19` | T0/major | S | .launching has no timeout: if auth readiness never lands, the splash is terminal | App/Coordinators/AppCoordinator.swift:258-262; Features/Splash/Views/SplashView.swift:55-59 | A 5–8s watchdog that forces .auth with a one-line 'We couldn't reach Patina — try again'. |
-| `C4-03` | T0/major | M | Three empty states are indistinguishable from a failed fetch — two of them lie to a client who has data | apps/mobile/Patina/Patina/Features/Rooms/RoomSyncCoordinator.swift:189-197 + Features/Rooms/Vi… | Add lastLoadFailed to both view models and an error branch on the OrderDetailView.swift:41 model, which already distinguishes "we… |
-| `C4-12` | T0/major | M | No pull-to-refresh on any of the four tab roots, or on three of four Studio detail screens | apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:245 (Today), Features/Rooms/… | Add .refreshable to the four roots wired to the same work their .task blocks do, and to the three detail screens; InvoiceDetailVi… |
-| `C4-16` | T0/major | S | supabase-swift reads inherit URLSession.shared timeouts (60 s request / 7-day resource), not the app's 30 s | apps/mobile/Patina/Patina/Core/Network/SupabaseClient.swift:54-63; budgets at Services/API/API… | Pass a configured URLSession into SupabaseClientOptions.GlobalOptions(session:) with timeoutIntervalForRequest = 30 and timeoutIn… |
-| `C7-05` | T0/major | S | A fresh CIContext() is constructed per captured hero frame, on the main actor, mid-scan | apps/mobile/Patina/Patina/Features/Walk/Services/FrameCaptureService.swift:17 (@MainActor), :2… | Hoist to one lazily-created CIContext and move the encode off the main actor. |
-| `C7-13` | T0/major | S | Telemetry queue re-queues failed batches without bound and rewrites the whole file every 30 s | apps/mobile/Patina/Patina/Services/Analytics/DailyRoomBatchQueue.swift:70-78,81-90,94-101; end… | Cap pending (drop oldest), add backoff on repeated failure, stop persisting on every failed tick. |
-| `C7-15` | T0/major | S | A forced GoTrue token refresh runs before every single artifact upload | apps/mobile/Patina/Patina/Services/Sync/BackgroundScanUploader.swift:146-156 | Read auth.session (which refreshes only when expired) once per bundle rather than calling refreshSession() per artifact. |
-| `C7-17` | T0/major | S | The U39 all-or-nothing decode still stands on the saved-pieces and single-piece reads | apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:170-174 and :146-148 | Wrap both in FailableDecodable exactly as decodeProducts already does. |
-| `L07-05` ⇢L1-C | T0/major | S | The Studio hub shows stale counts as current when the backend is unreachable, with no staleness signal | apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioHubViewModel.swift (the hub's load… | Whatever staleness affordance R-03 lands on Today, apply to StudioHubViewModel in the same wave. VISION §6 constraint carried fro… |
-| `R-01` | T0/major | M | Studio asserts the client has nothing (0 decisions, 0 records, no messages) for ~50 s during an outage, under… | Studio screen; shots/R/12a-studio-retry-t50-spinner.png, shots/R/13a-studio-false-empty.png | Never render section empty-states from a failed fetch. Give each Studio section three distinct states (loading / loaded-empty / f… |
-| `R-02` | T0/major | M | Cold launch with the backend down silently deletes badge counts, the designer seat and a record row; the bell… | Today; shots/R/16-cold-3.png, 17b-cold-t22.png, 18-cold-today-bottom.png vs 00-preflight-befor… | Persist the last successful badge counts, designer seat and record rows; on a failed refresh keep showing them (optionally dimmed… |
-| `R-03` | T0/major | S | Today has no pull-to-refresh and no staleness signal — the only way to recover is to background the app | apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:249; shots/R/03a-ptr.png, 03… | Add `.refreshable` to the DailyRoomView ScrollView calling the same sequence as the scenePhase handler, and show a 'last updated'… |
-| `R-05` | T0/major | M | Proposal shows a blank page with "One moment…" for 65-185 s before admitting failure | Proposal detail; shots/R/14a-proposal-t2.png … 14d-proposal-t185.png, 15a/15b | Cap the proposal fetch at ~10 s, render the proposal title/summary from the record row that launched it while loading (skeleton,… |
-| `B-15` | T1/major | M | The previous account's taste portrait survives sign-out and shows under the Guest avatar | Studio as guest after signing James out — shots/B/75-guest-after-signout.png | Clear the on-device taste portrait, onboarding flags and companion state in the sign-out path, keyed by owner user id. |
-| `C2-06` | T1/major | S | Sign-out leaves the previous account's screens on the navigation stack | apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:276-280 and :223-225; Patina/C… | In beginSplashTransition() (or on the .main -> .auth/.launching transition) clear navigationPath, screenStack, every tabs stack,… |
-| `GAP3-18` | T1/major | M | After sign-out the Guest profile still lists the previous account's rooms | ProfileView / DailyRoomView room rails after AuthService sign-out · shots/GAP3/22-guest-entry.… | Extend the sign-out LocalStoreReset to the room list/room-count sources, or scope those reads by `local_store_owner_user_id` the… |
-| `C1-18` | T0/minor | S | The splash holds 1.5s on every cold launch and its own animation never finishes | App/Coordinators/AppCoordinator.swift:77-81,258-262; Features/Splash/Views/SplashView.swift:41… | Bring the wordmark fade to ≤1.2s and drop the floor to ~0.6s (or 0 when isAuthStateReady is already true). |
+_W1 close (2026-09-03): closed 20 · open 8_
+
+| id | W1 status | tier/sev | eff | title | where | fix |
+|---|---|---|---|---|---|---|
+| `C7-01` | **open** | T0/blocker | M | ModelContainer failure is fatalError — no fallback, no MigrationPlan; a build-2 schema change crash-loops eve… | apps/mobile/Patina/Patina/Core/Persistence/PersistenceController.swift:25-48 | Add a SchemaMigrationPlan; on catch, move the old store aside and open a fresh one (or in-memory) behind a designed 'we had to st… |
+| `C7-02` | **closed** · W1 L1-B · `de1fa5196` | T0/blocker | S | BoardModel is fetched and inserted against a container whose Schema does not contain it (Saved / Collections) | PersistenceController.swift:26-35 vs Core/Models/BoardModel.swift:12-13; Features/Collections/… | Add BoardModel.self to the schema (and to LocalStoreReset), or remove the boards feature from CollectionsView before shipping. |
+| `GAP4-02` | **closed** · W1 L1-B · `de1fa5196` | T1/blocker | S | The fallback entry screen is a hard dead end: no back, no cancel, and the interactive-pop gesture is dead | ScanFallbackEntryView.swift (whole view) presented from QuietConversationFlowHost.swift:195-20… | Give the host a persistent "Not now" / ✕ that calls leaveFlow(landingOn: .heroFrame), and re-enable the interactive pop for the .… |
+| `GAP4-03` | **closed** · W1 L1-B · `de1fa5196` | T1/blocker | S | Developer default dimensions are pre-filled and become the tester's real room data | ScanFallbackEntryView.swift:27-28 (length="18", width="14") + :283-287 (isValid); shots/GAP4/1… | Start the fields empty with real placeholders, disable Continue until both are entered, or label the row as a suggestion. |
+| `GAP4-25` | **open** | T1/blocker | S | BLOCKER: "Rescan" on the floor plan strands the tester on a permanently blank screen; only force-quitting rec… | QuietConversationFlowHost.swift:337-346 (resetForRescan) + :145-152 (bootstrap) + content rout… | Have resetForRescan() call bootstrap() (or set the step directly), and give `.initial` a real loading state instead of a bare bac… |
+| `A-34` ⇢L1-D | **closed** · W1 L1-B · `de1fa5196` | T0/major | M | Every recommendation scores 40–46 % match after a five-question quiz | Browse pieces; shots/A/14,15,16 | Either rescale/normalise the score so a good match reads as one, or stop showing a percentage and use a qualitative band ("Strong… |
+| `A-81` | **closed** · W1 L1-B · `de1fa5196` | T0/major | M | Four different counts of "what needs you" on one screen | Daily Room home; shots/A/44-home-signedin.png | Derive every badge from one "needs you" query, or label each count with what it counts. |
+| `A3-18` ⇢L0.2 | **open** | T0/major | S | Every product fetch pulls two 768-dim vectors the app never decodes — 20.7 KB per row, ~90% waste | Core/Network/ProductAPIClient.swift:113 (productSelect = "*,vendors!products_vendor_id_fkey(..… | Replace `*` with the ~24 columns RawProductWithVendor actually decodes. One-line change, ~10x smaller payload on the Record and o… |
+| `B-03` | **closed** · W1 L1-B · `de1fa5196` | T0/major | S | A deleted room stays in Studio and the room count never updates | Studio after deleting 'Audit Room B' — shots/B/48-signedin-studio.png, 49-studio-scroll1.png,… | Invalidate/refetch the rooms query and the profile-stats query on room deletion, or drive both from one observable store. |
+| `B-04` | **closed** · W1 L1-B · `de1fa5196` | T0/major | S | Deleting a room strands the user on the dead detail screen showing a hedged not-found error | Room detail immediately after Delete — shots/B/47-after-delete.png | Pop the navigation stack to the rooms list on successful delete; keep the not-found state only for genuine deep-link misses, and… |
+| `C-11` ⇢L1-D | **closed** · W1 L1-B · `de1fa5196` | T0/major | M | The same product shows three different match scores in one session: 73%, 57%, 50% | Heirloom Oak Dining Table — shots/C/52-flagson-pieces.png (73%), 11-dark-browse.png (57%), 12-… | Compute the match once against a single scope and pass it through, or label each score with its scope ("73% for your home / 57% f… |
+| `C1-19` | **closed** · W1 L1-B · `de1fa5196` | T0/major | S | .launching has no timeout: if auth readiness never lands, the splash is terminal | App/Coordinators/AppCoordinator.swift:258-262; Features/Splash/Views/SplashView.swift:55-59 | A 5–8s watchdog that forces .auth with a one-line 'We couldn't reach Patina — try again'. |
+| `C4-03` | **closed** · W1 L1-B · `1773570b1` | T0/major | M | Three empty states are indistinguishable from a failed fetch — two of them lie to a client who has data | apps/mobile/Patina/Patina/Features/Rooms/RoomSyncCoordinator.swift:189-197 + Features/Rooms/Vi… | Add lastLoadFailed to both view models and an error branch on the OrderDetailView.swift:41 model, which already distinguishes "we… |
+| `C4-12` | **closed** · W1 L1-B · `de1fa5196` | T0/major | M | No pull-to-refresh on any of the four tab roots, or on three of four Studio detail screens | apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:245 (Today), Features/Rooms/… | Add .refreshable to the four roots wired to the same work their .task blocks do, and to the three detail screens; InvoiceDetailVi… |
+| `C4-16` | **closed** · W1 L1-B · `de1fa5196` | T0/major | S | supabase-swift reads inherit URLSession.shared timeouts (60 s request / 7-day resource), not the app's 30 s | apps/mobile/Patina/Patina/Core/Network/SupabaseClient.swift:54-63; budgets at Services/API/API… | Pass a configured URLSession into SupabaseClientOptions.GlobalOptions(session:) with timeoutIntervalForRequest = 30 and timeoutIn… |
+| `C7-05` | **open** | T0/major | S | A fresh CIContext() is constructed per captured hero frame, on the main actor, mid-scan | apps/mobile/Patina/Patina/Features/Walk/Services/FrameCaptureService.swift:17 (@MainActor), :2… | Hoist to one lazily-created CIContext and move the encode off the main actor. |
+| `C7-13` | **open** | T0/major | S | Telemetry queue re-queues failed batches without bound and rewrites the whole file every 30 s | apps/mobile/Patina/Patina/Services/Analytics/DailyRoomBatchQueue.swift:70-78,81-90,94-101; end… | Cap pending (drop oldest), add backoff on repeated failure, stop persisting on every failed tick. |
+| `C7-15` | **open** | T0/major | S | A forced GoTrue token refresh runs before every single artifact upload | apps/mobile/Patina/Patina/Services/Sync/BackgroundScanUploader.swift:146-156 | Read auth.session (which refreshes only when expired) once per bundle rather than calling refreshSession() per artifact. |
+| `C7-17` | **closed** · W1 L1-B · `de1fa5196` | T0/major | S | The U39 all-or-nothing decode still stands on the saved-pieces and single-piece reads | apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:170-174 and :146-148 | Wrap both in FailableDecodable exactly as decodeProducts already does. |
+| `L07-05` ⇢L1-C | **open** | T0/major | S | The Studio hub shows stale counts as current when the backend is unreachable, with no staleness signal | apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioHubViewModel.swift (the hub's load… | Whatever staleness affordance R-03 lands on Today, apply to StudioHubViewModel in the same wave. VISION §6 constraint carried fro… |
+| `R-01` | **closed** · W1 L1-B · `2b4270d5c` | T0/major | M | Studio asserts the client has nothing (0 decisions, 0 records, no messages) for ~50 s during an outage, under… | Studio screen; shots/R/12a-studio-retry-t50-spinner.png, shots/R/13a-studio-false-empty.png | Never render section empty-states from a failed fetch. Give each Studio section three distinct states (loading / loaded-empty / f… |
+| `R-02` | **closed** · W1 L1-B · `4790ab8eb` | T0/major | M | Cold launch with the backend down silently deletes badge counts, the designer seat and a record row; the bell… | Today; shots/R/16-cold-3.png, 17b-cold-t22.png, 18-cold-today-bottom.png vs 00-preflight-befor… | Persist the last successful badge counts, designer seat and record rows; on a failed refresh keep showing them (optionally dimmed… |
+| `R-03` | **closed** · W1 L1-B · `2b4270d5c` | T0/major | S | Today has no pull-to-refresh and no staleness signal — the only way to recover is to background the app | apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:249; shots/R/03a-ptr.png, 03… | Add `.refreshable` to the DailyRoomView ScrollView calling the same sequence as the scenePhase handler, and show a 'last updated'… |
+| `R-05` | **closed** · W1 L1-B · `de1fa5196` | T0/major | M | Proposal shows a blank page with "One moment…" for 65-185 s before admitting failure | Proposal detail; shots/R/14a-proposal-t2.png … 14d-proposal-t185.png, 15a/15b | Cap the proposal fetch at ~10 s, render the proposal title/summary from the record row that launched it while loading (skeleton,… |
+| `B-15` | **closed** · W1 L1-B · `de1fa5196` | T1/major | M | The previous account's taste portrait survives sign-out and shows under the Guest avatar | Studio as guest after signing James out — shots/B/75-guest-after-signout.png | Clear the on-device taste portrait, onboarding flags and companion state in the sign-out path, keyed by owner user id. |
+| `C2-06` | **closed** · W1 L1-F · `52aa910ea` | T1/major | S | Sign-out leaves the previous account's screens on the navigation stack | apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:276-280 and :223-225; Patina/C… | In beginSplashTransition() (or on the .main -> .auth/.launching transition) clear navigationPath, screenStack, every tabs stack,… |
+| `GAP3-18` | **open** | T1/major | M | After sign-out the Guest profile still lists the previous account's rooms | ProfileView / DailyRoomView room rails after AuthService sign-out · shots/GAP3/22-guest-entry.… | Extend the sign-out LocalStoreReset to the room list/room-count sources, or scope those reads by `local_store_owner_user_id` the… |
+| `C1-18` | **closed** · W1 L1-B · `de1fa5196` | T0/minor | S | The splash holds 1.5s on every cold launch and its own animation never finishes | App/Coordinators/AppCoordinator.swift:77-81,258-262; Features/Splash/Views/SplashView.swift:41… | Bring the wordmark fade to ≤1.2s and drop the floor to ~0.6s (or 0 when isAuthStateReady is already true). |
 
 ### W1 · L1-C Layout, Companion, Dynamic Type — 28 findings
 
 _count: 28 · blocker 3 · major 25 · minor 0 · polish 0_
 
-| id | tier/sev | eff | title | where | fix |
-|---|---|---|---|---|---|
-| `GAP1B-01` ⇢L1-E | T0/blocker | M | Approve and Cancel are off-screen on the decision consent sheet at accessibility text sizes | apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:368-448 (DecisionC… | Replace the fixed [.medium,.large] with a content-driven detent (or .large alone at accessibility sizes via @Environment(\.dynami… |
-| `GAP1B-02` | T0/blocker | S | Send is clipped and Cancel is gone on the decision defer sheet at accessibility text sizes | apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDeferSheet.swift:26-79, presented a… | As GAP1B-01: content-driven detent plus a pinned bottom button pair. |
-| `GAP4-16` ⇢L1-D | T1/blocker | S | The Reveal's only CTA is invisible in light mode: charcoal capsule on a charcoal ground | RevealView.swift:34 (PatinaColors.charcoal ground) + StyleContinueButton.swift:36-40 + PatinaC… | Paint the Reveal with the semantic inverse-surface tokens, or give StyleContinueButton an explicit on-charcoal fill variant. |
-| `A-100` | T0/major | S | The Settings sheet has no dismiss control | Settings; shots/A/54, 55 | Add a "Done" toolbar item (or .presentationDragIndicator(.visible)). |
-| `A-45` ⇢L1-D | T0/major | S | Back, Share and Save scroll off the top of the product detail | Product detail; shots/A/19-product-detail-scrolled.png | Pin the overlay controls (or collapse them into a real navigation bar with a material) instead of letting them scroll with the he… |
-| `A-50` | T0/major | S | The Companion's first-run coach mark covers the menu it is explaining | Companion menu, first open; shots/A/20-companion-menu.png | Anchor the coach mark below the menu (or dim the menu and highlight one row) so the described content stays visible. |
-| `A-89` | T0/major | M | The circular Back button floats over scrolling content with no bar or material behind it | Studio, invoice detail, notifications, room detail; shots/A/47-studio-scroll1.png, 50-invoice-… | Give the back control a real navigation bar with a scroll-edge material, or a top content inset. |
-| `A-99` | T0/major | S | Switching Appearance back to Light leaves the Settings sheet dark | Settings → Appearance; shots/A/57, 60, 63, 64, 65 | Apply the preferredColorScheme at the window/scene level (or pass it into the sheet's environment) instead of on the presenting v… |
-| `A1-14` | T0/major | S | DesignerConsultationView shows a hard-coded placeholder 'Matched Designer' card | apps/mobile/Patina/Patina/Features/DesignServices/DesignerConsultationView.swift:55-75 | Replace the card with the flow's own value proposition, or delete it and let the screen be the hero + 'Start a request'. |
-| `B-07` | T0/major | S | The inline help tooltip's text overflows its own bubble top and bottom | Today, small (?) beside 'Good afternoon.' — shots/B/17-guest-inline-help.png | Size the bubble from its text (fixedSize / intrinsic content height) instead of a fixed frame, and add vertical padding. |
-| `B-09` | T0/major | S | The first-launch tour's Skip/Next are stock iOS system blue — the only blue in the app | Today, first-launch tour — shots/B/14-guest-today.png, 15-tour-step2.png, 66-relaunch-james.pn… | Set an app-wide .tint to the Patina brown and restyle the tour bubble to the app's card/typography system. |
-| `B-10` | T0/major | M | Every coach mark covers the content it is describing | Today tour step 1, Companion first-open card — shots/B/14-guest-today.png, 68-companion-open.p… | Anchor the bubble below/beside its target with a highlight cut-out, or dim everything except the target. |
-| `B-27` | T0/major | M | The pinned 'Your Studio' capsule title floats over and hides list content as the page scrolls | Studio — shots/B/19,20,49,57 | Use a real collapsing navigation title with a scroll-edge material, or drop the capsule and inset the content below it. |
-| `B-28` | T0/major | S | After a payment failure the Pay button is pushed entirely behind the tab bar and the error panel is clipped | Invoice detail after tapping Pay — shots/B/54-pay-result-b.png + scan_ui | Scroll the failure into view, add a bottom safe-area inset for the tab bar, and keep Pay visible (or make the retry the primary b… |
-| `B-60` | T0/major | S | The 'Add a new room' sheet mixes three background materials and two icon systems | Add a new room sheet — shots/B/39-add-room.png | Give the sheet one opaque background at a fixed detent and use the same tile treatment for both rows. |
-| `C-05` | T0/major | S | Four "?" controls at three sizes on one header; three share the identical label "More information" | Your Spaces; shots/C/09-dark-spaces.png, 51-flagson-spaces.png | Collapse to one help affordance per screen; give any remaining ones distinct labels naming their subject. |
-| `C-06` ⇢L1-D | T0/major | M | Dynamic Type breaks headline text mid-word — "Good / afternoo / n." at XXXL, six fragments at AX sizes | shots/C/30-xxxl-today.png, 35-ax3xl-today.png, 36/37-ax3xl-companion, 38-ax3xl-spaces | Let the header stack switch to a vertical layout above .xxLarge (ViewThatFits / dynamicTypeSize check), and add minimumScaleFacto… |
-| `C-18` | T0/major | S | The greeting "?" tooltip clips its own copy at the top AND the bottom, and the trigger is unreachable by Voic… | Today; shots/C/07-dark-greeting-help.png | Size the bubble to its content, make it opaque, and either give the trigger a real accessibility label or delete it (it duplicate… |
-| `C5-05` ⇢L1-E | T0/major | S | Settings → 'Help Center' opens a 404 (silently lands on the marketing home page) | apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:153-155 | Point at a page that exists, or remove the row until one does. |
-| `C6-18` | T0/major | S | Room-type chips: six in a fixed row, 24pt tall, colour-only selection, no labels | Features/Rooms/Components/RoomTypePillRow.swift:24-45 (used by Name Your Room, Manual Entry an… | Give each chip a 44pt min height, add .isSelected, and let the row wrap (ViewThatFits or a flow layout) at accessibility sizes. |
-| `C9-04` | T0/major | M | Twenty hard-coded bottom clearances, none derived from CompanionHearthMetrics | DailyRoomView.swift:371, ProfileView.swift:167, YourSpacesView.swift:97, CrossRoomView.swift:4… | Replace all twenty with CompanionHearthMetrics.pinnedFooterClearance(houseFirst:) (or the reservation modifier where the screen s… |
-| `P-34` ⇢L1-A | T0/major | M | At the largest Dynamic Type size the first screen collapses: every button label truncates, text breaks the gu… | Welcome home at content_size accessibility-extra-extra-extra-large; shots/P/40-welcome-ax3xl.p… | ScrollView fallback above .accessibility1; minimumScaleFactor/multi-line button labels; stacked legal links; let the Apple button… |
-| `R-06` | T0/major | S | Browse / Recommendations does not fill the screen in its loading, error AND empty states — a cream band float… | apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:59 and :145… | Add `.frame(maxWidth:.infinity, maxHeight:.infinity, alignment:.top)` to the root VStack before the `.background`, so the cream g… |
-| `C-23` | T1/major | S | Two different sheet chromes: Settings has no dismiss control and no grabber, Help has both | shots/C/29-dark-settings.png vs 32-xxxl-help-panel.png | Pick one sheet pattern and apply it everywhere; give Settings a Done button. |
-| `GAP1B-03` ⇢L1-D | T1/major | M | "Good evening." breaks mid-word on the Today home at accessibility text sizes | Today home header (DailyRoomView) — the greeting shares a horizontal band with the bell/help/S… | Give the greeting the full content width and move the bell/help/Studio cluster to its own row (or a toolbar) at dynamicTypeSize >… |
-| `GAP1B-07` ⇢L1-D | T1/major | S | "Cancel" on both decision sheets is a 17.6 pt tap target | apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:438-441 and Decisi… | Give .ghost the same 44 pt min height and full-width frame as the other PatinaButton styles. |
-| `GAP1B-08` ⇢L1-A | T1/major | S | The auth screen’s text links are all ~15-17 pt tall | Welcome + Sign In screens (Features/Authentication) — measured via idb ui describe-all | .frame(minHeight: 44).contentShape(Rectangle()) on each link. |
-| `GAP2-24` | T1/major | S | The "Pay $4,250.00" button starts one point below the fold on an iPhone 17 Pro | Invoice detail — shots/GAP2/51-invoice-detail.png (at rest) vs 52-invoice-detail-bottom.png | Pin the pay button to the bottom safe area (this screen earns a fixed footer), or shorten the sections above it. |
+_W1 close (2026-09-03): closed 26 · open 2_
+
+| id | W1 status | tier/sev | eff | title | where | fix |
+|---|---|---|---|---|---|---|
+| `GAP1B-01` ⇢L1-E | **closed** · W1 L1-C · `d0d5c048c` | T0/blocker | M | Approve and Cancel are off-screen on the decision consent sheet at accessibility text sizes | apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:368-448 (DecisionC… | Replace the fixed [.medium,.large] with a content-driven detent (or .large alone at accessibility sizes via @Environment(\.dynami… |
+| `GAP1B-02` | **closed** · W1 L1-C · `d0d5c048c` | T0/blocker | S | Send is clipped and Cancel is gone on the decision defer sheet at accessibility text sizes | apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDeferSheet.swift:26-79, presented a… | As GAP1B-01: content-driven detent plus a pinned bottom button pair. |
+| `GAP4-16` ⇢L1-D | **open** | T1/blocker | S | The Reveal's only CTA is invisible in light mode: charcoal capsule on a charcoal ground | RevealView.swift:34 (PatinaColors.charcoal ground) + StyleContinueButton.swift:36-40 + PatinaC… | Paint the Reveal with the semantic inverse-surface tokens, or give StyleContinueButton an explicit on-charcoal fill variant. |
+| `A-100` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | The Settings sheet has no dismiss control | Settings; shots/A/54, 55 | Add a "Done" toolbar item (or .presentationDragIndicator(.visible)). |
+| `A-45` ⇢L1-D | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | Back, Share and Save scroll off the top of the product detail | Product detail; shots/A/19-product-detail-scrolled.png | Pin the overlay controls (or collapse them into a real navigation bar with a material) instead of letting them scroll with the he… |
+| `A-50` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | The Companion's first-run coach mark covers the menu it is explaining | Companion menu, first open; shots/A/20-companion-menu.png | Anchor the coach mark below the menu (or dim the menu and highlight one row) so the described content stays visible. |
+| `A-89` | **closed** · W1 L1-C · `440a312ea` | T0/major | M | The circular Back button floats over scrolling content with no bar or material behind it | Studio, invoice detail, notifications, room detail; shots/A/47-studio-scroll1.png, 50-invoice-… | Give the back control a real navigation bar with a scroll-edge material, or a top content inset. |
+| `A-99` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | Switching Appearance back to Light leaves the Settings sheet dark | Settings → Appearance; shots/A/57, 60, 63, 64, 65 | Apply the preferredColorScheme at the window/scene level (or pass it into the sheet's environment) instead of on the presenting v… |
+| `A1-14` | **open** | T0/major | S | DesignerConsultationView shows a hard-coded placeholder 'Matched Designer' card | apps/mobile/Patina/Patina/Features/DesignServices/DesignerConsultationView.swift:55-75 | Replace the card with the flow's own value proposition, or delete it and let the screen be the hero + 'Start a request'. |
+| `B-07` | **closed** · W1 L1-C · `440a312ea` | T0/major | S | The inline help tooltip's text overflows its own bubble top and bottom | Today, small (?) beside 'Good afternoon.' — shots/B/17-guest-inline-help.png | Size the bubble from its text (fixedSize / intrinsic content height) instead of a fixed frame, and add vertical padding. |
+| `B-09` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | The first-launch tour's Skip/Next are stock iOS system blue — the only blue in the app | Today, first-launch tour — shots/B/14-guest-today.png, 15-tour-step2.png, 66-relaunch-james.pn… | Set an app-wide .tint to the Patina brown and restyle the tour bubble to the app's card/typography system. |
+| `B-10` | **closed** · W1 L1-C · `7c119e563` | T0/major | M | Every coach mark covers the content it is describing | Today tour step 1, Companion first-open card — shots/B/14-guest-today.png, 68-companion-open.p… | Anchor the bubble below/beside its target with a highlight cut-out, or dim everything except the target. |
+| `B-27` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | M | The pinned 'Your Studio' capsule title floats over and hides list content as the page scrolls | Studio — shots/B/19,20,49,57 | Use a real collapsing navigation title with a scroll-edge material, or drop the capsule and inset the content below it. |
+| `B-28` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | After a payment failure the Pay button is pushed entirely behind the tab bar and the error panel is clipped | Invoice detail after tapping Pay — shots/B/54-pay-result-b.png + scan_ui | Scroll the failure into view, add a bottom safe-area inset for the tab bar, and keep Pay visible (or make the retry the primary b… |
+| `B-60` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | The 'Add a new room' sheet mixes three background materials and two icon systems | Add a new room sheet — shots/B/39-add-room.png | Give the sheet one opaque background at a fixed detent and use the same tile treatment for both rows. |
+| `C-05` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | Four "?" controls at three sizes on one header; three share the identical label "More information" | Your Spaces; shots/C/09-dark-spaces.png, 51-flagson-spaces.png | Collapse to one help affordance per screen; give any remaining ones distinct labels naming their subject. |
+| `C-06` ⇢L1-D | **closed** · W1 L1-C · `a9cb4ceb4` | T0/major | M | Dynamic Type breaks headline text mid-word — "Good / afternoo / n." at XXXL, six fragments at AX sizes | shots/C/30-xxxl-today.png, 35-ax3xl-today.png, 36/37-ax3xl-companion, 38-ax3xl-spaces | Let the header stack switch to a vertical layout above .xxLarge (ViewThatFits / dynamicTypeSize check), and add minimumScaleFacto… |
+| `C-18` | **closed** · W1 L1-C · `440a312ea` | T0/major | S | The greeting "?" tooltip clips its own copy at the top AND the bottom, and the trigger is unreachable by Voic… | Today; shots/C/07-dark-greeting-help.png | Size the bubble to its content, make it opaque, and either give the trigger a real accessibility label or delete it (it duplicate… |
+| `C5-05` ⇢L1-E | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | Settings → 'Help Center' opens a 404 (silently lands on the marketing home page) | apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:153-155 | Point at a page that exists, or remove the row until one does. |
+| `C6-18` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | Room-type chips: six in a fixed row, 24pt tall, colour-only selection, no labels | Features/Rooms/Components/RoomTypePillRow.swift:24-45 (used by Name Your Room, Manual Entry an… | Give each chip a 44pt min height, add .isSelected, and let the row wrap (ViewThatFits or a flow layout) at accessibility sizes. |
+| `C9-04` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | M | Twenty hard-coded bottom clearances, none derived from CompanionHearthMetrics | DailyRoomView.swift:371, ProfileView.swift:167, YourSpacesView.swift:97, CrossRoomView.swift:4… | Replace all twenty with CompanionHearthMetrics.pinnedFooterClearance(houseFirst:) (or the reservation modifier where the screen s… |
+| `P-34` ⇢L1-A | **closed** · W1 L1-C · `d0d5c048c` | T0/major | M | At the largest Dynamic Type size the first screen collapses: every button label truncates, text breaks the gu… | Welcome home at content_size accessibility-extra-extra-extra-large; shots/P/40-welcome-ax3xl.p… | ScrollView fallback above .accessibility1; minimumScaleFactor/multi-line button labels; stacked legal links; let the Apple button… |
+| `R-06` | **closed** · W1 L1-C · `d0d5c048c` | T0/major | S | Browse / Recommendations does not fill the screen in its loading, error AND empty states — a cream band float… | apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:59 and :145… | Add `.frame(maxWidth:.infinity, maxHeight:.infinity, alignment:.top)` to the root VStack before the `.background`, so the cream g… |
+| `C-23` | **closed** · W1 L1-C · `d0d5c048c` | T1/major | S | Two different sheet chromes: Settings has no dismiss control and no grabber, Help has both | shots/C/29-dark-settings.png vs 32-xxxl-help-panel.png | Pick one sheet pattern and apply it everywhere; give Settings a Done button. |
+| `GAP1B-03` ⇢L1-D | **closed** · W1 L1-C · `d0d5c048c` | T1/major | M | "Good evening." breaks mid-word on the Today home at accessibility text sizes | Today home header (DailyRoomView) — the greeting shares a horizontal band with the bell/help/S… | Give the greeting the full content width and move the bell/help/Studio cluster to its own row (or a toolbar) at dynamicTypeSize >… |
+| `GAP1B-07` ⇢L1-D | **closed** · W1 L1-C · `d0d5c048c` | T1/major | S | "Cancel" on both decision sheets is a 17.6 pt tap target | apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:438-441 and Decisi… | Give .ghost the same 44 pt min height and full-width frame as the other PatinaButton styles. |
+| `GAP1B-08` ⇢L1-A | **closed** · W1 L1-C · `d0d5c048c` | T1/major | S | The auth screen’s text links are all ~15-17 pt tall | Welcome + Sign In screens (Features/Authentication) — measured via idb ui describe-all | .frame(minHeight: 44).contentShape(Rectangle()) on each link. |
+| `GAP2-24` | **closed** · W1 L1-C · `d0d5c048c` | T1/major | S | The "Pay $4,250.00" button starts one point below the fold on an iPhone 17 Pro | Invoice detail — shots/GAP2/51-invoice-detail.png (at rest) vs 52-invoice-detail-bottom.png | Pin the pay button to the bottom safe area (this screen earns a fixed footer), or shorten the sections above it. |
 
 ### W1 · L1-D Tokens, dark mode, contrast, iconography — 18 findings
 
 _count: 18 · blocker 1 · major 17 · minor 0 · polish 0_
 
-| id | tier/sev | eff | title | where | fix |
-|---|---|---|---|---|---|
-| `A3-01` | T0/blocker | M | Every product surface is empty on production: get_recommendations returns zero rows for every tester | Strata public.products / get_aesthete_matches; ProductAPIClient.swift:80-92 (withholdingUnreso… | Seed a real catalogue: >=30 layer='catalog' status='published' products with brand or vendor, images, price, category and a produ… |
-| `A-11` ⇢L1-A | T0/major | M | Full-colour system emoji are the production iconography of the style quiz | Style quiz Q2/Q4/Q5; shots/A/07,08,10,11 | Replace with SF Symbols or the brand's line icons, in a single weight and one colour; strip the glyph from the accessibility labe… |
-| `A-36` ⇢L0.3 | T0/major | S | Missing images render as flat colour blocks with no missing-image state | Browse pieces; shots/A/15-browse-scroll1.png, 16 | Add a designed placeholder (brand mark on a tint) plus a shimmer for the loading case, and distinguish loading from permanently-m… |
-| `A-73` ⇢L1-A | T0/major | S | White-on-tan primary buttons fail contrast (~2.2:1) | Auth, coach mark, invoice; shots/A/34,38,20,50 | Darken the tan for filled buttons or use ink text on tan; validate every filled-button pairing. |
-| `A-90` | T0/major | S | "Pay $4,250.00" is painted in the app's disabled-button tan at ~2.2:1 contrast | Invoice detail; shots/A/50-invoice-bottom.png vs 34/37 | Give enabled/disabled genuinely different treatments (black = enabled, reduced-opacity grey = disabled) and never reuse the accen… |
-| `A3-17` ⇢L0.3 | T0/major | M | The three editorial stories have no hero images and claim a 3–5 minute read on ~400-character bodies | public.editorial_stories (3 rows); Core/Network/EditorialStoriesAPIClient.swift | Commission real bodies and hero images for at least these three rows, or compute read_minutes from the body and hide the badge be… |
-| `B-18` ⇢L0.3 | T0/major | L | Product photography contradicts the product, and a missing image renders as a bare grey block | Pieces grid and product detail — shots/B/13-guest-home-today.png, 34-signedin-today-b.png, 67-… | Re-shoot/re-map the seeded catalogue imagery, and give the image slot a designed placeholder (mark + product name) instead of an… |
-| `C-01` | T0/major | S | Companion orb is invisible in dark mode — hardcoded fill, 1.15:1 against the page | Today/all flags-OFF screens; shots/C/06-dark-launch-2.0s.png vs 00-preflight-before.png | Give the orb an adaptive fill (invert to a light disc in dark mode) or add a border/shadow token. Same fix covers the Companion p… |
-| `C-02` | T0/major | S | Companion status line is dark-on-dark in dark mode (1.11:1) while the title stays white | Companion sheet; shots/C/crop-dark-companion-header.png vs crop-light-companion-header.png | The panel is a fixed dark surface; the subtitle uses a colour that flips with the system appearance. Pin the subtitle to the pane… |
-| `C-20` | T0/major | S | Dark-mode text contrast fails WCAG on the de-emphasised rows: meta 2.66:1, body 4.27:1 | Today "MOVED" rows; shots/C/06-dark-launch-2.0s.png | Raise the dark-mode de-emphasised ink to ≥4.5:1 (body) and ≥3:1 (meta). |
-| `C-27` ⇢L0.3 | T0/major | S | Pieces tab renders a missing product image as a blank cream rectangle, with overlay chrome at 2.01:1 on it | "Wool Kilim Runner"; shots/C/52-flagson-pieces.png | Add a branded image placeholder and a failed-load state; give the overlay chrome a guaranteed scrim so it holds contrast over lig… |
-| `C-41` | T0/major | S | Two competing primary-button styles: solid gold vs near-white pill | shots/C/20-dark-proposal-scrolled.png and 23-dark-invoice-bottom.png (gold) vs 10-dark-room.pn… | One primary token; pick a different disabled treatment. |
-| `C3-01` | T0/major | M | `pearl` is a light-only hairline used 89x as the app's border/divider colour — 12.8:1 in dark mode where 1.2:… | PatinaDesignKit/Sources/PatinaDesignKit/Tokens/PatinaColors.swift:43 + 89 call sites (PatinaTa… | Add Border.hairline / Border.strong semantic tokens built with Color.patinaDynamic(light: pearl, dark: <graphite +1 notch>), then… |
-| `C3-05` | T0/major | M | White/off-white labels on `clay` fills are 2.33:1 across ~15 selected-state controls, including a PatinaButto… | PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaButton.swift:94,105; RoomTypePillRow.… | Route filled selection states through FilterChip / PatinaButton(.primary) (charcoal + Text.inverse), or use clayDeep for filled s… |
-| `C3-15` | T0/major | M | 46 inline `.font(.custom("Face", size:))` bypass PatinaTypography — and one names PlayfairDisplay-Light, whic… | Features/StyleReveal/Views/RevealView.swift:85 (the bug) and :127; ScanFloorPlanPreviewView.sw… | Ship PlayfairDisplay-Light or change that call to -Regular; promote the 46 inline sites to named PatinaTypography tokens; raise t… |
-| `C5-14` ⇢L1-E | T0/major | M | Two money formats ship at once — Today shows $4,200 and $4.2K for the same piece one tap apart | canonical Features/Shared/CurrencyFormatting.swift; bypasses at ProductModel.swift:181-187, Sa… | Route all ten through PatinaCurrency; if a compact 'K' form is wanted, put it inside PatinaCurrency so there is one rule. |
-| `P-25` | T0/major | S | The OTP field's placeholder is "000000", exposed as its accessibility value, and a filled field looks almost… | auth.otp.tokenField; shots/P/23-code-requested-t0.png vs 25-code-entered.png | AXValue empty, accessibilityLabel "Sign-in code"; six digit boxes or a clearly distinct filled state; a placeholder that isn't a… |
-| `P-35` | T0/major | S | In dark mode the primary CTA is pure black on a near-black ground | Welcome home, appearance dark; shots/P/39-welcome-dark.png | Switch the Apple button style with the colour scheme. |
+_W1 close (2026-09-03): closed 15 · open 3_
+
+| id | W1 status | tier/sev | eff | title | where | fix |
+|---|---|---|---|---|---|---|
+| `A3-01` | **open** | T0/blocker | M | Every product surface is empty on production: get_recommendations returns zero rows for every tester | Strata public.products / get_aesthete_matches; ProductAPIClient.swift:80-92 (withholdingUnreso… | Seed a real catalogue: >=30 layer='catalog' status='published' products with brand or vendor, images, price, category and a produ… |
+| `A-11` ⇢L1-A | **open** | T0/major | M | Full-colour system emoji are the production iconography of the style quiz | Style quiz Q2/Q4/Q5; shots/A/07,08,10,11 | Replace with SF Symbols or the brand's line icons, in a single weight and one colour; strip the glyph from the accessibility labe… |
+| `A-36` ⇢L0.3 | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | Missing images render as flat colour blocks with no missing-image state | Browse pieces; shots/A/15-browse-scroll1.png, 16 | Add a designed placeholder (brand mark on a tint) plus a shimmer for the loading case, and distinguish loading from permanently-m… |
+| `A-73` ⇢L1-A | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | White-on-tan primary buttons fail contrast (~2.2:1) | Auth, coach mark, invoice; shots/A/34,38,20,50 | Darken the tan for filled buttons or use ink text on tan; validate every filled-button pairing. |
+| `A-90` | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | "Pay $4,250.00" is painted in the app's disabled-button tan at ~2.2:1 contrast | Invoice detail; shots/A/50-invoice-bottom.png vs 34/37 | Give enabled/disabled genuinely different treatments (black = enabled, reduced-opacity grey = disabled) and never reuse the accen… |
+| `A3-17` ⇢L0.3 | **open** | T0/major | M | The three editorial stories have no hero images and claim a 3–5 minute read on ~400-character bodies | public.editorial_stories (3 rows); Core/Network/EditorialStoriesAPIClient.swift | Commission real bodies and hero images for at least these three rows, or compute read_minutes from the body and hide the badge be… |
+| `B-18` ⇢L0.3 | **closed** · W1 L1-D · `b8413ee29` | T0/major | L | Product photography contradicts the product, and a missing image renders as a bare grey block | Pieces grid and product detail — shots/B/13-guest-home-today.png, 34-signedin-today-b.png, 67-… | Re-shoot/re-map the seeded catalogue imagery, and give the image slot a designed placeholder (mark + product name) instead of an… |
+| `C-01` | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | Companion orb is invisible in dark mode — hardcoded fill, 1.15:1 against the page | Today/all flags-OFF screens; shots/C/06-dark-launch-2.0s.png vs 00-preflight-before.png | Give the orb an adaptive fill (invert to a light disc in dark mode) or add a border/shadow token. Same fix covers the Companion p… |
+| `C-02` | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | Companion status line is dark-on-dark in dark mode (1.11:1) while the title stays white | Companion sheet; shots/C/crop-dark-companion-header.png vs crop-light-companion-header.png | The panel is a fixed dark surface; the subtitle uses a colour that flips with the system appearance. Pin the subtitle to the pane… |
+| `C-20` | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | Dark-mode text contrast fails WCAG on the de-emphasised rows: meta 2.66:1, body 4.27:1 | Today "MOVED" rows; shots/C/06-dark-launch-2.0s.png | Raise the dark-mode de-emphasised ink to ≥4.5:1 (body) and ≥3:1 (meta). |
+| `C-27` ⇢L0.3 | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | Pieces tab renders a missing product image as a blank cream rectangle, with overlay chrome at 2.01:1 on it | "Wool Kilim Runner"; shots/C/52-flagson-pieces.png | Add a branded image placeholder and a failed-load state; give the overlay chrome a guaranteed scrim so it holds contrast over lig… |
+| `C-41` | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | Two competing primary-button styles: solid gold vs near-white pill | shots/C/20-dark-proposal-scrolled.png and 23-dark-invoice-bottom.png (gold) vs 10-dark-room.pn… | One primary token; pick a different disabled treatment. |
+| `C3-01` | **closed** · W1 L1-D · `b8413ee29` | T0/major | M | `pearl` is a light-only hairline used 89x as the app's border/divider colour — 12.8:1 in dark mode where 1.2:… | PatinaDesignKit/Sources/PatinaDesignKit/Tokens/PatinaColors.swift:43 + 89 call sites (PatinaTa… | Add Border.hairline / Border.strong semantic tokens built with Color.patinaDynamic(light: pearl, dark: <graphite +1 notch>), then… |
+| `C3-05` | **closed** · W1 L1-D · `b8413ee29` | T0/major | M | White/off-white labels on `clay` fills are 2.33:1 across ~15 selected-state controls, including a PatinaButto… | PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaButton.swift:94,105; RoomTypePillRow.… | Route filled selection states through FilterChip / PatinaButton(.primary) (charcoal + Text.inverse), or use clayDeep for filled s… |
+| `C3-15` | **closed** · W1 L1-D · `b8413ee29` | T0/major | M | 46 inline `.font(.custom("Face", size:))` bypass PatinaTypography — and one names PlayfairDisplay-Light, whic… | Features/StyleReveal/Views/RevealView.swift:85 (the bug) and :127; ScanFloorPlanPreviewView.sw… | Ship PlayfairDisplay-Light or change that call to -Regular; promote the 46 inline sites to named PatinaTypography tokens; raise t… |
+| `C5-14` ⇢L1-E | **closed** · W1 L1-D · `b8413ee29` | T0/major | M | Two money formats ship at once — Today shows $4,200 and $4.2K for the same piece one tap apart | canonical Features/Shared/CurrencyFormatting.swift; bypasses at ProductModel.swift:181-187, Sa… | Route all ten through PatinaCurrency; if a compact 'K' form is wanted, put it inside PatinaCurrency so there is one rule. |
+| `P-25` | **closed** · W1 L1-D · `a04b2d99b` | T0/major | S | The OTP field's placeholder is "000000", exposed as its accessibility value, and a filled field looks almost… | auth.otp.tokenField; shots/P/23-code-requested-t0.png vs 25-code-entered.png | AXValue empty, accessibilityLabel "Sign-in code"; six digit boxes or a clearly distinct filled state; a placeholder that isn't a… |
+| `P-35` | **closed** · W1 L1-D · `b8413ee29` | T0/major | S | In dark mode the primary CTA is pure black on a near-black ground | Welcome home, appearance dark; shots/P/39-welcome-dark.png | Switch the Apple button style with the colour scheme. |
 
 ### W1 · L1-E Copy — 18 findings
 
 _count: 18 · blocker 0 · major 16 · minor 2 · polish 0_
 
-| id | tier/sev | eff | title | where | fix |
-|---|---|---|---|---|---|
-| `A-52` | T0/major | S | The Companion promises a designer and a home to an anonymous guest | Companion menu (guest); shots/A/21-companion-menu-open.png | Branch the Companion copy on auth state; for guests say what signing in would unlock rather than asserting a relationship. |
-| `A-60` | T0/major | S | The tour calls the destination "Your profile"; the button it points at says "Studio" | Coach tour step 2; shots/A/26-tour-step2.png | Pick one name for the client's own space and use it in the pill, the tour, the section header and the Companion menu. |
-| `A-79` | T0/major | S | The guest→account migration sheet names data the user does not have | Immediately after sign-in; shots/A/42-signed-in-home.png | Compose the sentence from actual counts ("Keep the 1 piece you saved on this phone?"), and omit the sheet entirely when there is… |
-| `A3-28` | T0/major | M | 'client', 'homeowner' and 'designer' are three words for two kinds of person in profiles.role | public.profiles.role; handle_new_user(); AuthService.sendMagicLink / signUp | Pick one word, migrate the rows, and flip handle_new_user's COALESCE fallback to that word so an unlabelled signup is never a des… |
-| `B-20` | T0/major | S | Room CTA is built as 'for the ' + room name, producing ungrammatical copy | Room detail primary button — shots/B/43-room-detail.png | Drop the article: 'Browse pieces for Audit Room B', or use a fixed label 'Browse pieces for this room'. |
-| `B-23` | T0/major | S | 'Your portrait stays on this device' but the quiz answers are POSTed to the backend | Taste Portrait footnote — shots/B/11-quiz-done-a.png, 32-portrait-signedin.png | Either stop sending guest answers, or reword to what is true ('Your portrait is yours — reset it any time in Settings'). |
-| `C-22` ⇢L1-C | T0/major | M | "Your studio", "Your profile" and the "Studio" pill all land on one screen, and the promised "Portal" does no… | shots/C/16-dark-studio.png vs 27-dark-profile.png (identical) | Split profile from studio, or relabel the Companion rows to match the single destination and drop the Portal promise. |
-| `C-30` | T0/major | S | "1 ROOMS" — pluralisation bug on the profile stat (the accessibility label gets it right) | Studio/profile hub; shots/C/16-dark-studio.png | Use a String.LocalizedStringResource with an inflection rule for the visible label too. |
-| `C-38` | T0/major | S | Identical truncated boilerplate on every browse card: "Selected from Patina's room-aware edit for Gu…" | Room-scoped browse grid; shots/C/11-dark-browse.png | Delete the line (as the Pieces tab already does) or move it to a one-time section note. |
-| `C4-08` | T0/major | S | AR "Save View" toast prints a Swift enum's default description, module name and all | apps/mobile/Patina/Patina/Features/ARPlacement/Views/ARPlacementView.swift:111-113 | Map to app copy in the view model; and make RoomsAPIError conform to LocalizedError so no other caller can repeat it. |
-| `C4-09` | T0/major | M | The design-request send screen prints storage / Postgres error strings to a homeowner | apps/mobile/Patina/Patina/Features/RoomScan/Shared/Components/ScanUploadProgressView.swift:57-… | A ScanUploadFailureCopy mapping upload phase → app sentence; lastError becomes a diagnostic column no view reads. |
-| `C5-06` | T0/major | S | Today's headline says 'Good night.' for 8 hours a day, 'Early morning.' at dawn and 'Good day.' at midday | apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/TimeOfDay.swift:26-41, rendered as… | night → 'Good evening.', day → 'Good afternoon.', dawn → 'Good morning.'; drop the terminal periods. |
-| `C5-09` | T0/major | M | Third noun collision — Piece / Product / Item — plus a SwiftUI class name printed as a button label | ItemActionMenu.swift:31 ('View Product Detail'); PatinaDesignKit/.../PatinaEmptyState.swift:66… | 'piece' everywhere in consumer copy (the brand's and the tab's word); ItemActionMenu row → 'See the piece' (the phrase OrderPlace… |
-| `C5-10` | T0/major | M | Title Case and sentence case collide inside single screens (Settings, the auth sheet, onboarding) | SettingsView.swift:81 'Sign Out' vs :89 'Delete account' (adjacent rows; same pair AccountView… | Adopt sentence case except proper nouns (what the newer copy already does) and sweep. Settings and the auth sheet are the highest… |
-| `C5-11` | T0/major | M | Four spellings of 'Something went wrong', and a raw interpolated error on the design-request send screen | PatinaErrorState.swift:41,49; CompanionAPIModels.swift:291; ScanReviewView.swift:128; DesignRe… | One PatinaErrorState sentence; delete the two raw arms; rewrite .submissionFailed as "We couldn't send your request. Nothing was… |
-| `C5-16` ⇢L1-B | T0/major | S | Room rows still print the literal 'UNKNOWN MAKER' that the Browse grid was fixed (SP-10) to suppress | Features/Rooms/Components/RoomItemRow.swift:43 and :89; Features/Rooms/Views/ItemActionMenu.sw… | Give SavedItem the same resolvedMakerName guard and drop the line when nil. |
-| `A-06` | T0/minor | S | Apostrophes are mixed within one three-page carousel | Patina/Features/Onboarding/Views/OnboardingFlowView.swift:31,37,57,58 | Sweep every user-facing string for U+2019; add a lint rule. |
-| `C5-20` | T0/minor | S | 'Start Your Journey' and 'Join the furniture discovery journey' are brand-voice violations | OnboardingFlowView.swift:32; AuthenticationView.swift:134 | "Let's begin" (already page 3's CTA) and a signup subtitle that says what an account buys. |
+_W1 close (2026-09-03): closed 4 · open 14_
+
+| id | W1 status | tier/sev | eff | title | where | fix |
+|---|---|---|---|---|---|---|
+| `A-52` | **open** | T0/major | S | The Companion promises a designer and a home to an anonymous guest | Companion menu (guest); shots/A/21-companion-menu-open.png | Branch the Companion copy on auth state; for guests say what signing in would unlock rather than asserting a relationship. |
+| `A-60` | **open** | T0/major | S | The tour calls the destination "Your profile"; the button it points at says "Studio" | Coach tour step 2; shots/A/26-tour-step2.png | Pick one name for the client's own space and use it in the pill, the tour, the section header and the Companion menu. |
+| `A-79` | **open** | T0/major | S | The guest→account migration sheet names data the user does not have | Immediately after sign-in; shots/A/42-signed-in-home.png | Compose the sentence from actual counts ("Keep the 1 piece you saved on this phone?"), and omit the sheet entirely when there is… |
+| `A3-28` | **open** | T0/major | M | 'client', 'homeowner' and 'designer' are three words for two kinds of person in profiles.role | public.profiles.role; handle_new_user(); AuthService.sendMagicLink / signUp | Pick one word, migrate the rows, and flip handle_new_user's COALESCE fallback to that word so an unlabelled signup is never a des… |
+| `B-20` | **open** | T0/major | S | Room CTA is built as 'for the ' + room name, producing ungrammatical copy | Room detail primary button — shots/B/43-room-detail.png | Drop the article: 'Browse pieces for Audit Room B', or use a fixed label 'Browse pieces for this room'. |
+| `B-23` | **open** | T0/major | S | 'Your portrait stays on this device' but the quiz answers are POSTed to the backend | Taste Portrait footnote — shots/B/11-quiz-done-a.png, 32-portrait-signedin.png | Either stop sending guest answers, or reword to what is true ('Your portrait is yours — reset it any time in Settings'). |
+| `C-22` ⇢L1-C | **open** | T0/major | M | "Your studio", "Your profile" and the "Studio" pill all land on one screen, and the promised "Portal" does no… | shots/C/16-dark-studio.png vs 27-dark-profile.png (identical) | Split profile from studio, or relabel the Companion rows to match the single destination and drop the Portal promise. |
+| `C-30` | **closed** · W1 L1-E · `5657ab492` | T0/major | S | "1 ROOMS" — pluralisation bug on the profile stat (the accessibility label gets it right) | Studio/profile hub; shots/C/16-dark-studio.png | Use a String.LocalizedStringResource with an inflection rule for the visible label too. |
+| `C-38` | **open** | T0/major | S | Identical truncated boilerplate on every browse card: "Selected from Patina's room-aware edit for Gu…" | Room-scoped browse grid; shots/C/11-dark-browse.png | Delete the line (as the Pieces tab already does) or move it to a one-time section note. |
+| `C4-08` | **open** | T0/major | S | AR "Save View" toast prints a Swift enum's default description, module name and all | apps/mobile/Patina/Patina/Features/ARPlacement/Views/ARPlacementView.swift:111-113 | Map to app copy in the view model; and make RoomsAPIError conform to LocalizedError so no other caller can repeat it. |
+| `C4-09` | **open** | T0/major | M | The design-request send screen prints storage / Postgres error strings to a homeowner | apps/mobile/Patina/Patina/Features/RoomScan/Shared/Components/ScanUploadProgressView.swift:57-… | A ScanUploadFailureCopy mapping upload phase → app sentence; lastError becomes a diagnostic column no view reads. |
+| `C5-06` | **open** | T0/major | S | Today's headline says 'Good night.' for 8 hours a day, 'Early morning.' at dawn and 'Good day.' at midday | apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/TimeOfDay.swift:26-41, rendered as… | night → 'Good evening.', day → 'Good afternoon.', dawn → 'Good morning.'; drop the terminal periods. |
+| `C5-09` | **closed** · W1 L1-E · `05e1ffaaa` | T0/major | M | Third noun collision — Piece / Product / Item — plus a SwiftUI class name printed as a button label | ItemActionMenu.swift:31 ('View Product Detail'); PatinaDesignKit/.../PatinaEmptyState.swift:66… | 'piece' everywhere in consumer copy (the brand's and the tab's word); ItemActionMenu row → 'See the piece' (the phrase OrderPlace… |
+| `C5-10` | **closed** · W1 L1-E · `05e1ffaaa` | T0/major | M | Title Case and sentence case collide inside single screens (Settings, the auth sheet, onboarding) | SettingsView.swift:81 'Sign Out' vs :89 'Delete account' (adjacent rows; same pair AccountView… | Adopt sentence case except proper nouns (what the newer copy already does) and sweep. Settings and the auth sheet are the highest… |
+| `C5-11` | **open** | T0/major | M | Four spellings of 'Something went wrong', and a raw interpolated error on the design-request send screen | PatinaErrorState.swift:41,49; CompanionAPIModels.swift:291; ScanReviewView.swift:128; DesignRe… | One PatinaErrorState sentence; delete the two raw arms; rewrite .submissionFailed as "We couldn't send your request. Nothing was… |
+| `C5-16` ⇢L1-B | **open** | T0/major | S | Room rows still print the literal 'UNKNOWN MAKER' that the Browse grid was fixed (SP-10) to suppress | Features/Rooms/Components/RoomItemRow.swift:43 and :89; Features/Rooms/Views/ItemActionMenu.sw… | Give SavedItem the same resolvedMakerName guard and drop the line when nil. |
+| `A-06` | **closed** · W1 L1-E · `08397a7d2` | T0/minor | S | Apostrophes are mixed within one three-page carousel | Patina/Features/Onboarding/Views/OnboardingFlowView.swift:31,37,57,58 | Sweep every user-facing string for U+2019; add a lint rule. |
+| `C5-20` | **open** | T0/minor | S | 'Start Your Journey' and 'Join the furniture discovery journey' are brand-voice violations | OnboardingFlowView.swift:32; AuthenticationView.swift:134 | "Let's begin" (already page 3's CTA) and a signup subtitle that says what an account buys. |
 
 ### W1 · L1-F Notifications, messaging, widget, deep links — 17 findings
 
 _count: 17 · blocker 1 · major 16 · minor 0 · polish 0_
 
-| id | tier/sev | eff | title | where | fix |
-|---|---|---|---|---|---|
-| `L07-02` ⇢L1-C | T0/blocker | S | On the four-tab root the message composer is drawn under the tab bar and cannot be tapped — a round-one clien… | apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:58 (composer as the… | Apply the existing seam: .padding(.bottom, CompanionHearthMetrics.pinnedFooterClearance(houseFirst: FeatureFlags.shared.isOn(.hou… |
-| `A-63` | T0/major | S | The notifications empty-state "Sign in" button is a circle narrower than its own label | Notifications (guest); shots/A/29-guest-bell.png | Use a capsule with intrinsic width and horizontal padding instead of a fixed square frame + Circle clip. |
-| `A-80` ⇢L1-B | T0/major | S | The notifications screen shows its EMPTY state while data is still loading | Notifications, immediately after sign-in; shots/A/43-after-migrate.png vs 45 | Add a loading state (skeleton rows) and only fall through to the empty state once the fetch has resolved with zero rows. |
-| `B-16` | T0/major | S | The widget App-Group snapshot is not cleared on sign-out and carries no account identifier | group.cloud.patina.app container — research/B.md §Step 12 | Write an owner user id into the snapshot, and truncate/replace both files with a signed-out placeholder on sign-out, then WidgetC… |
-| `C-13` | T0/major | S | The message thread has no header at all — the tester is never told who they are messaging | shots/C/26-dark-messages.png; full describe_screen | Add a conversation header with the designer's name, avatar and project. |
-| `C-14` | T0/major | S | The message thread's only content is a system log line, "Project conversation opened." | shots/C/26-dark-messages.png | Replace with a real empty state ("Say hello to Leah — she usually replies within a day") and suppress the audit line. |
-| `C2-02` ⇢L1-B | T0/major | S | Universal link arriving before configure(coordinator:) is dropped, yet reported handled | apps/mobile/Patina/Patina/App/DeepLinking/DeepLinkHandler.swift:64-71 (vs the correct pattern… | Use the same stash-or-open pair the widget branch uses: when coordinator == nil, set pendingRoute = route. |
-| `C2-07` | T0/major | S | The bell's unread badge stays stale after reading the feed | apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:28,106-108,258; Patina/Featu… | Source the unread count from one shared @Observable service (BadgeCountService is already refreshed on the same triggers), or rel… |
-| `C2-09` | T0/major | S | "Turn on notifications" is a silent no-op when authorization was already denied | apps/mobile/Patina/Patina/Services/API/PushTokenService.swift:66-77; Patina/Features/Notificat… | Read notificationSettings().authorizationStatus before asking; on .denied print the equivalent of InvoiceReminder.deniedLine and… |
-| `C2-21` ⇢L1-A | T0/major | M | A deep link tapped while signed out is queued invisibly, only drains at .main, and holds one URL | apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:94-97,243-246; Patina/App/Deep… | Queue for every non-.main phase, acknowledge it on the auth screen in one line, and hold a small FIFO rather than one slot. |
-| `C4-04` | T0/major | S | A failed message send in a conversation is completely silent | apps/mobile/Patina/Patina/Features/Messaging/ViewModels/MessagingViewModel.swift:246-258 + Fea… | Render viewModel.error above the composer regardless of messages.isEmpty, with a Retry that re-sends draft; better, an unsent bub… |
-| `GAP7B-02` ⇢L0.6 | T0/major | M | With house-widget OFF — the TestFlight first-launch condition — the PLACED widget stays on "Open Patina to se… | apps/mobile/Patina/Patina/Core/State/FeatureFlags.swift (mirror); WidgetSnapshot.flagOn; Patin… | Ship the widget ungated for the TestFlight round (D5), or hide it from the gallery while the flag is off, or make the no-data car… |
-| `GAP7B-03` | T0/major | S | Every row title on the small widget truncates mid-word | PatinaWidget/HouseWidgetViews.swift (small family row titles) | Two-line titles with lineLimit(2) + minimumScaleFactor, or a smaller type ramp for the title. Adding .systemMedium (GAP7B-07) als… |
-| `GAP7B-04` | T0/major | M | The whole small widget is one tap target pointed at the FIRST row, so tapping the second row opens the first… | apps/mobile/Patina/PatinaWidget/HouseWidgetViews.swift:38 — .widgetURL(PatinaWidgetLinks.link(… | Either draw one row on systemSmall with a real destination, or make the card’s tap target visibly the whole record ("See what mov… |
-| `GAP7B-05` | T0/major | M | The first widget row is a "story" with no route at all, so the widget’s only live tap target lands on Today | house-record.json (row story:a8b3f8a0-… has no route key); App/DeepLinking/DeepLinkHandler.rou… | Give story rows a destination, or exclude rows with no route from the widget projection. |
-| `GAP7B-09` ⇢L1-A +GAP7-03,GAP7-04 | T0/major | M | A link tapped while signed out is not queued, not acknowledged, and never arrives — not even after signing in | apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:94-97,243-246; App/DeepLinking… | Queue for every non-.main phase, hold a FIFO not one slot, persist the pending destination (App Group/UserDefaults with a short T… |
-| `L07-03` ⇢L1-B | T0/major | S | A message that fails to send says nothing for at least a minute, then silently reappears in the composer | apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:36 — `} else if let… | Drop the messages.isEmpty condition and render the send error inline above the composer. The invoice screen's failure banner is t… |
+_W1 close (2026-09-03): closed 12 · open 5_
+
+| id | W1 status | tier/sev | eff | title | where | fix |
+|---|---|---|---|---|---|---|
+| `L07-02` ⇢L1-C | **closed** · W1 L1-F · `52aa910ea` | T0/blocker | S | On the four-tab root the message composer is drawn under the tab bar and cannot be tapped — a round-one clien… | apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:58 (composer as the… | Apply the existing seam: .padding(.bottom, CompanionHearthMetrics.pinnedFooterClearance(houseFirst: FeatureFlags.shared.isOn(.hou… |
+| `A-63` | **open** | T0/major | S | The notifications empty-state "Sign in" button is a circle narrower than its own label | Notifications (guest); shots/A/29-guest-bell.png | Use a capsule with intrinsic width and horizontal padding instead of a fixed square frame + Circle clip. |
+| `A-80` ⇢L1-B | **open** | T0/major | S | The notifications screen shows its EMPTY state while data is still loading | Notifications, immediately after sign-in; shots/A/43-after-migrate.png vs 45 | Add a loading state (skeleton rows) and only fall through to the empty state once the fetch has resolved with zero rows. |
+| `B-16` | **closed** · W1 L1-F · `52aa910ea` | T0/major | S | The widget App-Group snapshot is not cleared on sign-out and carries no account identifier | group.cloud.patina.app container — research/B.md §Step 12 | Write an owner user id into the snapshot, and truncate/replace both files with a signed-out placeholder on sign-out, then WidgetC… |
+| `C-13` | **closed** · W1 L1-F · `52aa910ea` | T0/major | S | The message thread has no header at all — the tester is never told who they are messaging | shots/C/26-dark-messages.png; full describe_screen | Add a conversation header with the designer's name, avatar and project. |
+| `C-14` | **closed** · W1 L1-F · `52aa910ea` | T0/major | S | The message thread's only content is a system log line, "Project conversation opened." | shots/C/26-dark-messages.png | Replace with a real empty state ("Say hello to Leah — she usually replies within a day") and suppress the audit line. |
+| `C2-02` ⇢L1-B | **closed** · W1 L1-F · `52aa910ea` | T0/major | S | Universal link arriving before configure(coordinator:) is dropped, yet reported handled | apps/mobile/Patina/Patina/App/DeepLinking/DeepLinkHandler.swift:64-71 (vs the correct pattern… | Use the same stash-or-open pair the widget branch uses: when coordinator == nil, set pendingRoute = route. |
+| `C2-07` | **closed** · W1 L1-F · `fe0a63ee0` | T0/major | S | The bell's unread badge stays stale after reading the feed | apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:28,106-108,258; Patina/Featu… | Source the unread count from one shared @Observable service (BadgeCountService is already refreshed on the same triggers), or rel… |
+| `C2-09` | **closed** · W1 L1-F · `52aa910ea` | T0/major | S | "Turn on notifications" is a silent no-op when authorization was already denied | apps/mobile/Patina/Patina/Services/API/PushTokenService.swift:66-77; Patina/Features/Notificat… | Read notificationSettings().authorizationStatus before asking; on .denied print the equivalent of InvoiceReminder.deniedLine and… |
+| `C2-21` ⇢L1-A | **closed** · W1 L1-F · `4790ab8eb` | T0/major | M | A deep link tapped while signed out is queued invisibly, only drains at .main, and holds one URL | apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:94-97,243-246; Patina/App/Deep… | Queue for every non-.main phase, acknowledge it on the auth screen in one line, and hold a small FIFO rather than one slot. |
+| `C4-04` | **closed** · W1 L1-F · `52aa910ea` | T0/major | S | A failed message send in a conversation is completely silent | apps/mobile/Patina/Patina/Features/Messaging/ViewModels/MessagingViewModel.swift:246-258 + Fea… | Render viewModel.error above the composer regardless of messages.isEmpty, with a Retry that re-sends draft; better, an unsent bub… |
+| `GAP7B-02` ⇢L0.6 | **open** | T0/major | M | With house-widget OFF — the TestFlight first-launch condition — the PLACED widget stays on "Open Patina to se… | apps/mobile/Patina/Patina/Core/State/FeatureFlags.swift (mirror); WidgetSnapshot.flagOn; Patin… | Ship the widget ungated for the TestFlight round (D5), or hide it from the gallery while the flag is off, or make the no-data car… |
+| `GAP7B-03` | **open** | T0/major | S | Every row title on the small widget truncates mid-word | PatinaWidget/HouseWidgetViews.swift (small family row titles) | Two-line titles with lineLimit(2) + minimumScaleFactor, or a smaller type ramp for the title. Adding .systemMedium (GAP7B-07) als… |
+| `GAP7B-04` | **open** | T0/major | M | The whole small widget is one tap target pointed at the FIRST row, so tapping the second row opens the first… | apps/mobile/Patina/PatinaWidget/HouseWidgetViews.swift:38 — .widgetURL(PatinaWidgetLinks.link(… | Either draw one row on systemSmall with a real destination, or make the card’s tap target visibly the whole record ("See what mov… |
+| `GAP7B-05` | **closed** · W1 L1-F · `52aa910ea` | T0/major | M | The first widget row is a "story" with no route at all, so the widget’s only live tap target lands on Today | house-record.json (row story:a8b3f8a0-… has no route key); App/DeepLinking/DeepLinkHandler.rou… | Give story rows a destination, or exclude rows with no route from the widget projection. |
+| `GAP7B-09` ⇢L1-A +GAP7-03,GAP7-04 | **closed** · W1 L1-F · `4790ab8eb` | T0/major | M | A link tapped while signed out is not queued, not acknowledged, and never arrives — not even after signing in | apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:94-97,243-246; App/DeepLinking… | Queue for every non-.main phase, hold a FIFO not one slot, persist the pending destination (App Group/UserDefaults with a short T… |
+| `L07-03` ⇢L1-B | **closed** · W1 L1-F · `52aa910ea` | T0/major | S | A message that fails to send says nothing for at least a minute, then silently reappears in the composer | apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:36 — `} else if let… | Drop the messages.isEmpty condition and render the send error inline above the composer. The invoice screen's failure banner is t… |
 
 **W1 total: 137** — blocker 14, major 119, minor 4, polish 0.
 
+**W1 close: closed 97 · open 40.** Closed means *review-closed **and** walk-verified on glass* — a
+lane's own coverage table is not a close, and neither is a source pin. The forty open rows are not
+failures: thirty-six are rows no walk could reach (a quiz never entered, a LiDAR scan, a placed
+widget, a payload shape), two are rows the fix rounds re-opened (`L07-05`, `GAP3-18`), one is
+`L07-01`, whose migration is written and whose apply is Kody's, and one — the fourteen-row L1-E
+block — is a coverage gap the wave created by giving no walker an L1-E table. Every row carries its
+own reason in `findings.json` (`openReason`), and `build/waves/w1/wave-report.md` §5 groups them.
+
 ---
 
-## W2 — Build 2, the first tester week (T1) — 365 findings
+## W1 closure — the rows the walks filed (2026-09-03)
+
+The three acceptance walks and their four re-walks filed **49** new rows. **29 were fixed and
+walk-verified inside the wave** and carry `wave: "closed"` in `findings.json`; they are listed here
+because a closed row appears in no lane table. The other **20 are open and sit in the W2 lane tables
+above their lane's other rows** — `W1-A-02`, `W1-A-09`, `W1-A-10`, `W1-A-11`, `W1-B-03`, `W1-B-11`,
+`W1-B-14`, `W1-B-15`, `W1-B-16`, `W1-B-17`, `W1-B-18`, `W1-C-07`, `W1-C-10`, `W1-C-11`, `W1-C-13`,
+`W1-C-16`, `W1-C-17`, `W1-C-18`, `W1-C-19`, `W1-S-01`.
+
+Wave placement follows PROGRAM.md §7's rule as the closer received it — **blocker → a W1 follow-up,
+everything else → W2**. No open row is a blocker (the three blockers filed were `W1-B-02`, withdrawn;
+`W1-C-01`, closed by 00562; `W1-A-03`, a harness row, closed), so all twenty went to W2. Two of them,
+`W1-B-16` and `W1-B-17`, re-open W1 rows and are flagged as such in their `judgeNote`; seven polish
+rows carry `T2` inside W2, which is the first time W2 holds a T2 row — one word from Fable moves them
+to W3.
+
+| id | severity | lane | disposition | closed by |
+|---|---|---|---|---|
+| `W1-A-01` | minor | L1-E | **closed** — the push primer's straight apostrophe, and the two suites that pinned it | `ce9f602c5` |
+| `W1-A-03` | major | L2-G | **closed** — walker HID write path dead while reads stayed healthy; root-caused to a stale per-udid `idb shell` | walk A re-walk 2 |
+| `W1-A-04` | minor | L1-A | **closed** — the legal links open in-app; MobileSafari never launches | `ce9f602c5` |
+| `W1-A-05` | minor | L1-D | **closed** — the Apple button scales with the ramp (84 pt at AX-XL, 50 pt at large) | `ce9f602c5` |
+| `W1-A-06` | minor | L1-A | **closed** — a wrong code no longer claims to have expired | `ce9f602c5` |
+| `W1-A-07` | minor | L1-E | **closed** — the delete-account copy names the retention period | `ce9f602c5` |
+| `W1-A-08` | major | L2-G | **closed** — the local kong gateway, dead from a retired worktree's template mounts | walk A §0.1 |
+| `W1-B-01` | major | L1-B | **closed** — one keyboard Done bar per screen, never one per field | `ea4d9d321` |
+| `W1-B-02` | blocker | L1-F | **WITHDRAWN** — the sheets present on the first tap; the filing was the `W1-A-03` HID fault. `PresentedSheetHostTests` is kept | `1e9372fb2` |
+| `W1-B-04` | major | L1-B | **closed** — its two halves are `R-01` and `R-02` | `4790ab8eb` |
+| `W1-B-05` | major | L1-C | **closed** — `AXButton "About Today"` is back in the tree | `440a312ea` |
+| `W1-B-06` | minor | L1-B | **closed** — one provenance string on all four surfaces | `3dbef7c0b` |
+| `W1-B-07` | minor | L1-E | **closed** — the apostrophe sweep, with a lint that walks it | `08397a7d2` |
+| `W1-B-08` | minor | L1-C | **closed** — the secondary pair stacks at 44 pt | `a9cb4ceb4` |
+| `W1-B-09` | polish | L1-C | **closed** — both filed halves; the wrap it bought exposed `W1-B-18` | `7c119e563` |
+| `W1-B-10` | minor | L1-C | **closed** — `$18,500.00` on one line at AX-XL | `a9cb4ceb4` |
+| `W1-B-12` | minor | L1-C | **closed** — the `.auth` sheet has a grabber and a Done | `3dbef7c0b` |
+| `W1-B-13` | polish | L1-C | **closed** — the `◎` is an SF Symbol | `3dbef7c0b` |
+| `W1-C-01` | blocker | L0.2 | **closed** — `00562` gives the addressed user an UPDATE policy, narrowed to three columns. ⚠ not on Strata — runbook §L | `fe0a63ee0` |
+| `W1-C-02` | major | L1-F | **closed** — the notice renders and the queue drains, on the real sign-out path | `4790ab8eb` |
+| `W1-C-03` | major | L1-C | **closed** — the Companion headline wraps; this closed `C-06`'s last surface | `a9cb4ceb4` |
+| `W1-C-04` | major | L1-C | **closed** — the piece card grows with the ramp; the heart has its own lane | `a9cb4ceb4` |
+| `W1-C-05` | major | L1-C | **closed** — the purchase bar stacks above `.xxLarge` | `a9cb4ceb4` |
+| `W1-C-06` | minor | L1-E | **closed** — 282 curly against 2 comment-only straight, with an app-wide lint | `08397a7d2` |
+| `W1-C-08` | major | L1-C | **closed** — a denied authorization renders a door, not a switch reading ON | `3dbef7c0b` |
+| `W1-C-09` | minor | L1-A | **closed** — a clean sign-out says nothing; this freed the slot `C2-21` needed | `4790ab8eb` |
+| `W1-C-12` | minor | L1-F | **closed** — one spelling across AASA, the route table and the portal | `3dbef7c0b` |
+| `W1-C-14` | polish | L1-C | **closed** — `A-89`'s scroll-edge scrim | `440a312ea` |
+| `W1-C-15` | polish | L1-C | **closed** — the defer sheet's preview grows and scrolls | `a9cb4ceb4` |
+
+---
+
+## W2 — Build 2, the first tester week (T1) — 385 findings
 
 ### W2 · L0.1 Build & configuration (iOS, agent) — 9 findings
 
@@ -379,13 +467,14 @@ _count: 9 · blocker 0 · major 0 · minor 9 · polish 0_
 | `G-07` | T1/minor | S | Permission strings are split-brained: build settings silently override the tracked Info.plist, and the shippe… | apps/mobile/Patina/Patina/Info.plist vs the INFOPLIST_KEY_NS*UsageDescription build settings (… | Pick one source of truth — the build settings already win — delete the shadowed keys from Patina/Info.plist, and rewrite the came… |
 | `GAP5-05` | T1/minor | S | RECONCILIATION: UIStatusBarHidden = true is inert on BOTH idioms — A2-11's premise is wrong | shots/GAP5/07-ipad-statusbar-crop.png (iPad) vs 06-phone-statusbar-crop.png (top 160 px of the… | Delete INFOPLIST_KEY_UIStatusBarHidden from both targets; keep the one per-view call. It redirects A2-11: there is nothing to un-… |
 
-### W2 · L0.2 Production backend (Kody-run; agent prepares and probes) — 3 findings
+### W2 · L0.2 Production backend (Kody-run; agent prepares and probes) — 4 findings
 
-_count: 3 · blocker 0 · major 1 · minor 2 · polish 0_
+_count: 4 · blocker 0 · major 2 · minor 2 · polish 0_
 
 | id | tier/sev | eff | title | where | fix |
 |---|---|---|---|---|---|
 | `A3-14` ⇢L1-B | T1/major | S | fulfillment_orders / _order_items / _shipments have no client SELECT policy — a tester's real order shows not… | pg_policies for the three fulfillment_* tables | Ships with A3-03 (apply 00540). Until then order tracking silently renders empty for a real order — worse than an error. |
+| `W1-B-03` ⇢L1-C | T1/major | M | An Approval decision offers no approve control — the client cannot do the one thing Procurement is waiting on | public.apply_client_decision (it takes p_selected_option_id and raises insufficient_privilege… | Give a coordination_kind = 'signoff' decision a real approve path in the RPC (or a decision-level CTA the RPC accepts), then rend… |
 | `A3-10` ⇢L1-B | T1/minor | S | client_designer_roster view does not exist on Strata — the app's designer-of-record read 404s | Core/Network/RosterAPIClient.swift:40; GET /rest/v1/client_designer_roster | Ships with A3-03 (apply 00536). Until then the roster call should read as 'no designer yet' rather than an error. |
 | `A3-19` | T1/minor | S | vendors is anon-readable including internal trade notes | GET /rest/v1/vendors?select=* with the shipped anon key | Narrow the anon SELECT policy to the three columns the embed needs, or move the embed behind a SECURITY DEFINER view that project… |
 
@@ -406,9 +495,9 @@ _count: 1 · blocker 0 · major 1 · minor 0 · polish 0_
 |---|---|---|---|---|---|
 | `GAP8-05` ⇢L1-C | T1/major | S | The first sentence the app says on production is false, and it comes from Sanity | Sanity kv3qrinl/production helpContent _id cb2047b7-8ea6-4b6b-9f4d-12e2e66b9c54 (surfaceKey io… | Publish artifacts/ios-daily-return-2026-08-26/waves/w3/n3-sanity-copy.md to Sanity before the TestFlight round; it is written and… |
 
-### W2 · L1-A Welcome, sign-in, onboarding — 41 findings
+### W2 · L1-A Welcome, sign-in, onboarding — 45 findings
 
-_count: 41 · blocker 0 · major 18 · minor 21 · polish 2_
+_count: 45 · blocker 0 · major 18 · minor 23 · polish 4_
 
 | id | tier/sev | eff | title | where | fix |
 |---|---|---|---|---|---|
@@ -451,12 +540,16 @@ _count: 41 · blocker 0 · major 18 · minor 21 · polish 2_
 | `GAP4-33` | T1/minor | M | "Retake Style Quiz" opens a THIRD style-question surface, with the onboarding taxonomy | ProfileView.swift:154-156 (navigate to .styleQuiz) → ContentView.swift:324 (StyleQuizView); sh… | Collapse the three surfaces into one quiz component with one taxonomy and one result store. |
 | `P-03` | T1/minor | S | Terms and Privacy leave the app into full Safari and land on a cookie-consent banner | auth.welcome.termsLink; shots/P/02-terms-link.png, 03-terms-safari-cookiebanner.png | SFSafariViewController (or a native reader) plus an app-scoped legal route with no site chrome and no cookie banner. |
 | `P-27` | T1/minor | S | "Sign in with Apple" is offered three times across the auth surface and outweighs each sheet's own primary ac… | shots/P/01-welcome-cold.png, 19-email-form.png, 31-password-sheet.png | Drop the Apple button from the sub-sheets, or demote it. |
+| `W1-A-11` | T1/minor | S | The consent sentence loses its 'and' at accessibility text sizes | Patina/Features/Authentication/Views/AuthScreenView.swift:305-315 (legalFooter) | Put the conjunction in the stacked branch too: VStack(spacing: 2) { termsLink; Text("and").foregroundStyle(PatinaColors.Text.mute… |
+| `W1-C-07` | T1/minor | S | A signed-in user is shown the signed-out onboarding intro, still offering 'I already have an account — Sign i… | Patina/Features/Onboarding — the intro carousel | Hide the sign-in affordance on the intro when AuthService already holds a session; the carousel is legitimate for a signed-in use… |
 | `C1-29` | T1/polish | S | Features/FirstLaunch's coordinator, state machine and metrics are dead code | Features/FirstLaunch/Coordinators/FirstLaunchCoordinator.swift; Models/FirstLaunchState.swift;… | Delete the three files; keep CameraPermissionView and OnboardingFunnel, which the host does use. |
 | `GAP3-26` | T1/polish | S | The style quiz states progress three ways in one card | style-quiz progress card · shots/GAP3/37-after-skip.png, 38-quiz-done.png, 39-quiz-q3.png | Keep the bar plus one label; drop the other two. |
+| `W1-A-09` | T2/polish | S | At AX-XL the consent line sits entirely below the fold, so the reader consents to text they cannot see | Welcome (AuthScreenView) at content_size accessibility-extra-large | Either let the AX-XL layout tighten the generous space above the button stack, or pin the consent line to the bottom of the viewp… |
+| `W1-A-10` | T2/polish | S | The marketing site's cookie-consent banner renders inside the in-app legal sheet | the in-app legal sheet (AuthScreenView.termsURL / privacyURL → SafariView) | Suppress the banner for the in-app reader — an ?embed=1 (or app-source) query param on termsURL/privacyURL that the legal pages h… |
 
-### W2 · L1-B Data, persistence, resilience — 52 findings
+### W2 · L1-B Data, persistence, resilience — 55 findings
 
-_count: 52 · blocker 0 · major 23 · minor 24 · polish 5_
+_count: 55 · blocker 0 · major 24 · minor 26 · polish 5_
 
 | id | tier/sev | eff | title | where | fix |
 |---|---|---|---|---|---|
@@ -483,6 +576,7 @@ _count: 52 · blocker 0 · major 23 · minor 24 · polish 5_
 | `GAP8-04` ⇢L0.2 | T1/major | M | Even with a catalogue, every product surface stays empty until 00533 or vendor rows land | Core/Network/ProductAPIClient.swift:75-92; Core/Models/ProductModel.swift:222-233; 00246:278 | Ship 00533 so brand reaches the client, or make vendor attachment a publish gate; and move the withheld-count log out of #if DEBU… |
 | `R-04` | T1/major | M | After the backend returns, Today settles into a self-contradictory state and stays there | Today; shots/R/19b-unpause-t45-notouch.png + describe_screen | Do not stamp the visit / rebuild the record from a partially failed refresh; treat a refresh with any failed leg as aborted and k… |
 | `R-09` | T1/major | M | Four failure surfaces disagree on how long to wait, what to draw and what to say | Today / Browse / Studio / Proposal; §1l of research/R.md | One shared network policy: a single timeout (≈10-12 s) applied to every client including the Supabase paths, and one PatinaErrorS… |
+| `W1-B-16` ⇢L1-C | T1/major | S | A cold-launch failure prints a retained Studio count as current, with no staleness line — L07-05's failure sh… | Patina/Features/Profile/ViewModels/StudioHubViewModel.swift (the staleness source) + the cold-… | Persist lastLoadedAt beside the retained counts in the floor and let StudioHub.StalenessLine render from it on a cold-launch fail… |
 | `A-02` | T1/minor | S | The splash wordmark never reaches full opacity before the splash is dismissed | SplashView.swift:44 vs AppCoordinator.swift:81; shots/A/01-cold-t2.png vs 01-cold-t12.png | Shorten the wordmark fade to ~0.8 s (or raise the gate) so the mark is fully drawn before the cross-fade begins. |
 | `A1-07` | T1/minor | S | A whole navigation-intent layer has no call sites (handleIntent / IntentDetector / startRoomScanFlow) | apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:578, :663, :679, :691; Feature… | Delete it, or wire the Companion chat rail it was written for. Worth doing early: it makes route-door greps lie — .yourSpaces and… |
 | `A2-17` ⇢L0.6 | T1/minor | S | AppTrackingTransparency is linked but never requested; the opt-out branch is unreachable | Patina/Services/Analytics/PostHogService.swift:11, 70-76 | Delete the import and the block. Declare NSPrivacyTracking=false in the new privacy manifest (A2-02) and answer the ASC nutrition… |
@@ -507,15 +601,17 @@ _count: 52 · blocker 0 · major 23 · minor 24 · polish 5_
 | `R-19` | T1/minor | S | Two E-level SettingsService errors are logged on every launch against a healthy backend | App log 2026-09-01 17:21:38.901 and .907 | Use `.maybeSingle()` (or treat zero rows as a normal empty result) and log at debug, not error, when the row legitimately does no… |
 | `R-20` | T1/minor | S | Today's error line is laid out as two loose links rather than a message with an action | Today foot; shots/R/17b-cold-t22.png, 18-cold-today-bottom.png | Reuse PatinaErrorState (or a compact inline variant of it) so all four error surfaces share one composition. |
 | `R-22` | T1/minor | S | No way to cancel a long wait, and each filter chip restarts one | Browse; shots/R/07a-browse-t1.png, 08a-retry-t20-spinner.png | Disable or visually quiet the chips while a fetch is in flight, cancel the in-flight task when a new filter is chosen, and shorte… |
+| `W1-C-11` | T1/minor | M | A cold-launch request burst intermittently stalls after the socket connects, and every request then times out… | Patina/Core/Network — URLSession usage across the API clients | Instrument and bound the cold-launch burst (it fires ~16 requests), and give the retry a path that does not depend on the stalled… |
+| `W1-C-16` | T1/minor | S | A decision the client cannot read renders as a network error whose retry can never succeed | Patina/Features/Decisions — DecisionDetailViewModel / DecisionDetailView | Distinguish 'no row' from 'the fetch failed': decision == nil after a SUCCESSFUL response is 'this isn’t available any more', wit… |
 | `A1-09` | T1/polish | S | AppCoordinator.hasExistingRooms() is a self-described placeholder | apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:282-286 | Delete it, or point it at RoomStore. |
 | `C1-33` | T1/polish | S | The phase change is animated twice, with two different curves | ContentView.swift:81; App/Coordinators/AppCoordinator.swift:227-229 | Keep the coordinator's withAnimation and drop the view modifier (or the reverse), once. |
 | `GAP2-07` | T1/polish | M | No tracking number, carrier or link on a Shipped order, though the row promises "Where your pieces are" | shots/GAP2/38-order-detail.png; OrderDetailAction.track(label:url:) exists in OrderDetailView.… | When no tracking URL exists, say so in one line rather than leaving the promise unanswered. |
 | `GAP2-17` | T1/polish | S | One slow download disables every row in the documents list | DocumentListView.swift:112-119 | Disable only the downloading row and give it a visible "Preparing…" label. |
 | `GAP4-27` | T1/polish | S | The fallback form resets to the developer defaults on every visit, making duplicate rooms the default outcome | ScanFallbackEntryView.swift:27-31 (@State seeds); shots/GAP4/34-fallback-pass2.png | Keep the unit reset; drop the fabricated dimensions and the pre-selected room type. |
 
-### W2 · L1-C Layout, Companion, Dynamic Type — 125 findings
+### W2 · L1-C Layout, Companion, Dynamic Type — 135 findings
 
-_count: 125 · blocker 0 · major 57 · minor 59 · polish 9_
+_count: 135 · blocker 0 · major 58 · minor 63 · polish 14_
 
 | id | tier/sev | eff | title | where | fix |
 |---|---|---|---|---|---|
@@ -576,6 +672,7 @@ _count: 125 · blocker 0 · major 57 · minor 59 · polish 9_
 | `GAP8-01` ⇢L0.3 | T1/major | S | Today's only content block is a 57-day-old story, and it prints the date | supabase/migrations/00143_editorial_stories.sql:138-175; Features/Home/Views/DailyStoryCard.sw… | Put real dated rows in editorial_stories on Strata (or refresh published_at on a schedule); add the year to the chip when the dat… |
 | `GAP8-08` ⇢L0.3 | T1/major | L | Signed-in Today on production is the guest home minus one line | Features/Home/Models/TodayExperience.swift:273-297; Features/Home/Views/DailyRoomView.swift:24… | Design the discovering + empty-house + empty-catalogue home as a first-class state rather than the residue of four if statements;… |
 | `GAP8-09` ⇢L0.2 | T1/major | M | Studio on production is five empty boxes, and the one non-zero number on it is wrong | Features/Profile/Views/StudioHubView.swift:32,225-246; Features/Profile/ViewModels/StudioQueue… | Collapse the empty sections into one honest invitation until the client has a designer; make the Conversation badge count threads… |
+| `W1-B-18` | T1/major | S | At AX-XL the tour bubble clips its own content and offers no way through it | Patina/Features/Help/FirstLaunchTour.swift (the popover's 320 pt cap) | Let the popover grow (or scroll) with the type ramp instead of capping at 320 pt, and keep the action row pinned inside the bubbl… |
 | `A-38` | T1/minor | S | The "why this piece" line truncates mid-word and repeats verbatim across cards | Browse pieces; shots/A/14-home-t1.png | Shorten the template to two lines, make it card-specific, and reserve the same height on every card. |
 | `A-92` ⇢L1-E | T1/minor | S | "Remind me the day before it's due" has no visible control | Invoice detail; shots/A/49-invoice-detail.png | Make it a labelled Toggle with the explanatory line as its footer. |
 | `A1-02` | T1/minor | S | On the flags-off root (the TestFlight default) Your Spaces has no home door | apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:247-370; doors are Companion… | Give YourHouseRail a 'See all spaces' tail on the flags-off root (or ship round 1 with house-first on). Same one row also un-buri… |
@@ -635,6 +732,10 @@ _count: 125 · blocker 0 · major 57 · minor 59 · polish 9_
 | `GAP6-45` | T1/minor | S | The Companion offers 'Rescan room' on a room that was never scanned | shots/GAP6/GAP6.md step (b) — Companion in room context (capture in research/GAP6.md) | Say 'Scan this room' when there is no scan, and gate the saved-pieces row on a non-zero count. |
 | `L07-06` | T1/minor | M | Floating chrome is painted over live content on four Studio screens, including a money figure | apps/mobile/Patina/Patina/Design/Components/PatinaScreenChrome.swift:66-80 — the back chevron… | Give the chrome overlay an opaque backing that spans the leading gutter, or reserve it as a safeAreaInset rather than an overlay. |
 | `L07-09` | T1/minor | S | At accessibility-extra-large the sign sheet's own labels break mid-word and nothing actionable is on screen a… | apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalSignSheet.swift (the proposalSign.t… | Let the label column size to content (or stack label-over-value at accessibility sizes) and open the sheet at .large when dynamic… |
+| `W1-B-11` | T1/minor | S | 'MEMBER SINCE …' clips at both margins at AX-XL | Patina/Features/Profile/Views/StudioHubView.swift — the member-since caption | minimumScaleFactor + allowsTightening on the caption, or let it wrap above .accessibility1. |
+| `W1-C-10` ⇢L1-F | T1/minor | S | --resetonboarding cannot replay the first-launch tour: it clears UserDefaults while the tour's state lives in… | Patina/PatinaApp.swift:67-71 + the Supabase help-state adapter | Have --resetonboarding clear the profile's help_state too (or have the adapter honour the reset), not only the local keys. |
+| `W1-C-17` | T1/minor | S | The decision option row's CTA truncates to 'Choo…' at AX3XL | Patina/Features/Decisions/Views/DecisionDetailView.swift — the per-option primary | The PurchaseActionBar treatment W1-C-05 received: stack the price above a full-width CTA above .accessibility1, or two-line the l… |
+| `W1-S-01` | T1/minor | S | A-34 / C-11's unscored-piece guard is on an unmerged, unreviewed L1-C commit | first-flight/w1-l1c commit 46752b646 — the matchVerdict guards in ProductDetailView and Recomm… | Review 46752b646 and land it, or re-derive the guard on top of the integrated tip; either way take the two known issues off Match… |
 | `A-48` | T1/polish | S | A grey band sits under the product action bar in the home-indicator safe area | Product detail; shots/A/18-product-detail.png, 19 | Extend the bar's background with .ignoresSafeArea(edges: .bottom) and keep its content inside the safe area. |
 | `C5-35` | T1/polish | S | Tour step 3's fallback repeats its own heading in different casing and drops the terminal period | apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:293-296 | body: 'Projects, proposals, invoices and files, in one place.' |
 | `GAP2-11` | T1/polish | S | A search field sits above three project rows, and the cards carry nothing that distinguishes them | shots/GAP2/42-projects-list.png | Hide search below a threshold (>=8 projects); put current phase and next date on the card. |
@@ -644,6 +745,11 @@ _count: 125 · blocker 0 · major 57 · minor 59 · polish 9_
 | `GAP6-04` | T1/polish | S | The raised budget sheet leaves a 236 pt dead band above the keyboard | shots/GAP6/17-budget-numberpad-visible.png | Size the sheet to its content ('.presentationDetents([.height(...)])') so it never carries a third of a screen of nothing. |
 | `GAP6-32` | T1/polish | S | The note editor is a ~430 pt box for one sentence, and its placeholder misses the caret baseline | shots/GAP6/42-saved-note-sheet.png, 43-note-sheet-keyboard.png · Features/Collections/Views/Sa… | Cap the editor height and align the overlay to the editor's real text insets. |
 | `GAP6-44` | T1/polish | S | Segmented tabs are drawn over an empty state | shots/GAP6/25-cross-room-all-items.png | Hide the segmentation until there is something to segment; settle on one '+' treatment. |
+| `W1-B-14` | T2/polish | S | The tour's step-2 copy names a control its spotlight does not light | Patina/Features/Help/FirstLaunchTour.swift:302 — the step whose anchor is .todayRecord | Move the step to the + Add anchor, or rewrite the copy to describe the Record the spotlight actually names. |
+| `W1-B-15` | T2/polish | S | The tour scrim leaves the top safe area un-dimmed | Patina/Features/Help/FirstLaunchTour.swift — FirstLaunchTourScrim, applied as .overlay on cont… | .ignoresSafeArea() on the scrim so the dim reaches the screen edge. |
+| `W1-C-13` | T2/polish | S | First-launch tour step 2's popover is drawn over the tab bar | Patina/Features/Help/FirstLaunchTour.swift — step 2 popover placement | Offset the popover above the tab bar's safe area so the bar it is teaching stays visible. |
+| `W1-C-18` | T2/polish | S | The Browse header truncates rather than wrapping at AX3XL | Patina/Features/Recommendations/Views/RecommendationsView.swift — the screen header | lineLimit + minimumScaleFactor on the title — the same pairing C-06 got; let the Saved value wrap or drop to its own line. |
+| `W1-C-19` | T2/polish | S | Completing the tour does not record 'completed' — a finished tour is stored identically to one that auto-star… | Patina/Features/Help/FirstLaunchTour.swift — the tour's persistence | Write completed: true + completedAt on complete() and let isResolved carry the suppression, so launched can go back to meaning 'a… |
 
 ### W2 · L1-D Tokens, dark mode, contrast, iconography — 51 findings
 
@@ -758,9 +864,9 @@ _count: 48 · blocker 0 · major 6 · minor 31 · polish 11_
 | `GAP6-43` | T1/polish | S | 'You added the Heirloom Oak Dining Table on Tuesday' for something added fifteen seconds ago | shots/GAP6/37-room-with-item.png | Relative phrasing inside the last day ('just now', 'today'), weekday only beyond it. |
 | `R-21` | T1/polish | S | "5 things need your eye" is printed twice on the same Studio screen | Studio; shots/R/11a-studio-t2.png | Suppress the companion caption on any screen whose own header already carries the same count. |
 
-### W2 · L1-F Notifications, messaging, widget, deep links — 27 findings
+### W2 · L1-F Notifications, messaging, widget, deep links — 28 findings
 
-_count: 27 · blocker 0 · major 5 · minor 18 · polish 4_
+_count: 28 · blocker 0 · major 6 · minor 18 · polish 4_
 
 | id | tier/sev | eff | title | where | fix |
 |---|---|---|---|---|---|
@@ -769,6 +875,7 @@ _count: 27 · blocker 0 · major 5 · minor 18 · polish 4_
 | `C4-15` | T1/major | S | "Message your designer" is a silent no-op on failure in three places — twice on a failure banner where it's t… | apps/mobile/Patina/Patina/Features/Home/ViewModels/DailyRoomViewModel.swift:445-455 + Features… | Reuse the openThreadFailed state at all three call sites; flip the button label instead of doing nothing. |
 | `GAP7-02` +GAP7B-10 | T1/major | M | A universal link tapped while the app is not running is silently dropped about a third of the time | apps/mobile/Patina/Patina/App/DeepLinking/DeepLinkHandler.swift:62-69; shots/GAP7/32-launchque… | Give the universal-link branch the same pendingRoute stash and replay it from configure(coordinator:). |
 | `GAP8-06` ⇢L0.2 | T1/major | S | tester@patina.cloud's bell shows "New pieces for you" with an empty body and a dead tap | Core/Network/NotificationsAPIClient.swift:127-161,224-233; App/DeepLinking/NotificationRouter.… | Read metadata.headline/message alongside title/body; give welcome_series its own bucket instead of falling through to .newRecomme… |
+| `W1-B-17` ⇢L1-B | T1/major | M | After sign-out the guest room list still shows the previous account's room — GAP3-18's failure shape, re-open… | the auth seam changed by 4790ab8eb (Patina/Services/Auth/AuthService.swift settledUserId seedi… | Treat A → nil as a scope change too: reset the local store on sign-out, or scope YourSpacesView's room query to the signed-in own… |
 | `A-105` | T1/minor | M | patina:// deep links do nothing — no navigation, no error | xcrun simctl openurl; shots/A/61,62,66,67 | Wire onOpenURL to the router, dismiss any presented sheet before routing, and show a designed "we couldn't find that" state for u… |
 | `A-86` | T1/minor | S | Notification rows have inconsistent anatomy and the unread tint does not share a margin | Notifications; shots/A/45-bell-signedin.png | Give every row the same timestamp slot, and inset the tint to the same margin as the separators (or bleed both). |
 | `A1-13` | T1/minor | S | Notifications lands on a different tab depending on how it was opened | apps/mobile/Patina/Patina/Features/Navigation/RouteTabTable.swift:55-77 vs App/Coordinators/Ap… | Either route the bell through openExternal, or accept and document it. Only bites once house-first is on. |
@@ -792,12 +899,13 @@ _count: 27 · blocker 0 · major 5 · minor 18 · polish 4_
 | `GAP1-16` | T1/polish | S | Notification rows mix '12h ago' with rows carrying no timestamp at all | Notifications sheet; shots/GAP1/04-decision-list.png | Give every row the same time treatment, or drop it from all of them and lean on the section header. |
 | `GAP7-05` | T1/polish | S | A widget row whose subject has since been resolved lands on Today with no explanation | apps/mobile/Patina/Patina/App/DeepLinking/DeepLinkHandler.swift route(forWidgetLink:in:); shot… | Carry the row's route token in the widget payload rather than only its id, or say one line when the fallback fires. |
 
-### W2 · L2-G Tests & gates — 6 findings
+### W2 · L2-G Tests & gates — 7 findings
 
-_count: 6 · blocker 0 · major 0 · minor 5 · polish 1_
+_count: 7 · blocker 0 · major 1 · minor 5 · polish 1_
 
 | id | tier/sev | eff | title | where | fix |
 |---|---|---|---|---|---|
+| `W1-A-02` | T1/major | M | All three W1 walkers share one local database and one client@patina.dev account; peer data appeared on a walk… | shared local Supabase 127.0.0.1:54321 / :54322; account client@patina.dev | Give each walker its own account for the wave, or serialise the signed-in legs. Until then treat every W1 room-count, roster, bad… |
 | `A4-15` | T1/minor | M | A4-15: the in-process account-switch seam is unit-verified only, never walked | artifacts/ios-daily-return-2026-08-26/waves/w6/integration.md §9.7 item 1; waves/w5/walk.md:34… | One scripted account-switch walk (sign out, sign in as the second account, send from a piece) on a simulator with healthy HID del… |
 | `C7-16` | T1/minor | L | 236 unique compiler warnings in the app target, 112 of them 'error in the Swift 6 language mode' | artifacts/ios-testflight-polish-2026-09-01/.build/xcodebuild.log (BUILD SUCCEEDED, 0 errors) | Triage the 112 Swift-6 errors before the language-mode bump; fix the five real concurrency ones now; restore .swiftlint.yml reada… |
 | `G-03` | T1/minor | M | XCUITest suite is dead: 7/11 fail against a first-run flow that no longer exists; the 4 passes are Xcode temp… | apps/mobile/Patina/PatinaUITests/FirstLaunchUITests.swift; PatinaUITests/Helpers/FirstLaunchTe… | Either rewrite the suite against the live first-run identifiers (auth.welcome.guestButton, auth.form.emailField, companion.intro.… |
@@ -805,7 +913,7 @@ _count: 6 · blocker 0 · major 0 · minor 5 · polish 1_
 | `G-11` | T1/minor | M | `swiftlint lint` can never exit 0: 421 error-severity violations, 396 of them snake_case DTO keys | research/G-lint.json; heaviest in Patina/Core/Network/*APIClient.swift and Patina/Services/Syn… | Add identifier_name `allowed_symbols` or an excluded path glob for the DTO / API-client files (or move wire shapes behind explici… |
 | `GAP1-18` | T1/polish | S | Universal link cold-start relaunches the app without launch arguments (tooling caveat for other lanes) | xcrun simctl openurl https://client.patina.cloud/decisions/<id>; shots/GAP1/20-coldlink-decisi… | Any lane using openurl must relaunch with -DeploymentTarget local afterwards; note this in the steward doc. |
 
-**W2 total: 365** — blocker 0, major 130, minor 195, polish 40.
+**W2 total: 385** — blocker 0, major 135, minor 203, polish 47.
 
 ---
 

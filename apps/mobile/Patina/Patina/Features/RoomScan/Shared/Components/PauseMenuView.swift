@@ -36,7 +36,7 @@ struct PauseMenuView: View {
 
             VStack(spacing: 32) {
                 Text("Paused")
-                    .font(.custom("PlayfairDisplay-Regular", size: 28, relativeTo: .title))
+                    .font(PatinaTypography.h2)
                     .foregroundStyle(PatinaColors.offWhite)
 
                 VStack(spacing: 0) {
@@ -60,8 +60,8 @@ struct PauseMenuView: View {
             .padding(.horizontal, 32)
         }
         .alert("Discard this scan?", isPresented: $showLeaveConfirmation) {
-            Button("Discard Scan", role: .destructive, action: onLeave)
-            Button("Keep Scanning", role: .cancel) {}
+            Button("Discard scan", role: .destructive, action: onLeave)
+            Button("Keep scanning", role: .cancel) {}
         } message: {
             Text("Nothing from this walk will be saved.")
         }
@@ -77,12 +77,12 @@ struct PauseMenuView: View {
             VStack(spacing: 4) {
                 Text("Finish With What We Have")
                     .font(PatinaTypography.body)
-                    .foregroundStyle(PatinaColors.pearl.opacity(0.35))
+                    .foregroundStyle(PatinaColors.OnDark.muted.opacity(0.5))
                 Text("Walk a little more first")
                     .font(PatinaTypography.monoSmall)
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.pearl.opacity(0.55))
+                    .foregroundStyle(PatinaColors.OnDark.muted)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, 14)
@@ -93,7 +93,7 @@ struct PauseMenuView: View {
 
     private func menuRow(
         label: String,
-        foreground: Color = PatinaColors.pearl,
+        foreground: Color = PatinaColors.OnDark.primary,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {

@@ -27,6 +27,10 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     @State private var viewModel = DailyRoomViewModel()
     @State private var notificationsViewModel = NotificationsViewModel()
     @State private var expandedStory: DailyStory?
+    // C5-02: nothing sets this in round one — the `?` triggers are removed
+    // because zero `ios-app/*` help articles exist in production Sanity, so
+    // every door opened on an empty panel. The sheet wiring stays as a seam
+    // W2 restores the buttons to; it is deliberately unreachable, not live.
     @State private var isHelpPanelPresented = false
     @State private var resumableScan: ScanRecoveryService.RecoveryCandidate?
     /// SP-08 / Q7: the ask arrives here, once, the first time something
@@ -185,6 +189,24 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                 presentPushPrimerIfEarned()
             }
         }
+        // C4-12 / R-03 (L1-B's note): a root whose data is stale or whose
+        // load failed offered no way to ask again short of a relaunch.
+        // The same sequence, in the same order, as the `scenePhase` handler
+        // above — minus `presentPushPrimerIfEarned()`, which is deliberately
+        // absent: a pull-to-refresh is not the moment to put a permission
+        // prompt in front of someone.
+        .refreshable {
+            viewModel.load()
+            syncCompanionContext()
+            await badges.refresh()
+            await requestStatus.refresh()
+            syncCompanionContext()
+            await viewModel.refreshProjectRooms()
+            await viewModel.refreshRecord()
+            await ProfileService.shared.mirrorLastSeenIfNeeded()
+            await viewModel.refreshNewThisWeek()
+            await notificationsViewModel.load()
+        }
         .helpPanel(
             isPresented: $isHelpPanelPresented,
             surfaceKey: SurfaceKeys.IOSApp.Home.root
@@ -252,10 +274,20 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     dateString: viewModel.greetingDate.uppercased(),
                     greeting: TimeOfDay.current.greeting,
                     attentionCount: BadgeCountService.shared.attentionCount,
-                    onHelpTap: { isHelpPanelPresented = true },
+                    // Round one: no ios-app/* help articles exist, so the `?`
+                    // would open on an empty panel (C5-02). W2 restores it.
+                    onHelpTap: nil,
                     onStudioTap: { coordinator.navigate(to: .profile) },
                     onBellTap: { coordinator.navigate(to: .notifications) },
-                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count,
+                    // C2-07: one count, from the one service every surface
+                    // reads. Today's private view model still drives the push
+                    // primer (`presentPushPrimerIfEarned`); it no longer drives
+                    // the badge, because marking a row read in the feed mutated
+                    // a different instance and the bell went on badging 3.
+                    unreadCount: BadgeCountService.shared.unreadNotificationCount,
+                    // R-02: the same service says whether that zero is a fact
+                    // or an unanswered query.
+                    unreadCountIsKnown: BadgeCountService.shared.hasLoaded,
                     // M1's header is date, greeting and a bell. The pill is
                     // B-1's fallback door for the root without a bar; where
                     // the bar draws, the Studio tab IS the door.
@@ -266,6 +298,12 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     HouseRecordCard(
                         record: viewModel.record,
                         drawsEmpties: AuthService.shared.isAuthenticated && tier >= .engaged,
+                        // R-03: the Studio says when its numbers are from and
+                        // Today said nothing at all. Same rule, same words.
+                        stalenessLine: RecordStaleness.line(
+                            refreshFailed: badges.lastRefreshFailed,
+                            record: viewModel.record
+                        ),
                         onRow: openRecordRow,
                         onSeeAll: { half in
                             PostHogService.shared.capture("today_record_see_all_tapped", properties: [
@@ -367,9 +405,8 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                         .padding(.top, PatinaSpacing.md)
                         .accessibilityIdentifier("DailyRoomView.SignInLine")
                 }
-
-                Spacer().frame(height: 120)
             }
+            .companionBottomClearance()
         }
     }
 
@@ -441,7 +478,7 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
             HomeStoryRetryRow(onRetry: { viewModel.refreshTodaysStory() })
                 .accessibilityIdentifier("DailyRoomView.EditorialStory")
         } else {
-            ProgressView("Loading today's story…")
+            ProgressView("Loading today’s story…")
                 .font(PatinaTypography.caption)
                 .tint(PatinaColors.Text.interactive)
                 .frame(maxWidth: .infinity, minHeight: 120)

@@ -85,7 +85,9 @@
   "sourceLane": "A1",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A1-anatomy.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walked — DesignerConsultationView sits behind 'Get design help', which no walker opened (walk B §3.2)"
  },
  {
   "id": "A1-15",
@@ -894,7 +896,9 @@
   "sourceLane": "A3",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A3-prod.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the local catalogue has 16 published pieces, so the honest empty state never renders. EmptyStateCallSiteTests is the only L1-D bar the walk could not exercise. The data half is D2's (Leah's manifest)"
  },
  {
   "id": "A3-02",
@@ -1001,7 +1005,12 @@
   "sourceLane": "A3",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A3-prod.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: Welcome renders Apple + email only; no Google node in the tree (shots/w1-walk-a/01)"
  },
  {
   "id": "A3-07",
@@ -1022,7 +1031,9 @@
   "sourceLane": "A3",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A3-prod.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — Sign in with Apple cannot complete on a simulator with no Apple Account. R1 · D-02 is the proof (walk A §3)"
  },
  {
   "id": "A3-09",
@@ -1157,7 +1168,9 @@
   "sourceLane": "A3",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A3-prod.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — no allow-listed local account exists. Walk A probed the server leg: POST /functions/v1/test-account-login with a non-allow-listed pair → 403 invalid_credentials, so it fails closed; a successful redemption is unproven. R1 · D-04"
  },
  {
   "id": "A3-17",
@@ -1181,7 +1194,9 @@
   "alsoTouches": [
    "L0.3"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the editorial row on Today carries no read-time badge, but the story itself was never opened, so the '1 min read' claim path was not exercised"
  },
  {
   "id": "A3-18",
@@ -1205,7 +1220,9 @@
   "alsoTouches": [
    "L0.2"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walkable — the payload column shape is invisible from the UI (walk B §3.1)"
  },
  {
   "id": "A3-19",
@@ -1403,7 +1420,9 @@
   "sourceLane": "A3",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A3-prod.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — no walker carried an L1-E coverage table; this row is review-closed on source. See the wave report §6 (the L1-E coverage gap)"
  },
  {
   "id": "A4-02",
@@ -1610,7 +1629,12 @@
   "alsoTouches": [
    "L1-E"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "ce9f602c5",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A re-walk 2 on glass (51): the alert names the account, the server data, what is retained, and now 'indefinitely' — the duration W1-A-07 filed"
  },
  {
   "id": "A-88",
@@ -1654,7 +1678,12 @@
   "sourceLane": "A",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: appearance applies inside the sheet and survives System → Dark → Light with no stuck-dark sheet (11, 12, 13)"
  },
  {
   "id": "A-11",
@@ -1678,7 +1707,9 @@
   "alsoTouches": [
    "L1-A"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the style quiz was skipped at onboarding and not re-entered, so the quiz iconography was never on screen"
  },
  {
   "id": "A-105",
@@ -1722,7 +1753,9 @@
   "shots": [
    "shots/A/29-guest-bell.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the guest notifications empty state was never reached; every walk was signed in when the feed was open"
  },
  {
   "id": "A-90",
@@ -1745,7 +1778,12 @@
   "shots": [
    "shots/A/50-invoice-bottom.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: 'Pay $4,250.00' is ink on the cream primary at 14.24:1, was ~2.2:1 disabled tan (26)"
  },
  {
   "id": "A-102",
@@ -1794,7 +1832,12 @@
   "alsoTouches": [
    "L0.3"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: every product image 400s from local storage and every slot draws a designed placeholder — brand mark + 'Tap to retry' — distinguishing a failed load from a miss (24, 25, 41)"
  },
  {
   "id": "A-34",
@@ -1818,7 +1861,12 @@
   "alsoTouches": [
    "L1-D"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: every card and the detail show a qualitative band ('Good match', 'Worth a look') — no 40–46 % percentages anywhere (43, 76). ⚠ the unscored-piece guard is in an unmerged L1-C commit (46752b646) — filed as W1-S-01; walk C saw a linked piece read 'Not scored yet', so the label is honest without it"
  },
  {
   "id": "A-05",
@@ -1839,7 +1887,12 @@
   "sourceLane": "A",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: Skip from onboarding page 1 lands on the push primer, not the quiz; hint reads 'Skips the introduction and the style questions.' (14→15)"
  },
  {
   "id": "A-97",
@@ -1888,7 +1941,9 @@
   "alsoTouches": [
    "L1-B"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the feed resolved too fast to catch a loading frame. The same honesty pattern is present on the decision detail ('One moment…'), but that is not this row's screen"
  },
  {
   "id": "A-45",
@@ -1914,7 +1969,12 @@
   "alsoTouches": [
    "L1-D"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: product detail Back/Share/Save pinned in an opaque chrome band (76→77)"
  },
  {
   "id": "A-13",
@@ -1940,7 +2000,9 @@
   "alsoTouches": [
    "L1-E"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the quiz was never entered (Skip correctly skipped it, which is A-05 passing). Walk C re-walk 2 reached the carousel via --resetonboarding but skipped the quiz again"
  },
  {
   "id": "A-81",
@@ -1963,7 +2025,12 @@
   "shots": [
    "shots/A/44-home-signedin.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: every count names what it counts — bell AXValue '3 unread', Studio 'Awaiting you, 5 things awaiting you', Today's NEEDS YOU capped with 'See all'"
  },
  {
   "id": "A-64",
@@ -2057,7 +2124,12 @@
   "shots": [
    "shots/A/47-studio-scroll1.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "440a312ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: the scroll-edge scrim fades content out under the floating chevron on both of the finding's own screens — Room Settings (14) and the proposal detail's 'Timeline' (15)"
  },
  {
   "id": "A-60",
@@ -2080,7 +2152,9 @@
   "shots": [
    "shots/A/26-tour-step2.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the binary's tour copy already reads 'Your Studio' (deck L118) but Sanity's live content overrides it, and the CMS publish is Kody-run (runbook §F). No walker read the tour heading text"
  },
  {
   "id": "A-50",
@@ -2103,7 +2177,12 @@
   "shots": [
    "shots/A/20-companion-menu.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: the Companion's first-run coach mark is anchored ABOVE the menu; every row stays visible (11)"
  },
  {
   "id": "A-96",
@@ -2150,7 +2229,9 @@
   "shots": [
    "shots/A/42-signed-in-home.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the guest→account migration sheet was never reached"
  },
  {
   "id": "A-14",
@@ -2192,7 +2273,12 @@
   "sourceLane": "A",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: the Settings sheet carries a Done control top right (09); held in re-walk 2 (41)"
  },
  {
   "id": "A-52",
@@ -2215,7 +2301,9 @@
   "shots": [
    "shots/A/21-companion-menu-open.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the Companion was never opened in a guest session (walk B's guest legs read Today, Spaces and the Studio only)"
  },
  {
   "id": "A-73",
@@ -2239,7 +2327,12 @@
   "alsoTouches": [
    "L1-A"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C, measured: piece detail 14.24:1, invoice Pay 14.24:1, tour Next 13.53:1 (03, 25, 26, 92)"
  },
  {
   "id": "A-58",
@@ -2306,7 +2399,12 @@
   "shots": [
    "shots/A/01-cold-t12.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: two buttons, two native idioms (system Apple mark, SF Symbol envelope); no emoji, no bitmap G (01)"
  },
  {
   "id": "A-06",
@@ -2327,7 +2425,12 @@
   "sourceLane": "A",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/A.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-E",
+  "closedCommit": "08397a7d2",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C re-walk 2 counted the app target: 282 double-quoted literals carry U+2019 between letters and 2 carry U+0027, both of them trailing comments. AppApostropheLintTests.everyAppLiteralIsCurly walks every .swift under Patina/ with a >300-file floor. Walk B re-walk 2 read the pair that made the finding — 'Couldn’t load recommendations' beside 'Let’s try that again' in one viewport (37)"
  },
  {
   "id": "A-21",
@@ -2350,7 +2453,9 @@
   "shots": [
    "shots/A/11-quiz-q5.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — same: the quiz's question screens were never answered on any walk"
  },
  {
   "id": "A-01",
@@ -2696,7 +2801,12 @@
   "shots": [
    "shots/B/48-signedin-studio.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: after the delete the Studio reads 1 ROOM and YOUR ROOMS drops the deleted room; Whole Home 2 → 1 (22, 23, 26)"
  },
  {
   "id": "B-04",
@@ -2719,7 +2829,12 @@
   "shots": [
    "shots/B/47-after-delete.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: Delete pops straight to the Spaces list, no dead detail, no hedged not-found (22)"
  },
  {
   "id": "B-07",
@@ -2742,7 +2857,12 @@
   "shots": [
    "shots/B/17-guest-inline-help.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "440a312ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: both tooltips render every line inside the bubble with padding above and below (03 Today, 05 Spaces). Root cause was a popover measuring content with a nil proposal"
  },
  {
   "id": "B-09",
@@ -2765,7 +2885,12 @@
   "shots": [
    "shots/B/14-guest-today.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: tour Skip/Next are Patina ink + a charcoal pill, no system blue anywhere (83)"
  },
  {
   "id": "B-10",
@@ -2788,7 +2913,12 @@
   "shots": [
    "shots/B/14-guest-today.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "7c119e563",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 2: the cut-out now punches out the greeting header on step 1 — pixel probe at x 2.7 pt reads y 62→117 dimmed, y 117.3→246 UN-DIMMED, y 246→ dimmed (27); steps 2 and 3 unchanged, step 3's tab row byte-identical to re-walk 1"
  },
  {
   "id": "B-11",
@@ -2832,7 +2962,12 @@
   "shots": [
    "shots/B/23-guest-account.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A re-walk 2 on glass: SettingsView.SignInButton 'Sign in or create your account' in the ACCOUNT group (44) and AccountView.SignInButton (45)"
  },
  {
   "id": "B-13",
@@ -2858,7 +2993,12 @@
   "alsoTouches": [
    "L1-C"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A re-walk 2: the guest Studio hub renders 'Your Studio begins with a project.' with a Sign in door, not 'Open settings' (42)"
  },
  {
   "id": "B-15",
@@ -2882,7 +3022,12 @@
    "shots/B/75-guest-after-signout.png"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: guest Studio after sign-out reads 'Guest / 0 ROOMS / 0 SAVED' with no taste portrait (40); james.okafor@example.com opens clean (42, 43). ⚠ the sibling room-list leg re-opened as GAP3-18 / W1-B-17 in re-walk 2 — the portrait half is what this row is about and it holds"
  },
  {
   "id": "B-16",
@@ -2903,7 +3048,12 @@
   "sourceLane": "B",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/B.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: before sign-out widget-snapshot.json carries ownerId A0000000-…-0005; after sign-out it is replaced with an empty payload and house-record.json is deleted outright"
  },
  {
   "id": "B-18",
@@ -2929,7 +3079,12 @@
   "alsoTouches": [
    "L0.3"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C (placeholder half): the missing-image case is the designed placeholder, not a bare grey block; the one image that loaded matched its product (24, 77)"
  },
  {
   "id": "B-20",
@@ -2952,7 +3107,9 @@
   "shots": [
    "shots/B/43-room-detail.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — no walker carried an L1-E coverage table"
  },
  {
   "id": "B-21",
@@ -2975,7 +3132,12 @@
   "shots": [
    "shots/B/30-post-signin.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: terminate + relaunch of a signed-in account lands straight on Today, no intro, no quiz (18). Walk C re-walk 2 corroborates the account-not-install half — both password sign-ins went straight through because OnboardingCompletion remembers the account (04, 63)"
  },
  {
   "id": "B-23",
@@ -2998,7 +3160,9 @@
   "shots": [
    "shots/B/11-quiz-done-a.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the quiz was never entered, so its promise line was never on screen"
  },
  {
   "id": "B-26",
@@ -3042,7 +3206,12 @@
   "sourceLane": "B",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/B.md",
   "shots": [],
-  "rootScope": "flags-on-only"
+  "rootScope": "flags-on-only",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: an opaque 'Your Studio' band with a hairline, content masked as it scrolls under (25, 79)"
  },
  {
   "id": "B-28",
@@ -3065,7 +3234,12 @@
   "shots": [
    "shots/B/54-pay-result-b.png"
   ],
-  "rootScope": "flags-on-only"
+  "rootScope": "flags-on-only",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: the payment-failure panel scrolls into view un-clipped, Pay stays visible above the tab bar, two recovery actions (66)"
  },
  {
   "id": "B-30",
@@ -3383,7 +3557,12 @@
   "shots": [
    "shots/B/39-add-room.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: 'Add a new room' is one opaque ground at a fixed detent with SF Symbols in both rows — no ◎, no 📐 (06)"
  },
  {
   "id": "C-01",
@@ -3406,7 +3585,12 @@
   "shots": [
    "shots/C/06-dark-launch-2.0s.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: the Companion mark measures 11.15:1 in dark (was 1.15:1) and 7.86:1 in light (20, 09)"
  },
  {
   "id": "C-02",
@@ -3429,7 +3613,12 @@
   "shots": [
    "shots/C/crop-dark-companion-header.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: the Companion panel subtitle measures 5.71:1 against the fixed dark panel (was 1.11:1); title 8.03:1 (21)"
  },
  {
   "id": "C-03",
@@ -3478,7 +3667,12 @@
   "shots": [
    "shots/C/09-dark-spaces.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: one help affordance per header, distinct labels, 44×44 in the AX tree"
  },
  {
   "id": "C-06",
@@ -3504,7 +3698,12 @@
   "alsoTouches": [
    "L1-D"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "a9cb4ceb4",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1 closed the three named AX-XL breaks — decision card title wraps on word boundaries (19), the sign sheet holds 'TOTAL'/'EXPIRY' on one line each (16), the badge reads 'Recommended' in one capsule (22). Walk C re-walk 2 closed the Companion half the finding's own evidence names: 'Want a / recommendation?' at AX3XL on Pieces (25)"
  },
  {
   "id": "C-07",
@@ -3599,7 +3798,12 @@
   "alsoTouches": [
    "L1-D"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: Fixture Oak Dining Table reads 'Good match' on the grid and 'Good match' on the detail in one session — one verdict, one scope (43, 76). Same W1-S-01 caveat"
  },
  {
   "id": "C-13",
@@ -3622,7 +3826,12 @@
   "shots": [
    "shots/C/26-dark-messages.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: the thread has a real header — avatar 'LH', 'Leah Hartwell', 'Aspen Loft Refresh' (29)"
  },
  {
   "id": "C-14",
@@ -3645,7 +3854,12 @@
   "shots": [
    "shots/C/26-dark-messages.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: the thread's content is real messages; the 'Project conversation opened.' audit line is suppressed (29)"
  },
  {
   "id": "C-15",
@@ -3689,7 +3903,12 @@
   "shots": [
    "shots/C/07-dark-greeting-help.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "440a312ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1, both halves: no clipping, and describe_screen(nested) returns AXButton 'About Today' at {{161.17,133.33},{44,44}} where it returned AXGroup 'Today' / children: []"
  },
  {
   "id": "C-20",
@@ -3712,7 +3931,12 @@
   "shots": [
    "shots/C/06-dark-launch-2.0s.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: dark-mode de-emphasised ink — meta 7.48:1, section labels 9.72:1, body 12.42:1, was 2.66 / 4.27 (20)"
  },
  {
   "id": "C-22",
@@ -3738,7 +3962,9 @@
   "alsoTouches": [
    "L1-C"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — 'Your Studio' was read on glass (walk B, B-27) but the three-name collision was not enumerated on one screen"
  },
  {
   "id": "C-23",
@@ -3762,7 +3988,12 @@
    "shots/C/29-dark-settings.png"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: a visible drag indicator sits at the top of the sheet (09, 37)"
  },
  {
   "id": "C-24",
@@ -3811,7 +4042,12 @@
   "alsoTouches": [
    "L0.3"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: the Pieces card draws the placeholder and the overlay chrome is a white label on a charcoal capsule, not 2.01:1 over cream (24)"
  },
  {
   "id": "C-28",
@@ -3885,7 +4121,12 @@
   "shots": [
    "shots/C/16-dark-studio.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-E",
+  "closedCommit": "5657ab492",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: after the delete the Studio stat reads '1 ROOM', not '1 ROOMS' (23, 26); the guest hub reads '0 ROOMS' (40)"
  },
  {
   "id": "C-32",
@@ -4025,7 +4266,9 @@
   "shots": [
    "shots/C/11-dark-browse.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the browse cards were read for layout, not for the boilerplate line"
  },
  {
   "id": "C-41",
@@ -4048,7 +4291,12 @@
   "shots": [
    "shots/C/20-dark-proposal-scrolled.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: one primary token on the piece detail, the invoice, the proposal and the tour; no gold-vs-white pair anywhere (25, 26, 28, 92)"
  },
  {
   "id": "C-42",
@@ -4279,7 +4527,12 @@
   "shots": [
    "shots/P/34-cancel-from-password.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A, both halves, measured to the third decimal: a sheet error never reaches the root (08), a root error renders in a reserved slot at y=309.17 with the five controls unmoved (11); no regression under fix round 2 (re-walk 2, 35)"
  },
  {
   "id": "P-18",
@@ -4302,7 +4555,12 @@
   "shots": [
    "shots/P/14-relaunch2-root.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: Onboarding.SignInButton 'I already have an account — Sign in' on the onboarding page (14)"
  },
  {
   "id": "P-02",
@@ -4325,7 +4583,12 @@
   "shots": [
    "shots/P/01-welcome-cold.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: SF Symbol envelope; AXLabel is exactly 'Continue with email', no glyph"
  },
  {
   "id": "P-20",
@@ -4348,7 +4611,12 @@
   "shots": [
    "shots/P/20-email-malformed.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: invalid email raises auth.form.emailValidation AND the primary stays enabled:false (03)"
  },
  {
   "id": "P-22",
@@ -4371,7 +4639,12 @@
   "shots": [
    "shots/P/26-verify-t0.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: one status region — statusBanner REPLACED by errorBanner, never both; Verify stays at y=747.7 inside the 874 pt viewport (05→06)"
  },
  {
   "id": "P-34",
@@ -4397,7 +4670,12 @@
   "alsoTouches": [
    "L1-A"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: at AX3XL 'Welcome home' wraps at the word, both CTAs wrap inside their buttons instead of truncating, the legal links stack, and the screen scrolls (98, 99)"
  },
  {
   "id": "P-03",
@@ -4466,7 +4744,12 @@
   "shots": [
    "shots/P/23-code-requested-t0.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: the code field announces AXLabel 'Sign-in code' / AXValue 'Empty' — no phantom code; re-confirmed under fix round 2 (re-walk 2 regression sweep)"
  },
  {
   "id": "P-27",
@@ -4512,7 +4795,12 @@
   "shots": [
    "shots/P/19-email-form.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: one name end to end — 'Continue with email' → 'Email me a code' → 'Enter your sign-in code' → field 'Sign-in code'; 'magic link' appears nowhere (02, 05, 12)"
  },
  {
   "id": "P-17",
@@ -4558,7 +4846,12 @@
   "shots": [
    "shots/P/39-welcome-dark.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: in dark the Apple button flips to a white ground with a black label — label 21:1, ground vs page 18.6:1 (A6)"
  },
  {
   "id": "P-32",
@@ -4623,7 +4916,9 @@
   "sourceLane": "C1",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C1.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — same; the quiz was never submitted, so the 'Reading your answers…' state was never rendered"
  },
  {
   "id": "C1-05",
@@ -4644,7 +4939,9 @@
   "sourceLane": "C1",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C1.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — in-flight state was unobservable: the repaired local stack answers OTP requests in under 120 ms so no spinner survived a describe_after, and the Apple row (the one AuthProviderRow.isBusy drives) is intercepted by the simulator's own 'Sign in to your Apple Account' alert (walk A §3, shot 10)"
  },
  {
   "id": "C1-08",
@@ -4794,7 +5091,12 @@
   "alsoTouches": [
    "L1-C"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A re-walk 2 on glass (44, 45, 50): the guest Account state is a sentence and a door; signed in, the group becomes Account / Sign in on the web / Sign out / Delete account"
  },
  {
   "id": "C1-15",
@@ -4836,7 +5138,12 @@
   "sourceLane": "C1",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C1.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: every cold launch reached content in ≤3 s, no perceptible 1.5 s dwell. Unmeasured with instruments — R1 · D-01 records the real device figure"
  },
  {
   "id": "C1-19",
@@ -4857,7 +5164,12 @@
   "sourceLane": "C1",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C1.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: cold launch with kong PAUSED reached the Today root, not a terminal splash (36)"
  },
  {
   "id": "C1-21",
@@ -4941,7 +5253,9 @@
   "sourceLane": "C1",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C1.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the quiz was never entered, so save-on-disappear was never exercised"
  },
  {
   "id": "C1-29",
@@ -4983,7 +5297,12 @@
   "sourceLane": "C1",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C1.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: Terms and Privacy are separate links to different pages; re-walk 2 confirms both open in-app (36→37)"
  },
  {
   "id": "C1-31",
@@ -5070,7 +5389,12 @@
   "sourceLane": "C1",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C1.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: verification fired on the sixth digit with no Verify tap, and the success banner was gone the moment the error landed (06)"
  },
  {
   "id": "C1-38",
@@ -5241,7 +5565,12 @@
   "alsoTouches": [
    "L1-B"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C (partial): not isolatable from outside the process, but patina://today fired at a cold app landed on Today rather than being swallowed (70, 71) and every scheme link fired at a running app arrived"
  },
  {
   "id": "C2-03",
@@ -5305,7 +5634,12 @@
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C2.md",
   "shots": [],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: sign-out from the Studio tab returns the app to Today with an empty stack and account B opens with no page of account A beneath it (38, 42); held under fix round 2 (re-walk 2 regression table)"
  },
  {
   "id": "C2-07",
@@ -5326,7 +5660,12 @@
   "sourceLane": "C2",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C2.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "fe0a63ee0",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C re-walk 2, end to end on glass: bell badges 3 → Mark all read → rows clear → no badge on Today → none after a tab round trip → none after a COLD RELAUNCH, i.e. after a fresh server fetch (06–11). The six notification_log rows read 0 unread / status opened. 00562 gives the addressed user an UPDATE policy narrowed to opened_at, clicked_at, status"
  },
  {
   "id": "C2-08",
@@ -5368,7 +5707,12 @@
   "sourceLane": "C2",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C2.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: 'Turn on notifications' → iOS prompt → Don't Allow → the primer re-renders 'Notifications are off for Patina.' and the CTA becomes Open Settings (06–08)"
  },
  {
   "id": "C2-10",
@@ -5607,7 +5951,12 @@
   "alsoTouches": [
    "L1-A"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "4790ab8eb",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C re-walk 2 on the real path: Settings → Sign out → Welcome with an EMPTY status slot (61) → universal link → 'We’ll open what you tapped once you’re in.' in that slot (62). Walk 1 failed because W1-C-09's spurious banner took the one slot; 4790ab8eb removed the banner"
  },
  {
   "id": "C2-22",
@@ -5691,7 +6040,12 @@
   "sourceLane": "C3",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C3.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: PatinaColors.pearl has 0 production call sites outside the two token files; the dark hairline is adaptive (20). Ratcheted to == 0 at merge 6 (a04b2d99b)"
  },
  {
   "id": "C3-03",
@@ -5715,7 +6069,12 @@
   "alsoTouches": [
    "L1-D"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: in dark the Apple button flips to a white ground with a black label — label 21:1, button ground vs page 18.6:1 (A6). That is P-35's shot and C3-03's fix"
  },
  {
   "id": "C3-04",
@@ -5757,7 +6116,12 @@
   "sourceLane": "C3",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C3.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C (scoped): no white-on-clay selected state appeared on the walk — the 'All' chip and the tour CTA are charcoal + inverse ink at 13.53:1 (42, 92). The ~15 controls the finding names were not enumerated"
  },
  {
   "id": "C3-06",
@@ -5781,7 +6145,12 @@
   "alsoTouches": [
    "L1-D"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: disabled is desaturated grey, enabled is charcoal fill + off-white label; the inverted affordance is gone (02→04)"
  },
  {
   "id": "C3-07",
@@ -5970,7 +6339,12 @@
   "sourceLane": "C3",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C3.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: 0 inline .font(.custom( in production code — all 8 grep hits are test files or a doc comment"
  },
  {
   "id": "C3-16",
@@ -6306,7 +6680,12 @@
   "sourceLane": "C4",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C4.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "1773570b1",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B (2 of 3): Studio distinguishes loading (38) from failure (39); Browse distinguishes loading (73) from error (74). The Spaces branch (note O5) is not exercisable — this client always has a room"
  },
  {
   "id": "C4-04",
@@ -6327,7 +6706,12 @@
   "sourceLane": "C4",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C4.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: with the API stopped mid-send an inline banner appears above the composer within ~6 s — 'We couldn’t send that. Nothing was lost — your message is still here.' + Try again, draft intact (31)"
  },
  {
   "id": "C4-05",
@@ -6390,7 +6774,9 @@
   "sourceLane": "C4",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C4.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — AR placement was never entered"
  },
  {
   "id": "C4-09",
@@ -6411,7 +6797,9 @@
   "sourceLane": "C4",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C4.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the design-request send screen sits behind 'Get design help', which no walker opened (the same door as A1-14)"
  },
  {
   "id": "C4-10",
@@ -6474,7 +6862,12 @@
   "sourceLane": "C4",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C4.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: .refreshable on all four roots and every Studio detail in the merged tree, and two pulls proven end to end — Studio recovered from its error card (40), Today restored its whole record (84)"
  },
  {
   "id": "C4-13",
@@ -6558,7 +6951,12 @@
   "sourceLane": "C4",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C4.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B (indirect): with kong paused the send failed at 15–33 s and the Studio load at ~30 s, not at URLSession.shared's 60 s (34, 81, 39)"
  },
  {
   "id": "C4-17",
@@ -6774,7 +7172,12 @@
   "alsoTouches": [
    "L1-C"
   ],
-  "rootScope": "n/a"
+  "rootScope": "n/a",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: the six ? doors no longer open the empty Sanity panel; the inline tooltip prints its own fallback text (06, 10)"
  },
  {
   "id": "C5-04",
@@ -6798,7 +7201,12 @@
   "alsoTouches": [
    "L1-E"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "a04b2d99b",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: Privacy Policy loads a real page — 'LEGAL · Privacy Policy · Last updated: August 11, 2026' (09)"
  },
  {
   "id": "C5-05",
@@ -6822,7 +7230,12 @@
   "alsoTouches": [
    "L1-E"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: SUPPORT holds 'Contact us' and 'Terms & privacy' only — the Help Center 404 row is gone (10)"
  },
  {
   "id": "C5-06",
@@ -6843,7 +7256,9 @@
   "sourceLane": "C5",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C5.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — walkers saw 'Good afternoon' and 'Good evening', both valid windows, but no walk crossed a boundary the finding names"
  },
  {
   "id": "C5-07",
@@ -6906,7 +7321,12 @@
   "sourceLane": "C5",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C5.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-E",
+  "closedCommit": "05e1ffaaa",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: 'Saved pieces: 0' on the Studio, not 'Saved items'"
  },
  {
   "id": "C5-10",
@@ -6927,7 +7347,12 @@
   "sourceLane": "C5",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C5.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-E",
+  "closedCommit": "05e1ffaaa",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: 'Sign up' (not 'Sign Up'), 'Retake your style quiz'; walk B re-walk 1 read the 'Sign out?' alert on glass (37)"
  },
  {
   "id": "C5-11",
@@ -6948,7 +7373,9 @@
   "sourceLane": "C5",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C5.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the design-request send screen was never reached"
  },
  {
   "id": "C5-13",
@@ -6996,7 +7423,12 @@
   "alsoTouches": [
    "L1-E"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "b8413ee29",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: one money format on every surface walked — $4,250.00 through Today, the record row, the invoice header, line items, subtotal, total and the Pay button; no K form anywhere (09, 24, 26, 27, 65, 71)"
  },
  {
   "id": "C5-16",
@@ -7020,7 +7452,9 @@
   "alsoTouches": [
    "L1-B"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — the room rows' maker line was not read"
  },
  {
   "id": "C5-12",
@@ -7146,7 +7580,9 @@
   "sourceLane": "C5",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C5.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walk-verified — 'Start Your Journey' sits on a surface no walk entered"
  },
  {
   "id": "C5-21",
@@ -7692,7 +8128,12 @@
   "sourceLane": "C6",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C6.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B (2 of 3 halves): chips measure exactly 44 pt, the row wraps to two lines, selection is a filled pill not colour-only (12). The .isSelected TRAIT is not readable through describe_screen"
  },
  {
   "id": "C6-19",
@@ -8196,7 +8637,9 @@
   "sourceLane": "C7",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C7.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walkable — needs a deliberately corrupt SwiftData store; three cold launches produced no crash-loop and no recovery notice (walk B §3.1)"
  },
  {
   "id": "C7-02",
@@ -8217,7 +8660,12 @@
   "sourceLane": "C7",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C7.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B (weak): the Saved surface renders and a save/unsave round trip works with no BoardModel trap (43, 44, 45). Boards themselves were not exercised"
  },
  {
   "id": "C7-04",
@@ -8259,7 +8707,9 @@
   "sourceLane": "C7",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C7.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walkable — needs LiDAR; R1 · D-05"
  },
  {
   "id": "C7-06",
@@ -8409,7 +8859,9 @@
   "sourceLane": "C7",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C7.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walkable — the telemetry queue is invisible from the UI"
  },
  {
   "id": "C7-14",
@@ -8451,7 +8903,9 @@
   "sourceLane": "C7",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C7.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walkable — needs a real scan upload; R1 · D-05"
  },
  {
   "id": "C7-16",
@@ -8493,7 +8947,12 @@
   "sourceLane": "C7",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C7.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B (weak): the single-piece read (76) and the saved-pieces read (44) both render; no all-or-nothing blank"
  },
  {
   "id": "C7-19",
@@ -8808,7 +9267,12 @@
   "sourceLane": "C9",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C9.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: the last row clears the tab bar on every root walked — Save Room (14), Pay (64), Sign proposal (48), the Studio tail (26)"
  },
  {
   "id": "C9-05",
@@ -8876,7 +9340,12 @@
   "sourceLane": "C9",
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/C9.md",
   "shots": [],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "ea4d9d321",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk A: the code field's numeric pad carries a Done toolbar and Done removes it (06→07). The other five sites landed as note B-L1A-2 (1773570b1) and were over-applied — walk B found three Done bars on one screen (W1-B-01); ea4d9d321 makes it one bar per screen and walk B re-walk 2 measured exactly one pill on all three Manual Room Entry fields (09, 10, 11)"
  },
  {
   "id": "C9-09",
@@ -9133,7 +9602,12 @@
    "shots/R/12a-studio-retry-t50-spinner.png",
    "shots/R/13a-studio-false-empty.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "2b4270d5c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: the Studio's cold failure renders the honest card with no 'Nothing needs your attention right now.' above it (31, 32, 33); held in re-walk 2"
  },
  {
   "id": "R-02",
@@ -9156,7 +9630,12 @@
   "shots": [
    "shots/R/16-cold-3.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "4790ab8eb",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 2: an offline cold launch keeps the whole Record AND the designer seat — 'Leah Hartwell · Aspen Loft Refresh · Message' present at t≈4 s, t≈35 s and after the fetch failed (26, 27, 30), naming the same project it names online"
  },
  {
   "id": "R-03",
@@ -9179,7 +9658,12 @@
   "shots": [
    "shots/R/03a-ptr.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "2b4270d5c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B re-walk 1: Today prints 'Last updated 12 minutes ago.' at the head of the Record while offline (30); pull-to-refresh had already passed in walk 1 (84)"
  },
  {
   "id": "R-04",
@@ -9225,7 +9709,12 @@
   "shots": [
    "shots/R/14a-proposal-t2.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: proposal detail rendered fully in ~2 s (47) — no 65–185 s 'One moment…'"
  },
  {
   "id": "R-06",
@@ -9248,7 +9737,12 @@
   "shots": [
    "shots/R/07a-browse-t1.png"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: Browse fills the screen edge to edge in loading and in error (73, 74)"
  },
  {
   "id": "R-09",
@@ -9295,7 +9789,12 @@
   "alsoTouches": [
    "L1-B"
   ],
-  "rootScope": "n/a"
+  "rootScope": "n/a",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: no ? reaches Sanity any more — both doors open an inline tooltip carrying a local fallback sentence, so 'No help articles yet … on the way' never appears (06, 10). The Sanity publish (runbook §F) is still owed for the tour bodies; this row's HTTP-400 empty state is gone from the app"
  },
  {
   "id": "R-18",
@@ -10019,7 +10518,12 @@
    "shots/GAP2/51-invoice-detail.png"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: 'Pay $4,250.00' is a pinned bottom footer, fully visible AT REST on iPhone 17 Pro (64); held in re-walk 2 (38)"
  },
  {
   "id": "GAP2-04",
@@ -10658,7 +11162,9 @@
    "shots/GAP3/22-guest-entry.png"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "RE-OPENED by walk B re-walk 2 (W1-B-17): after signing out, the guest Your Spaces still lists the previous account's room ('Guest Bedroom, 180 sq ft', 'Whole Home, 1 room') on a device whose guest Studio says 'Guest / Rooms: 0'. Reproduced twice (44/45/46, then 56→57/58/59). Signing in as a DIFFERENT account does clear it, so the reset fires on an account change and not on a sign-out to guest — a consequence of seeding settledUserId in 4790ab8eb. On a shared phone this is a privacy leak"
  },
  {
   "id": "GAP3-25",
@@ -11183,7 +11689,9 @@
    "shots/GAP4/37-rescan-t1.png"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walkable — Rescan needs a completed LiDAR scan"
  },
  {
   "id": "GAP4-16",
@@ -11210,7 +11718,9 @@
    "L1-D"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "open",
+  "openReason": "not walked — the Reveal lives inside the style-quiz flow, which no walk entered (walk B §3.2; walk C's A-11 for the same reason)"
  },
  {
   "id": "GAP4-18",
@@ -11283,7 +11793,12 @@
    "shots/GAP4/13-fallback-entry.png"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: a persistent 'Not now' sits on the fallback entry screen and lands the user on Today (16, 17)"
  },
  {
   "id": "GAP4-01",
@@ -11519,7 +12034,12 @@
    "shots/GAP4/13-fallback-entry.png"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "de1fa5196",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: Length/Width start empty with placeholders and the CTA is disabled, on BOTH the manual-entry form (12) and the scan-fallback form (16); held in re-walk 2 (08)"
  },
  {
   "id": "GAP4-04",
@@ -13583,7 +14103,12 @@
   "alsoTouches": [
    "L1-E"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: Approve AND Cancel fully on screen at large and at accessibility-extra-large (59, 60); walk C re-confirms at AX3XL (66, 67, 47)"
  },
  {
   "id": "GAP1B-02",
@@ -13608,7 +14133,12 @@
    "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/research/GAP1-defer-axtree.json"
   ],
   "ledgerId": "GAP1-02 (GAP1.md)",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: Send AND Cancel fully on screen at AX-XL and large (61, 62); walk C at AX3XL (68)"
  },
  {
   "id": "GAP1B-03",
@@ -13637,7 +14167,12 @@
    "L1-D"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: 'Good afternoon' takes full width and wraps at a word boundary at AX-XL with the bell/Studio cluster out of its band (82); walk C at AX3XL (40, 54) and again after the header rewrite (12, 13)"
  },
  {
   "id": "GAP1B-04",
@@ -13715,7 +14250,12 @@
    "L1-D"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: Cancel on both sheets is a full-width outlined button ≥44 pt, not a 17.6 pt ghost"
  },
  {
   "id": "GAP1B-08",
@@ -13741,7 +14281,12 @@
    "L1-A"
   ],
   "promotedBy": "D12",
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "d0d5c048c",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk B: termsLink, privacyLink, passwordButton and the sign-in form's links all report height 44 in the AX tree (01)"
  },
  {
   "id": "GAP1B-09",
@@ -13915,7 +14460,9 @@
   "alsoTouches": [
    "L0.6"
   ],
-  "rootScope": "n/a"
+  "rootScope": "n/a",
+  "status": "open",
+  "openReason": "not walk-verified on a placed widget — the springboard widget gallery could not be opened by synthetic taps (3 attempts). Code evidence: the snapshot is written with flagOn:false AND a populated movedRows, and HouseWidget declares its families unconditionally. R1 · D-10"
  },
  {
   "id": "GAP7B-03",
@@ -13939,7 +14486,9 @@
    "shots/GAP7/35-gallery-preview-small.png"
   ],
   "ledgerId": "GAP7B-03 (GAP7.md)",
-  "rootScope": "n/a"
+  "rootScope": "n/a",
+  "status": "open",
+  "openReason": "not walk-verified on a placed widget — HouseWidgetViews.swift:212-213 carries .lineLimit(2) + .minimumScaleFactor(0.8) on the row title; unproven on glass. R1 · D-10"
  },
  {
   "id": "GAP7B-04",
@@ -13963,7 +14512,9 @@
    "shots/GAP7/36-widget-tap-second-row.png"
   ],
   "ledgerId": "GAP7B-04 (GAP7.md)",
-  "rootScope": "n/a"
+  "rootScope": "n/a",
+  "status": "open",
+  "openReason": "not walk-verified on a placed widget — .systemMedium is in supportedFamilies and each medium row carries its own Link(destination:); unproven on glass. R1 · D-10"
  },
  {
   "id": "GAP7B-05",
@@ -13988,7 +14539,12 @@
    "shots/GAP7/36-widget-tap-second-row.png"
   ],
   "ledgerId": "GAP7B-05 (GAP7.md)",
-  "rootScope": "n/a"
+  "rootScope": "n/a",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: house-record.json contains the route-less story row; widget-snapshot.json contains only the routed order row — the projection excludes rows with no route"
  },
  {
   "id": "GAP7B-09",
@@ -14026,7 +14582,12 @@
    "GAP7-03",
    "GAP7-04"
   ],
-  "rootScope": "both"
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "4790ab8eb",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C re-walk 2 on the typed-password path, twice: with an invoice link held, signing in opens the INVOICE (INV-2026-0142, Pay $4,250.00), not Today — from a cold signed-out launch (03→04→05) and from the sign-out → link → sign-in sequence (61→62→63)"
  },
  {
   "id": "GAP7B-06",
@@ -14212,7 +14773,9 @@
   "rootScope": "both",
   "alsoTouches": [
    "L1-E"
-  ]
+  ],
+  "status": "open",
+  "openReason": "code half done, apply owed. 00563 (renumbered off 00559 at pre-merge, 2026-09-03, because main took 00559) is written, proven red→green in a rolled-back local transaction, and its RLS test is green on the local stack — but it is NOT applied to Strata (a Kody-run step, runbook §K) and the app path is unproven: the finding needs a designer in two active studios, which the fixture does not create, and completing a signature would have mutated the shared fixture."
  },
  {
   "id": "L07-02",
@@ -14241,7 +14804,12 @@
   "rootScope": "flags-on-only",
   "alsoTouches": [
    "L1-C"
-  ]
+  ],
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: on the four-tab root the composer sits clear above the tab bar, takes focus, accepts text and sends (29, 30); walk B agrees (31, 32)"
  },
  {
   "id": "L07-03",
@@ -14268,7 +14836,12 @@
   "rootScope": "both",
   "alsoTouches": [
    "L1-B"
-  ]
+  ],
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "52aa910ea",
+  "closedOn": "2026-09-03",
+  "walkEvidence": "walk C: the send failure is inline and immediate (31). Walk B measures it at ~20–33 s on its own route and records the wait"
  },
  {
   "id": "L07-05",
@@ -14296,7 +14869,9 @@
   "rootScope": "both",
   "alsoTouches": [
    "L1-C"
-  ]
+  ],
+  "status": "open",
+  "openReason": "RE-OPENED by walk B re-walk 2 (W1-B-16): the warm shape prints 'Last updated 1 minute ago.' (35) but the COLD shape does not. R-02's floor now carries the Studio count across a cold launch without the timestamp that makes it honest — offline cold launch prints '5 things need your eye' as current above 'We couldn’t gather your Studio…' with no staleness line anywhere in the tree (33). This is L07-05's exact failure shape on the path the R-02 fix created"
  },
  {
   "id": "L07-04",
@@ -14470,5 +15045,1320 @@
   "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w0/l0.7-coverage-walk.md",
   "shots": [],
   "rootScope": "both"
+ },
+ {
+  "id": "W1-A-01",
+  "lane": "L1-E",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "copy",
+  "title": "The push primer ships a straight apostrophe, and a green test pins it verbatim citing a superseded ruling",
+  "where": "Patina/Features/Notifications/Views/PushPrimerView.swift:25; pinned by PatinaTests/PushTokenServiceTests.swift:190-196",
+  "evidence": "Byte check of the shipped literal: 57 65 27 6c 6c = We + U+0027 + ll, where the rest of the app types U+2019. PushTokenServiceTests.primerCopyIsVerbatim asserted the exact string, its comment citing ruling Q7 in source/rulings-2026-08-27.md as naming a STRAIGHT apostrophe — so A-06's rule and Q7 were in direct conflict with Q7 enforced by a passing test.",
+  "fix": "Change the literal to We’ll and update primerCopyIsVerbatim in the same commit, recording that Q7's glyph is superseded.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 1 (ce9f602c5) with both pinning suites moved to the typographic byte. Walk A re-walk 2 read it on glass after sign-in: AXLabel 'We’ll tell you when your designer sends something that needs you…' (shot 41).",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-F"
+  ],
+  "status": "closed",
+  "closedBy": "W1 L1-E",
+  "closedCommit": "ce9f602c5",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-A-03",
+  "lane": "L2-G",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": false,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "tests-gates",
+  "title": "Walker HID write path dies silently while the read path stays healthy — every tap reports success and does nothing",
+  "where": "walker clone ff-w1-walk-a 4D075B9D-6CD6-4878-8E93-3B2AF8932067; blitz device_action / idb",
+  "evidence": "HID worked for shots 01-18 and stopped immediately after terminate → uninstall → keychain reset → install. describe_screen kept returning a full tree and simctl io kept returning correct frames while seven distinct write attempts returned success strings and changed nothing (three verified byte-identical with cmp -s). Recovery attempts that failed: relaunch, terminate+relaunch, shutdown+boot+relaunch, full erase+boot+reinstall.",
+  "fix": "Root cause (walk A re-walk 2): a stale per-udid `idb shell` orphaned by the walker's own device reboots. Recovery is two kills against the walker's own udid, after which blitz repairs itself. Wave rule: re-run the HID preflight AFTER every fresh-install sequence and after every device reboot, and assert the frame CHANGED (cmp -s against the pre-tap shot) — a success string from device_action is not evidence.",
+  "codeNote": "",
+  "judgeNote": "Closed by walk A re-walk 2 §R2.1: root-caused, recovered, and blitz's own write path re-verified against a cmp-static baseline (shots 54→55). Cost the wave 8 of walk A's 27 rows on the first pass and the whole of walk C's first re-walk. It is a harness row, not a product row — recorded here so the next wave's steward inherits the recovery.",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "n/a",
+  "status": "closed",
+  "closedBy": "W1 walk A",
+  "closedCommit": "",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-A-04",
+  "lane": "L1-A",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "auth",
+  "title": "Both legal links eject the person into system Safari mid-sign-up",
+  "where": "AuthScreenView.termsLink and AuthScreenView.privacyLink on the Welcome screen",
+  "evidence": "Tapping Privacy Policy launched the Safari application — the tree root AXLabel flipped from 'Patina' to 'Safari' and the status bar showed a '◀ Patina' return breadcrumb (shot 09).",
+  "fix": "Present both in an SFSafariViewController sheet so a reader checking the terms before creating an account stays inside the sign-up.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 1 (ce9f602c5). Walk A re-walk 2 proved both halves on glass: Terms opens an in-app sheet rendering 'LEGAL · Terms of Service', no '◀ Patina' breadcrumb, and the device's process list during the sheet is Patina.app/Patina ONLY — MobileSafari never launches (shots 36→37).",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "ce9f602c5",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-A-05",
+  "lane": "L1-D",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "At accessibility-extra-large every Welcome control scales except the Sign in with Apple label",
+  "where": "Welcome at content_size accessibility-extra-large; the system Apple button",
+  "evidence": "Shot 21: 'Welcome home', 'Start with a piece you love', 'Continue with email' (wrapping to two lines inside its button) and 'Have a password? Sign in' all scale; the Apple button holds a fixed height and type size and becomes the smallest text on the screen.",
+  "fix": "Give the Apple button a Dynamic-Type-aware height — this is the D-L1A-1 note already routed to L1-D alongside C3-03.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 1 (ce9f602c5). Walk A re-walk 1 measured it: at AX-XL auth.welcome.appleButton frame height = 84 against neighbour emailButton 81.5, and at content_size large the same button measures exactly 50 — so the growth is Dynamic Type, not a constant swap. Re-confirmed at re-walk 2 (shot 38).",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-A"
+  ],
+  "status": "closed",
+  "closedBy": "W1 L1-D",
+  "closedCommit": "ce9f602c5",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-A-06",
+  "lane": "L1-A",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "auth",
+  "title": "A wrong sign-in code is reported as an expired one, sending the person to Resend instead of to re-reading their code",
+  "where": "the OTP error path; auth.form.errorBanner on the code sheet",
+  "evidence": "999999 entered seconds after a real code was issued read 'That sign-in code has expired. Send yourself a new one.' (shot 06). GoTrue conflates wrong and expired in one error and the app took the expiry branch, asserting something false about a mistyped code.",
+  "fix": "Use wording that covers both without asserting expiry: 'That code didn’t work. Check it, or send yourself a new one.'",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 1 (ce9f602c5) at both call sites (AuthVerificationFailure and .otpExpired). Walk A re-walk 2 walked it: 999999 typed ~30 s after a real code was issued, resend timer still at 28 s so expiry was impossible, and the banner read the new sentence (shot 34).",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "ce9f602c5",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-A-07",
+  "lane": "L1-E",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "copy",
+  "title": "A-101's delete-account copy names what is retained but not for how long, which its own fix line required",
+  "where": "Patina/Features/Account/AccountDeletionService.swift:55-58 (confirmationBody)",
+  "evidence": "The shipped copy closed A-101's device-only scoping but did not name the retention period the finding's fix line asked for ('name what is retained for legal/financial reasons and for how long').",
+  "fix": "Add the retention period to the retained-records clause.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 1 (ce9f602c5). Walk A re-walk 2 read the alert on glass: '…stays in our records indefinitely — with your name and contact details removed…' (shot 51), and read AccountDeletionService.swift:45-64 afterwards: the code implements no purge window, so 'indefinitely' is the honest duration and does not invent the 30/90-day window DeleteAccountCopyTests.noFabricatedWindow bans.",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-A"
+  ],
+  "status": "closed",
+  "closedBy": "W1 L1-E",
+  "closedCommit": "ce9f602c5",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-A-08",
+  "lane": "L2-G",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": false,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "tests-gates",
+  "title": "The local API gateway was dead for every walker — silently, because Welcome renders identically without it",
+  "where": "local dev stack; container supabase_kong_supabase; mounts from the retired worktree .codex/worktrees/agent-tester-notes/supabase/templates/",
+  "evidence": "kong was Exited (127) at session start; curl http://127.0.0.1:54321/auth/v1/settings returned http_code 000 while :54322 and every other container were healthy. docker start failed with 'error mounting …/agent-tester-notes/supabase/templates/confirmation.html … not a directory' — Docker had recreated the six deleted template files as empty directories after that worktree was retired. Critically, Welcome renders the same with the backend down (RL1A-06's target == .local clause puts Apple in regardless), so a walker can pass a Welcome check against a dead API and never know.",
+  "fix": "Make the wave's first walker probe curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54321/auth/v1/settings and refuse to start on anything but 200. Recreate kong from the current worktree after any worktree retirement.",
+  "codeNote": "",
+  "judgeNote": "Repaired by walk A in its own §0.1 (the six templates replaced from the integration worktree); /auth/v1/settings then returned 200 with {apple:false,google:false,email:true}. Held for the rest of the wave — walk A re-walk 2 read 200 / 'Up 5 hours (healthy)'. A harness row, not a product row.",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [],
+  "rootScope": "n/a",
+  "status": "closed",
+  "closedBy": "W1 walk A",
+  "closedCommit": "",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-A-02",
+  "lane": "L2-G",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "major",
+  "testerVisible": false,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "tests-gates",
+  "title": "All three W1 walkers share one local database and one client@patina.dev account; peer data appeared on a walker's screen mid-walk",
+  "where": "shared local Supabase 127.0.0.1:54321 / :54322; account client@patina.dev",
+  "evidence": "Walk A's Today rail showed 'Walk B Test Room. 120 sq ft' where shot 16 had shown Guest Bedroom / Dining Room / Living Room 23 minutes earlier. Confirmed in SQL: rooms joined to auth.users for client@patina.dev returns 'Walk B Test Room|2026-09-03 20:23:59.615512+00' beside 'Guest Bedroom|2026-09-03 20:00:43.215171+00' (shot 18). It cost something concrete again in re-walk 2: reaching W1-A-07 meant requesting two OTPs on the shared account, invalidating any code another walker held.",
+  "fix": "Give each walker its own account for the wave, or serialise the signed-in legs. Until then treat every W1 room-count, roster, badge-count and 'your house' observation from any walker as provisional.",
+  "codeNote": "",
+  "judgeNote": "This is PROGRAM.md §7 hard rule 1's failure mode moved from the simulator to the database, and §7 does not yet say so. It is a wave-workflow row, not a product defect — placed in W2 · L2-G so it is scheduled rather than remembered. The durable fix is an amendment to §7's hard rules; PROGRAM.md §12.6 proposes the wording.",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "n/a",
+  "status": "open"
+ },
+ {
+  "id": "W1-A-09",
+  "lane": "L1-A",
+  "wave": "W2",
+  "tier": "T2",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "At AX-XL the consent line sits entirely below the fold, so the reader consents to text they cannot see",
+  "where": "Welcome (AuthScreenView) at content_size accessibility-extra-large",
+  "evidence": "With the Apple button correctly scaling to 84 pt per W1-A-05, the stack below moves down 34 pt: auth.welcome.guestButton ends at y=827.08 in an 874 pt viewport, 'Have a password? Sign in' is cut by the bottom edge, and the consent sentence with its two links is entirely below the fold — none of it appears in the AX tree, which excludes off-screen elements (shot 27).",
+  "fix": "Either let the AX-XL layout tighten the generous space above the button stack, or pin the consent line to the bottom of the viewport so it is visible at any text size.",
+  "codeNote": "",
+  "judgeNote": "Explicitly NOT a regression the W1-A-05 fix caused — those controls were already at or past the fold at AX-XL beforehand and the fix moves them a further 34 pt. Walk A re-walk 2 scrolled and PROVED both are reachable (shot 39), which is what keeps this polish rather than major.",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-A-10",
+  "lane": "L1-A",
+  "wave": "W2",
+  "tier": "T2",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "auth",
+  "title": "The marketing site's cookie-consent banner renders inside the in-app legal sheet",
+  "where": "the in-app legal sheet (AuthScreenView.termsURL / privacyURL → SafariView)",
+  "evidence": "Shot 37: the Terms page loads inside Patina and a dark 'We use cookies to understand how you interact with Patina… Decline / Accept' banner covers the terms text — a web consent question interrupting a native sign-up, stacked on the app's own consent line the reader just tapped through.",
+  "fix": "Suppress the banner for the in-app reader — an ?embed=1 (or app-source) query param on termsURL/privacyURL that the legal pages honour by hiding the cookie bar.",
+  "codeNote": "",
+  "judgeNote": "A consequence of W1-A-04's fix, which is still the right fix. The change is on the marketing site, not in the app, so the app-side half is one URL constant.",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-A-11",
+  "lane": "L1-A",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "copy",
+  "title": "The consent sentence loses its 'and' at accessibility text sizes",
+  "where": "Patina/Features/Authentication/Views/AuthScreenView.swift:305-315 (legalFooter)",
+  "evidence": "ViewThatFits(in: .horizontal) has HStack { termsLink; Text(\"and\"); privacyLink } as its first branch and VStack { termsLink; privacyLink } as its fallback — the fallback omits the conjunction. Walked: at content_size large the tree carries an 'and' StaticText at y 770.67; at accessibility-extra-large there is no 'and' node at all and the line reads 'By continuing, you agree to our / Terms of Service / Privacy Policy' (shot 39).",
+  "fix": "Put the conjunction in the stacked branch too: VStack(spacing: 2) { termsLink; Text(\"and\").foregroundStyle(PatinaColors.Text.muted); privacyLink }.",
+  "codeNote": "",
+  "judgeNote": "The comment above the branch ('P-34: stacked at accessibility sizes so neither link truncates') shows the stacking is deliberate; dropping the word was not. The reader who most needs the sentence gets a fragment.",
+  "sourceLane": "W1-A",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-a.md",
+  "shots": [
+   "shots/w1-walk-a/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-B-01",
+  "lane": "L1-B",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "The numeric keyboard toolbar renders three 'Done' buttons",
+  "where": "Patina/Features/Rooms/Views/ManualRoomEntryView.swift:70,147 plus the windows-count field",
+  "evidence": "Focusing any numeric field on Manual Room Entry drew three 'Done' buttons side by side in one keyboard accessory bar, below the tab bar (shots 13, 14). Integration commit 1773570b1 (note B-L1A-2, finding C9-08) put .keyboardDoneToolbar() on each of the screen's three fields; SwiftUI merges every ToolbarItemGroup(placement: .keyboard) in the hierarchy into one bar.",
+  "fix": "One .keyboardDoneToolbar() per screen, and change KeyboardDismissalTests from 'every bare numeric field carries the modifier' to 'every screen with numeric fields yields exactly one keyboard toolbar'.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (ea4d9d321). Walk B re-walk 2 measured exactly one Done pill on Length, Width and the Windows count (shots 09, 10, 11) against re-walk 1's shot 35. Walk A re-walk 2 confirmed no regression on the code sheet's own toolbar (y=792).",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/",
+   "shots/w1-walk-b/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "ea4d9d321",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-02",
+  "lane": "L1-F",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "blocker",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "navigation",
+  "title": "WITHDRAWN — every coordinator-driven modal appeared inert on the house-first root",
+  "where": "Patina/ContentView.swift:91-95 (the .sheet(item: coordinator.presentedSheet) driver) with mainContent resolving to HouseFirstRoot()",
+  "evidence": "Filed as a blocker after two independent entry points, three taps each, with describe_screen(all:true) showing no sheet content: Your Spaces header '+' (.newRoom, shot 09) and Studio → MORE → Settings (.settings, shot 27). Consequence as filed: no reachable Sign out on the root every tester will see.",
+  "fix": "Host the sheet driver inside HouseFirstRoot's rootContent, and pin every PresentedSheet case with a test.",
+  "codeNote": "",
+  "judgeNote": "WITHDRAWN by walk B re-walk 1 §1: three PresentedSheet cases presented on the first tap on the same root — .newRoom (06), .settings (09) and .auth (41). The cause was the HID fault W1-A-03 describes: taps returned success strings and never landed. The test the round wrote anyway (PresentedSheetHostTests, 1e9372fb2) reaches the same conclusion by source pin and is kept. The eight ids it had blocked — A-100, C-23, A-99, C5-05, B-60, B-15, GAP3-18, C2-06 — were all walked in re-walk 1 and all passed.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r1/",
+   "shots/w1-walk-b/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-C"
+  ],
+  "status": "withdrawn",
+  "closedBy": "W1 walk B re-walk 1",
+  "closedCommit": "1e9372fb2",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-04",
+  "lane": "L1-B",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "performance-resilience",
+  "title": "Two surfaces assert emptiness the moment a fetch fails",
+  "where": "Patina/Features/Profile/Views/StudioHubView.swift and Features/Home/Views/DailyRoomView.swift",
+  "evidence": "Studio printed 'Nothing needs your attention right now.' directly above its own 'We couldn't gather your Studio.' card (shot 39). Today replaced a live record with 'NEEDS YOU — Nothing needs you right now.' and 'MOVED — Nothing moved yet.' after a cold launch whose fetch failed (shot 83), for a client with an overdue decision, an unpaid invoice and a sent proposal; a single pull-to-refresh restored every row (shot 84).",
+  "fix": "Suppress the empty-summary sentence whenever lastLoadFailed is true (Studio), and keep the persisted record rows on a failed refresh instead of writing the empty result through (Today).",
+  "codeNote": "",
+  "judgeNote": "The two halves are R-01 and R-02. R-01 closed in fix round 1 (2b4270d5c — hasLoaded now means 'a load finished AND answered'); R-02's rows closed in the same commit and its designer seat in fix round 2 (4790ab8eb), walked at re-walk 2 (26, 27, 30). The residual — the Studio's cold shape printing a retained count with no staleness line — is W1-B-16.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/",
+   "shots/w1-walk-b/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "4790ab8eb",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-05",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "The Today greeting's help trigger is invisible to VoiceOver while the identical component on Spaces is reachable",
+  "where": "Patina/Features/Home/Views/DailyGreetingHeader.swift:153-155",
+  "evidence": "describe_screen(nested:true) on Today returned the greeting as AXGroup 'Today' with children: [] — HelpInfoIcon(accessibilityLabel: 'About Today') was not in the tree — while the same component on YourSpacesView was exposed as AXButton 'About Your Spaces', 44×44. The .accessibilityElement(children: .contain) + .accessibilityLabel('Today') pair swallowed the child.",
+  "fix": "Drop .accessibilityLabel('Today') from the .contain container so the child button stays in the tree; add an AX-tree assertion for 'About Today'.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 1 (440a312ea) — the same commit as C-18, whose VoiceOver half this is. Walk B re-walk 1: describe_screen now returns AXButton 'About Today' at {{161.17,133.33},{44,44}} with the surface name moved to AXStaticText 'TODAY. THURSDAY · SEP 3'. Walk C re-walk 1 confirmed independently.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r1/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "440a312ea",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-06",
+  "lane": "L1-B",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "rooms-scan",
+  "title": "The same room is 'Typed, not scanned' on Spaces and 'SCANNED SEP 3' in the Studio",
+  "where": "Patina/Features/Rooms/** (room card) vs Features/Profile/Views/StudioHubView.swift vs Features/Rooms/Views/RoomSettingsView.swift",
+  "evidence": "Guest Bedroom read '180 sq ft · Typed, not scanned' on Your Spaces (shot 08) and 'Guest Bedroom / SCANNED SEP 3' in the Studio's YOUR ROOMS rail (shot 26). Room Settings labelled the same typed dimensions 'Scan Data — 120 sq ft · 2 windows detected' (shot 19).",
+  "fix": "Derive the provenance label from one source (room.captureMethod) and use it on all three surfaces; 'detected' belongs only to a real scan.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (3dbef7c0b). Walk B re-walk 2 read one string on all four surfaces: Spaces (02), room detail (03), Room Settings 'Room measurements / 180 sq ft · Typed, not scanned' (04) and the Studio card 'TYPED, NOT SCANNED' (05). Walk C corroborated (16).",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/",
+   "shots/w1-walk-b/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-C"
+  ],
+  "status": "closed",
+  "closedBy": "W1 L1-B",
+  "closedCommit": "3dbef7c0b",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-07",
+  "lane": "L1-E",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "copy",
+  "title": "ASCII apostrophes survive on three screens the copy deck normalised elsewhere, sometimes beside a U+2019 in the same viewport",
+  "where": "Patina/Features/Recommendations/Views/RecommendationsView.swift, Features/Documents/DocumentListView.swift, Features/Invoices/Views/InvoiceDetailView.swift",
+  "evidence": "Browse error printed \"Couldn't load recommendations\" (ASCII) directly above \"Let’s try that again\" (U+2019) — shot 74. The document failure alert read \"Couldn't open this file\" with a body repeating the title verbatim (shot 68). Invoice detail carried \"Remind me the day before it's due\" and \"WHAT'S INCLUDED\" (shot 64). Re-walk 1 counted 168 straight-apostrophe literals against 134 curly, across 14 files rather than the three named.",
+  "fix": "Extend the A-06 sweep to every view-model string, rename 'recommendations' to 'pieces' in that error line, and give the document alert a body that adds something its title does not.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (08397a7d2) as an app-wide sweep with a lint that walks it. Walk B re-walk 2 read all three surfaces on glass: the Browse pair curly in one viewport (37), the invoice (38), and a documents alert whose body is now different text — 'This document isn’t available to open yet.' (40).",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/",
+   "shots/w1-walk-b/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-E",
+  "closedCommit": "08397a7d2",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-08",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "The decision's two secondary actions abut with no gutter and read as one run of text at accessibility sizes",
+  "where": "Patina/Features/Decisions/Views/DecisionDetailView.swift",
+  "evidence": "'Not yet' and 'Neither of these' sat shoulder to shoulder on one line at large (shot 56) and at accessibility-extra-large filled the width as a single unbroken run with adjoining tap targets (shot 55) — on the same screen whose sheet Cancel had just been given a full-width 44 pt treatment by GAP1B-07.",
+  "fix": "Give the secondary pair the same full-width ≥44 pt treatment, or stack them above .xxLarge.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (a9cb4ceb4). Walk B re-walk 2 measured the stack at AX-XL: 'Not yet' {{24,594.33},{103.67,44}} and 'Neither of these' {{24,642.33},{230.67,44}} — separate rows, 44 pt each, a 4 pt gap; at default size the gutter is a real 24 pt (was 12). Walk C confirmed at AX3XL (43).",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/",
+   "shots/w1-walk-b/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "a9cb4ceb4",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-09",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "help-tour",
+  "title": "The first-launch tour truncates its own title at accessibility sizes and paints over live content with no dim",
+  "where": "Patina/Features/Help/FirstLaunchTour.swift",
+  "evidence": "At accessibility-extra-large the tour bubble read 'Welcome to Pat…' (shot 82). At any size the bubble was drawn over two live record rows with no dim and no highlight cut-out (shot 83).",
+  "fix": "Let the tour title wrap rather than truncate, add the dim / highlight cut-out B-10's fix names, and scroll the described target into view before showing its step.",
+  "codeNote": "",
+  "judgeNote": "Both filed halves closed — the dim in fix round 1 (72744cbd8) and the title in fix round 2 (7c119e563), where walk B re-walk 2 read it wrapping to 'Welcome / to Patina' at AX-XL (61). ⚠ the same frame exposed a worse defect the wrap created: the bubble clips its step counter and its last body line and offers no Skip or Next at that size. That is W1-B-18, open.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/",
+   "shots/w1-walk-b/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "7c119e563",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-10",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "The sign sheet's money value breaks mid-number at AX-XL",
+  "where": "Patina/Features/Proposals/Views/ProposalSignSheet.swift — the value column beside MonoLabel",
+  "evidence": "C-06's label fix held ('TOTAL', 'EXPIRY' each on one line) but the value read '$18,500' / '.00' on two lines — a contract's total split after the thousands group, on the sheet a client signs from (re-walk 1 shots 16, 17).",
+  "fix": "Give Text(line.value) the same one-line treatment the label got (lineLimit(1) + minimumScaleFactor + allowsTightening).",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (a9cb4ceb4). Walk B re-walk 2: 'TOTAL … $18,500.00' on one unbroken line at AX-XL, 'EXPIRY … Expires Sep 17' likewise (22), with the label column's C-06 fix still holding.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r1/",
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "a9cb4ceb4",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-12",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "navigation",
+  "title": "The in-context auth sheet has no Done/Cancel and no drag indicator",
+  "where": "Patina/ContentView.swift — sheetContent(for: .auth) → AuthSheet()",
+  "evidence": "The sheet raised from the guest Studio's 'Sign in' presented with neither a grabber nor a Done/Cancel control — the exact pair A-100/C-23 gave Settings one screen away (re-walk 1 shot 41). A reader who does not know to swipe down has no visible way out.",
+  "fix": "Apply the same sheet chrome to AuthSheet, or route every PresentedSheet case through one shared chrome modifier so a new case cannot ship without it.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (3dbef7c0b). Walk B re-walk 2: the .auth sheet now carries 'Sheet Grabber' {{163,57},{76,25}} and 'Done' {{342,74},{44,44}} (47). Walk A re-walk 2 confirmed the bare AuthSheet raised from Account carries both (46).",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r1/",
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "3dbef7c0b",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-13",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "visual-system",
+  "title": "The empty-Spaces CTA still carries the ◎ glyph B-60 replaced",
+  "where": "Patina/Features/Rooms/Views/YourSpacesView.swift — the no-rooms CTA",
+  "evidence": "'◎ Scan Your First Room' used the same Unicode glyph B-60's fix removed from the add-room sheet one screen away (re-walk 1 shot 43, on account B's empty state).",
+  "fix": "Use the SF Symbol the add-room sheet now uses.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (3dbef7c0b). Walk B re-walk 2 read the CTA behind the camera-viewfinder SF Symbol on account B's empty state (52).",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r1/",
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "3dbef7c0b",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-B-03",
+  "lane": "L0.2",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "studio-designer",
+  "title": "An Approval decision offers no approve control — the client cannot do the one thing Procurement is waiting on",
+  "where": "public.apply_client_decision (it takes p_selected_option_id and raises insufficient_privilege unless coordination_kind = 'selection'); surfaced at Patina/Features/Decisions/Views/DecisionDetailView.swift",
+  "evidence": "'Design Development sign-off — drawing set B' (badge Approval, Overdue Aug 30, body 'Drawing set B needs your sign-off before Procurement can release the long-lead casegoods') rendered only 'Not yet', 'Neither of these' and 'Discuss this with your designer' at both text sizes (shots 56, 80, 20, 21). The sibling Product decision renders two option cards with 'Choose this' (58), so the screen drew its primary action only from the option list.",
+  "fix": "Give a coordination_kind = 'signoff' decision a real approve path in the RPC (or a decision-level CTA the RPC accepts), then render it. The client-side synthesis the first filing asked for is not available: apply_client_decision refuses a signoff row.",
+  "codeNote": "",
+  "judgeNote": "The SURFACE half is closed on the W1 tip (a9cb4ceb4): the screen now states 'There is nothing to choose here yet — your designer has not added the options.' above the two acts that work, so it is an honest dead end rather than a broken screen (walk B re-walk 2, shot 15). What stays open is the product gap the walker named — a round-one tester still cannot unblock Procurement — and it is a backend row, which is why the lane moves to L0.2.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/",
+   "shots/w1-walk-b/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-C"
+  ],
+  "status": "open"
+ },
+ {
+  "id": "W1-B-11",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "'MEMBER SINCE …' clips at both margins at AX-XL",
+  "where": "Patina/Features/Profile/Views/StudioHubView.swift — the member-since caption",
+  "evidence": "At accessibility-extra-large the caption measures {{0.5,359.33},{401,35.33}} on a 402 pt screen: no margin either side, the leading M cut at x=0 and '2026' running into the right edge (re-walk 1 shot 18, re-walk 2 shot 19).",
+  "fix": "minimumScaleFactor + allowsTightening on the caption, or let it wrap above .accessibility1.",
+  "codeNote": "",
+  "judgeNote": "Filed at re-walk 1 and confirmed unchanged at re-walk 2 — not in any of fix round 2's seven commits, and the screen confirms it.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-B-14",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T2",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "help-tour",
+  "title": "The tour's step-2 copy names a control its spotlight does not light",
+  "where": "Patina/Features/Help/FirstLaunchTour.swift:302 — the step whose anchor is .todayRecord",
+  "evidence": "The bubble reads 'Add pieces to a room with + Add — they follow you everywhere' while the cut-out lights the Record card, because the step's anchor is .todayRecord (re-walk 1 shot 28; unchanged at re-walk 2, shot 28).",
+  "fix": "Move the step to the + Add anchor, or rewrite the copy to describe the Record the spotlight actually names.",
+  "codeNote": "",
+  "judgeNote": "Invisible before B-10's cut-out landed; unmissable now. A consequence of a fix, not a regression of one.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-B-15",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T2",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "help-tour",
+  "title": "The tour scrim leaves the top safe area un-dimmed",
+  "where": "Patina/Features/Help/FirstLaunchTour.swift — FirstLaunchTourScrim, applied as .overlay on content()",
+  "evidence": "A bright cream band runs from y 0 to y 62 pt above the dim on every tour step. Pixel-probed: rgb (250,247,242) above y=62 pt, (180,178,175) below — a visible seam across the top of the screen (re-walk 1 shots 27, 28, 29, 39; unchanged at re-walk 2).",
+  "fix": ".ignoresSafeArea() on the scrim so the dim reaches the screen edge.",
+  "codeNote": "",
+  "judgeNote": "OPEN DELIBERATELY. Commit 7c119e563 records that .ignoresSafeArea() was tried and reverted because it moves the cut-out out of the anchors' coordinate space and step 3's spotlight went to (157,156,152). The walker agrees with the trade as stated and the row stays open as polish — the fix needs the anchor space rethought, not the modifier re-applied.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-B-16",
+  "lane": "L1-B",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "performance-resilience",
+  "title": "A cold-launch failure prints a retained Studio count as current, with no staleness line — L07-05's failure shape on the path the R-02 fix created",
+  "where": "Patina/Features/Profile/ViewModels/StudioHubViewModel.swift (the staleness source) + the cold-launch floor added by 4790ab8eb",
+  "evidence": "Offline cold launch: the hub prints '5 things need your eye' as current above 'We couldn’t gather your Studio…' with no 'Last updated …' line anywhere in the tree (re-walk 2 shot 33; describe-all returns the summary and the error card and no staleness text). The WARM shape still prints the line (35), so the gap is the cold branch alone. Re-walk 1 passed L07-05 only because the cold shape then had no count to be stale.",
+  "fix": "Persist lastLoadedAt beside the retained counts in the floor and let StudioHub.StalenessLine render from it on a cold-launch failure exactly as it does on a warm one; add a test that a floor-restored count never renders without a staleness line.",
+  "codeNote": "",
+  "judgeNote": "This re-opens L07-05, a T0/W1 row, on the branch that fixed R-02. L07-05 is therefore left OPEN in W1; this row carries the mechanism into W2. Fable may wish to pull it back into a W1 follow-up rather than W2 — the closer's placement follows the wave rule (blocker → W1-followup, everything else → W2) and does not pre-empt that call.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-C"
+  ],
+  "status": "open"
+ },
+ {
+  "id": "W1-B-17",
+  "lane": "L1-F",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "settings-account",
+  "title": "After sign-out the guest room list still shows the previous account's room — GAP3-18's failure shape, re-opened by the settledUserId seeding",
+  "where": "the auth seam changed by 4790ab8eb (Patina/Services/Auth/AuthService.swift settledUserId seeding) + SessionScope.reset(); surfaced in Features/Rooms/Views/YourSpacesView.swift",
+  "evidence": "After signing out, the guest Your Spaces still lists 'Guest Bedroom, 180 sq ft · Typed, not scanned, $9,000 Budget' and 'Whole Home, 1 room · 0 items · $0 total' on a device where the same guest session's Studio says 'Guest / Rooms: 0' and Today says 'Start with a room'. Reproduced twice, once per sign-out (44/45/46, then 56→57/58/59). Signing in as a DIFFERENT account does clear it (52, 'No rooms yet').",
+  "fix": "Treat A → nil as a scope change too: reset the local store on sign-out, or scope YourSpacesView's room query to the signed-in owner and show the guest empty state when there is none. Pin it with a test that asserts the guest room list is empty after a sign-out from a seeded account.",
+  "codeNote": "",
+  "judgeNote": "The reset fires on an account CHANGE and not on a sign-out to guest, which is exactly what seeding settledUserId from local_store_owner_user_id changes about the A → nil transition. This is the scope's own 'sign out → guest shows nothing of the previous account' leg and on a shared phone it is a privacy leak. GAP3-18 is left OPEN in W1 for it; R1 · D-17's third sub-claim rests on it.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-B"
+  ],
+  "status": "open"
+ },
+ {
+  "id": "W1-B-18",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "help-tour",
+  "title": "At AX-XL the tour bubble clips its own content and offers no way through it",
+  "where": "Patina/Features/Help/FirstLaunchTour.swift (the popover's 320 pt cap)",
+  "evidence": "At accessibility-extra-large the 'Step 1 of 2' counter is not drawn, the title's ascenders are cut by the bubble's top edge, the last body line 'your space.' overflows below the rounded rect onto the dimmed content, and describe-all returns three elements — Application, Group 'dismiss popup', and the Heading — with no Skip and no Next (re-walk 2 shot 61). At default size the same step draws both buttons (27).",
+  "fix": "Let the popover grow (or scroll) with the type ramp instead of capping at 320 pt, and keep the action row pinned inside the bubble at every size; add an AX-tree assertion that Skip and Next are present at accessibility-extra-large.",
+  "codeNote": "",
+  "judgeNote": "Created by W1-B-09's title-wrap fix: the wrap freed the truncation and the 320 pt cap then ate the action row. The only exit at that size is a tap on the surrounding scrim, which abandons rather than completes the tour and which nothing on screen advertises. Worse than the row it replaced.",
+  "sourceLane": "W1-B",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-b.md",
+  "shots": [
+   "shots/w1-walk-b-r2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-C-01",
+  "lane": "L0.2",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "blocker",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "notifications",
+  "title": "notification_log has no UPDATE policy for authenticated — read state never persists, so the bell can never clear",
+  "where": "supabase/migrations — RLS on public.notification_log; consumed by Patina/Core/Network/NotificationsAPIClient.swift:82-118",
+  "evidence": "pg_policies listed only three SELECT/INSERT/UPDATE policies, all service-role or read-only; there was no UPDATE policy for a signed-in user. Kong logged the app's PATCH /rest/v1/notification_log?opened_at=is.null&channel=in.(in_app,push) as 204, and all six rows stayed opened_at IS NULL. Proven again directly at re-walk 1 with a real bearer token: the PATCH answers 200 with Content-Length 2 — an empty array, zero rows — and the table still reads 6 of 6 unread. On glass: 'Mark all read' cleared every dot, the bell still badged 3, and re-opening the feed showed the three unread rows back (shots 11, 12, 14, 15).",
+  "fix": "Add an UPDATE policy USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id) scoped to the surfaced channels, or a SECURITY DEFINER RPC. Pin it with a supabase/tests RLS test — the iOS unit bars cannot see a 204 with zero rows.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 by supabase/migrations/00562_notification_log_owner_opened.sql + its RLS test (5 assertion groups). Walk C re-walk 2 walked it end to end: bell 3 → Mark all read → no badge on Today → still none after a tab round trip → still none after a COLD RELAUNCH, i.e. after a fresh server fetch (06–11), with the six rows reading 0 unread / status opened. ⚠ the migration is NOT on Strata — runbook §L. ⚠ the anon-key half (the pre-existing service-role policy is USING auth.uid() IS NULL, which is TRUE under anon) is deliberately deferred and still owed.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L0.2",
+  "closedCommit": "fe0a63ee0",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-02",
+  "lane": "L1-F",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "widget-deeplinks",
+  "title": "A link tapped while signed out is neither acknowledged nor delivered after sign-in",
+  "where": "Patina/App/Coordinators/AppCoordinator.swift (pendingLinkNotice / FIFO drain) + Features/Authentication/Views/AuthScreenView.swift",
+  "evidence": "Signed out, firing https://client.patina.cloud/invoices/<id> and then patina://record/invoice:<id> at the Welcome screen produced no pending-link notice in the tree — only auth.welcome.errorBanner (shots A0, A1). Signing back in landed on Today; the invoice never opened (A2, A3).",
+  "fix": "The notice must render on the auth screen and the FIFO must drain when the phase reaches .main after an interactive sign-in, not only on the cold-launch path.",
+  "codeNote": "",
+  "judgeNote": "Both halves work; the residue was the slot-precedence collision W1-C-09 describes, closed in fix round 2 (4790ab8eb). Walk C re-walk 2 on the real path: sign out → Welcome with an empty slot (61) → link → 'We’ll open what you tapped once you’re in.' (62) → typed-password sign-in → the INVOICE opens (63).",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "4790ab8eb",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-03",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "Companion panel headline breaks mid-word at accessibility sizes",
+  "where": "Patina/Features/Companion — CompanionContextProvider.swift:194, the panel title",
+  "evidence": "At content_size accessibility-extra-extra-extra-large the Companion panel rendered 'Want a recommendati / on?' across two lines (shot 50) — the un-closed half of C-06, whose own evidence list names shots/C/36,37-ax3xl-companion.",
+  "fix": "Apply the same treatment DailyGreetingHeader received — minimumScaleFactor plus a word-safe wrap — to the panel title.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (a9cb4ceb4). Walk C re-walk 2 reproduced it in the exact context the finding names — panelTitle returns 'Want a recommendation?' only on .emergence, the Pieces screen — and read 'Want a / recommendation?' wrapped at the word with the long word scaled to fit (25). The mechanism is lineLimit(3) + minimumScaleFactor(0.5): a line ceiling is what makes the scale factor engage. This closes C-06's last surface.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "a9cb4ceb4",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-04",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "accessibility",
+  "title": "Pieces grid card collapses at large type — verdict pill clips mid-word, overflows the card and collides with the favourite heart",
+  "where": "Patina/Features/Browse — the product card's verdict pill + favourite control",
+  "evidence": "At XXXL the pill read 'Good matc' with the heart glyph drawn on top of the clipped text (shot 42). At accessibility-XXXL the pill overflowed the card entirely, covered the image placeholder, the maker line truncated to 'FIXTUR…' and the price was cut in half by the tab bar (shot 53).",
+  "fix": "Let the pill wrap or scale with the ramp, give the heart its own lane rather than overlaying the pill, and let the card's height grow with the type size.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (a9cb4ceb4). Walk C re-walk 2: at XXXL the pill reads 'Good match' in full with the heart beside it in its own lane and the price inside the card (21); at AX3XL the pill stays inside its card, does not cover the image, and the price is fully legible once the card is scrolled into view — the card grows with the ramp (22, 23).",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "a9cb4ceb4",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-05",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "Product detail primary CTA truncates at XXXL",
+  "where": "Patina/Features/ProductDetail/Views/ProductDetailView.swift — the pinned purchase bar",
+  "evidence": "At content_size extra-extra-extra-large the primary read 'Ask Leah to sour…' in a 144.33 × 52 frame while the secondary 'Add to room' fitted; the full string survived only in the AX label (shots 41, 11).",
+  "fix": "Two-line label plus minimumScaleFactor on the primary, or stack the two actions vertically above .xxLarge — the same fallback P-34 gave the Welcome buttons.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (a9cb4ceb4). Walk C re-walk 2: at XXXL the purchase bar STACKS — 'Ask Leah to source this' on one full-width primary, 'Add to room' below it, no truncation (20).",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "a9cb4ceb4",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-06",
+  "lane": "L1-E",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "M",
+  "area": "copy",
+  "title": "152 user-facing strings still ship a straight apostrophe; two spellings appear on one screen",
+  "where": "app-wide; named sites included PushPrimerView.swift:25, the Companion coaching mark, three Invoices strings and StudioHubView's Budget row",
+  "evidence": "A grep over the app target for a straight apostrophe inside a string literal, comment lines excluded, returned 152 hits while 48 files already typed U+2019. On glass: 'Couldn't load this decision' beside 'Let's try that again' in the same block (shot 63). At re-walk 1 the count had risen to 159, because fix round 1 added one on the most-seen screen in the app (the new link notice).",
+  "fix": "Add an apostrophe rule to the lint over SourceScan.code(in:) and sweep once, instead of fixing named deck rows one at a time.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (08397a7d2). Walk C re-walk 2 counted the app target itself rather than trusting the sweep: 282 double-quoted literals carry U+2019 between letters and 2 carry U+0027 — and both of those two are trailing comments. The rule exists and is app-wide: AppApostropheLintTests.everyAppLiteralIsCurly walks every .swift under Patina/ with a >300-file floor so an empty walk cannot pass.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-E",
+  "closedCommit": "08397a7d2",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-08",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "major",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "settings-account",
+  "title": "Settings' Notifications toggle reads ON while iOS authorization is denied",
+  "where": "Patina/Features/Settings/Views/SettingsView.swift — the Preferences section",
+  "evidence": "On the same launch where the push primer had just reported 'Notifications are off for Patina. You can turn them on in Settings.' (shot 08, after Don't Allow at the system prompt), Settings showed the Notifications toggle in the ON position (shot 35).",
+  "fix": "Read UNUserNotificationCenter.notificationSettings().authorizationStatus and reflect it in the control — the same honesty C2-09's primer now has.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (3dbef7c0b). Walk C re-walk 2 read it under the exact launch condition the finding named (authorization still .denied on that simulator): the row is no longer a switch but 'Notifications are off in iOS Settings' with a slashed-bell icon and a chevron — a door, not a toggle (17). Walk A could not decide it on its own device because it had declined the primer with 'Not now' rather than denying at the system prompt, which is notDetermined and correctly still a switch.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-F"
+  ],
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "3dbef7c0b",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-09",
+  "lane": "L1-A",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "auth",
+  "title": "Welcome shows 'Something went wrong on our side' immediately after a clean sign-out, and it occupies the pending-link notice's row",
+  "where": "Patina/Services/Auth/AuthService.swift (the default branch) + Features/Authentication/Views/AuthScreenView.swift:366-380 (AuthStatusSlot)",
+  "evidence": "Both sign-outs performed in walk C landed on Welcome with the banner already present (shots 97, A6); nothing had failed. AuthStatusSlot.message returns errorMessage BEFORE pendingLinkNotice, so the two share one slot and the error always wins — which is what kept C2-21 broken on the real path.",
+  "fix": "Do not surface a provider/sign-out error on a clean sign-out. Closing this closes C2-21 on the real path for free.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (4790ab8eb). Walk C re-walk 2 signed out through the real control and the Welcome screen came back with an EMPTY status slot (61), where walk 1 reproduced the banner twice on that same path. Walk B re-walk 2 saw the same across a real account change (43).",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-A",
+  "closedCommit": "4790ab8eb",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-12",
+  "lane": "L1-F",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "widget-deeplinks",
+  "title": "AASA publishes /piece/* while the app's route table also accepted /pieces/*, and producers write /doc/*",
+  "where": "apps/client-portal/src/app/.well-known/apple-app-site-association/route.ts:40 vs Patina/App/DeepLinking/DeepLinkHandler.swift:290-297",
+  "evidence": "AASA declared [\"/piece/*\", \"/invoices/*\", \"/proposals/*\", \"/decisions/*\"] while the app's route table accepted both 'piece' and 'pieces'. Firing /pieces/<id> opened Safari on the production client-portal sign-in page (shot 76); /piece/<id> opened the piece detail (77). Separately, notification_log.metadata->>'deep_link' carried /doc/<id>, a path AASA does not claim.",
+  "fix": "Settle one spelling, then publish in AASA every path a producer actually writes — or stop emitting deep_link values whose paths the association does not claim.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (3dbef7c0b). Walk C re-walk 2: DeepLinkHandler's case is 'piece' alone, AASA publishes the same four paths, and apps/client-portal/src/app serves piece (singular) — one spelling, agreed across all three. On glass /piece/<id> opens the app (12) and /pieces/<id> opens Safari (13), unchanged behaviour but now honest: nothing writes that URL and the portal has no such route. The /doc/* half was dismissed on evidence — all three /doc/<id> rows in notification_log belong to designer@patina.dev, none to a client.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L0.2"
+  ],
+  "status": "closed",
+  "closedBy": "W1 L1-F",
+  "closedCommit": "3dbef7c0b",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-14",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "visual-system",
+  "title": "Proposal detail's floating Back button overlaps scrolled content",
+  "where": "Patina/Features/Proposals — the proposal detail's floating back control",
+  "evidence": "Scrolled to the proposal's lower half, the circular Back button sat on top of the 'Timeline' heading (shot 28).",
+  "fix": "Give the scroll view a top inset for the floating control, or fade the control as the content scrolls under it.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 1 (440a312ea) — A-89's scroll-edge scrim. Walk C re-walk 2 scrolled the proposal detail: 'Timeline' fades to near-invisible as it passes under the floating Back button and the next heading sits clear below it; no legible text is overlapped any more (19).",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "440a312ea",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-15",
+  "lane": "L1-C",
+  "wave": "closed",
+  "tier": "closed",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "Decision defer sheet's message preview clips its own text at accessibility sizes",
+  "where": "Patina/Features/Decisions/Views/DecisionDeferSheet.swift — the preview box",
+  "evidence": "At accessibility-XXXL the preview read 'About Dining chairs - Shaker' with the next line cut off mid-height inside the box, while Send and Cancel below it were correct and fully visible (shot 68).",
+  "fix": "Let the preview box scroll or grow with its content; the button pair is already pinned correctly.",
+  "codeNote": "",
+  "judgeNote": "Closed in fix round 2 (a9cb4ceb4). Walk C re-walk 2 at AX3XL: the box grows with the ramp and scrolls — three complete lines, 'About Dining chairs - Shaker Oak vs Windsor', no cut-through (44, 45), with GAP1B-02 still passing alongside it.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "closed",
+  "closedBy": "W1 L1-C",
+  "closedCommit": "a9cb4ceb4",
+  "closedOn": "2026-09-03"
+ },
+ {
+  "id": "W1-C-07",
+  "lane": "L1-A",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "onboarding",
+  "title": "A signed-in user is shown the signed-out onboarding intro, still offering 'I already have an account — Sign in'",
+  "where": "Patina/Features/Onboarding — the intro carousel",
+  "evidence": "GoTrue logged a successful password grant for client@patina.dev (POST /token 200, user agent Patina/3 CFNetwork) and the very next frame was the intro carousel with Onboarding.SignInButton enabled (shots 04, 05). At re-walk 2 the affordance is still present on carousel page 1, page 2 and the style quiz while a live client session exists (48, 49, 51, 55 + describe_screen) — the session provably live, since skipping the quiz lands straight on Today with Leah Hartwell and the client's rows.",
+  "fix": "Hide the sign-in affordance on the intro when AuthService already holds a session; the carousel is legitimate for a signed-in user who has not completed onboarding, the second sign-in door is not.",
+  "codeNote": "",
+  "judgeNote": "Honest caveat from the walker: walk 1's exact entry (a fresh password sign-in landing on the carousel) did not reproduce at re-walk 2, because OnboardingCompletion now remembers the account on this install — both sign-ins went straight through. The defect as described is live; its trigger is narrower than walk 1 implied and the walker reached it with --resetonboarding.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-C-10",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "help-tour",
+  "title": "--resetonboarding cannot replay the first-launch tour: it clears UserDefaults while the tour's state lives in profiles.help_state",
+  "where": "Patina/PatinaApp.swift:67-71 + the Supabase help-state adapter",
+  "evidence": "The reset block cleared only hasSeenThreshold, hasCompletedOnboarding and roomCount. Fix round 2 (7c119e563) added the carousel keys and walk C re-walk 2 confirms the CAROUSEL half is fixed (48). The TOUR half is not: twice after --resetonboarding the tour did not run (52 with the flag, 54 after a further plain relaunch), because forgetAllFirstLaunchTourState() walks UserDefaults only and the tour's v2 backing is Supabase profiles.help_state, which read {\"tours\": {\"ios-first-launch-tour\": {\"launched\": true}}} throughout. The tour ran on the very next launch after that column was set to {} on the LOCAL stack (55, 56).",
+  "fix": "Have --resetonboarding clear the profile's help_state too (or have the adapter honour the reset), not only the local keys.",
+  "codeNote": "",
+  "judgeNote": "Half closed, half open, and the residual is now located rather than suspected. It matters beyond QA: walk B could only reach B-10, W1-B-09, W1-B-14, W1-B-15 and W1-B-18 by running the app offline (so the hydrate failed) or as a guest. A tester who wants to see the tour again cannot.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/"
+  ],
+  "rootScope": "both",
+  "alsoTouches": [
+   "L1-F"
+  ],
+  "status": "open"
+ },
+ {
+  "id": "W1-C-11",
+  "lane": "L1-B",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.85,
+  "effort": "M",
+  "area": "performance-resilience",
+  "title": "A cold-launch request burst intermittently stalls after the socket connects, and every request then times out at 30 s until relaunch",
+  "where": "Patina/Core/Network — URLSession usage across the API clients",
+  "evidence": "Reproduced at re-walk 2 on a HEALTHY stack with no deliberate outage. Twice, a decision opened by deep link hung on 'One moment…' and fell to 'Couldn’t load this decision' (26–33). The CFNetwork log: [C67 … /rest/v1/client_decisions] start → Socket received CONNECTED → reporting state ready → event: client:data_stall @3.114s, with the twin [C68 … client_decision_options] doing the same. Kong logged nothing for either (it writes its access line on response). Controls on the same build and simulator: the identical queries answer from the host in 7 ms / 20 ms; the simulator's own Safari reaches kong instantly (34); the same decision opens first try from the in-app Decisions list with both requests logged 200 (37); the deep link works at a warm app (38); an invoice deep link at cold launch works (39); a later cold-launch decision deep link succeeded (41).",
+  "fix": "Instrument and bound the cold-launch burst (it fires ~16 requests), and give the retry a path that does not depend on the stalled connection. Confirm on hardware first: one deliberate airplane-mode round trip plus a cold-launch push tap on the device pass.",
+  "codeNote": "",
+  "judgeNote": "No longer PLAUSIBLE — it is intermittent, clusters around the cold-launch burst, and is client-side of a connected socket. Its worst face is a push notification tapped from a cold app landing on an error screen whose retry does not recover, which is R1 · D-07's exact scenario. Still owes the physical-device round trip before it is treated as fully product-side.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-C-13",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T2",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "help-tour",
+  "title": "First-launch tour step 2's popover is drawn over the tab bar",
+  "where": "Patina/Features/Help/FirstLaunchTour.swift — step 2 popover placement",
+  "evidence": "Step 2 ('Save what you love') renders across the bottom of the screen, covering the house rail and all of the tab bar except a sliver of 'Tod…' (shot 93; confirmed on glass again at re-walk 2, shot 57). Its own target stays visible above it. Step 3 is the proof the placement machinery can do better — its popover sits above the bar with the Studio tab punched out of the scrim beneath it (58).",
+  "fix": "Offset the popover above the tab bar's safe area so the bar it is teaching stays visible.",
+  "codeNote": "",
+  "judgeNote": "Unchanged by the B-10 scrim work, which changed the dim and not the placement.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/",
+   "shots/w1-walk-c/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-C-16",
+  "lane": "L1-B",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "performance-resilience",
+  "title": "A decision the client cannot read renders as a network error whose retry can never succeed",
+  "where": "Patina/Features/Decisions — DecisionDetailViewModel / DecisionDetailView",
+  "evidence": "/decisions/b0000000-…-0d2c01 is the same client's own project, status draft. PostgREST answered the app 200 with body length 2 ([]) for both the decision and its options, and the screen still printed 'Couldn’t load this decision' + 'Let’s try that again' (shot 40).",
+  "fix": "Distinguish 'no row' from 'the fetch failed': decision == nil after a SUCCESSFUL response is 'this isn’t available any more', with a way back to Decisions — not a retry.",
+  "codeNote": "",
+  "judgeNote": "Notification and email deep links carry decision ids, so a decision pulled back to draft, resolved or deleted gives every one of those links a false error. Adjacent to W1-C-11 (which is the genuine-stall case) and to W1-B-03.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-C-17",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "The decision option row's CTA truncates to 'Choo…' at AX3XL",
+  "where": "Patina/Features/Decisions/Views/DecisionDetailView.swift — the per-option primary",
+  "evidence": "At AX3XL the per-option primary truncates to 'Choo…' on both options, beside prices that are full size (shot 43).",
+  "fix": "The PurchaseActionBar treatment W1-C-05 received: stack the price above a full-width CTA above .accessibility1, or two-line the label with minimumScaleFactor.",
+  "codeNote": "",
+  "judgeNote": "Same class as W1-C-05, on a surface fix round 2 did not touch — and this one is the button that resolves the decision.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-C-18",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T2",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "accessibility",
+  "title": "The Browse header truncates rather than wrapping at AX3XL",
+  "where": "Patina/Features/Recommendations/Views/RecommendationsView.swift — the screen header",
+  "evidence": "At AX3XL the screen title truncates to 'Browse pie…' and the Saved row's value truncates to 'NOTHIN…' (shots 22, 23), while the subtitle below wraps correctly. Every other headline on the walk wraps at the word.",
+  "fix": "lineLimit + minimumScaleFactor on the title — the same pairing C-06 got; let the Saved value wrap or drop to its own line.",
+  "codeNote": "",
+  "judgeNote": "The one headline on the walk that still truncates after C-06 and W1-C-03 closed every other named surface.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-C-19",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T2",
+  "severity": "polish",
+  "testerVisible": true,
+  "confidence": 0.7,
+  "effort": "S",
+  "area": "help-tour",
+  "title": "Completing the tour does not record 'completed' — a finished tour is stored identically to one that auto-started and was never seen",
+  "where": "Patina/Features/Help/FirstLaunchTour.swift — the tour's persistence",
+  "evidence": "After tapping Done on step 3 of 3, help-system.tour.ios-first-launch-tour holds {\"launched\":true} and profiles.help_state reads {\"tours\": {\"ios-first-launch-tour\": {\"launched\": true}}} — so FirstLaunchTourState.isResolved stays false.",
+  "fix": "Write completed: true + completedAt on complete() and let isResolved carry the suppression, so launched can go back to meaning 'attempted'.",
+  "codeNote": "",
+  "judgeNote": "PLAUSIBLE, not confirmed: the walker signed out between the Done tap and the read, so a sign-out-side reset is not excluded. Suppression happens to work today because the orchestrator gates on launched. Related to W1-C-10 — the same state is what --resetonboarding cannot clear.",
+  "sourceLane": "W1-C",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/walk-c.md",
+  "shots": [
+   "shots/w1-walk-c-rewalk2/"
+  ],
+  "rootScope": "both",
+  "status": "open"
+ },
+ {
+  "id": "W1-S-01",
+  "lane": "L1-C",
+  "wave": "W2",
+  "tier": "T1",
+  "severity": "minor",
+  "testerVisible": true,
+  "confidence": 0.95,
+  "effort": "S",
+  "area": "browse-saved",
+  "title": "A-34 / C-11's unscored-piece guard is on an unmerged, unreviewed L1-C commit",
+  "where": "first-flight/w1-l1c commit 46752b646 — the matchVerdict guards in ProductDetailView and RecommendationsView, plus UnscoredMatchPillTests",
+  "evidence": "integration.md §7 records it: L1-C was merged at a reviewed point (117d547c8), two commits below its branch tip, and 46752b646 is one of the two. On the wave tip both views still draw product.matchLabel unconditionally, and MatchScoreResolverTests' two known issues ('the verdict pills guard on matchVerdict' ×2) are that, honestly recorded.",
+  "fix": "Review 46752b646 and land it, or re-derive the guard on top of the integrated tip; either way take the two known issues off MatchScoreResolverTests in the same commit.",
+  "codeNote": "",
+  "judgeNote": "A-34 and C-11 are CLOSED on the wave tip: no percentages anywhere, one band per piece per session, and walk C saw a linked piece read 'Not scored yet' — so the label is honest without the guard and the fixture has no unscored piece to expose it. This row carries the residue, not the finding. Two other branch tips are likewise ahead of what was merged (first-flight/w1-l1d 5c5893fc3, first-flight/w1-l1e 36c525b7f) and are recorded in integration.md §7 rather than here, because nothing on them is claimed by a closed row.",
+  "sourceLane": "W1-S",
+  "ledger": "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/integration.md",
+  "shots": [],
+  "rootScope": "both",
+  "status": "open"
  }
 ]

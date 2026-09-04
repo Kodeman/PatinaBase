@@ -132,7 +132,7 @@ struct AskDesignerSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(failure.sentence)
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.error)
+                        .foregroundStyle(PatinaColors.Text.error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,7 +186,7 @@ struct AskDesignerSheet: View {
                 // No thread can exist for this relationship. The act should
                 // not have drawn; say so plainly rather than pretending.
                 failure = MoneyFailure(
-                    "We couldn't reach your designer. Nothing has been sent.",
+                    "We couldn’t reach your designer. Nothing has been sent.",
                     offersDesignerMessage: false
                 )
                 isSending = false
@@ -205,7 +205,7 @@ struct AskDesignerSheet: View {
         } catch {
             MoneyFailureCopy.log("ask-designer", error)
             failure = MoneyFailure(
-                "We couldn't send that. Your designer hasn't seen it yet.",
+                "We couldn’t send that. Your designer hasn’t seen it yet.",
                 offersDesignerMessage: false
             )
         }

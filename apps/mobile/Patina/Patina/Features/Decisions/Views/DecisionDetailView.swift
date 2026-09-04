@@ -8,6 +8,14 @@
 //  on confirm the choice is fed through `apply_decision`. Designer-side
 //  sees the same view read-only (RLS enforces who can respond).
 //
+//  W1-B-03 (the no-options line) and W1-B-08 (the deferral pair's two layout
+//  branches) took this past SwiftLint's 500-line `file_length`. The consent
+//  sheet below is the obvious thing to lift out, and four suites in three
+//  other lanes read it AT THIS PATH — `DecisionSheetDetentTests`,
+//  `MoneyAndStudioCopyTests`, `TapTargetTests`, `TopBandFoldTests` — so the
+//  split is a wave-wide edit, not a hygiene one. Scoped here instead; the
+//  split belongs to W2's R3 pass, with those pins.
+// swiftlint:disable file_length
 
 import SwiftUI
 
@@ -15,6 +23,7 @@ struct DecisionDetailView: View {
     let decisionId: String
     @State private var viewModel = DecisionDetailViewModel()
     @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -27,8 +36,22 @@ struct DecisionDetailView: View {
                         Text(DecisionOptionCopy.allUnavailableLine)
                             .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.Text.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 24)
                             .accessibilityIdentifier("decisionDetail.optionsPending")
+                    } else if viewModel.hasNoOptionsAtAll {
+                        // W1-B-03: an overdue decision with no options row drew
+                        // NOTHING here, so the screen read as an approval whose
+                        // approve button was missing. See
+                        // `DecisionOptionCopy.nothingToChooseYetLine` for why a
+                        // synthesised Approve would be a control that cannot
+                        // succeed.
+                        Text(DecisionOptionCopy.nothingToChooseYetLine)
+                            .font(PatinaTypography.bodySmall)
+                            .foregroundStyle(PatinaColors.Text.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 24)
+                            .accessibilityIdentifier("decisionDetail.noOptions")
                     } else {
                         ForEach(viewModel.options) { option in
                             optionCard(option)
@@ -52,6 +75,8 @@ struct DecisionDetailView: View {
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task { await viewModel.load(decisionId: decisionId) }
+        // C4-12 (L1-B's note C-L1B-2): exactly what the `.task` above calls.
+        .refreshable { await viewModel.load(decisionId: decisionId) }
         .sheet(item: $viewModel.pendingDeferral) { deferral in
             DecisionDeferSheet(
                 deferral: deferral,
@@ -67,7 +92,7 @@ struct DecisionDetailView: View {
                 },
                 onCancel: { viewModel.cancelDeferral() }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents(DecisionSheetDetents.detents(for: dynamicTypeSize))
         }
         .sheet(isPresented: consentSheetBinding) {
             if let option = pendingOption {
@@ -85,7 +110,7 @@ struct DecisionDetailView: View {
                     },
                     onCancel: { viewModel.cancelSelection() }
                 )
-                .presentationDetents([.medium, .large])
+                .presentationDetents(DecisionSheetDetents.detents(for: dynamicTypeSize))
             }
         }
     }
@@ -122,7 +147,7 @@ struct DecisionDetailView: View {
             if !viewModel.isResolved, let due = DateDisplay.due(decision.due_date) {
                 Text(due.text)
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                    .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
                     .padding(.top, 2)
                     .accessibilityIdentifier("decisionDetail.due")
             }
@@ -179,7 +204,7 @@ struct DecisionDetailView: View {
         HStack(spacing: 6) {
             Image(systemName: "checkmark.seal.fill")
                 .foregroundStyle(PatinaColors.sage)
-            Text("You've responded to this decision")
+            Text("You’ve responded to this decision")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.sage)
         }
@@ -225,7 +250,17 @@ struct DecisionDetailView: View {
                 Spacer()
                 if isRecommended {
                     Text("Recommended")
+                        // C-06: the badge is one word in a capsule beside a
+                        // title that takes the rest of the row. At
+                        // accessibility-extra-large the capsule was squeezed
+                        // below the word's own width and it wrapped inside
+                        // itself — "Recommende / d". One line, tightened, and
+                        // never split.
                         .font(PatinaTypography.monoTiny)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .allowsTightening(true)
+                        .fixedSize(horizontal: true, vertical: false)
                         .foregroundStyle(PatinaColors.Text.interactive)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -286,6 +321,16 @@ struct DecisionDetailView: View {
         let dollars = cents / 100
         return "$\(NumberFormatter.localizedString(from: NSNumber(value: dollars), number: .decimal))"
     }
+}
+
+// MARK: - The acts below the options
+
+/// `W1-B-08` grew the deferral pair into two layout branches and a shared
+/// control, which took `DecisionDetailView`'s body past SwiftLint's 300-line
+/// `type_body_length`. These four are a different job from the screen's
+/// composition above — the acts that do NOT resolve the decision — so they
+/// move to an extension rather than buying a scoped disable.
+extension DecisionDetailView {
 
     /// SP-17: the two answers a real client gives, alongside the choices.
     /// Neither resolves the decision — both open a note into the thread with
@@ -303,22 +348,45 @@ struct DecisionDetailView: View {
                         .foregroundStyle(PatinaColors.Text.muted)
                         .accessibilityIdentifier("decisionDetail.deferralSent")
                 }
-                HStack(spacing: 12) {
-                    ForEach(DecisionDeferral.allCases) { deferral in
-                        Button(deferral.actLabel) {
-                            viewModel.beginDeferral(deferral)
+                // W1-B-08: the pair sat shoulder to shoulder with a 12 pt
+                // gutter, and at accessibility sizes the two labels grew into
+                // one run of text with their tap targets touching — "Not
+                // yetNeither of these". Above `.accessibility1` they stack,
+                // each full width; below it the gutter is a real one and each
+                // label holds its own line.
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(DecisionDeferral.allCases) { deferral in
+                            deferralAct(deferral)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                        .accessibilityIdentifier("decisionDetail.defer.\(deferral.rawValue)")
+                    }
+                } else {
+                    HStack(spacing: 24) {
+                        ForEach(DecisionDeferral.allCases) { deferral in
+                            deferralAct(deferral)
+                        }
+                        Spacer(minLength: 0)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
         }
+    }
+
+    /// One deferral act, so both layout branches in `deferralActs` draw the
+    /// same control rather than two copies that can drift (`W1-B-08`).
+    private func deferralAct(_ deferral: DecisionDeferral) -> some View {
+        Button(deferral.actLabel) {
+            viewModel.beginDeferral(deferral)
+        }
+        .font(PatinaTypography.bodySmallMedium)
+        .foregroundStyle(PatinaColors.Text.interactive)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("decisionDetail.defer.\(deferral.rawValue)")
     }
 
     /// Quiet R20 affordance: jump to the project's comms thread to talk the
@@ -345,6 +413,25 @@ struct DecisionDetailView: View {
             action: { Task { await viewModel.load(decisionId: decisionId) } }
         )
         .padding(.top, 80)
+    }
+}
+
+// MARK: - Sheet detents
+
+/// GAP1B-01 / GAP1B-02. Both decision sheets were declared
+/// `.presentationDetents([.medium, .large])`, and a sheet offered `.medium`
+/// rests there. At `accessibility-extra-large` the content grew ~2.5x inside
+/// a half-screen sheet: Approve rendered ~17 pt of its 49.9 pt on an 874 pt
+/// display, Cancel sat 58 pt below the edge, and `showsIndicators: false`
+/// hid that the sheet scrolled at all. The consent sheet is the app's
+/// e-signature surface — it had no reachable primary act and no reachable
+/// way out.
+///
+/// Above `.accessibility1` there is one honest answer and it is the whole
+/// screen. Below it the two-detent sheet is unchanged.
+enum DecisionSheetDetents {
+    static func detents(for size: DynamicTypeSize) -> Set<PresentationDetent> {
+        size.isAccessibilitySize ? [.large] : [.medium, .large]
     }
 }
 
@@ -420,6 +507,15 @@ private struct DecisionConsentSheet: View {
                     .accessibilityIdentifier("decisionConsent.signatureField")
                 }
 
+            }
+            .padding(24)
+        }
+        .background(PatinaColors.Background.primary)
+        .patinaTopBand()
+        // GAP1B-01: the act does not travel with the scroll. An inset keeps
+        // both controls on screen at every text size and every offset.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 12) {
                 PatinaButton(
                     "Approve",
                     style: .clay,
@@ -435,15 +531,19 @@ private struct DecisionConsentSheet: View {
                 }
                 .accessibilityIdentifier("decisionConsent.approve")
 
-                PatinaButton("Cancel", style: .ghost, isEnabled: !isSubmitting) {
+                // GAP1B-07: `.ghost` renders as bare left-aligned text and
+                // measured 17.6 pt against the 44 pt floor. `.secondary` is
+                // the same component, full width and 52 pt tall.
+                PatinaButton("Cancel", style: .secondary, isEnabled: !isSubmitting) {
                     onCancel()
                     dismiss()
                 }
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 16)
+            .background(PatinaColors.Background.primary)
         }
-        .background(PatinaColors.Background.primary)
-        .patinaTopBand()
     }
 }
 

@@ -225,7 +225,7 @@ extension AppNotificationType {
         case .newRecommendations: return "New pieces for you"
         case .designerResponse: return "Designer update"
         case .styleUpdate: return "Style profile updated"
-        case .emergenceAlert: return "Something's emerging"
+        case .emergenceAlert: return "Something’s emerging"
         case .scanComplete: return "Room scan ready"
         case .proposal: return "A proposal needs your signature"
         case .invoice: return "An invoice is waiting"

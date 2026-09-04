@@ -103,7 +103,7 @@ extension XCUIApplication {
     /// Tap "Let's walk" to start the walk
     func tapLetsWalk() {
         let button = letsWalkButton
-        XCTAssertTrue(button.waitForExistence(timeout: 5), "Let's walk button should appear")
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "Let’s walk button should appear")
         button.tap()
     }
 

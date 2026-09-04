@@ -15,13 +15,33 @@ public final class RoomStore {
 
     public let context: ModelContext
 
+    /// Whether this store is the device-global one every screen reads.
+    ///
+    /// GAP3-18's scope applies to that store and only that store: a caller
+    /// that brought its own `ModelContext` — a test, a preview, a migration
+    /// working set — is looking at rows it created, not at an account's.
+    /// Gating those too made `allRooms()` answer `[]` in every suite that
+    /// builds an in-memory container, which is a different bug.
+    private let isSharedStore: Bool
+
     public init(context: ModelContext) {
         self.context = context
+        self.isSharedStore = PersistenceController.isSharedContext(context)
     }
 
     // MARK: - Reads
 
+    /// The GAP3-18 scope, applied to the shared store only.
+    private var accountRowsAreVisible: Bool {
+        !isSharedStore || LocalStoreOwnership.accountRowsAreVisible
+    }
+
     public func allRooms() -> [RoomModel] {
+        // GAP3-18: after a sign-out the store still holds the account's rooms
+        // — it must, or the same account signing back in loses them — but the
+        // guest now holding the phone is not their owner. The rows stay; the
+        // read is scoped.
+        guard accountRowsAreVisible else { return [] }
         let descriptor = FetchDescriptor<RoomModel>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
@@ -29,6 +49,7 @@ public final class RoomStore {
     }
 
     public func room(id: UUID) -> RoomModel? {
+        guard accountRowsAreVisible else { return nil }
         let descriptor = FetchDescriptor<RoomModel>(
             predicate: #Predicate { $0.id == id }
         )
@@ -43,6 +64,7 @@ public final class RoomStore {
     }
 
     public func allItems() -> [SavedItem] {
+        guard accountRowsAreVisible else { return [] }
         let descriptor = FetchDescriptor<SavedItem>(
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
         )
@@ -107,6 +129,7 @@ public final class RoomStore {
         room.measuredWithUnitControl = measuredWithUnitControl
         context.insert(room)
         save()
+        LocalRoomSignal.shared.changed()
         return room
     }
 
@@ -281,8 +304,16 @@ public final class RoomStore {
     }
 
     public func delete(_ room: RoomModel) {
+        // B-03: a synced room deleted here is still a row on the server, and
+        // the next reconcile re-created it. The tombstone is what the merge
+        // reads so a delete the server has not confirmed is still a delete.
+        if let remoteId = room.remoteId { RoomTombstones.record(remoteId) }
         context.delete(room)
         save()
+        // B-03: Studio kept reporting "2 ROOMS" and kept rendering the card
+        // for a room the person had just deleted, because its view model
+        // snapshots rooms in one `onAppear` and nothing told the snapshot.
+        LocalRoomSignal.shared.changed()
     }
 
     // MARK: - Items

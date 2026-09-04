@@ -30,8 +30,13 @@ struct HomeHeaderTests {
         let source = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         // The greeting is what the screen prints…
         #expect(source.contains("Text(greeting)"))
-        // …and "Today" is still what the surface is called (C4).
-        #expect(source.contains("accessibilityLabel(\"Today\")"))
+        // …and "Today" is still what the surface is called (C4). C-18 /
+        // W1-B-05 moved the name off the CONTAINER, where a label collapsed the
+        // group and took the "About Today" help door out of the accessibility
+        // tree, and onto the date line inside it.
+        #expect(source.contains("accessibilityLabel(\"Today. \\(dateString)\")"))
+        #expect(!source.contains(".accessibilityLabel(\"Today\")"),
+                "labelling the .contain container swallows its children (C-18)")
         // The bare monogram avatar is gone.
         #expect(!source.contains("PatinaGradients.earth"))
         #expect(!source.contains("monogramAvatar"))
@@ -51,7 +56,7 @@ struct HomeHeaderTests {
     /// flag-off root and not where the bar carries the Studio tab — and the
     /// tour anchor it hosts travels with it rather than being left mounted on
     /// a control that is not there.
-    @Test("the Studio pill is the root-without-a-bar's door, and only that root's")
+    @Test("the Studio pill is the root-without-a-bar’s door, and only that root’s")
     func theStudioPillIsGatedOffWhereTheBarDraws() throws {
         let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         #expect(header.contains("var showsStudioControl: Bool = true"))

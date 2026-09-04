@@ -22,15 +22,27 @@ struct StudioHubView: View {
                 guestState
             } else if viewModel.isLoading && !viewModel.hasLoaded {
                 loadingState
-            } else if viewModel.failedSources.count == 7 {
-                errorState
             } else {
-                if let loadMessage = viewModel.loadMessage {
-                    partialLoadNotice(loadMessage)
+                // L07-05: the staleness line is drawn ABOVE the branch, so it
+                // reaches the total-failure shape too. Inside the `else` it was
+                // structurally unreachable — the one shape that most needs it —
+                // and a warm hub kept printing "5 things need your eye" as
+                // current with every section replaced by the error card and
+                // nothing anywhere saying when that count was last true.
+                if let stalenessLine = viewModel.stalenessLine {
+                    StudioHubStalenessLine(text: stalenessLine)
                 }
 
-                ForEach(StudioQueueSectionKind.allCases) { kind in
-                    sectionCard(viewModel.snapshot.section(kind))
+                if viewModel.failedSources.count == 7 {
+                    errorState
+                } else {
+                    if let loadMessage = viewModel.loadMessage {
+                        partialLoadNotice(loadMessage)
+                    }
+
+                    ForEach(StudioQueueSectionKind.allCases) { kind in
+                        sectionCard(viewModel.snapshot.section(kind))
+                    }
                 }
             }
         }
@@ -65,7 +77,14 @@ struct StudioHubView: View {
                     .foregroundStyle(PatinaColors.Text.interactive)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("Studio summary: \(hint)")
-            } else if viewModel.hasLoaded {
+            } else if viewModel.hasLoaded && viewModel.failedSources.isEmpty {
+                // R-01: `hasLoaded` alone is "a load finished", not "a load
+                // answered". A failed refresh leaves every hint nil, so the
+                // hub printed "Nothing needs your attention right now."
+                // directly above its own "We couldn't gather your Studio"
+                // card — an assertion of emptiness on the strength of a
+                // request that never landed. Emptiness is only claimable when
+                // something actually came back.
                 Text("Nothing needs your attention right now.")
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
@@ -128,15 +147,19 @@ struct StudioHubView: View {
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button("Open settings") {
-                coordinator.presentedSheet = .settings
+            // B-13: the card used to send a guest to Settings, which then held
+            // no sign-in row either — two dead ends pointing at each other.
+            // `.auth` presents `AuthSheet`, which dismisses itself the moment a
+            // session lands.
+            Button("Sign in") {
+                coordinator.presentedSheet = .auth
             }
             .font(PatinaTypography.bodySmallMedium)
             .foregroundStyle(PatinaColors.Text.interactive)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
-            .accessibilityHint("Opens account settings where you can sign in.")
-            .accessibilityIdentifier("StudioHub.GuestSettingsButton")
+            .accessibilityHint("Opens the sign-in screen.")
+            .accessibilityIdentifier("StudioHub.GuestSignInButton")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -178,7 +201,7 @@ struct StudioHubView: View {
             sectionHeader(section)
 
             Divider()
-                .overlay(PatinaColors.pearl)
+                .overlay(PatinaColors.Border.hairline)
                 .accessibilityHidden(true)
 
             sectionContent(section)
@@ -187,7 +210,7 @@ struct StudioHubView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(PatinaColors.pearl, lineWidth: 1)
+                .stroke(PatinaColors.Border.hairline, lineWidth: 1)
         }
         .accessibilityIdentifier("StudioHub.Section.\(section.kind.rawValue)")
     }
@@ -251,7 +274,7 @@ struct StudioHubView: View {
                 if index < section.rows.count - 1 {
                     Divider()
                         .padding(.leading, 56)
-                        .overlay(PatinaColors.pearl)
+                        .overlay(PatinaColors.Border.hairline)
                         .accessibilityHidden(true)
                 }
             }
@@ -348,5 +371,21 @@ struct StudioHubView: View {
             ]
         )
         coordinator.navigate(to: row.route)
+    }
+}
+
+/// `L07-05` (note O12): what the reader is looking at, while the notice above
+/// says what went wrong. A sentence by ruling — never a dot, never a badge.
+/// It sits outside `StudioHubView` so the view's body stays inside SwiftLint's
+/// `type_body_length` ceiling.
+private struct StudioHubStalenessLine: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(PatinaTypography.bodySmall)
+            .foregroundStyle(PatinaColors.Text.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("StudioHub.StalenessLine")
     }
 }

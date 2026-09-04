@@ -100,7 +100,7 @@ final class ProductDetailViewModel {
             }
         } catch {
             await MainActor.run {
-                self.error = "Couldn't load product"
+                self.error = "Couldn’t load product"
                 self.product = nil
                 self.isLoading = false
             }

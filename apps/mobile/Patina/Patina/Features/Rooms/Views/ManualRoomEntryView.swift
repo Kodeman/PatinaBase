@@ -14,8 +14,13 @@ struct ManualRoomEntryView: View {
 
     @State private var roomType: String = "living"
     @State private var name: String = ""
-    @State private var lengthFeet: String = "18"
-    @State private var widthFeet: String = "14"
+    // GAP4-03: these read "18" and "14" as if typed, and `save()` writes them
+    // through `measuredWithUnitControl: true` — a room nobody measured,
+    // recorded as measured fact. `ScanFallbackEntryView` is the other door
+    // onto the same sheet and was fixed first; this is the one Your Spaces →
+    // "Add a room" → "Enter manually" opens (review RL1B3-01).
+    @State private var lengthFeet: String = ""
+    @State private var widthFeet: String = ""
     @State private var ceilingHeightRaw: String = "standard" // 8 / 9 / 10 / vaulted
     @State private var windowCountRaw: String = "2"
     @State private var orientationRaw: String = "south"
@@ -30,7 +35,7 @@ struct ManualRoomEntryView: View {
                 }
                 group(title: "Room Name") {
                     TextField("e.g. Living Room", text: $name)
-                        .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                        .font(PatinaTypography.bodySerif)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 14)
                         .frame(height: 46)
@@ -40,7 +45,7 @@ struct ManualRoomEntryView: View {
                     HStack(spacing: 8) {
                         dimensionField(value: $lengthFeet, label: "Length")
                         Text("×")
-                            .foregroundStyle(PatinaColors.pearl)
+                            .foregroundStyle(PatinaColors.Text.muted)
                             .padding(.bottom, 14)
                         dimensionField(value: $widthFeet, label: "Width")
                     }
@@ -64,7 +69,7 @@ struct ManualRoomEntryView: View {
                         TextField("0", text: $windowCountRaw)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.center)
-                            .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                            .font(PatinaTypography.bodySerif)
                             .foregroundStyle(PatinaColors.Text.primary)
                             .frame(width: 60, height: 46)
                             .background(fieldBackground)
@@ -89,13 +94,31 @@ struct ManualRoomEntryView: View {
                         .foregroundStyle(PatinaColors.Text.inverse)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Capsule().fill(PatinaColors.Interactive.active))
+                        // The same disabled fill `StyleContinueButton` uses,
+                        // so the two CTAs in this flow read alike.
+                        .background(
+                            Capsule().fill(
+                                isValid
+                                    ? PatinaColors.Interactive.active
+                                    : PatinaColors.Interactive.active.opacity(0.3)
+                            )
+                        )
                 }
                 .buttonStyle(.plain)
+                .disabled(!isValid)
                 .padding(.top, 8)
             }
             .padding(20)
         }
+        // C9-08 (B-L1A-2): swiping the form puts the pad away, which is
+        // what the rest of iOS does.
+        .dismissKeyboardOnScroll()
+        // W1-B-01: ONE Done bar for the screen. This form has three pad
+        // fields — windows, length, width — and the modifier used to sit on
+        // each of them; SwiftUI merges every keyboard `ToolbarItemGroup` in
+        // the hierarchy, so the accessory bar drew three "Done" buttons side
+        // by side (walk B shots 13/14, re-walk 35).
+        .keyboardDoneToolbar()
         .background(PatinaColors.Background.primary.ignoresSafeArea())
         // U18: standard pushed-screen chrome — the header below carries
         // the title, so the chrome adds only the back chevron.
@@ -132,7 +155,7 @@ struct ManualRoomEntryView: View {
             TextField(label, text: value)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
-                .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                .font(PatinaTypography.bodySerif)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
@@ -150,8 +173,24 @@ struct ManualRoomEntryView: View {
             .fill(PatinaColors.Background.secondary)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                    .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
             )
+    }
+
+    // MARK: - Validation
+
+    private var isValid: Bool {
+        Self.dimensionsAreValid(length: lengthFeet, width: widthFeet)
+    }
+
+    /// The Save gate, pulled out so `ScanFallbackEntryTests` can call it.
+    /// With the fields no longer pre-seeded this is what stands between an
+    /// empty form and a room whose dimensions the person never gave —
+    /// `save()` passes them through `measuredWithUnitControl: true`.
+    static func dimensionsAreValid(length: String, width: String) -> Bool {
+        guard let lengthValue = Double(length), let widthValue = Double(width),
+              lengthValue > 0, widthValue > 0 else { return false }
+        return true
     }
 
     // MARK: - Save

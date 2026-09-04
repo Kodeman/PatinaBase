@@ -61,7 +61,7 @@ struct OrderSheetCopyTests {
         #expect(zero.moneyRows.map(\.label) == ["Piece"])
     }
 
-    @Test("the sheet prints the session's total, not one it computed")
+    @Test("the sheet prints the session’s total, not one it computed")
     func sheetPrintsTheOrdersOwnFigure() {
         // The RPC folds freight into `amount_cents` and snapshots the unit
         // price; the sheet reads those back rather than re-multiplying.
@@ -88,7 +88,7 @@ struct OrderSheetCopyTests {
             product: PurchaseFixture.piece(), terms: enabled, fitLine: nil
         )
         #expect(content.taxLine
-                == "Delivery and tax are added at payment. You'll see the full total before you pay.")
+                == "Delivery and tax are added at payment. You’ll see the full total before you pay.")
         #expect(content.isPrimaryEnabled)
         #expect(content.disabledReason == nil)
     }
@@ -148,7 +148,7 @@ struct OrderSheetCopyTests {
 
     // MARK: - The specs the gate guarantees
 
-    @Test("size and lead time are both printed, in the mock's words")
+    @Test("size and lead time are both printed, in the mock’s words")
     func specRows() {
         let content = OrderSheetContent.make(
             product: PurchaseFixture.piece(), terms: enabled, fitLine: nil
@@ -166,7 +166,7 @@ struct OrderSheetCopyTests {
         #expect(without.fitLine == nil)
         let with = OrderSheetContent.make(
             product: PurchaseFixture.piece(), terms: enabled,
-            fitLine: "Your Living Room's longest wall is 18 ft. This table is 7 ft."
+            fitLine: "Your Living Room’s longest wall is 18 ft. This table is 7 ft."
         )
         #expect(with.fitLine?.contains("18 ft") == true)
     }
@@ -187,7 +187,7 @@ struct OrderSheetCopyTests {
         #expect(uncredited.creditedInset == nil)
     }
 
-    @Test("once the server names one, the inset says whose rate it is and whose price it isn't")
+    @Test("once the server names one, the inset says whose rate it is and whose price it isn’t")
     func creditedInsetCopy() {
         let content = OrderSheetContent.make(
             product: PurchaseFixture.piece(), terms: enabled, fitLine: nil,
@@ -197,8 +197,8 @@ struct OrderSheetCopyTests {
         let inset = try? #require(content.creditedInset)
         #expect(inset?.contains("Ordered in your name.") == true)
         #expect(inset?.contains("Leah sees it") == true)
-        #expect(inset?.contains("the piece's trade rate") == true)
-        #expect(inset?.contains("This doesn't change your price.") == true)
+        #expect(inset?.contains("the piece’s trade rate") == true)
+        #expect(inset?.contains("This doesn’t change your price.") == true)
     }
 
     @Test("an unnamed designer is 'Your designer', never a guess")
@@ -220,7 +220,7 @@ struct OrderSheetCopyTests {
         let line = OrderPlacedView.summaryLine(order, taxShippingEnabled: false)
         #expect(line == "Heirloom Oak Dining Table · $4,200.00")
         #expect(!line.contains("delivery and tax"))
-        #expect(OrderPlacedView.shipLine == "We'll email you when it ships.")
+        #expect(OrderPlacedView.shipLine == "We’ll email you when it ships.")
         #expect(OrderPlacedView.receiptLine == "A receipt is on its way to your inbox.")
     }
 
