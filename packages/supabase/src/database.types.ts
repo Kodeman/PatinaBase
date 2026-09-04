@@ -15290,6 +15290,77 @@ export type Database = {
           },
         ]
       }
+      project_notes: {
+        Row: {
+          answered_at: string | null
+          author_id: string
+          body: string
+          created_at: string
+          enclosures: Json
+          id: string
+          project_id: string
+          retired_at: string | null
+          sent_at: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          answered_at?: string | null
+          author_id: string
+          body: string
+          created_at?: string
+          enclosures?: Json
+          id?: string
+          project_id: string
+          retired_at?: string | null
+          sent_at?: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          answered_at?: string | null
+          author_id?: string
+          body?: string
+          created_at?: string
+          enclosures?: Json
+          id?: string
+          project_id?: string
+          retired_at?: string | null
+          sent_at?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_palettes: {
         Row: {
           created_at: string
@@ -15859,6 +15930,53 @@ export type Database = {
             columns: ["section_id"]
             isOneToOne: false
             referencedRelation: "project_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_reading_marks: {
+        Row: {
+          project_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          project_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          project_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_reading_marks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_reading_marks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_reading_marks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_reading_marks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -29716,6 +29834,58 @@ export type Database = {
         }
         Returns: Json
       }
+      approve_client_signoff: {
+        Args: {
+          p_client_consent_method?: string
+          p_client_signature?: string
+          p_decision_id: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          approval_contract: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          predecessor_decision_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       approve_product_configuration: {
         Args: { p_configuration_id: string; p_expected_version?: number }
         Returns: Json
@@ -32314,6 +32484,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_project_read: { Args: { p_project_id: string }; Returns: string }
       mark_project_review_delivery_sent:
         | {
             Args: {
@@ -32557,6 +32728,10 @@ export type Database = {
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
+      }
+      project_note_enclosures_ok: {
+        Args: { p_enclosures: Json }
+        Returns: boolean
       }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
       promote_board_reference_to_selection: {

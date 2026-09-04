@@ -12847,3 +12847,129 @@ DO $g$ BEGIN
   GRANT UPDATE (opened_at, clicked_at, status) ON public.notification_log TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00564_client_signoff_approval.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.approve_client_signoff(uuid, text, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00564_client_signoff_approval.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.approve_client_signoff(uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  REVOKE ALL ON SCHEMA app_private FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA app_private TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.is_project_studio_member(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION app_private.is_project_studio_member(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.is_project_client(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION app_private.is_project_client(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_note_enclosures_ok(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_note_enclosures_ok(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_notes FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT ON public.project_notes TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT UPDATE (body, enclosures, state, answered_at, retired_at) ON public.project_notes TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_notes TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_reading_marks FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON public.project_reading_marks TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_reading_marks TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_project_read(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_project_read(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
