@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useMyProjectApprovalReviews } from '@patina/supabase';
 
 import { ClientHeader } from './client-header';
+import { ThresholdChromeGate } from './threshold-chrome-gate';
 import type { ProjectListItem } from '../../types/project';
 import { isClientActionableProjectApproval } from '../../lib/client-attention';
 
@@ -78,12 +79,14 @@ function AuthenticatedAppChrome({
 
   return (
     <>
-      <ClientHeader
-        projects={projects}
-        activeProjectId={activeProjectId}
-        approvalsPending={approvalsPending}
-        unreadMessages={unreadMessages}
-      />
+      <ThresholdChromeGate pathname={pathname} projectCount={projects.length}>
+        <ClientHeader
+          projects={projects}
+          activeProjectId={activeProjectId}
+          approvalsPending={approvalsPending}
+          unreadMessages={unreadMessages}
+        />
+      </ThresholdChromeGate>
       {children}
     </>
   );
