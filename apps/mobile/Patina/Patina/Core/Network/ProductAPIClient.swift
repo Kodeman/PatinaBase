@@ -13,7 +13,7 @@ actor ProductAPIClient {
     static let shared = ProductAPIClient()
 
     private let baseURL = APIConfiguration.apiURL
-    private let session = URLSession.shared
+    private let session = PatinaURLSession.shared
 
     // MARK: - Auth Helper
 
@@ -57,7 +57,7 @@ actor ProductAPIClient {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: params)
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             #if DEBUG
             PatinaLog.ui.debug("[ProductAPI] Recommendations HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
@@ -159,7 +159,7 @@ actor ProductAPIClient {
         directRequest.httpMethod = "GET"
         await applyHeaders(to: &directRequest)
 
-        let (data, response) = try await session.data(for: directRequest)
+        let (data, response) = try await session.patinaData(for: directRequest)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             #if DEBUG
             PatinaLog.ui.debug("[ProductAPI] Product fetch HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
@@ -199,7 +199,7 @@ actor ProductAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw ProductAPIError.http(status: http.statusCode)
         }
@@ -232,7 +232,7 @@ actor ProductAPIClient {
             request.setValue("return=minimal", forHTTPHeaderField: "Prefer")
             request.httpBody = try JSONEncoder().encode(event)
 
-            _ = try await session.data(for: request)
+            _ = try await session.patinaData(for: request)
         } catch {
             PatinaLog.ui.error("[ProductAPI] Failed to track interaction: \(error.localizedDescription)")
         }
@@ -263,7 +263,7 @@ actor ProductAPIClient {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: params)
 
-        let (data, _) = try await session.data(for: request)
+        let (data, _) = try await session.patinaData(for: request)
         return try JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }

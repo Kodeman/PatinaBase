@@ -210,7 +210,7 @@ public actor DocumentsAPIClient {
 
         let data: Data
         do {
-            let (downloaded, response) = try await URLSession.shared.data(from: url)
+            let (downloaded, response) = try await PatinaURLSession.shared.patinaData(from: url)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw DocumentError.downloadFailed
             }

@@ -166,15 +166,15 @@ struct MatchScoreResolverTests {
 
 // MARK: - The cross-lane half
 
-/// `A-34`/`C-11`'s remaining half is note **O11**: the two render sites are
+/// `A-34`/`C-11`'s remaining half was note **O11**: the two render sites are
 /// `ProductDetailView.swift` and `RecommendationsView.swift`, both L1-C's
-/// files, and L1-C has already merged (review `RL1B3-03`). Until the note is
-/// applied, an unscored piece draws `matchLabel` inside a
-/// `PatinaColors.success` capsule.
+/// files, and L1-C merged two commits below the branch tip that carried the
+/// guard (review `RL1B3-03`, filed as `W1-S-01`). Until it landed, an unscored
+/// piece drew `matchLabel` inside a `PatinaColors.success` capsule.
 ///
-/// A known issue, deliberately **not** `isIntermittent`: green while the note
-/// is genuinely owed, red the moment the guard lands — which is the signal to
-/// delete this block. Scheduling is `l1b-notes-out.md` §S6.
+/// This was a `withKnownIssue` — green while the note was genuinely owed, red
+/// the moment the guard landed. The guard is landed (W1-followup, `W1-S-01`),
+/// so it is an ordinary bar.
 @MainActor
 extension MatchScoreResolverTests {
 
@@ -185,12 +185,8 @@ extension MatchScoreResolverTests {
             "Patina/Features/Recommendations/Views/RecommendationsView.swift"
         ]
     )
-    func theVerdictPillsAreStillUnguarded(path: String) throws {
+    func theVerdictPillsGuardOnMatchVerdict(path: String) throws {
         let code = SourceScan.code(in: try SourcePin.read(path))
-        withKnownIssue(
-            "a verdict pill owes its matchVerdict guard (l1b-notes-out.md O11, merge 1)"
-        ) {
-            #expect(code.contains("matchVerdict"))
-        }
+        #expect(code.contains("matchVerdict"))
     }
 }

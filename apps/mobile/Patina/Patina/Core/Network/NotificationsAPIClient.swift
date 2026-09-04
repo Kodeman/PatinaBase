@@ -33,7 +33,7 @@ public actor NotificationsAPIClient {
     static let visibleStatusFilter = "in.(queued,sending,delivered,unconfirmed,opened,clicked)"
 
     private let baseURL = APIConfiguration.apiURL
-    private let session = URLSession.shared
+    private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
@@ -68,7 +68,7 @@ public actor NotificationsAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(
                 status: http.statusCode,
@@ -88,7 +88,7 @@ public actor NotificationsAPIClient {
         let iso = ISO8601DateFormatter().string(from: openedAt)
         let body: [String: String] = ["opened_at": iso, "status": "opened"]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (_, response) = try await session.data(for: request)
+        let (_, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: "")
         }
@@ -110,7 +110,7 @@ public actor NotificationsAPIClient {
         let iso = ISO8601DateFormatter().string(from: Date())
         let body: [String: String] = ["opened_at": iso, "status": "opened"]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (_, response) = try await session.data(for: request)
+        let (_, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: "")
         }

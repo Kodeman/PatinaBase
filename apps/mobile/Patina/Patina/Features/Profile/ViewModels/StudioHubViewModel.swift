@@ -68,11 +68,37 @@ final class StudioHubViewModel {
     /// badge. `nil` whenever the last refresh answered, so a healthy screen
     /// says nothing extra.
     var stalenessLine: String? {
-        guard !failedSources.isEmpty, !held.isEmpty else { return nil }
-        guard let lastSuccessAt else {
+        guard !failedSources.isEmpty, hasSomethingToBeStale else { return nil }
+        guard let retainedAt = lastSuccessAt ?? restoredFloorAt() else {
             return "We couldn’t reach your studio just now."
         }
-        return "Last updated \(Self.stalenessFormatter.localizedString(for: lastSuccessAt, relativeTo: Date()))."
+        return "Last updated \(Self.stalenessFormatter.localizedString(for: retainedAt, relativeTo: Date()))."
+    }
+
+    /// Whether the screen is printing anything a failed refresh could have
+    /// made stale.
+    ///
+    /// `W1-B-16`: `held` is this process's rows, so on a COLD launch it is
+    /// empty and the guard above returned nil — while the header, which reads
+    /// `BadgeCountService.studioHint`, was printing the restored floor's
+    /// number as current. The floor is the other thing that can be stale, and
+    /// it is the one the cold shape actually draws.
+    private var hasSomethingToBeStale: Bool {
+        !held.isEmpty || restoredFloorAt() != nil
+    }
+
+    /// When the persisted count floor the screen is DRAWING was last true,
+    /// read through a seam so a test can drive the cold shape without a
+    /// network or a shared singleton.
+    ///
+    /// `drawsAnyCount` is the second half: a floor is written for an account
+    /// with nothing in it too, and dating an empty Studio — "Last updated 2
+    /// minutes ago." over a screen with nothing on it — is a staleness claim
+    /// about nothing, where before `W1-B-16` there was no line at all.
+    @ObservationIgnored
+    var restoredFloorAt: () -> Date? = {
+        let badges = BadgeCountService.shared
+        return badges.drawsAnyCount ? badges.floorStoredAt : nil
     }
 
     private static let stalenessFormatter: RelativeDateTimeFormatter = {

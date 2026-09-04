@@ -201,6 +201,35 @@ final class BadgeCountService {
         let storedAt: Date
     }
 
+    /// When the restored floor was written — `nil` until one is restored, and
+    /// `nil` again the moment the floor is dropped.
+    ///
+    /// `L07-05` / `W1-B-16`: `PersistedCounts` has always carried `storedAt`;
+    /// `restorePersistedCounts()` simply threw it away. The Studio header
+    /// prints `studioHint`, which on a cold launch is the floor's number, so an
+    /// offline cold launch printed "5 things need your eye" as current above
+    /// "We couldn't gather your Studio…" with no staleness line anywhere in the
+    /// tree — the warm shape printed it, because the warm shape has an
+    /// in-process `lastSuccessAt` to name. This is that timestamp, kept.
+    ///
+    /// It is deliberately NOT `hasLoaded`: like the counts it restores beside,
+    /// it is a record of when something was last true, never a claim that a
+    /// fetch answered.
+    private(set) var floorStoredAt: Date?
+
+    /// Whether the counts this service is holding draw anything at all.
+    ///
+    /// `floorStoredAt` says a floor was WRITTEN, and one is written for an
+    /// account with nothing in it too — five zeros and four empty arrays. The
+    /// Studio's staleness line dates what the screen is SHOWING, so a floor
+    /// that draws nothing must not date an empty Studio: before `W1-B-16` that
+    /// shape printed no line, and it should not have gained one.
+    var drawsAnyCount: Bool {
+        pendingDecisionCount > 0 || unreadMessageCount > 0
+            || proposalsAwaitingSignatureCount > 0 || payableInvoiceCount > 0
+            || projectCount > 0
+    }
+
     private static let persistedCountsKey = "patina.badge_counts.last_successful.v1"
 
     private let defaults: UserDefaults
@@ -254,6 +283,7 @@ final class BadgeCountService {
         pendingDecisions = stored.pendingDecisions ?? []
         pendingProposals = stored.pendingProposals ?? []
         payableInvoices = stored.payableInvoices ?? []
+        floorStoredAt = stored.storedAt
     }
 
     private func persistCounts(now: Date = Date()) {
@@ -273,6 +303,7 @@ final class BadgeCountService {
         )
         guard let data = try? encoder.encode(stored) else { return }
         defaults.set(data, forKey: Self.persistedCountsKey)
+        floorStoredAt = now
     }
 
     #if DEBUG
@@ -441,6 +472,7 @@ final class BadgeCountService {
         // R-02: the floor is the PREVIOUS account's. Without this, account B's
         // first launch paints account A's numbers.
         defaults.removeObject(forKey: Self.persistedCountsKey)
+        floorStoredAt = nil
     }
 
     /// Debounced refresh for bursty triggers (push receipt can deliver a

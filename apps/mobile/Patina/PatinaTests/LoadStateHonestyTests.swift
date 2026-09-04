@@ -286,6 +286,9 @@ struct LoadStateHonestyTests {
     @Test
     func aHubThatNeverLoadedSaysThatInsteadOfANonExistentTimestamp() throws {
         let hub = StudioHubViewModel()
+        // `W1-B-16`: no floor either, and the seam reads this clone's own
+        // defaults (`RL1F-33`'s shape) — so it is named, not inherited.
+        hub.restoredFloorAt = { nil }
         hub.apply(try hubResult(decisionsFailed: true))
         #expect(hub.stalenessLine == "We couldn’t reach your studio just now.")
     }
@@ -295,6 +298,7 @@ struct LoadStateHonestyTests {
     @Test
     func anEmptyHubHasNoStalenessLine() throws {
         let hub = StudioHubViewModel()
+        hub.restoredFloorAt = { nil }  // nothing held AND no floor (W1-B-16)
         hub.apply(try hubResult(everythingFailed: true))
         #expect(hub.stalenessLine == nil)
         #expect(hub.loadMessage == "We couldn’t gather your Studio. Check your connection and try again.")

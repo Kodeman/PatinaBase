@@ -42,7 +42,9 @@ struct StudioDoorTests {
         #expect(FirstLaunchTourAnchor.profileMonogram.rawValue == "profile-monogram")
 
         // The tour is hosted above the stacks, so the popover can reach it.
-        #expect(SourceScan.code(in: root).contains("FirstLaunchTour(canAutoStart:"))
+        // `W1-C-13` gave the call a second argument, so it wraps.
+        #expect(SourceScan.code(in: root).contains("FirstLaunchTour("))
+        #expect(SourceScan.code(in: root).contains("canAutoStart: coordinator.tabs.isShowingTodayRoot"))
 
         // And the header's duplicate door is gated off wherever the bar draws.
         #expect(SourceScan.code(in: header).contains("if showsStudioControl {"))
@@ -116,7 +118,13 @@ struct StudioDoorTests {
 
         #expect(!code.contains("arrowEdge: .top"))
         #expect(!code.contains("arrowEdge: .bottom"))
-        #expect(code.contains("arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge(for: geometry)"))
+        // `W1-C-13` gave the call the host's own bottom chrome, and `W1F-01`
+        // the bar's measured top — so the modifier asks for a whole placement
+        // (edge, and what the popover hangs from) rather than an edge.
+        #expect(code.contains("arrowEdge: placement.edge"))
+        #expect(code.contains("FirstLaunchTourPopoverPlacement.placement("))
+        #expect(code.contains("for: geometry,"))
+        #expect(code.contains("bottomReservation: bottomReservation"))
         // The host names the root the anchors measure themselves against.
         #expect(
             code.contains(

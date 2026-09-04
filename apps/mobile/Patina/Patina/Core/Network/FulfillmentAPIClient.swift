@@ -191,7 +191,7 @@ public actor FulfillmentAPIClient {
     public static let shared = FulfillmentAPIClient()
 
     private let baseURL = APIConfiguration.apiURL
-    private let session = URLSession.shared
+    private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
 
     private static let designerEmbed =
@@ -219,7 +219,7 @@ public actor FulfillmentAPIClient {
         let url = baseURL.appendingPathComponent(path).appending(queryItems: queryItems)
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(
                 status: http.statusCode,
@@ -315,7 +315,7 @@ public actor FulfillmentAPIClient {
         request.httpMethod = "POST"
         await applyHeaders(to: &request)
         request.httpBody = Data("{}".utf8)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(
                 status: http.statusCode,

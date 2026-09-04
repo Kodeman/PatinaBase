@@ -183,7 +183,10 @@ struct QuizProgressTests {
     func onboardingMountWiresTheExits() throws {
         let host = try SourcePin.read("Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift")
         #expect(host.contains("onDefer: { skipToBrowsing() }"))
-        #expect(host.contains("onSignIn: { returnToSignIn() }"))
+        // `W1-C-07`: the door is offered to a guest and withheld from a
+        // signed-in reader; `GuestEscapeTests` pins which is which.
+        #expect(host.contains("onSignIn: guestSignInDoor"))
+        #expect(host.contains("{ returnToSignIn() }"))
     }
 
     // MARK: - RL2A-02 · a discarded or submitted run stays gone

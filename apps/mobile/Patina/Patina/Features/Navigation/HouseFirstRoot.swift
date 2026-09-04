@@ -42,7 +42,18 @@ public struct HouseFirstRoot: View {
     /// model per root: this one covers all four stacks *and* the bar;
     /// `DailyRoomView` still owns the flag-off root's.
     public var body: some View {
-        FirstLaunchTour(canAutoStart: coordinator.tabs.isShowingTodayRoot) {
+        // `W1-C-13`: the bar is a `safeAreaInset` INSIDE `rootContent`, so it
+        // is inside the coordinate space every anchor measures itself in — and
+        // step 2's card was hung down across it. Placement subtracts it.
+        //
+        // `itemHeight`, not `barHeight`: the bar frames itself at 49 and lets
+        // the inset add the device's own bottom inset underneath, and that
+        // inset is outside the tour root's bounds. 49 is what the bar occupies
+        // in the space the anchors report.
+        FirstLaunchTour(
+            canAutoStart: coordinator.tabs.isShowingTodayRoot,
+            bottomReservation: PatinaTabBar<EmptyView>.itemHeight
+        ) {
             rootContent
         }
     }
@@ -126,6 +137,10 @@ public struct HouseFirstRoot: View {
         } trailing: {
             companionSlot
         }
+        // `W1F-01`: the bar says where it is. An anchor inside Today's
+        // ScrollView measures no container at all, so the bar's top could not
+        // be derived from one — and step 2's card was hung across it again.
+        .firstLaunchTourChrome()
     }
 
     /// M1 §6's fifth slot — the Strata mark, and the Companion's only door on

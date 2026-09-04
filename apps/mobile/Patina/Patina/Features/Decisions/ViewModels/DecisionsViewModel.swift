@@ -196,15 +196,43 @@ final class DecisionDetailViewModel {
     /// Distinct from `hasNoRenderableOptions`, which is about options that
     /// exist and render blank. Gated on the decision having loaded, so the
     /// line is never printed over a screen that is still fetching.
+    ///
+    /// A client-court sign-off is excluded: it carries no options BY DESIGN —
+    /// the absence is the shape of the decision, not a gap in it — and it has
+    /// its own act below.
     var hasNoOptionsAtAll: Bool {
         decision != nil && !isLoading && options.isEmpty
+            && decision?.isClientSignoff != true
     }
 
-    /// Whether the decision is already resolved (any option chosen, or the
-    /// status says so). Used to hide the per-option choose CTAs.
-    var isResolved: Bool {
-        decision?.isResolved == true || selectedOptionId != nil
+    /// `W1-B-03`, the act itself: this decision is a sign-off the client is
+    /// the one to give, and it is still waiting on them.
+    ///
+    /// `options.isEmpty` is part of the predicate because `approve_client_
+    /// signoff` refuses a decision that carries options — a row a designer has
+    /// since given choices to is answered by choosing one, and offering both
+    /// is how a client and a designer come to read different answers.
+    ///
+    /// `!isResolved` is not enough: it reads `status == "responded"`, so an
+    /// EXPIRED sign-off passed it, drew "Give your sign-off", and was refused
+    /// by the RPC with a `check_violation` (23514) — an act offered that
+    /// cannot succeed. `isApprovableClientSignoff` is the status leg the
+    /// server actually applies.
+    var awaitsClientSignoff: Bool {
+        guard let decision, !isLoading, !isResolved else { return false }
+        return decision.isApprovableClientSignoff && options.isEmpty
     }
+
+    /// Whether the decision is already resolved (any option chosen, a sign-off
+    /// given, or the status says so). Used to hide the per-option choose CTAs.
+    var isResolved: Bool {
+        decision?.isResolved == true || selectedOptionId != nil || hasSignedOff
+    }
+
+    /// `W1-B-03`: the sign-off landed in this session. The server row is
+    /// `responded` and the next load will say so; until then this is what
+    /// stops the screen offering the act a second time.
+    private(set) var hasSignedOff: Bool = false
 
     /// Mark the option the client tapped — opens the consent step.
     func beginSelection(optionId: String) {
@@ -247,11 +275,72 @@ final class DecisionDetailViewModel {
     }
 
     /// SP-15's first act on the decision path: re-open the consent step on the
-    /// option the failed submit was carrying.
+    /// option the failed submit was carrying — or, on a sign-off, on the
+    /// sign-off itself, which carries no option to remember.
     func retrySelection() {
-        guard let optionId = lastAttemptedOptionId, !isSubmitting, !isResolved else { return }
+        guard !isSubmitting, !isResolved else { return }
+        if awaitsClientSignoff {
+            submitFailure = nil
+            isApprovingSignoff = true
+            return
+        }
+        guard let optionId = lastAttemptedOptionId else { return }
         submitFailure = nil
         pendingOptionId = optionId
+    }
+
+    // MARK: - W1-B-03 · the sign-off
+
+    /// Whether the consent step is up for the sign-off. The mirror of
+    /// `pendingOptionId`, which a sign-off has nothing to put in.
+    var isApprovingSignoff: Bool = false
+
+    func beginSignoff() {
+        guard awaitsClientSignoff, !isSubmitting else { return }
+        isApprovingSignoff = true
+    }
+
+    func cancelSignoff() {
+        isApprovingSignoff = false
+    }
+
+    /// Give the sign-off with the client's consent. On success the decision is
+    /// `responded` server-side and every FF&E item held by it is released —
+    /// which is the one thing Procurement was waiting on.
+    /// The act itself, behind a seam. Both of `confirmSignoff`'s branches are
+    /// what a client sees — the seal, or the failure banner with its retry —
+    /// and neither is reachable from a test through the singleton actor's own
+    /// network call.
+    @ObservationIgnored
+    var approveSignoff: (
+        String, DecisionsAPIClient.ConsentMethod, String?
+    ) async throws -> Void = { decisionId, consent, signature in
+        try await DecisionsAPIClient.shared.approveSignoff(
+            decisionId: decisionId,
+            consent: consent,
+            signature: signature
+        )
+    }
+
+    func confirmSignoff(
+        decisionId: String,
+        consent: DecisionsAPIClient.ConsentMethod,
+        signature: String? = nil
+    ) async {
+        guard isApprovingSignoff, !isSubmitting else { return }
+        isSubmitting = true
+        error = nil
+        submitFailure = nil
+        do {
+            try await approveSignoff(decisionId, consent, signature)
+            self.hasSignedOff = true
+            self.isApprovingSignoff = false
+        } catch {
+            MoneyFailureCopy.log("decision", error)
+            self.submitFailure = MoneyFailureCopy.decision
+            self.isApprovingSignoff = false
+        }
+        isSubmitting = false
     }
 
     /// Look up the project's comms thread for the "Discuss this" action.

@@ -27,7 +27,7 @@ public actor RosterAPIClient {
     public static let shared = RosterAPIClient()
 
     private let baseURL = APIConfiguration.apiURL
-    private let session = URLSession.shared
+    private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
 
     /// The active roster rows naming this client, newest first.
@@ -52,7 +52,7 @@ public actor RosterAPIClient {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(
                 status: http.statusCode,

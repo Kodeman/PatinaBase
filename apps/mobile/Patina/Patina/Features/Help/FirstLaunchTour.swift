@@ -651,6 +651,21 @@ public final class FirstLaunchTourModel {
         anchorFrames[anchor] = rect
     }
 
+    /// Where the host's bottom chrome begins, in the tour root's space.
+    ///
+    /// `W1F-01`: an anchor inside Today's `ScrollView` cannot measure the tour
+    /// root at all — `proxy.bounds(of:)` resolves nothing through the scroll
+    /// and reports a container of 0 — so the bar's top could not be derived
+    /// where it was needed. The bar is outside the scroll and measures the
+    /// space fine, so it reports its own top edge here and placement reads it.
+    public private(set) var chromeTop: CGFloat?
+
+    /// Told by `firstLaunchTourChrome()` whenever the layout moves the bar.
+    public func reportChromeTop(_ top: CGFloat) {
+        guard chromeTop != top else { return }
+        chromeTop = top
+    }
+
     /// The frame the scrim leaves un-dimmed, or nil when nothing is showing.
     ///
     /// `B-10`'s other half. The card places correctly — step 1 sits below the
@@ -690,16 +705,24 @@ public struct FirstLaunchTour<Content: View>: View {
     /// their own visibility signal; see `DailyRoomView`.
     public var canAutoStart: Bool = true
 
+    /// `W1-C-13`: how much of this host's bottom edge is chrome a card must not
+    /// be hung across. `HouseFirstRoot` wraps the tour around `rootContent`,
+    /// tab bar included, and passes `PatinaTabBar.itemHeight`; `DailyRoomView`
+    /// wraps only Today's content and passes nothing.
+    public var bottomReservation: CGFloat = 0
+
     public init(
         tourKey: String = FirstLaunchTourModel.defaultTourKey,
         steps: [FirstLaunchTourStep] = FirstLaunchTourModel.defaultSteps,
         canAutoStart: Bool = true,
+        bottomReservation: CGFloat = 0,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self._model = State(
             wrappedValue: FirstLaunchTourModel(tourKey: tourKey, steps: steps)
         )
         self.canAutoStart = canAutoStart
+        self.bottomReservation = bottomReservation
         self.content = content
     }
 
@@ -708,10 +731,12 @@ public struct FirstLaunchTour<Content: View>: View {
     public init(
         model: FirstLaunchTourModel,
         canAutoStart: Bool = true,
+        bottomReservation: CGFloat = 0,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self._model = State(wrappedValue: model)
         self.canAutoStart = canAutoStart
+        self.bottomReservation = bottomReservation
         self.content = content
     }
 
@@ -737,6 +762,7 @@ public struct FirstLaunchTour<Content: View>: View {
             // but with `@Observable` the optional-keyed `@Environment` value is
             // the single injection path.)
             .environment(\.firstLaunchTourModel, model)
+            .environment(\.firstLaunchTourBottomReservation, bottomReservation)
             // `id: canAutoStart` is load-bearing — a plain `.task` runs once at
             // mount and would burn the one-shot while Home sits under a pushed
             // route. Keying on the gate re-runs the check when the cover clears.
@@ -776,6 +802,11 @@ public struct FirstLaunchTour<Content: View>: View {
         let userId = session.user.id.uuidString.lowercased()
         let adapter = SupabaseHelpStateAdapter.withSharedClient(userId: userId)
         await adapter.loadState()
+        // W1-C-10's other half, before anything reads the hydrated blob.
+        if FirstLaunchTourLaunchReset.consume() {
+            await adapter.forgetAllTours()
+            await adapter.flush()
+        }
         // Sweep any pre-S4-1 UserDefaults entries up to Supabase so the next
         // launch reads cleanly. Returns 0 when there's nothing to migrate.
         _ = await migrateUserDefaultsHelpStateToSupabase(
@@ -783,6 +814,36 @@ public struct FirstLaunchTour<Content: View>: View {
             knownTourKeys: [model.tourKey]
         )
         model.enableSupabaseSync(adapter: adapter)
+    }
+}
+
+// MARK: - `--resetonboarding`, the half that is not on this device
+
+/// Whether this launch asked for the tour to replay, and whether that ask has
+/// been spent.
+///
+/// `W1-C-10`: `PatinaApp.init` clears `help-system.tour.*` from UserDefaults,
+/// which is the whole of the v1 backing and none of the v2 one — the tour's
+/// authoritative state for a signed-in user is `profiles.help_state`, and the
+/// adapter's `loadState()` puts it straight back. Walker C ran the flag twice
+/// (shots 52 and 54) and the tour did not replay either time.
+///
+/// Spent once per process, because `installSupabaseAdapterIfAuthenticated` runs
+/// from a `.task(id: canAutoStart)` that re-fires whenever the host's surface
+/// comes back on screen — and a second clear would erase a `completed` this
+/// same launch had just recorded.
+@MainActor
+enum FirstLaunchTourLaunchReset {
+    private static var isSpent = false
+
+    /// One spelling of the flag, shared with the block in `PatinaApp.init`
+    /// that clears the local half.
+    static var isRequested: Bool { PatinaApp.shouldResetOnboarding }
+
+    static func consume() -> Bool {
+        guard isRequested, !isSpent else { return false }
+        isSpent = true
+        return true
     }
 }
 
@@ -845,6 +906,16 @@ private struct FirstLaunchTourScrim: View {
 /// resolves to `nil` and the modifier becomes a structural no-op.
 private extension EnvironmentValues {
     @Entry var firstLaunchTourModel: FirstLaunchTourModel? = nil
+
+    /// How much of the tour root's bottom edge belongs to host chrome the card
+    /// must not cover. `HouseFirstRoot` hosts the tour ABOVE `rootContent`, so
+    /// the tab bar is inside the coordinate space every anchor measures itself
+    /// in; the flag-off root has no bar there and passes nothing.
+    ///
+    /// The figure is `PatinaTabBar.itemHeight` (49) — the row the bar occupies
+    /// INSIDE the tour root — and not `barHeight` (83), which adds the 34 pt
+    /// home indicator that `safeAreaInset` draws below the root's own bounds.
+    @Entry var firstLaunchTourBottomReservation: CGFloat = 0
 }
 
 /// Tags a view as the anchor for a specific tour step. When the orchestrator
@@ -854,11 +925,20 @@ private extension EnvironmentValues {
 private struct FirstLaunchTourAnchorModifier: ViewModifier {
     let anchor: FirstLaunchTourAnchor
     @Environment(\.firstLaunchTourModel) private var model: FirstLaunchTourModel?
+    @Environment(\.firstLaunchTourBottomReservation) private var bottomReservation: CGFloat
 
     /// Where this anchor sits inside the tour's root, refreshed whenever the
-    /// layout moves it. Drives `arrowEdge` — see
+    /// layout moves it. Drives the placement — see
     /// `FirstLaunchTourPopoverPlacement` for why the edge cannot be a constant.
     @State private var geometry = FirstLaunchTourPopoverPlacement.AnchorGeometry.unmeasured
+
+    private var placement: FirstLaunchTourPopoverPlacement.Placement {
+        FirstLaunchTourPopoverPlacement.placement(
+            for: geometry,
+            bottomReservation: bottomReservation,
+            chromeTop: model?.chromeTop
+        )
+    }
 
     func body(content: Content) -> some View {
         content
@@ -886,7 +966,13 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
             .onDisappear { model?.unregisterAnchor(anchor) }
             .popover(
                 isPresented: isShownBinding,
-                arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge(for: geometry)
+                // `W1-C-13` / `W1F-01`: the host's own bottom chrome, so a card
+                // is never hung down across the bar the tour is standing on —
+                // and an anchor too tall for a card on either side hands the
+                // popover its own top lip to hang from.
+                attachmentAnchor: placement.attachment.map { .rect(.rect($0)) }
+                    ?? .rect(.bounds),
+                arrowEdge: placement.edge
             ) {
                 popoverContent
                     .presentationCompactAdaptation(.popover)
@@ -928,6 +1014,24 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     }
 }
 
+/// Reports the host's bottom chrome — the tab bar — to the tour, so a card is
+/// placed against where the bar actually is rather than against a container
+/// height the anchors that matter cannot measure (`W1F-01`).
+private struct FirstLaunchTourChromeModifier: ViewModifier {
+    @Environment(\.firstLaunchTourModel) private var model: FirstLaunchTourModel?
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(
+                    in: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
+                ).minY
+            } action: { top in
+                model?.reportChromeTop(top)
+            }
+    }
+}
+
 public extension View {
     /// Tag this view as the anchor for the given tour step. The wrapping
     /// `FirstLaunchTour` decides whether to render the popover here based on
@@ -936,6 +1040,12 @@ public extension View {
     /// don't host the tour.
     func firstLaunchTourAnchor(_ anchor: FirstLaunchTourAnchor) -> some View {
         modifier(FirstLaunchTourAnchorModifier(anchor: anchor))
+    }
+
+    /// Tag this view as the host's bottom chrome: the tour will not hang a
+    /// card across it. No-op outside a `FirstLaunchTour` ancestor.
+    func firstLaunchTourChrome() -> some View {
+        modifier(FirstLaunchTourChromeModifier())
     }
 }
 
@@ -954,36 +1064,27 @@ private struct FirstLaunchTourPopoverCard: View {
     let onSkip: () -> Void
 
     @State private var loaded: CoachmarkContent? = nil
+    /// The copy column's ideal height, measured — see `copyColumn`.
+    @State private var copyHeight: CGFloat = 0
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// `W1-B-18`: at accessibility-extra-large the card grew past what the
+    /// popover could show and was CENTRED in it, so the step counter and the
+    /// title's ascenders were cut off the top, the last body line spilled below
+    /// the rounded rect onto the dimmed content, and `describe-all` returned
+    /// three elements — Application, "dismiss popup", the Heading — with no
+    /// Skip and no Next (re-walk 2 shot 61). The only exit at that size was a
+    /// tap on the scrim, which abandons the tour rather than completing it and
+    /// which nothing on screen advertised.
+    ///
+    /// The copy is what may overflow, so the copy is what scrolls, and the
+    /// action row sits outside it. 300 pt plus the 44 pt row and 16 pt of
+    /// padding each way is the `cardClearance` placement reserves.
+    private static let copyColumnCap: CGFloat = 300
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Step \(stepNumber) of \(totalSteps)")
-                .font(PatinaTypography.monoLabel)
-                .tracking(0.5)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .accessibilityIdentifier("FirstLaunchTour.StepIndicator")
-
-            // W1-B-09: at accessibility-extra-large the card truncated its own
-            // title — "Welcome to Pat…" — because the popover is capped at
-            // 320 pt and an `h5` serif at that size does not fit one line.
-            // Wrapping is what a title should do; the scale factor is there so
-            // a single long word cannot break inside itself the way `C-06`'s
-            // surfaces did.
-            Text(resolvedHeading)
-                .font(PatinaTypography.h5)
-                .foregroundStyle(PatinaColors.Text.primary)
-                .lineLimit(3)
-                .minimumScaleFactor(0.6)
-                .allowsTightening(true)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("FirstLaunchTour.Heading")
-
-            Text(resolvedBody)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("FirstLaunchTour.Body")
+            copyColumn
 
             HStack(spacing: 12) {
                 Spacer()
@@ -1016,7 +1117,10 @@ private struct FirstLaunchTourPopoverCard: View {
             }
         }
         .padding(16)
-        .frame(maxWidth: 320)
+        // `W1-B-18`: the ramp needs the extra width as well as the scroll — an
+        // `h5` serif wrapping to three lines inside 320 pt is what `W1-B-09`
+        // left behind. A popover on this device has ~370 pt to give.
+        .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 344 : 320)
         // B-09: the card is the only stock-iOS surface a tester meets — Skip
         // was system-blue text and Next a system-blue capsule in an otherwise
         // cream, brown and black app. The styles above are explicit, and this
@@ -1026,6 +1130,64 @@ private struct FirstLaunchTourPopoverCard: View {
         .accessibilityElement(children: .combine)
         .task(id: step.surfaceKey) {
             await loadContent()
+        }
+    }
+
+    /// The step counter, the title and the body — everything that grows with
+    /// the type ramp. Scrolls only where it has to: at the ordinary sizes the
+    /// column is laid out exactly as it was, so the walk's default-size shots
+    /// stay the record.
+    @ViewBuilder
+    private var copyColumn: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            ScrollView(showsIndicators: true) {
+                copyLines
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // A `ScrollView` has no ideal height of its own, so inside
+                    // a popover — which sizes to its content's ideal — it takes
+                    // whatever is left over, and the copy got 105 pt of the 300
+                    // it is allowed. Measured here (the content is laid out at
+                    // its ideal inside the scroll, which is the number wanted)
+                    // and given back as an explicit height below.
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        copyHeight = $0
+                    }
+            }
+            .frame(height: copyHeight == 0 ? nil : min(copyHeight, Self.copyColumnCap))
+            .scrollBounceBehavior(.basedOnSize)
+        } else {
+            copyLines
+        }
+    }
+
+    private var copyLines: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Step \(stepNumber) of \(totalSteps)")
+                .font(PatinaTypography.monoLabel)
+                .tracking(0.5)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .accessibilityIdentifier("FirstLaunchTour.StepIndicator")
+
+            // W1-B-09: at accessibility-extra-large the card truncated its own
+            // title — "Welcome to Pat…" — because an `h5` serif at that size
+            // does not fit one line of the card's width. Wrapping is what a
+            // title should do; the scale factor is there so a single long word
+            // cannot break inside itself the way `C-06`'s surfaces did.
+            Text(resolvedHeading)
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .lineLimit(3)
+                .minimumScaleFactor(0.6)
+                .allowsTightening(true)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("FirstLaunchTour.Heading")
+
+            Text(resolvedBody)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("FirstLaunchTour.Body")
         }
     }
 

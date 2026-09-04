@@ -181,7 +181,7 @@ public actor RoomsAPIClient {
     public static let shared = RoomsAPIClient()
 
     private let baseURL = APIConfiguration.apiURL
-    private let session = URLSession.shared
+    private let session = PatinaURLSession.shared
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.keyEncodingStrategy = .useDefaultKeys
@@ -243,7 +243,7 @@ public actor RoomsAPIClient {
     public func listRooms(userId: String) async throws -> [RemoteRoom] {
         var request = URLRequest(url: Self.roomsListURL(base: baseURL, userId: userId))
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         // Every other call on this client validates the status; this one
         // decoded straight through, so a 401 arrived as a decode error and the
         // log line named the wrong cause (fix-review m-8).
@@ -256,7 +256,7 @@ public actor RoomsAPIClient {
         request.httpMethod = "POST"
         await applyHeaders(to: &request, prefer: "return=representation")
         request.httpBody = try encoder.encode(payload)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         try Self.ensureOK(response, data: data)
         let rows = try decoder.decode([RemoteRoom].self, from: data)
         guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
@@ -270,7 +270,7 @@ public actor RoomsAPIClient {
         request.httpMethod = "PATCH"
         await applyHeaders(to: &request, prefer: "return=representation")
         request.httpBody = try encoder.encode(patch)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         try Self.ensureOK(response, data: data)
         let rows = try decoder.decode([RemoteRoom].self, from: data)
         guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
@@ -300,7 +300,7 @@ public actor RoomsAPIClient {
         // resurrection it exists to prevent. Asking for the row back makes
         // "deleted nothing" throw, which lands in the existing retry.
         await applyHeaders(to: &request, prefer: "return=representation")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         try Self.ensureOK(response, data: data)
         guard try !decoder.decode([RemoteRoom].self, from: data).isEmpty else {
             throw RoomsAPIError.emptyResponse
@@ -314,7 +314,7 @@ public actor RoomsAPIClient {
         request.httpMethod = "POST"
         await applyHeaders(to: &request, prefer: "return=representation")
         request.httpBody = try encoder.encode(payload)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         try Self.ensureOK(response, data: data)
         let rows = try decoder.decode([RemoteRoomScan].self, from: data)
         guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
@@ -330,7 +330,7 @@ public actor RoomsAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, _) = try await session.data(for: request)
+        let (data, _) = try await session.patinaData(for: request)
         return try decoder.decode([RemoteRoomScan].self, from: data)
     }
 
@@ -345,7 +345,7 @@ public actor RoomsAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, _) = try await session.data(for: request)
+        let (data, _) = try await session.patinaData(for: request)
         return try decoder.decode([RemoteSavedItem].self, from: data)
     }
 
@@ -361,7 +361,7 @@ public actor RoomsAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, _) = try await session.data(for: request)
+        let (data, _) = try await session.patinaData(for: request)
         return try decoder.decode([RemoteSavedItem].self, from: data)
     }
 
@@ -370,7 +370,7 @@ public actor RoomsAPIClient {
         request.httpMethod = "POST"
         await applyHeaders(to: &request, prefer: "return=representation")
         request.httpBody = try encoder.encode(payload)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         try Self.ensureOK(response, data: data)
         let rows = try decoder.decode([RemoteSavedItem].self, from: data)
         guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
@@ -390,7 +390,7 @@ public actor RoomsAPIClient {
         await applyHeaders(to: &request, prefer: "return=representation")
         let value: Any = roomId.map { $0 as Any } ?? NSNull()
         request.httpBody = try encoder.encode(["room_id": AnyCodable(value)])
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         try Self.ensureOK(response, data: data)
         let rows = try decoder.decode([RemoteSavedItem].self, from: data)
         guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
@@ -403,7 +403,7 @@ public actor RoomsAPIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         await applyHeaders(to: &request, prefer: "return=minimal")
-        let (_, response) = try await session.data(for: request)
+        let (_, response) = try await session.patinaData(for: request)
         try Self.ensureOK(response)
     }
 

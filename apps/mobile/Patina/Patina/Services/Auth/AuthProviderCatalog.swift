@@ -137,7 +137,7 @@ public final class AuthProviderCatalog {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 10
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await PatinaURLSession.shared.patinaData(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw NetworkError.serverError(
                 statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1,

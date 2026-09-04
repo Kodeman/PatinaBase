@@ -250,7 +250,7 @@ public final class QRAuthService {
         let encoder = JSONEncoder()
         urlRequest.httpBody = try encoder.encode(request)
 
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await PatinaURLSession.shared.patinaData(for: urlRequest)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw QRAuthError.networkError(message: "Invalid response")

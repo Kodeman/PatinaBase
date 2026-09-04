@@ -15,7 +15,28 @@ struct YourSpacesView: View {
     @Environment(\.appCoordinator) private var coordinator
     /// True only when this screen is the Spaces tab's root (W3 · N2's seam).
     @Environment(\.isTabRoot) private var isTabRoot
-    @Query(sort: \RoomModel.createdAt, order: .reverse) private var rooms: [RoomModel]
+    @Query(sort: \RoomModel.createdAt, order: .reverse) private var storedRooms: [RoomModel]
+
+    /// `GAP3-18` / `W1-B-17`: the rows on this phone, as the person holding it
+    /// is allowed to see them.
+    ///
+    /// The SwiftData store is device-global and `LocalStoreReset
+    /// .wipeUserScopedData()` runs on ONE seam — a different real account
+    /// signing in. A sign-out wipes nothing, deliberately, so the same account
+    /// signing back in finds its rooms; between the two there is a guest
+    /// holding the phone. `LocalStoreOwnership.accountRowsAreVisible` is the
+    /// gate L1-B built for exactly that, and `RoomStore`, `ProfileViewModel`
+    /// and `StyleProfileStore` all read through it — which is why the guest
+    /// Studio said "Rooms: 0" while THIS screen, holding its own `@Query`,
+    /// still listed "Guest Bedroom, 180 sq ft" under a header reading Guest.
+    /// A `@Query` cannot be given a predicate the gate lives in (the owner is
+    /// not a column), so the gate is applied to its result.
+    ///
+    /// `AuthService` is `@Observable` and the gate reads it, so this
+    /// re-evaluates the moment the session goes — no signal of its own.
+    private var rooms: [RoomModel] {
+        LocalStoreOwnership.accountRowsAreVisible ? storedRooms : []
+    }
     /// Drives the contextual help-panel sheet attached to the Rooms surface.
     ///
     /// C5-02: nothing sets this in round one — the `?` triggers are removed

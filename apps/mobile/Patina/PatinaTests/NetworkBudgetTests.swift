@@ -45,10 +45,27 @@ struct NetworkBudgetTests {
 
     /// The client is constructed with that session. Without this pin the
     /// configuration above can be perfect and unused.
+    ///
+    /// `W1-C-11` moved the construction one line up so the reference survives
+    /// `init` — a stalled pool can only be dropped through the session that
+    /// owns it — and the client is handed that same object.
     @Test
     func theClientIsBuiltWithThatSession() throws {
         let source = try SourcePin.read("Patina/Core/Network/SupabaseClient.swift")
-        #expect(source.contains("session: URLSession(configuration: Self.sessionConfiguration)"))
+        #expect(source.contains("sdkSession = URLSession(configuration: Self.sessionConfiguration)"))
+        #expect(source.contains("session: sdkSession,"))
+        #expect(SupabaseClientManager.shared.sdkSession
+            .configuration.timeoutIntervalForRequest == APIConfiguration.requestTimeout)
+    }
+
+    /// `W1-C-11`: the app's own pool carries the same budget, because the nine
+    /// raw clients moved onto it off `URLSession.shared`.
+    @Test
+    func theAppSessionCarriesTheSameBudget() {
+        let configuration = PatinaURLSession.configuration
+        #expect(configuration.timeoutIntervalForRequest == APIConfiguration.requestTimeout)
+        #expect(configuration.timeoutIntervalForResource == APIConfiguration.resourceTimeout)
+        #expect(configuration.waitsForConnectivity == false)
     }
 
     // MARK: - C1-04 (L1-A's half, on this lane's file)
