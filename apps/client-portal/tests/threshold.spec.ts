@@ -368,10 +368,24 @@ test.describe('The Threshold — the client page', () => {
 
     // `page.request` carries this context's cookies, so these are the signed-in
     // answers. maxRedirects:0 reads the redirect itself rather than its target.
+    // The whole map, at the served-response level. The unit tests in
+    // `src/__tests__/middleware.test.ts` cover the same table against the
+    // module; this is the half that would catch a matcher, basePath or build
+    // change that stops the middleware running at all.
     for (const [path, anchor] of [
-      ['/projects', ''],
-      ['/invoices', '#letterbox'],
       ['/today', '#doorstep'],
+      ['/decisions', '#doorstep'],
+      ['/reviews', '#doorstep'],
+      ['/proposals', '#door'],
+      ['/invoices', '#letterbox'],
+      ['/budget', '#ledger'],
+      ['/documents', '#mat-papers'],
+      ['/orders', '#road'],
+      ['/messages', '#note'],
+      ['/inbox', '#note'],
+      ['/account', '#mat'],
+      ['/settings/notifications', '#mat'],
+      ['/projects', ''],
     ] as const) {
       const response = await page.request.get(path, { maxRedirects: 0 });
       expect(response.status(), `${path} should be a permanent redirect`).toBe(308);
@@ -380,7 +394,24 @@ test.describe('The Threshold — the client page', () => {
       if (anchor) {
         expect(location, `${path} keeps its anchor`).toContain(anchor);
       }
+      // The fold carries this homeowner's refreshed session cookies, so it may
+      // never be held by a shared cache.
+      expect(
+        response.headers()['cache-control'] ?? '',
+        `${path} is privately cached`,
+      ).toContain('private');
     }
+  });
+
+  // The `request` fixture is its own context with its own cookie jar and no
+  // storageState, so this is the signed-out answer even inside a file whose
+  // other tests sign in.
+  test('answers /preferences/unsubscribe with no session at all', async ({ request }) => {
+    // A recipient clicking out of an email usually has no session. Until the
+    // cutover this page sat behind the sign-in wall, which put a wall in front
+    // of an outcome page for an action already taken.
+    const response = await request.get('/preferences/unsubscribe', { maxRedirects: 0 });
+    expect(response.status(), 'no sign-in wall on the outcome page').toBe(200);
   });
 
   test('collapses /invoices onto the letterbox on the one page', async ({ page }) => {

@@ -18,6 +18,7 @@ import type { NotificationPreferences } from "@patina/shared/types";
 
 import { ScoredAction } from "@/components/threshold/instruments/scored-action";
 import { AvatarUploadField } from "@/components/account/AvatarUploadField";
+import { refusalSentence } from "@/lib/threshold/refusal";
 
 import { useScrollLock } from "./use-scroll-lock";
 
@@ -392,9 +393,7 @@ function ProfileSection() {
                 role="alert"
                 className="border-t border-[var(--border-subtle)] pt-2 text-[13px] text-[var(--text-body)]"
               >
-                {updateProfile.error instanceof Error
-                  ? updateProfile.error.message
-                  : "Could not save."}
+                {refusalSentence(updateProfile.error, "Could not save.")}
               </p>
             )}
           </div>
@@ -446,9 +445,7 @@ function NotificationsSection() {
             role="alert"
             className="border-t border-[var(--border-subtle)] pt-2 text-[13px] text-[var(--text-body)]"
           >
-            {updatePrefs.error instanceof Error
-              ? updatePrefs.error.message
-              : "Could not save."}
+            {refusalSentence(updatePrefs.error, "Could not save.")}
           </p>
         )}
       </div>
@@ -763,7 +760,7 @@ function SessionsSection() {
       await signOutAll.mutateAsync();
       router.push("/auth/signin");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-out failed");
+      setError(refusalSentence(err, "Could not end your sessions just now."));
       setConfirming(false);
     }
   }

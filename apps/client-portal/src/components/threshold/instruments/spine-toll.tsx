@@ -53,11 +53,11 @@ export interface SpineTollProps {
   /** Fired when the client takes the act — the caller reports `tollFollowed`. */
   onFollow?: () => void;
   /**
-   * Settling IN PLACE. Given, the act stops being a way out of the page and
-   * becomes the act itself; withheld, the toll keeps its outbound link to the
-   * invoice — which is what The Making still passes.
+   * Settling IN PLACE — the only way the act is taken. There is no outbound
+   * branch: the acts never leave the page (Kody 2026-09-04), and the invoice
+   * route this once fell back to is retired.
    */
-  settle?: {
+  settle: {
     onSettle: () => void;
     pending?: boolean;
     disabled?: boolean;
@@ -123,23 +123,17 @@ export function SpineToll({
       {children}
 
       <div className="mt-3">
-        {/* One act, two ways out of it: in place when the caller settles here,
-            and the invoice's own page when it does not. `onFollow` reports the
-            toll either way. */}
+        {/* One act, taken here. `onFollow` reports the toll. */}
         <ScoredAction
           actionKey="toll_settle"
           regionKey="toll"
           variant="primary"
-          {...(settle
-            ? {
-                loading: settle.pending,
-                disabled: settle.disabled,
-                onClick: () => {
-                  onFollow?.();
-                  settle.onSettle();
-                },
-              }
-            : { href: `/invoices/${invoiceId}`, onClick: onFollow })}
+          loading={settle.pending}
+          disabled={settle.disabled}
+          onClick={() => {
+            onFollow?.();
+            settle.onSettle();
+          }}
         >
           Settle the balance
         </ScoredAction>

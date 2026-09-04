@@ -412,7 +412,7 @@ describe('client middleware retired-route map', () => {
 
   // Every mapped path WITH an id.
   it.each([
-    ['/decisions/dec-1', '/', '#doorstep'],
+    ['/decisions/dec-1', '/', '#approval-dec-1'],
     ['/proposals/prop-1', '/', '#door'],
     ['/proposals/prop-1/sign', '/', '#door'],
     ['/invoices/inv-1', '/', '#letterbox'],
@@ -445,9 +445,13 @@ describe('client middleware retired-route map', () => {
   // studio-only by RLS, so the emailed link is the client's sole route in.
   // A 308 with no ceiling can be cached by a browser or an intermediary for
   // good; the anchors are a design decision and will move.
-  it('puts a ceiling on how long a fold may be cached', async () => {
+  // `private` matters as much as the ceiling: the fold copies the refreshed
+  // Supabase auth cookies onto the redirect, so a response marked cacheable by
+  // `max-age` alone invites an intermediary to hold one homeowner's session
+  // and serve it to the next reader of the same URL.
+  it('puts a private ceiling on how long a fold may be cached', async () => {
     await visit('/invoices');
-    expect(lastRedirect().headers?.get('Cache-Control')).toBe('max-age=3600');
+    expect(lastRedirect().headers?.get('Cache-Control')).toBe('private, max-age=3600');
   });
 
   it('carries the edition id the review mail was sent about', async () => {

@@ -65,6 +65,7 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17';
 import { resolveStudioIdentity } from '../_shared/studio-identity.ts';
+import { clientProjectLink } from '../_shared/client-portal-links.ts';
 import {
   type InvoiceCheckoutAttempt,
   InvoiceCheckoutIntegrityError,
@@ -278,18 +279,18 @@ async function loadInvoicePayable(
     metadata: { payable_type: 'invoice', invoice_id: invoice.id },
     // Back to the project page the client pays from — the letterbox reads
     // ?checkout= there and states the outcome in place. `invoice` names which
-    // one settled; no fragment, because the attempt params are appended after
-    // this string (invoice-checkout-core.ts) and a fragment would swallow them.
+    // one settled, and `#letterbox` puts the receipt on screen at first paint
+    // instead of after hydration rewrites the hash. The fragment survives the
+    // attempt params: invoiceCheckoutReturnUrl splits it off and re-appends it
+    // last (invoice-checkout-core.ts).
     //
     // ⚠ DEPLOY ORDER — this function must NOT ship before the flagless client
-    // portal. `/projects/[projectId]` renders the Threshold only behind the
-    // `threshold` PostHog flag and is fail-closed, so a client outside the
-    // flag would land on the old project dashboard, which reads no
-    // `?checkout=` at all: no receipt, no cancellation notice, the till's
-    // params left on the address. Gate this deploy on the lane that removes
-    // the flag (client-page-completion L8) plus the portal deploy.
-    successUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=cancelled`,
+    // portal. `/projects/[projectId]` on the currently-deployed worker reads no
+    // `?checkout=` at all, so a return landing there gets no receipt and no
+    // cancellation notice. Ship order is: portal first, probe it, THEN these
+    // functions (2026-09-04 review, finding 2).
+    successUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=success&session_id={CHECKOUT_SESSION_ID}#letterbox`,
+    cancelUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=cancelled#letterbox`,
     processingDetail:
       'A bank transfer for this invoice is already processing. Bank transfers take 3–5 business days to clear.',
     async onStaleSession(sessionId: string) {
@@ -522,18 +523,26 @@ interface DirectOrderRow {
 }
 
 /**
- * Where Checkout hands a direct-order buyer back: her project, else the list.
+ * Where Checkout hands a direct-order buyer back: the road of her project,
+ * else the road of whichever house the front door opens.
  *
- * ⚠ Same deploy gate as the invoice successUrl above (flagless portal first).
- * stripe-webhook's own emails still link `/orders?order=<id>` and
- * `/invoices/<id>` on purpose: those addresses must keep working for mail
- * already sent, so the retirement plan owns them as redirects rather than this
- * change set repointing them.
+ * `/orders` is retired — a return sent there costs the buyer a 308 hop, and a
+ * full sign-in round trip whenever the session cookie is not sent back on the
+ * Stripe return. `clientProjectLink` is the same helper stripe-webhook's own
+ * order mail uses, so both addresses now agree.
+ *
+ * ⚠ Same deploy gate as the invoice successUrl above: the portal ships first.
+ * stripe-webhook's own emails still link `/invoices/<id>` on purpose — that
+ * address is claimed by the iOS app and folds correctly for everyone else.
  */
-function directOrderReturnBase(order: DirectOrderRow): string {
-  return order.project_id
-    ? `${CLIENT_PORTAL_URL}/projects/${order.project_id}?order=${order.id}`
-    : `${CLIENT_PORTAL_URL}/orders?order=${order.id}`;
+function directOrderReturn(
+  order: DirectOrderRow,
+  checkout: 'success' | 'cancelled',
+): string {
+  return clientProjectLink(CLIENT_PORTAL_URL, order.project_id, 'road', {
+    order: order.id,
+    checkout,
+  });
 }
 
 /**
@@ -684,8 +693,8 @@ async function loadDirectOrderPayable(
     // The road on the order's own project page reads ?checkout= there. An
     // order raised without a project has no house to return to and keeps the
     // orders list.
-    successUrl: `${directOrderReturnBase(order)}&checkout=success`,
-    cancelUrl: `${directOrderReturnBase(order)}&checkout=cancelled`,
+    successUrl: directOrderReturn(order, 'success'),
+    cancelUrl: directOrderReturn(order, 'cancelled'),
     processingDetail:
       'A bank transfer for this order is already processing. Bank transfers take 3–5 business days to clear.',
     // Nothing to fail — the pointer lives on this row and is overwritten when a

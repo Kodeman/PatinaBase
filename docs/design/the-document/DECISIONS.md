@@ -10712,4 +10712,11 @@ Three further rulings, all consequences of the same interview:
 
 Consequence for the workstream: the retirement plan (`docs/superpowers/plans/2026-09-04-client-portal-retirement.md`) and the completion plan that preceded it (`docs/superpowers/plans/2026-09-04-client-page-completion.md`) carry this ruling out in code — old route trees, the header components, both flags, and every hook and component the inventory marks dead at cutover are deleted, not archived behind a switch.
 
+**Four smaller rulings settled by the pre-cutover review (2026-09-04), recorded so the next reader does not re-open them:**
+
+- **A refusal is body ink under a hairline, everywhere on the page.** `--color-error` is red and is forbidden by name; the one component still reaching for it (the avatar field inside the mat's details sheet) now takes the same refusal style as every other act. And a refusal says so *in the house's own words*: a PostgREST or edge-function string names a table or a constraint and is never printed to the homeowner as content (`lib/threshold/refusal.ts`). Every act on the surface now routes its cause through that.
+- **The acts never leave the page — including the toll.** `SpineToll` kept an outbound `href` to `/invoices/<id>` for a caller that no longer exists. It is gone; settling in place is the only way the act is taken.
+- **A named decision opens on its own ask.** `/decisions/<id>` folds to `#approval-<decisionId>`, the element id the doorstep already draws, so a client with three standing asks is put in front of the one the mail was about. `/scans/<id>` does **not** get the same treatment: the End state asked for `#room-<roomId>`, a scan id is not a room id, and the only way to turn one into the other is a database read inside edge middleware on every scan link. The doorstep is the ruled answer for scans.
+- **An empty room band is not silence, and stays.** "Absence is silence" governs a region with nothing to *say* — an empty-state card, a zero, an error string. A room in the client's own house, named by her studio's scope and drawn as a section with nothing on its floor yet, is stating a fact about her house. The band keeps its drawing.
+
 *Entries add: R135 · last id = R135*

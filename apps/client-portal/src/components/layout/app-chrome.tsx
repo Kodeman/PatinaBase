@@ -2,8 +2,6 @@
 
 import { usePathname } from 'next/navigation';
 
-import type { ProjectListItem } from '../../types/project';
-
 // Routes a visitor reaches with no session at all: auth, the token/guest
 // views, the quiz funnel, the demos and the role-mismatch interstitials.
 //
@@ -16,19 +14,14 @@ const PUBLIC_PREFIXES = [
   '/field',
   '/rfq',
   '/plans',
+  '/evidence',
   '/quiz',
-  '/demo',
+  '/preferences/unsubscribe',
   '/wrong-portal',
   '/unauthorized',
 ];
 
 interface AppChromeProps {
-  /**
-   * Still handed down by the root layout. Nothing above the page reads it now
-   * that the header is gone; the layout's fetch retires with the rest of the
-   * old tree.
-   */
-  projects?: ProjectListItem[];
   children: React.ReactNode;
 }
 

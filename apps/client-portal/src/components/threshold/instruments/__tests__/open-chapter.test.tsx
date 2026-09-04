@@ -60,12 +60,15 @@ const PAINTWORK_GATE = {
   href: '/projects/vale/trade-scopes/ts-2',
 };
 
+// `settle` is required: the toll's act is always taken in place — there is no
+// outbound branch, because the acts never leave the page.
 const INVOICE_4 = {
   invoiceId: 'inv-4',
   invoiceNumber: 'Invoice No. 4',
   totalCents: 1825000,
   paidCents: 912500,
   dueDate: '2026-08-15',
+  settle: { onSettle: () => {} },
 };
 
 const CREDENZA = {
@@ -204,14 +207,16 @@ describe('SpineToll', () => {
     expect(within(screen.getByTestId('spine-toll-ledger')).getByText('$0')).toBeInTheDocument();
   });
 
-  it('scores SETTLE THE BALANCE at the invoice, and reports the follow', () => {
+  it('settles in place — the act never leaves the page — and reports the follow', () => {
     const onFollow = jest.fn();
-    render(<SpineToll {...INVOICE_4} onFollow={onFollow} />);
-    const act = screen.getByRole('link', { name: /settle the balance/i });
-    expect(act).toHaveAttribute('href', '/invoices/inv-4');
+    const onSettle = jest.fn();
+    render(<SpineToll {...INVOICE_4} onFollow={onFollow} settle={{ onSettle }} />);
+    const act = screen.getByRole('button', { name: /settle the balance/i });
+    expect(screen.queryByRole('link', { name: /settle the balance/i })).toBeNull();
     expect(act).toHaveAttribute('data-action-region', 'toll');
     fireEvent.click(act);
     expect(onFollow).toHaveBeenCalledTimes(1);
+    expect(onSettle).toHaveBeenCalledTimes(1);
   });
 
   it('never inks money red — past due reads in the same ink as anything else', () => {

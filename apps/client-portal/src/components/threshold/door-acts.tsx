@@ -13,6 +13,7 @@ import {
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { hasPassed } from '@/lib/threshold/expiry';
+import { refusalSentence } from '@/lib/threshold/refusal';
 
 import { InstrumentReading } from './instrument-reading';
 
@@ -149,7 +150,7 @@ export function DoorActs({
       setOpen(null);
       setReceipt('Your question was sent');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send your question');
+      setError(refusalSentence(err, 'Unable to send your question right now.'));
     } finally {
       askLatch.current = false;
     }
@@ -170,7 +171,7 @@ export function DoorActs({
       setOpen(null);
       setReceipt('Your note was sent');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send your note');
+      setError(refusalSentence(err, 'Unable to send your note right now.'));
     } finally {
       changeLatch.current = false;
     }
@@ -193,13 +194,7 @@ export function DoorActs({
       setDeclinedAt(new Date());
       onDeclined?.();
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : isLegacy
-            ? 'Failed to decline proposal'
-            : 'Failed to decline this document.',
-      );
+      setError(refusalSentence(err, 'Unable to decline this paper right now.'));
     } finally {
       declineLatch.current = false;
     }

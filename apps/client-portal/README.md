@@ -52,14 +52,15 @@ hold lands on `/` or `/projects/[projectId]` opened to an anchor —
 
 | Old route(s) | Anchor |
 |---|---|
-| `/today`, `/decisions`, `/decisions/[id]`, `/reviews`, `/projects/[id]/reviews/*` | `#doorstep` |
+| `/today`, `/decisions`, `/reviews`, `/projects/[id]/reviews/*` | `#doorstep` |
+| `/decisions/[id]` | `#approval-<decisionId>` — the standing ask's own element id, so a client with several is put in front of the one the mail named. An answered decision is no longer drawn, the fragment does not resolve, and she lands at the top of the page, which is the doorstep. |
 | `/proposals`, `/proposals/[id]`, `/proposals/[id]/sign` | `#door` |
 | `/invoices`, `/invoices/[id]` | `#letterbox` |
 | `/budget` | `#ledger` |
 | `/documents` | `#mat-papers` |
 | `/orders` | `#road` |
 | `/messages`, `/messages/*`, `/inbox` | `#note` |
-| `/scans`, `/scans/[id]` | `#room-<roomId>` when resolvable, else `#doorstep` |
+| `/scans`, `/scans/[id]` | `#doorstep`. The End state asked for `#room-<roomId>` when resolvable; a scan id is not a room id, and the only way to turn one into the other is a database read inside edge middleware on every scan link. Ruled not worth it (2026-09-04 review, finding 10) — the doorstep carries the captures a band did not claim. |
 | `/account`, `/preferences`, `/settings/*` | `#mat` |
 | `/projects` | `/` (the active-project redirect, not an anchor) |
 
@@ -77,7 +78,12 @@ tree:
 - `/auth/*` — sign-in, magic link, and session handling.
 - `/share/[token]` and other token-bearing links a studio hands out.
 - `/preferences/unsubscribe` — made **public** as part of this cutover (it
-  was bouncing signed-out recipients).
+  was bouncing signed-out recipients). It never unsubscribes anyone on a GET:
+  a public GET that mutates is taken by link scanners, mail proxies and
+  browser prefetch, so a `?token=` arriving here renders a one-button confirm
+  that POSTs to `/api/unsubscribe`. That route redirects a browser (303) back
+  to this page's `?status=` render, and still answers a mail client's RFC 8058
+  one-click POST with a bare 200.
 - Checkout return URLs (`?checkout=success|cancel` on `/projects/<id>#letterbox`) —
   read on mount by the letterbox, then cleaned from the query string.
 - `/wrong-portal`, `/unauthorized`, `/error`, `/not-found` — system pages.

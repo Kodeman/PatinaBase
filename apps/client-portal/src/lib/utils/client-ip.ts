@@ -7,11 +7,11 @@
  *     production traffic). Authoritative and not attacker-supplied.
  *  2. `x-forwarded-for` first hop — covers non-Workers environments (local
  *     dev behind a reverse proxy) where a forwarding chain may be present.
- *  3. `x-client-ip` — set by client-portal's middleware.ts, but only for
- *     PAGE routes under `/proposals` (`pathname.startsWith('/proposals')`);
- *     API routes under `/api/proposals/**` never match that check, so
- *     middleware never sets this header there. Kept as a last-resort
- *     fallback rather than removed, in case that ever changes.
+ *  3. `x-client-ip` — a legacy header. The client portal's middleware used to
+ *     stamp it for PAGE routes under `/proposals`; that tree is retired and
+ *     folds before it renders, and API routes never matched the stamp anyway,
+ *     so nothing in this portal sets it now. Kept as a last-resort fallback
+ *     for a proxy that supplies it.
  *
  * Lives outside any `route.ts` deliberately: Next's App Router validates
  * that route files only export recognized handlers/config (GET, POST,

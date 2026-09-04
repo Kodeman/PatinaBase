@@ -144,8 +144,13 @@ async function collectItems(
       category: "decision",
       title: row.kind === "decision_overdue" ? `${title} (overdue)` : title,
       // /decisions is retired; a decision is answered on the doorstep of the
-      // project it belongs to.
-      link: clientProjectLink(CLIENT_PORTAL_URL, dec?.project_id ?? null, "doorstep"),
+      // project it belongs to, at the ask's own anchor so a client with
+      // several standing asks is put in front of the one this line names.
+      link: clientProjectLink(
+        CLIENT_PORTAL_URL,
+        dec?.project_id ?? null,
+        dec?.id ? `approval-${dec.id}` : "doorstep",
+      ),
       decisionId: dec?.id,
       artifact,
     });

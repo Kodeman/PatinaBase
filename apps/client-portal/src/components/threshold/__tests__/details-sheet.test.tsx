@@ -336,12 +336,16 @@ describe("DetailsSheet — what you hear from us", () => {
       mutate: updatePrefsMutate,
       isPending: false,
       isError: true,
-      error: new Error("could not reach the studio"),
+      error: new Error(
+        'new row violates row-level security policy for table "notification_preferences"',
+      ),
     });
     rerender(<DetailsSheet open onClose={jest.fn()} />);
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "could not reach the studio",
-    );
+    // The house says it refused; the cause's own string is a developer's
+    // message and never reaches the homeowner as content.
+    const refusal = screen.getByRole("alert");
+    expect(refusal).toHaveTextContent("Could not save.");
+    expect(refusal).not.toHaveTextContent("row-level security");
   });
 
   it("reveals quiet-hours fields only once enabled", async () => {
@@ -521,7 +525,9 @@ describe("DetailsSheet — every session, everywhere", () => {
   });
 
   it("reports a failed sign-out instead of pretending it happened", async () => {
-    signOutAllMutateAsync.mockRejectedValueOnce(new Error("network blip"));
+    signOutAllMutateAsync.mockRejectedValueOnce(
+      new Error("AuthApiError: refresh_token_not_found"),
+    );
     render(<DetailsSheet open onClose={jest.fn()} />);
 
     await userEvent.click(
@@ -531,7 +537,9 @@ describe("DetailsSheet — every session, everywhere", () => {
       screen.getByRole("button", { name: "Yes, sign out everywhere" }),
     );
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("network blip");
+    const refusal = await screen.findByRole("alert");
+    expect(refusal).toHaveTextContent("Could not end your sessions just now.");
+    expect(refusal).not.toHaveTextContent("refresh_token_not_found");
     expect(push).not.toHaveBeenCalled();
   });
 });

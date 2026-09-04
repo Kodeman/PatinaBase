@@ -221,14 +221,22 @@ describe('DoorActs', () => {
     expect(act('Read it in full')).toBeInTheDocument();
   });
 
-  it('says what refused it and keeps the words the client typed', async () => {
-    declineDocument.mockRejectedValue(new Error('This document is no longer open.'));
+  // The refusal is said in the house's own words. The cause is a PostgREST or
+  // edge-function string — a developer's message, sometimes naming a table or
+  // a constraint — and it is never printed to the homeowner as content
+  // (`lib/threshold/refusal.ts`).
+  it('says it refused in its own words, and keeps the words the client typed', async () => {
+    declineDocument.mockRejectedValue(
+      new Error('new row violates row-level security policy for table "proposals"'),
+    );
     renderActs();
     fireEvent.click(act('Decline'));
     type('door-decline', 'Not this season.');
     fireEvent.click(act('Decline document'));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('This document is no longer open.');
+    const refusal = await screen.findByRole('alert');
+    expect(refusal).toHaveTextContent('Unable to decline this paper right now.');
+    expect(refusal).not.toHaveTextContent('row-level security');
     expect(screen.getByTestId('door-decline')).toHaveValue('Not this season.');
     expect(screen.queryByTestId('door-declined')).not.toBeInTheDocument();
   });

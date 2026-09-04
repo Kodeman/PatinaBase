@@ -28,7 +28,14 @@ export type ThresholdAnchor =
   | "mat-papers"
   | "road"
   | "note"
-  | "mat";
+  | "mat"
+  /**
+   * One standing ask, by its decision id — the element id the doorstep's
+   * `ApprovalAsk` already draws. An answered decision leaves the fragment
+   * unresolved and the client lands at the top of the page, which is the
+   * doorstep.
+   */
+  | `approval-${string}`;
 
 /** Ids are interpolated into a link a stranger will click — refuse the odd ones. */
 const ID_SEGMENT = /^[A-Za-z0-9_-]+$/;

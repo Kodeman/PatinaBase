@@ -111,8 +111,8 @@ rendering a route of its own — the full map lives in
 section; in short: approvals and design reviews land on `#doorstep`,
 proposals on `#door`, invoices on `#letterbox`, budget on `#ledger`,
 documents on `#mat-papers`, orders on `#road`, messages and inbox on `#note`,
-room scans on `#room-<roomId>` (or `#doorstep` when the room can't be
-resolved), and account/preferences/settings on `#mat`. Public, token,
+a named decision on its own ask (`#approval-<decisionId>`), room scans on
+`#doorstep`, and account/preferences/settings on `#mat`. Public, token,
 auth, and system routes (share links, the sign endpoints, the checkout
 return URL, `/preferences/unsubscribe`) are untouched — they were never part
 of the header's route tree and carry no anchor.

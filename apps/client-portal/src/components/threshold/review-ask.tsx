@@ -18,6 +18,7 @@ import {
   useRecordProjectReviewFeedback,
 } from "@/hooks/use-commercial-client";
 import { useAuth } from "@/hooks/use-auth";
+import { refusalSentence } from "@/lib/threshold/refusal";
 import {
   reviewVerdictFromLabel,
   type ClientReviewVerdict,
@@ -148,11 +149,7 @@ function StudioReviewCard({ request }: { request: ClientPendingReview }) {
           queryClientInvalidate();
         },
         onError: (err) => {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Could not send just now. Try again.",
-          );
+          setError(refusalSentence(err, "Could not send just now. Try again."));
         },
       },
     );

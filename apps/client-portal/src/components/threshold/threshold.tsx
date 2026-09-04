@@ -217,6 +217,13 @@ export interface ThresholdProps {
   otherHouses?: OtherHouse[];
   /** How the client got here — `/` chose this house, or she named it. */
   viewSource?: 'front-door' | 'named';
+  /**
+   * `?proposal=<id>`, off a folded `/proposals/<id>[/sign]`. It already chose
+   * the HOUSE server-side; here it chooses the DOOR, so the `#door` anchor the
+   * fold lands on is the paper the mail was actually about rather than
+   * whichever door happens to be first.
+   */
+  namedProposalId?: string | null;
 }
 
 export function Threshold({
@@ -225,6 +232,7 @@ export function Threshold({
   milestones,
   otherHouses = [],
   viewSource = 'named',
+  namedProposalId = null,
 }: ThresholdProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
@@ -581,8 +589,18 @@ export function Threshold({
   // The first door that will actually RENDER: `renderDoor` answers null for a
   // mark whose paper is missing, and a pin or a `#door` anchor on a door that
   // is not drawn is simply lost.
+  // A paper named on the address takes the anchor when it is one of hers and
+  // its own paper is drawn; otherwise the first drawn door does, exactly as
+  // before. Decided server-to-render, never in an effect: `#door` is in the
+  // URL at first paint, and moving the id after hydration would scroll the
+  // client somewhere she was not standing.
+  const drawnDoors = doorMarks.filter((mark) => paperById.has(mark.proposalId ?? ''));
   const firstDoorId =
-    doorMarks.find((mark) => paperById.has(mark.proposalId ?? ''))?.id ?? null;
+    (namedProposalId
+      ? drawnDoors.find((mark) => mark.proposalId === namedProposalId)?.id
+      : null) ??
+    drawnDoors[0]?.id ??
+    null;
   // The same guard the doors take: `renderWall` answers null for a mark whose
   // selection is missing, and a `#wall` anchor on a gate that never renders is
   // a dead link in the note's enclosures.

@@ -32,9 +32,10 @@ export default async function HomePage(props?: {
   // would show a different invoice and the door whatever that house happens to
   // have pending. Resolve the instrument's own house first; the active-house
   // clocks decide only when nothing names one.
+  const namedProposalId = one(query.proposal) ?? null;
   const namedProjectId = await resolveHouseForInstrument(projectIds, {
     invoiceId: one(query.invoice),
-    proposalId: one(query.proposal),
+    proposalId: namedProposalId ?? undefined,
   });
   const activeProjectId =
     namedProjectId ?? (await resolveActiveHouse(projectIds));
@@ -77,6 +78,7 @@ export default async function HomePage(props?: {
           milestones={milestones}
           otherHouses={toOtherHouses(projects, project.id)}
           viewSource="front-door"
+          namedProposalId={namedProposalId}
         />
       </main>
     </div>

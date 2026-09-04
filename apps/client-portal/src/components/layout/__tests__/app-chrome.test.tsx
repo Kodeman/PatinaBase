@@ -27,12 +27,16 @@ describe('AppChrome', () => {
     // SP-03 / review M-D3: the shared piece page is opened from a text message
     // by someone with no session.
     '/piece/9c1f0a24-1f2b-4b7e-9a3e-0f2d8a6c5b41',
+    '/evidence/abc123',
+    // The one-click unsubscribe outcome page: the recipient clicking it out of
+    // an email more often than not has no session at all.
+    '/preferences/unsubscribe',
     '/wrong-portal',
     '/unauthorized',
   ])('marks the login-less guest path %s public', (pathname) => {
     mockPathname = pathname;
     const { container } = render(
-      <AppChrome projects={[]}>
+      <AppChrome>
         <div>guest content</div>
       </AppChrome>,
     );
@@ -45,7 +49,7 @@ describe('AppChrome', () => {
     (pathname) => {
       mockPathname = pathname;
       const { container } = render(
-        <AppChrome projects={[]}>
+        <AppChrome>
           <div>app content</div>
         </AppChrome>,
       );

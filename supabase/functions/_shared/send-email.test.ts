@@ -4,7 +4,9 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildResendRequestHeaders,
+  buildUnsubscribeHeaders,
   checkEmailSuppression,
+  generateUnsubscribeUrl,
   prepareCompliantEmail,
   type PreparedResendRequest,
   sendPreparedResendRequest,
@@ -299,4 +301,33 @@ Deno.test("known non-2xx provider response is failed", async () => {
     state: "failed",
     error: "Resend API 400: bad request",
   });
+});
+
+/* The client portal's route tree is retired: `/preferences` is a 308 onto the
+   one project page and nothing there reads a token. The one-click header must
+   therefore name `/api/unsubscribe` — a route the portal keeps, which the
+   middleware answers before both the sign-in gate and the retirement fold —
+   whatever base URL a caller hands in. notification-digest passes
+   CLIENT_PORTAL_URL, so this is the assertion that keeps its mail working. */
+Deno.test("one-click unsubscribe always names /api/unsubscribe, never /preferences", async () => {
+  Deno.env.set("UNSUBSCRIBE_TOKEN_SECRET", "test-secret-for-unsubscribe-header");
+  try {
+    const url = await generateUnsubscribeUrl(
+      "user-1",
+      "reminder_digest",
+      "https://client.patina.cloud",
+    );
+    assertEquals(
+      url.startsWith("https://client.patina.cloud/api/unsubscribe?token="),
+      true,
+    );
+    assertEquals(url.includes("/preferences"), false);
+
+    const headers = buildUnsubscribeHeaders(url);
+    assertEquals(headers["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
+    assertEquals(headers["List-Unsubscribe"].includes("/preferences"), false);
+    assertEquals(headers["List-Unsubscribe"], `<${url}>`);
+  } finally {
+    Deno.env.delete("UNSUBSCRIBE_TOKEN_SECRET");
+  }
 });

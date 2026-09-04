@@ -8,7 +8,6 @@ import {
   type RoleDomain,
   type RoleLookup,
 } from '@/lib/portal-access';
-import { env } from '@/lib/env';
 import { retiredRouteTarget } from '@/lib/retired-routes';
 
 // Look up the user's role domains. Returns a tri-state so the caller can
@@ -66,15 +65,12 @@ function logRoleCheckSkipped(reason: string, path: string, userId: string): void
 }
 
 export async function middleware(req: NextRequest) {
+  // Nothing is stamped onto the request here any more: the `/proposals` page
+  // tree is retired and folds before it renders, and the two routes that
+  // record a signing IP (`/api/proposals/[id]/sign`, `/api/trade-scopes/[id]/
+  // accept`) never matched that stamp — API routes short-circuit below —
+  // reading `cf-connecting-ip` / `x-forwarded-for` directly instead.
   const requestHeaders = new Headers(req.headers);
-  if (req.nextUrl.pathname.startsWith('/proposals')) {
-    const forwarded = req.headers.get('x-forwarded-for');
-    const realIp = req.headers.get('x-real-ip');
-    const clientIp = forwarded?.split(',')[0]?.trim() || realIp;
-    if (clientIp) {
-      requestHeaders.set('x-client-ip', clientIp);
-    }
-  }
 
   const res = NextResponse.next({ request: { headers: requestHeaders } });
 
@@ -155,7 +151,6 @@ export async function middleware(req: NextRequest) {
   // manufacturer carrying the .patina.cloud SSO cookie lands on the client
   // shell instead of /wrong-portal.
   const isPublicPage =
-    req.nextUrl.pathname.startsWith('/demo') ||
     isInviteLanding ||
     isQuizPage ||
     isSharePage ||
@@ -200,14 +195,6 @@ export async function middleware(req: NextRequest) {
     });
     return redirect;
   };
-
-  // /demo/* is sample/showcase content, not something real traffic should
-  // reach in production. Gate it ahead of the public/auth classification
-  // below (which still treats /demo as public in dev) so this short-circuits
-  // cleanly instead of layering onto the role-aware checks further down.
-  if (env.isProduction && req.nextUrl.pathname.startsWith('/demo')) {
-    return redirectWithCookies(new URL('/', baseUrl));
-  }
 
   // Authenticated user on an auth page: send them home (or to callbackUrl),
   // but first verify they belong on this portal. Without this gate, a user
@@ -299,7 +286,11 @@ export async function middleware(req: NextRequest) {
     // decision and will move; an hour is long enough to spare the round trip
     // on a mail campaign's burst and short enough that a changed map reaches
     // everyone the same day.
-    folded.headers.set('Cache-Control', 'max-age=3600');
+    // `private` is load-bearing, not decoration: redirectWithCookies copies
+    // the refreshed Supabase auth cookies onto this response, so a bare
+    // `max-age` would invite any intermediary that honours it alone to hold
+    // one homeowner's session and hand it to the next reader of the same URL.
+    folded.headers.set('Cache-Control', 'private, max-age=3600');
     return folded;
   }
 

@@ -12,11 +12,14 @@
  * Two rules the map obeys:
  *  - Carry the project id when the old URL had one; otherwise target `/`, which
  *    resolves to the client's active project.
- *  - Carry the entity id as a query param when the Threshold reads one:
+ *  - Carry the entity id when the Threshold reads one, and only then:
  *    `?invoice=` (the letterbox's contract, shared with
- *    `create-checkout-session` and read by `Letterbox`), `?review=` (the
- *    selection edition the doorstep's ask opens on) and `?proposal=`;
- *    `?order=` already rides the original query.
+ *    `create-checkout-session`, read by `Letterbox`), `?review=` (the
+ *    selection edition `SelectionEditionAsk` opens on), `?proposal=` (read by
+ *    `Threshold` to give the `#door` anchor to the paper the mail named);
+ *    `?order=` already rides the original query. A decision needs no param:
+ *    the ask carries its own element id, so `/decisions/<id>` folds straight
+ *    onto `#approval-<id>`.
  *  - `?invoice=` and `?proposal=` also decide WHICH house `/` opens: the
  *    front door resolves the instrument's own project before it falls back to
  *    the house that moved last (`lib/data/active-project.ts`), so mail about
@@ -31,7 +34,15 @@ export type ThresholdAnchor =
   | 'mat-papers'
   | 'road'
   | 'note'
-  | 'mat';
+  | 'mat'
+  /**
+   * One standing ask, by its decision id — the element id `ApprovalAsk` and
+   * `ApprovalRecords` both already draw (`approval-ask.tsx`). A decision that
+   * has since been answered and dropped leaves the fragment unresolved, which
+   * lands the client at the top of the page: the doorstep, the same place the
+   * bare fold went.
+   */
+  | `approval-${string}`;
 
 export interface RetiredRouteTarget {
   /** `/` (the active project) or `/projects/<id>`. */
@@ -92,9 +103,15 @@ export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null 
   const [head, second, third] = segments;
 
   switch (head) {
-    // `/decisions/<id>` — the decision is answered on the doorstep.
+    // `/decisions/<id>` — the decision is answered on the doorstep, and the
+    // ask itself is the anchor: a client with three standing asks must be put
+    // in front of the one the mail was about, not at the head of the list.
     case 'decisions':
-      return segments.length === 2 ? { path: '/', anchor: 'doorstep' } : null;
+      if (segments.length !== 2) return null;
+      return {
+        path: '/',
+        anchor: ID_SEGMENT.test(second) ? `approval-${second}` : 'doorstep',
+      };
 
     // `/proposals/<id>` and `/proposals/<id>/sign` — signing happens at the
     // door. `?proposal=` names WHICH house's door: `/` on its own opens the

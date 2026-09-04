@@ -18,6 +18,7 @@ import {
   moneyInWords,
 } from "@/components/threshold/instruments/standing-sentence";
 import { useAuth } from "@/hooks/use-auth";
+import { refusalSentence } from "@/lib/threshold/refusal";
 
 import { SIGNATURE_NOTICE } from "./consent-copy";
 
@@ -326,11 +327,7 @@ export function RequestChangeAct({
         },
         onError: (err) => {
           inFlight.current = false;
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Could not send just now. Try again.",
-          );
+          setError(refusalSentence(err, "Could not send just now. Try again."));
         },
       },
     );
@@ -493,11 +490,7 @@ function ScopeChangeDecideCard({
       {
         onSuccess: () => setResolved({ kind: "approved", at: new Date() }),
         onError: (err) => {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Could not send just now. Try again.",
-          );
+          setError(refusalSentence(err, "Could not send just now. Try again."));
         },
         onSettled: () => {
           actInFlight.current = false;
@@ -519,11 +512,7 @@ function ScopeChangeDecideCard({
       {
         onSuccess: () => setResolved({ kind: "declined", at: new Date() }),
         onError: (err) => {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Could not send just now. Try again.",
-          );
+          setError(refusalSentence(err, "Could not send just now. Try again."));
         },
         onSettled: () => {
           actInFlight.current = false;
@@ -711,9 +700,7 @@ export function MyScopeChangeRequestsAsk({ projectId }: { projectId: string }) {
         onSuccess: () => setWithdrawnId(requestId),
         onError: (err) => {
           setError(
-            err instanceof Error
-              ? err.message
-              : "Could not withdraw just now. Try again.",
+            refusalSentence(err, "Could not withdraw just now. Try again."),
           );
         },
         onSettled: () => {
