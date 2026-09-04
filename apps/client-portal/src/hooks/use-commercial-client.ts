@@ -102,13 +102,26 @@ export function useProjectWorkingBudget(projectId: string) {
  * Room-grouped goods selections for the commercial rail's "Your selections"
  * card. origin discriminates commercial (design-services/furnishings
  * authority) projects from legacy ones — project-view-wrapper branches on it.
+ *
+ * READS `get_client_project_threshold`, NOT `get_client_project_selections`.
+ * The two are the same projection at different widths: the older RPC is the
+ * iOS app's, held at its shipped 00441 shape, and the newer one carries the
+ * keys the web surfaces need back (origin, kind, client prices, instrument,
+ * tradeJourney, allowance, docCode, imageUrl, updatedAt). Repointing here
+ * rather than widening there is what lets the native client keep its contract
+ * while the portal moves. The payload is the same shape to
+ * `adaptClientSelections`, which is unchanged.
+ *
+ * Every web caller of this hook moves with it — The Making under `single-pane`
+ * as well as The Threshold — which is the intended effect: the selection-derived
+ * regions The Making has been dark on light up again.
  */
 export function useClientSelections(projectId: string) {
   return useQuery<ClientProjectSelections>({
     queryKey: clientSelectionsKey(projectId),
     enabled: !!projectId,
     queryFn: async () => {
-      const { data, error } = await getSupabase().rpc('get_client_project_selections', {
+      const { data, error } = await getSupabase().rpc('get_client_project_threshold', {
         p_project_id: projectId,
       });
       if (error) throw error;
