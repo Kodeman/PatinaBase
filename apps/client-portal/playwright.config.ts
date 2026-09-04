@@ -16,32 +16,22 @@ const LOCAL_ANON_KEY =
 // service-role key can never reach the local server by way of .env.local.
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const THRESHOLD_SPEC = /threshold\.spec\.ts/;
-const THRESHOLD_PORT = 3102;
-
 /**
- * TWO servers, because `NEXT_PUBLIC_*` is inlined when a dev server starts and
- * a flag override therefore belongs to the server, not to a spec. Carrying
- * `threshold:true` on the shared :3002 server turned the flag on for EVERY
- * client-portal spec, and eight top-level routes — `/documents`, `/today`,
- * `/proposals` among them — collapse to project anchors under it, so
- * `plan-set` and its neighbours were quietly testing a surface no shipped
- * client sees.
+ * ONE server, ONE project.
  *
- * :3002 is the shipped surface and carries NO override. :3102 is the Threshold,
- * and only `tests/threshold.spec.ts` runs against it.
+ * Until wave 2 this file ran two dev servers: :3002 for the shipped surface
+ * and :3102 carrying `NEXT_PUBLIC_FLAG_OVERRIDES=threshold:true` for
+ * `threshold.spec.ts`, plus a `NEXT_DIST_DIR=.next-threshold` so the two
+ * copies of the same app did not share and corrupt one `.next`. The flag was
+ * the only thing that ever differed between them, and the flag is gone — no
+ * code reads `threshold` or `single-pane` any more, and every client meets the
+ * chrome-less house. Two servers that render the same surface are two chances
+ * to boot the wrong one, so the split (and the dist-dir special-casing it
+ * needed) comes out here.
  *
- * The `threshold` flag is now dead — no code reads it, both servers render the
- * same surface, and the override below is inert. The split (and the override)
- * come out in wave 2, with the spec that depends on them.
- *
- * The split is expressed as static `projects` and a static `webServer` array,
- * never conditioned on `--project`: Playwright re-evaluates this file in each
- * worker process WITHOUT the CLI's project flag, so an argv-conditional
- * project list fails with "Project ... not found in the worker process".
- * Both servers therefore start on any invocation, which is why they need
- * separate build directories (NEXT_DIST_DIR, see next.config.js) — same app,
- * same folder, and one shared `.next` corrupts both.
+ * The Supabase pins stay, and they are the point: apps/client-portal/.env.local
+ * has pointed at Strata PROD before, and this suite reads and writes the LOCAL
+ * stack.
  */
 export default defineConfig({
   testDir: './tests',
@@ -58,27 +48,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      // The Threshold is not part of the default sweep: it needs the flagged
-      // server, and against the shipped chrome every assertion in it is wrong.
-      testIgnore: THRESHOLD_SPEC,
       use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'threshold',
-      testMatch: THRESHOLD_SPEC,
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${THRESHOLD_PORT}`,
-      },
     },
   ],
   webServer: [
     {
-      // Self-boots :3002 for the share/board specs, but reuses an
-      // already-running dev server when one is up (the usual local case).
-      // Pinned at the LOCAL stack for the same reason as the server below —
-      // .env.local has pointed at Strata PROD before — but carrying NO flag
-      // override, so every default-project spec meets the shipped surface.
+      // Reuses an already-running dev server when one is up (the usual local
+      // case). Pinned at the LOCAL stack — see the note above.
       command: 'pnpm dev',
       url: 'http://localhost:3002',
       reuseExistingServer: true,
@@ -87,24 +63,6 @@ export default defineConfig({
         NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
         NEXT_PUBLIC_SUPABASE_ANON_KEY: LOCAL_ANON_KEY,
         SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
-      },
-    },
-    {
-      // The flagged server. Never reused — an already-running :3102 would have
-      // been started by someone else with unknown env, and a known env is the
-      // entire point of this entry. The Supabase pins are here because
-      // apps/client-portal/.env.local has pointed at Strata PROD before, and
-      // this suite reads and writes the LOCAL stack.
-      command: `pnpm exec next dev --webpack -p ${THRESHOLD_PORT}`,
-      url: `http://localhost:${THRESHOLD_PORT}`,
-      reuseExistingServer: false,
-      timeout: 120000,
-      env: {
-        NEXT_DIST_DIR: '.next-threshold',
-        NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: LOCAL_ANON_KEY,
-        SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
-        NEXT_PUBLIC_FLAG_OVERRIDES: 'threshold:true',
       },
     },
   ],
