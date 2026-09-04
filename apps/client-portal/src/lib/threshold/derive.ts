@@ -343,6 +343,13 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   // ── the walls ──────────────────────────────────────────────────────────────
   // Detection verbatim from The Making's AcceptanceGate: a trade line the sub
   // has called substantially complete, with an instrument behind it to accept.
+  //
+  // The room falls away on the same terms as a door's: a wall can only hang in
+  // a room the drawing actually draws. A trade line filed under an archived
+  // room — or ANY room at all on the ground floor, where no room is drawn —
+  // stands on the Doorstep instead. Without this it would render nowhere while
+  // the standing sentence went on counting it, which is the one failure the
+  // page must never have: an ask the client is told about and cannot find.
   const wallMarks: ThresholdMark[] = selections.flatMap((selection) => {
     const proposalId = selection.instrument?.proposalId ?? null;
     if (
@@ -352,13 +359,15 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     ) {
       return [];
     }
-    const anchor = selection.roomId ? 'wall' : 'doorstep';
+    const roomId =
+      selection.roomId && roomIds.has(selection.roomId) ? selection.roomId : null;
+    const anchor = roomId ? 'wall' : 'doorstep';
     if (movedSince(input.selectionUpdatedAt?.[selection.id])) changed.add(anchor);
     return [
       {
         id: `wall:${selection.id}`,
         kind: 'wall' as MarkKind,
-        roomId: selection.roomId,
+        roomId,
         label: selection.name,
         anchor,
         proposalId,

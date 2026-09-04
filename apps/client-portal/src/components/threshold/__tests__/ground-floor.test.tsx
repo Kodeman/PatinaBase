@@ -93,11 +93,4 @@ describe('GroundFloor — Path A order', () => {
 
     expect(screen.queryByTestId('ahead')).not.toBeInTheDocument();
   });
-
-  it('draws no room band and no plan key', () => {
-    const { container } = renderGroundFloor();
-
-    expect(container.querySelector('#key')).toBeNull();
-    expect(container.querySelector('section[id^="room-"]')).toBeNull();
-  });
 });

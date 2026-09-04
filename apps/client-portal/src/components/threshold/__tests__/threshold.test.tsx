@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 import type { Invoice, ProjectApprovalReview, Proposal } from '@patina/supabase';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
-import type { ClientSelection } from '@/lib/commercial-documents';
+import { adaptClientSelections, type ClientSelection } from '@/lib/commercial-documents';
 
 /* ── The wiring ─────────────────────────────────────────────────────────────
    Everything below the surface is a query, so the boundary is the hook
@@ -382,20 +382,27 @@ beforeEach(() => {
 });
 
 describe('Threshold — which house', () => {
+  // Path B's sheet is two columns: a story-pole rail on the left and the house
+  // on the right. The pole therefore comes FIRST in the DOM and is not part of
+  // the reading order at all — so the order below is asserted over the house
+  // column, and the rail is asserted separately as a rail.
   it('draws the house, in reading order, once the rooms have come back', () => {
     const { container } = renderThreshold();
 
-    const ordered = Array.from(
-      container.querySelectorAll(
-        '#doorplate, #doorstep, #key, #story-pole, section[id^="room-"], #road, #note, #previously, #mat',
+    const house = container.querySelector('#doorstep')!.parentElement!;
+    const ordered = [
+      container.querySelector('#doorplate')!,
+      ...Array.from(
+        house.querySelectorAll(
+          '#doorstep, #key, section[id^="room-"], #road, #note, #previously, #mat',
+        ),
       ),
-    ).map((node) => node.id);
+    ].map((node) => node.id);
 
     expect(ordered).toEqual([
       'doorplate',
       'doorstep',
       'key',
-      'story-pole',
       `room-${LIBRARY}`,
       `room-${ENTRY}`,
       'road',
@@ -404,6 +411,22 @@ describe('Threshold — which house', () => {
       'mat',
     ]);
     expect(screen.queryByTestId('ground-floor')).not.toBeInTheDocument();
+  });
+
+  it('stands the story pole beside the whole house, as a sticky left rail', () => {
+    const { container } = renderThreshold();
+
+    const pole = container.querySelector('#story-pole')!;
+    const rail = pole.parentElement!;
+    expect(rail.className).toContain('sticky');
+
+    // The rail is the first column, so it precedes the house in the DOM…
+    const doorstep = container.querySelector('#doorstep')!;
+    expect(pole.compareDocumentPosition(doorstep) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // …and it is a SIBLING of the whole house column, not a child of its head,
+    // so it stands beside the room bands and the mat too.
+    expect(rail.parentElement).toBe(doorstep.parentElement!.parentElement);
+    expect(rail.parentElement!.contains(container.querySelector('#mat'))).toBe(true);
   });
 
   it('falls to the ground floor when the rooms have settled empty', () => {
@@ -784,5 +807,190 @@ describe('Threshold — what moved since', () => {
     fireEvent.click(screen.getByRole('button', { name: /what changed since yesterday/i }));
 
     expect(container.querySelector(`#room-${LIBRARY}`)).not.toHaveAttribute('data-changed');
+  });
+});
+
+/* ── Never reverse ──────────────────────────────────────────────────────────
+   "Nothing in the letterbox." and "Nothing stands open on this drawing." are
+   assertions, not blanks. A client who reads either and then watches $9,125
+   and two open marks arrive has been told something untrue. The house speaks
+   only once every source it speaks FROM has answered. ──────────────────── */
+
+const IN_FLIGHT = { data: undefined, isPending: true, isLoading: true, isError: false };
+
+describe('Threshold — never reverse', () => {
+  it('says nothing about the letterbox while the invoices are in flight', () => {
+    invoicesMock.mockReturnValue(IN_FLIGHT);
+    renderThreshold();
+
+    expect(screen.queryByTestId('letterbox')).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing in the letterbox/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+  });
+
+  it('says nothing about the drawing while the papers are in flight', () => {
+    proposalsMock.mockReturnValue(IN_FLIGHT);
+    renderThreshold();
+
+    expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
+    expect(screen.queryByText(/stands open on this drawing/i)).not.toBeInTheDocument();
+  });
+
+  it('holds the same way for the goods, the rooms and the letter', () => {
+    for (const mock of [selectionsMock, roomsMock, notesMock]) {
+      mock.mockReturnValue(IN_FLIGHT);
+      const { unmount } = renderThreshold();
+
+      expect(screen.getByTestId('doorstep')).toBeInTheDocument();
+      expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+      expect(screen.queryByTestId('house-ledger')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('letterbox')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('ground-floor')).not.toBeInTheDocument();
+
+      unmount();
+      mock.mockReturnValue(settled([]));
+    }
+  });
+
+  it('holds the doorplate up throughout — the house is always named', () => {
+    invoicesMock.mockReturnValue(IN_FLIGHT);
+    renderThreshold();
+
+    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('The Vale Residence');
+    expect(screen.getByTestId('doorstep-sentence-pending')).toBeInTheDocument();
+  });
+});
+
+/* ── A wall with nowhere to hang ────────────────────────────────────────────
+   A trade line filed under a room the drawing does not draw used to render
+   nowhere while the standing sentence went on counting it. ───────────────── */
+
+describe('Threshold — a wall the drawing cannot place', () => {
+  it('stands it on the doorstep, outside every band', () => {
+    selectionsMock.mockReturnValue(
+      settled({
+        origin: 'commercial',
+        selections: [CREDENZA, { ...PAINTWORK, roomId: 'room-archived' }],
+      }),
+    );
+
+    const { container } = renderThreshold();
+
+    const wall = container.querySelector('#wall');
+    expect(wall).not.toBeNull();
+    expect(wall?.closest('section[id^="room-"]')).toBeNull();
+    expect(container.textContent).toContain('Prairie Coat Painting');
+  });
+
+  it('stands every wall on the doorstep of a house with no rooms', () => {
+    roomsMock.mockReturnValue(settled([]));
+
+    const { container } = renderThreshold();
+
+    expect(screen.getByTestId('ground-floor')).toBeInTheDocument();
+    expect(container.querySelector('#wall')).not.toBeNull();
+    expect(container.querySelector('#door')).not.toBeNull();
+  });
+});
+
+/* ── The note's enclosures and the doorstep's one line of history ────────── */
+
+describe('Threshold — enclosures and history', () => {
+  it('keeps a signed enclosure in the letter, pointing at Previously', () => {
+    notesMock.mockReturnValue(
+      settled([{ ...NOTE, enclosures: [{ kind: 'proposal' as const, id: 'prop-1' }] }]),
+    );
+
+    const enclosures = renderThreshold().container.querySelector(
+      '[data-testid="note-enclosures"]',
+    )!;
+    expect(enclosures.textContent).toContain('Design services agreement');
+    expect(enclosures.querySelector('a')).toHaveAttribute('href', '#previously');
+  });
+
+  it('encloses a trade scope by its own name, not by one of its lines', () => {
+    notesMock.mockReturnValue(
+      settled([{ ...NOTE, enclosures: [{ kind: 'trade_scope' as const, id: 'prop-paint' }] }]),
+    );
+    renderThreshold();
+
+    expect(screen.getByTestId('note-enclosures')).toHaveTextContent('Paintwork scope');
+    expect(screen.getByTestId('note-enclosures')).not.toHaveTextContent('The paintwork');
+  });
+
+  it('prints an instrument on the doorstep’s Previously line, never a note body', () => {
+    notesMock.mockReturnValue(
+      settled([
+        NOTE,
+        {
+          ...NOTE,
+          id: 'note-old',
+          body: 'A very long line that would run right off the doorstep if it were printed there.',
+          state: 'retired' as const,
+          retiredAt: '2026-08-02T09:00:00Z',
+        },
+      ]),
+    );
+
+    renderThreshold();
+
+    const line = screen.getByTestId('doorstep-previously');
+    expect(line).toHaveTextContent('Design services agreement');
+    expect(line).not.toHaveTextContent('run right off the doorstep');
+  });
+});
+
+/* ── The RPC's own shape ────────────────────────────────────────────────────
+   `updatedAt` reaches the page through `adaptClientSelections`, so the test
+   feeds a RAW row the way 00565's get_client_project_selections emits it —
+   not a pre-shaped ClientSelection — and asserts the tick lands. ─────────── */
+
+describe('Threshold — updatedAt off the raw payload', () => {
+  it('ticks a band from a timestamp the adapter read out of the RPC row', () => {
+    previousMarkMock.mockReturnValue({
+      data: '2026-08-03T00:00:00Z',
+      isPending: false,
+      isError: false,
+    });
+    selectionsMock.mockReturnValue(
+      settled(
+        adaptClientSelections({
+          origin: 'commercial',
+          selections: [
+            {
+              id: 'sel-credenza',
+              kind: 'furnishings',
+              name: 'Walnut credenza',
+              roomId: LIBRARY,
+              roomName: 'Library & lounge',
+              quantity: 1,
+              clientUnitPriceCents: 840000,
+              clientLineTotalCents: 840000,
+              itemType: 'furniture',
+              logisticsStatus: 'in_production',
+              tradeJourney: null,
+              allowance: null,
+              instrument: {
+                documentId: 'doc-7',
+                proposalId: 'prop-7',
+                name: 'Furnishings authorization No. 7',
+                executedAt: null,
+              },
+              productId: null,
+              imageUrl: null,
+              docCode: 'FA-7',
+              updatedAt: '2026-08-04T12:00:00Z',
+            },
+          ],
+        }),
+      ),
+    );
+
+    const { container } = renderThreshold();
+
+    fireEvent.click(screen.getByRole('button', { name: /what changed since yesterday/i }));
+
+    expect(container.querySelector(`#room-${LIBRARY}`)).toHaveAttribute('data-changed', 'true');
+    expect(container.querySelector(`#room-${ENTRY}`)).not.toHaveAttribute('data-changed');
   });
 });
