@@ -1,4 +1,11 @@
-import { planKeyGeometry, PLAN_MARK_STROKE, type KeyMark, type KeyRoom } from '../plan-key';
+import {
+  fitLeaderText,
+  MAX_LEADER_CHARS,
+  planKeyGeometry,
+  PLAN_MARK_STROKE,
+  type KeyMark,
+  type KeyRoom,
+} from '../plan-key';
 
 function room(id: string, name: string, sortOrder = 0, floorAreaSqft: number | null = null): KeyRoom {
   return { id, name, sortOrder, floorAreaSqft };
@@ -195,5 +202,45 @@ describe('planKeyGeometry — marks', () => {
     const once = planKeyGeometry(ROOMS, [doorMark, wallMark]);
     const twice = planKeyGeometry(ROOMS, [doorMark, wallMark]);
     expect(twice).toEqual(once);
+  });
+});
+
+describe('planKeyGeometry — the sheet fits its own lettering', () => {
+  const longMark: KeyMark = {
+    kind: 'wall',
+    roomId: 'r-bed',
+    label: 'Paintwork and plaster to the whole upper floor',
+    anchor: 'wall',
+  };
+
+  it('cuts a label past the drawing’s budget, and marks the cut', () => {
+    expect(fitLeaderText('The painted wall')).toBe('The painted wall');
+    const cut = fitLeaderText(longMark.label);
+    expect(cut).toHaveLength(MAX_LEADER_CHARS);
+    expect(cut.endsWith('…')).toBe(true);
+  });
+
+  it('carries the cut label onto the leader itself', () => {
+    const geometry = planKeyGeometry(ROOMS, [longMark]);
+    expect(geometry.leaders[0].text).toBe(fitLeaderText(longMark.label));
+  });
+
+  it('widens the viewBox until the last letter is inside it', () => {
+    const bare = planKeyGeometry(ROOMS, []);
+    const lettered = planKeyGeometry(ROOMS, [longMark]);
+    const width = (viewBox: string) => Number(viewBox.split(/\s+/)[2]);
+
+    const leader = lettered.leaders[0];
+    // 22 mono characters at 13 units apiece run past the road's right edge.
+    expect(width(lettered.viewBox)).toBeGreaterThan(width(bare.viewBox));
+    expect(width(lettered.viewBox)).toBeGreaterThanOrEqual(
+      leader.toX + leader.text.length * 8,
+    );
+  });
+
+  it('sets the road’s own name on the room labels’ baseline, under the dash', () => {
+    const geometry = planKeyGeometry(ROOMS, []);
+    expect(geometry.roadLabelY).toBe(geometry.labels[0].y);
+    expect(geometry.roadLabelY).toBeGreaterThan(geometry.road.y);
   });
 });

@@ -25,10 +25,10 @@ import { parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
 
    THE DRAWING IS GENERATED, NOT ILLUSTRATED. Nothing about the room's real
    geometry reaches the client portal, so the schematic is composed from the
-   only two things this band knows: the room's name and its pieces. A ruled
-   rectangle, a floor line, and one footprint per piece — dashed while the
-   piece is unsigned, drawn once it has been signed for or has arrived. The
-   name seeds the proportions so a room draws the same way on every render.
+   only two things this band knows: the room's name and its pieces. A floor
+   line, a wall line, and one footprint per piece — dashed while the piece is
+   still on its way, drawn once it stands in the room, lettered with the
+   piece's own name, and as wide as the quantity it stands for.
 
    THE STAMP TELLS ONLY WHAT THE ROW KNOWS. `TrackingRow` presses the status
    stamp; the deck's second stamp line is maker · city · date, and a
@@ -44,49 +44,71 @@ const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'lon
 
 // ── the drawing ──────────────────────────────────────────────────────────────
 
+/* A section, not a picture. Two lines carry the room — the floor everything
+   stands on and the wall it stands against — and every other stroke on the
+   sheet is a piece the client actually owns. The old drawing ruled a closed
+   rectangle, which on a room with one piece read as a large empty box; a
+   floor and a wall read as a room whatever is standing in it. */
+
 const DRAW_W = 1000;
-const DRAW_H = 232;
+/** The drawn room. At the band's measure this lands near 140 rendered px. */
+const DRAW_H = 140;
+/** A room with nothing on its floor: the outline, and its own name inside. */
+const EMPTY_H = 80;
 const WALL_L = 42;
 const WALL_R = 944;
-const CEIL_Y = 16;
-const FLOOR_Y = 206;
-const FOOT_H = 14;
-
-/** A stable small integer from a string, so a room draws identically twice. */
-function seed(text: string): number {
-  let value = 0;
-  for (let index = 0; index < text.length; index += 1) {
-    value = (value * 31 + text.charCodeAt(index)) % 99991;
-  }
-  return value;
-}
+const WALL_TOP = 14;
+const FLOOR_Y = 104;
+const FOOT_H = 18;
+/** Mono under each footprint, in user units. */
+const FOOT_TYPE = 11;
+const FOOT_LABEL_DY = 20;
+/** Paper either side of a footprint inside its own slot. */
+const FOOT_GUTTER = 14;
+const MIN_FOOT_W = 26;
+/** One mono character at `FOOT_TYPE`, for the label's own budget. */
+const FOOT_CHAR_W = 7;
 
 interface Footprint {
   id: string;
   x: number;
   w: number;
+  label: string;
+  /** Drawn solid once the piece is standing in the room; dashed until then. */
   drawn: boolean;
 }
 
-/** True once the piece is signed for, or once it has reached the house. */
+/** True once the piece has reached the house — delivered, or installed. */
 function isDrawn(piece: ClientSelection): boolean {
-  return (
-    !!piece.instrument?.executedAt ||
-    journeyStageIndexForStatus(piece.logisticsStatus) >= DELIVERED_STOP
-  );
+  return journeyStageIndexForStatus(piece.logisticsStatus) >= DELIVERED_STOP;
 }
 
-function footprints(roomName: string, pieces: ClientSelection[]): Footprint[] {
+/** A name cut to the slot it stands under, with the cut marked. */
+function fitFootLabel(name: string, slot: number): string {
+  const budget = Math.max(4, Math.floor(slot / FOOT_CHAR_W));
+  const trimmed = name.trim();
+  return trimmed.length <= budget ? trimmed : `${trimmed.slice(0, budget - 1).trimEnd()}…`;
+}
+
+/**
+ * One footprint a piece, evenly spaced across the floor, as wide as the
+ * quantity it stands for — two of a chair take twice the floor one takes,
+ * until the slot runs out.
+ */
+function footprints(pieces: ClientSelection[]): Footprint[] {
   if (pieces.length === 0) return [];
-  const span = (WALL_R - WALL_L) / pieces.length;
-  const jitter = seed(roomName);
+  const slot = (WALL_R - WALL_L) / pieces.length;
+  const unit = (slot - FOOT_GUTTER) / 3;
   return pieces.map((piece, index) => {
-    const share = 0.44 + (((jitter + seed(piece.name)) % 26) / 100);
-    const w = Math.round(span * share);
+    const quantity = Number.isFinite(piece.quantity) ? Math.max(1, Math.trunc(piece.quantity)) : 1;
+    const w = Math.round(
+      Math.min(slot - FOOT_GUTTER, Math.max(MIN_FOOT_W, unit * Math.min(quantity, 3))),
+    );
     return {
       id: piece.id,
-      x: Math.round(WALL_L + span * index + (span - w) / 2),
+      x: Math.round(WALL_L + slot * index + (slot - w) / 2),
       w,
+      label: fitFootLabel(piece.name, slot),
       drawn: isDrawn(piece),
     };
   });
@@ -101,43 +123,74 @@ function RoomDrawing({
   pieces: ClientSelection[];
   liftedId: string | null;
 }) {
-  const feet = footprints(roomName, pieces);
+  const feet = footprints(pieces);
+
+  if (feet.length === 0) {
+    return (
+      <svg
+        data-testid="room-band-drawing"
+        role="img"
+        aria-label={`Section through ${roomName}, with nothing on the floor yet`}
+        viewBox={`0 0 ${DRAW_W} ${EMPTY_H}`}
+        className="mt-4 block h-auto max-h-[80px] w-full"
+        style={{ stroke: 'currentColor', fill: 'none', strokeWidth: 1, color: 'inherit' }}
+      >
+        <g vectorEffect="non-scaling-stroke">
+          <rect x={WALL_L} y={12} width={WALL_R - WALL_L} height={EMPTY_H - 24} />
+          <text
+            data-testid="room-band-drawing-name"
+            x={DRAW_W / 2}
+            y={EMPTY_H / 2 + 4}
+            textAnchor="middle"
+            fontSize={FOOT_TYPE}
+            className="fill-[var(--text-muted)] stroke-none font-mono tracking-[0.4px]"
+          >
+            {roomName}
+          </text>
+        </g>
+      </svg>
+    );
+  }
 
   return (
     <svg
       data-testid="room-band-drawing"
       role="img"
-      aria-label={
-        feet.length === 0
-          ? `Section through ${roomName}, with nothing on the floor yet`
-          : `Section through ${roomName}, with ${countInWords(feet.length)} ${
-              feet.length === 1 ? 'footprint' : 'footprints'
-            } on the floor`
-      }
+      aria-label={`Section through ${roomName}, with ${countInWords(feet.length)} ${
+        feet.length === 1 ? 'footprint' : 'footprints'
+      } on the floor`}
       viewBox={`0 0 ${DRAW_W} ${DRAW_H}`}
-      className="mt-4 block h-auto w-full"
+      className="mt-4 block h-auto max-h-[140px] w-full"
       style={{ stroke: 'currentColor', fill: 'none', strokeWidth: 1, color: 'inherit' }}
     >
       <g vectorEffect="non-scaling-stroke">
-        <line x1={WALL_L} y1={CEIL_Y} x2={WALL_R} y2={CEIL_Y} />
-        <line x1={WALL_L - 14} y1={CEIL_Y} x2={WALL_L - 14} y2={FLOOR_Y} />
-        <line x1={WALL_L} y1={CEIL_Y} x2={WALL_L} y2={FLOOR_Y} />
-        <line x1={WALL_R} y1={CEIL_Y} x2={WALL_R} y2={FLOOR_Y} />
-        <line x1={WALL_R + 14} y1={CEIL_Y} x2={WALL_R + 14} y2={FLOOR_Y} />
+        {/* the wall the room stands against */}
+        <line data-testid="room-band-wall" x1={WALL_L} y1={WALL_TOP} x2={WALL_L} y2={FLOOR_Y} />
         {/* the floor line the whole room stands on */}
-        <line x1={WALL_L} y1={FLOOR_Y} x2={WALL_R} y2={FLOOR_Y} />
+        <line data-testid="room-band-floor" x1={WALL_L} y1={FLOOR_Y} x2={WALL_R} y2={FLOOR_Y} />
         {feet.map((foot) => (
-          <rect
-            key={foot.id}
-            data-footprint={foot.id}
-            data-footprint-state={foot.drawn ? 'drawn' : 'dashed'}
-            data-lifted={liftedId === foot.id ? 'true' : undefined}
-            x={foot.x}
-            y={FLOOR_Y - FOOT_H - (liftedId === foot.id ? 2 : 0)}
-            width={foot.w}
-            height={FOOT_H}
-            strokeDasharray={foot.drawn ? undefined : '4 4'}
-          />
+          <g key={foot.id}>
+            <rect
+              data-footprint={foot.id}
+              data-footprint-state={foot.drawn ? 'drawn' : 'dashed'}
+              data-lifted={liftedId === foot.id ? 'true' : undefined}
+              x={foot.x}
+              y={FLOOR_Y - FOOT_H - (liftedId === foot.id ? 2 : 0)}
+              width={foot.w}
+              height={FOOT_H}
+              strokeDasharray={foot.drawn ? undefined : '4 4'}
+            />
+            <text
+              data-footprint-label={foot.id}
+              x={foot.x + foot.w / 2}
+              y={FLOOR_Y + FOOT_LABEL_DY}
+              textAnchor="middle"
+              fontSize={FOOT_TYPE}
+              className="fill-current stroke-none font-mono tracking-[0.4px]"
+            >
+              {foot.label}
+            </text>
+          </g>
         ))}
       </g>
     </svg>

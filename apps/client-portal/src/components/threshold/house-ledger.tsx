@@ -38,8 +38,26 @@ function owedWords(count: number): string {
   return count > 1 ? `Owed across ${count} open invoices` : 'Owed on the open invoice';
 }
 
+/**
+ * Where the house stands, in one sentence. It is drawn whenever EITHER figure
+ * is known, because this sentence is the column: beside the letterbox's
+ * drawing a ledger of one row and no sentence reads as a half-empty page.
+ */
+function standsSentence(ledger: HouseLedgerModel): string | null {
+  const agreed = figure(ledger.agreedCents) ? ledger.agreedCents : null;
+  const planned = figure(ledger.plannedCents) ? ledger.plannedCents : null;
+  if (agreed !== null && planned !== null) {
+    return `The house stands at ${moneyInWords(agreed)} agreed of ${moneyInWords(
+      planned,
+    )} planned.`;
+  }
+  if (agreed !== null) return `The house stands at ${moneyInWords(agreed)} agreed.`;
+  if (planned !== null) return `The house stands at ${moneyInWords(planned)} planned.`;
+  return null;
+}
+
 export function HouseLedger({ ledger }: HouseLedgerProps) {
-  const stands = figure(ledger.agreedCents) && figure(ledger.plannedCents);
+  const stands = standsSentence(ledger);
 
   const rows: LedgerRow[] = [
     { key: 'owed' as const, words: owedWords(ledger.owedInvoiceCount), cents: ledger.owedCents },
@@ -59,9 +77,7 @@ export function HouseLedger({ ledger }: HouseLedgerProps) {
           data-testid="house-ledger-top"
           className="font-heading pb-[10px] text-[clamp(1.05rem,1.6vw,1.3rem)] leading-[1.35] tracking-[-0.01em] text-[var(--text-primary)]"
         >
-          {`The house stands at ${moneyInWords(ledger.agreedCents as number)} agreed of ${moneyInWords(
-            ledger.plannedCents as number,
-          )} planned.`}
+          {stands}
         </p>
       )}
 
@@ -81,6 +97,16 @@ export function HouseLedger({ ledger }: HouseLedgerProps) {
           </span>
         </div>
       ))}
+
+      {ledger.overageLine && (
+        <p
+          data-dimmable
+          data-testid="house-ledger-overage"
+          className="pt-2.5 text-[15px] leading-[1.5] text-[var(--text-body)]"
+        >
+          {ledger.overageLine}
+        </p>
+      )}
     </div>
   );
 }

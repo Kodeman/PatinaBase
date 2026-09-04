@@ -125,7 +125,13 @@ export function Doorstep({
       )}
 
       {children && (
-        <div className="mt-[clamp(16px,2vw,24px)] grid items-start gap-[clamp(20px,3vw,44px)] [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] max-[960px]:[grid-template-columns:minmax(0,1fr)]">
+        // The two halves are one row, so they measure to the same height: the
+        // ledger's column runs the full depth of the letterbox's drawing
+        // rather than stopping under its last line and leaving the paper open.
+        <div
+          data-testid="doorstep-grid"
+          className="mt-[clamp(16px,2vw,24px)] grid items-stretch gap-[clamp(20px,3vw,44px)] [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] max-[960px]:[grid-template-columns:minmax(0,1fr)]"
+        >
           {children}
         </div>
       )}

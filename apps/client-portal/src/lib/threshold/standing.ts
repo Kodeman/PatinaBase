@@ -125,6 +125,39 @@ export function roomVarianceLine(
   return `about ${amount} ${delta > 0 ? 'past' : 'under'} its target`;
 }
 
+/** A room named the way a sentence names it: "the dining room", once. */
+function roomInSentence(name: string): string {
+  const trimmed = name.trim();
+  return /^the\s/i.test(trimmed) ? trimmed.slice(4).trim() : trimmed;
+}
+
+/** A band as the overage note reads it. */
+export interface OverageBand {
+  name: string;
+  targetCents: number | null;
+  agreedCents: number;
+  varianceLine: string | null;
+}
+
+/**
+ * The note under the ledger: the one room standing past its target, and the
+ * room whose headroom absorbs it when there is one. Null when no room carries
+ * a target it has passed — a house on its targets says nothing.
+ */
+export function houseOverageLine(bands: OverageBand[]): string | null {
+  const over = bands.find(
+    (band) =>
+      band.targetCents !== null && band.agreedCents > band.targetCents && !!band.varianceLine,
+  );
+  if (!over) return null;
+  const under = bands.find(
+    (band) =>
+      band !== over && band.targetCents !== null && band.agreedCents < band.targetCents,
+  );
+  const head = `The ${roomInSentence(over.name)} stands ${over.varianceLine}`;
+  return under ? `${head}; the ${roomInSentence(under.name)} absorbs it.` : `${head}.`;
+}
+
 /** "19 June" — the day a thing happened, the way the deck's own line prints it. */
 function dayAndMonth(date: Date): string {
   return `${date.getDate()} ${MONTHS[date.getMonth()]}`;

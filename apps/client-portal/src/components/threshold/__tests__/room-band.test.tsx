@@ -146,6 +146,59 @@ describe('RoomBand', () => {
     );
   });
 
+  it('rules a floor and a wall, and nothing else, on a drawing 140 units deep', () => {
+    const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
+
+    const drawing = screen.getByTestId('room-band-drawing');
+    expect(drawing).toHaveAttribute('viewBox', '0 0 1000 140');
+    expect(drawing.className.baseVal ?? drawing.getAttribute('class')).toContain('max-h-[140px]');
+    expect(screen.getByTestId('room-band-floor')).toBeInTheDocument();
+    expect(screen.getByTestId('room-band-wall')).toBeInTheDocument();
+    // Two lines and no closed outline: the old rectangle read as an empty box.
+    expect(container.querySelectorAll('svg line')).toHaveLength(2);
+    expect(container.querySelectorAll('svg rect')).toHaveLength(2);
+  });
+
+  it('spaces the footprints evenly and sizes them by quantity', () => {
+    const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
+
+    const feet = Array.from(container.querySelectorAll('[data-footprint]')).map((foot) => ({
+      x: Number(foot.getAttribute('x')),
+      w: Number(foot.getAttribute('width')),
+    }));
+    expect(feet).toHaveLength(2);
+    // Two of the sconces, one runner: the pair takes more floor than the one.
+    expect(feet[0].w).toBeGreaterThan(feet[1].w);
+    // Evenly spaced: one slot — (944 - 42) / 2 — between the two centres.
+    const centres = feet.map((foot) => foot.x + foot.w / 2);
+    expect(Math.abs(centres[1] - centres[0] - 451)).toBeLessThanOrEqual(1);
+  });
+
+  it('letters each footprint with the piece’s own name, in 11px mono', () => {
+    const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
+
+    const labels = Array.from(container.querySelectorAll('[data-footprint-label]'));
+    expect(labels.map((label) => label.textContent)).toEqual([
+      'Brass library sconces',
+      'Kilim runner',
+    ]);
+    for (const label of labels) {
+      expect(label).toHaveAttribute('font-size', '11');
+      expect(label.getAttribute('class')).toContain('font-mono');
+    }
+  });
+
+  it('draws an 80-unit outline with the room’s name inside when nothing stands here', () => {
+    const { container } = render(
+      <RoomBand band={band({ pieces: [], agreedCents: 0, marks: [] })} projectId="proj-1" />,
+    );
+
+    const drawing = screen.getByTestId('room-band-drawing');
+    expect(drawing).toHaveAttribute('viewBox', '0 0 1000 80');
+    expect(screen.getByTestId('room-band-drawing-name')).toHaveTextContent('Library & lounge');
+    expect(container.querySelectorAll('[data-footprint]')).toHaveLength(0);
+  });
+
   it('rules the floor line of settled type when the band has receipts', () => {
     render(<RoomBand band={band()} projectId="proj-1" />);
 

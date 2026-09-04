@@ -28,7 +28,7 @@ import { journeyStageIndexForStatus } from '@/components/commercial/journey-step
 import type { ClientProjectSelections, ClientSelection } from '@/lib/commercial-documents';
 
 import { byPlanOrder, type KeyMark, type KeyRoom, type MarkKind } from './plan-key';
-import { roomVarianceLine } from './standing';
+import { houseOverageLine, roomVarianceLine } from './standing';
 
 /** A piece is still on the road until it has reached the house. */
 const DELIVERED_STOP = journeyStageIndexForStatus('delivered');
@@ -99,6 +99,8 @@ export interface ThresholdInput {
   today: Date;
   /** The live authorized total, when the client plan has been read. */
   liveAuthorizedTotalCents?: number | null;
+  /** The published plan's own planned total — Σ its lines' targets. */
+  plannedTotalCents?: number | null;
   /** Draw cents held behind each trade instrument, keyed by proposal id. */
   heldDrawCentsByProposalId?: Record<string, number> | null;
   /** When each selection last moved, keyed by selection id, where known. */
@@ -142,8 +144,13 @@ export interface RoadPieceModel {
 }
 
 export interface HouseLedgerModel {
-  /** Σ of the rooms' targets, or null when no room carries one. */
+  /** The plan's own total where it has one, else Σ of the rooms' targets. */
   plannedCents: number | null;
+  /**
+   * The live authorized total where the plan has been read, else Σ of what the
+   * bands have agreed. A house that has agreed money has a figure to stand at
+   * whether or not a budget was ever published against it.
+   */
   agreedCents: number | null;
   /**
    * Σ balance across EVERY open invoice, or null when none is open — not the
@@ -156,6 +163,8 @@ export interface HouseLedgerModel {
   owedInvoiceCount: number;
   heldCents: number | null;
   awaitingCents: number;
+  /** "The dining room stands about forty-nine hundred past its target." */
+  overageLine: string | null;
 }
 
 export interface InvoiceModel {
@@ -248,6 +257,11 @@ function noteState(note: ThresholdNote): PreviouslyState {
   if (note.state === 'standing') return 'standing';
   if (note.state === 'answered' || note.answeredAt) return 'answered';
   return 'sent';
+}
+
+/** A figure the surface can print: a real number, above zero. */
+function positive(cents: number | null | undefined): number | null {
+  return typeof cents === 'number' && Number.isFinite(cents) && cents > 0 ? cents : null;
 }
 
 function toInvoiceModel(invoice: Invoice): InvoiceModel {
@@ -455,13 +469,15 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
       .map((mark) => mark.proposalId)
       .filter((proposalId): proposalId is string => proposalId !== null),
   );
+  const roomTargetTotal =
+    targets.length > 0 ? targets.reduce((sum, cents) => sum + cents, 0) : null;
+  const planTotal = positive(input.plannedTotalCents);
+  const liveAuthorized = positive(input.liveAuthorizedTotalCents);
+  const bandsAgreed = bands.reduce((sum, band) => sum + band.agreedCents, 0);
+
   const ledger: HouseLedgerModel = {
-    plannedCents: targets.length > 0 ? targets.reduce((sum, cents) => sum + cents, 0) : null,
-    agreedCents:
-      typeof input.liveAuthorizedTotalCents === 'number' &&
-      Number.isFinite(input.liveAuthorizedTotalCents)
-        ? input.liveAuthorizedTotalCents
-        : null,
+    plannedCents: planTotal ?? roomTargetTotal,
+    agreedCents: liveAuthorized ?? (bandsAgreed > 0 ? bandsAgreed : null),
     owedCents:
       openInvoices.length > 0 ? computeInvoiceRollup(openInvoices).outstandingCents : null,
     owedInvoiceCount: openInvoices.length,
@@ -472,6 +488,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
       (sum, proposal) => sum + (proposal.totalAmountCents || 0),
       0,
     ),
+    overageLine: houseOverageLine(bands),
   };
 
   // ── the note, and what came before it ──────────────────────────────────────

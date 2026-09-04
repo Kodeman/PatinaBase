@@ -477,6 +477,16 @@ describe('Threshold — the five facts', () => {
     expect(screen.getByTestId('doorplate-sub')).toHaveTextContent('Procurement');
   });
 
+  it('addresses the plate to the client the session names, and to nobody without one', () => {
+    const { unmount } = renderThreshold();
+    expect(screen.getByTestId('doorplate-line')).toHaveTextContent('prepared for Harper Vale');
+    unmount();
+
+    authMock.mockReturnValue({ user: { name: null }, signOut: jest.fn() });
+    renderThreshold();
+    expect(screen.getByTestId('doorplate-line')).not.toHaveTextContent('prepared for');
+  });
+
   it('gives the first door and the first wall the page-level anchors', () => {
     const { container } = renderThreshold();
 
@@ -722,11 +732,13 @@ describe('Threshold — the held draws', () => {
     expect(screen.getByTestId('house-ledger-held')).toHaveTextContent('$1,440');
   });
 
-  it('says nothing about held money while the bundles are unread', () => {
+  it('holds the whole house while the bundles are unread, not just the held row', () => {
     bundles = {};
 
     renderThreshold();
 
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+    expect(screen.queryByTestId('house-ledger')).not.toBeInTheDocument();
     expect(screen.queryByTestId('house-ledger-held')).not.toBeInTheDocument();
   });
 });
@@ -758,7 +770,7 @@ describe('Threshold — a room’s target', () => {
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent('$31,000 planned');
   });
 
-  it('plans nothing when neither the plan nor the room carries a figure', () => {
+  it('stands on the agreed figure alone when nothing is planned', () => {
     planMock.mockReturnValue(
       settled({ publishedAt: null, rooms: [], lines: [], liveAuthorizedTotalCents: 6140000 }),
     );
@@ -766,7 +778,10 @@ describe('Threshold — a room’s target', () => {
 
     renderThreshold();
 
-    expect(screen.queryByTestId('house-ledger-top')).not.toBeInTheDocument();
+    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
+      'The house stands at $61,400 agreed.',
+    );
+    expect(screen.getByTestId('house-ledger-top')).not.toHaveTextContent('planned');
   });
 });
 
@@ -850,6 +865,17 @@ describe('Threshold — never reverse', () => {
       unmount();
       mock.mockReturnValue(settled([]));
     }
+  });
+
+  it('holds the house while the plan is in flight — targets decide every variance', () => {
+    planMock.mockReturnValue(IN_FLIGHT);
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+    expect(screen.queryByTestId('house-ledger-top')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('house-ledger-overage')).not.toBeInTheDocument();
+    expect(screen.queryByText(/past its target/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('room-band-ledger')).not.toBeInTheDocument();
   });
 
   it('holds the doorplate up throughout — the house is always named', () => {

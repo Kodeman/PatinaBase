@@ -1,4 +1,9 @@
-import { keySentence, previouslyLine, thresholdStanding } from '../standing';
+import {
+  houseOverageLine,
+  keySentence,
+  previouslyLine,
+  thresholdStanding,
+} from '../standing';
 
 describe('thresholdStanding — what is asked of the client', () => {
   it('names one closed door', () => {
@@ -151,5 +156,44 @@ describe('previouslyLine — what it will not print', () => {
 describe('keySentence — past twelve', () => {
   it('falls to figures', () => {
     expect(keySentence(13)).toBe('13 marks stand open on this drawing.');
+  });
+});
+
+describe('houseOverageLine — the note under the ledger', () => {
+  const band = (
+    name: string,
+    targetCents: number | null,
+    agreedCents: number,
+    varianceLine: string | null,
+  ) => ({ name, targetCents, agreedCents, varianceLine });
+
+  it('names the room past its target and the one absorbing it', () => {
+    expect(
+      houseOverageLine([
+        band('The library', 2_380_000, 2_490_000, 'about eleven hundred past its target'),
+        band('The bedroom', 2_000_000, 1_800_000, 'about two thousand under its target'),
+      ]),
+    ).toBe(
+      'The library stands about eleven hundred past its target; the bedroom absorbs it.',
+    );
+  });
+
+  it('stops at the overage when no room has the headroom to absorb it', () => {
+    expect(
+      houseOverageLine([
+        band('Library', 2_380_000, 2_490_000, 'about eleven hundred past its target'),
+        band('Bedroom', 2_000_000, 2_000_000, null),
+      ]),
+    ).toBe('The Library stands about eleven hundred past its target.');
+  });
+
+  it('says nothing when no room carries a target it has passed', () => {
+    expect(houseOverageLine([])).toBeNull();
+    expect(houseOverageLine([band('Library', null, 2_490_000, null)])).toBeNull();
+    expect(
+      houseOverageLine([
+        band('Library', 2_380_000, 1_000_000, 'about fourteen hundred under its target'),
+      ]),
+    ).toBeNull();
   });
 });

@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from 'react';
 
-import type { splitSpinePhases } from '@/components/making/making-spine';
+import { getPhaseLabel } from '@patina/types';
+
+import {
+  parseSpineDate,
+  recognisePhaseSlug,
+  startOfWeek,
+  type SpinePhase,
+  type splitSpinePhases,
+} from '@/components/making/making-spine';
 
 /* ── The story pole ─────────────────────────────────────────────────────────
    A carpenter's story pole is marked once and then never re-marked: the
@@ -16,8 +24,8 @@ import type { splitSpinePhases } from '@/components/making/making-spine';
    the first section's name and nothing else — never a broken observer and
    never a blank rail.
 
-   Narrow, the rail collapses to six dots. Six dots under the doorplate say the
-   same thing the rail says and take one line to say it.
+   Narrow, the rail collapses to one dot per chapter. The dots under the
+   doorplate say the same thing the rail says and take one line to say it.
 
    Not a threshold unit and never dimmable: the pole is the page's own measure,
    and a measure that fades in one reading of the house is no measure.
@@ -25,6 +33,56 @@ import type { splitSpinePhases } from '@/components/making/making-spine';
 
 /** The mock's brass. Lane 4 declares --threshold-accent once on the page root. */
 const ACCENT = 'var(--threshold-accent, #8A5F19)';
+
+const LONG_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
+/** "12 October" — the day the pole speaks a week by. */
+const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
+
+/**
+ * The chapter's name, resolved per phase rather than taken off the spine.
+ *
+ * `normalizePhaseSlug` answers `'consultation'` twice over: once when it truly
+ * recognises the first chapter, and once as its can-never-be-undefined
+ * fallback for anything it cannot place. `project_phases.phase_key` is null on
+ * most real rows, so every unplaceable phase collapses onto one label and a
+ * six-chapter pole reads "Discovery" four times. When the slug is the fallback
+ * answer the row's own name gets a second hearing — as a client label when it
+ * names one, and otherwise as itself, because a phase the house calls by its
+ * own name is still a distinct graduation.
+ */
+function graduationName(phase: SpinePhase): string {
+  if (phase.slug !== 'consultation') return getPhaseLabel(phase.slug, 'client');
+  const fromName = recognisePhaseSlug(phase.title);
+  if (fromName) return getPhaseLabel(fromName, 'client');
+  return phase.title.trim() || getPhaseLabel('consultation', 'client');
+}
+
+/**
+ * The chapter's span, in the pole's own idiom: "March" when it opens and
+ * closes in one month, "April–May" when it does not, and "week of 12
+ * October" for a chapter still ahead that carries only the day it is aimed at.
+ * A phase carrying no date at all is simply not dated.
+ */
+function graduationSpan(phase: SpinePhase): string | null {
+  const from = parseSpineDate(phase.startDate);
+  const closed = parseSpineDate(phase.completionDate);
+  const to = closed ?? parseSpineDate(phase.targetDate);
+
+  if (from && to) {
+    const opens = LONG_MONTH.format(from);
+    const closes = LONG_MONTH.format(to);
+    return opens === closes && from.getFullYear() === to.getFullYear()
+      ? opens
+      : `${opens}\u2013${closes}`;
+  }
+
+  if (!from && to && !closed && phase.status !== 'completed') {
+    return `week of ${DAY_MONTH.format(startOfWeek(to))}`;
+  }
+
+  const only = from ?? to;
+  return only ? LONG_MONTH.format(only) : null;
+}
 
 export interface StoryPoleProps {
   phases: ReturnType<typeof splitSpinePhases>;
@@ -35,11 +93,14 @@ export interface StoryPoleProps {
 export function StoryPole({ phases, sections }: StoryPoleProps) {
   const [here, setHere] = useState(0);
 
-  const graduations = [
-    ...phases.settled.map((phase) => ({ phase, held: false })),
-    ...(phases.current ? [{ phase: phases.current, held: true }] : []),
-    ...phases.future.map((phase) => ({ phase, held: false })),
-  ];
+  const graduations = [...phases.settled, ...(phases.current ? [phases.current] : []), ...phases.future]
+    .sort((a, b) => a.index - b.index)
+    .map((phase) => ({
+      phase,
+      held: phase.id === phases.current?.id,
+      name: graduationName(phase),
+      span: graduationSpan(phase),
+    }));
   const heldAt = graduations.findIndex((graduation) => graduation.held);
 
   const sectionIds = sections.map((section) => section.id).join('|');
@@ -142,8 +203,13 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
                   : 'block font-normal uppercase tracking-[0.09em] text-[var(--text-body)]'
               }
             >
-              {graduation.phase.label}
+              {graduation.name}
             </b>
+            {graduation.span && (
+              <span data-testid={`story-pole-span-${graduation.phase.id}`}>
+                {graduation.span}
+              </span>
+            )}
             {graduation.held && <span className="block">the house stands here</span>}
           </li>
         ))}
