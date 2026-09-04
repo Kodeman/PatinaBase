@@ -110,6 +110,7 @@ beforeEach(() => {
       updated_at: '2026-01-01T00:00:00Z',
     },
     isLoading: false,
+    isError: false,
   });
   mockUseUpdateProfile.mockReturnValue({
     mutate: updateProfileMutate,
@@ -121,9 +122,18 @@ beforeEach(() => {
     mutateAsync: signOutAllMutateAsync,
     isPending: false,
   });
-  mockUseNotificationPreferences.mockReturnValue({ data: makePrefs(), isLoading: false });
-  mockUseUpdateNotificationPreferences.mockReturnValue({ mutate: updatePrefsMutate });
-  mockUseMyThreadOverrides.mockReturnValue({ data: [], isLoading: false });
+  mockUseNotificationPreferences.mockReturnValue({
+    data: makePrefs(),
+    isLoading: false,
+    isError: false,
+  });
+  mockUseUpdateNotificationPreferences.mockReturnValue({
+    mutate: updatePrefsMutate,
+    isPending: false,
+    isError: false,
+    error: null,
+  });
+  mockUseMyThreadOverrides.mockReturnValue({ data: [], isLoading: false, isError: false });
   mockUseUpdateThreadNotificationPref.mockReturnValue({ mutate: updateThreadPrefMutate });
   mockUseMuteThread.mockReturnValue({ mutate: muteThreadMutate });
 });
@@ -147,8 +157,21 @@ describe('DetailsSheet — open, the frame', () => {
   it('closes on Escape', () => {
     const onClose = jest.fn();
     render(<DetailsSheet open onClose={onClose} />);
-    fireEvent.keyDown(document, { key: 'Escape' });
+    // Fired on the element the trap has focused, matching a real keypress —
+    // the handler is guarded to only act within its own container so it
+    // never steals an Escape meant for a sibling overlay (e.g. L5's sheet).
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a keydown whose target sits outside this sheet', () => {
+    const onClose = jest.fn();
+    render(<DetailsSheet open onClose={onClose} />);
+    const outsider = document.createElement('div');
+    document.body.appendChild(outsider);
+    fireEvent.keyDown(outsider, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    document.body.removeChild(outsider);
   });
 
   it('closes on the scrim', async () => {
@@ -202,6 +225,24 @@ describe('DetailsSheet — name and number', () => {
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
+
+  it('mounts the avatar upload act, absorbed from /account', () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+    expect(screen.getByTestId('account-avatar-upload')).toBeInTheDocument();
+  });
+
+  it('shows a loading sentence while the profile is read', () => {
+    mockUseProfile.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    render(<DetailsSheet open onClose={jest.fn()} />);
+    expect(screen.getByText('Reading the file…')).toBeInTheDocument();
+  });
+
+  it('holds on a settled sentence, not a loading line, when the profile query fails', () => {
+    mockUseProfile.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    render(<DetailsSheet open onClose={jest.fn()} />);
+    expect(screen.getByText('The file could not be read.')).toBeInTheDocument();
+    expect(screen.queryByText('Reading the file…')).not.toBeInTheDocument();
+  });
 });
 
 describe('DetailsSheet — what you hear from us', () => {
@@ -217,6 +258,35 @@ describe('DetailsSheet — what you hear from us', () => {
     expect(updatePrefsMutate).toHaveBeenCalledWith({ type_price_drop: false });
   });
 
+  it('flips push and in-app channel toggles', async () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+    await userEvent.click(screen.getByRole('checkbox', { name: /^Push/ }));
+    expect(updatePrefsMutate).toHaveBeenCalledWith({ channels_push: false });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'In-app' }));
+    expect(updatePrefsMutate).toHaveBeenCalledWith({ channels_in_app: false });
+  });
+
+  it('reports a pending write and a failed write beside the section head', () => {
+    mockUseUpdateNotificationPreferences.mockReturnValue({
+      mutate: updatePrefsMutate,
+      isPending: true,
+      isError: false,
+      error: null,
+    });
+    const { rerender } = render(<DetailsSheet open onClose={jest.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Saving…');
+
+    mockUseUpdateNotificationPreferences.mockReturnValue({
+      mutate: updatePrefsMutate,
+      isPending: false,
+      isError: true,
+      error: new Error('could not reach the studio'),
+    });
+    rerender(<DetailsSheet open onClose={jest.fn()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('could not reach the studio');
+  });
+
   it('reveals quiet-hours fields only once enabled', async () => {
     render(<DetailsSheet open onClose={jest.fn()} />);
     expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
@@ -229,10 +299,32 @@ describe('DetailsSheet — what you hear from us', () => {
     mockUseNotificationPreferences.mockReturnValue({
       data: makePrefs({ quiet_hours_enabled: true }),
       isLoading: false,
+      isError: false,
     });
     render(<DetailsSheet open onClose={jest.fn()} />);
     expect(screen.getByLabelText('Start')).toHaveValue('22:00');
     expect(screen.getByLabelText('End')).toHaveValue('08:00');
+  });
+
+  it('carries the full timezone list and always offers the stored zone', () => {
+    mockUseNotificationPreferences.mockReturnValue({
+      data: makePrefs({ quiet_hours_enabled: true, timezone: 'Asia/Tokyo' }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    const select = screen.getByLabelText('Timezone') as HTMLSelectElement;
+    expect(select).toHaveValue('Asia/Tokyo');
+    const optionValues = Array.from(select.options).map((o) => o.value);
+    expect(optionValues).toEqual(
+      expect.arrayContaining([
+        'Asia/Tokyo',
+        'Asia/Singapore',
+        'Asia/Dubai',
+        'Australia/Sydney',
+      ]),
+    );
   });
 
   it('sets a digest frequency', async () => {
@@ -276,6 +368,7 @@ describe('DetailsSheet — conversations, muted or set apart', () => {
     render(<DetailsSheet open onClose={jest.fn()} />);
 
     expect(screen.getByText('The Quist library')).toBeInTheDocument();
+    expect(screen.getByText('Project')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Unmute' }));
     expect(muteThreadMutate).toHaveBeenCalledWith({ threadId: 'th-1', muted: false });
   });
@@ -297,9 +390,17 @@ describe('DetailsSheet — conversations, muted or set apart', () => {
     });
     render(<DetailsSheet open onClose={jest.fn()} />);
 
+    expect(screen.getByText('Vendor brief')).toBeInTheDocument();
     const select = screen.getByLabelText('Notification preference for Prairie Coat Painting');
     fireEvent.change(select, { target: { value: 'none' } });
     expect(updateThreadPrefMutate).toHaveBeenCalledWith({ threadId: 'th-2', pref: 'none' });
+  });
+
+  it('holds on a settled sentence when the overrides query fails', () => {
+    mockUseMyThreadOverrides.mockReturnValue({ data: [], isLoading: false, isError: true });
+    render(<DetailsSheet open onClose={jest.fn()} />);
+    expect(screen.getByTestId('details-threads')).toBeInTheDocument();
+    expect(screen.getByText('The file could not be read.')).toBeInTheDocument();
   });
 });
 
@@ -309,10 +410,14 @@ describe('DetailsSheet — every session, everywhere', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Sign out everywhere' }));
     expect(signOutAllMutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByText('Sign out on every device now?')).toBeInTheDocument();
+    expect(
+      screen.getByText(/ends every active session on every device, including this one/i),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Never mind' }));
-    expect(screen.queryByText('Sign out on every device now?')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/ends every active session on every device, including this one/i),
+    ).not.toBeInTheDocument();
   });
 
   it('signs out everywhere and lands on sign-in', async () => {
@@ -335,5 +440,49 @@ describe('DetailsSheet — every session, everywhere', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network blip');
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('DetailsSheet — focus trap and restore', () => {
+  const FOCUSABLE_SELECTOR =
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  it('wraps Tab from the last focusable element back to the first', () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+    const dialog = screen.getByTestId('details-sheet');
+    const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+  });
+
+  it('wraps Shift+Tab from the first focusable element to the last', () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+    const dialog = screen.getByTestId('details-sheet');
+    const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    first.focus();
+    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('returns focus to whatever opened it, once it closes', () => {
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    expect(document.activeElement).toBe(opener);
+
+    const { rerender } = render(<DetailsSheet open onClose={jest.fn()} />);
+    expect(document.activeElement).not.toBe(opener);
+
+    rerender(<DetailsSheet open={false} onClose={jest.fn()} />);
+    expect(document.activeElement).toBe(opener);
+
+    document.body.removeChild(opener);
   });
 });

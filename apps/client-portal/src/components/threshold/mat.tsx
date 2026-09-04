@@ -38,6 +38,8 @@ export interface MatProps {
   papers: MatPaper[];
   /** Opens the details sheet in place (L7 absorbs /account — never a route). */
   onOpenDetails: () => void;
+  /** Whether the details sheet is currently open, for aria-expanded on the act that opens it. */
+  detailsOpen?: boolean;
   onSignOut: () => void;
 }
 
@@ -64,7 +66,7 @@ function Paper({ paper }: { paper: MatPaper }) {
   return <span className={LINE_CLASS}>{paper.label}</span>;
 }
 
-export function Mat({ people, papers, onOpenDetails, onSignOut }: MatProps) {
+export function Mat({ people, papers, onOpenDetails, detailsOpen, onSignOut }: MatProps) {
   return (
     <section
       id="mat"
@@ -112,6 +114,8 @@ export function Mat({ people, papers, onOpenDetails, onSignOut }: MatProps) {
               surfaceKey="the_threshold"
               variant="tertiary"
               onClick={onOpenDetails}
+              aria-haspopup="dialog"
+              aria-expanded={!!detailsOpen}
             >
               Your details
             </ScoredAction>

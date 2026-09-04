@@ -607,6 +607,7 @@ export function Threshold({
       people={people}
       papers={papers}
       onOpenDetails={() => setDetailsOpen((open) => !open)}
+      detailsOpen={detailsOpen}
       onSignOut={() => void signOut()}
     />
   );

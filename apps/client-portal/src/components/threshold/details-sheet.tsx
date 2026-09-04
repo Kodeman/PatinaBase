@@ -17,6 +17,7 @@ import {
 import type { NotificationPreferences } from '@patina/shared/types';
 
 import { ScoredAction } from '@/components/making/scored-action';
+import { AvatarUploadField } from '@/components/account/AvatarUploadField';
 
 /* ── Your details ──────────────────────────────────────────────────────────
    The one place on the Threshold that is about her, not the house: the
@@ -43,9 +44,9 @@ export interface DetailsSheetProps {
 const SECTION_HEAD_CLASS =
   'font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
 const FIELD_LABEL_CLASS =
-  'block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] mb-1.5';
+  'block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)] mb-1.5';
 const TEXT_INPUT_CLASS =
-  'w-full max-w-[36ch] border-0 border-b border-[var(--border-default)] bg-transparent px-0.5 py-1.5 text-[15px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
+  'w-full max-w-[36ch] border-0 border-b border-current bg-transparent px-0.5 py-1.5 text-[15px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
 const ROW_CLASS = 'flex items-start justify-between gap-4 border-t border-[var(--border-subtle)] py-2.5';
 
 /* Every client-relevant preference key from both retired pages, deduped and
@@ -124,6 +125,10 @@ const COMMON_TIMEZONES = [
   'Europe/Paris',
   'Europe/Berlin',
   'Europe/Madrid',
+  'Asia/Tokyo',
+  'Asia/Singapore',
+  'Asia/Dubai',
+  'Australia/Sydney',
   'UTC',
 ];
 
@@ -147,9 +152,13 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
   }, [open]);
 
   // ── Esc closes; Tab is trapped inside the sheet ──────────────────────────
+  // Guarded on the event's own target being inside THIS sheet's container:
+  // L5's papers-sheet mounts in the same threshold.tsx wrapper with the same
+  // Esc contract, and without the guard one Escape would close both overlays.
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
@@ -173,12 +182,24 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
 
+  // ── Lock the page behind the sheet from scrolling under the scrim ───────
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
       <button
         type="button"
+        aria-hidden="true"
+        tabIndex={-1}
         aria-label="Close your details"
         onClick={onClose}
         className="fixed inset-0 z-0 cursor-default bg-[var(--text-primary)] opacity-[0.28]"
@@ -216,7 +237,7 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
 }
 
 function ProfileSection() {
-  const { data: profile, isLoading } = useProfile();
+  const { data: profile, isLoading, isError } = useProfile();
   const updateProfile = useUpdateProfile();
 
   const [fullName, setFullName] = useState('');
@@ -252,10 +273,20 @@ function ProfileSection() {
     <section className="mt-6 border-t border-[var(--border-default)] pt-5" data-testid="details-profile">
       <p className={SECTION_HEAD_CLASS}>Name and number</p>
 
-      {isLoading || !hydrated ? (
+      {isError ? (
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">The file could not be read.</p>
+      ) : isLoading || !hydrated ? (
         <p className="mt-3 text-[15px] text-[var(--text-muted)]">Reading the file…</p>
       ) : (
         <div className="mt-3 flex flex-col gap-4">
+          {profile && (
+            <AvatarUploadField
+              userId={profile.id}
+              currentUrl={profile.avatar_url}
+              displayName={profile.full_name ?? undefined}
+            />
+          )}
+
           <label htmlFor="details-full-name">
             <span className={FIELD_LABEL_CLASS}>Full name</span>
             <input
@@ -297,6 +328,7 @@ function ProfileSection() {
               loading={updateProfile.isPending}
               loadingLabel="Saving"
               onClick={onSave}
+              data-testid="details-save"
             >
               Save
             </ScoredAction>
@@ -318,13 +350,13 @@ function ProfileSection() {
 }
 
 function NotificationsSection() {
-  const { data: prefs, isLoading } = useNotificationPreferences();
+  const { data: prefs, isLoading, isError } = useNotificationPreferences();
   const updatePrefs = useUpdateNotificationPreferences();
+  const browserTz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
   const timezones = useMemo(() => {
-    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return Array.from(new Set([browserTz, ...COMMON_TIMEZONES]));
-  }, []);
+    return Array.from(new Set([browserTz, prefs?.timezone, ...COMMON_TIMEZONES].filter(Boolean))) as string[];
+  }, [browserTz, prefs?.timezone]);
 
   function update(updates: Partial<NotificationPreferences>) {
     updatePrefs.mutate(updates);
@@ -332,15 +364,29 @@ function NotificationsSection() {
 
   return (
     <section className="mt-6 border-t border-[var(--border-default)] pt-5" data-testid="details-notifications">
-      <p className={SECTION_HEAD_CLASS}>What you hear from us</p>
+      <div className="flex items-baseline justify-between gap-4">
+        <p className={SECTION_HEAD_CLASS}>What reaches you</p>
+        {updatePrefs.isPending && (
+          <p role="status" className="text-[13px] text-[var(--text-muted)]">
+            Saving…
+          </p>
+        )}
+        {updatePrefs.isError && (
+          <p role="alert" className="text-[13px] text-[var(--color-error,#C77B6E)]">
+            {updatePrefs.error instanceof Error ? updatePrefs.error.message : 'Could not save.'}
+          </p>
+        )}
+      </div>
 
-      {isLoading || !prefs ? (
+      {isError ? (
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">The file could not be read.</p>
+      ) : isLoading || !prefs ? (
         <p className="mt-3 text-[15px] text-[var(--text-muted)]">Reading the file…</p>
       ) : (
         <div className="mt-3">
           <PrefToggle
             label="Email notifications"
-            help="Turn off to stop all marketing email. Order receipts and account alerts still send."
+            help="Turn off to stop all email from Patina, including order receipts and account alerts."
             checked={prefs.channels_email}
             onChange={(v) => update({ channels_email: v })}
           />
@@ -408,13 +454,14 @@ function NotificationsSection() {
                   <span className={FIELD_LABEL_CLASS}>Timezone</span>
                   <select
                     id="details-quiet-tz"
-                    value={prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
+                    value={prefs.timezone || browserTz}
                     onChange={(event) => update({ timezone: event.target.value })}
                     className={TEXT_INPUT_CLASS}
                   >
                     {timezones.map((tz) => (
                       <option key={tz} value={tz}>
                         {tz}
+                        {tz === browserTz ? ' (your timezone)' : ''}
                       </option>
                     ))}
                   </select>
@@ -503,30 +550,43 @@ function PrefToggle({
   );
 }
 
+const THREAD_KIND_LABEL: Record<string, string> = {
+  project: 'Project',
+  vendor_brief: 'Vendor brief',
+};
+
 function ConversationsSection() {
-  const { data: overrides = [], isLoading } = useMyThreadOverrides();
+  const { data: overrides = [], isLoading, isError } = useMyThreadOverrides();
   const updatePref = useUpdateThreadNotificationPref();
   const muteThread = useMuteThread();
 
   const muted = overrides.filter((o) => o.muted_at);
   const customPref = overrides.filter((o) => !o.muted_at && o.notification_pref !== 'all');
 
-  if (!isLoading && overrides.length === 0) return null;
+  if (!isLoading && !isError && muted.length + customPref.length === 0) return null;
 
   return (
     <section className="mt-6 border-t border-[var(--border-default)] pt-5" data-testid="details-threads">
       <p className={SECTION_HEAD_CLASS}>Conversations, muted or set apart</p>
 
-      {isLoading ? (
+      {isError ? (
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">The file could not be read.</p>
+      ) : isLoading ? (
         <p className="mt-3 text-[15px] text-[var(--text-muted)]">Reading the file…</p>
       ) : (
         <div className="mt-3">
           {[...muted, ...customPref].map((override) => {
             const label =
               override.thread_title ?? (override.counterpart_names.join(', ') || 'A conversation');
+            const kindLabel = THREAD_KIND_LABEL[override.thread_kind] ?? 'Direct';
             return (
               <div key={override.thread_id} className={ROW_CLASS}>
-                <span className="flex-1 text-[15px] text-[var(--text-body)]">{label}</span>
+                <span className="flex-1 text-[15px] text-[var(--text-body)]">
+                  {label}
+                  <span className="block font-mono text-[11px] tracking-[0.04em] text-[var(--text-muted)]">
+                    {kindLabel}
+                  </span>
+                </span>
                 {override.muted_at ? (
                   <ScoredAction
                     actionKey="details_thread_unmute"
@@ -595,20 +655,25 @@ function SessionsSection() {
           variant="secondary"
           className="mt-3"
           onClick={() => setConfirming(true)}
+          data-testid="details-signout-all"
         >
           Sign out everywhere
         </ScoredAction>
       ) : (
         <div className="mt-3 flex flex-wrap items-center gap-4">
-          <p className="text-[15px] text-[var(--text-body)]">Sign out on every device now?</p>
+          <p className="max-w-[48ch] text-[15px] text-[var(--text-body)]">
+            This ends every active session on every device, including this one.
+            You&rsquo;ll be redirected to sign in.
+          </p>
           <ScoredAction
             actionKey="details_signout_all_confirm"
             regionKey="details"
             surfaceKey="the_threshold"
-            variant="danger"
+            variant="secondary"
             loading={signOutAll.isPending}
             loadingLabel="Signing out"
             onClick={onConfirm}
+            data-testid="details-signout-all-confirm"
           >
             Yes, sign out everywhere
           </ScoredAction>

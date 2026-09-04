@@ -100,6 +100,19 @@ describe('Mat — the people, the papers, and the way out', () => {
     expect(onOpenDetails).toHaveBeenCalledTimes(1);
   });
 
+  it('announces the details act as a dialog trigger, and its open state', () => {
+    const { rerender } = render(<Mat {...mat({ detailsOpen: false })} />);
+    const yourDetails = screen.getByRole('button', { name: /your details/i });
+    expect(yourDetails).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(yourDetails).toHaveAttribute('aria-expanded', 'false');
+
+    rerender(<Mat {...mat({ detailsOpen: true })} />);
+    expect(screen.getByRole('button', { name: /your details/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
   it('offers the way out, and takes it', async () => {
     const onSignOut = jest.fn();
     render(<Mat {...mat({ onSignOut })} />);
