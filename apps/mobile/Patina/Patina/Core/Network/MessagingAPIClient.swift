@@ -112,7 +112,7 @@ public actor MessagingAPIClient {
     public static let shared = MessagingAPIClient()
 
     private let baseURL = APIConfiguration.apiURL
-    private let session = URLSession.shared
+    private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
@@ -147,7 +147,7 @@ public actor MessagingAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
@@ -177,7 +177,7 @@ public actor MessagingAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
@@ -196,7 +196,7 @@ public actor MessagingAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
@@ -212,7 +212,7 @@ public actor MessagingAPIClient {
         request.httpMethod = "POST"
         await applyHeaders(to: &request, prefer: "return=representation")
         request.httpBody = try encoder.encode(payload)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
@@ -259,7 +259,7 @@ public actor MessagingAPIClient {
         request.httpMethod = "POST"
         await applyHeaders(to: &request)
         request.httpBody = try JSONSerialization.data(withJSONObject: [parameter: value])
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(
                 status: http.statusCode,
@@ -289,7 +289,7 @@ public actor MessagingAPIClient {
         await applyHeaders(to: &request, prefer: "return=minimal")
         let body: [String: String] = ["last_read_at": ISO8601DateFormatter().string(from: Date())]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (_, response) = try await session.data(for: request)
+        let (_, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: "")
         }

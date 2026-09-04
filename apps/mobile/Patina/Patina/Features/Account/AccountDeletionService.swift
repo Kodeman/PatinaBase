@@ -88,7 +88,7 @@ final class AccountDeletionService {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await PatinaURLSession.shared.patinaData(for: request)
         } catch {
             #if DEBUG
             PatinaLog.auth.error("[DeleteAccount] transport failed: \(error.localizedDescription)")

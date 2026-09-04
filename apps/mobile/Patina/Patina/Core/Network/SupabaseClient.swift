@@ -44,6 +44,14 @@ public final class SupabaseClientManager {
     /// The Supabase client instance
     public let client: SupabaseClient
 
+    /// The session the SDK actually runs on, held rather than handed away.
+    ///
+    /// `W1-C-11`: a stalled pooled connection is only droppable through the
+    /// session that owns it, and every request in the cold-launch burst waits
+    /// on this one for its auth refresh. `PatinaURLSession.noteFailure` flushes
+    /// both pools, which it can only do if this reference survives `init`.
+    public let sdkSession: URLSession
+
     /// The session every supabase-swift read runs on.
     ///
     /// Without it the SDK falls back to `URLSession.shared`, whose defaults
@@ -69,6 +77,7 @@ public final class SupabaseClientManager {
         let logger: (any SupabaseLogger)? = nil
         #endif
 
+        sdkSession = URLSession(configuration: Self.sessionConfiguration)
         client = SupabaseClient(
             supabaseURL: AppConfiguration.supabaseURL,
             supabaseKey: AppConfiguration.supabaseAnonKey,
@@ -77,7 +86,7 @@ public final class SupabaseClientManager {
                     emitLocalSessionAsInitialSession: true
                 ),
                 global: SupabaseClientOptions.GlobalOptions(
-                    session: URLSession(configuration: Self.sessionConfiguration),
+                    session: sdkSession,
                     logger: logger
                 )
             )

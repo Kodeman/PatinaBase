@@ -198,7 +198,7 @@ public actor DecisionsAPIClient {
     public static let shared = DecisionsAPIClient()
 
     private let baseURL = APIConfiguration.apiURL
-    private let session = URLSession.shared
+    private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
@@ -279,7 +279,7 @@ public actor DecisionsAPIClient {
             .appending(queryItems: [URLQueryItem(name: "select", value: select)] + filters)
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
@@ -295,7 +295,7 @@ public actor DecisionsAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
@@ -319,7 +319,7 @@ public actor DecisionsAPIClient {
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
@@ -337,7 +337,7 @@ public actor DecisionsAPIClient {
         await applyHeaders(to: &request)
         let body: [String: String] = ["p_decision_id": decisionId]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
@@ -370,7 +370,7 @@ public actor DecisionsAPIClient {
             "p_quantity": NSNull(),
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: params)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.patinaData(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
