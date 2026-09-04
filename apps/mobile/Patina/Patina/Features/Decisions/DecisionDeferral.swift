@@ -72,4 +72,15 @@ enum DecisionOptionCopy {
     /// do work.
     static let nothingToChooseYetLine =
         "There is nothing to choose here yet — your designer has not added the options."
+
+    /// `W1-B-03`'s other half, once the act existed.
+    ///
+    /// The paragraph above is still the honest answer for a decision that is
+    /// waiting on its designer. It was the wrong answer for a SIGN-OFF, which
+    /// carries no options by design and was never waiting on anybody but the
+    /// client — and which 00564's `approve_client_signoff` can now resolve.
+    static let signoffPrompt =
+        "This one is yours to approve. Nothing to choose — your designer needs your sign-off."
+    static let signoffAction = "Give your sign-off"
+    static let signoffConsentEyebrow = "CONFIRM YOUR SIGN-OFF"
 }

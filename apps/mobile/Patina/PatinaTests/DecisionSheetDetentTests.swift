@@ -61,8 +61,11 @@ struct DecisionSheetDetentTests {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionDetailView.swift")
         )
+        // Three presentations, two sheet types: the deferral sheet, and the
+        // consent sheet at both of its call sites — a choice and, since
+        // `W1-B-03`, a sign-off. Every one of them derives its detents.
         let calls = code.components(separatedBy: "DecisionSheetDetents.detents(for:").count - 1
-        #expect(calls == 2, "only \(calls) of the two decision sheets derives its detents")
+        #expect(calls == 3, "only \(calls) of the three decision presentations derives its detents")
         #expect(!code.contains("presentationDetents([.medium, .large])"),
                 "a decision sheet still hard-codes the pair that hid Approve and Cancel")
     }

@@ -110,6 +110,19 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
     public let description: String?
     public let status: String?
     public let decision_type: String?
+    /// `W1-B-03`: which act resolves this decision, and whose it is.
+    ///
+    /// `'selection'` is answered by choosing an option; `'signoff'` by
+    /// approving. Both columns are `SELECT`-granted to `authenticated`
+    /// (`information_schema.column_privileges`), and both decode as nil on a
+    /// row read by an older select — which reads as "not a sign-off" and
+    /// leaves the screen exactly as it was.
+    public let coordination_kind: String?
+    public let court: String?
+    /// Non-nil on a Stage-2 project-artifact decision, which is answered
+    /// through its own evidence-bearing path and never by `approve_client_
+    /// signoff`. Carried so the screen does not offer an act the RPC refuses.
+    public let approval_contract: String?
     public let recommended_option_id: String?
     /// Audit-trail timestamps. Non-nil once the client has viewed / responded.
     public let viewed_at: String?
@@ -124,6 +137,15 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
     /// Convenience: the decision has already been responded to.
     public var isResolved: Bool {
         status == "responded" || responded_at != nil
+    }
+
+    /// A sign-off the addressed client is the one to give — exactly the shape
+    /// `approve_client_signoff` (00564) accepts, so the screen never draws an
+    /// act the server will refuse.
+    public var isClientSignoff: Bool {
+        coordination_kind == "signoff"
+            && court == "client"
+            && approval_contract == nil
     }
 
     /// Who asked. "your designer" when the embed brought nobody — the record
@@ -207,6 +229,7 @@ public actor DecisionsAPIClient {
     /// the list + detail queries can't drift.
     private static let decisionColumns =
         "id,project_id,title,description:context,status,decision_type,"
+        + "coordination_kind,court,approval_contract,"
         + "recommended_option_id,viewed_at,responded_at,due_date,"
         + "client_consent_method,client_consented_at,created_at,"
 
@@ -368,6 +391,37 @@ public actor DecisionsAPIClient {
             "p_client_signature": signature ?? NSNull(),
             "p_client_note": NSNull(),
             "p_quantity": NSNull(),
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: params)
+        let (data, response) = try await session.patinaData(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
+    /// Approve a client-court sign-off — the act `apply_client_decision` has no
+    /// shape for.
+    ///
+    /// `W1-B-03`: that RPC takes a `p_selected_option_id` and raises
+    /// `insufficient_privilege` unless `coordination_kind = 'selection'`, and
+    /// below it the option must belong to the decision — so an option-less
+    /// sign-off had no argument list at all, and Procurement stayed blocked on
+    /// a screen whose only acts were "Not yet" and "Discuss this". 00564's
+    /// `approve_client_signoff` is that act: same authority test, same consent
+    /// columns, same `decision_resolved` notification, same FF&E unblock.
+    public func approveSignoff(
+        decisionId: String,
+        consent: ConsentMethod,
+        signature: String? = nil
+    ) async throws {
+        let url = baseURL.appendingPathComponent("/rest/v1/rpc/approve_client_signoff")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        await applyHeaders(to: &request)
+        let params: [String: Any] = [
+            "p_decision_id": decisionId,
+            "p_client_consent_method": consent.rawValue,
+            "p_client_signature": signature ?? NSNull(),
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: params)
         let (data, response) = try await session.patinaData(for: request)

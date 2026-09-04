@@ -39,13 +39,17 @@ struct DecisionDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 24)
                             .accessibilityIdentifier("decisionDetail.optionsPending")
+                    } else if viewModel.awaitsClientSignoff {
+                        // W1-B-03: the act the screen had no shape for. An
+                        // Approval decision carries no options BY DESIGN — the
+                        // absence is what it is, not a gap — and 00564's
+                        // `approve_client_signoff` is what resolves it. It goes
+                        // through the same consent step as a choice, because it
+                        // is the same contractual moment.
+                        signoffAction
                     } else if viewModel.hasNoOptionsAtAll {
-                        // W1-B-03: an overdue decision with no options row drew
-                        // NOTHING here, so the screen read as an approval whose
-                        // approve button was missing. See
-                        // `DecisionOptionCopy.nothingToChooseYetLine` for why a
-                        // synthesised Approve would be a control that cannot
-                        // succeed.
+                        // A decision with no options that is NOT a sign-off is
+                        // still waiting on its designer, and still says so.
                         Text(DecisionOptionCopy.nothingToChooseYetLine)
                             .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.Text.secondary)
@@ -111,6 +115,26 @@ struct DecisionDetailView: View {
                     onCancel: { viewModel.cancelSelection() }
                 )
                 .presentationDetents(DecisionSheetDetents.detents(for: dynamicTypeSize))
+            } else if viewModel.isApprovingSignoff {
+                // W1-B-03: the same sheet, the same contractual moment, named
+                // for the act. A sign-off has no option to put in the title, so
+                // the subject is the decision itself.
+                DecisionConsentSheet(
+                    eyebrow: DecisionOptionCopy.signoffConsentEyebrow,
+                    optionTitle: viewModel.decision?.title ?? "this sign-off",
+                    isSubmitting: viewModel.isSubmitting,
+                    onConfirm: { consent, signature in
+                        Task {
+                            await viewModel.confirmSignoff(
+                                decisionId: decisionId,
+                                consent: consent,
+                                signature: signature
+                            )
+                        }
+                    },
+                    onCancel: { viewModel.cancelSignoff() }
+                )
+                .presentationDetents(DecisionSheetDetents.detents(for: dynamicTypeSize))
             }
         }
     }
@@ -121,13 +145,41 @@ struct DecisionDetailView: View {
         return viewModel.options.first(where: { $0.id == id })
     }
 
-    /// `.sheet(isPresented:)` binding driven by the VM's `pendingOptionId`.
-    /// Dismissing the sheet (swipe or Cancel) clears the pending option.
+    /// `.sheet(isPresented:)` binding driven by whichever act is pending — an
+    /// option the client tapped, or the sign-off (`W1-B-03`), which has no
+    /// option to remember. Dismissing the sheet (swipe or Cancel) clears both.
     private var consentSheetBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.pendingOptionId != nil },
-            set: { if !$0 { viewModel.cancelSelection() } }
+            get: { viewModel.pendingOptionId != nil || viewModel.isApprovingSignoff },
+            set: {
+                if !$0 {
+                    viewModel.cancelSelection()
+                    viewModel.cancelSignoff()
+                }
+            }
         )
+    }
+
+    /// `W1-B-03`: one line saying whose the decision is, and the act.
+    private var signoffAction: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(DecisionOptionCopy.signoffPrompt)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("decisionDetail.signoffPrompt")
+
+            PatinaButton(
+                DecisionOptionCopy.signoffAction,
+                style: .primary,
+                isLoading: viewModel.isSubmitting && viewModel.isApprovingSignoff,
+                isEnabled: !viewModel.isSubmitting
+            ) {
+                viewModel.beginSignoff()
+            }
+            .accessibilityIdentifier("decisionDetail.signoff")
+        }
+        .padding(.horizontal, 24)
     }
 
     private func header(_ decision: RemoteClientDecision) -> some View {
@@ -453,6 +505,9 @@ enum DecisionConsentValidation {
 ///   • E-signature    — the client types their full legal name.
 /// The choice is fed back to the caller via `onConfirm(method, signature?)`.
 private struct DecisionConsentSheet: View {
+    /// `W1-B-03`: the same sheet serves a choice and a sign-off, and names
+    /// which it is. Defaulted, so the option path is unchanged.
+    var eyebrow: String = "CONFIRM YOUR CHOICE"
     let optionTitle: String
     let isSubmitting: Bool
     let onConfirm: (DecisionsAPIClient.ConsentMethod, String?) -> Void
@@ -473,7 +528,7 @@ private struct DecisionConsentSheet: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
-                    MonoLabel(text: "CONFIRM YOUR CHOICE")
+                    MonoLabel(text: eyebrow)
                         .tracking(2)
                     Text(optionTitle)
                         .font(PatinaTypography.h3)
