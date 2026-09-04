@@ -67,7 +67,11 @@ async function sendReviewEmail(opts: {
 }): Promise<boolean> {
   const senderDisplay = opts.senderName;
   const greeting = opts.clientName ? `Hi ${escapeHtml(opts.clientName)},` : 'Hi there,';
-  const reviewUrl = `${CLIENT_PORTAL_URL}/review/${opts.projectId}`;
+  // L6 fix round, finding #25 — `/review/<id>` has never been a route; the
+  // studio review ask now lives on the project's own doorstep. `#doorstep`
+  // is a real, already-rendered anchor id (doorstep.tsx) and matches the
+  // retirement plan's own canonical mapping for this function.
+  const reviewUrl = `${CLIENT_PORTAL_URL}/projects/${opts.projectId}#doorstep`;
   const subject = `Share your experience with ${senderDisplay}`;
 
   const html = renderBrandedShell({

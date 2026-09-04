@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -32,7 +32,11 @@ import {
 
    STUDIO REVIEW is discoverable: `useMyPendingReviewRequests` already reads
    every request addressed to the signed-in client, so the doorstep only has
-   to keep the one that names this project.
+   to keep the ones that name this project — every one, not just the first,
+   and a request with no project link at all stands on every project's
+   doorstep rather than nowhere (deliberate: the old `/reviews` route was not
+   project-scoped either, and a client-wide ask has no other home once that
+   route is retired).
 
    EDITION REVIEW is not: `project_review_editions` reads studio-only by RLS,
    and the RPC behind `useClientProjectReviewBundle` takes an edition id the
@@ -59,27 +63,29 @@ function designerNameOf(request: ClientPendingReview): string {
   );
 }
 
+function belongsToThisProject(
+  request: ClientPendingReview,
+  projectId: string,
+): boolean {
+  return request.project === null || request.project.id === projectId;
+}
+
 /**
- * The studio's own review request, standing on the doorstep. There is no
- * room for it to belong to — a review is of the relationship, not a piece —
- * so like `DoorstepApproval` it stands beside the ledger rather than inside
- * a band.
+ * One studio review request, standing on the doorstep. There is no room for
+ * it to belong to — a review is of the relationship, not a piece — so like
+ * `DoorstepApproval` it stands beside the ledger rather than inside a band.
+ * A card of its own rather than a single shared form: two requests can stand
+ * at once (finding #16), each with its own draft and its own confirmation.
  */
-export function StudioReviewAsk({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const pendingQuery = useMyPendingReviewRequests(user?.id);
+function StudioReviewCard({ request }: { request: ClientPendingReview }) {
+  const queryClientInvalidate = useReviewInvalidation();
   const submit = useSubmitReview();
   const [rating, setRating] = useState(0);
+  const [focusIndex, setFocusIndex] = useState(0);
+  const starRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sentAt, setSentAt] = useState<Date | null>(null);
-
-  const request =
-    (pendingQuery.data ?? []).find((req) => req.project?.id === projectId) ??
-    null;
-
-  if (!request && !sentAt) return null;
 
   if (sentAt) {
     return (
@@ -89,16 +95,38 @@ export function StudioReviewAsk({ projectId }: { projectId: string }) {
         className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
       >
         <p className="pt-2.5 text-[15px] leading-relaxed text-[var(--text-body)]">
-          {`Sent ${DAY_MONTH.format(sentAt)}. Thank you for the words.`}
+          {`Sent ${DAY_MONTH.format(sentAt)}. Your studio has it.`}
         </p>
       </section>
     );
   }
-  if (!request) return null;
 
   const designerName = designerNameOf(request);
 
-  function handleSubmit() {
+  function selectStar(index: number, focusButton: boolean) {
+    setFocusIndex(index);
+    setRating(STARS[index]);
+    if (focusButton) starRefs.current[index]?.focus();
+  }
+
+  function onStarsKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      selectStar(Math.min(focusIndex + 1, STARS.length - 1), true);
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      selectStar(Math.max(focusIndex - 1, 0), true);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      selectStar(0, true);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      selectStar(STARS.length - 1, true);
+    }
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setError(null);
     if (rating < 1 || rating > 5) {
       setError("Choose a rating from 1 to 5 stars.");
@@ -109,16 +137,11 @@ export function StudioReviewAsk({ projectId }: { projectId: string }) {
       return;
     }
     submit.mutate(
-      { reviewId: request!.id, rating, reviewText: body.trim() },
+      { reviewId: request.id, rating, reviewText: body.trim() },
       {
         onSuccess: () => {
           setSentAt(new Date());
-          void queryClient.invalidateQueries({
-            queryKey: ["my-pending-review-requests", user?.id],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["my-submitted-reviews", user?.id],
-          });
+          queryClientInvalidate();
         },
         onError: (err) => {
           setError(
@@ -155,78 +178,125 @@ export function StudioReviewAsk({ projectId }: { projectId: string }) {
         </p>
       )}
 
-      <div
-        className="mt-4 flex items-center gap-1"
-        role="radiogroup"
-        aria-label="Rating, out of 5 stars"
-      >
-        {STARS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={rating === value}
-            aria-label={`${value} star${value === 1 ? "" : "s"}`}
-            onClick={() => setRating(value)}
-            data-testid={`review-star-${value}`}
-            className="min-h-[44px] min-w-[28px] font-heading text-[1.1rem] leading-none text-[var(--text-primary)]"
-            style={{ opacity: value <= rating ? 1 : 0.32 }}
-          >
-            ★
-          </button>
-        ))}
-      </div>
-
-      <label
-        htmlFor={`review-body-${request.id}`}
-        className="mt-4 block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
-      >
-        What did you love? Anything we could improve?
-      </label>
-      <textarea
-        id={`review-body-${request.id}`}
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        rows={4}
-        data-testid="review-body"
-        placeholder="A few sentences about your experience…"
-        className="mt-1.5 w-full max-w-[52ch] resize-y border border-[var(--border-default)] bg-transparent px-3 py-2 text-[15px] leading-relaxed text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]"
-      />
-      <p className="mt-1 font-mono text-[11px] text-[var(--text-muted)]">
-        {`${body.length} / ${MIN_BODY} min`}
-      </p>
-
-      {error && (
-        <p
-          role="alert"
-          className="mt-2 text-[15px] leading-normal text-[var(--color-error)]"
+      <form onSubmit={handleSubmit}>
+        <div
+          className="mt-4 flex items-center gap-1"
+          role="radiogroup"
+          aria-label="Rating, out of 5 stars"
+          onKeyDown={onStarsKeyDown}
         >
-          {error}
+          {STARS.map((value, index) => (
+            <button
+              key={value}
+              ref={(el) => {
+                starRefs.current[index] = el;
+              }}
+              type="button"
+              role="radio"
+              aria-checked={rating === value}
+              aria-label={`${value} star${value === 1 ? "" : "s"}`}
+              tabIndex={index === focusIndex ? 0 : -1}
+              onClick={() => selectStar(index, false)}
+              data-testid={`review-star-${value}`}
+              className="min-h-[44px] min-w-[28px] font-heading text-[1.1rem] leading-none text-[var(--text-primary)]"
+              style={{ opacity: value <= rating ? 1 : 0.32 }}
+            >
+              ★
+            </button>
+          ))}
+        </div>
+
+        <label
+          htmlFor={`review-body-${request.id}`}
+          className="mt-4 block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
+        >
+          What did you love? Anything we could improve?
+        </label>
+        <textarea
+          id={`review-body-${request.id}`}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          rows={4}
+          required
+          minLength={MIN_BODY}
+          data-testid="review-body"
+          placeholder="A few sentences about your experience…"
+          className="mt-1.5 w-full max-w-[52ch] resize-y border border-[var(--border-default)] bg-transparent px-3 py-2 text-[15px] leading-relaxed text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]"
+        />
+        <p className="mt-1 font-mono text-[11px] text-[var(--text-muted)]">
+          {`${body.length} / ${MIN_BODY} min`}
         </p>
-      )}
 
-      <div className="mt-4">
-        <ScoredAction
-          actionKey="review_submit"
-          regionKey="doorstep"
-          surfaceKey="the_threshold"
-          variant="primary"
-          loading={submit.isPending}
-          loadingLabel="Sending"
-          onClick={handleSubmit}
-          data-testid="review-submit"
-        >
-          Send your review
-        </ScoredAction>
-      </div>
+        {error && (
+          <p
+            role="alert"
+            className="mt-2 text-[15px] leading-normal text-[var(--color-error)]"
+          >
+            {error}
+          </p>
+        )}
+
+        <div className="mt-4">
+          <ScoredAction
+            actionKey="review_submit"
+            regionKey="doorstep"
+            surfaceKey="the_threshold"
+            variant="primary"
+            type="submit"
+            loading={submit.isPending}
+            loadingLabel="Sending"
+            data-testid="review-submit"
+          >
+            Send your review
+          </ScoredAction>
+        </div>
+      </form>
     </section>
+  );
+}
+
+/** `useSubmitReview`'s own `onSuccess` only invalidates the designer-side
+ * `client-reviews`/`review-stats` keys (not the client-side
+ * `my-pending-review-requests`/`my-submitted-reviews` ones `ReviewsIndex.tsx`
+ * itself never fixed either) — every card invalidates both client-side keys
+ * itself on success. A tiny hook rather than importing `useQueryClient` per
+ * card so the invalidation keys live in one place. */
+function useReviewInvalidation() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({
+      queryKey: ["my-pending-review-requests", user?.id],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["my-submitted-reviews", user?.id],
+    });
+  };
+}
+
+export function StudioReviewAsk({ projectId }: { projectId: string }) {
+  const { user } = useAuth();
+  const pendingQuery = useMyPendingReviewRequests(user?.id);
+
+  const requests = (pendingQuery.data ?? []).filter(
+    (req) => req.request_status === "sent" && belongsToThisProject(req, projectId),
+  );
+
+  return (
+    <>
+      {requests.map((request) => (
+        <StudioReviewCard key={request.id} request={request} />
+      ))}
+    </>
   );
 }
 
 /**
  * The reviews this client has already sent, read the way the rest of
  * Previously reads a closed thing: one dated line, ruled with a leader out to
- * the word for how it closed. A sibling list rather than an entry merged into
+ * the word for how it closed, unfolding to the review's own words — the old
+ * `PastReviewCard` showed the body in full and this is its only home once
+ * `/reviews` retires. A sibling list rather than an entry merged into
  * `deriveThreshold`'s own join — `client_reviews` never touches selections,
  * proposals, invoices, rooms or notes, so it has nothing to say to the one
  * join that reconciles those five.
@@ -234,8 +304,8 @@ export function StudioReviewAsk({ projectId }: { projectId: string }) {
 export function SubmittedReviewsPrevious({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const submittedQuery = useMySubmittedReviews(user?.id);
-  const rows = (submittedQuery.data ?? []).filter(
-    (review) => review.project?.id === projectId,
+  const rows = (submittedQuery.data ?? []).filter((review) =>
+    belongsToThisProject(review, projectId),
   );
 
   if (rows.length === 0) return null;
@@ -269,6 +339,14 @@ export function SubmittedReviewsPrevious({ projectId }: { projectId: string }) {
                 Sent
               </span>
             </p>
+            {review.review_text && (
+              <p
+                data-testid="submitted-review-text"
+                className="pb-3 text-[15px] leading-relaxed text-[var(--text-body)]"
+              >
+                {review.review_text}
+              </p>
+            )}
           </li>
         );
       })}
@@ -309,12 +387,41 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
   const bundleQuery = useClientProjectReviewBundle(editionId ?? "", projectId);
   const feedback = useRecordProjectReviewFeedback(editionId ?? "");
 
+  // The link the studio sent is spent the moment its bundle has mounted —
+  // `?review=` re-reading on every reload, and travelling in any
+  // shared/bookmarked copy of this URL, is not what a one-time deep link
+  // should do (L2's letterbox cleans `?checkout=` the same way).
+  useEffect(() => {
+    if (!editionId || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("review")) return;
+    url.searchParams.delete("review");
+    window.history.replaceState({}, "", url.toString());
+  }, [editionId]);
+
   if (!editionId) return null;
+
   const bundle = bundleQuery.data;
-  if (bundleQuery.isLoading || bundleQuery.isError || !bundle) return null;
+
+  if (bundleQuery.isError) {
+    return (
+      <section
+        data-threshold-unit="review-edition-ask"
+        data-testid="review-edition-unavailable"
+        className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
+      >
+        <p className="pt-2.5 text-[15px] leading-relaxed text-[var(--text-body)]">
+          This selection review is unavailable.
+        </p>
+      </section>
+    );
+  }
+
+  if (bundleQuery.isLoading || !bundle) return null;
   if (bundle.items.length === 0) return null;
 
   const closed = bundle.status !== "published";
+  const inFlightItemId = feedback.isPending ? feedback.variables?.reviewItemId : null;
 
   return (
     <section
@@ -339,7 +446,9 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
       </p>
 
       <ul className="mt-4 list-none">
-        {bundle.items.map((item) => (
+        {bundle.items.map((item) => {
+          const itemInFlight = inFlightItemId === item.id;
+          return (
           <li
             key={item.id}
             data-testid="review-edition-item"
@@ -360,7 +469,7 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
                 {item.name}
                 {` · ${item.roomName}`}
                 {item.clientPriceCents
-                  ? ` · ${moneyInWords(item.clientPriceCents)}`
+                  ? ` · ${moneyInWords(item.clientPriceCents, item.currency)}`
                   : ""}
               </p>
               {item.verdict && (
@@ -375,7 +484,7 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
                     regionKey="doorstep"
                     surfaceKey="the_threshold"
                     variant="tertiary"
-                    disabled={feedback.isPending}
+                    disabled={itemInFlight}
                     onClick={() =>
                       feedback.mutate({
                         reviewItemId: item.id,
@@ -391,7 +500,7 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
                     regionKey="doorstep"
                     surfaceKey="the_threshold"
                     variant="tertiary"
-                    disabled={feedback.isPending}
+                    disabled={itemInFlight}
                     onClick={() =>
                       feedback.mutate({
                         reviewItemId: item.id,
@@ -420,14 +529,12 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
                     regionKey="doorstep"
                     surfaceKey="the_threshold"
                     variant="tertiary"
-                    disabled={
-                      feedback.isPending || !(comments[item.id] ?? "").trim()
-                    }
+                    disabled={itemInFlight || !(comments[item.id] ?? "").trim()}
                     onClick={() =>
                       feedback.mutate({
                         reviewItemId: item.id,
                         verdict: "comment",
-                        comment: comments[item.id],
+                        comment: (comments[item.id] ?? "").trim(),
                       })
                     }
                     data-testid={`review-edition-comment-${item.id}`}
@@ -438,7 +545,8 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
               )}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       {closed && (

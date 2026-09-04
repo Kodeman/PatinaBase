@@ -9,6 +9,12 @@ jest.mock("@patina/supabase", () => ({
   useApproveScopeChange: jest.fn(),
   useDeclineScopeChange: jest.fn(),
   useCreateClientScopeChangeRequest: jest.fn(),
+  useCancelClientScopeChangeRequest: jest.fn(),
+}));
+
+jest.mock("@/hooks/use-auth", () => ({
+  __esModule: true,
+  useAuth: jest.fn(),
 }));
 
 jest.mock("@/lib/analytics/events", () => ({
@@ -18,17 +24,26 @@ jest.mock("@/lib/analytics/events", () => ({
 
 import {
   useApproveScopeChange,
+  useCancelClientScopeChangeRequest,
   useCreateClientScopeChangeRequest,
   useDeclineScopeChange,
   useScopeChangeRequests,
 } from "@patina/supabase";
+import { useAuth } from "@/hooks/use-auth";
 
-import { PendingScopeChangeAsk, RequestChangeAct } from "../scope-change-ask";
+import {
+  MyScopeChangeRequestsAsk,
+  PendingScopeChangeAsk,
+  RequestChangeAct,
+  ResolvedScopeChangesPrevious,
+} from "../scope-change-ask";
 
 const scopeMock = useScopeChangeRequests as jest.Mock;
 const approveMock = useApproveScopeChange as jest.Mock;
 const declineMock = useDeclineScopeChange as jest.Mock;
 const createMock = useCreateClientScopeChangeRequest as jest.Mock;
+const cancelMock = useCancelClientScopeChangeRequest as jest.Mock;
+const authMock = useAuth as jest.Mock;
 
 const PROJECT_ID = "proj-vale";
 
@@ -47,6 +62,14 @@ beforeEach(() => {
   approveMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
   declineMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
   createMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  cancelMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  authMock.mockReturnValue({ user: { id: "client-1" } });
+  try {
+    globalThis.sessionStorage?.clear();
+  } catch {
+    // jsdom always provides sessionStorage; the guard matches the module's
+    // own defensive read/write.
+  }
   // jsdom's `crypto` carries no `randomUUID` — same fixture as
   // scope-change/new/page.test.tsx, which `useCreateClientScopeChangeRequest`
   // requires an idempotency key from either way.
@@ -113,7 +136,11 @@ describe('RequestChangeAct — "Ask for a change", house-wide or room-scoped', (
       expect.objectContaining({
         projectId: PROJECT_ID,
         title: "Swap the sofa fabric",
-        description: "We would like a more durable fabric for the family sofa.",
+        // Finding #24 — the mutation payload carries no room field, so the
+        // room the change was raised from travels in the body the studio
+        // reads instead.
+        description:
+          "We would like a more durable fabric for the family sofa.\n\nRaised from: Library.",
         idempotencyKey: expect.any(String),
       }),
       expect.any(Object),
@@ -227,5 +254,246 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
     await waitFor(() =>
       expect(screen.getByText(/^Declined /)).toBeInTheDocument(),
     );
+  });
+
+  // Finding #3 — a second studio-sent change must not become invisible.
+  it("stands every pending studio-sent change, not just the first", () => {
+    scopeMock.mockReturnValue({
+      data: [
+        { ...STUDIO_CHANGE, id: "sc-1" },
+        { ...STUDIO_CHANGE, id: "sc-2", title: "Add sconces to the hallway" },
+      ],
+      isLoading: false,
+    });
+    wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
+
+    expect(screen.getByText("Add a runner to the stair hall")).toBeInTheDocument();
+    expect(screen.getByText("Add sconces to the hallway")).toBeInTheDocument();
+  });
+
+  // Finding #4 — new_rooms and their budgets belong on screen before a name
+  // is typed against them.
+  it("renders new_rooms with their budgets", () => {
+    scopeMock.mockReturnValue({
+      data: [
+        {
+          ...STUDIO_CHANGE,
+          new_rooms: [{ name: "Mudroom", budgetCents: 450000 }],
+        },
+      ],
+      isLoading: false,
+    });
+    wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
+
+    expect(screen.getByTestId("scope-change-new-room")).toHaveTextContent(
+      "Mudroom · $4,500",
+    );
+  });
+
+  // Finding #5 — a reduction is a clause, not silence, and the new-total
+  // sentence does not depend on any other clause firing.
+  it("words a reduction to the FF&E budget, not just an addition", () => {
+    scopeMock.mockReturnValue({
+      data: [
+        {
+          ...STUDIO_CHANGE,
+          additional_ffe_budget_cents: -50000,
+          additional_design_fee_cents: 0,
+          timeline_impact_weeks: 0,
+          new_total_budget_cents: 0,
+        },
+      ],
+      isLoading: false,
+    });
+    wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
+
+    expect(screen.getByText(/less FF&E budget/)).toBeInTheDocument();
+  });
+
+  it("states the new project value even when no other clause fired", () => {
+    scopeMock.mockReturnValue({
+      data: [
+        {
+          ...STUDIO_CHANGE,
+          additional_ffe_budget_cents: 0,
+          additional_design_fee_cents: 0,
+          timeline_impact_weeks: 0,
+          new_total_budget_cents: 9500000,
+        },
+      ],
+      isLoading: false,
+    });
+    wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
+
+    expect(screen.getByText(/New project value: \$95,000\./)).toBeInTheDocument();
+  });
+
+  // Finding #21 — the counterweight act reads tertiary on this surface, not
+  // the danger variant reserved for a refused act's own confirmation.
+  it("never introduces a danger-variant act", () => {
+    scopeMock.mockReturnValue({ data: [STUDIO_CHANGE], isLoading: false });
+    const { container } = wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
+    expect(container.querySelector('[data-action-variant="danger"]')).toBeNull();
+  });
+});
+
+describe("RequestChangeAct — closed on a completed project (finding #12)", () => {
+  it("renders nothing when the project is completed", () => {
+    const { container } = wrap(
+      <RequestChangeAct projectId={PROJECT_ID} projectStatus="completed" />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders nothing when the project is archived", () => {
+    const { container } = wrap(
+      <RequestChangeAct projectId={PROJECT_ID} projectStatus="archived" />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("still offers the act for any other status", () => {
+    wrap(<RequestChangeAct projectId={PROJECT_ID} projectStatus="in_progress" />);
+    expect(screen.getByText("Ask for a change")).toBeInTheDocument();
+  });
+});
+
+describe("RequestChangeAct — double-submit and reload-safe idempotency (findings #9, #11)", () => {
+  it("does not send twice for two clicks inside one tick", async () => {
+    const mutate = jest.fn();
+    createMock.mockReturnValue({ mutate, isPending: false });
+    wrap(<RequestChangeAct projectId={PROJECT_ID} />);
+
+    await userEvent.click(screen.getByTestId("request-change-mat"));
+    await userEvent.type(screen.getByTestId("scope-change-title"), "A title");
+    await userEvent.type(
+      screen.getByTestId("scope-change-description"),
+      "A description long enough to pass validation.",
+    );
+    const send = screen.getByTestId("scope-change-send");
+    // Two rapid clicks, both landing before React Query's isPending would
+    // reach a render — the ref-guard, not the disabled prop, must hold.
+    await userEvent.click(send);
+    await userEvent.click(send);
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses the same idempotency key across a fresh mount for the same title and description", async () => {
+    let firstKey: string | undefined;
+    createMock.mockReturnValue({
+      mutate: jest.fn((vars) => {
+        firstKey = vars.idempotencyKey;
+      }),
+      isPending: false,
+    });
+    const first = wrap(<RequestChangeAct projectId={PROJECT_ID} />);
+    await userEvent.click(screen.getByTestId("request-change-mat"));
+    await userEvent.type(screen.getByTestId("scope-change-title"), "A title");
+    await userEvent.type(
+      screen.getByTestId("scope-change-description"),
+      "A description long enough to pass validation.",
+    );
+    await userEvent.click(screen.getByTestId("scope-change-send"));
+    first.unmount();
+
+    let secondKey: string | undefined;
+    createMock.mockReturnValue({
+      mutate: jest.fn((vars) => {
+        secondKey = vars.idempotencyKey;
+      }),
+      isPending: false,
+    });
+    wrap(<RequestChangeAct projectId={PROJECT_ID} />);
+    await userEvent.click(screen.getByTestId("request-change-mat"));
+    await userEvent.type(screen.getByTestId("scope-change-title"), "A title");
+    await userEvent.type(
+      screen.getByTestId("scope-change-description"),
+      "A description long enough to pass validation.",
+    );
+    await userEvent.click(screen.getByTestId("scope-change-send"));
+
+    expect(secondKey).toBe(firstKey);
+  });
+});
+
+describe("MyScopeChangeRequestsAsk — withdraw the client's own request (finding #7)", () => {
+  const MY_REQUEST = {
+    id: "sc-mine",
+    title: "Add a bench to the entry",
+    description: "A bench for shoes by the door.",
+    status: "sent",
+    request_origin: "client_request",
+    requested_by: "client-1",
+  };
+
+  it("renders nothing without a pending client request", () => {
+    scopeMock.mockReturnValue({ data: [], isLoading: false });
+    const { container } = wrap(<MyScopeChangeRequestsAsk projectId={PROJECT_ID} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("stands the client's own pending request with a withdraw act", () => {
+    scopeMock.mockReturnValue({ data: [MY_REQUEST], isLoading: false });
+    wrap(<MyScopeChangeRequestsAsk projectId={PROJECT_ID} />);
+
+    expect(screen.getByText("Add a bench to the entry")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("scope-change-withdraw-sc-mine"),
+    ).toBeInTheDocument();
+  });
+
+  it("withdraws on click and stamps the result in place", async () => {
+    const mutate = jest.fn((_vars, opts) => opts?.onSuccess?.());
+    cancelMock.mockReturnValue({ mutate, isPending: false });
+    scopeMock.mockReturnValue({ data: [MY_REQUEST], isLoading: false });
+    wrap(<MyScopeChangeRequestsAsk projectId={PROJECT_ID} />);
+
+    await userEvent.click(screen.getByTestId("scope-change-withdraw-sc-mine"));
+
+    expect(mutate).toHaveBeenCalledWith(
+      { requestId: "sc-mine", projectId: PROJECT_ID },
+      expect.any(Object),
+    );
+    expect(screen.getByTestId("my-scope-change-withdrawn")).toBeInTheDocument();
+  });
+
+  it("does not stand a different client's request", () => {
+    scopeMock.mockReturnValue({
+      data: [{ ...MY_REQUEST, requested_by: "someone-else" }],
+      isLoading: false,
+    });
+    const { container } = wrap(<MyScopeChangeRequestsAsk projectId={PROJECT_ID} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("ResolvedScopeChangesPrevious — what closed, read from the row itself (finding #6)", () => {
+  it("renders nothing with no resolved row", () => {
+    scopeMock.mockReturnValue({
+      data: [{ id: "sc-1", title: "Still pending", status: "sent" }],
+      isLoading: false,
+    });
+    const { container } = wrap(<ResolvedScopeChangesPrevious projectId={PROJECT_ID} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("reads an approval that survives a reload — from the row, not local state", () => {
+    scopeMock.mockReturnValue({
+      data: [
+        {
+          id: "sc-1",
+          title: "Add a runner to the stair hall",
+          status: "approved",
+          approved_at: "2026-08-04T12:00:00Z",
+        },
+      ],
+      isLoading: false,
+    });
+    wrap(<ResolvedScopeChangesPrevious projectId={PROJECT_ID} />);
+
+    const line = screen.getByTestId("resolved-scope-change-line");
+    expect(line).toHaveTextContent("Add a runner to the stair hall");
+    expect(line).toHaveTextContent("Approved");
   });
 });

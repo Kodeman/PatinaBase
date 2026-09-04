@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import type { ReactNode } from "react";
-import Link from "next/link";
+import type { ReactNode } from 'react';
+import Link from 'next/link';
 
-import { ScoredAction } from "@/components/making/scored-action";
+import { ScoredAction } from '@/components/making/scored-action';
 
 /* ── The mat ────────────────────────────────────────────────────────────────
    What you find by the door on the way out: who is working on the house and
@@ -37,7 +37,7 @@ export interface MatPaper {
 export interface MatProps {
   people: MatPerson[];
   papers: MatPaper[];
-  accountHref: "/account";
+  accountHref: '/account';
   onSignOut: () => void;
   /** L6 — "Ask for a change" (scope-change-ask.tsx), house-wide rather than
    * room-scoped. Optional so every other caller of `Mat` is unaffected. */
@@ -45,9 +45,9 @@ export interface MatProps {
 }
 
 const LINE_CLASS =
-  "block w-full border-t border-[var(--border-subtle)] py-2 text-left text-[15px] leading-[1.5] text-[var(--text-body)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]";
+  'block w-full border-t border-[var(--border-subtle)] py-2 text-left text-[15px] leading-[1.5] text-[var(--text-body)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
 const COLUMN_HEAD_CLASS =
-  "mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]";
+  'mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
 
 function Paper({ paper }: { paper: MatPaper }) {
   if (paper.href) {

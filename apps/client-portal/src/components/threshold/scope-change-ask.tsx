@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 
 import {
   useApproveScopeChange,
+  useCancelClientScopeChangeRequest,
   useCreateClientScopeChangeRequest,
   useDeclineScopeChange,
   useScopeChangeRequests,
+  type Database,
 } from "@patina/supabase";
 
 import { ScoredAction } from "@/components/making/scored-action";
@@ -16,41 +17,40 @@ import {
   joinClauses,
   moneyInWords,
 } from "@/components/making/standing-sentence";
+import { useAuth } from "@/hooks/use-auth";
+
+import { SIGNATURE_NOTICE } from "./consent-copy";
 
 /* ── SCOPE CHANGE ─────────────────────────────────────────────────────────────
    Absorbs `/projects/[id]/scope-change/new` (raise a request) and
-   `/projects/[id]/scope-change/[changeId]` (decide one the studio sent). Both
-   read and write `scope_change_requests` through hooks that already exist —
+   `/projects/[id]/scope-change/[changeId]` (decide one the studio sent, or
+   withdraw one the client sent). All four read and write
+   `scope_change_requests` through hooks that already exist —
    `useScopeChangeRequests` is project-scoped and client-readable, so unlike
    the two review routes this needs no query-param workaround to find its own
-   pending row.
+   rows.
 
    `RequestChangeAct` is the trigger: it mounts wherever "Ask for a change"
    belongs — the mat (house-wide) and each room band (room-scoped, carried
    through via the mark's own `roomId` so a studio triaging the request knows
    which room it was raised from, the one thing the old bare `/scope-change/new`
-   route never captured). `PendingScopeChangeAsk` is the doorstep ask for a
-   change the STUDIO sent — `request_origin !== 'client_request'` — which is
-   the only direction that asks the client to decide anything; a client's own
-   request is theirs to withdraw, not a gate anyone owes a response through. */
+   route never captured).
+
+   Three doorstep asks, corresponding to the old page's three directions:
+   `PendingScopeChangeAsk` (decide one the studio sent), `MyScopeChangeRequestsAsk`
+   (withdraw one the client sent), `ResolvedScopeChangesPrevious` (what closed,
+   read from the row's own timestamps so it survives a reload rather than
+   living only in a component's local state). */
 
 const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "long",
 });
 const MIN_DESCRIPTION = 10;
+const PENDING_STATUSES = new Set(["draft", "sent", "viewed"]);
 
-interface ScopeChangeRow {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  request_origin: string | null;
-  additional_ffe_budget_cents: number | null;
-  additional_design_fee_cents: number | null;
-  timeline_impact_weeks: number | null;
-  new_total_budget_cents: number | null;
-}
+type ScopeChangeRow =
+  Database["public"]["Tables"]["scope_change_requests"]["Row"];
 
 function isPendingStudioChange(row: ScopeChangeRow): boolean {
   return (
@@ -59,30 +59,140 @@ function isPendingStudioChange(row: ScopeChangeRow): boolean {
   );
 }
 
+function isMyPendingRequest(row: ScopeChangeRow, userId: string | undefined): boolean {
+  return (
+    row.request_origin === "client_request" &&
+    !!userId &&
+    row.requested_by === userId &&
+    PENDING_STATUSES.has(row.status)
+  );
+}
+
+function isResolved(row: ScopeChangeRow): boolean {
+  return (
+    !!row.approved_at ||
+    !!row.declined_at ||
+    !!row.applied_at ||
+    row.status === "cancelled"
+  );
+}
+
+/** `new_rooms`/`new_ffe_items` are `Json`, written by the designer-portal
+ * amendment sheet (`ScopeChangeNewRoom`/`ScopeChangeNewFFEItem` in
+ * `@patina/types`) — parsed defensively rather than trusted, since Json
+ * carries no compile-time shape. */
+function parseNewRooms(value: ScopeChangeRow["new_rooms"]): Array<{ name: string; budgetCents: number }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const record = entry as Record<string, unknown>;
+    if (typeof record.name !== "string") return [];
+    const budgetCents =
+      typeof record.budgetCents === "number"
+        ? record.budgetCents
+        : typeof record.budget_cents === "number"
+          ? record.budget_cents
+          : 0;
+    return [{ name: record.name, budgetCents }];
+  });
+}
+
+function signedClause(cents: number, label: string): string {
+  const amount = moneyInWords(Math.abs(cents));
+  return cents > 0 ? `${amount} additional ${label}` : `${amount} less ${label}`;
+}
+
+function weeksClause(weeks: number): string {
+  const magnitude = Math.abs(weeks);
+  const word = countInWords(magnitude);
+  const unit = magnitude === 1 ? "week" : "weeks";
+  return weeks > 0
+    ? `${word} ${unit} added to the timeline`
+    : `${word} ${unit} taken off the timeline`;
+}
+
+/**
+ * The impact, in words. Every clause reads its own sign — a reduction to the
+ * FF&E budget or the design fee is not silence, it is a clause of its own —
+ * and the new-total sentence stands independently of whether any other
+ * clause fired, because a change that only restates the project's value is
+ * still a financial effect the signature covers.
+ */
 function impactLine(row: ScopeChangeRow): string | null {
   const clauses: string[] = [];
-  if ((row.additional_ffe_budget_cents ?? 0) > 0) {
-    clauses.push(
-      `${moneyInWords(row.additional_ffe_budget_cents!)} additional FF&E budget`,
-    );
+  const ffe = row.additional_ffe_budget_cents ?? 0;
+  if (ffe !== 0) clauses.push(signedClause(ffe, "FF&E budget"));
+  const fee = row.additional_design_fee_cents ?? 0;
+  if (fee !== 0) clauses.push(signedClause(fee, "design fee"));
+  const weeks = row.timeline_impact_weeks ?? 0;
+  if (weeks !== 0) clauses.push(weeksClause(weeks));
+
+  const total = row.new_total_budget_cents ?? 0;
+  const totalSentence = total !== 0 ? ` New project value: ${moneyInWords(total)}.` : "";
+  const clauseSentence = clauses.length > 0 ? `${joinClauses(clauses)}.` : "";
+
+  if (!clauseSentence && !totalSentence) return null;
+  return `${clauseSentence}${totalSentence}`;
+}
+
+// ── reload-safe idempotency (ported from scope-change/new/page.tsx) ─────────
+
+type SubmissionIntent = {
+  version: 1;
+  scope: string;
+  fingerprint: string;
+  idempotencyKey: string;
+};
+
+const intentStorageKey = (projectId: string, scope: string) =>
+  `patina:scope-change-intent:${projectId}:${scope}`;
+
+function readSubmissionIntent(
+  projectId: string,
+  scope: string,
+  fingerprint: string,
+): SubmissionIntent | null {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(intentStorageKey(projectId, scope));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<SubmissionIntent>;
+    if (
+      value.version !== 1 ||
+      value.scope !== scope ||
+      value.fingerprint !== fingerprint ||
+      typeof value.idempotencyKey !== "string" ||
+      value.idempotencyKey.length === 0
+    ) {
+      return null;
+    }
+    return value as SubmissionIntent;
+  } catch {
+    return null;
   }
-  if ((row.additional_design_fee_cents ?? 0) > 0) {
-    clauses.push(
-      `${moneyInWords(row.additional_design_fee_cents!)} additional design fee`,
+}
+
+function persistSubmissionIntent(projectId: string, intent: SubmissionIntent): void {
+  try {
+    globalThis.sessionStorage?.setItem(
+      intentStorageKey(projectId, intent.scope),
+      JSON.stringify(intent),
     );
+  } catch {
+    // Storage can be unavailable in hardened/private browser contexts. The
+    // in-memory ref still protects retries for the lifetime of this mount.
   }
-  if ((row.timeline_impact_weeks ?? 0) > 0) {
-    const weeks = row.timeline_impact_weeks!;
-    clauses.push(
-      `${countInWords(weeks)} ${weeks === 1 ? "week" : "weeks"} added to the timeline`,
-    );
+}
+
+function clearSubmissionIntent(projectId: string, intent: SubmissionIntent): void {
+  try {
+    const persisted = readSubmissionIntent(projectId, intent.scope, intent.fingerprint);
+    if (persisted?.idempotencyKey === intent.idempotencyKey) {
+      globalThis.sessionStorage?.removeItem(intentStorageKey(projectId, intent.scope));
+    }
+  } catch {
+    // The server receipt already proved the commit; stale session data is
+    // safe and will be replaced when the client authors a different fingerprint.
   }
-  if (clauses.length === 0) return null;
-  const total =
-    (row.new_total_budget_cents ?? 0) > 0
-      ? ` New project value: ${moneyInWords(row.new_total_budget_cents!)}.`
-      : "";
-  return `${joinClauses(clauses)}.${total}`;
 }
 
 export interface RequestChangeActProps {
@@ -90,6 +200,10 @@ export interface RequestChangeActProps {
   /** Present when raised from a room band; absent from the mat's house-wide ask. */
   roomId?: string;
   roomName?: string;
+  /** A completed/archived project refuses the RPC; hide the invitation to
+   * write a request that can only be rejected — the old route showed
+   * "This project's scope is closed" instead of the form. */
+  projectStatus?: string;
 }
 
 /**
@@ -104,6 +218,7 @@ export function RequestChangeAct({
   projectId,
   roomId,
   roomName,
+  projectStatus,
 }: RequestChangeActProps) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -111,11 +226,17 @@ export function RequestChangeAct({
   const [error, setError] = useState<string | null>(null);
   const [sentAt, setSentAt] = useState<Date | null>(null);
   const create = useCreateClientScopeChangeRequest();
-  const queryClient = useQueryClient();
+  // React Query's isPending reaches the next render; the ref closes the
+  // same-tick double-click window before that render occurs (door-gate.tsx's
+  // own `inFlight` pattern).
+  const inFlight = useRef(false);
+  const submissionIntentRef = useRef<SubmissionIntent | null>(null);
 
   const region = roomId ? "room-band" : "mat";
   const scope = roomId ? `room-${roomId}` : "mat";
   const fieldId = (name: string) => `scope-change-${scope}-${name}`;
+
+  if (projectStatus === "completed" || projectStatus === "archived") return null;
 
   if (sentAt) {
     return (
@@ -148,6 +269,7 @@ export function RequestChangeAct({
   }
 
   function handleSubmit() {
+    if (inFlight.current) return;
     setError(null);
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
@@ -159,21 +281,46 @@ export function RequestChangeAct({
       setError(`Say a little more — at least ${MIN_DESCRIPTION} characters.`);
       return;
     }
+    inFlight.current = true;
+
+    // A change raised from a room band names the room in the body the studio
+    // reads — the mutation payload itself carries only a title and a
+    // description, so the room has nowhere else to travel.
+    const fullDescription = roomName
+      ? `${trimmedDescription}\n\nRaised from: ${roomName}.`
+      : trimmedDescription;
+    const fingerprint = JSON.stringify([trimmedTitle, fullDescription]);
+    let submissionIntent = submissionIntentRef.current;
+    if (submissionIntent?.fingerprint !== fingerprint) {
+      submissionIntent =
+        readSubmissionIntent(projectId, scope, fingerprint) ?? {
+          version: 1,
+          scope,
+          fingerprint,
+          idempotencyKey: globalThis.crypto.randomUUID(),
+        };
+      persistSubmissionIntent(projectId, submissionIntent);
+      submissionIntentRef.current = submissionIntent;
+    }
+
     create.mutate(
       {
         projectId,
-        idempotencyKey: globalThis.crypto.randomUUID(),
+        idempotencyKey: submissionIntent.idempotencyKey,
         title: trimmedTitle,
-        description: trimmedDescription,
+        description: fullDescription,
       },
       {
         onSuccess: () => {
+          clearSubmissionIntent(projectId, submissionIntent!);
+          submissionIntentRef.current = null;
+          inFlight.current = false;
           setSentAt(new Date());
-          void queryClient.invalidateQueries({
-            queryKey: ["scope-changes", projectId],
-          });
+          // useCreateClientScopeChangeRequest's own onSuccess already
+          // invalidates ['scope-changes', projectId].
         },
         onError: (err) => {
+          inFlight.current = false;
           setError(
             err instanceof Error
               ? err.message
@@ -257,14 +404,43 @@ export function RequestChangeAct({
   );
 }
 
+function NewRooms({ rooms }: { rooms: Array<{ name: string; budgetCents: number }> }) {
+  if (rooms.length === 0) return null;
+  return (
+    <div className="mt-3">
+      <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        New rooms
+      </p>
+      <ul className="mt-1.5 list-none">
+        {rooms.map((room, index) => (
+          <li
+            key={`${room.name}-${index}`}
+            data-testid="scope-change-new-room"
+            className="text-[15px] leading-relaxed text-[var(--text-body)]"
+          >
+            {`${room.name} · ${moneyInWords(room.budgetCents)}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
- * A change the studio proposed, standing on the doorstep the way
- * `DoorstepApproval` does: it carries no single room (the old page never
- * scoped a studio-sent change to one either — `new_rooms` can add several at
- * once) so it stands beside the ledger, not inside a band.
+ * One studio-sent change, standing on the doorstep the way `DoorstepApproval`
+ * does: it carries no single room (the old page never scoped a studio-sent
+ * change to one either — `new_rooms` can add several at once) so it stands
+ * beside the ledger, not inside a band. A separate card per row, not a single
+ * `find` — a studio that sends a second amendment before the first is
+ * decided must not make the second invisible.
  */
-export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
-  const scopeQuery = useScopeChangeRequests(projectId);
+function ScopeChangeDecideCard({
+  request,
+  projectId,
+}: {
+  request: ScopeChangeRow;
+  projectId: string;
+}) {
   const approve = useApproveScopeChange();
   const decline = useDeclineScopeChange();
   const [signName, setSignName] = useState("");
@@ -276,8 +452,8 @@ export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
     at: Date;
   } | null>(null);
 
-  const rows = (scopeQuery.data ?? []) as ScopeChangeRow[];
-  const request = rows.find(isPendingStudioChange) ?? null;
+  const impact = impactLine(request);
+  const newRooms = parseNewRooms(request.new_rooms);
 
   if (resolved) {
     return (
@@ -294,9 +470,6 @@ export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
       </section>
     );
   }
-  if (!request) return null;
-
-  const impact = impactLine(request);
 
   function handleApprove() {
     setError(null);
@@ -305,7 +478,7 @@ export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
       return;
     }
     approve.mutate(
-      { requestId: request!.id, projectId, approvedByName: signName.trim() },
+      { requestId: request.id, projectId, approvedByName: signName.trim() },
       {
         onSuccess: () => setResolved({ kind: "approved", at: new Date() }),
         onError: (err) => {
@@ -323,7 +496,7 @@ export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
     setError(null);
     decline.mutate(
       {
-        requestId: request!.id,
+        requestId: request.id,
         projectId,
         declineReason: declineReason.trim() || undefined,
       },
@@ -366,6 +539,7 @@ export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
           {impact}
         </p>
       )}
+      <NewRooms rooms={newRooms} />
 
       {!showDecline ? (
         <div className="mt-4">
@@ -375,6 +549,9 @@ export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
           >
             Type your full name
           </label>
+          <p className="mt-1 max-w-[52ch] text-[12px] leading-snug text-[var(--text-muted)]">
+            {SIGNATURE_NOTICE}
+          </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-3">
             <input
               id={`scope-change-sign-${request.id}`}
@@ -432,7 +609,7 @@ export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
               actionKey="scope_change_decline"
               regionKey="doorstep"
               surfaceKey="the_threshold"
-              variant="danger"
+              variant="tertiary"
               loading={decline.isPending}
               loadingLabel="Declining"
               onClick={handleDecline}
@@ -462,5 +639,175 @@ export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
         </p>
       )}
     </section>
+  );
+}
+
+/** Every studio-sent change still awaiting a decision — not just the first. */
+export function PendingScopeChangeAsk({ projectId }: { projectId: string }) {
+  const scopeQuery = useScopeChangeRequests(projectId);
+  const rows = (scopeQuery.data ?? []) as ScopeChangeRow[];
+  const pending = rows.filter(isPendingStudioChange);
+
+  return (
+    <>
+      {pending.map((request) => (
+        <ScopeChangeDecideCard
+          key={request.id}
+          request={request}
+          projectId={projectId}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * The client's own pending requests — theirs to withdraw, not something
+ * anyone owes a response through. Migration 00395 exists solely to let a
+ * client cancel their own scope-change request; without this ask no surface
+ * reaches that RPC.
+ */
+export function MyScopeChangeRequestsAsk({ projectId }: { projectId: string }) {
+  const { user } = useAuth();
+  const scopeQuery = useScopeChangeRequests(projectId);
+  const cancel = useCancelClientScopeChangeRequest();
+  const [withdrawnId, setWithdrawnId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const rows = (scopeQuery.data ?? []) as ScopeChangeRow[];
+  const mine = rows.filter((row) => isMyPendingRequest(row, user?.id));
+
+  if (mine.length === 0) return null;
+
+  function handleWithdraw(requestId: string) {
+    setError(null);
+    cancel.mutate(
+      { requestId, projectId },
+      {
+        onSuccess: () => setWithdrawnId(requestId),
+        onError: (err) => {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Could not withdraw just now. Try again.",
+          );
+        },
+      },
+    );
+  }
+
+  return (
+    <>
+      {mine.map((request) =>
+        withdrawnId === request.id ? (
+          <section
+            key={request.id}
+            data-threshold-unit="scope-change-ask"
+            data-testid="my-scope-change-withdrawn"
+            className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
+          >
+            <p className="pt-2.5 text-[15px] leading-relaxed text-[var(--text-body)]">
+              Withdrawn.
+            </p>
+          </section>
+        ) : (
+          <section
+            key={request.id}
+            id={`scope-change-${request.id}`}
+            data-threshold-unit="scope-change-ask"
+            data-never-dim=""
+            data-testid="my-scope-change-request"
+            aria-labelledby={`my-scope-change-title-${request.id}`}
+            className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
+          >
+            <p className="pt-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              Awaiting your studio&apos;s review
+            </p>
+            <h2
+              id={`my-scope-change-title-${request.id}`}
+              className="font-heading mt-1.5 text-[1.35rem] font-medium tracking-[-0.012em]"
+            >
+              {request.title}
+            </h2>
+            <p className="mt-2 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]">
+              {request.description}
+            </p>
+            <div className="mt-4">
+              <ScoredAction
+                actionKey="scope_change_withdraw"
+                regionKey="doorstep"
+                surfaceKey="the_threshold"
+                variant="tertiary"
+                loading={cancel.isPending}
+                loadingLabel="Withdrawing"
+                onClick={() => handleWithdraw(request.id)}
+                data-testid={`scope-change-withdraw-${request.id}`}
+              >
+                Withdraw this request
+              </ScoredAction>
+            </div>
+            {error && (
+              <p
+                role="alert"
+                className="mt-2 text-[15px] leading-normal text-[var(--color-error)]"
+              >
+                {error}
+              </p>
+            )}
+          </section>
+        ),
+      )}
+    </>
+  );
+}
+
+function resolvedStampOf(row: ScopeChangeRow): { label: string; date: Date | null } {
+  if (row.status === "cancelled") return { label: "Withdrawn", date: null };
+  if (row.applied_at) return { label: "Applied", date: new Date(row.applied_at) };
+  if (row.declined_at) return { label: "Declined", date: new Date(row.declined_at) };
+  if (row.approved_at) return { label: "Approved", date: new Date(row.approved_at) };
+  return { label: "Closed", date: null };
+}
+
+/**
+ * What closed, read the way `SubmittedReviewsPrevious` reads a closed thing:
+ * one dated line per row, from the row's own `approved_at`/`declined_at`/
+ * `applied_at`/`cancelled` rather than a component's local state — so an
+ * approval or decline the client gave a moment ago is still here after a
+ * reload, not silently gone the instant the row drops out of "pending".
+ */
+export function ResolvedScopeChangesPrevious({ projectId }: { projectId: string }) {
+  const scopeQuery = useScopeChangeRequests(projectId);
+  const rows = ((scopeQuery.data ?? []) as ScopeChangeRow[]).filter(isResolved);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <ul data-testid="resolved-scope-changes-previously" className="list-none">
+      {rows.map((row) => {
+        const { label, date } = resolvedStampOf(row);
+        return (
+          <li
+            key={row.id}
+            data-testid="resolved-scope-change-line"
+            className="border-t border-[var(--border-default)]"
+          >
+            <p className="flex min-h-[44px] w-full items-baseline gap-3 py-3">
+              <span className="min-w-[6.6em] shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                {date ? DAY_MONTH.format(date) : "—"}
+              </span>
+              <span className="font-heading text-[1.05rem]">{row.title}</span>
+              <span
+                aria-hidden="true"
+                className="relative top-[-0.28em] mx-2 min-w-[10px] flex-auto border-b border-dotted border-[var(--border-default)]"
+              />
+              <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-mocha)]">
+                {label}
+              </span>
+            </p>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
