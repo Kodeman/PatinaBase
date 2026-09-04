@@ -145,7 +145,7 @@ export const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 't
     eyebrow: 'Direction · compose the offer',
     headline: 'Draw up the direction',
     reason: 'Turn the agreed discovery into scope, fees, terms, and a visual point of view.',
-    action: { key: 'open-drafting-room', label: 'Open the Drafting Room', destination: { kind: 'anchor', section: 'direction' } },
+    action: { key: 'open-drafting-room', label: 'Open the Contract Room', destination: { kind: 'anchor', section: 'direction' } },
   },
   // The proposal stage never reaches here for its headline or act — every
   // proposal document is answered by proposalGuide, which carries the ⌥ dated
@@ -535,7 +535,7 @@ function proposalGuide(
       headline: isCommercial ? 'Finish the design agreement' : 'Finish the proposal',
       reason: 'Review the current draft and complete the client-facing terms before it leaves the studio.',
       action: row.proposal_id
-        ? { key: 'open-drafting-room', label: 'Open Drafting Room', destination: { kind: 'href', href: `/drafting/${row.proposal_id}` } }
+        ? { key: 'open-drafting-room', label: 'Open Contract Room', destination: { kind: 'href', href: `/drafting/${row.proposal_id}` } }
         : controls,
     };
   }

@@ -2416,7 +2416,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             proposal; the editing happens in the Drafting Room. */}
         {liveProposal?.status === 'draft' && (
           <p className="mb-2 mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-            Read-only preview · edit in the Drafting Room
+            Read-only preview · edit in the Contract Room
           </p>
         )}
         {/* R85 — the Folio mounts on proposal-stage documents (space

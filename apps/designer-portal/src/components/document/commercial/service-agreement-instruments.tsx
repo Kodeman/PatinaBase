@@ -208,7 +208,7 @@ export function ServiceAgreementInstruments({
                   trailing="→"
                   onClick={enterDrafting}
                 >
-                  Open the Drafting Room
+                  Open the Contract Room
                 </DocumentAction>
               )}
               {document.state === "draft" && (

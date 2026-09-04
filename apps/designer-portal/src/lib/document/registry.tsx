@@ -124,7 +124,7 @@ export const STUDIO_ROOMS: StudioSurface[] = [
   {
     key: 'drafting-room',
     kind: 'room',
-    label: 'Drafting Room',
+    label: 'Contract Room',
     subLabel: 'proposal in hand',
     // F62 — 'boards'/'moodboards' used to resolve here as well as to the
     // boards themselves; the Drafting Room gives them back so one typed word
@@ -302,7 +302,7 @@ export const STUDIO_VERBS: StudioSurface[] = [
     scope: 'global',
     help: {
       surfaceKey: 'designer-portal/document/desk',
-      blurb: 'Open the Drafting Room for an existing household — the services agreement, not a proposal.',
+      blurb: 'Open the Contract Room for an existing household — the services agreement, not a proposal.',
     },
   },
   {

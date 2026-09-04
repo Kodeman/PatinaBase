@@ -290,7 +290,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 exports rather than a doorway string (C-AF-01). */}
             <ContentsRow
               icon={PenTool}
-              label="Open the Drafting Room"
+              label="Open the Contract Room"
               subLabel="facets fill in any order"
               variant="verb"
               prominent={prominent}

@@ -812,7 +812,7 @@ export function CommandBar() {
         thisSurface.push({
           kind: 'room',
           key: 'drafting-room-here',
-          label: 'Open the Drafting Room',
+          label: 'Open the Contract Room',
           sub: 'this proposal · boards & lines',
           icon: DRAFTING_ROOM_ICON,
           run: () => router.push(`/drafting/${draftingProposalId}`),

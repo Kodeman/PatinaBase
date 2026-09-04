@@ -265,7 +265,7 @@ function ServiceAgreementEditor({
 
   return (
     <RoomShell
-      title="The Drafting Room · Design Agreement"
+      title="The Contract Room · Design Agreement"
       count={`${Math.max(0, completed)} of 7 facets written`}
       action={
         <DocumentAction

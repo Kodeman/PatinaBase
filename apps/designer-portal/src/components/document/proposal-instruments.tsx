@@ -365,7 +365,7 @@ function LegacyProposalInstruments({
             <p className="mt-0.5 text-[14px] leading-snug text-[var(--color-charcoal)]">
               {pct === 0 ? (
                 <>
-                  <b>Not started yet</b> — open the Drafting Room to write it
+                  <b>Not started yet</b> — open the Contract Room to write it
                 </>
               ) : fullyDrafted ? (
                 <>

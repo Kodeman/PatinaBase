@@ -142,7 +142,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
       <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-16">
         <p className="max-w-lg font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
           {draftingProposalId
-            ? 'This paper is still a proposal — its boards are in the Drafting Room.'
+            ? 'This paper is still a proposal — its boards are in the Contract Room.'
             : 'This paper has no project yet — the boards open when one does.'}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-6">
@@ -151,7 +151,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
               href={`/drafting/${draftingProposalId}`}
               className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]"
             >
-              Open the Drafting Room →
+              Open the Contract Room →
             </Link>
           )}
           <Link

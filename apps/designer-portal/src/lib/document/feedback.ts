@@ -110,7 +110,7 @@ export function screenNameFromPath(pathname: string | null | undefined): string 
   const p = pathname ?? '';
   if (p === '/desk' || p === '/') return 'The Desk';
   if (p.startsWith('/library')) return 'Library';
-  if (p.startsWith('/drafting')) return 'Drafting Room';
+  if (p.startsWith('/drafting')) return 'Contract Room';
   if (p.startsWith('/compose')) return 'Composing';
   if (p.startsWith('/doc')) return 'Document';
   if (p.startsWith('/people')) return 'People';

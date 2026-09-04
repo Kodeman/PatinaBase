@@ -25,7 +25,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/components/document/rooms/drafting/drafting-room', () => ({
   DraftingRoom: ({ proposalId }: { proposalId: string }) => (
-    <div data-room={proposalId}>The Drafting Room</div>
+    <div data-room={proposalId}>The Contract Room</div>
   ),
 }));
 jest.mock('@/components/document/drafting/drafting-estimate-flow', () => ({
@@ -61,14 +61,14 @@ describe('the Drafting Room route', () => {
   it('opens the Room with the worktable flag ON — the press is descoped', () => {
     renderRoute();
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(screen.getByText('The Drafting Room')).toBeInTheDocument();
+    expect(screen.getByText('The Contract Room')).toBeInTheDocument();
   });
 
   it('opens the Room with the flag off, exactly as it always has', () => {
     flag.on = false;
     renderRoute();
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(screen.getByText('The Drafting Room')).toBeInTheDocument();
+    expect(screen.getByText('The Contract Room')).toBeInTheDocument();
   });
 
   it('opens the Room on the Desk’s flagged-lines walk-in, either way', () => {
@@ -77,7 +77,7 @@ describe('the Drafting Room route', () => {
       flag.on = on;
       const { unmount } = renderRoute('?flagged=1');
       expect(mockReplace).not.toHaveBeenCalled();
-      expect(screen.getByText('The Drafting Room')).toBeInTheDocument();
+      expect(screen.getByText('The Contract Room')).toBeInTheDocument();
       unmount();
     }
   });

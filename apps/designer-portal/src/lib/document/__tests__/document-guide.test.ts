@@ -375,7 +375,7 @@ describe('deriveDocumentGuide', () => {
   });
 
   it.each([
-    ['draft', 'legacy', null, 'Finish the proposal', 'Open Drafting Room'],
+    ['draft', 'legacy', null, 'Finish the proposal', 'Open Contract Room'],
     ['sent', 'legacy', null, 'Wait for the client’s signature', 'Review signing controls'],
     ['accepted', 'legacy', null, 'The client has signed', 'Review signing controls'],
     ['declined', 'legacy', null, 'Follow up on the proposal', 'Review follow-up controls'],
@@ -496,7 +496,7 @@ describe('deriveDocumentGuide', () => {
     });
     expect(guide.action).toEqual({
       key: 'open-drafting-room',
-      label: 'Open the Drafting Room',
+      label: 'Open the Contract Room',
       destination: { kind: 'href', href: '/drafting/proposal-1' },
     });
     expect(guide.topInput?.label).toBe('phases & fees');
