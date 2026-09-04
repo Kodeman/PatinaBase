@@ -186,6 +186,18 @@ final class BadgeCountService {
         /// decodes — an absent key is `nil`, not a decode failure that would
         /// throw the whole floor away.
         let projects: [RemoteProject]?
+        /// `R-02`, the seat's PROJECT. `projects` alone brings the seat back
+        /// but not the one it named: `DesignerSeat.activeProject` resolves the
+        /// urgent NEEDS YOU row against these three collections — the only
+        /// place a row's `project_id` survives — and with them empty it falls
+        /// through to `active.first`, so a cold offline Today seated Leah on
+        /// the most-recently-updated project instead of the one the Record is
+        /// about. Restored for the same reason `projects` is, and under the
+        /// same contract: a floor to draw, never a claim that a fetch
+        /// answered. Optional for the same forward-compatibility reason.
+        let pendingDecisions: [RemoteClientDecision]?
+        let pendingProposals: [RemoteProposal]?
+        let payableInvoices: [RemoteInvoice]?
         let storedAt: Date
     }
 
@@ -239,6 +251,9 @@ final class BadgeCountService {
         // claim that `listProjects()` answered. Everything that gates on a
         // fetch having landed still waits for one.
         projects = stored.projects ?? []
+        pendingDecisions = stored.pendingDecisions ?? []
+        pendingProposals = stored.pendingProposals ?? []
+        payableInvoices = stored.payableInvoices ?? []
     }
 
     private func persistCounts(now: Date = Date()) {
@@ -251,6 +266,9 @@ final class BadgeCountService {
             payableInvoiceCount: payableInvoiceCount,
             projectCount: projectCount,
             projects: projects,
+            pendingDecisions: pendingDecisions,
+            pendingProposals: pendingProposals,
+            payableInvoices: payableInvoices,
             storedAt: now
         )
         guard let data = try? encoder.encode(stored) else { return }

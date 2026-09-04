@@ -142,11 +142,45 @@ public final class AuthService {
     /// against every auth-state event so a token refresh — which yields the
     /// same user several times a session — costs nothing, and a real change of
     /// account costs exactly one reset.
+    ///
+    /// Seeded at `init` from `settledAccountOnDisk()` — see that method for
+    /// why a cold launch is not an account change (`R-02`).
     private var settledUserId: String?
+
+    /// Whether the session fan-out has already run for this process. See its
+    /// call site in the auth-state listener (`R-02`). Named rather than quoted
+    /// there because `SessionIsolationTests` reads the raw source for the
+    /// ORDER of that call and a mention in a doc comment is an earlier match.
+    private var hasFannedSessionRefresh = false
+
+    /// The account this DEVICE last settled on, read back across launches.
+    ///
+    /// `R-02`, the designer-seat half. `settledUserId` used to start `nil`, so
+    /// GoTrue restoring a session on a cold launch read as `nil → A` — an
+    /// account CHANGE — and fired `SessionScope.reset()`. That wipes
+    /// `BadgeCountService`'s retained rows AND deletes
+    /// `patina.badge_counts.last_successful.v1`, the persisted floor R-02 put
+    /// there. Online nobody noticed: the refetch that followed refilled it.
+    /// **Offline it is the whole defect** — the floor was deleted, every fetch
+    /// failed, `projects` stayed `[]`, and `DesignerSeat.make` had nothing to
+    /// name, so "Leah Hartwell · Aspen Loft Refresh · Message" vanished from a
+    /// cold offline Today while the Record's own rows (a different store,
+    /// untouched by the reset) survived beside it.
+    ///
+    /// `localStoreOwnerKey` is already the device's record of whose data is on
+    /// this phone — `reconcileLocalStoreOwner` writes it on every settle and
+    /// `shouldWipeLocalStore` reads it — so the same fact answers this
+    /// question. A different account still reads as a change and still resets;
+    /// a fresh install has no owner and its `nil → A` still resets, over
+    /// nothing.
+    static func settledAccountOnDisk(_ defaults: UserDefaults = .standard) -> String? {
+        defaults.string(forKey: localStoreOwnerKey)
+    }
 
     // MARK: - Initialization
 
     private init() {
+        settledUserId = Self.settledAccountOnDisk()
         startAuthStateListener()
     }
 
@@ -306,7 +340,15 @@ public final class AuthService {
                 }
 
                 // And after: the two services nothing else will ask for.
-                if accountChanged, incomingUserId != nil {
+                //
+                // `R-02`: `accountChanged` alone stopped being enough once
+                // `settledUserId` is seeded from disk — a cold launch
+                // restoring the SAME account is deliberately not a change any
+                // more, and this fan-out is what asked for its rows. The
+                // once-per-process leg keeps that ask exactly where it was
+                // while the reset above no longer fires.
+                if incomingUserId != nil, accountChanged || !hasFannedSessionRefresh {
+                    hasFannedSessionRefresh = true
                     SessionScope.refresh()
                 }
             }
@@ -728,11 +770,42 @@ public final class AuthService {
             try await supabase.auth.signOut()
             applySession(nil)
         } catch {
+            // W1-C-09. The SDK clears the stored session BEFORE it revokes the
+            // token, so a throw here does not mean the person is still signed
+            // in — a revoke that 401s on an already-expired refresh token, or
+            // that never reaches the network, still ends the session. The
+            // Welcome screen then said "Something went wrong on our side. Try
+            // again, or write to hello@patina.cloud." about a sign-out that
+            // worked, and because `AuthStatusSlot` ranks `errorMessage` above
+            // `pendingLinkNotice` that one banner also occupied the slot
+            // `C2-21`'s "We'll open what you tapped once you're in." needs.
+            //
+            // So: ask what actually happened before saying anything.
+            let sessionRemains = (try? await supabase.auth.session) != nil
+            guard Self.signOutOutcome(sessionRemains: sessionRemains) == .failed else {
+                applySession(nil)
+                return
+            }
             // Root scope: a failed sign-out leaves the reader looking at the
             // Welcome screen, which is where this has to be readable.
             setError(Self.authErrorSentence(error), scope: .root)
             throw error
         }
+    }
+
+    /// What a throw out of `signOut()` means. Pure, so the rule is a testable
+    /// fact rather than something only a live GoTrue can exercise (`W1-C-09`).
+    enum SignOutOutcome: Equatable {
+        /// The session is gone. Whatever the network said, this was a
+        /// sign-out and nothing is owed to the reader.
+        case signedOut
+        /// A session survived the attempt: the person is still signed in and
+        /// the failure is worth saying.
+        case failed
+    }
+
+    static func signOutOutcome(sessionRemains: Bool) -> SignOutOutcome {
+        sessionRemains ? .failed : .signedOut
     }
 
     // MARK: - Email Verification

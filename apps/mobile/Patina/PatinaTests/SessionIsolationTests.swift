@@ -110,7 +110,7 @@ struct SessionIsolationTests {
 
     // MARK: - The service that caused the defect
 
-    @Test("the badge service really does drop the previous account's rows")
+    @Test("the badge service really does drop the previous account’s rows")
     func badgeCountsAreCleared() throws {
         let service = BadgeCountService.makeForTests()
         let projects = try JSONDecoder().decode([RemoteProject].self, from: Data("""
@@ -273,7 +273,7 @@ struct SessionIsolationTests {
             "RecordOwner.swift", "ContextMemoryStore.swift", "ConversationStorageService.swift",
             "FirstLaunchDataStore.swift",
             "firstLaunchTourState.swift", "UserDefaultsBacked.swift"
-        ] { out[file] = "on disk, owner-keyed or device-scoped — LocalStoreReset's boundary" }
+        ] { out[file] = "on disk, owner-keyed or device-scoped — LocalStoreReset’s boundary" }
 
         // Its two `UserDefaults.standard` keys carry no account, so unlike its
         // neighbours above it was NOT covered by anything: `wipeUserScopedData`
@@ -337,7 +337,7 @@ struct SessionIsolationTests {
         out["AuthService.swift"] = "the seam — it decides the reset, it is not reset by it"
         out["GuestSessionStore.swift"] = "cleared by AuthService on every real session"
         out["LocalStoreClaim.swift"] = "drives the SP-06 claim sheet across the same boundary"
-        out["FeatureFlags.swift"] = "resolved once per launch; a device answer, not an account's"
+        out["FeatureFlags.swift"] = "resolved once per launch; a device answer, not an account’s"
         return out
     }()
 
