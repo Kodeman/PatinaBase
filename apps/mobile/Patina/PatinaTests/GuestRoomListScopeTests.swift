@@ -74,18 +74,33 @@ struct GuestRoomListScopeTests {
     }
 
     /// The screen and the Studio now answer with one voice, on one store.
+    ///
+    /// The walk's contradiction was a device where the Studio said "Guest /
+    /// Rooms: 0" and the gallery one tap away listed two rooms. `ProfileView
+    /// Model`'s room list reads `RoomStore`, whose gate is deliberately inert
+    /// on a private context (`aPrivateContextIsNotScoped`), so the Studio side
+    /// is read here through the two members that do consult the injected
+    /// predicate — and the gallery side through the expression the screen uses.
     @Test("the gallery and the Studio stat agree after a sign-out")
     func theGalleryAndTheStudioAgree() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
         _ = store.createRoom(name: "Guest Bedroom", roomType: "bedroom", manualEntry: true)
+        context.insert(TableItemModel(name: "Oak Bench", productId: "p1", savedAt: Date()))
+        try context.save()
         let stored = store.allRooms()
 
-        let profile = ProfileViewModel()
-        profile.accountRowsAreVisible = { false }
-        profile.loadData(context: context)
+        let owner = ProfileViewModel()
+        owner.accountRowsAreVisible = { true }
+        owner.loadData(context: context)
+        #expect(owner.savedItemCount == 1)
 
-        #expect(profile.rooms.isEmpty)
+        let guest = ProfileViewModel()
+        guest.accountRowsAreVisible = { false }
+        guest.loadData(context: context)
+
+        #expect(guest.savedItemCount == 0)
+        #expect(guest.styleProfile == nil)
         #expect(gatedRooms(stored, isAuthenticated: false, owner: "userA").isEmpty)
     }
 
