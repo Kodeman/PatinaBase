@@ -23,11 +23,17 @@
 -- Third parties: studio_manager@patina.dev a0000000-…-0003 is an ACTIVE
 -- non-guest co-member of the project designer's "Local Dev Studio", so it is a
 -- studio writer. cf-phase1-alice cf100000-…-0001 owns a different organization
--- and is the second studio. sarah.chen 1a9cce67-… is neither, and the project
--- carries no project_parties rows, so she is the stranger.
+-- and is the second studio. manufacturer@patina.dev a0000000-…-0006 is neither,
+-- holds no organization membership and no project, and the project carries no
+-- project_parties rows, so he is the stranger. His id is FIXED by
+-- seed/dev-accounts.sql — the demo households in designer-clients.sql get a
+-- fresh random uuid on every reset, so a stranger picked from those would name a
+-- profile that does not exist and every refusal below would pass vacuously.
 --
 -- Covers:
---   1. a studio co-member who is not the lead designer writes a note
+--   1. a studio co-member who is not the lead designer writes a note, and
+--      cannot rewrite authorship, ownership or the send stamp afterwards
+--   1c. a coordination party — a VENDOR with a login — reads zero notes
 --   2. a second studio's member reads zero notes and cannot insert one
 --   3. the client reads the standing note and cannot INSERT or UPDATE
 --   4. a stranger reads zero notes
@@ -124,6 +130,23 @@ BEGIN
     SELECT 1 FROM public.project_parties
      WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1'::uuid
   ), 'FIXTURE: the project must carry no parties, or the stranger is not a stranger';
+
+  -- The stranger must be a REAL profile with no relationship to the project.
+  -- A refusal aimed at a uuid no profile carries proves nothing.
+  ASSERT EXISTS (
+    SELECT 1 FROM public.profiles
+     WHERE id = 'a0000000-0000-0000-0000-000000000006'::uuid
+  ), 'FIXTURE: the stranger must be a real profile, or every refusal below is vacuous';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.organization_members
+     WHERE user_id = 'a0000000-0000-0000-0000-000000000006'::uuid
+  ), 'FIXTURE: the stranger must hold no organization membership';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.projects
+     WHERE id = 'b0000000-0000-0000-0000-0000000000d1'::uuid
+       AND 'a0000000-0000-0000-0000-000000000006'::uuid
+           IN (client_id, designer_id, lead_designer_id, created_by)
+  ), 'FIXTURE: the stranger must have no part in the fixture project';
 END $$;
 
 -- ─── 1. a studio co-member who is not the lead designer writes a note ──────
@@ -190,6 +213,101 @@ BEGIN
     'forged authorship must be refused by RLS, got ' || COALESCE(v_sqlstate, '<none>');
 END $$;
 ROLLBACK TO SAVEPOINT s1b;
+
+-- The INSERT policy's authorship rule is only worth as much as the UPDATE that
+-- follows it. author_id, project_id and sent_at carry no UPDATE privilege at all,
+-- so a member cannot re-attribute a colleague's note, move it to another of the
+-- studio's projects, or forward-date it out of the client's sight (her policy
+-- reads sent_at <= now()). What a member MAY do is answer or retire it.
+SAVEPOINT s1c;
+DO $$
+DECLARE
+  v_sqlstate text;
+  v_rows integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004'::uuid);
+
+  BEGIN
+    UPDATE public.project_notes
+       SET author_id = 'a0000000-0000-0000-0000-000000000003'::uuid
+     WHERE id = 'c0000000-0000-0000-0000-00000000c001'::uuid;
+    ASSERT false, 'a studio member re-attributed a colleague''s note';
+  EXCEPTION WHEN OTHERS THEN
+    v_sqlstate := SQLSTATE;
+  END;
+  ASSERT v_sqlstate = '42501',
+    'rewriting author_id must be refused by the column grant, got ' || COALESCE(v_sqlstate, '<none>');
+
+  BEGIN
+    UPDATE public.project_notes
+       SET project_id = 'b0000000-0000-0000-0000-0000000000d1'::uuid
+     WHERE id = 'c0000000-0000-0000-0000-00000000c001'::uuid;
+    ASSERT false, 'a studio member moved a note to another project';
+  EXCEPTION WHEN OTHERS THEN
+    v_sqlstate := SQLSTATE;
+  END;
+  ASSERT v_sqlstate = '42501',
+    'rewriting project_id must be refused by the column grant, got ' || COALESCE(v_sqlstate, '<none>');
+
+  BEGIN
+    UPDATE public.project_notes
+       SET sent_at = now() + interval '30 days'
+     WHERE id = 'c0000000-0000-0000-0000-00000000c001'::uuid;
+    ASSERT false, 'a studio member forward-dated a note out of the client''s sight';
+  EXCEPTION WHEN OTHERS THEN
+    v_sqlstate := SQLSTATE;
+  END;
+  ASSERT v_sqlstate = '42501',
+    'rewriting sent_at must be refused by the column grant, got ' || COALESCE(v_sqlstate, '<none>');
+
+  UPDATE public.project_notes
+     SET state = 'retired', retired_at = now()
+   WHERE id = 'c0000000-0000-0000-0000-00000000c001'::uuid;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 1, 'a studio member must still be able to retire a note';
+
+  PERFORM pg_temp.reset_role();
+END $$;
+ROLLBACK TO SAVEPOINT s1c;
+
+-- ─── 1d. a coordination party is not the client ───────────────────────────
+-- project_parties.party_kind admits 'vendor' and 'gc'. A note is what the studio
+-- writes to its CLIENT, so the client predicate is projects.client_id alone and
+-- a party with a login reads nothing here.
+
+SAVEPOINT s1d;
+DO $$
+DECLARE
+  v_rows integer;
+  v_sqlstate text;
+BEGIN
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, profile_id, created_by)
+  VALUES (
+    'c0000000-0000-0000-0000-0000000000f1'::uuid,
+    'b0000000-0000-0000-0000-0000000000d1'::uuid,
+    'vendor', 'Corbin Finishes',
+    'a0000000-0000-0000-0000-000000000006'::uuid,
+    'a0000000-0000-0000-0000-000000000004'::uuid
+  );
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000006'::uuid);
+
+  SELECT count(*) INTO v_rows FROM public.project_notes
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1'::uuid;
+  ASSERT v_rows = 0,
+    'a vendor party read ' || v_rows || ' notes the studio wrote to its client';
+
+  BEGIN
+    PERFORM public.mark_project_read('b0000000-0000-0000-0000-0000000000d1'::uuid);
+    ASSERT false, 'a vendor party stamped the client''s project as read';
+  EXCEPTION WHEN OTHERS THEN
+    v_sqlstate := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_sqlstate = '42501',
+    'a vendor party must be refused by mark_project_read, got ' || COALESCE(v_sqlstate, '<none>');
+END $$;
+ROLLBACK TO SAVEPOINT s1d;
 
 -- ─── 2. a second studio's member: zero rows, and no insert ────────────────
 
@@ -277,7 +395,7 @@ DO $$
 DECLARE
   v_rows integer;
 BEGIN
-  PERFORM pg_temp.assume_user('1a9cce67-a584-4320-a9ab-4730aebc1ac8'::uuid);
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000006'::uuid);
   SELECT count(*) INTO v_rows FROM public.project_notes
    WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1'::uuid;
   PERFORM pg_temp.reset_role();
@@ -331,6 +449,24 @@ BEGIN
   GET DIAGNOSTICS v_updated = ROW_COUNT;
   ASSERT v_updated = 0, 'the designer moved the client''s reading mark';
   PERFORM pg_temp.reset_role();
+
+  -- Owning the row is not enough. mark_project_read refuses a non-party, and the
+  -- table grant must not be a side door around it: an unrelated user stamping
+  -- arbitrary real project ids is an existence oracle and unbounded row growth.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000006'::uuid);
+  BEGIN
+    INSERT INTO public.project_reading_marks (project_id, user_id)
+    VALUES (
+      'b0000000-0000-0000-0000-0000000000d1'::uuid,
+      'a0000000-0000-0000-0000-000000000006'::uuid
+    );
+    ASSERT false, 'an unrelated user stamped a reading mark on somebody else''s project';
+  EXCEPTION WHEN OTHERS THEN
+    v_sqlstate := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_sqlstate = '42501',
+    'an unrelated reading-mark insert must be refused by RLS, got ' || COALESCE(v_sqlstate, '<none>');
 END $$;
 ROLLBACK TO SAVEPOINT s5;
 
@@ -373,7 +509,7 @@ BEGIN
   PERFORM pg_temp.reset_role();
 
   -- A stranger is refused rather than silently stamped.
-  PERFORM pg_temp.assume_user('1a9cce67-a584-4320-a9ab-4730aebc1ac8'::uuid);
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000006'::uuid);
   BEGIN
     PERFORM public.mark_project_read('b0000000-0000-0000-0000-0000000000d1'::uuid);
     ASSERT false, 'a stranger marked somebody else''s project read';
@@ -468,7 +604,7 @@ DO $$
 DECLARE
   v_sqlstate text;
 BEGIN
-  PERFORM pg_temp.assume_user('1a9cce67-a584-4320-a9ab-4730aebc1ac8'::uuid);
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000006'::uuid);
   BEGIN
     PERFORM public.get_client_project_selections(
       'b0000000-0000-0000-0000-0000000000d1'::uuid
@@ -496,10 +632,23 @@ BEGIN
   ASSERT NOT has_function_privilege('anon', 'public.get_client_project_selections(uuid)', 'EXECUTE'),
     'anon must never call get_client_project_selections';
 
-  ASSERT has_table_privilege('authenticated', 'public.project_notes', 'SELECT, INSERT, UPDATE'),
+  ASSERT has_table_privilege('authenticated', 'public.project_notes', 'SELECT, INSERT'),
     'authenticated must be able to read and write project_notes through RLS';
   ASSERT NOT has_table_privilege('authenticated', 'public.project_notes', 'DELETE'),
     'nothing deletes a note; it is retired';
+  -- UPDATE is column-level, so the table-level privilege is deliberately absent.
+  ASSERT NOT has_table_privilege('authenticated', 'public.project_notes', 'UPDATE'),
+    'a table-wide UPDATE grant would undo the INSERT policy''s authorship rule';
+  ASSERT has_column_privilege('authenticated', 'public.project_notes', 'body', 'UPDATE')
+    AND has_column_privilege('authenticated', 'public.project_notes', 'enclosures', 'UPDATE')
+    AND has_column_privilege('authenticated', 'public.project_notes', 'state', 'UPDATE')
+    AND has_column_privilege('authenticated', 'public.project_notes', 'answered_at', 'UPDATE')
+    AND has_column_privilege('authenticated', 'public.project_notes', 'retired_at', 'UPDATE'),
+    'a studio must be able to answer, edit and retire a note';
+  ASSERT NOT has_column_privilege('authenticated', 'public.project_notes', 'author_id', 'UPDATE')
+    AND NOT has_column_privilege('authenticated', 'public.project_notes', 'project_id', 'UPDATE')
+    AND NOT has_column_privilege('authenticated', 'public.project_notes', 'sent_at', 'UPDATE'),
+    'authorship, ownership and the send stamp are not the studio''s to rewrite';
   ASSERT NOT has_table_privilege('anon', 'public.project_notes', 'SELECT'),
     'anon must never read project_notes';
   ASSERT NOT has_table_privilege('anon', 'public.project_reading_marks', 'SELECT'),

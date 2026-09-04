@@ -57,18 +57,31 @@
 --     · the ORDER BY (00441);
 --     · the LEFT JOIN products for imageUrl (00435);
 --     · removed_at IS NULL (00434's removal audit) on both branches;
+--     · 00435's live-set narrowing — design_disposition NOT IN
+--       ('not_selected','superseded') — on both branches. An executed instrument
+--       is the stronger gate for whether the client ever agreed to a line, but it
+--       says nothing about whether that line has since been WITHDRAWN or
+--       REPLACED. A signed-then-superseded line would otherwise stand on the
+--       page beside the line that replaced it.
 --     · projectId / projectName, so nothing the head emitted is lost.
---   Two deliberate departures from the head, both narrow:
---     · design_disposition = 'selected' is NOT carried over. Both branches here
---       join through an EXECUTED instrument, which is a strictly stronger gate
---       than a studio-side disposition flag, and applying the flag as well would
---       hide lines the client has already signed for.
+--   Three deliberate departures from the head, each narrow:
 --     · jsonb_strip_nulls is NOT carried over. The client page's derivations and
 --       its tests read a stable key set; an absent key and a null one are not
 --       the same contract. Emitting an explicit null discloses nothing.
+--     · The trade branch emits the SAME key set as the furnishings branch rather
+--       than 00423's narrower ten, so one shape serves both and the page needs no
+--       per-kind adapter. The added keys are threadId, category, assignmentScope,
+--       quantity, productId, imageUrl, docCode, and explicit nulls for
+--       clientUnitPriceCents and allowance. None carries the studio's side of the
+--       money.
+--     · The function is marked STABLE. 00423 was STABLE; 00441's head carried no
+--       volatility marker and so defaulted to VOLATILE. STABLE is correct for a
+--       read-only projection and lets the planner hoist it.
 --   NEVER returned, at any depth: trade_price_cents, trade_unit_cost_cents,
---   markup_percent, vendor identity, purchase orders, bids. Enforced by
---   supabase/tests/rls/project_notes_test.sql §7.
+--   markup_percent, vendor identity, purchase orders, bids, and no live,
+--   unsigned project_ffe_items money on ANY path — allowance.resolvedCents
+--   included (see 1d). Enforced by supabase/tests/rls/project_notes_test.sql §7
+--   and supabase/tests/ffe/release_security_test.sql.
 --
 --   Two existing SQL tests asserted the 00439 contract this reverses and are
 --   RE-CONTRACTED to 00565 in the same commit as this file, not silenced:
@@ -85,9 +98,17 @@
 --       carrying no commercial documents; now asserts that same fixture reads
 --       origin 'legacy' with an empty selections array and does not error.
 --
--- Reuses, never redefines: public.is_studio_comember (head body 00556) and
--- public.is_coordination_party (00217). Policy-only predicates live in
--- app_private (precedent 00467).
+-- Reuses, never redefines: public.is_studio_comember (head body 00556).
+-- Policy-only predicates live in app_private (precedent 00467).
+--
+-- A note is studio↔client correspondence, and nothing else reads it (Kody,
+-- 2026-09-04). app_private.is_project_client is therefore projects.client_id
+-- alone; it deliberately does NOT admit public.is_coordination_party (00217),
+-- because project_parties.party_kind admits 'vendor' and 'gc' — a sub the studio
+-- would never hand its private prose to. Nothing else in this file wanted the
+-- party read: the reading mark and mark_project_read follow the same predicate,
+-- and get_client_project_selections keeps 00441's preamble, which never admitted
+-- parties either.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql
 -- (python3 scripts/generate-legacy-grants.py) after this migration.
@@ -139,14 +160,11 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
   SELECT (select auth.uid()) IS NOT NULL
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM public.projects AS project
-        WHERE project.id = p_project
-          AND project.client_id = (select auth.uid())
-      )
-      OR public.is_coordination_party(p_project)
+    AND EXISTS (
+      SELECT 1
+      FROM public.projects AS project
+      WHERE project.id = p_project
+        AND project.client_id = (select auth.uid())
     );
 $$;
 
@@ -156,7 +174,7 @@ GRANT EXECUTE ON FUNCTION app_private.is_project_client(uuid)
   TO authenticated, service_role;
 
 COMMENT ON FUNCTION app_private.is_project_client(uuid) IS
-  'True when the caller is the project''s client (00441:88) or a logged-in coordination party (00217). Policy-only.';
+  'True when the caller IS the project''s client (projects.client_id, 00441:88) — and nobody else. Deliberately excludes public.is_coordination_party (00217): party_kind admits vendor and gc, and a note is studio-to-client correspondence. Policy-only.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 1b. public.project_notes — the line the studio writes to its client
@@ -208,7 +226,9 @@ CREATE TABLE IF NOT EXISTS public.project_notes (
   CONSTRAINT project_notes_enclosures_check
     CHECK (public.project_note_enclosures_ok(enclosures)),
   CONSTRAINT project_notes_retirement_shape_check
-    CHECK ((state = 'retired') = (retired_at IS NOT NULL))
+    CHECK ((state = 'retired') = (retired_at IS NOT NULL)),
+  CONSTRAINT project_notes_answered_shape_check
+    CHECK (answered_at IS NULL OR state IN ('answered', 'retired'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_project_notes_project_sent
@@ -217,6 +237,11 @@ CREATE INDEX IF NOT EXISTS idx_project_notes_project_sent
 CREATE INDEX IF NOT EXISTS idx_project_notes_standing
   ON public.project_notes (project_id)
   WHERE state = 'standing';
+
+-- author_id is ON DELETE RESTRICT, so a profile delete probes this table; without
+-- an index that probe is a sequential scan.
+CREATE INDEX IF NOT EXISTS idx_project_notes_author
+  ON public.project_notes (author_id);
 
 DROP TRIGGER IF EXISTS set_updated_at ON public.project_notes;
 CREATE TRIGGER set_updated_at
@@ -252,12 +277,23 @@ CREATE POLICY project_notes_client_select
 
 -- No DELETE policy and no DELETE grant, deliberately: a note is retired, and
 -- retirement is what "Previously" is made of.
--- Revoked from authenticated too, then re-granted: local stacks replay a
--- blanket creation-time baseline (seed/00-legacy-grants.sql) before this file's
--- grants, so a one-sided REVOKE would leave DELETE standing locally while prod
--- had none.
+-- Revoked from authenticated too, then re-granted: a local reset replays
+-- migrations first and seed/00-legacy-grants.sql after, and that seed's blanket
+-- creation-time baseline hands authenticated everything before replaying this
+-- file's own GRANT/REVOKE pair. A one-sided REVOKE would leave the baseline's
+-- DELETE (and table-wide UPDATE) standing locally while prod had neither.
+--
+-- UPDATE is COLUMN-level on purpose. The INSERT policy pins
+-- author_id = auth.uid() because who wrote a note is the only thing the client's
+-- "who wrote this" line rests on; a table-wide UPDATE grant would let any member
+-- of the studio rewrite that afterwards, and rewrite sent_at to back-date a note
+-- or forward-date it out of the client's sight (the client policy reads
+-- sent_at <= now()). project_id is withheld for the same reason: a note belongs
+-- to the project it was written on.
 REVOKE ALL ON public.project_notes FROM PUBLIC, anon, authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE ON public.project_notes TO authenticated;
+GRANT SELECT, INSERT ON public.project_notes TO authenticated;
+GRANT UPDATE (body, enclosures, state, answered_at, retired_at)
+  ON public.project_notes TO authenticated;
 GRANT ALL ON public.project_notes TO service_role;
 
 COMMENT ON TABLE public.project_notes IS
@@ -302,16 +338,33 @@ CREATE POLICY project_reading_marks_owner_select
   ON public.project_reading_marks FOR SELECT TO authenticated
   USING (user_id = (select auth.uid()));
 
+-- Owning the row is not enough to write one: mark_project_read refuses anyone
+-- who is neither the client nor a member of the studio, and the table grant must
+-- not be an unlocked side door around it. Without this, any authenticated user
+-- could stamp a mark against any real project id — an existence oracle and
+-- unbounded row growth on somebody else's project.
 DROP POLICY IF EXISTS project_reading_marks_owner_insert ON public.project_reading_marks;
 CREATE POLICY project_reading_marks_owner_insert
   ON public.project_reading_marks FOR INSERT TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (
+    user_id = (select auth.uid())
+    AND (
+      app_private.is_project_client(project_id)
+      OR app_private.is_project_studio_member(project_id)
+    )
+  );
 
 DROP POLICY IF EXISTS project_reading_marks_owner_update ON public.project_reading_marks;
 CREATE POLICY project_reading_marks_owner_update
   ON public.project_reading_marks FOR UPDATE TO authenticated
   USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (
+    user_id = (select auth.uid())
+    AND (
+      app_private.is_project_client(project_id)
+      OR app_private.is_project_studio_member(project_id)
+    )
+  );
 
 REVOKE ALL ON public.project_reading_marks FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT, INSERT, UPDATE ON public.project_reading_marks TO authenticated;
@@ -429,13 +482,32 @@ BEGIN
         'tradeJourney', NULL,
         -- The block exists because the CLIENT signed an allowance — that is the
         -- frozen snapshot's business (authorization_item.item_type), and it
-        -- never changes. Whether the allowance has since been RESOLVED is the
-        -- live schedule line's business (item.item_type), and that is what
-        -- decides resolvedCents.
+        -- never changes.
+        --
+        -- 00423 resolved it off the LIVE schedule line (item.item_type = 'fixed'
+        -- → item.line_total_cents). That is the one path on which the restored
+        -- payload would still have handed the client an unsigned working-row
+        -- figure the studio can move under her, and it is withdrawn here: an
+        -- allowance is RESOLVED when a later EXECUTED authorization snapshots the
+        -- same live line as 'fixed', and the resolved figure is that snapshot's
+        -- own client_line_total_cents. Until such an instrument exists the
+        -- allowance is unresolved and this is null.
         'allowance', CASE WHEN authorization_item.item_type = 'allowance' THEN jsonb_build_object(
           'ceilingCents', authorization_item.client_line_total_cents,
-          'resolvedCents', CASE WHEN item.item_type = 'fixed'
-            THEN item.line_total_cents ELSE NULL END
+          'resolvedCents', (
+            SELECT resolution.client_line_total_cents
+            FROM public.furnishing_authorization_items AS resolution
+            JOIN public.project_commercial_documents AS resolution_doc
+              ON resolution_doc.id = resolution.commercial_document_id
+             AND resolution_doc.executed_at IS NOT NULL
+            JOIN public.proposals AS resolution_proposal
+              ON resolution_proposal.id = resolution_doc.proposal_id
+             AND resolution_proposal.commercial_state = 'executed'
+            WHERE resolution.source_ffe_item_id = item.id
+              AND resolution.item_type = 'fixed'
+            ORDER BY resolution_doc.executed_at DESC, resolution.id
+            LIMIT 1
+          )
         ) ELSE NULL END,
         'instrument', jsonb_build_object(
           'documentId', doc.id,
@@ -460,6 +532,7 @@ BEGIN
       LEFT JOIN public.products AS product ON product.id = item.product_id
       WHERE item.project_id = p_project_id
         AND item.removed_at IS NULL
+        AND item.design_disposition NOT IN ('not_selected', 'superseded')
     ), '[]'::jsonb)
 
     -- ── trade: the presence line under an executed trade scope ────────────
@@ -513,6 +586,7 @@ BEGIN
       ) AS section ON true
       WHERE item.project_id = p_project_id
         AND item.removed_at IS NULL
+        AND item.design_disposition NOT IN ('not_selected', 'superseded')
     ), '[]'::jsonb)
   );
 END;

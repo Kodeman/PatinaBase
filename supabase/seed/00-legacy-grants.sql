@@ -12916,7 +12916,13 @@ END $g$;
 
 -- 00565_the_client_page.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE ON public.project_notes TO authenticated;
+  GRANT SELECT, INSERT ON public.project_notes TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00565_the_client_page.sql
+DO $g$ BEGIN
+  GRANT UPDATE (body, enclosures, state, answered_at, retired_at) ON public.project_notes TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

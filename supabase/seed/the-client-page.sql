@@ -164,7 +164,10 @@ BEGIN
   ) VALUES (
     v_fa_item, v_project, v_room_dining, v_product,
     'Walnut dining table, 96"', 'furniture',
-    'fixed', 'production', 1, 940000, 940000,
+    -- 905000 on the LIVE row against 940000 on the signed snapshot below, on
+    -- purpose: the client's page must render 940000, the figure she put her name
+    -- to, and a page showing 905000 is reading the studio's working row.
+    'fixed', 'production', 1, 905000, 905000,
     620000, 51.61, 0, 'FF-101',
     v_fa_thread, 'selected', 'room',
     NOW() - INTERVAL '41 days', NOW() - INTERVAL '9 days'
@@ -193,6 +196,13 @@ BEGIN
      AND source_authorization_item_id IS DISTINCT FROM v_fa_snapshot;
 
   -- ── 3. One signed trade scope, substantially complete ───────────────────
+  --
+  -- ⚠ NEVER LIFT THE set_config LINES BELOW OUT OF A SEED. app.proposal_accept_id
+  -- and app.commercial_document_id are the row-exact capability GUCs
+  -- guard_proposal_authority and guard_commercial_proposal_authority key on;
+  -- setting them by hand executes a commercial instrument without going through
+  -- its canonical RPC. That is legitimate for a fixture materialising history
+  -- and is a hole anywhere else.
   -- The paintwork is the wall the client is asked to accept: finished on the
   -- trade's word, standing until she says so herself.
 
