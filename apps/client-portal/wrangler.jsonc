@@ -18,11 +18,11 @@
   // breaking the extension's independent re-derivation. Value here is the
   // CURRENT derived value for this env's Supabase project.
   "vars": {
-    // NEXT_PUBLIC_FLAG_OVERRIDES: the PostHog `threshold` flag currently
-    // evaluates true for EVERY client. parseFlagOverride() in
-    // src/hooks/use-feature-flag.ts has no env guard and short-circuits
-    // PostHog entirely, so this pins the Threshold, its chrome gate and its
-    // route collapse OFF for everyone. REMOVE once the flag is retargeted.
+    // NEXT_PUBLIC_FLAG_OVERRIDES: INERT. No code reads the `threshold` flag
+    // any more — the Threshold, its chrome gate and its route collapse are
+    // unconditional for every client, so this pins nothing and is NOT a kill
+    // switch. The only way back from a bad deploy is a Worker rollback.
+    // The ship lane deletes this var and this comment.
     "NEXT_PUBLIC_FLAG_OVERRIDES": "threshold:false",
     "NEXT_PUBLIC_SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
     "NEXT_PUBLIC_EDGE_API_URL": "https://api.patina.cloud",

@@ -3,8 +3,6 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-
 import { collapsedHref } from './route-collapse';
 
 interface ThresholdRouteCollapseProps {
@@ -23,29 +21,30 @@ const SCROLL_POLL_TIMEOUT_MS = 2000;
 
 /**
  * The eight old top-level destinations (the seven nav routes plus
- * `/messages`) collapse to anchors on the one project page for a
- * solo-project client under the Threshold. A client sitting on one of those
- * old routes — a stale bookmark, a link from an old email — should land on
- * the matching anchor, not the standalone page.
+ * `/messages`), and `/projects` itself, collapse to anchors on the house. A
+ * client sitting on one of those old routes — a stale bookmark, a link from
+ * an old email — should land on the matching anchor, not the standalone
+ * page. A solo client lands on her one project; a client with several lands
+ * on `/`, which opens on whichever house moved last.
  *
  * Renders nothing. Mounts alongside `<AppChrome>` for every authenticated
- * page, same fail-closed shape as `SinglePaneSoloRedirect`: while the flag is
- * loading, and forever if it never resolves, nothing moves. Only a
- * resolved-true flag, a client with exactly one project, and a path that
- * maps to an anchor triggers the hop, and `replace` keeps the old route out
- * of the back-button history.
+ * page. A client with no project is left where she is: `collapsedHref`
+ * returns null and nothing moves. `replace` keeps the old route out of the
+ * back-button history.
  *
- * No re-fire guard is needed: once the hop lands on `/projects/<id>`, that
- * path is unmapped, so `collapsedHref` returns null and the effect is
+ * No re-fire guard is needed: both destinations (`/projects/<id>` and `/`)
+ * are unmapped, so `collapsedHref` returns null there and the effect is
  * naturally inert — until the client visits another mapped route, at which
- * point it should (and does) collapse again. This mirrors
- * `SinglePaneSoloRedirect`, which relies on the same self-termination.
+ * point it should (and does) collapse again.
  */
 export function ThresholdRouteCollapse({ projectIds }: ThresholdRouteCollapseProps) {
   const pathname = usePathname() ?? '';
   const router = useRouter();
-  const { value: threshold, isLoading } = useFeatureFlag('threshold');
-  const soloProjectId = projectIds.length === 1 ? projectIds[0] : null;
+  // The array identity changes on every render of the server-rendered layout
+  // above, so the effect depends on the only two things about it that change
+  // the answer: how many houses there are, and which one is first.
+  const houseCount = projectIds.length;
+  const firstHouseId = projectIds[0];
 
   // Holds the in-flight scroll poll's cancel function so a later hop (or the
   // component's own unmount) can stop a still-running poll. Kept in a ref
@@ -56,9 +55,7 @@ export function ThresholdRouteCollapse({ projectIds }: ThresholdRouteCollapsePro
   const cancelScrollPollRef = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {
-    if (isLoading || !threshold || !soloProjectId) return;
-
-    const href = collapsedHref(pathname, soloProjectId);
+    const href = collapsedHref(pathname, projectIds);
     if (!href) return;
 
     router.replace(href);
@@ -88,7 +85,10 @@ export function ThresholdRouteCollapse({ projectIds }: ThresholdRouteCollapsePro
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [isLoading, pathname, router, soloProjectId, threshold]);
+    // `projectIds` is a fresh array every render; `houseCount` and
+    // `firstHouseId` are the whole of what `collapsedHref` reads from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, houseCount, firstHouseId, router]);
 
   // Stop a still-running scroll poll if the component unmounts outright.
   useEffect(() => {

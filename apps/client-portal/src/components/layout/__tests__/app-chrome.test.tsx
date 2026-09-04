@@ -87,7 +87,7 @@ describe('AppChrome', () => {
   );
 
   it('renders the authenticated header on a normal app route', () => {
-    mockPathname = '/projects/proj-1';
+    mockPathname = '/account';
     render(
       <AppChrome projects={[]}>
         <div>app content</div>
@@ -95,6 +95,33 @@ describe('AppChrome', () => {
     );
     expect(screen.getByTestId('client-header')).toBeInTheDocument();
     expect(screen.getByText('app content')).toBeInTheDocument();
+  });
+
+  // The two routes that render the house are chrome-less for every client
+  // who has a house: the mat carries the details, the way out, and the other
+  // houses.
+  it.each(['/', '/projects/proj-1'])(
+    'renders no header on the house route %s',
+    (pathname) => {
+      mockPathname = pathname;
+      render(
+        <AppChrome projects={[project('proj-1', 0, 0)]}>
+          <div>app content</div>
+        </AppChrome>,
+      );
+      expect(screen.queryByTestId('client-header')).not.toBeInTheDocument();
+      expect(screen.getByText('app content')).toBeInTheDocument();
+    },
+  );
+
+  it('keeps the header on the front door for a client with no house at all', () => {
+    mockPathname = '/';
+    render(
+      <AppChrome projects={[]}>
+        <div>app content</div>
+      </AppChrome>,
+    );
+    expect(screen.getByTestId('client-header')).toBeInTheDocument();
   });
 
   it('adds the sanitized global Stage-2 actionable total to non-Stage2 project work without double counting', () => {

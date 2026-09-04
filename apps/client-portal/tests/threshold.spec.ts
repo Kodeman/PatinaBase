@@ -5,19 +5,20 @@ import { test, expect, type Page } from '@playwright/test';
  * page, driven against the LOCAL stack and the solo-client fixture that
  * supabase/seed/the-client-page.sql lays on `client-solo@patina.dev`.
  *
- * That client owns exactly one house on purpose. The chrome gate and the route
- * collapse both stand down for a client with two or more projects — the
- * Threshold is one project's story, and a client with several keeps the header
- * because it is the only project switcher there is. This file therefore seeds
- * NOTHING and parks NOTHING: it reads the fixture as the seed laid it, so it
- * can run beside every other spec without moving the ground under them.
+ * That client owns exactly one house on purpose — not because the surface
+ * differs by project count (it no longer does: every client gets the
+ * chrome-less house, and the mat names her other houses), but because the
+ * figures below are that fixture's. This file seeds NOTHING and parks
+ * NOTHING: it reads the fixture as the seed laid it, so it can run beside
+ * every other spec without moving the ground under them.
  *
  * Every figure asserted below is one the seed put in the database, not a number
  * copied out of the mockup — the unit suite's five facts come from its own
  * fixture and are deliberately different.
  *
- * Runs only under `--project=threshold`, against the flag-overridden server on
- * :3102 (playwright.config.ts). The default project ignores this file.
+ * Runs only under `--project=threshold`, against the second server on :3102
+ * (playwright.config.ts). The default project ignores this file. That server's
+ * flag override is now inert — wave 2 collapses the two-server split.
  */
 
 const PROJECT_ID = 'b0000000-0000-0000-0000-00000000c0d1';

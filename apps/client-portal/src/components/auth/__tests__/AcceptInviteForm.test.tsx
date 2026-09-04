@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AcceptInviteForm } from '../AcceptInviteForm';
-import { replaceAuthDestination } from '@/lib/auth-redirect';
+import { CLIENT_AUTH_DESTINATION, replaceAuthDestination } from '@/lib/auth-redirect';
 
 const signUp = jest.fn();
 const signInWithPassword = jest.fn();
@@ -58,7 +58,7 @@ describe('AcceptInviteForm', () => {
       }),
     );
     fireEvent.click(fallback);
-    expect(replaceAuthDestination).toHaveBeenCalledWith('/projects');
+    expect(replaceAuthDestination).toHaveBeenCalledWith(CLIENT_AUTH_DESTINATION);
   });
 
   it('gives an actionable invitation error instead of a session error', async () => {

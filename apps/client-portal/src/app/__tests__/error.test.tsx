@@ -33,10 +33,10 @@ describe('RootError', () => {
     expect(reset).toHaveBeenCalledTimes(1);
   });
 
-  it('links back to the projects list', () => {
+  it('links back to the house, not the retired list', () => {
     render(<RootError error={makeError()} reset={reset} />);
     const link = screen.getByRole('link', { name: /back to your projects/i });
-    expect(link).toHaveAttribute('href', '/projects');
+    expect(link).toHaveAttribute('href', '/');
   });
 
   it('logs the error to the console', () => {
