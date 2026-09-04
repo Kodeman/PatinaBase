@@ -253,6 +253,15 @@ Test Files  1 passed (1)
      Tests  18 passed (18)
 ```
 
+`pnpm --filter @patina/admin-portal type-check` (the one shared package this pass touched is
+consumed by the portal whose build enforces types)
+
+```
+> @patina/admin-portal@0.1.0 type-check
+> tsc --noEmit
+```
+(no diagnostics, exit 0)
+
 `npx eslint src/components/threshold src/lib/threshold src/app`
 
 ```
@@ -280,8 +289,7 @@ retirement plan removes; fixing them here would be scope this pass was not given
   retired routes' source for copy fidelity.
 - The counted scroll lock was exercised in jsdom only; the two-sheets-in-the-other-order case has
   not been walked by hand.
-- `packages/supabase`'s `useDirectOrders` `staleTime` was type-checked and unit-tested but not
-  exercised against a live query cache, and the admin-portal build (which enforces types on shared
-  packages) was not run.
+- `packages/supabase`'s `useDirectOrders` `staleTime` was type-checked (client- and admin-portal)
+  and unit-tested, but not exercised against a live query cache.
 - The 12 pre-existing `src/app` lint errors were confirmed pre-existing by file identity against
   `origin/main`, not by re-running eslint on a clean checkout.
