@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
 
 import { ScoredAction } from '@/components/making/scored-action';
 import { PAPERS_TAB_LABEL } from '@/lib/threshold/papers';
