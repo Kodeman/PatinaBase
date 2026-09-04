@@ -24,6 +24,7 @@ import {
   studioCobrand,
   studioDisplayName,
 } from '../_shared/studio-identity.ts';
+import { clientProjectLink } from '../_shared/client-portal-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -67,11 +68,10 @@ async function sendReviewEmail(opts: {
 }): Promise<boolean> {
   const senderDisplay = opts.senderName;
   const greeting = opts.clientName ? `Hi ${escapeHtml(opts.clientName)},` : 'Hi there,';
-  // L6 fix round, finding #25 — `/review/<id>` has never been a route; the
-  // studio review ask now lives on the project's own doorstep. `#doorstep`
-  // is a real, already-rendered anchor id (doorstep.tsx) and matches the
-  // retirement plan's own canonical mapping for this function.
-  const reviewUrl = `${CLIENT_PORTAL_URL}/projects/${opts.projectId}#doorstep`;
+  // Was `/review/<projectId>` — singular, and no such route ever existed, so
+  // every review request since this function shipped landed on a 404. The
+  // review lives on the doorstep of the project's own page now.
+  const reviewUrl = clientProjectLink(CLIENT_PORTAL_URL, opts.projectId, 'doorstep');
   const subject = `Share your experience with ${senderDisplay}`;
 
   const html = renderBrandedShell({

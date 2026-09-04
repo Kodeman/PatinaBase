@@ -27,10 +27,13 @@ describe('client middleware Universal Link exemption', () => {
       headers: new Map(),
       cookies: { getAll: () => [] },
     });
-    (NextResponse.redirect as jest.Mock).mockImplementation((url: URL) => ({
-      url,
-      cookies: { set: jest.fn() },
-    }));
+    (NextResponse.redirect as jest.Mock).mockImplementation(
+      (url: URL, status?: number) => ({
+        url,
+        status,
+        cookies: { set: jest.fn() },
+      }),
+    );
     (createMiddlewareClient as jest.Mock).mockReturnValue({
       auth: { getUser: jest.fn().mockResolvedValue({ data: { user: null } }) },
     });
@@ -308,5 +311,210 @@ describe('client middleware Universal Link exemption', () => {
     const redirectUrl = (NextResponse.redirect as jest.Mock).mock
       .calls[0][0] as URL;
     expect(redirectUrl.origin).toBe('http://localhost:3002');
+  });
+});
+
+/**
+ * The retirement map. Every authenticated address the old portal had is folded
+ * onto a section of the one project page; these cases are the contract that
+ * mail, SMS, cron and Universal Links sent before the cutover still land right.
+ */
+describe('client middleware retired-route map', () => {
+  const authenticatedConsumer = () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+    (createMiddlewareClient as jest.Mock).mockReturnValue({
+      auth: {
+        getUser: jest
+          .fn()
+          .mockResolvedValue({ data: { user: { id: 'client-1' } } }),
+      },
+    });
+    (createAdminClient as jest.Mock).mockReturnValue({
+      from: jest.fn(() => ({
+        select: jest.fn(() => ({
+          eq: jest.fn().mockResolvedValue({
+            data: [{ roles: { domain: 'consumer' } }],
+            error: null,
+          }),
+        })),
+      })),
+    });
+  };
+
+  const visit = async (pathname: string, query = '') =>
+    middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname,
+        search: query ? `?${query}` : '',
+        searchParams: new URLSearchParams(query),
+      },
+    } as never);
+
+  const lastRedirect = () => {
+    const calls = (NextResponse.redirect as jest.Mock).mock.calls;
+    const [url, status] = calls[calls.length - 1] as [URL, number | undefined];
+    return { url, status };
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (NextResponse.next as jest.Mock).mockReturnValue({
+      headers: new Map(),
+      cookies: { getAll: () => [] },
+    });
+    (NextResponse.redirect as jest.Mock).mockImplementation(
+      (url: URL, status?: number) => ({
+        url,
+        status,
+        cookies: { set: jest.fn() },
+      }),
+    );
+    authenticatedConsumer();
+  });
+
+  afterEach(() => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  });
+
+  // Every mapped path without an id.
+  it.each([
+    ['/today', '/', '#doorstep'],
+    ['/decisions', '/', '#doorstep'],
+    ['/reviews', '/', '#doorstep'],
+    ['/scans', '/', '#doorstep'],
+    ['/proposals', '/', '#door'],
+    ['/invoices', '/', '#letterbox'],
+    ['/budget', '/', '#ledger'],
+    ['/documents', '/', '#mat-papers'],
+    ['/orders', '/', '#road'],
+    ['/messages', '/', '#note'],
+    ['/inbox', '/', '#note'],
+    ['/account', '/', '#mat'],
+    ['/preferences', '/', '#mat'],
+    ['/settings/notifications', '/', '#mat'],
+    ['/projects', '/', ''],
+  ])('folds %s onto %s%s', async (pathname, expectedPath, expectedHash) => {
+    await visit(pathname);
+    const { url, status } = lastRedirect();
+    expect(status).toBe(308);
+    expect(url.pathname).toBe(expectedPath);
+    expect(url.hash).toBe(expectedHash);
+    expect(url.origin).toBe('http://localhost:3002');
+  });
+
+  // Every mapped path WITH an id.
+  it.each([
+    ['/decisions/dec-1', '/', '#doorstep'],
+    ['/proposals/prop-1', '/', '#door'],
+    ['/proposals/prop-1/sign', '/', '#door'],
+    ['/invoices/inv-1', '/', '#letterbox'],
+    ['/messages/thread-1', '/', '#note'],
+    ['/scans/scan-1', '/', '#doorstep'],
+    ['/settings/notifications/thread-1', '/', '#mat'],
+  ])('folds %s onto %s%s', async (pathname, expectedPath, expectedHash) => {
+    await visit(pathname);
+    const { url, status } = lastRedirect();
+    expect(status).toBe(308);
+    expect(url.pathname).toBe(expectedPath);
+    expect(url.hash).toBe(expectedHash);
+  });
+
+  it('names the invoice so the letterbox opens on the one the mail was about', async () => {
+    await visit('/invoices/inv-1');
+    const { url } = lastRedirect();
+    expect(url.searchParams.get('invoice')).toBe('inv-1');
+  });
+
+  it('carries the project id when the old URL had one', async () => {
+    await visit('/projects/proj-1/reviews/edition-1');
+    const { url, status } = lastRedirect();
+    expect(status).toBe(308);
+    expect(url.pathname).toBe('/projects/proj-1');
+    expect(url.hash).toBe('#doorstep');
+  });
+
+  it('carries the project id from the reviews index too', async () => {
+    await visit('/projects/proj-1/reviews');
+    const { url } = lastRedirect();
+    expect(url.pathname).toBe('/projects/proj-1');
+    expect(url.hash).toBe('#doorstep');
+  });
+
+  it("preserves the till's query when folding a Stripe return", async () => {
+    await visit('/invoices/inv-1', 'checkout=success&session_id=cs_1');
+    const { url } = lastRedirect();
+    expect(url.pathname).toBe('/');
+    expect(url.searchParams.get('checkout')).toBe('success');
+    expect(url.searchParams.get('session_id')).toBe('cs_1');
+    expect(url.searchParams.get('invoice')).toBe('inv-1');
+    expect(url.hash).toBe('#letterbox');
+  });
+
+  it('preserves ?order= when folding a direct-order return', async () => {
+    await visit('/orders', 'order=ord-1&checkout=success');
+    const { url } = lastRedirect();
+    expect(url.searchParams.get('order')).toBe('ord-1');
+    expect(url.hash).toBe('#road');
+  });
+
+  it.each([
+    '/projects/proj-1',
+    '/invoices/inv-1/print',
+    '/piece/abc',
+    '/quiz',
+  ])('leaves %s alone', async (pathname) => {
+    await visit(pathname);
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+  });
+
+  it('lands sign-in on the active project page, not the retired list', async () => {
+    await visit('/auth/signin');
+    const { url } = lastRedirect();
+    expect(url.pathname).toBe('/');
+    expect(url.origin).toBe('http://localhost:3002');
+  });
+
+  it('lets a signed-out recipient reach /preferences/unsubscribe without a sign-in wall', async () => {
+    (createMiddlewareClient as jest.Mock).mockReturnValue({
+      auth: { getUser: jest.fn().mockResolvedValue({ data: { user: null } }) },
+    });
+    const response = await visit('/preferences/unsubscribe', 'token=abc');
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(response).toBeDefined();
+  });
+
+  it('does not fold /preferences/unsubscribe for a signed-in recipient either', async () => {
+    await visit('/preferences/unsubscribe');
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+  });
+
+  it('sends a signed-out visitor to sign-in with the old path, so the anchor survives the round trip', async () => {
+    (createMiddlewareClient as jest.Mock).mockReturnValue({
+      auth: { getUser: jest.fn().mockResolvedValue({ data: { user: null } }) },
+    });
+    await visit('/invoices/inv-1', 'checkout=success');
+    const { url } = lastRedirect();
+    expect(url.pathname).toBe('/auth/signin');
+    expect(url.searchParams.get('callbackUrl')).toBe(
+      '/invoices/inv-1?checkout=success',
+    );
+  });
+
+  it('still sends a wrong-role user to the interstitial instead of folding', async () => {
+    (createAdminClient as jest.Mock).mockReturnValue({
+      from: jest.fn(() => ({
+        select: jest.fn(() => ({
+          eq: jest.fn().mockResolvedValue({
+            data: [{ roles: { domain: 'designer' } }],
+            error: null,
+          }),
+        })),
+      })),
+    });
+    await visit('/invoices/inv-1');
+    const { url } = lastRedirect();
+    expect(url.pathname).toBe('/wrong-portal');
   });
 });

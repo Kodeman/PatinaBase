@@ -89,6 +89,10 @@ import {
 } from './invoice-checkout-integrity.ts';
 // BOH fulfillment intake emission (S0) — additive, one new call site below.
 import { enqueueAgentTask, type RpcClient } from '../_shared/agent-queue.ts';
+import {
+  clientProjectDeepLink,
+  clientProjectLink,
+} from '../_shared/client-portal-links.ts';
 // Direct-order settle side effects (00540 / W5): the earnings credit + project
 // notice, and the intake enqueue that gives the client a "where is it".
 import {
@@ -389,6 +393,10 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     const projectName = invoice.project?.name ?? 'your project';
     const designerName = designerDisplayName(invoice);
     const balanceCents = invoice.total_cents - invoice.amount_paid_cents;
+    // /invoices/<id> stays: the Patina iOS app claims `/invoices/*` in its
+    // applinks entitlement, so a client with the app installed opens the native
+    // invoice. On the web the portal's middleware 308s it onto
+    // `/?invoice=<id>#letterbox`, which is where this receipt is read.
     const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
     // Two amounts, deliberately: the client is told what their card/bank was
     // actually charged (balance + rail fee), the designer is told what landed
@@ -1093,10 +1101,12 @@ interface DirectOrderRow {
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
   shipping: Record<string, unknown> | null;
+  /** The house the piece is bound for. Null for an order raised outside a project. */
+  project_id: string | null;
 }
 
 const DIRECT_ORDER_COLS =
-  'id, client_id, product_name, quantity, unit_price_cents, amount_cents, currency, status, stripe_checkout_session_id, stripe_payment_intent_id, shipping';
+  'id, client_id, product_name, quantity, unit_price_cents, amount_cents, currency, status, stripe_checkout_session_id, stripe_payment_intent_id, shipping, project_id';
 
 function directOrderSessionIds(session: Stripe.Checkout.Session): {
   sessionId: string;
@@ -1279,7 +1289,11 @@ async function sendDirectOrderPaidEmails(admin: SupabaseClient, orderId: string)
         currency: order.currency,
         clientName: (client as { full_name?: string | null } | null)?.full_name ?? null,
         shippingSummary,
-        portalUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}`,
+        // The road on the order's own project page. /orders is retired; an
+        // order raised outside a project falls back to the client's active one.
+        portalUrl: clientProjectLink(CLIENT_PORTAL_URL, order.project_id, 'road', {
+          order: order.id,
+        }),
       });
       const sendResult = await sendCompliantEmail(admin, {
         to: clientEmail,
@@ -1294,7 +1308,7 @@ async function sendDirectOrderPaidEmails(admin: SupabaseClient, orderId: string)
           amount_cents: order.amount_cents,
           subject: rendered.subject,
           message: `Your order for ${order.product_name} is confirmed — ${amountLabel} received.`,
-          deep_link: `/orders?order=${order.id}`,
+          deep_link: clientProjectDeepLink(order.project_id, 'road', { order: order.id }),
         },
       });
       if (!sendResult.success && !sendResult.suppressed) {
@@ -1364,8 +1378,10 @@ async function sendDirectOrderFailureSideEffects(
     if (!order) return;
 
     const amountLabel = formatInvoiceCurrency(order.amount_cents, order.currency);
-    const portalUrl = `${CLIENT_PORTAL_URL}/orders`;
-    const deepLink = `/orders?order=${order.id}`;
+    const portalUrl = clientProjectLink(CLIENT_PORTAL_URL, order.project_id, 'road', {
+      order: order.id,
+    });
+    const deepLink = clientProjectDeepLink(order.project_id, 'road', { order: order.id });
 
     // Ops heads-up: a client's bank transfer bounced and the order reopened.
     console.warn(
