@@ -1,14 +1,21 @@
+// Pinned BEFORE the imports so the whole file runs west of UTC: the seam
+// between derive's parsing and standing's formatting is invisible in a UTC
+// runner, and CI inherits whatever zone the runner happens to be in.
+process.env.TZ = 'America/Chicago';
+
 import type { Invoice } from '@patina/supabase';
 
 import type { ClientSelection } from '@/lib/commercial-documents';
 
 import {
   deriveThreshold,
+  parseSourceDate,
   type ThresholdInput,
   type ThresholdNote,
   type ThresholdProposal,
   type ThresholdRoom,
 } from '../derive';
+import { previouslyLine } from '../standing';
 
 const ENTRY: ThresholdRoom = { id: 'r-ent', name: 'Entry', sortOrder: 0, floorAreaSqft: null };
 const LIBRARY: ThresholdRoom = { id: 'r-lib', name: 'Library', sortOrder: 1, floorAreaSqft: null };
@@ -360,13 +367,20 @@ describe('deriveThreshold — the ledger and the letterbox', () => {
     amount_paid_cents: 0,
   });
 
-  it('opens the soonest-due open invoice and owes exactly its balance', () => {
+  it('opens the soonest-due open invoice; the ledger owes across all of them', () => {
     const model = deriveThreshold(input({ invoices: [later, soonest] }));
 
     expect(model.letterbox?.id).toBe('inv-4');
     expect(model.letterbox?.balanceCents).toBe(912_500);
     expect(model.letterbox?.dueDate).toBe('2026-08-15');
+    expect(model.ledger.owedCents).toBe(1_412_500);
+    expect(model.ledger.owedInvoiceCount).toBe(2);
+  });
+
+  it('owes exactly the letterbox figure when only one invoice is open', () => {
+    const model = deriveThreshold(input({ invoices: [soonest] }));
     expect(model.ledger.owedCents).toBe(912_500);
+    expect(model.letterbox?.balanceCents).toBe(912_500);
   });
 
   it('ignores drafts, voids and settled invoices', () => {
@@ -527,13 +541,50 @@ describe('deriveThreshold — what moved since the client last read', () => {
         },
         selections: {
           origin: 'commercial',
-          selections: [selection({ id: 's-1', roomId: 'r-lib' })],
+          selections: [
+            selection({ id: 's-1', roomId: 'r-lib', instrument: instrument('p-1') }),
+          ],
         },
         selectionUpdatedAt: { 's-1': AFTER },
       }),
     );
 
     expect([...model.changed].sort()).toEqual(['door', 'letterbox', 'note', 'room-r-lib']);
+  });
+
+  it('lights the doorstep, not a door, when the ask that moved has no room', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        proposals: {
+          signatureGates: [proposal({ id: 'p-ds', sentAt: AFTER })],
+          instrumentReceipts: [],
+        },
+      }),
+    );
+    expect([...model.changed]).toEqual(['doorstep']);
+  });
+
+  it('does not count a reading exactly on the moment as movement', () => {
+    const model = deriveThreshold(
+      input({ previousReadAt: PREVIOUS, notes: [note({ id: 'n-1', sentAt: PREVIOUS })] }),
+    );
+    expect(model.changed.size).toBe(0);
+  });
+
+  it('treats an unreadable date as no date at all', () => {
+    expect(() =>
+      deriveThreshold(
+        input({
+          previousReadAt: 'not a date',
+          notes: [note({ id: 'n-1', sentAt: 'also not a date' })],
+        }),
+      ),
+    ).not.toThrow();
+    const model = deriveThreshold(
+      input({ previousReadAt: PREVIOUS, notes: [note({ id: 'n-1', sentAt: 'not a date' })] }),
+    );
+    expect(model.changed.size).toBe(0);
   });
 
   it('marks a wall whose instrument moved', () => {
@@ -571,5 +622,315 @@ describe('deriveThreshold — what moved since the client last read', () => {
       }),
     );
     expect(model.changed.size).toBe(0);
+  });
+});
+
+describe('deriveThreshold — dates as the client reads them', () => {
+  it('runs west of UTC, so the seam is visible', () => {
+    expect(new Date().getTimezoneOffset()).toBeGreaterThan(0);
+  });
+
+  it('reads a date-only column as a calendar day, not as UTC midnight', () => {
+    const model = deriveThreshold(
+      input({
+        notes: [
+          note({ id: 'n-1', state: 'retired', body: 'Fourteen selections agreed', retiredAt: '2026-06-19' }),
+        ],
+      }),
+    );
+    expect(previouslyLine(model.previously[0] as { label: string; date: Date })).toBe(
+      'Previously — Fourteen selections agreed, 19 June.',
+    );
+  });
+
+  it('reads a real timestamptz on the client’s own wall clock', () => {
+    // 20 June 02:00Z is still the nineteenth in Chicago.
+    const model = deriveThreshold(
+      input({
+        proposals: {
+          signatureGates: [],
+          instrumentReceipts: [
+            { id: 'r-1', label: 'Fourteen selections agreed', date: '2026-06-20T02:00:00.000Z' },
+          ],
+        },
+      }),
+    );
+    expect(previouslyLine(model.previously[0] as { label: string; date: Date })).toBe(
+      'Previously — Fourteen selections agreed, 19 June.',
+    );
+  });
+
+  it('parses both shapes and rejects what it cannot read', () => {
+    expect(parseSourceDate('2026-06-19')?.getDate()).toBe(19);
+    expect(parseSourceDate('2026-06-19')?.getMonth()).toBe(5);
+    expect(parseSourceDate('2026-06-20T02:00:00.000Z')?.getDate()).toBe(19);
+    expect(parseSourceDate('not a date')).toBeNull();
+    expect(parseSourceDate(null)).toBeNull();
+    expect(parseSourceDate(undefined)).toBeNull();
+  });
+
+  it('sorts a date-only due date against a full timestamp without drifting a day', () => {
+    const model = deriveThreshold(
+      input({
+        invoices: [
+          invoice({ id: 'inv-late', due_date: '2026-08-16', total_cents: 100 }),
+          invoice({ id: 'inv-early', due_date: '2026-08-15', total_cents: 100 }),
+        ],
+      }),
+    );
+    expect(model.letterbox?.id).toBe('inv-early');
+  });
+});
+
+describe('deriveThreshold — a door with nowhere to hang', () => {
+  it('falls back to the doorstep when its heaviest room is not on the drawing', () => {
+    const model = deriveThreshold(
+      input({
+        proposals: { signatureGates: [proposal({ id: 'p-7' })], instrumentReceipts: [] },
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({
+              id: 's-1',
+              roomId: 'r-archived',
+              clientLineTotalCents: 400_000,
+              instrument: instrument('p-7'),
+            }),
+          ],
+        },
+      }),
+    );
+
+    expect(model.marks).toHaveLength(1);
+    expect(model.marks[0].roomId).toBeNull();
+    expect(model.marks[0].anchor).toBe('doorstep');
+    expect(model.drawnMarkCount).toBe(0);
+  });
+
+  it('still hangs on the heaviest DRAWN room when only some of it is off the drawing', () => {
+    const model = deriveThreshold(
+      input({
+        proposals: { signatureGates: [proposal({ id: 'p-7' })], instrumentReceipts: [] },
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({
+              id: 's-gone',
+              roomId: 'r-archived',
+              clientLineTotalCents: 900_000,
+              instrument: instrument('p-7'),
+            }),
+            selection({
+              id: 's-here',
+              roomId: 'r-ent',
+              clientLineTotalCents: 120_000,
+              instrument: instrument('p-7'),
+            }),
+          ],
+        },
+      }),
+    );
+    expect(model.marks[0].roomId).toBe('r-ent');
+  });
+
+  it('breaks a dead heat on plan order', () => {
+    const model = deriveThreshold(
+      input({
+        proposals: { signatureGates: [proposal({ id: 'p-7' })], instrumentReceipts: [] },
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({
+              id: 's-lib',
+              roomId: 'r-lib',
+              clientLineTotalCents: 400_000,
+              instrument: instrument('p-7'),
+            }),
+            selection({
+              id: 's-ent',
+              roomId: 'r-ent',
+              clientLineTotalCents: 400_000,
+              instrument: instrument('p-7'),
+            }),
+          ],
+        },
+      }),
+    );
+    expect(model.marks[0].roomId).toBe('r-ent');
+  });
+});
+
+describe('deriveThreshold — the drawn mark count', () => {
+  it('counts only the marks the key can draw', () => {
+    const model = deriveThreshold(
+      input({
+        proposals: {
+          signatureGates: [proposal({ id: 'p-room' }), proposal({ id: 'p-doorstep' })],
+          instrumentReceipts: [],
+        },
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({
+              id: 's-1',
+              roomId: 'r-lib',
+              clientLineTotalCents: 400_000,
+              instrument: instrument('p-room'),
+            }),
+            selection({
+              id: 's-paint',
+              kind: 'trade',
+              roomId: 'r-stair',
+              tradeJourney: 'substantially_complete',
+              instrument: instrument('p-paint'),
+            }),
+          ],
+        },
+      }),
+    );
+
+    expect(model.marks).toHaveLength(3);
+    expect(model.drawnMarkCount).toBe(2);
+  });
+
+  it('does not count a wall in a room that is not on the drawing', () => {
+    const model = deriveThreshold(
+      input({
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({
+              id: 's-paint',
+              kind: 'trade',
+              roomId: 'r-archived',
+              tradeJourney: 'substantially_complete',
+              instrument: instrument('p-paint'),
+            }),
+          ],
+        },
+      }),
+    );
+    expect(model.marks).toHaveLength(1);
+    expect(model.drawnMarkCount).toBe(0);
+  });
+});
+
+describe('deriveThreshold — the doorstep asks', () => {
+  it('carries the phase approvals through; they belong to no room', () => {
+    const approvals = [
+      { id: 'a-1', title: 'Concept direction', phaseId: 'ph-1' },
+      { id: 'a-2', title: 'Millwork drawings', phaseId: 'ph-2' },
+    ];
+    expect(deriveThreshold(input({ approvals })).doorstepAsks).toEqual(approvals);
+    expect(deriveThreshold(input()).doorstepAsks).toEqual([]);
+  });
+});
+
+describe('deriveThreshold — the held draw', () => {
+  const wall = (id: string, proposalId: string, roomId: string) =>
+    selection({
+      id,
+      kind: 'trade',
+      roomId,
+      tradeJourney: 'substantially_complete',
+      instrument: instrument(proposalId),
+    });
+
+  it('holds one figure per instrument, however many lines sit under it', () => {
+    const model = deriveThreshold(
+      input({
+        selections: {
+          origin: 'commercial',
+          selections: [wall('s-a', 'p-paint', 'r-stair'), wall('s-b', 'p-paint', 'r-ent')],
+        },
+        heldDrawCentsByProposalId: { 'p-paint': 144_000 },
+      }),
+    );
+
+    expect(model.marks).toHaveLength(2);
+    expect(model.ledger.heldCents).toBe(144_000);
+  });
+
+  it('holds one figure per instrument across two instruments', () => {
+    const model = deriveThreshold(
+      input({
+        selections: {
+          origin: 'commercial',
+          selections: [wall('s-a', 'p-paint', 'r-stair'), wall('s-b', 'p-tile', 'r-ent')],
+        },
+        heldDrawCentsByProposalId: { 'p-paint': 144_000, 'p-tile': 60_000 },
+      }),
+    );
+    expect(model.ledger.heldCents).toBe(204_000);
+  });
+});
+
+describe('deriveThreshold — what is owed across every open invoice', () => {
+  const first = invoice({
+    id: 'inv-4',
+    due_date: '2026-08-15',
+    total_cents: 1_825_000,
+    amount_paid_cents: 912_500,
+  });
+  const second = invoice({
+    id: 'inv-5',
+    due_date: '2026-09-15',
+    total_cents: 500_000,
+    amount_paid_cents: 0,
+  });
+
+  it('sums the balances and still opens only the soonest-due one', () => {
+    const model = deriveThreshold(input({ invoices: [second, first] }));
+
+    expect(model.ledger.owedCents).toBe(1_412_500);
+    expect(model.ledger.owedInvoiceCount).toBe(2);
+    expect(model.letterbox?.id).toBe('inv-4');
+    expect(model.letterbox?.balanceCents).toBe(912_500);
+  });
+
+  it('counts nothing when nothing is open', () => {
+    const model = deriveThreshold(input());
+    expect(model.ledger.owedCents).toBeNull();
+    expect(model.ledger.owedInvoiceCount).toBe(0);
+  });
+
+  it('leaves an invoice with no due date at the back of the letterbox', () => {
+    const undated = invoice({ id: 'inv-undated', due_date: null, total_cents: 100 });
+    const model = deriveThreshold(input({ invoices: [undated, first] }));
+    expect(model.letterbox?.id).toBe('inv-4');
+    expect(model.ledger.owedInvoiceCount).toBe(2);
+  });
+});
+
+describe('deriveThreshold — the road, the rest of it', () => {
+  it('keeps a roomless piece on the road however far along it is', () => {
+    const model = deriveThreshold(
+      input({
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({ id: 's-installed', roomId: null, name: 'Sconces', logisticsStatus: 'installed' }),
+          ],
+        },
+      }),
+    );
+    expect(model.road.map((piece) => piece.selectionId)).toEqual(['s-installed']);
+  });
+});
+
+describe('deriveThreshold — it reads, it does not rearrange', () => {
+  it('leaves the caller’s arrays as it found them', () => {
+    const rooms = [STAIR, ENTRY, LIBRARY];
+    const notes = [note({ id: 'n-2' }), note({ id: 'n-1', state: 'retired', retiredAt: '2026-06-01' })];
+    const invoices = [
+      invoice({ id: 'inv-5', due_date: '2026-09-15', total_cents: 100 }),
+      invoice({ id: 'inv-4', due_date: '2026-08-15', total_cents: 100 }),
+    ];
+
+    deriveThreshold(input({ rooms, notes, invoices }));
+
+    expect(rooms.map((room) => room.id)).toEqual(['r-stair', 'r-ent', 'r-lib']);
+    expect(notes.map((entry) => entry.id)).toEqual(['n-2', 'n-1']);
+    expect(invoices.map((entry) => entry.id)).toEqual(['inv-5', 'inv-4']);
   });
 });

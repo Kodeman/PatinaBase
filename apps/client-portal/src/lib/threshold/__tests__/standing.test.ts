@@ -123,3 +123,33 @@ describe('keySentence', () => {
     expect(keySentence(4)).toBe('Four marks stand open on this drawing.');
   });
 });
+
+describe('thresholdStanding — a real ask is never silenced', () => {
+  it('names the door even when the caller says nothing is owed', () => {
+    expect(
+      thresholdStanding({ doors: 1, walls: 0, balanceCents: 0, nothingOwed: true }),
+    ).toBe('One door in this house is closed until you sign it.');
+  });
+
+  it('names finished work even when the caller says nothing is owed', () => {
+    expect(
+      thresholdStanding({ doors: 0, walls: 1, balanceCents: 912_500, nothingOwed: true }),
+    ).toBe('Finished work waits for your acceptance.');
+  });
+});
+
+describe('previouslyLine — what it will not print', () => {
+  it('is silent on a label of nothing but space', () => {
+    expect(previouslyLine({ label: '   ', date: new Date(2026, 5, 19) })).toBeNull();
+  });
+
+  it('is silent on a date it cannot read', () => {
+    expect(previouslyLine({ label: 'Something agreed', date: new Date('nonsense') })).toBeNull();
+  });
+});
+
+describe('keySentence — past twelve', () => {
+  it('falls to figures', () => {
+    expect(keySentence(13)).toBe('13 marks stand open on this drawing.');
+  });
+});

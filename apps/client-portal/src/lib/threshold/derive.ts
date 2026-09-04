@@ -23,11 +23,11 @@ import { invoiceBalanceCents } from '@patina/shared';
 // pre-issue, voids are cancelled). Imported rather than restated so the
 // threshold and /budget can never disagree about what is open; the module
 // lives under app/budget and stays there.
-import { visibleInvoices } from '@/app/budget/rollup';
+import { computeInvoiceRollup, visibleInvoices } from '@/app/budget/rollup';
 import { journeyStageIndexForStatus } from '@/components/commercial/journey-stepper';
 import type { ClientProjectSelections, ClientSelection } from '@/lib/commercial-documents';
 
-import type { KeyMark, KeyRoom, MarkKind } from './plan-key';
+import { byPlanOrder, type KeyMark, type KeyRoom, type MarkKind } from './plan-key';
 
 /** A piece is still on the road until it has reached the house. */
 const DELIVERED_STOP = journeyStageIndexForStatus('delivered');
@@ -136,8 +136,15 @@ export interface HouseLedgerModel {
   /** Σ of the rooms' targets, or null when no room carries one. */
   plannedCents: number | null;
   agreedCents: number | null;
-  /** The soonest-due open invoice's balance, or null when nothing is due. */
+  /**
+   * Σ balance across EVERY open invoice, or null when none is open — not the
+   * letterbox's one figure. The Making sums all of them and so does /budget;
+   * a page that owed less than the budget page said would be a disagreement
+   * the client has no way to resolve.
+   */
   owedCents: number | null;
+  /** How many invoices that total is spread across. */
+  owedInvoiceCount: number;
   heldCents: number | null;
   awaitingCents: number;
 }
@@ -167,12 +174,16 @@ export interface PreviouslyEntry {
 
 export interface ThresholdModel {
   marks: ThresholdMark[];
+  /** Marks the key actually draws. `keySentence` takes THIS, not marks.length. */
+  drawnMarkCount: number;
   bands: RoomBandModel[];
   road: RoadPieceModel[];
   ledger: HouseLedgerModel;
   letterbox: InvoiceModel | null;
   note: NoteModel | null;
   previously: PreviouslyEntry[];
+  /** Phase approvals carry no room, so they always stand on the Doorstep. */
+  doorstepAsks: ThresholdApproval[];
   /** Unit ids that moved since `previousReadAt`. Empty on a first reading. */
   changed: Set<string>;
   groundFloor: boolean;
@@ -182,17 +193,30 @@ export interface ThresholdModel {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function parseMoment(value: string | null | undefined): number | null {
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * A date off the database, as a Date the page can format.
+ *
+ * The split matters and is the house convention (making-spine.tsx's
+ * parseSpineDate): a `YYYY-MM-DD` column is a CALENDAR DAY with no zone — an
+ * invoice due on the fifteenth is due on the fifteenth wherever the client is
+ * standing — so it is read as local midnight. `new Date('2026-06-19')` would
+ * read UTC midnight instead, and every client west of Greenwich would be told
+ * the day before. A full timestamptz is a real instant and keeps its zone; the
+ * page then formats it on the client's own wall clock.
+ */
+export function parseSourceDate(value: string | null | undefined): Date | null {
   if (!value) return null;
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? null : parsed;
+  const dateOnly = DATE_ONLY.exec(value);
+  const parsed = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function byPlanOrder(a: ThresholdRoom, b: ThresholdRoom): number {
-  if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-  const byName = a.name.localeCompare(b.name);
-  if (byName !== 0) return byName;
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+function parseMoment(value: string | null | undefined): number | null {
+  return parseSourceDate(value)?.getTime() ?? null;
 }
 
 /** Soonest due first; an invoice with no due date waits at the back. */
@@ -216,8 +240,9 @@ function toInvoiceModel(invoice: Invoice): InvoiceModel {
 // ── the join ─────────────────────────────────────────────────────────────────
 
 export function deriveThreshold(input: ThresholdInput): ThresholdModel {
-  const pending = input.rooms === null || input.rooms === undefined;
-  const rooms = pending ? [] : [...(input.rooms as ThresholdRoom[])].sort(byPlanOrder);
+  const given = input.rooms;
+  const pending = given === null || given === undefined;
+  const rooms = pending ? [] : [...given].sort(byPlanOrder);
 
   // Origin discipline, verbatim from The Making: only a confirmed commercial
   // origin renders the selection-derived regions. Anything else is silence.
@@ -237,10 +262,14 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   // A proposal knows nothing about rooms; its selections do. The door hangs on
   // the room holding the most of what the paper is worth, and on the Doorstep
   // when none of it lands in a room at all.
+  // Only rooms the key actually draws can hold a door. A selection filed under
+  // an archived or filtered-out room would otherwise elect a room that has no
+  // rect, no band and no anchor — a door announced in the sentence that the
+  // client cannot find anywhere on the page.
   const totalsByProposalRoom = new Map<string, Map<string, number>>();
   for (const selection of selections) {
     const proposalId = selection.instrument?.proposalId;
-    if (!proposalId || !selection.roomId) continue;
+    if (!proposalId || !selection.roomId || !roomIds.has(selection.roomId)) continue;
     const byRoom = totalsByProposalRoom.get(proposalId) ?? new Map<string, number>();
     byRoom.set(
       selection.roomId,
@@ -268,13 +297,17 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
 
   const doorMarks: ThresholdMark[] = input.proposals.signatureGates.map((proposal) => {
     const roomId = heaviestRoom(proposal.id);
-    if (movedSince(proposal.sentAt) || movedSince(proposal.updatedAt)) changed.add('door');
+    const anchor = roomId ? 'door' : 'doorstep';
+    // The mark's OWN anchor, so since-yesterday lights the section the ask is
+    // actually in — a doorstep proposal must not dim the doorstep and light a
+    // door that does not hold it.
+    if (movedSince(proposal.sentAt) || movedSince(proposal.updatedAt)) changed.add(anchor);
     return {
       id: `door:${proposal.id}`,
       kind: 'door' as MarkKind,
       roomId,
       label: proposal.title,
-      anchor: roomId ? 'door' : 'doorstep',
+      anchor,
       proposalId: proposal.id,
       amountCents: proposal.totalAmountCents || 0,
     };
@@ -292,14 +325,15 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     ) {
       return [];
     }
-    if (movedSince(input.selectionUpdatedAt?.[selection.id])) changed.add('wall');
+    const anchor = selection.roomId ? 'wall' : 'doorstep';
+    if (movedSince(input.selectionUpdatedAt?.[selection.id])) changed.add(anchor);
     return [
       {
         id: `wall:${selection.id}`,
         kind: 'wall' as MarkKind,
         roomId: selection.roomId,
         label: selection.name,
-        anchor: selection.roomId ? 'wall' : 'doorstep',
+        anchor,
         proposalId,
         amountCents: selection.clientLineTotalCents || 0,
       },
@@ -361,6 +395,13 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     .filter((cents): cents is number => typeof cents === 'number' && Number.isFinite(cents));
 
   const heldDraws = input.heldDrawCentsByProposalId;
+  // One held figure per INSTRUMENT. Wall marks are per selection, so two trade
+  // lines under one trade scope would otherwise report the draw twice.
+  const heldInstruments = new Set(
+    wallMarks
+      .map((mark) => mark.proposalId)
+      .filter((proposalId): proposalId is string => proposalId !== null),
+  );
   const ledger: HouseLedgerModel = {
     plannedCents: targets.length > 0 ? targets.reduce((sum, cents) => sum + cents, 0) : null,
     agreedCents:
@@ -368,12 +409,11 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
       Number.isFinite(input.liveAuthorizedTotalCents)
         ? input.liveAuthorizedTotalCents
         : null,
-    owedCents: letterbox ? letterbox.balanceCents : null,
+    owedCents:
+      openInvoices.length > 0 ? computeInvoiceRollup(openInvoices).outstandingCents : null,
+    owedInvoiceCount: openInvoices.length,
     heldCents: heldDraws
-      ? wallMarks.reduce(
-          (sum, mark) => sum + (mark.proposalId ? heldDraws[mark.proposalId] ?? 0 : 0),
-          0,
-        )
+      ? [...heldInstruments].reduce((sum, proposalId) => sum + (heldDraws[proposalId] ?? 0), 0)
       : null,
     awaitingCents: input.proposals.signatureGates.reduce(
       (sum, proposal) => sum + (proposal.totalAmountCents || 0),
@@ -382,6 +422,9 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   };
 
   // ── the note, and what came before it ──────────────────────────────────────
+  // An 'answered' note is deliberately in neither place: it is no longer
+  // standing on her page, and it is not history either — she answered it, so
+  // the answer is the thing that carries on. Only 'retired' moves to Previously.
   const notes = input.notes ?? [];
   const standing = notes.find((candidate) => candidate.state === 'standing') ?? null;
   const note: NoteModel | null = standing
@@ -424,12 +467,14 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
 
   return {
     marks,
+    drawnMarkCount: marks.filter((mark) => mark.roomId !== null && roomIds.has(mark.roomId)).length,
     bands,
     road,
     ledger,
     letterbox,
     note,
     previously,
+    doorstepAsks: input.approvals ?? [],
     changed,
     groundFloor: !pending && rooms.length === 0,
     pending,

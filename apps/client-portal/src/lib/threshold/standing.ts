@@ -75,7 +75,10 @@ export function thresholdStanding(m: ThresholdStandingInput): string {
     (clause): clause is string => clause !== null,
   );
 
-  if (!m.nothingOwed && clauses.length > 0) {
+  // A real ask always wins over the flag. `nothingOwed` and a door count are
+  // contradictory inputs, and only one direction of that contradiction is
+  // dangerous: telling a client nothing waits for her name while a paper does.
+  if (clauses.length > 0) {
     return `${capitalize(joinClauses(clauses))}.`;
   }
 
