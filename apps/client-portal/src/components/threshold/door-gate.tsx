@@ -18,6 +18,7 @@ import {
   type ThresholdMark,
   type ThresholdProposal,
 } from '@/lib/threshold/derive';
+import { noteInBrief } from '@/lib/threshold/standing';
 
 import {
   KIND_LABEL,
@@ -83,10 +84,10 @@ export interface DoorGateProps {
   /**
    * The studio's standing note, pinned to the leaf. Null pins nothing.
    *
-   * CONTRACT: the standing note is rendered EITHER here or by `TheNote`, never
-   * both — the two components take the same `NoteModel` and neither dedupes,
-   * so passing it to both prints the same first-person paragraph twice and has
-   * a screen reader announce it twice. A door that pins the note owns it.
+   * CONTRACT: the pin carries the note's OPENING and a way back to it, never
+   * its body — `TheNote` sets the letter itself, once, under `#note`. Pin it
+   * on ONE door: the same quote on three leaves is three voices asking for the
+   * same signature.
    */
   note: NoteModel | null;
   projectId: string;
@@ -387,8 +388,12 @@ export function DoorGate({
                 {/* The quote marks are load-bearing: this is the one first-person
                     paragraph on a third-person page, and unattributed it reads
                     as the page speaking. */}
+                {/* The OPENING of the note, never the whole of it: the letter
+                    itself is set once, under `#note`, and a door that reprinted
+                    it would have the client read the same paragraph twice on
+                    one page. */}
                 <blockquote className="font-heading text-[1.1rem] italic leading-relaxed">
-                  {`“${note.body}”`}
+                  {`“${noteInBrief(note.body)}”`}
                 </blockquote>
                 <figcaption className="mt-2.5 font-mono text-[11px] uppercase not-italic tracking-[0.1em] text-[var(--text-muted)]">
                   {[
@@ -400,6 +405,13 @@ export function DoorGate({
                     .filter((part): part is string => !!part)
                     .join(' · ')}
                 </figcaption>
+                <a
+                  data-testid="door-note-read"
+                  href="#note"
+                  className="mt-3 inline-block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-body)] underline decoration-[var(--border-default)] underline-offset-4"
+                >
+                  Read the note
+                </a>
               </figure>
             )}
 

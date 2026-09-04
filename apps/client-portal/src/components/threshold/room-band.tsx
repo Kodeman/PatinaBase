@@ -59,6 +59,10 @@ const WALL_L = 42;
 const WALL_R = 944;
 const WALL_TOP = 14;
 const FLOOR_Y = 104;
+/** The door opening in the left-hand wall, measured up off the floor line. */
+const OPENING_H = 52;
+/** How far the opening's head returns from the wall into the paper. */
+const JAMB_W = 12;
 const FOOT_H = 18;
 /** Mono under each footprint, in user units. */
 const FOOT_TYPE = 11;
@@ -164,10 +168,37 @@ function RoomDrawing({
       style={{ stroke: 'currentColor', fill: 'none', strokeWidth: 1, color: 'inherit' }}
     >
       <g vectorEffect="non-scaling-stroke">
-        {/* the wall the room stands against */}
-        <line data-testid="room-band-wall" x1={WALL_L} y1={WALL_TOP} x2={WALL_L} y2={FLOOR_Y} />
+        {/* the wall the room stands against, stopping at the head of the
+            opening — the room is entered from its left-hand side, which is the
+            side the plan key strikes its door mark on (plan-key.ts draws every
+            mark at `rect.x`), so the two drawings agree about where the door is */}
+        <line
+          data-testid="room-band-wall"
+          x1={WALL_L}
+          y1={WALL_TOP}
+          x2={WALL_L}
+          y2={FLOOR_Y - OPENING_H}
+        />
+        {/* the head of the opening, returning into the wall's thickness */}
+        <line
+          data-testid="room-band-door-head"
+          x1={WALL_L - JAMB_W}
+          y1={FLOOR_Y - OPENING_H}
+          x2={WALL_L}
+          y2={FLOOR_Y - OPENING_H}
+        />
         {/* the floor line the whole room stands on */}
         <line data-testid="room-band-floor" x1={WALL_L} y1={FLOOR_Y} x2={WALL_R} y2={FLOOR_Y} />
+        {/* and the floor carried out through the opening, dashed: what is
+            beyond the door is not this room and is not drawn as if it were */}
+        <line
+          data-testid="room-band-threshold"
+          x1={0}
+          y1={FLOOR_Y}
+          x2={WALL_L}
+          y2={FLOOR_Y}
+          strokeDasharray="2 4"
+        />
         {feet.map((foot) => (
           <g key={foot.id}>
             <rect

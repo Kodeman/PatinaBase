@@ -18,7 +18,7 @@ import {
 import type { ProjectApprovalReview, ProjectNote } from '@patina/supabase';
 import { getFieldTradeLabel } from '@patina/types';
 
-import { openChapterOf, splitSpinePhases } from '@/components/making/making-spine';
+import { openChapterOf } from '@/components/making/making-spine';
 import { ScoredAction } from '@/components/making/scored-action';
 import { monthAndYear } from '@/components/making/standing-sentence';
 import { useAuth } from '@/hooks/use-auth';
@@ -40,8 +40,14 @@ import {
   type ThresholdReceipt,
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
+import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
-import { keySentence, previouslyLine, thresholdStanding } from '@/lib/threshold/standing';
+import {
+  keySentence,
+  previouslyLine,
+  readingMarkLine,
+  thresholdStanding,
+} from '@/lib/threshold/standing';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
 import { KIND_LABEL } from './consent-copy';
@@ -405,7 +411,10 @@ export function Threshold({
     selectionUpdatedAt,
   });
 
-  const phases = useMemo(() => splitSpinePhases(milestones), [milestones]);
+  const phases = useMemo(
+    () => thresholdPhases(milestones, project.currentPhase, project.status),
+    [milestones, project.currentPhase, project.status],
+  );
   const openChapter = openChapterOf(phases, project.currentPhase);
   const studioName = words(identityQuery.data?.name);
 
@@ -472,10 +481,9 @@ export function Threshold({
         key={mark.id}
         mark={mark}
         proposal={paper}
-        // The standing note is rendered by `TheNote`, once. Both components
-        // take the same NoteModel and neither dedupes, so pinning it here as
-        // well would print the same paragraph twice.
-        note={null}
+        // Pinned to the FIRST door only, and only ever as its opening: the
+        // letter itself is set once, by `TheNote`.
+        note={mark.id === firstDoorId ? model.note : null}
         projectId={projectId}
         first={mark.id === firstDoorId}
         studioName={studioName}
@@ -626,6 +634,7 @@ export function Threshold({
       showSince={showSince}
       sinceActive={sinceActive}
       onToggleSince={() => setSinceActive((was) => !was)}
+      readingMark={readingMarkLine(parseSourceDate(previousReadAt))}
     >
       {ledger}
       {model.groundFloor ? null : letterbox}

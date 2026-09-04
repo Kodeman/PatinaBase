@@ -1,7 +1,8 @@
 'use client';
 
 import { moneyInWords } from '@/components/making/standing-sentence';
-import type { HouseLedgerModel } from '@/lib/threshold/derive';
+import { parseSourceDate, type HouseLedgerModel } from '@/lib/threshold/derive';
+import { owedDueLine } from '@/lib/threshold/standing';
 
 /* ── The house ledger ───────────────────────────────────────────────────────
    Where the house stands in money, on the doorstep, in four lines.
@@ -27,6 +28,8 @@ interface LedgerRow {
   key: 'owed' | 'held' | 'awaiting';
   words: string;
   cents: number;
+  /** What the figure carries after it, when the row has a day to name. */
+  due?: string | null;
 }
 
 function figure(cents: number | null | undefined): cents is number {
@@ -60,7 +63,12 @@ export function HouseLedger({ ledger }: HouseLedgerProps) {
   const stands = standsSentence(ledger);
 
   const rows: LedgerRow[] = [
-    { key: 'owed' as const, words: owedWords(ledger.owedInvoiceCount), cents: ledger.owedCents },
+    {
+      key: 'owed' as const,
+      words: owedWords(ledger.owedInvoiceCount),
+      cents: ledger.owedCents,
+      due: owedDueLine(parseSourceDate(ledger.owedDueDate), ledger.owedInvoiceCount),
+    },
     { key: 'held' as const, words: 'Held on finished work', cents: ledger.heldCents },
     { key: 'awaiting' as const, words: 'Awaiting your name', cents: ledger.awaitingCents },
   ].flatMap((row) => (figure(row.cents) ? [{ ...row, cents: row.cents }] : []));
@@ -93,7 +101,7 @@ export function HouseLedger({ ledger }: HouseLedgerProps) {
             data-ledger-figure
             className="font-mono text-[13.5px] tabular-nums text-[var(--text-primary)]"
           >
-            {moneyInWords(row.cents)}
+            {row.due ? `${moneyInWords(row.cents)} · ${row.due}` : moneyInWords(row.cents)}
           </span>
         </div>
       ))}

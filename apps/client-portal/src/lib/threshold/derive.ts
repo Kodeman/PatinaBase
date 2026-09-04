@@ -161,6 +161,8 @@ export interface HouseLedgerModel {
   owedCents: number | null;
   /** How many invoices that total is spread across. */
   owedInvoiceCount: number;
+  /** The soonest day the house owes on, off the first open invoice. */
+  owedDueDate: string | null;
   heldCents: number | null;
   awaitingCents: number;
   /** "The dining room stands about forty-nine hundred past its target." */
@@ -481,6 +483,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     owedCents:
       openInvoices.length > 0 ? computeInvoiceRollup(openInvoices).outstandingCents : null,
     owedInvoiceCount: openInvoices.length,
+    owedDueDate: openInvoices[0]?.due_date ?? null,
     heldCents: heldDraws
       ? [...heldInstruments].reduce((sum, proposalId) => sum + (heldDraws[proposalId] ?? 0), 0)
       : null,

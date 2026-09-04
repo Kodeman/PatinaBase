@@ -494,11 +494,12 @@ describe('Threshold — the five facts', () => {
     expect(container.querySelectorAll('#wall')).toHaveLength(1);
   });
 
-  it('prints the standing note once, not twice on a door leaf as well', () => {
+  it('sets the note’s body once, and pins only its opening to the door', () => {
     renderThreshold();
 
     expect(screen.getAllByTestId('note-body')).toHaveLength(1);
-    expect(screen.queryByTestId('door-note-pin')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('door-note-pin')).toHaveLength(1);
+    expect(screen.getByTestId('door-note-read')).toHaveAttribute('href', '#note');
   });
 });
 
