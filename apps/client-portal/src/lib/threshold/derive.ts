@@ -247,6 +247,12 @@ export function parseSourceDate(value: string | null | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+/** "19 June" — the house's date idiom, read the same way everywhere. */
+export const DAY_MONTH = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+});
+
 function parseMoment(value: string | null | undefined): number | null {
   return parseSourceDate(value)?.getTime() ?? null;
 }

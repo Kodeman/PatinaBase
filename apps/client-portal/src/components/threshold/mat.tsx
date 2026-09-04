@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { ScoredAction } from '@/components/making/scored-action';
+import { PAPERS_TAB_LABEL } from '@/lib/threshold/papers';
 
 import { COLUMN_HEAD_CLASS, LINE_CLASS, SUBLINE_CLASS } from './mat-classes';
 import { OtherHouses, type OtherHouse } from './other-houses';
@@ -46,6 +47,10 @@ export interface MatProps {
   onSignOut: () => void;
   /** The act that governs the letters, wired next door. */
   correspondence?: ReactNode;
+  /** Lays the papers sheet over the page — every paper, not only the named few. */
+  onOpenPapers?: () => void;
+  /** Whether that sheet is down, so the act can say so where it is read. */
+  papersOpen?: boolean;
 }
 
 function Paper({ paper }: { paper: MatPaper }) {
@@ -73,6 +78,8 @@ export function Mat({
   accountHref,
   onSignOut,
   correspondence,
+  onOpenPapers,
+  papersOpen = false,
 }: MatProps) {
   return (
     <section
@@ -107,6 +114,19 @@ export function Mat({
           {papers.map((paper, index) => (
             <Paper key={`${paper.label}-${index}`} paper={paper} />
           ))}
+          {onOpenPapers && (
+            <ScoredAction
+              actionKey="mat_papers"
+              regionKey="mat"
+              surfaceKey="the_threshold"
+              variant="tertiary"
+              aria-expanded={papersOpen}
+              aria-controls="papers-sheet"
+              onClick={onOpenPapers}
+            >
+              {PAPERS_TAB_LABEL}
+            </ScoredAction>
+          )}
         </div>
 
         <OtherHouses houses={otherHouses} />
