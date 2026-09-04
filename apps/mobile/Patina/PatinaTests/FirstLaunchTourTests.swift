@@ -863,7 +863,10 @@ struct FirstLaunchTourTests {
         )
 
         #expect(daily.contains("if coordinator.isHouseFirstRoot {"))
-        #expect(houseFirst.contains("FirstLaunchTour(canAutoStart:"))
+        // `W1-C-13` gave the call a second argument — the bar's own height, so
+        // step 2's card is never hung across it — so the call wraps.
+        #expect(houseFirst.contains("FirstLaunchTour("))
+        #expect(houseFirst.contains("canAutoStart: coordinator.tabs.isShowingTodayRoot"))
         // The flag must not be read live in the view layer — `isHouseFirstRoot`
         // is resolved once at launch by `AppCoordinator` and held.
         #expect(!daily.contains("FeatureFlags.shared.isOn(.houseFirst)"))

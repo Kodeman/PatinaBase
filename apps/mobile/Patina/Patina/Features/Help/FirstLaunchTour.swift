@@ -690,16 +690,24 @@ public struct FirstLaunchTour<Content: View>: View {
     /// their own visibility signal; see `DailyRoomView`.
     public var canAutoStart: Bool = true
 
+    /// `W1-C-13`: how much of this host's bottom edge is chrome a card must not
+    /// be hung across. `HouseFirstRoot` wraps the tour around `rootContent`,
+    /// tab bar included, and passes `PatinaTabBar.itemHeight`; `DailyRoomView`
+    /// wraps only Today's content and passes nothing.
+    public var bottomReservation: CGFloat = 0
+
     public init(
         tourKey: String = FirstLaunchTourModel.defaultTourKey,
         steps: [FirstLaunchTourStep] = FirstLaunchTourModel.defaultSteps,
         canAutoStart: Bool = true,
+        bottomReservation: CGFloat = 0,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self._model = State(
             wrappedValue: FirstLaunchTourModel(tourKey: tourKey, steps: steps)
         )
         self.canAutoStart = canAutoStart
+        self.bottomReservation = bottomReservation
         self.content = content
     }
 
@@ -708,10 +716,12 @@ public struct FirstLaunchTour<Content: View>: View {
     public init(
         model: FirstLaunchTourModel,
         canAutoStart: Bool = true,
+        bottomReservation: CGFloat = 0,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self._model = State(wrappedValue: model)
         self.canAutoStart = canAutoStart
+        self.bottomReservation = bottomReservation
         self.content = content
     }
 
@@ -737,6 +747,7 @@ public struct FirstLaunchTour<Content: View>: View {
             // but with `@Observable` the optional-keyed `@Environment` value is
             // the single injection path.)
             .environment(\.firstLaunchTourModel, model)
+            .environment(\.firstLaunchTourBottomReservation, bottomReservation)
             // `id: canAutoStart` is load-bearing — a plain `.task` runs once at
             // mount and would burn the one-shot while Home sits under a pushed
             // route. Keying on the gate re-runs the check when the cover clears.
@@ -845,6 +856,12 @@ private struct FirstLaunchTourScrim: View {
 /// resolves to `nil` and the modifier becomes a structural no-op.
 private extension EnvironmentValues {
     @Entry var firstLaunchTourModel: FirstLaunchTourModel? = nil
+
+    /// How much of the tour root's bottom edge belongs to host chrome the card
+    /// must not cover. `HouseFirstRoot` hosts the tour ABOVE `rootContent`, so
+    /// the 83 pt tab bar is inside the coordinate space every anchor measures
+    /// itself in; the flag-off root has no bar there and passes nothing.
+    @Entry var firstLaunchTourBottomReservation: CGFloat = 0
 }
 
 /// Tags a view as the anchor for a specific tour step. When the orchestrator
@@ -854,6 +871,7 @@ private extension EnvironmentValues {
 private struct FirstLaunchTourAnchorModifier: ViewModifier {
     let anchor: FirstLaunchTourAnchor
     @Environment(\.firstLaunchTourModel) private var model: FirstLaunchTourModel?
+    @Environment(\.firstLaunchTourBottomReservation) private var bottomReservation: CGFloat
 
     /// Where this anchor sits inside the tour's root, refreshed whenever the
     /// layout moves it. Drives `arrowEdge` — see
@@ -886,7 +904,12 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
             .onDisappear { model?.unregisterAnchor(anchor) }
             .popover(
                 isPresented: isShownBinding,
-                arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge(for: geometry)
+                // `W1-C-13`: the host's own bottom chrome, so a card is never
+                // hung down across the bar the tour is standing on.
+                arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge(
+                    for: geometry,
+                    bottomReservation: bottomReservation
+                )
             ) {
                 popoverContent
                     .presentationCompactAdaptation(.popover)
@@ -954,36 +977,27 @@ private struct FirstLaunchTourPopoverCard: View {
     let onSkip: () -> Void
 
     @State private var loaded: CoachmarkContent? = nil
+    /// The copy column's ideal height, measured — see `copyColumn`.
+    @State private var copyHeight: CGFloat = 0
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// `W1-B-18`: at accessibility-extra-large the card grew past what the
+    /// popover could show and was CENTRED in it, so the step counter and the
+    /// title's ascenders were cut off the top, the last body line spilled below
+    /// the rounded rect onto the dimmed content, and `describe-all` returned
+    /// three elements — Application, "dismiss popup", the Heading — with no
+    /// Skip and no Next (re-walk 2 shot 61). The only exit at that size was a
+    /// tap on the scrim, which abandons the tour rather than completing it and
+    /// which nothing on screen advertised.
+    ///
+    /// The copy is what may overflow, so the copy is what scrolls, and the
+    /// action row sits outside it. 300 pt plus the 44 pt row and 16 pt of
+    /// padding each way is the `cardClearance` placement reserves.
+    private static let copyColumnCap: CGFloat = 300
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Step \(stepNumber) of \(totalSteps)")
-                .font(PatinaTypography.monoLabel)
-                .tracking(0.5)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .accessibilityIdentifier("FirstLaunchTour.StepIndicator")
-
-            // W1-B-09: at accessibility-extra-large the card truncated its own
-            // title — "Welcome to Pat…" — because the popover is capped at
-            // 320 pt and an `h5` serif at that size does not fit one line.
-            // Wrapping is what a title should do; the scale factor is there so
-            // a single long word cannot break inside itself the way `C-06`'s
-            // surfaces did.
-            Text(resolvedHeading)
-                .font(PatinaTypography.h5)
-                .foregroundStyle(PatinaColors.Text.primary)
-                .lineLimit(3)
-                .minimumScaleFactor(0.6)
-                .allowsTightening(true)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("FirstLaunchTour.Heading")
-
-            Text(resolvedBody)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("FirstLaunchTour.Body")
+            copyColumn
 
             HStack(spacing: 12) {
                 Spacer()
@@ -1016,7 +1030,10 @@ private struct FirstLaunchTourPopoverCard: View {
             }
         }
         .padding(16)
-        .frame(maxWidth: 320)
+        // `W1-B-18`: the ramp needs the extra width as well as the scroll — an
+        // `h5` serif wrapping to three lines inside 320 pt is what `W1-B-09`
+        // left behind. A popover on this device has ~370 pt to give.
+        .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 344 : 320)
         // B-09: the card is the only stock-iOS surface a tester meets — Skip
         // was system-blue text and Next a system-blue capsule in an otherwise
         // cream, brown and black app. The styles above are explicit, and this
@@ -1026,6 +1043,64 @@ private struct FirstLaunchTourPopoverCard: View {
         .accessibilityElement(children: .combine)
         .task(id: step.surfaceKey) {
             await loadContent()
+        }
+    }
+
+    /// The step counter, the title and the body — everything that grows with
+    /// the type ramp. Scrolls only where it has to: at the ordinary sizes the
+    /// column is laid out exactly as it was, so the walk's default-size shots
+    /// stay the record.
+    @ViewBuilder
+    private var copyColumn: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            ScrollView(showsIndicators: true) {
+                copyLines
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // A `ScrollView` has no ideal height of its own, so inside
+                    // a popover — which sizes to its content's ideal — it takes
+                    // whatever is left over, and the copy got 105 pt of the 300
+                    // it is allowed. Measured here (the content is laid out at
+                    // its ideal inside the scroll, which is the number wanted)
+                    // and given back as an explicit height below.
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        copyHeight = $0
+                    }
+            }
+            .frame(height: copyHeight == 0 ? nil : min(copyHeight, Self.copyColumnCap))
+            .scrollBounceBehavior(.basedOnSize)
+        } else {
+            copyLines
+        }
+    }
+
+    private var copyLines: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Step \(stepNumber) of \(totalSteps)")
+                .font(PatinaTypography.monoLabel)
+                .tracking(0.5)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .accessibilityIdentifier("FirstLaunchTour.StepIndicator")
+
+            // W1-B-09: at accessibility-extra-large the card truncated its own
+            // title — "Welcome to Pat…" — because an `h5` serif at that size
+            // does not fit one line of the card's width. Wrapping is what a
+            // title should do; the scale factor is there so a single long word
+            // cannot break inside itself the way `C-06`'s surfaces did.
+            Text(resolvedHeading)
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .lineLimit(3)
+                .minimumScaleFactor(0.6)
+                .allowsTightening(true)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("FirstLaunchTour.Heading")
+
+            Text(resolvedBody)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("FirstLaunchTour.Body")
         }
     }
 
