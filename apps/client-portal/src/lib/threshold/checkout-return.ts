@@ -77,7 +77,12 @@ export function consumeCheckoutReturn(): CheckoutReturn | null {
   return consumedValue;
 }
 
-/** Test seam: a fresh page load, in a module that only ever reads once. */
+/**
+ * A fresh page load, in a module that only ever reads once.
+ *
+ * @internal Test seam. Nothing on the surface may call this: it re-arms the
+ * latch, and a second read of a consumed address would replay a receipt.
+ */
 export function resetCheckoutReturn(): void {
   consumed = false;
   consumedValue = null;
@@ -93,4 +98,66 @@ export function useCheckoutReturn(): CheckoutReturn | null {
     setReceived(consumeCheckoutReturn());
   }, []);
   return received;
+}
+
+/* ── CONFIRMING THE RETURN ───────────────────────────────────────────────────
+   A return URL says only that Checkout handed the browser back. It is not
+   evidence that money moved: ACH is the preferred method and settles in 3–5
+   business days, and a client can reach `?checkout=success` by typing it.
+
+   So the house waits for its own row to say so. While it waits it says it is
+   waiting, and after `CONFIRM_POLL_TIMEOUT_MS` it says plainly that nothing is
+   confirmed yet — the two sentences the invoice detail page said, in its own
+   words. Nothing here ever reverses: `confirming` hardens into `confirmed` or
+   into `unconfirmed`, and neither one un-says a payment. ─────────────────── */
+
+export const CONFIRM_POLL_INTERVAL_MS = 3_000;
+export const CONFIRM_POLL_TIMEOUT_MS = 30_000;
+
+export type ConfirmState = 'confirming' | 'confirmed' | 'unconfirmed';
+
+/**
+ * @param active   a settled return naming a row THIS surface is rendering
+ * @param settled  that row itself says the money landed
+ * @param onRefetch the surface's own re-read, polled while waiting
+ */
+export function useCheckoutConfirmation(
+  active: boolean,
+  settled: boolean,
+  onRefetch?: () => void | Promise<unknown>,
+): ConfirmState | null {
+  const [timedOut, setTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!active || settled) return;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt >= CONFIRM_POLL_TIMEOUT_MS) {
+        setTimedOut(true);
+        clearInterval(timer);
+        return;
+      }
+      void onRefetch?.();
+    }, CONFIRM_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [active, settled, onRefetch]);
+
+  if (!active) return null;
+  if (settled) return 'confirmed';
+  return timedOut ? 'unconfirmed' : 'confirming';
+}
+
+/**
+ * Bring the anchor the till returned to into view, once. `replaceState` sets
+ * the fragment without ever scrolling to it, and the letterbox sits well below
+ * the first viewport — the receipt would otherwise be off-screen with nothing
+ * to say it exists.
+ */
+export function revealReturnAnchor(element: HTMLElement | null): void {
+  if (!element || typeof element.scrollIntoView !== 'function') return;
+  const still =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)')?.matches === true;
+  element.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
 }

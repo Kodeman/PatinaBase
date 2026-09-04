@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import type { RoadOrderModel } from '@/lib/threshold/road-orders';
+import type { ClosedOrderModel, RoadOrderModel } from '@/lib/threshold/road-orders';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
 
 jest.mock('@patina/supabase', () => ({
@@ -28,6 +28,9 @@ const LAMP: RoadOrderModel = {
   currency: 'USD',
   stageIndex: 0,
   payable: true,
+  inFlight: false,
+  houseless: false,
+  settled: false,
 };
 
 const RUG: RoadOrderModel = {
@@ -38,6 +41,18 @@ const RUG: RoadOrderModel = {
   currency: 'USD',
   stageIndex: 3,
   payable: false,
+  inFlight: false,
+  houseless: false,
+  settled: true,
+};
+
+const REFUNDED: ClosedOrderModel = {
+  id: 'ord-9',
+  name: 'Ceramic table lamp',
+  amountCents: 26_000,
+  currency: 'USD',
+  word: 'Refunded',
+  raisedAt: '2026-07-02T10:00:00Z',
 };
 
 let mutateAsync: jest.Mock;
@@ -103,12 +118,69 @@ describe('RoadOrders — the pieces she bought herself', () => {
     expect(screen.getByTestId('road-orders-error')).toHaveTextContent('This order was refunded.');
   });
 
-  it('reads the return from the till for an order', () => {
-    standAt('?order=ord-1&checkout=success');
-    render(<RoadOrders orders={[LAMP]} today={new Date(2026, 8, 4)} />);
+  it('says the money landed only once the order’s own row says so', () => {
+    standAt('?order=ord-2&checkout=success');
+    render(<RoadOrders orders={[RUG]} today={new Date(2026, 8, 4)} />);
 
     expect(screen.getByTestId('road-orders-receipt')).toHaveTextContent(
       'Paid September 4. Receipt in your email.',
+    );
+  });
+
+  it('waits, and never claims a payment, while the row is still unpaid', () => {
+    standAt('?order=ord-1&checkout=success');
+    render(<RoadOrders orders={[LAMP]} today={new Date(2026, 8, 4)} />);
+
+    const receipt = screen.getByTestId('road-orders-receipt');
+    expect(receipt).toHaveTextContent('Confirming payment… This usually takes a few seconds.');
+    expect(receipt).not.toHaveTextContent('Paid');
+  });
+
+  it('states the bank transfer once the wait runs out', () => {
+    jest.useFakeTimers();
+    try {
+      standAt('?order=ord-1&checkout=success');
+      render(<RoadOrders orders={[LAMP]} today={new Date(2026, 8, 4)} />);
+
+      act(() => {
+        jest.advanceTimersByTime(31_000);
+      });
+
+      expect(screen.getByTestId('road-orders-receipt')).toHaveTextContent(
+        'Your bank transfer has been started.',
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('says nothing about a piece that is not standing on this road', () => {
+    standAt('?order=ord-elsewhere&checkout=success');
+    render(<RoadOrders orders={[LAMP]} today={new Date(2026, 8, 4)} />);
+
+    expect(screen.queryByTestId('road-orders-receipt')).not.toBeInTheDocument();
+  });
+
+  it('says a bank transfer is pending on a piece already in flight', () => {
+    render(<RoadOrders orders={[{ ...LAMP, payable: false, inFlight: true }]} />);
+
+    expect(screen.getByText(/bank transfer pending/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /pay for this piece/i })).not.toBeInTheDocument();
+  });
+
+  it('says when a piece is tied to no house', () => {
+    render(<RoadOrders orders={[{ ...LAMP, houseless: true }]} />);
+
+    expect(
+      screen.getByText(/bought direct, not tied to this house/),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps what is no longer coming, with its word and its date', () => {
+    render(<RoadOrders orders={[]} closed={[REFUNDED]} today={new Date(2026, 8, 4)} />);
+
+    expect(screen.getByTestId('road-orders-closed')).toHaveTextContent(
+      'Ceramic table lamp · Refunded · bought July 2 · $260',
     );
   });
 

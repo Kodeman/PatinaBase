@@ -190,4 +190,93 @@ describe('Settlement — the balance settled in place', () => {
 
     expect(mutateAsync).not.toHaveBeenCalled();
   });
+
+  it('will not claim a card session at a fee it does not yet know', () => {
+    optionsMock.mockReturnValue({ isPending: true, data: undefined });
+    renderSettlement();
+
+    fireEvent.click(screen.getByRole('radio', { name: /^card/i }));
+
+    expect(screen.getByRole('button', { name: /settle the balance/i })).toBeDisabled();
+    expect(screen.queryByTestId('settlement-charge')).not.toBeInTheDocument();
+  });
+
+  it('offers no act on a letter with nothing left to pay', () => {
+    render(
+      <Settlement
+        invoice={{ ...INVOICE, paidCents: 1_825_000, balanceCents: 0 }}
+        currency="USD"
+        designerName="Quist Interiors"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /settle the balance/i })).toBeDisabled();
+  });
+
+  it('states a payment already clearing as a fact, not a failure, and holds the act', async () => {
+    const onRefetch = jest.fn();
+    render(
+      <Settlement
+        invoice={INVOICE}
+        currency="USD"
+        designerName="Quist Interiors"
+        onRefetch={onRefetch}
+      />,
+    );
+    mutateAsync.mockRejectedValue(
+      new InvoiceCheckoutError(
+        'payment_processing',
+        'A bank transfer for this invoice is already processing. Bank transfers take 3–5 business days to clear.',
+      ),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /settle the balance/i }));
+    });
+
+    const standing = screen.getByTestId('settlement-processing');
+    expect(standing).toHaveAttribute('role', 'status');
+    expect(standing).toHaveTextContent(
+      'A bank transfer for this invoice is already processing. Bank transfers take 3–5 business days to clear.',
+    );
+    expect(screen.queryByTestId('settlement-error')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /settle the balance/i })).toBeDisabled();
+    expect(onRefetch).toHaveBeenCalled();
+  });
+
+  it('re-reads the invoices after a payment that needs review', async () => {
+    const onRefetch = jest.fn();
+    render(
+      <Settlement
+        invoice={INVOICE}
+        currency="USD"
+        designerName="Quist Interiors"
+        onRefetch={onRefetch}
+      />,
+    );
+    mutateAsync.mockRejectedValue(
+      new InvoiceCheckoutError('payment_reconciliation_required', 'needs review'),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /settle the balance/i }));
+    });
+
+    expect(onRefetch).toHaveBeenCalled();
+  });
+
+  it('holds the act while a return from the till is still unconfirmed', () => {
+    render(
+      <Settlement invoice={INVOICE} currency="USD" designerName="Quist Interiors" hold />,
+    );
+
+    expect(screen.getByRole('button', { name: /settle the balance/i })).toBeDisabled();
+  });
+
+  it('holds the ways to pay while a check notification is in flight', () => {
+    notifyMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: true });
+    renderSettlement();
+
+    expect(screen.getByRole('radio', { name: /^card/i })).toBeDisabled();
+  });
 });

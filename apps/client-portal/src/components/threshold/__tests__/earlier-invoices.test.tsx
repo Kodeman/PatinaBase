@@ -4,8 +4,28 @@ import type { Invoice } from '@patina/supabase';
 jest.mock('@/lib/analytics/events', () => ({
   __esModule: true,
   makingEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
-  clientEvents: {},
+  clientEvents: {
+    paymentStarted: jest.fn(),
+    paymentMethodSelected: jest.fn(),
+    checkIntentSubmitted: jest.fn(),
+  },
 }));
+
+// An open line unfolds the same settlement the letterbox does, so the pay
+// path's three hooks are a boundary here as well.
+jest.mock('@patina/supabase', () => ({
+  __esModule: true,
+  InvoiceCheckoutError: class InvoiceCheckoutError extends Error {},
+  useInvoicePaymentOptions: jest.fn(),
+  useStartCheckout: jest.fn(),
+  useNotifyCheckIntent: jest.fn(),
+}));
+
+import {
+  useInvoicePaymentOptions,
+  useNotifyCheckIntent,
+  useStartCheckout,
+} from '@patina/supabase';
 
 import { EarlierInvoices } from '../earlier-invoices';
 
@@ -48,6 +68,21 @@ function invoice(overrides: Partial<Invoice> = {}): Invoice {
 }
 
 describe('EarlierInvoices — what is kept behind the one letter', () => {
+  beforeEach(() => {
+    (useInvoicePaymentOptions as jest.Mock).mockReturnValue({
+      isPending: false,
+      data: { card_surcharge_bps: 300, check_remit_to: null },
+    });
+    (useStartCheckout as jest.Mock).mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+    (useNotifyCheckIntent as jest.Mock).mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+  });
+
   it('says nothing when the letterbox holds the only invoice', () => {
     const { container } = render(
       <EarlierInvoices invoices={[invoice({ id: 'inv-4' })]} exceptId="inv-4" />,
@@ -121,6 +156,41 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
     expect(print).toHaveAttribute('href', '/invoices/inv-3/print');
     expect(print).toHaveAttribute('target', '_blank');
     expect(print).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('settles a second open balance on its own line, in place', () => {
+    render(
+      <EarlierInvoices
+        invoices={[
+          invoice({
+            id: 'inv-5',
+            invoice_number: 'Invoice No. 5',
+            status: 'sent',
+            amount_paid_cents: 0,
+            paid_at: null,
+          }),
+        ]}
+        designerName="Quist Interiors"
+        today={TODAY}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+    expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settle this balance' }));
+
+    expect(screen.getByTestId('settlement')).toBeInTheDocument();
+    expect(screen.getByTestId('spine-toll')).toHaveAttribute('data-invoice-id', 'inv-5');
+    expect(screen.getByTestId('threshold-payment-methods')).toBeInTheDocument();
+  });
+
+  it('offers a settled line its record and nothing to pay', () => {
+    render(<EarlierInvoices invoices={[invoice()]} today={TODAY} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+
+    expect(screen.queryByRole('button', { name: 'Settle this balance' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
   });
 
   it('spells the year out on a receipt from another one, newest first', () => {

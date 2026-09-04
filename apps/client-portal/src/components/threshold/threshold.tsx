@@ -42,7 +42,7 @@ import {
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
-import { toRoadOrders } from '@/lib/threshold/road-orders';
+import { toClosedOrders, toRoadOrders } from '@/lib/threshold/road-orders';
 import { keySentence, previouslyLine, thresholdStanding } from '@/lib/threshold/standing';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
@@ -424,7 +424,6 @@ export function Threshold({
     proposalsQuery.isPending ||
     selectionsQuery.isPending ||
     invoicesQuery.isPending ||
-    ordersQuery.isPending ||
     notesQuery.isPending ||
     roomsQuery.isPending ||
     planQuery.isPending ||
@@ -614,13 +613,26 @@ export function Threshold({
       invoice={model.letterbox}
       invoices={invoicesQuery.data ?? []}
       designerName={studioName}
+      onRefetch={invoicesQuery.refetch}
       today={today}
     />
   );
-  const roadOrders = toRoadOrders(ordersQuery.data, projectId);
+  // direct_orders is client-wide and unfiltered, and most clients have no rows
+  // in it — it decides what the ROAD says, not what the house says, so it
+  // gates the road alone rather than the whole page's first paint. The road
+  // holds until it settles, so the count never rewrites itself.
+  const ordersSettled = !ordersQuery.isPending;
+  const roadOrders = ordersSettled ? toRoadOrders(ordersQuery.data, projectId) : [];
+  const closedOrders = ordersSettled ? toClosedOrders(ordersQuery.data, projectId) : [];
   const road =
-    model.road.length > 0 || roadOrders.length > 0 ? (
-      <TheRoad pieces={model.road} orders={roadOrders} today={today} />
+    ordersSettled && (model.road.length > 0 || roadOrders.length > 0 || closedOrders.length > 0) ? (
+      <TheRoad
+        pieces={model.road}
+        orders={roadOrders}
+        closedOrders={closedOrders}
+        onOrdersRefetch={ordersQuery.refetch}
+        today={today}
+      />
     ) : null;
   const note = (
     <TheNote

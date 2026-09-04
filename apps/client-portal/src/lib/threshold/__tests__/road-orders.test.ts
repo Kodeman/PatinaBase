@@ -1,6 +1,6 @@
 import type { DirectOrder } from '@patina/supabase';
 
-import { toRoadOrders } from '../road-orders';
+import { toClosedOrders, toRoadOrders } from '../road-orders';
 
 function order(overrides: Partial<DirectOrder> = {}): DirectOrder {
   return {
@@ -48,10 +48,15 @@ describe('toRoadOrders', () => {
     ).toMatchObject({ stageIndex: 3 });
   });
 
-  it('will not offer to pay for a piece already in flight', () => {
-    expect(
-      toRoadOrders([order({ stripe_payment_intent_id: 'pi_1' })], 'project-1')[0].payable,
-    ).toBe(false);
+  it('will not offer to pay for a piece already in flight, and says it is in flight', () => {
+    const [piece] = toRoadOrders([order({ stripe_payment_intent_id: 'pi_1' })], 'project-1');
+
+    expect(piece).toMatchObject({ payable: false, inFlight: true, settled: false });
+  });
+
+  it('marks a piece raised against no house', () => {
+    expect(toRoadOrders([order({ project_id: null })], 'project-1')[0].houseless).toBe(true);
+    expect(toRoadOrders([order()], 'project-1')[0].houseless).toBe(false);
   });
 
   it('keeps this house’s orders and the ones raised against no house', () => {
@@ -75,5 +80,30 @@ describe('toRoadOrders', () => {
       ),
     ).toEqual([]);
     expect(toRoadOrders(undefined, 'project-1')).toEqual([]);
+  });
+});
+
+describe('toClosedOrders', () => {
+  it('keeps what is not coming, in /orders’ own words, newest first', () => {
+    const closed = toClosedOrders(
+      [
+        order({ id: 'ref', status: 'refunded', created_at: '2026-08-01T10:00:00Z' }),
+        order({ id: 'can', status: 'canceled', created_at: '2026-08-09T10:00:00Z' }),
+        order({ id: 'moving', status: 'pending_payment' }),
+      ],
+      'project-1',
+    );
+
+    expect(closed.map((piece) => [piece.id, piece.word])).toEqual([
+      ['can', 'Canceled'],
+      ['ref', 'Refunded'],
+    ]);
+  });
+
+  it('keeps another house’s closed orders out of this one', () => {
+    expect(
+      toClosedOrders([order({ status: 'refunded', project_id: 'project-2' })], 'project-1'),
+    ).toEqual([]);
+    expect(toClosedOrders(undefined, 'project-1')).toEqual([]);
   });
 });

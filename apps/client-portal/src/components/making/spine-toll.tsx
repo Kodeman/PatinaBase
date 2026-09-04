@@ -123,28 +123,26 @@ export function SpineToll({
       {children}
 
       <div className="mt-3">
-        {settle ? (
-          <ScoredAction
-            actionKey="toll_settle"
-            regionKey="toll"
-            variant="primary"
-            loading={settle.pending}
-            disabled={settle.disabled}
-            onClick={settle.onSettle}
-          >
-            Settle the balance
-          </ScoredAction>
-        ) : (
-          <ScoredAction
-            actionKey="toll_settle"
-            regionKey="toll"
-            variant="primary"
-            href={`/invoices/${invoiceId}`}
-            onClick={onFollow}
-          >
-            Settle the balance
-          </ScoredAction>
-        )}
+        {/* One act, two ways out of it: in place when the caller settles here,
+            and the invoice's own page when it does not. `onFollow` reports the
+            toll either way. */}
+        <ScoredAction
+          actionKey="toll_settle"
+          regionKey="toll"
+          variant="primary"
+          {...(settle
+            ? {
+                loading: settle.pending,
+                disabled: settle.disabled,
+                onClick: () => {
+                  onFollow?.();
+                  settle.onSettle();
+                },
+              }
+            : { href: `/invoices/${invoiceId}`, onClick: onFollow })}
+        >
+          Settle the balance
+        </ScoredAction>
       </div>
     </div>
   );

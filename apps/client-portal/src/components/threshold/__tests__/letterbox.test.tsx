@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Invoice } from '@patina/supabase';
 
@@ -104,6 +104,7 @@ function standAt(search: string) {
 
 describe('Letterbox — one letter, half out of the slot', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     resetCheckoutReturn();
     standAt('');
     jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
@@ -224,10 +225,16 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(screen.queryByTestId('earlier-invoices')).not.toBeInTheDocument();
   });
 
-  it('reads a settled return from the till and says so once', () => {
+  it('reads a settled return once the invoice’s own row says it is paid', () => {
     standAt('?invoice=inv-4&checkout=success&session_id=cs_1');
 
-    render(<Letterbox invoice={null} today={new Date(2026, 8, 4)} />);
+    render(
+      <Letterbox
+        invoice={null}
+        invoices={[invoiceRow({ id: 'inv-4', status: 'paid' })]}
+        today={new Date(2026, 8, 4)}
+      />,
+    );
 
     expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
       'Paid September 4. Receipt in your email.',
@@ -236,13 +243,96 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(clientEvents.paymentCompleted).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
   });
 
+  it('will not say a letter is paid while it is still open, and counts nothing', () => {
+    standAt('?invoice=inv-4&checkout=success&session_id=cs_1');
+
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-4' })}
+        invoices={[
+          invoiceRow({
+            id: 'inv-4',
+            status: 'sent',
+            amount_paid_cents: 912_500,
+            total_cents: 1_825_000,
+            paid_at: null,
+          }),
+        ]}
+        today={new Date(2026, 8, 4)}
+      />,
+    );
+
+    const receipt = screen.getByTestId('letterbox-receipt');
+    expect(receipt).toHaveTextContent('Confirming payment… This usually takes a few seconds.');
+    expect(receipt).not.toHaveTextContent('Paid September 4');
+    expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('says plainly that nothing is confirmed once the wait runs out', () => {
+    jest.useFakeTimers();
+    try {
+      standAt('?invoice=inv-4&checkout=success');
+
+      render(
+        <Letterbox
+          invoice={invoice({ id: 'inv-4' })}
+          invoices={[
+            invoiceRow({
+              id: 'inv-4',
+              status: 'sent',
+              amount_paid_cents: 0,
+              total_cents: 1_825_000,
+              paid_at: null,
+            }),
+          ]}
+          today={new Date(2026, 8, 4)}
+        />,
+      );
+
+      act(() => {
+        jest.advanceTimersByTime(31_000);
+      });
+
+      expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
+        'Checkout returned, but Patina has not confirmed a payment yet. Do not submit another payment until the status is known.',
+      );
+      expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('says nothing about a letter this house is not holding', () => {
+    standAt('?invoice=inv-elsewhere&checkout=success');
+
+    render(<Letterbox invoice={invoice()} invoices={[invoiceRow()]} today={TODAY} />);
+
+    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
+    expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
+  });
+
   it('says nothing changed when she came back from a cancelled till', () => {
     standAt('?invoice=inv-4&checkout=cancelled');
 
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-4' })}
+        invoices={[invoiceRow({ id: 'inv-4', status: 'sent' })]}
+        today={TODAY}
+      />,
+    );
 
     expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent('Nothing changed.');
     expect(clientEvents.paymentCancelled).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
+  });
+
+  it('keeps the letter in the slot printable too', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.getByRole('link', { name: /print/i })).toHaveAttribute(
+      'href',
+      '/invoices/b0000000-0000-0000-0000-0000000000i4/print',
+    );
   });
 
   it('leaves an order’s return to the road', () => {

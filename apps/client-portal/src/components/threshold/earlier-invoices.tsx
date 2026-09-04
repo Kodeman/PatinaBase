@@ -3,11 +3,14 @@
 import { useState } from 'react';
 
 import type { Invoice } from '@patina/supabase';
+import { invoiceBalanceCents } from '@patina/shared';
 
 import { ScoredAction } from '@/components/making/scored-action';
 import { moneyInWords } from '@/components/making/standing-sentence';
 import { visibleInvoices } from '@/app/budget/rollup';
-import { parseSourceDate } from '@/lib/threshold/derive';
+import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
+
+import { Settlement } from './settlement';
 
 /* ── EARLIER INVOICES ────────────────────────────────────────────────────────
    The letterbox holds one letter. Everything that came before it is kept, and
@@ -17,7 +20,12 @@ import { parseSourceDate } from '@/lib/threshold/derive';
    house and the budget page can never disagree about which invoices exist.
    Each line can be printed, and printing opens the invoice's own printable
    sheet in a new tab: a print is a document, not chrome, so it keeps its
-   route. ─────────────────────────────────────────────────────────────────── */
+   route.
+
+   A line that is still owed is not only a record. The letterbox holds the
+   soonest-due letter; a studio that sent two can be paid for both, and the
+   second one settles here — the same ceremony, unfolded on its own line, so
+   retiring `/invoices/[id]` strands no balance. ──────────────────────────── */
 
 const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
 const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
@@ -35,12 +43,29 @@ function longDate(value: string | null | undefined, today?: Date): string | null
     : LONG_MONTH_DAY.format(date);
 }
 
+/** Still owed: the house may be asked for money on it. */
+function isOpen(invoice: Invoice): boolean {
+  return (
+    (invoice.status === 'sent' || invoice.status === 'partially_paid') &&
+    invoiceBalanceCents(invoice) > 0
+  );
+}
+
+/** The row as the toll reads it — the same arithmetic every money surface runs. */
+function toModel(invoice: Invoice): InvoiceModel {
+  return {
+    id: invoice.id,
+    number: invoice.invoice_number,
+    totalCents: invoice.total_cents || 0,
+    paidCents: invoice.amount_paid_cents || 0,
+    balanceCents: invoiceBalanceCents(invoice),
+    dueDate: invoice.due_date,
+  };
+}
+
 /** What became of it, in one dated clause. */
 function receiptTrail(invoice: Invoice, today?: Date): string {
-  const balanceCents = Math.max(
-    (invoice.total_cents || 0) - (invoice.amount_paid_cents || 0),
-    0,
-  );
+  const balanceCents = invoiceBalanceCents(invoice);
   if (invoice.status === 'paid') {
     const paid = longDate(invoice.paid_at, today);
     return paid ? `paid ${paid}` : 'paid';
@@ -67,11 +92,22 @@ export interface EarlierInvoicesProps {
   invoices: Invoice[];
   /** The one standing in the letterbox — it is not also kept behind it. */
   exceptId?: string | null;
+  /** Who a check would be coming to, when a line here is settled. */
+  designerName?: string | null;
+  /** Re-read the invoices after an attempt that ended in a fact, not a session. */
+  onRefetch?: () => void | Promise<unknown>;
   today?: Date;
 }
 
-export function EarlierInvoices({ invoices, exceptId, today }: EarlierInvoicesProps) {
+export function EarlierInvoices({
+  invoices,
+  exceptId,
+  designerName,
+  onRefetch,
+  today,
+}: EarlierInvoicesProps) {
   const [open, setOpen] = useState(false);
+  const [settling, setSettling] = useState<string | null>(null);
 
   const earlier = visibleInvoices(invoices)
     .filter((invoice) => invoice.id !== exceptId)
@@ -106,25 +142,70 @@ export function EarlierInvoices({ invoices, exceptId, today }: EarlierInvoicesPr
                 <li
                   key={invoice.id}
                   data-earlier-invoice={invoice.id}
-                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-[var(--border-subtle)] py-2 last:border-b"
+                  className="border-t border-[var(--border-subtle)] py-2 last:border-b"
                 >
-                  <span className="text-[15px] leading-[1.62] text-[var(--text-body)]">
-                    {`${invoice.invoice_number ?? 'Invoice'} · ${moneyInWords(
-                      invoice.total_cents || 0,
-                      invoice.currency || 'USD',
-                    )} · ${receiptTrail(invoice, today)}`}
-                  </span>
-                  <ScoredAction
-                    actionKey="invoice_print"
-                    regionKey="letterbox"
-                    surfaceKey="the_threshold"
-                    variant="tertiary"
-                    href={`/invoices/${invoice.id}/print`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Print
-                  </ScoredAction>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <span className="text-[15px] leading-[1.62] text-[var(--text-body)]">
+                      {`${invoice.invoice_number ?? 'Invoice'} · ${moneyInWords(
+                        invoice.total_cents || 0,
+                        invoice.currency || 'USD',
+                      )} · ${receiptTrail(invoice, today)}`}
+                    </span>
+                    <span className="flex flex-wrap items-baseline gap-x-4">
+                      {isOpen(invoice) && (
+                        <ScoredAction
+                          actionKey="invoice_settle"
+                          regionKey="letterbox"
+                          surfaceKey="the_threshold"
+                          variant="secondary"
+                          aria-expanded={settling === invoice.id}
+                          aria-controls={`earlier-invoice-settle-${invoice.id}`}
+                          onClick={() =>
+                            setSettling((was) => (was === invoice.id ? null : invoice.id))
+                          }
+                        >
+                          {settling === invoice.id ? 'Close this letter' : 'Settle this balance'}
+                        </ScoredAction>
+                      )}
+                      <ScoredAction
+                        actionKey="invoice_print"
+                        regionKey="letterbox"
+                        surfaceKey="the_threshold"
+                        variant="tertiary"
+                        href={`/invoices/${invoice.id}/print`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Print
+                      </ScoredAction>
+                    </span>
+                  </div>
+
+                  {isOpen(invoice) && (
+                    <div
+                      id={`earlier-invoice-settle-${invoice.id}`}
+                      className={`grid overflow-hidden motion-safe:transition-[grid-template-rows] motion-safe:duration-[420ms] ${
+                        settling === invoice.id ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                      }`}
+                    >
+                      <div className="min-h-0">
+                        {settling === invoice.id && (
+                          <Settlement
+                            invoice={toModel(invoice)}
+                            currency={invoice.currency || 'USD'}
+                            designerName={
+                              invoice.designer?.full_name?.trim() ||
+                              invoice.designer?.business_name?.trim() ||
+                              designerName?.trim() ||
+                              'your designer'
+                            }
+                            onRefetch={onRefetch}
+                            today={today}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

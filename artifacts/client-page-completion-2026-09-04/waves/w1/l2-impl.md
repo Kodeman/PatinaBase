@@ -198,3 +198,164 @@ Check supabase/functions/create-checkout-session/index.ts
 - The letterbox states `Paid <date>` on the return without waiting for the webhook. The old page polled
   for the exact payment row; `useProjectInvoices` does not select `payments`, so that evidence is not
   available on this surface. The balance corrects itself on the next invoices refetch.
+
+---
+
+# Fix round (review `waves/w1/l2-review.md`)
+
+Every blocker and major applied; ten of the eleven minors/nits applied, one rejected with a reason and
+one accepted as a stated regression. Gate output at the end.
+
+## Fixed, by finding number
+
+**1 · blocker — the house no longer says money moved on the strength of a query string.**
+`letterbox.tsx` / `road-orders.tsx` now derive the receipt from the ROW, not the address. A new
+`useCheckoutConfirmation` (`lib/threshold/checkout-return.ts`) polls the surface's own re-read every 3s
+for 30s — the invoice detail page's own interval and timeout — and yields `confirming` → `confirmed` |
+`unconfirmed`. Copy, byte-copied from the routes being retired:
+- letterbox: `Confirming payment… This usually takes a few seconds.` → `Paid <date>. Receipt in your
+  email.` (the plan's sentence, now true when it is said) or, on timeout, `Checkout returned, but Patina
+  has not confirmed a payment yet. Do not submit another payment until the status is known.`
+- road: the same confirming line, then `/orders`' own `Your bank transfer has been started. Bank
+  transfers take 3–5 business days to clear — we’ll email your receipt as soon as it lands.`
+Nothing reverses: `confirming` only hardens. Settled evidence is `status === 'paid'` or
+`invoiceBalanceCents(row) <= 0` for a letter, `status === 'paid'` for an order.
+
+**2 · blocker — a second open invoice can be paid.** `earlier-invoices.tsx`: a line that is still open
+(`sent`/`partially_paid` with a balance) carries **Settle this balance** beside Print, unfolding the same
+`Settlement` on its own line (`aria-expanded`/`aria-controls`, `0fr→1fr`, content mounted only while
+open). Nothing leaves the page; `/invoices/[id]` strands no balance when it retires. `derive.ts` is still
+untouched — the row→model conversion is local to the file.
+
+**3 · blocker — the repointed return URL is gated on the flagless portal.**
+`create-checkout-session/index.ts` carries a `⚠ DEPLOY ORDER` block at the invoice `successUrl` and at
+`directOrderReturnBase`: this function must not ship before L8 removes the `threshold` flag and the
+flagless portal is live, or a client outside the flag lands on the old dashboard, which reads no
+`?checkout=`. **Integration lane ship order: L8 merged → client portal deployed → `supabase functions
+deploy create-checkout-session`.**
+
+**4 · major — `paymentCompleted` fires on confirmation, not on the return.** The letterbox reports
+`client_payment_completed` only when `confirm === 'confirmed'`; an abandoned ACH debit or a failure is
+never counted. `paymentCancelled` still fires on the cancel return, with no amount (this surface has no
+exact attempt evidence, and the old page deliberately omitted it rather than sampling a balance).
+
+**5 · major — `payment_processing` is a standing fact, not a failure.** `settlement.tsx` branches on
+`err.code === 'payment_processing'`, renders the till's own `payable.processingDetail` (`err.message`) in
+a `role="status"` paragraph (`settlement-processing`), holds the act, and re-reads the invoices.
+
+**6 · major — an order in flight says so.** `RoadOrderModel.inFlight` (`pending_payment` with a stamped
+PaymentIntent) adds `· bank transfer pending` to the line — `/orders`' `Processing (bank transfer
+pending)` in the road's own grammar. The act stays withheld (`payable` already excluded it).
+
+**7 · major — the letter being paid is printable.** A `Print` act (`/invoices/<id>/print`, new tab) sits
+beside "Open the letterbox", so the line items, tax, memo and payments list stay reachable for the open
+letter after `/invoices/[invoiceId]` retires.
+
+**8 · major — the return lands on its anchor.** `revealReturnAnchor` scrolls the letterbox (or the road)
+into view once after the receipt renders, `behavior: 'auto'` under `prefers-reduced-motion`. Guarded for
+jsdom and for a page where the element never mounts.
+
+**9 · major — the house speaks only about rows it is holding.** The letterbox answers a return only when
+`?invoice=` names an invoice in this project's list; the road only when `?order=` names a piece standing
+on it. A hand-typed `?checkout=success&order=whatever` now says nothing and fires no event.
+
+**10 · minor (partial, see rejections) — the act is held while a return is unconfirmed.**
+`Settlement.hold` carries the old `canPay`'s `confirmState !== 'confirming' | 'unconfirmed'` terms, and
+the `payment_processing` branch holds it too.
+
+**11 · minor — first paint no longer waits on `direct_orders`.** `ordersQuery.isPending` is out of
+`threshold.tsx`'s settle gate; the ROAD alone holds until orders settle (`ordersSettled`), so the "pieces
+in motion" count still never rewrites itself.
+
+**12 · minor — a houseless order says it is houseless.** `RoadOrderModel.houseless` renders `· bought
+direct, not tied to this house`, so the same lamp standing in two houses after L8 does not read as two
+lamps.
+
+**13 · minor — refunded and cancelled orders are kept.** `toClosedOrders()` + a "No longer coming" list
+at the end of the road: `<name> · Refunded|Canceled · bought <date> · <money>`, `/orders`' own words, no
+act, never in the in-motion count.
+
+**15 · minor — `invoiceBalanceCents` everywhere.** `earlier-invoices.tsx` no longer restates the
+arithmetic.
+
+**16 · minor — the chooser is held while a check notification is in flight.**
+`disabled={startCheckout.isPending || notifyCheckIntent.isPending}`.
+
+**17 · minor — the reconciliation branch re-reads.** `await onRefetch?.()` on both the reconciliation and
+the processing branch. `onRefetch` is threaded `threshold.tsx` → `Letterbox` → `Settlement` (and to
+`EarlierInvoices`), so no `useQueryClient` is required in a test that renders a bare component.
+
+**18 · minor — `resetCheckoutReturn` is marked `@internal`** with the reason (it re-arms the latch; a
+second read would replay a receipt).
+
+**20 · minor — the four missing test cases, plus more.** `settlement.test.tsx`: card with
+`useInvoicePaymentOptions.isPending` disables the act; `balanceCents <= 0` disables; `payment_processing`
+renders as `role="status"` and holds the act; `hold` disables; the check-intent hold.
+`letterbox.test.tsx`: a settled return **with the invoice still open in the slot** stays at "Confirming"
+and counts nothing; the timeout sentence; a return naming a letter this house is not holding.
+`road-orders.test.tsx`: settled-only receipt, confirming, timeout, foreign order, in-flight clause,
+houseless clause, the closed list. `road-orders.test.ts`: `inFlight`/`houseless`/`settled` and
+`toClosedOrders`. `checkout-return.test.ts`: `revealReturnAnchor` including reduced motion.
+
+**21 · nit — one act in `spine-toll.tsx`.** The two `ScoredAction` branches are one element with spread
+props; the sanctioned `making/` edit is now ~20 lines and the label lives in one place.
+
+**22 · nit — `onFollow` fires on the settle path too**, so the toll's reporting has a counterpart in
+place. (`Settlement` passes no `onFollow` today, so no behaviour changed for The Making.)
+
+## Rejections and accepted regressions
+
+- **10 (the rest) — `hasProcessingStripe` / `hasReconciliationRequired` are an accepted regression.**
+  The evidence is `invoice.payments`, and `useProjectInvoices` does not select it. Adding a nested
+  `payments` select to a `@patina/supabase` hook changes the payload for every consumer of that hook in
+  three portals and needs a client-side RLS answer for `invoice_payments` — not a minimal shared-file
+  edit, and the double-charge case it guards is still refused by the edge function (409) and now stated
+  in the standing voice (finding 5). Stated here as the review permits.
+- **14 — the webhook's email links stay as they are.** `stripe-webhook` links live in mail already sent;
+  repointing them now would break for every client outside the `threshold` flag (finding 3's problem, in
+  a place with no way to hold the deploy). The retirement plan owns `/orders` and `/invoices/<id>` as
+  redirects. Said explicitly, as the finding asked.
+- **19 — no change.** The plate belongs to `SpineToll`, which The Making renders as-is; stripping it here
+  would either fork the toll or change The Making's surface. Raised for Fable at integration as the
+  review suggests.
+
+## Gate output (verbatim)
+
+`pnpm --dir .codex/worktrees/agent-cpc-l2/apps/client-portal type-check`
+```
+> @patina/client-portal@0.1.0 type-check /Users/kody/Code/patina-merged/.codex/worktrees/agent-cpc-l2/apps/client-portal
+> tsc --noEmit
+```
+
+`pnpm --dir .codex/worktrees/agent-cpc-l2/apps/client-portal test -- threshold making`
+```
+Test Suites: 36 passed, 36 total
+Tests:       641 passed, 641 total
+Snapshots:   0 total
+Time:        5.552 s
+Ran all test suites matching /threshold|making/i.
+```
+(617 before the fix round; 641 after — 24 new cases.)
+
+`npx eslint src/components/threshold src/components/making src/lib/threshold`
+```
+✖ 2 problems (0 errors, 2 warnings)
+```
+Both warnings are the pre-existing unused-disable directives in `the-making.tsx` and `tracking-row.tsx`,
+files this lane has not touched.
+
+`deno check --config supabase/functions/deno.json supabase/functions/create-checkout-session/index.ts`
+```
+Check supabase/functions/create-checkout-session/index.ts
+```
+
+Full client-portal jest (not a lane gate, run as a regression check): **136 of 138 suites pass, 1467 of
+1468 tests pass.** The two failures are pre-existing on `origin/main` and untouched by this lane —
+`src/lib/data/__tests__/orders.test.ts` cannot resolve `../orders` (the module does not exist on
+`origin/main` either) and `src/lib/__tests__/portal-access.test.ts` › `foreignPortalFromDomain` fails on
+the manufacturer case (last touched by `fe1cec874`, before this branch).
+
+## Still NOT verified
+Everything the first report listed still stands, minus the receipt claim, which is fixed. Additionally:
+the confirmation poll has never run against a real webhook — only against jest fake timers and synthetic
+rows.

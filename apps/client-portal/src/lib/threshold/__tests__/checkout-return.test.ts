@@ -3,6 +3,7 @@ import {
   consumeCheckoutReturn,
   readCheckoutReturn,
   resetCheckoutReturn,
+  revealReturnAnchor,
 } from '../checkout-return';
 
 describe('readCheckoutReturn', () => {
@@ -99,5 +100,30 @@ describe('consumeCheckoutReturn', () => {
 
     expect(consumeCheckoutReturn()).toBeNull();
     expect(replaceState).not.toHaveBeenCalled();
+  });
+});
+
+describe('revealReturnAnchor', () => {
+  it('brings the anchor into view — replaceState never scrolls to it', () => {
+    const scrollIntoView = jest.fn();
+    revealReturnAnchor({ scrollIntoView } as unknown as HTMLElement);
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+  });
+
+  it('stills the movement when the client asked for less of it', () => {
+    const scrollIntoView = jest.fn();
+    jest
+      .spyOn(window, 'matchMedia')
+      .mockReturnValue({ matches: true } as unknown as MediaQueryList);
+
+    revealReturnAnchor({ scrollIntoView } as unknown as HTMLElement);
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+  });
+
+  it('says nothing when there is nothing to scroll to', () => {
+    expect(() => revealReturnAnchor(null)).not.toThrow();
+    expect(() => revealReturnAnchor({} as HTMLElement)).not.toThrow();
   });
 });

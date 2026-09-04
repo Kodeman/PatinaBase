@@ -280,6 +280,14 @@ async function loadInvoicePayable(
     // ?checkout= there and states the outcome in place. `invoice` names which
     // one settled; no fragment, because the attempt params are appended after
     // this string (invoice-checkout-core.ts) and a fragment would swallow them.
+    //
+    // ⚠ DEPLOY ORDER — this function must NOT ship before the flagless client
+    // portal. `/projects/[projectId]` renders the Threshold only behind the
+    // `threshold` PostHog flag and is fail-closed, so a client outside the
+    // flag would land on the old project dashboard, which reads no
+    // `?checkout=` at all: no receipt, no cancellation notice, the till's
+    // params left on the address. Gate this deploy on the lane that removes
+    // the flag (client-page-completion L8) plus the portal deploy.
     successUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=cancelled`,
     processingDetail:
@@ -513,7 +521,15 @@ interface DirectOrderRow {
   project_id: string | null;
 }
 
-/** Where Checkout hands a direct-order buyer back: her project, else the list. */
+/**
+ * Where Checkout hands a direct-order buyer back: her project, else the list.
+ *
+ * ⚠ Same deploy gate as the invoice successUrl above (flagless portal first).
+ * stripe-webhook's own emails still link `/orders?order=<id>` and
+ * `/invoices/<id>` on purpose: those addresses must keep working for mail
+ * already sent, so the retirement plan owns them as redirects rather than this
+ * change set repointing them.
+ */
 function directOrderReturnBase(order: DirectOrderRow): string {
   return order.project_id
     ? `${CLIENT_PORTAL_URL}/projects/${order.project_id}?order=${order.id}`

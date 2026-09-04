@@ -42,12 +42,30 @@ export interface SettlementProps {
   currency: string;
   /** Who the check is coming to, in the client's own words for the studio. */
   designerName: string;
+  /**
+   * Hold the act. The letterbox raises this while a return from the till is
+   * still unconfirmed — the old detail page's `canPay` refused a second
+   * attempt in exactly that window.
+   */
+  hold?: boolean;
+  /** Re-read the invoices after an attempt that ended in a fact, not a session. */
+  onRefetch?: () => void | Promise<unknown>;
   today?: Date;
 }
 
-export function Settlement({ invoice, currency, designerName, today }: SettlementProps) {
+export function Settlement({
+  invoice,
+  currency,
+  designerName,
+  hold = false,
+  onRefetch,
+  today,
+}: SettlementProps) {
   const [method, setMethod] = useState<InvoicePaymentUIMethod>('us_bank_account');
   const [payError, setPayError] = useState<string | null>(null);
+  // A payment already clearing is not a failure. It is a standing fact, and it
+  // is said in the standing voice.
+  const [processing, setProcessing] = useState<string | null>(null);
 
   const paymentOptions = useInvoicePaymentOptions(invoice.id);
   const startCheckout = useStartCheckout();
@@ -88,6 +106,7 @@ export function Settlement({ invoice, currency, designerName, today }: Settlemen
     // is still being claimed, or with the check panel open, does nothing.
     if (startCheckout.isPending || method === 'check') return;
     setPayError(null);
+    setProcessing(null);
     try {
       const receipt = await startCheckout.mutateAsync({
         invoiceId: invoice.id,
@@ -101,10 +120,22 @@ export function Settlement({ invoice, currency, designerName, today }: Settlemen
       });
       window.location.href = receipt.url;
     } catch (err) {
+      if (err instanceof InvoiceCheckoutError && err.code === 'payment_processing') {
+        // 409 processing: the bank transfer she already started is clearing.
+        // The till's own detail says so; saying it in the failure voice would
+        // tell a client whose money has left her account that nothing did.
+        setProcessing(
+          err.message ||
+            'Your payment provider is still processing this payment. The balance will update after Patina receives confirmation.',
+        );
+        await onRefetch?.();
+        return;
+      }
       if (err instanceof InvoiceCheckoutError && err.code === 'payment_reconciliation_required') {
         setPayError(
           'This invoice has a payment that needs review. Do not submit another payment; your designer will follow up.',
         );
+        await onRefetch?.();
         return;
       }
       setPayError(err instanceof Error ? err.message : 'Unable to start payment.');
@@ -123,7 +154,12 @@ export function Settlement({ invoice, currency, designerName, today }: Settlemen
         settle={{
           onSettle: () => void handleSettle(),
           pending: startCheckout.isPending,
-          disabled: method === 'check' || invoice.balanceCents <= 0 || !surchargeKnown,
+          disabled:
+            method === 'check' ||
+            invoice.balanceCents <= 0 ||
+            !surchargeKnown ||
+            hold ||
+            processing !== null,
         }}
       >
         <PaymentMethodChooser
@@ -132,7 +168,7 @@ export function Settlement({ invoice, currency, designerName, today }: Settlemen
           balanceCents={invoice.balanceCents}
           currency={currency}
           cardSurchargeBps={cardSurchargeBps}
-          disabled={startCheckout.isPending}
+          disabled={startCheckout.isPending || notifyCheckIntent.isPending}
           designerName={designerName}
           invoiceNumber={invoice.number}
           checkRemitTo={paymentOptions.data?.check_remit_to ?? null}
@@ -151,6 +187,16 @@ export function Settlement({ invoice, currency, designerName, today }: Settlemen
           </p>
         )}
       </SpineToll>
+
+      {processing && (
+        <p
+          role="status"
+          data-testid="settlement-processing"
+          className="mt-2 max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {processing}
+        </p>
+      )}
 
       {payError && (
         <p

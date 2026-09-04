@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { GOODS_JOURNEY_STAGES } from '@/components/commercial/journey-stepper';
 import { countInWords } from '@/components/making/standing-sentence';
 import type { RoadPieceModel } from '@/lib/threshold/derive';
-import type { RoadOrderModel } from '@/lib/threshold/road-orders';
+import type { ClosedOrderModel, RoadOrderModel } from '@/lib/threshold/road-orders';
 
 import { RoadOrders } from './road-orders';
 import { ThresholdJourney } from './room-band';
@@ -53,10 +53,20 @@ export interface TheRoadProps {
   pieces: RoadPieceModel[];
   /** Pieces she bought herself — the same road, and the act that pays for them. */
   orders?: RoadOrderModel[];
+  /** Bought direct and not coming: refunded, cancelled. Never in the count. */
+  closedOrders?: ClosedOrderModel[];
+  /** Re-read the direct orders while a return from the till is waiting. */
+  onOrdersRefetch?: () => void | Promise<unknown>;
   today?: Date;
 }
 
-export function TheRoad({ pieces, orders = [], today }: TheRoadProps) {
+export function TheRoad({
+  pieces,
+  orders = [],
+  closedOrders = [],
+  onOrdersRefetch,
+  today,
+}: TheRoadProps) {
   const [liftedId, setLiftedId] = useState<string | null>(null);
   const inMotion = pieces.length + orders.length;
 
@@ -186,7 +196,14 @@ export function TheRoad({ pieces, orders = [], today }: TheRoadProps) {
         </ul>
       )}
 
-      {orders.length > 0 && <RoadOrders orders={orders} today={today} />}
+      {(orders.length > 0 || closedOrders.length > 0) && (
+        <RoadOrders
+          orders={orders}
+          closed={closedOrders}
+          onRefetch={onOrdersRefetch}
+          today={today}
+        />
+      )}
     </section>
   );
 }
