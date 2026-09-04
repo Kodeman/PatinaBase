@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { ScoredAction } from '@/components/making/scored-action';
 import {
@@ -63,6 +64,8 @@ export interface TheNoteProps {
   enclosures: NoteEnclosure[];
   authorName?: string | null;
   today?: Date;
+  /** The reply field, wired next door. Absent when there is nothing to write to. */
+  reply?: ReactNode;
 }
 
 export function TheNote({
@@ -71,6 +74,7 @@ export function TheNote({
   enclosures,
   authorName,
   today = new Date(),
+  reply,
 }: TheNoteProps) {
   const [unrolled, setUnrolled] = useState(false);
 
@@ -133,6 +137,8 @@ export function TheNote({
           ))}
         </ul>
       )}
+
+      {reply}
 
       {earlier.length > 0 && (
         <div className="mt-3">

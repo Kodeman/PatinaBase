@@ -28,6 +28,11 @@ import {
   useClientSelections,
 } from '@/hooks/use-commercial-client';
 import { useHydrated } from '@/hooks/use-hydrated';
+import {
+  useMarkLettersRead,
+  useMarkNoticesRead,
+  useProjectCorrespondence,
+} from '@/hooks/use-project-correspondence';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
 import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
@@ -53,6 +58,7 @@ import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
 import { ApprovalAsk, ApprovalReceipt, useDoorstepApprovals } from './approval-ask';
 import { KIND_LABEL } from './consent-copy';
+import { Letters, MuteLetters, WriteBack } from './correspondence';
 import { DoorGate, type DoorProposal } from './door-gate';
 import { Doorplate } from './doorplate';
 import { Doorstep } from './doorstep';
@@ -213,6 +219,9 @@ export function Threshold({
   const partiesQuery = useProjectParties(projectId);
   const ordersQuery = useDirectOrders();
   useProjectNotesRealtime(projectId);
+  const correspondence = useProjectCorrespondence(projectId);
+  const markNoticesRead = useMarkNoticesRead();
+  const markLettersRead = useMarkLettersRead();
   // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
   // effect depending on the object would re-run every render for the ref-guard
   // below to swallow.
@@ -239,6 +248,29 @@ export function Threshold({
     markedProject.current = projectId;
     markProjectRead({ projectId });
   }, [hydrated, markProjectRead, projectId]);
+
+  // The post is the reading mark's business too — /messages marked its thread
+  // read on view and /inbox offered one control for the notices — but it can
+  // only be marked once the post has ARRIVED, so it rides its own settle
+  // rather than the mount. The notices marked are this house's alone: 'all'
+  // would empty counts on surfaces this page never showed.
+  const markedPost = useRef<string | null>(null);
+  const { threadId: postThreadId, unreadNoticeIds, isPending: postPending } = correspondence;
+  useEffect(() => {
+    if (!hydrated || !projectId || postPending) return;
+    if (markedPost.current === projectId) return;
+    markedPost.current = projectId;
+    if (postThreadId) markLettersRead(postThreadId);
+    markNoticesRead(unreadNoticeIds);
+  }, [
+    hydrated,
+    markLettersRead,
+    markNoticesRead,
+    postPending,
+    postThreadId,
+    projectId,
+    unreadNoticeIds,
+  ]);
 
   // undefined = the mark has not resolved this session; null = no previous
   // mark, so this is a first visit and nothing can have changed since.
@@ -376,6 +408,7 @@ export function Threshold({
     ),
     heldDrawCentsByProposalId,
     selectionUpdatedAt,
+    messageSentAts: correspondence.sentAts,
   });
 
   const phases = useMemo(
@@ -400,6 +433,7 @@ export function Threshold({
     notesQuery.isPending ||
     roomsQuery.isPending ||
     planQuery.isPending ||
+    correspondence.isPending ||
     heldBundles.some((bundle) => bundle.isPending);
 
   // ── the doorstep's sentence ────────────────────────────────────────────────
@@ -588,6 +622,9 @@ export function Threshold({
       otherHouses={otherHouses}
       accountHref="/account"
       onSignOut={() => void signOut()}
+      correspondence={
+        <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
+      }
     />
   );
 
@@ -618,6 +655,12 @@ export function Threshold({
         today={today}
       />
     ) : null;
+  // The reply belongs under the note. With no standing note there is no note
+  // to answer under and the central act of /messages would be unreachable, so
+  // it heads the record instead.
+  const replyHeadsTheRecord = model.note === null && correspondence.threadId !== null;
+  const writeBack = <WriteBack threadId={correspondence.threadId} today={today} />;
+  const hasRecord = correspondence.letters.length > 0 || correspondence.notices.length > 0;
   const note = (
     <TheNote
       note={model.note}
@@ -625,9 +668,29 @@ export function Threshold({
       enclosures={enclosures}
       authorName={studioName}
       today={today}
+      reply={replyHeadsTheRecord ? undefined : writeBack}
     />
   );
-  const previouslySection = <Previously entries={model.previously} />;
+  // Gated HERE, not inside Previously: a React element is truthy even when the
+  // component renders nothing, so a slot handed down unconditionally would
+  // print an empty "Previously" over a house that has none.
+  const previouslySection = (
+    <Previously
+      entries={model.previously}
+      correspondence={
+        hasRecord || replyHeadsTheRecord ? (
+          <Letters
+            letters={correspondence.letters}
+            notices={correspondence.notices}
+            reply={replyHeadsTheRecord ? writeBack : undefined}
+            hasEarlier={correspondence.hasEarlierLetters}
+            onEarlier={correspondence.readEarlierLetters}
+            earlierPending={correspondence.isReadingEarlierLetters}
+          />
+        ) : undefined
+      }
+    />
+  );
 
   const doorstep = (
     <Doorstep

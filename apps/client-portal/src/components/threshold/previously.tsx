@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { PreviouslyEntry, PreviouslyState } from '@/lib/threshold/derive';
 
@@ -29,13 +30,13 @@ const STATE_WORD: Record<PreviouslyState, string> = {
 const ONE_LINE = 58;
 
 /** The line reads at a glance; the whole of it is one click away. */
-function oneLine(label: string): string {
+export function oneLine(label: string): string {
   const flat = label.replace(/\s+/g, ' ').trim();
   return flat.length <= ONE_LINE ? flat : `${flat.slice(0, ONE_LINE - 1).trimEnd()}…`;
 }
 
 /** Nothing to unfold when the line already carries the whole of it. */
-function isTruncated(label: string): boolean {
+export function isTruncated(label: string): boolean {
   return label.replace(/\s+/g, ' ').trim().length > ONE_LINE;
 }
 
@@ -55,12 +56,16 @@ function instrumentProposalId(entry: PreviouslyEntry): string | null {
 
 export interface PreviouslyProps {
   entries: PreviouslyEntry[];
+  /** The letters and the notices, wired next door. */
+  correspondence?: ReactNode;
 }
 
-export function Previously({ entries }: PreviouslyProps) {
+export function Previously({ entries, correspondence }: PreviouslyProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
-  if (entries.length === 0) return null;
+  // The correspondence is back matter too: a house with no closed instruments
+  // but a letter in it still has a Previously to keep the letter in.
+  if (entries.length === 0 && !correspondence) return null;
 
   return (
     <section
@@ -162,6 +167,8 @@ export function Previously({ entries }: PreviouslyProps) {
           );
         })}
       </ul>
+
+      {correspondence}
     </section>
   );
 }

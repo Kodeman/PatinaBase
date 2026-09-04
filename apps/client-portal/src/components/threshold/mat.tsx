@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import { ScoredAction } from '@/components/making/scored-action';
 
@@ -43,6 +44,8 @@ export interface MatProps {
   otherHouses?: OtherHouse[];
   accountHref: '/account';
   onSignOut: () => void;
+  /** The act that governs the letters, wired next door. */
+  correspondence?: ReactNode;
 }
 
 function Paper({ paper }: { paper: MatPaper }) {
@@ -63,7 +66,14 @@ function Paper({ paper }: { paper: MatPaper }) {
   return <span className={LINE_CLASS}>{paper.label}</span>;
 }
 
-export function Mat({ people, papers, otherHouses = [], accountHref, onSignOut }: MatProps) {
+export function Mat({
+  people,
+  papers,
+  otherHouses = [],
+  accountHref,
+  onSignOut,
+  correspondence,
+}: MatProps) {
   return (
     <section
       id="mat"
@@ -124,6 +134,9 @@ export function Mat({ people, papers, otherHouses = [], accountHref, onSignOut }
               Leave the house
             </ScoredAction>
           </div>
+          {/* Its own line: an act that governs the letters is not part of the
+              client's own record, and reads as one when it sits inside it. */}
+          {correspondence && <div className="mt-2">{correspondence}</div>}
         </div>
       </div>
     </section>
