@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { moneyInWords } from '@/components/making/standing-sentence';
+import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import type { ThresholdMark } from '@/lib/threshold/derive';
 import {
   LEADER_TEXT_DX,

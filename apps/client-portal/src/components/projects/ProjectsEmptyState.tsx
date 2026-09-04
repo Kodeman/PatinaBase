@@ -20,7 +20,7 @@ import { useState } from 'react';
 import { EmptyState, SurfaceKeys, useHelpContent } from '@patina/help-system';
 import { Folder } from 'lucide-react';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { DetailsSheet } from '@/components/threshold/details-sheet';
 import { useAuth } from '@/hooks/use-auth';
 

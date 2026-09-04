@@ -43,7 +43,7 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
       <p
         role="alert"
         data-testid="instrument-reading-refused"
-        className="mt-3 text-[15px] leading-normal text-[var(--color-error)]"
+        className="mt-3 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
       >
         This paper could not be drawn just now. Reload to try again.
       </p>

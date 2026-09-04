@@ -8,7 +8,7 @@
    and string-pinned by its own tests. This module is the house's vocabulary
    laid over that grammar, and nothing else. ────────────────────────────── */
 
-import { countInWords, joinClauses, moneyInWords } from '@/components/making/standing-sentence';
+import { countInWords, joinClauses, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 
 const MONTHS = [
   'January',

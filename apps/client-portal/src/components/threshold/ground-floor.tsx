@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 
-import { parseSpineDate, startOfWeek, type SpinePhase } from '@/components/making/making-spine';
+import { parseSpineDate, startOfWeek, type SpinePhase } from '@/components/threshold/instruments/making-spine';
 
 /* ── THE GROUND FLOOR ───────────────────────────────────────────────────────
    Path A, "The Attendance": the house a project has before it has rooms.

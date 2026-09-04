@@ -1,6 +1,6 @@
 'use client';
 
-import { moneyInWords } from '@/components/making/standing-sentence';
+import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import { parseSourceDate, type HouseLedgerModel } from '@/lib/threshold/derive';
 import { owedDueLine } from '@/lib/threshold/standing';
 

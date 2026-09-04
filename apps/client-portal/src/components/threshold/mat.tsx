@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { PAPERS_TAB_LABEL } from '@/lib/threshold/papers';
 
 import { COLUMN_HEAD_CLASS, LINE_CLASS, SUBLINE_CLASS } from './mat-classes';

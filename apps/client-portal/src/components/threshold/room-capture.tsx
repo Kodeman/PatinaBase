@@ -12,7 +12,7 @@ import {
 } from '@patina/supabase';
 import type { RoomScanAssociationWithDetails } from '@patina/shared';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { ScanStillFallback, ViewerErrorBoundary } from '@/components/scans/ViewerErrorBoundary';
 import { useMyDesigners } from '@/hooks/use-my-designers';
 import { DAY_MONTH, parseSourceDate } from '@/lib/threshold/derive';

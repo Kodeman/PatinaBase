@@ -2,8 +2,8 @@
 
 import type { ReactNode } from 'react';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { countInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 
 /* ── The doorstep ───────────────────────────────────────────────────────────
    Where she is standing when the page opens. One sentence in Playfair says

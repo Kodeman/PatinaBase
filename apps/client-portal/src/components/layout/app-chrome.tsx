@@ -1,21 +1,14 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useMyProjectApprovalReviews } from '@patina/supabase';
 
-import { ClientHeader } from './client-header';
-import { ThresholdChromeGate } from './threshold-chrome-gate';
 import type { ProjectListItem } from '../../types/project';
-import { isClientActionableProjectApproval } from '../../lib/client-attention';
 
-// Routes that must NOT get the app chrome (auth, public token views, quiz,
-// demo, and the role-mismatch interstitials). Everything else is an
-// authenticated app page and gets the global header + mobile drawer.
+// Routes a visitor reaches with no session at all: auth, the token/guest
+// views, the quiz funnel, the demos and the role-mismatch interstitials.
 //
 // '/piece' is the shared-piece page (SP-03): a stranger opens it from a text
-// message with no session at all, and must not be handed a Client Portal
-// header, a project switcher and links to Projects and Invoices they cannot
-// open.
+// message with no session, and must not be handed anything that assumes one.
 const PUBLIC_PREFIXES = [
   '/auth',
   '/piece',
@@ -30,64 +23,35 @@ const PUBLIC_PREFIXES = [
 ];
 
 interface AppChromeProps {
-  projects: ProjectListItem[];
+  /**
+   * Still handed down by the root layout. Nothing above the page reads it now
+   * that the header is gone; the layout's fetch retires with the rest of the
+   * old tree.
+   */
+  projects?: ProjectListItem[];
   children: React.ReactNode;
 }
 
 /**
- * AppChrome renders the client-portal header (and, below md, its drawer) once,
- * around every authenticated page — replacing the old per-page `<ClientHeader>`
- * so no route can render header-less and strand the homeowner. Project data is
- * fetched once in the root layout and threaded through here; the active project
- * and header counts are derived from it + the current path.
+ * The shell around every page. It carries no header, no drawer and no project
+ * switcher: the client portal's one authenticated surface is the house, which
+ * carries its own doorplate, its own details, its own way out and — for a
+ * client with more than one — her other houses. Every destination the old
+ * header offered is a retired route that 308s back to `/`.
+ *
+ * The public/authenticated split stays because it is this portal's record of
+ * which routes are reachable with no session; `display: contents` means the
+ * marker costs the page no box of its own.
  */
-export function AppChrome({ projects, children }: AppChromeProps) {
+export function AppChrome({ children }: AppChromeProps) {
   const pathname = usePathname() ?? '/';
   const isPublic = PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
 
-  if (isPublic) {
-    return <>{children}</>;
-  }
-
   return (
-    <AuthenticatedAppChrome projects={projects} pathname={pathname}>
+    <div className="contents" data-portal-shell={isPublic ? 'public' : 'authenticated'}>
       {children}
-    </AuthenticatedAppChrome>
-  );
-}
-
-function AuthenticatedAppChrome({
-  projects,
-  pathname,
-  children,
-}: AppChromeProps & { pathname: string }) {
-  const { data: projectApprovals } = useMyProjectApprovalReviews();
-
-  const activeProjectId = pathname.match(/^\/projects\/([^/]+)/)?.[1];
-  const nonStage2ApprovalsPending = projects.reduce(
-    (total, project) => total + project.nonStage2ApprovalsPending,
-    0,
-  );
-  const stage2ApprovalsPending = (projectApprovals ?? []).filter(
-    isClientActionableProjectApproval,
-  ).length;
-  const approvalsPending =
-    nonStage2ApprovalsPending + stage2ApprovalsPending;
-  const unreadMessages = projects.reduce((total, p) => total + (p.unreadMessages ?? 0), 0);
-
-  return (
-    <>
-      <ThresholdChromeGate pathname={pathname}>
-        <ClientHeader
-          projects={projects}
-          activeProjectId={activeProjectId}
-          approvalsPending={approvalsPending}
-          unreadMessages={unreadMessages}
-        />
-      </ThresholdChromeGate>
-      {children}
-    </>
+    </div>
   );
 }

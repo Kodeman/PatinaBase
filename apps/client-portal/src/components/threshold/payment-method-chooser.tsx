@@ -9,7 +9,7 @@ import {
   CHECK_REMIT_FALLBACK,
 } from '@patina/shared';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { refusalSentence } from '@/lib/threshold/refusal';
 
 /* ── HOW SHE WOULD LIKE TO PAY ───────────────────────────────────────────────

@@ -1,186 +1,61 @@
 import { render, screen } from '@testing-library/react';
 import { AppChrome } from '../app-chrome';
 
-let mockPathname = '/projects';
-const useMyProjectApprovalReviews = jest.fn();
-
-jest.mock('@patina/supabase', () => ({
-  useMyProjectApprovalReviews: (...args: unknown[]) =>
-    useMyProjectApprovalReviews(...args),
-}));
+let mockPathname = '/';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
 }));
 
-// This suite is exercising approvals/unread-count plumbing, not the
-// Threshold gate — pin the flag off so it's immune to
-// NEXT_PUBLIC_FLAG_OVERRIDES (the documented dev/e2e escape hatch) ever
-// resolving `threshold` true out from under it and dropping the header the
-// "renders the authenticated header on a normal app route" case below
-// depends on.
-jest.mock('@/hooks/use-feature-flag', () => ({
-  __esModule: true,
-  useFeatureFlag: () => ({ value: false, isLoading: false }),
-}));
-
-// ClientHeader pulls in useAuth/useProfile/help-system queries — the whole
-// point of PUBLIC_PREFIXES is that a login-less guest page never mounts it
-// (and never fires those queries), so it's stubbed here to a visible witness
-// rather than a real render.
-jest.mock('../client-header', () => ({
-  ClientHeader: ({
-    approvalsPending,
-  }: {
-    approvalsPending: number;
-  }) => (
-    <div data-testid="client-header" data-approvals-pending={approvalsPending}>
-      client-header
-    </div>
-  ),
-}));
-
-const project = (
-  id: string,
-  approvalsPending: number,
-  nonStage2ApprovalsPending: number,
-) => ({
-  id,
-  name: id,
-  progressPercentage: 0,
-  status: 'active',
-  approvalsPending,
-  nonStage2ApprovalsPending,
-  unreadMessages: 0,
-});
+/* The header, the drawer, the switcher and the bell are gone: the client
+   portal's one authenticated surface is the house, and it carries its own
+   doorplate, details, way out and other houses. What is left of the shell is
+   the record of which routes a visitor reaches with no session — and the
+   promise that it renders every page's children either way. */
 
 describe('AppChrome', () => {
   afterEach(() => {
-    mockPathname = '/projects';
-  });
-
-  beforeEach(() => {
-    useMyProjectApprovalReviews.mockReturnValue({ data: [] });
+    mockPathname = '/';
   });
 
   it.each([
+    '/auth/signin',
     '/field/abc123',
     '/share/abc123',
     '/rfq/abc123',
     `/plans/${'a'.repeat(64)}`,
     // SP-03 / review M-D3: the shared piece page is opened from a text message
-    // by someone with no session — it must not wear the Client Portal chrome.
+    // by someone with no session.
     '/piece/9c1f0a24-1f2b-4b7e-9a3e-0f2d8a6c5b41',
-  ])(
-    'renders no header (and never mounts ClientHeader) on the login-less guest path %s',
-    (pathname) => {
-      mockPathname = pathname;
-      render(
-        <AppChrome projects={[]}>
-          <div>guest content</div>
-        </AppChrome>,
-      );
-      expect(screen.queryByTestId('client-header')).not.toBeInTheDocument();
-      expect(screen.getByText('guest content')).toBeInTheDocument();
-      expect(useMyProjectApprovalReviews).not.toHaveBeenCalled();
-    },
-  );
-
-  it('renders the authenticated header on a normal app route', () => {
-    mockPathname = '/account';
-    render(
+    '/wrong-portal',
+    '/unauthorized',
+  ])('marks the login-less guest path %s public', (pathname) => {
+    mockPathname = pathname;
+    const { container } = render(
       <AppChrome projects={[]}>
-        <div>app content</div>
+        <div>guest content</div>
       </AppChrome>,
     );
-    expect(screen.getByTestId('client-header')).toBeInTheDocument();
-    expect(screen.getByText('app content')).toBeInTheDocument();
+    expect(container.firstChild).toHaveAttribute('data-portal-shell', 'public');
+    expect(screen.getByText('guest content')).toBeInTheDocument();
   });
 
-  // The two routes that render the house are chrome-less for every client
-  // who has a house: the mat carries the details, the way out, and the other
-  // houses.
-  it.each(['/', '/projects/proj-1'])(
-    'renders no header on the house route %s',
+  it.each(['/', '/projects/proj-1', '/invoices/inv-1/print'])(
+    'marks the signed-in path %s authenticated and renders no header',
     (pathname) => {
       mockPathname = pathname;
-      render(
-        <AppChrome projects={[project('proj-1', 0, 0)]}>
+      const { container } = render(
+        <AppChrome projects={[]}>
           <div>app content</div>
         </AppChrome>,
       );
-      expect(screen.queryByTestId('client-header')).not.toBeInTheDocument();
+      expect(container.firstChild).toHaveAttribute(
+        'data-portal-shell',
+        'authenticated',
+      );
+      expect(screen.queryByRole('banner')).not.toBeInTheDocument();
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
       expect(screen.getByText('app content')).toBeInTheDocument();
     },
   );
-
-  // Her too: every destination the header offers is a retired route that
-  // folds straight back to `/`, so it would be a ring of dead links. The
-  // empty state carries the mat's two acts instead.
-  it('drops the header on the front door for a client with no house at all', () => {
-    mockPathname = '/';
-    render(
-      <AppChrome projects={[]}>
-        <div>app content</div>
-      </AppChrome>,
-    );
-    expect(screen.queryByTestId('client-header')).not.toBeInTheDocument();
-    expect(screen.getByText('app content')).toBeInTheDocument();
-  });
-
-  it('adds the sanitized global Stage-2 actionable total to non-Stage2 project work without double counting', () => {
-    useMyProjectApprovalReviews.mockReturnValue({
-      data: [
-        {
-          decisionId: 'project-row-stage2',
-          projectId: 'project-1',
-          disposition: 'active',
-          lifecycleStatus: 'pending',
-          outcome: null,
-          completedReviewCount: 1,
-          requiredReviewCount: 1,
-        },
-        {
-          decisionId: 'orphan-stage2',
-          projectId: 'no-longer-assigned-project',
-          disposition: 'active',
-          lifecycleStatus: 'draft',
-          outcome: null,
-          completedReviewCount: 0,
-          requiredReviewCount: 1,
-        },
-        {
-          decisionId: 'awaiting-studio',
-          projectId: 'project-2',
-          disposition: 'active',
-          lifecycleStatus: 'draft',
-          outcome: null,
-          completedReviewCount: 1,
-          requiredReviewCount: 1,
-        },
-        {
-          decisionId: 'answered-pending',
-          projectId: 'project-2',
-          disposition: 'active',
-          lifecycleStatus: 'pending',
-          outcome: 'approved',
-          completedReviewCount: 1,
-          requiredReviewCount: 1,
-        },
-      ],
-    });
-
-    render(
-      <AppChrome projects={[project('project-1', 9, 2), project('project-2', 6, 1)]}>
-        <div>app content</div>
-      </AppChrome>,
-    );
-
-    // 3 legacy/proposal rows + 2 globally actionable Stage-2 rows. The project
-    // totals already contain project-row-stage2, so summing them would double it.
-    expect(screen.getByTestId('client-header')).toHaveAttribute(
-      'data-approvals-pending',
-      '5',
-    );
-  });
 });

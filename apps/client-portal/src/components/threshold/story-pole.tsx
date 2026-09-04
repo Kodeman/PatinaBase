@@ -10,7 +10,7 @@ import {
   startOfWeek,
   type SpinePhase,
   type splitSpinePhases,
-} from '@/components/making/making-spine';
+} from '@/components/threshold/instruments/making-spine';
 
 /* ── The story pole ─────────────────────────────────────────────────────────
    A carpenter's story pole is marked once and then never re-marked: the

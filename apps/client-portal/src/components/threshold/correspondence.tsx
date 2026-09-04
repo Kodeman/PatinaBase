@@ -3,7 +3,7 @@
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { useMuteLetters, useWriteBack } from '@/hooks/use-project-correspondence';
 import type { CorrespondenceLetter, NoticeReceipt } from '@/lib/threshold/correspondence';
 
@@ -26,7 +26,7 @@ const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'lon
 const HEAD_CLASS =
   'font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
 
-const REFUSAL_CLASS = 'mt-2 text-[15px] leading-normal text-[var(--color-error)]';
+const REFUSAL_CLASS = 'mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]';
 
 // ── the reply ───────────────────────────────────────────────────────────────
 

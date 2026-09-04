@@ -10,7 +10,7 @@ import {
   type ProjectDocument,
 } from '@patina/supabase';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import {
   documentSignedUrl,
   useClientDocuments,

@@ -1,4 +1,4 @@
-import { ProjectSurfaceSwitch } from '@/components/making/project-surface-switch';
+import { Threshold } from '@/components/threshold/threshold';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
 import {
   resolveActiveHouse,
@@ -71,7 +71,7 @@ export default async function HomePage(props?: {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
-        <ProjectSurfaceSwitch
+        <Threshold
           projectId={project.id}
           project={project}
           milestones={milestones}

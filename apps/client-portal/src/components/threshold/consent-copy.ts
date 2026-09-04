@@ -2,22 +2,20 @@ import type { CommercialDocumentKind } from '@patina/types';
 
 /* ── THE LEGAL LINE ──────────────────────────────────────────────────────────
    The consent the client ticks, the label on the act, and the sentence that
-   says what signing does — byte-copied from the shipped sign route
-   (app/proposals/[id]/sign/page.tsx), which is the only place these strings
-   are allowed to be authored.
+   says what signing does — byte-copied from the sign route
+   (app/proposals/[id]/sign/page.tsx) it was written for, and now the only
+   place these strings live: that route retired with the old portal, and the
+   door signs in place.
 
-   THIS FILE IS A COPY, NOT AN AUTHORSHIP. The Threshold hosts the signature
-   inline because the project page IS the surface the sign route would have
-   navigated to, so the route's copy has to travel with it. Nothing here may be
-   reworded, shortened or "improved" for the door: the mock's own consent line
-   ("I authorize these three pieces. Quist Interiors countersigns.") drops the
-   deposit disclosure and asserts a countersignature that a furnishings
-   authorization does not require, and it is UI truth for the drawing only.
+   Nothing here may be reworded, shortened or "improved" for the door: the
+   mock's own consent line ("I authorize these three pieces. Quist Interiors
+   countersigns.") drops the deposit disclosure and asserts a countersignature
+   that a furnishings authorization does not require, and it is UI truth for
+   the drawing only.
 
-   `__tests__/consent-copy.test.ts` reads the route's source off disk and
-   asserts every string below still appears in it verbatim, so the two cannot
-   drift apart silently. When the route's copy changes, that test fails and
-   this file is updated from it — never the other way round. ─────────────── */
+   `__tests__/consent-copy.test.ts` pins every branch and every refusal
+   sentence, and still reads the surviving signing API off disk so the tokens
+   the door reads cannot drift from the ones it answers with. ────────────── */
 
 /**
  * The route branches on four shapes: furnishings, trade scope, the two
@@ -61,37 +59,11 @@ export function summaryLineFor(kind: CommercialDocumentKind, title: string): str
   return `By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in “${title}”. The agreement becomes effective only after the studio countersigns.`;
 }
 
-/** The fragments the drift guard matches against the route's source. */
-export const SUMMARY_FRAGMENTS: readonly string[] = [
-  'By signing, you authorize only the named furnishing lines, quantities, and client prices in',
-  'By signing, you authorize the scope of work, price, and draw schedule in',
-  'By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in',
-  '. The agreement becomes effective only after the studio countersigns.',
-];
-
-/** Every consent string, for the drift guard. */
-export const CONSENT_LINES: readonly string[] = [
-  consentLineFor('furnishings_authorization'),
-  consentLineFor('trade_scope'),
-  consentLineFor('design_services'),
-  consentLineFor('legacy'),
-];
-
-/** Every act label, for the drift guard. */
-export const SIGN_LABELS: readonly string[] = [
-  signLabelFor('furnishings_authorization'),
-  signLabelFor('trade_scope'),
-  signLabelFor('design_services'),
-];
-
-/** The line under the name field — also the route's, verbatim. */
+/** The line under the name field — the retired route's, verbatim. */
 export const SIGNATURE_NOTICE = 'Your typed name acts as your electronic signature.';
 
 /**
- * The portal's existing kind vocabulary, as `awaiting-signature-cards.tsx`,
- * `commercial-document-shell.tsx`, `proposals/page.tsx` and `the-making.tsx`
- * all spell it. The Making's copy is module-private, so this is a fifth — the
- * value is pinned by `consent-copy.test.ts` against the exported one.
+ * The portal's kind vocabulary, as `commercial-document-shell.tsx` spells it.
  */
 export const KIND_LABEL: Partial<Record<CommercialDocumentKind, string>> = {
   design_services: 'Design services agreement',

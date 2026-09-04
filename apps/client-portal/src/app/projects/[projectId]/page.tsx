@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { ProjectSurfaceSwitch } from '@/components/making/project-surface-switch';
+import { Threshold } from '@/components/threshold/threshold';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
 import { toOtherHouses } from '@/lib/threshold/other-houses';
 
@@ -29,7 +29,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         {/* The page stays server-side: same fetch, same notFound(). Only the
             surface itself is a client component, because the house reads its
             own data. */}
-        <ProjectSurfaceSwitch
+        <Threshold
           projectId={project.id}
           project={project}
           milestones={milestones}

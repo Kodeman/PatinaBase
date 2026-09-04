@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useStartDirectOrderCheckout } from '@patina/supabase';
 
 import { GOODS_JOURNEY_STAGES } from '@/components/commercial/journey-stepper';
-import { ScoredAction } from '@/components/making/scored-action';
-import { moneyInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   revealReturnAnchor,
   useCheckoutConfirmation,
