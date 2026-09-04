@@ -4,9 +4,11 @@
 
 export const PROJECT_TYPE_LABELS: Record<string, string> = {
   full_room: 'Full Room',
+  full_house: 'Full House',
   consultation: 'Consultation',
   single_piece: 'Single Piece',
   staging: 'Staging',
+  custom: 'Custom',
 };
 
 export const BUDGET_RANGE_LABELS: Record<string, string> = {

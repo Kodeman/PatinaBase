@@ -111,7 +111,13 @@ export function DiscoveryRecap({
 
   return (
     <div>
-      {row.project_type && <RecapRow label="Project">{pretty(row.project_type)}</RecapRow>}
+      {row.project_type && (
+        <RecapRow label="Project">
+          {row.project_type === 'custom' && row.project_type_custom?.trim()
+            ? row.project_type_custom.trim()
+            : pretty(row.project_type)}
+        </RecapRow>
+      )}
       {(row.rooms ?? []).length > 0 && (
         <RecapRow label="Rooms">{(row.rooms ?? []).map((r) => r.name).filter(Boolean).join(', ')}</RecapRow>
       )}

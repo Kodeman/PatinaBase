@@ -46,6 +46,7 @@ export interface ClientDiscovery {
   designer_client_id: string;
   designer_id: string;
   project_type: string | null;
+  project_type_custom: string | null;
   rooms: DiscoveryRoom[];
   budget_min_cents: number | null;
   budget_max_cents: number | null;
@@ -76,7 +77,7 @@ export interface DiscoveryRead {
 }
 
 const DISCOVERY_COLUMNS =
-  'id, designer_client_id, designer_id, project_type, rooms, budget_min_cents, budget_max_cents, budget_basis, target_date, hard_date, start_urgency, style_tag_ids, style_keywords, lifestyle, keep_items, avoid_items, decision_makers, site_notes, room_scan_id, ready_at, seeded_proposal_id, seeded_at, created_at, updated_at';
+  'id, designer_client_id, designer_id, project_type, project_type_custom, rooms, budget_min_cents, budget_max_cents, budget_basis, target_date, hard_date, start_urgency, style_tag_ids, style_keywords, lifestyle, keep_items, avoid_items, decision_makers, site_notes, room_scan_id, ready_at, seeded_proposal_id, seeded_at, created_at, updated_at';
 
 /** The lead's coarse budget_range enum → a cents range for the prefill. */
 function budgetRangeToCents(range: string | null): { min: number | null; max: number | null } {

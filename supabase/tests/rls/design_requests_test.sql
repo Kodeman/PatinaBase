@@ -8,6 +8,8 @@
 --      open_design_requests to both designers; invisible to a non-designer
 --      (authenticated) and to anon; view exposes no homeowner-identity columns.
 --   3. Validation error slugs (each RAISE EXCEPTION path).
+--   2b. Scope vocabulary (00567): 'full_house' and 'custom' are accepted and
+--      stored on the lead; an unknown value is still invalid_project_type.
 --   4. Idempotent replay on (homeowner_id, client_request_id).
 --   5. Claim race: A wins; B → already_claimed; A re-claim → already_yours;
 --      non-designer → not_designer; unknown id → request_not_found.
@@ -234,6 +236,50 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- Case 2b — the 00567 scope vocabulary
+--
+-- 'full_house' and 'custom' joined full_room | consultation | single_piece |
+-- staging. No column carries a CHECK; the RAISE in submit_design_request is
+-- the only enforcement anywhere, so the accepted list is asserted from both
+-- sides: the two new values write a lead carrying them, and an unknown value
+-- is still refused with the same slug.
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_res  jsonb;
+  v_type text;
+  v_err  text;
+BEGIN
+  PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000001');
+
+  v_res := public.submit_design_request(
+    ARRAY['de000000-0000-4000-8000-0000000000f1']::uuid[], 'full_house',
+    p_designer_id => 'de000000-0000-4000-8000-000000000002',
+    p_client_request_id => 'de000000-0000-4000-8000-0000000000b1');
+  SELECT project_type INTO v_type FROM leads WHERE id = (v_res->>'lead_id')::uuid;
+  ASSERT v_type = 'full_house', 'FAIL 3h: full_house must be accepted and stored, got ' || COALESCE(v_type, 'NULL');
+
+  v_res := public.submit_design_request(
+    ARRAY['de000000-0000-4000-8000-0000000000f2']::uuid[], 'custom',
+    p_designer_id => 'de000000-0000-4000-8000-000000000002',
+    p_client_request_id => 'de000000-0000-4000-8000-0000000000b2');
+  SELECT project_type INTO v_type FROM leads WHERE id = (v_res->>'lead_id')::uuid;
+  ASSERT v_type = 'custom', 'FAIL 3i: custom must be accepted and stored, got ' || COALESCE(v_type, 'NULL');
+
+  -- The list is extended, not opened.
+  BEGIN
+    PERFORM public.submit_design_request(
+      ARRAY['de000000-0000-4000-8000-0000000000f1']::uuid[], 'bogus_type',
+      p_client_request_id => 'de000000-0000-4000-8000-0000000000b3');
+    v_err := '<none>';
+  EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
+  ASSERT v_err = 'invalid_project_type', 'FAIL 3j: expected invalid_project_type, got ' || v_err;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE 'design_requests: case 2b (00567 scope vocabulary) passed.';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- Case 3 — validation error slugs
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
@@ -299,6 +345,7 @@ BEGIN
   PERFORM pg_temp.reset_role();
   RAISE NOTICE 'design_requests: case 3 (validation slugs) passed.';
 END $$;
+
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Case 4 — idempotent replay

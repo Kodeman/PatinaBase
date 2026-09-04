@@ -180,3 +180,33 @@ describe('DiscoverySection — one head, not two (W5-R2 item 4)', () => {
     expect(() => render(<DiscoverySection {...PROPS} />)).not.toThrow();
   });
 });
+
+describe('DiscoverySection — custom project type', () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    mockReplace.mockClear();
+    mockBeginDirectionMutateAsync.mockReset();
+    mockUpsertMutateAsync.mockClear();
+  });
+
+  it('shows the "Describe the scope" input only when project type is Custom', () => {
+    render(<DiscoverySection {...PROPS} />);
+
+    // Open the Scope & rooms facet.
+    fireEvent.click(screen.getByRole('button', { name: /Scope & rooms/ }));
+
+    expect(screen.queryByLabelText('Describe the scope')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Project type'), {
+      target: { value: 'custom' },
+    });
+
+    expect(screen.getByLabelText('Describe the scope')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Project type'), {
+      target: { value: 'full_room' },
+    });
+
+    expect(screen.queryByLabelText('Describe the scope')).toBeNull();
+  });
+});
