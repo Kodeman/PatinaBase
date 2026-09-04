@@ -33,7 +33,10 @@ interface ProjectSurfaceSwitchProps {
  * Three surfaces now pass through here. `threshold` is read FIRST and wins
  * outright: it is the newer, narrower rollout, and a client in both pilots
  * gets the house rather than The Making. Each flag is independently
- * fail-closed — a loading flag never renders its surface.
+ * fail-closed — a loading flag never renders its surface. Both reads settle
+ * off the same PostHog `onFeatureFlags` callback, so a client in both pilots
+ * cannot watch The Making resolve first and then be replaced by the house;
+ * the window is one commit, the same one §4 already licenses for the header.
  *
  * THIS COMPONENT IS THE SOLE EMITTER OF `client_project_view`. Both branches
  * pass through here exactly once per project, and neither branch emits on its

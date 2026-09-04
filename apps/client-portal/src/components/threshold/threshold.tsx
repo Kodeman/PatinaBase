@@ -120,6 +120,10 @@ function words(value: string | null | undefined): string | null {
  * reads. The column is the fallback rather than the source: a project with no
  * published budget version still has rooms carrying figures, and a house that
  * said nothing about what was planned there would be quieter than the truth.
+ *
+ * The match is by NAME because a plan line carries a room name and no room id.
+ * A room renamed since the budget was published therefore falls to its own
+ * column, which is the safe direction to fall.
  */
 function roomTargetCents(
   row: Record<string, unknown>,
@@ -218,6 +222,12 @@ export interface ThresholdProps {
   milestones: MilestoneDetail[];
   projectApprovals?: ProjectApprovalReview[];
   projectApprovalsLoading?: boolean;
+  /**
+   * Taken and deliberately unread, for parity with `TheMaking`'s signature.
+   * The Making prints "Project approvals could not be read just now"; the
+   * house has no register for that sentence — a region that cannot be read is
+   * simply absent. Absence is silence.
+   */
   projectApprovalsError?: boolean;
 }
 
@@ -241,7 +251,10 @@ export function Threshold({
   const teamQuery = useProjectTeamMembers(projectId);
   const partiesQuery = useProjectParties(projectId);
   useProjectNotesRealtime(projectId);
-  const markRead = useMarkProjectRead();
+  // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
+  // effect depending on the object would re-run every render for the ref-guard
+  // below to swallow.
+  const { mutate: markProjectRead } = useMarkProjectRead();
   const previousMark = usePreviousReadingMark(projectId);
 
   const [sinceActive, setSinceActive] = useState(false);
@@ -262,8 +275,8 @@ export function Threshold({
     if (!hydrated || !projectId) return;
     if (markedProject.current === projectId) return;
     markedProject.current = projectId;
-    markRead.mutate({ projectId });
-  }, [hydrated, markRead, projectId]);
+    markProjectRead({ projectId });
+  }, [hydrated, markProjectRead, projectId]);
 
   // undefined = the mark has not resolved this session; null = no previous
   // mark, so this is a first visit and nothing can have changed since.
@@ -410,7 +423,14 @@ export function Threshold({
         })
       : null;
 
-  const firstReceipt = model.previously.find((entry) => entry.date !== null) ?? null;
+  // Instruments only. `model.previously` also carries retired NOTES, whose
+  // label is the note's whole body — and the doorstep's line is one mono
+  // sentence ("Previously — fourteen selections agreed, 19 June."), not a
+  // paragraph. A note that was taken down is history the client reads in
+  // Previously, not on the doorstep.
+  const firstReceipt =
+    model.previously.find((entry) => entry.kind === 'instrument' && entry.date !== null) ??
+    null;
   const previously =
     hydrated && !loading && firstReceipt?.date
       ? previouslyLine({ label: firstReceipt.label, date: firstReceipt.date })
@@ -463,12 +483,37 @@ export function Threshold({
     );
   };
 
+  // A mark stands on the doorstep when no band can claim it. `deriveThreshold`
+  // already nulls a roomId the drawing does not draw, so this is the same
+  // partition read from the other side — and it holds even if a mark ever
+  // arrives naming a room that is not in `model.bands`.
+  const banded = new Set(model.bands.map((band) => band.roomId));
+  const onDoorstep = (mark: ThresholdMark) => mark.roomId === null || !banded.has(mark.roomId);
+
   const doorstepGates: ReactNode[] = [
-    ...doorMarks.filter((mark) => mark.roomId === null).map(renderDoor),
-    ...wallMarks.filter((mark) => mark.roomId === null).map(renderWall),
+    ...doorMarks.filter(onDoorstep).map(renderDoor),
+    ...wallMarks.filter(onDoorstep).map(renderWall),
   ];
 
   // ── the note's enclosures ──────────────────────────────────────────────────
+  /** A trade scope's own name, off the instrument the selection was cut from. */
+  const scopeNameById = new Map(
+    selections.flatMap((selection) =>
+      selection.kind === 'trade' && selection.instrument?.proposalId
+        ? [[selection.instrument.proposalId, selection.instrument.name] as const]
+        : [],
+    ),
+  );
+
+  /** Papers already signed or executed on this project, by proposal id. */
+  const signedById = new Map(
+    accepted.flatMap((proposal) => {
+      const commercial = commercialSummaryFromProposal(proposal);
+      if (commercial.projectId !== projectId || commercial.kind === 'legacy') return [];
+      return [[proposal.id, proposal.title] as const];
+    }),
+  );
+
   const enclosures: NoteEnclosure[] = (model.note?.enclosures ?? []).flatMap(
     (enclosure): NoteEnclosure[] => {
       if (enclosure.kind === 'invoice') {
@@ -484,8 +529,20 @@ export function Threshold({
           : [];
       }
       const mark = model.marks.find((candidate) => candidate.proposalId === enclosure.id);
-      if (!mark) return [];
-      return [{ ...enclosure, label: mark.label, anchor: gateAnchor(mark) }];
+      // A trade scope is enclosed as the SCOPE, not as one of the lines under
+      // it — "Send it with the paintwork scope", never "with The paintwork".
+      if (mark) {
+        const label =
+          enclosure.kind === 'trade_scope'
+            ? scopeNameById.get(enclosure.id) ?? mark.label
+            : mark.label;
+        return [{ ...enclosure, label, anchor: gateAnchor(mark) }];
+      }
+      // The client signed it, or the sub finished with it. The paper does not
+      // vanish out of the letter that enclosed it — it moves to Previously,
+      // which is where she can still read it.
+      const settledPaper = signedById.get(enclosure.id);
+      return settledPaper ? [{ ...enclosure, label: settledPaper, anchor: 'previously' }] : [];
     },
   );
 
@@ -539,7 +596,7 @@ export function Threshold({
   const note = (
     <TheNote
       note={model.note}
-      earlier={model.previously}
+      earlier={model.previously.filter((entry) => entry.kind === 'note')}
       enclosures={enclosures}
       authorName={studioName}
       today={today}
@@ -559,6 +616,23 @@ export function Threshold({
       {ledger}
       {model.groundFloor ? null : letterbox}
     </Doorstep>
+  );
+
+  /**
+   * The doorstep before the house can speak: the sentence's measure held open
+   * and nothing else. No ledger rows, no letterbox — because an empty
+   * letterbox says "Nothing in the letterbox" and an empty key says "Nothing
+   * stands open on this drawing", and both would be contradicted a moment
+   * later. Silence never has to take anything back.
+   */
+  const quietDoorstep = (
+    <Doorstep
+      sentence={null}
+      previously={null}
+      changedCount={0}
+      showSince={false}
+      sinceActive={false}
+    />
   );
 
   const asks = (
@@ -584,13 +658,19 @@ export function Threshold({
 
   let body: ReactNode;
 
-  if (model.pending) {
-    // The rooms have not come back, so the house's shape is unknown. Show the
-    // doorstep and HOLD the house's place — never the ground floor, which
-    // would then have to be swapped for the house a moment later.
+  // NEVER REVERSE. The house speaks only once every source it speaks FROM has
+  // answered — the papers, the goods, the ledger, the rooms and the letter.
+  // Until then the doorstep stands alone and holds the house's place. This is
+  // the pending rule of `deriveThreshold` widened from the rooms to all five,
+  // because "Nothing in the letterbox" and "Nothing stands open on this
+  // drawing" are assertions, not blanks: a client who reads them and then
+  // watches $9,125 and two open marks arrive has been told something untrue.
+  // Absence is silence — and silence is also what an unanswered query sounds
+  // like.
+  if (!hydrated || loading || model.pending) {
     body = (
       <>
-        {doorstep}
+        {quietDoorstep}
         <div aria-hidden="true" data-testid="threshold-hold" className="min-h-[60vh]" />
       </>
     );
@@ -619,33 +699,41 @@ export function Threshold({
     ];
 
     body = (
-      <>
-        <div className="grid items-start gap-[clamp(20px,3vw,44px)] [grid-template-columns:minmax(0,1fr)_minmax(0,190px)] max-[960px]:[grid-template-columns:minmax(0,1fr)]">
-          <div className="min-w-0">
-            {doorstep}
-            {asks}
-            <PlanKey
-              geometry={planKeyGeometry(rooms ?? [], model.marks)}
-              marks={model.marks}
-              keySentence={keySentence(model.drawnMarkCount)}
-            />
-          </div>
+      // Path B's sheet: a 170px pole rail on the LEFT, sticky, standing beside
+      // the WHOLE house rather than beside its first screenful. The pole's
+      // caret watches every section on the page — the bands, the road, the
+      // note, Previously, the mat — so a rail that scrolls away before the
+      // first room band is watching sections the reader can no longer see it
+      // for. Narrow, the rail collapses to the six dots 3A draws and the grid
+      // falls to one column, which puts the pole under the doorplate.
+      <div className="grid items-start gap-[clamp(20px,3vw,44px)] [grid-template-columns:170px_minmax(0,1fr)] max-[860px]:gap-0 max-[860px]:[grid-template-columns:minmax(0,1fr)]">
+        <div className="sticky top-[14px] self-start max-[860px]:static">
           <StoryPole phases={phases} sections={sections} />
         </div>
 
-        {model.bands.map((band) => (
-          <RoomBand key={band.roomId} band={band} projectId={projectId}>
-            {band.marks.map((mark) =>
-              mark.kind === 'door' ? renderDoor(mark) : renderWall(mark),
-            )}
-          </RoomBand>
-        ))}
+        <div className="min-w-0">
+          {doorstep}
+          {asks}
+          <PlanKey
+            geometry={planKeyGeometry(rooms ?? [], model.marks)}
+            marks={model.marks}
+            keySentence={keySentence(model.drawnMarkCount)}
+          />
 
-        {road}
-        {note}
-        {previouslySection}
-        {mat}
-      </>
+          {model.bands.map((band) => (
+            <RoomBand key={band.roomId} band={band} projectId={projectId}>
+              {band.marks.map((mark) =>
+                mark.kind === 'door' ? renderDoor(mark) : renderWall(mark),
+              )}
+            </RoomBand>
+          ))}
+
+          {road}
+          {note}
+          {previouslySection}
+          {mat}
+        </div>
+      </div>
     );
   }
 

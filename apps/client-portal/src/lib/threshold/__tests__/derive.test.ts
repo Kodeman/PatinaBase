@@ -315,6 +315,42 @@ describe('deriveThreshold — the walls', () => {
     );
     expect(model.marks).toEqual([]);
   });
+
+  // A wall can only hang in a room the drawing draws. Anything else stands on
+  // the Doorstep — the same fallback a door already had, and the reason no
+  // ask can be counted in the standing sentence and then be findable nowhere.
+  it('stands a wall on the doorstep when its room is not on the drawing', () => {
+    const model = deriveThreshold(
+      input({
+        rooms: [ENTRY, LIBRARY],
+        selections: {
+          origin: 'commercial',
+          selections: [{ ...wallSelection, roomId: 'r-archived' }],
+        },
+      }),
+    );
+
+    expect(model.marks).toHaveLength(1);
+    expect(model.marks[0].roomId).toBeNull();
+    expect(model.marks[0].anchor).toBe('doorstep');
+    expect(model.bands.every((band) => band.marks.length === 0)).toBe(true);
+    // Not drawn on the key either — the key draws only what a room holds.
+    expect(model.drawnMarkCount).toBe(0);
+  });
+
+  it('stands every wall on the doorstep of a house with no rooms', () => {
+    const model = deriveThreshold(
+      input({
+        rooms: [],
+        selections: { origin: 'commercial', selections: [wallSelection] },
+      }),
+    );
+
+    expect(model.groundFloor).toBe(true);
+    expect(model.marks).toHaveLength(1);
+    expect(model.marks[0].roomId).toBeNull();
+    expect(model.marks[0].anchor).toBe('doorstep');
+  });
 });
 
 describe('deriveThreshold — the road', () => {
