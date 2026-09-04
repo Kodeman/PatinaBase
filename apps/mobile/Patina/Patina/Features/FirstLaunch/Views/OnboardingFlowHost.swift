@@ -85,7 +85,7 @@ struct OnboardingFlowHost: View {
                 // Studio; being made to answer five questions before seeing
                 // anything is what the label promised to avoid.
                 onSkip: { skipToBrowsing() },
-                onSignIn: { returnToSignIn() }
+                onSignIn: guestSignInDoor
             )
 
         case .walkPermission:
@@ -114,7 +114,7 @@ struct OnboardingFlowHost: View {
                 // The quiz used to be mandatory with no back, skip or close —
                 // including for an account that had already done it.
                 onDefer: { skipToBrowsing() },
-                onSignIn: { returnToSignIn() }
+                onSignIn: guestSignInDoor
             )
 
         case .styleResult(let result):
@@ -133,6 +133,21 @@ struct OnboardingFlowHost: View {
     /// P-18 — leave the guest flow for the Welcome screen.
     private func returnToSignIn() {
         GuestSessionStore.returnToSignIn(coordinator)
+    }
+
+    /// P-18's door, offered only to the reader it is for.
+    ///
+    /// `W1-C-07`: walk C signed in as `client@patina.dev` — GoTrue logged the
+    /// password grant — and the very next frame was this carousel with
+    /// `Onboarding.SignInButton` enabled, on page 1, page 2 and the quiz. The
+    /// carousel itself is legitimate for a signed-in account that has not
+    /// onboarded; a second sign-in door, which clears the guest opt-in and
+    /// sends the phase back to `.auth`, is not. `OnboardingFlowView` and
+    /// `StyleQuizView` both render nothing when the closure is absent, so nil
+    /// is the whole edit. `AuthService` is `@Observable`, so a sign-in that
+    /// lands while the carousel is up takes the door with it.
+    private var guestSignInDoor: (() -> Void)? {
+        AuthService.shared.isAuthenticated ? nil : { returnToSignIn() }
     }
 
     private func advanceToQuiz() {

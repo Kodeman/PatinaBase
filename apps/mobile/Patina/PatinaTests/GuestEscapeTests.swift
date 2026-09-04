@@ -61,8 +61,43 @@ struct GuestEscapeTests {
         #expect(view.contains("signInDoor"))
 
         let host = try SourcePin.read("Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift")
-        #expect(host.contains("onSignIn: { returnToSignIn() }"))
+        #expect(host.contains("onSignIn: guestSignInDoor"))
         #expect(host.contains("GuestSessionStore.returnToSignIn(coordinator)"))
+    }
+
+    // MARK: - W1-C-07 · and only to the reader it is for
+
+    /// Walk C signed in as `client@patina.dev` (GoTrue logged the grant) and
+    /// the very next frame was the carousel, still offering "I already have an
+    /// account — Sign in" on page 1, page 2 and the quiz. The carousel is
+    /// legitimate for a signed-in account that has not onboarded; a second
+    /// sign-in door — which clears the guest opt-in and sends the phase back
+    /// to `.auth` — is not.
+    @Test("a signed-in reader is offered no second sign-in door")
+    func aSignedInReaderGetsNoSignInDoor() throws {
+        let host = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift")
+        )
+        #expect(
+            host.contains("AuthService.shared.isAuthenticated ? nil : { returnToSignIn() }"),
+            "the intro still offers Sign in to somebody who is signed in (W1-C-07)"
+        )
+        // Both surfaces read the same door, so the quiz cannot keep one the
+        // carousel has dropped.
+        #expect(host.components(separatedBy: "onSignIn: guestSignInDoor").count - 1 == 2)
+    }
+
+    /// …and both surfaces genuinely draw nothing without it, which is what
+    /// makes nil the whole edit.
+    @Test("both surfaces render the door only when they are handed one")
+    func bothSurfacesGateOnThePresenceOfTheDoor() throws {
+        for path in [
+            "Patina/Features/Onboarding/Views/OnboardingFlowView.swift",
+            "Patina/Features/StyleQuiz/Views/StyleQuizView.swift"
+        ] {
+            let code = SourceScan.code(in: try SourcePin.read(path))
+            #expect(code.contains("if let onSignIn"), "\(path) draws the door unconditionally")
+        }
     }
 
     /// RL3A-01 — the door shipped in the ZStack overlay's bottom slot, which
