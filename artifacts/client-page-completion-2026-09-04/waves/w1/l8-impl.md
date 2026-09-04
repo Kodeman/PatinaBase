@@ -219,3 +219,197 @@ the repo's committed style differs from its Prettier config broadly. Nothing was
   React `cache`, so this should be one request-scoped fetch — not measured.
 - The report's claim that `single-pane-solo-redirect.tsx` and the `TheMaking` /
   `ProjectViewWrapper` trees are now dead is by import-graph reading, not by a bundle diff.
+
+---
+
+# Fix round (review `l8-review.md`, 22 findings)
+
+Branch `client-page-2/l8`; fix commit `ab45411b9` on top of `159fd8e05`.
+
+## Fixed, by finding number
+
+**1 — `/` bypassed the portal-role gate (blocker-adjacent MAJOR).** Applied as the review
+proposed. `req.nextUrl.pathname === '/'` is out of `isPublicPage` (`src/middleware.ts:143`),
+and `page.tsx`'s own `redirect('/auth/signin')` is deleted. Middleware now owns both gates on
+`/`: the unauthenticated visitor gets `/auth/signin?callbackUrl=/`, and a designer/manufacturer
+role gets `/wrong-portal`. Three new middleware tests cover signed-out, wrong role, and the
+consumer pass-through (no `x-patina-role-check` header).
+
+**2 — a thrown auth read looped `/` ↔ sign-in (major).** Subsumed by (1) and fixed at the
+root rather than patched: with `/` protected, `resolveActiveHouse` never has to tell a missing
+session from a missing project, so the `ActiveHouse` tri-state and `hasClientSession()` are
+gone. The function is now `resolveActiveHouse(projectIds): Promise<string | null>` and asks
+the auth server nothing on the zero-project and solo paths. There is no "signed-out" answer
+left to loop on.
+
+**3 — the inert wrangler override with a lying comment (major).** The plan assigns removal of
+the var itself to the ship lane ("Do NOT remove the wrangler override var"), so the var stays
+and its comment is corrected: it now states that no code reads `threshold`, that the override
+pins nothing and is **not** a kill switch, that only a Worker rollback reverses a bad deploy,
+and that the ship lane deletes both. Carried into "For the ship lane" below.
+
+**4 — the headline file had no test (major).** New `src/app/__tests__/page.test.tsx`, modelled
+on `src/app/share/[token]/__tests__/page.test.tsx`. Five cases: opens the chosen house; names
+the view source; **never puts the current house inside its own mat** (3 houses in, `p1,p3`
+out); empty state with zero houses and no detail read fired; empty state — not `notFound()` —
+when the chosen house will not open. The self-exclusion is now shared code
+(`lib/threshold/other-houses.ts#toOtherHouses`) used by both `/` and `/projects/[id]`, so the
+line the review flagged as untested at `projects/[projectId]/page.tsx:36` is covered too, by
+`lib/threshold/__tests__/other-houses.test.ts` as well as by the page test. `jest.config.js`
+no longer excludes `src/app/page.tsx` from coverage.
+
+**5 — sign-in still landed on the retired list (major).** `CLIENT_AUTH_DESTINATION = '/'`
+(`src/lib/auth-redirect.ts:9`), and `middleware.ts:207`'s hardcoded `'/projects'` default now
+imports that same constant instead of repeating a literal. `route-collapse.ts`'s doc comment
+no longer claims `/projects` is where sign-in lands — the collapse serves stale bookmarks and
+old emails only. Tests updated in `lib/__tests__/auth-redirect.test.ts` (plus a new
+"lands sign-in on the house"), `__tests__/middleware.test.ts`, and
+`components/auth/__tests__/AcceptInviteForm.test.tsx`, all three now asserting against the
+constant rather than a literal.
+
+**6 — the zero-project client was stranded on a header-less `/` (major).** Took the review's
+first option: `ThresholdChromeGate` gains a required `hasHouse` prop and drops the header only
+when `hasHouse && HOUSE_ROUTES.test(pathname)`. `AppChrome` already had `projects`, so it
+passes `projects.length > 0` — a one-line edit. A client with no house keeps the header on
+`/`, and therefore keeps sign-out and `/account`. Tests added to both suites.
+Note: `layout.tsx` reads projects with `.catch(() => [])`, so a transient list failure now
+degrades toward *more* navigation (header shown) rather than less — the safe direction.
+
+**7 — the `mat` ↔ `other-houses` import cycle (minor).** New
+`src/components/threshold/mat-classes.ts` holds `LINE_CLASS`, `COLUMN_HEAD_CLASS` and a third
+`SUBLINE_CLASS` (the muted second line, which both files were spelling out inline). Both
+files import from it; `mat.tsx` exports neither constant any more, so this lane's net effect
+on that multi-lane merge point is now *smaller* than before the fix round.
+
+**8 — sequential awaits and a duplicate auth round trip (minor).** The duplicate
+`auth.getUser()` is gone with `hasClientSession()` (see 2), so a solo or zero-project hit of
+`/` makes exactly one auth call — inside `fetchClientProjects`, as the sibling route does.
+The remaining two awaits are a genuine dependency chain (`projects` → which house → that
+house's detail) and cannot be parallelised; for a solo client `resolveActiveHouse` returns
+without touching the database, so `/` costs the same as `/projects/[id]`. The `cache()`d
+shared user read the review suggests is not taken up — see rejections.
+
+**9 — `notFound()` at the site root (minor).** `/` falls through to `ProjectsEmptyState` when
+the detail read returns null for a house the list named. `/projects/<id>` still answers 404,
+unchanged.
+
+**10 — the `projects` read had no owner predicate (minor).** Added
+`.eq('client_id', user.id)` alongside `.in('id', projectIds)`, with one `auth.getUser()` in
+the multi-house branch only (no user → stand on the freshest known house). The notes and
+invoices reads have no client column and are correctly left to RLS. Asserted by a new test.
+
+**11 — the env mock invented `PATINA_TEST_PROJECT_FIXTURES` (minor).** `@/lib/env` is now
+mocked as a plain `{ useProjectFixtures: boolean }` the tests set directly — the shape the
+real module actually exposes.
+
+**12 — `link.querySelector('span')` probed the DOM (minor).** Replaced with the behavioural
+assertion the review names: `queryByText('Des Moines')` absent, and the location-less link
+still findable by its accessible name.
+
+**13 — the accessible name ran name into location (minor).** `aria-label` on the `Link`, built
+by the same `·` the people column uses, with the waiting sentence appended after a full stop
+when there is one. Two tests.
+
+**14 — per-house attention was lost with the `/projects` list (minor).** Closed rather than
+recorded: `OtherHouse` carries `approvalsPending` / `unreadMessages` (which
+`fetchClientProjects` already returns), and `waitingSentence()` turns them into one quiet line
+under the house name — "A paper is waiting there." / "Notes are waiting there." /
+"A paper and a note are waiting there." A house with nothing waiting says nothing. Prose, in
+the mat's existing muted subline style — no badge, no count, no colour (VISION §6). Eight
+tests in `lib/threshold/__tests__/other-houses.test.ts` plus three in the component suite.
+
+**15 — the join/re-split round trip (minor).** The effect depends on `houseCount` and
+`firstHouseId`; `collapsedHref` receives `projectIds` directly.
+
+**17 — stale e2e comments (nit).** `tests/threshold.spec.ts`'s header no longer claims "a
+client with several keeps the header" (false since this lane) and no longer calls :3102 "the
+flag-overridden server". `playwright.config.ts` gains three lines saying the override is inert
+and that the two-server split comes out in wave 2. The override value itself is left in place
+— striking it without collapsing the split would leave the split unexplained, and the split is
+wave 2's to remove with the spec that depends on it.
+
+**19 — the error boundary pointed at the retired list (nit).** `href="/"`; the copy "Back to
+your projects" is byte-unchanged. Test updated.
+
+**22 — `client_project_view` silently changed meaning (nit).** `clientEvents.projectView` takes
+a second argument, `source: 'front-door' | 'named'` (default `'named'`); `ProjectSurfaceSwitch`
+takes a `viewSource` prop and `/` passes `'front-door'`. The component's comment says so.
+Three tests.
+
+## Rejected, with one reason each
+
+- **8 (the `cache()`d shared user read).** The duplicate call is already gone; wiring a shared
+  cached user read would mean editing `lib/data/projects.ts`, a file several other wave-1 lanes
+  touch, for no remaining round trip.
+- **16 (delete `single-pane-solo-redirect.tsx`).** The plan assigns the deletion to the
+  retirement lane, not this one. Named explicitly in the handoff below instead, which is what
+  the finding actually asks for.
+- **18 (the four-column mat wrap).** The review's own primary fix is "eyeball 1280 and 390 in
+  wave 2's first-viewport capture", which this lane cannot run; moving the column under the
+  papers is a layout ruling that belongs with that capture, not a blind edit.
+- **20 ("Your other houses" is second person).** The review states it is noted for consistency,
+  not as a defect, and the plan supplies the wording verbatim.
+- **21 (the superseded spec §4/§5 note).** The review scopes it to integration, and the spec
+  file is shared by all nine lanes — a doc edit here buys a merge conflict for no code effect.
+
+## Gate output
+
+`pnpm --dir .../apps/client-portal type-check`
+
+```
+> @patina/client-portal@0.1.0 type-check
+> tsc --noEmit
+```
+
+(clean — no diagnostics)
+
+`pnpm --dir .../apps/client-portal test -- threshold making`
+
+```
+Test Suites: 33 passed, 33 total
+Tests:       609 passed, 609 total
+Time:        5.437 s
+Ran all test suites matching /threshold|making/i.
+```
+
+Full portal jest (run because this round touches middleware, auth-redirect and the layout):
+
+```
+Test Suites: 2 failed, 135 passed, 137 total
+Tests:       1 failed, 1460 passed, 1461 total
+```
+
+Both failures are **pre-existing and untouched by this lane** —
+`git log 26b15145e..HEAD --name-only` and `git status` are both empty for all three files:
+
+- `src/lib/data/__tests__/orders.test.ts` — "Cannot find module '../orders'". `orders.ts` was
+  deleted on main in `4b9a0914d` ("remove vestigial cart/checkout stack") and its test was left
+  behind. **The integration lane's full-jest gate will trip on this**; the fix is to delete the
+  orphaned test.
+- `src/lib/__tests__/portal-access.test.ts` — "returns null for manufacturer (no manufacturer
+  portal)" now receives `{label: 'the Patina maker workspace', url: 'https://manufacturer.patina.cloud'}`.
+  The manufacturer portal exists; the assertion is stale. **Also trips integration's full jest.**
+
+`npx eslint <lane dirs>` — 0 errors, 0 warnings across every file this round touched.
+Whole-`src` eslint reports 33 errors, none in a file this lane has ever touched (list checked
+file by file).
+
+## For the ship lane
+
+1. Delete `NEXT_PUBLIC_FLAG_OVERRIDES` and its comment from
+   `apps/client-portal/wrangler.jsonc`. **There is no rollback flag left** — the only way back
+   from a bad client-portal deploy is `wrangler rollback`.
+2. `client_project_view` gains a `source` property from this deploy; any saved PostHog insight
+   on that event should be re-read with that in mind.
+3. `/` is now role-gated, so it calls `createAdminClient` (service role) per request exactly as
+   `/projects` did. `SUPABASE_SERVICE_ROLE_KEY` must be present on the Worker or every `/` hit
+   stamps `x-patina-role-check: skipped`.
+
+## For the retirement lane
+
+- `src/components/making/single-pane-solo-redirect.tsx` **and** its test are dead: the last
+  `useFeatureFlag('single-pane')` read in the app, with no mount since `app/projects/page.tsx`
+  dropped it. Name both files in the retirement file list or they will survive.
+- `apps/client-portal/playwright.config.ts`'s two-server split (:3002 / :3102) exists only
+  because the `threshold` flag used to change behaviour per server. Collapse it with the
+  `threshold.spec.ts` extension.
