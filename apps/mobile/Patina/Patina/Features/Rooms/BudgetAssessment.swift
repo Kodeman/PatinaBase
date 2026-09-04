@@ -49,7 +49,7 @@ public enum BudgetAssessment {
     public static func companionNudge(for level: BudgetLevel, roomName: String) -> String? {
         switch level {
         case .below50, .approaching: return nil
-        case .atRange:               return "You're at your budget for \(roomName)"
+        case .atRange:               return "You’re at your budget for \(roomName)"
         case .overRange:             return "Get design help with this room →"
         }
     }

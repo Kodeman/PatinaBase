@@ -30,19 +30,19 @@ struct GuestPromiseTests {
     /// either way — which is exactly what happened: L1-C threaded
     /// `isAuthenticated` through and typed the hint with U+0027. One `@Test`
     /// per fact now, the `RL1E2-05` shape this wrapper still had.
-    @Test("the Companion's row builder takes the guest's auth state")
+    @Test("the Companion’s row builder takes the guest’s auth state")
     func companionRowBuilderTakesAuthState() throws {
         let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
-        #expect(source.contains("isAuthenticated"), "no row builder takes the guest's state")
+        #expect(source.contains("isAuthenticated"), "no row builder takes the guest’s state")
     }
 
-    @Test("the Companion's home row says what a guest would find, in the deck's own bytes")
+    @Test("the Companion’s home row says what a guest would find, in the deck’s own bytes")
     func companionHomeRowSpeaksToAGuest() throws {
         let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
         #expect(source.contains("\"See what’s on Patina\""))
     }
 
-    @Test("the Companion's piece-act row promises a designer only to someone who has one")
+    @Test("the Companion’s piece-act row promises a designer only to someone who has one")
     func companionPieceActRowMakesNoDesignerPromise() throws {
         let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
         #expect(source.contains("\"Sign in and a designer will get back to you\""))

@@ -152,7 +152,7 @@ public struct HelpPanelSheet: View {
             // "No help articles yet" copy as a genuinely empty surface,
             // silently swallowing the error. Surface it with a retry.
             PatinaErrorState(
-                message: "Couldn't load help for this screen.",
+                message: "Couldn’t load help for this screen.",
                 action: { Task { await loadArticles() } }
             )
             .accessibilityIdentifier("HelpPanelSheet.ErrorState")

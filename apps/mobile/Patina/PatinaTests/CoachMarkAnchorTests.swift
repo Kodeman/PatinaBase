@@ -63,7 +63,7 @@ struct CoachMarkAnchorTests {
         #expect(fixedSize != nil && frame != nil)
         if let fixedSize, let frame {
             #expect(fixedSize.lowerBound < frame.lowerBound,
-                    "the frame still wins over the text's own height (B-07)")
+                    "the frame still wins over the text’s own height (B-07)")
         }
         // …and the width has to be FIXED, not a maximum. A popover measures its
         // content with a nil proposal; `maxWidth:` passes that nil straight
@@ -71,7 +71,7 @@ struct CoachMarkAnchorTests {
         // bubble was built to it — which is why the walk still found the copy
         // clipped top and bottom on Today AND on Spaces after the reorder.
         #expect(!code.contains("frame(maxWidth: maxWidth"),
-                "the bubble's width is still only a maximum (B-07)")
+                "the bubble’s width is still only a maximum (B-07)")
         #expect(code.contains("padding(.vertical, 14)"),
                 "the bubble has no vertical breathing room (B-07)")
         #expect(code.contains("PatinaColors.Background.primary"),
@@ -182,7 +182,7 @@ struct CoachMarkAnchorTests {
         // on the flag-off one. It gated only the START; the same answer is what
         // decides whether a card may draw.
         #expect(tour.contains("onChange(of: canAutoStart"),
-                "the model is never told the host's surface went away (B-10)")
+                "the model is never told the host’s surface went away (B-10)")
         #expect(tour.contains("setSubjectOnScreen("))
     }
 }

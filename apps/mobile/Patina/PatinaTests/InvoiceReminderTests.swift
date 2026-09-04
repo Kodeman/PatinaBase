@@ -168,7 +168,7 @@ struct InvoiceReminderTests {
         let body = InvoiceReminder.body(balanceCents: 425_000, currencyCode: "USD")
         #expect(body == "Your invoice is due tomorrow — $4,250.00. Nothing else.")
 
-        for word in ["Don't", "urgent", "Urgent", "!", "now", "overdue", "Act"] {
+        for word in ["Don’t", "urgent", "Urgent", "!", "now", "overdue", "Act"] {
             #expect(!body.contains(word), "the reminder must carry no urgency: \(word)")
         }
     }
@@ -195,7 +195,7 @@ struct InvoiceReminderTests {
         #expect(InvoiceReminder.setLine(fireDate: date)
                 == "Reminder set for \(DateDisplay.short(date)).")
         #expect(InvoiceReminder.removeLabel == "Remove")
-        #expect(InvoiceReminder.actLabel == "Remind me the day before it's due")
+        #expect(InvoiceReminder.actLabel == "Remind me the day before it’s due")
     }
 
 }

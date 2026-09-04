@@ -62,7 +62,7 @@ struct GreetingWindowTests {
     /// reads, and editing one silently changed the answer with every
     /// assertion above still passing. Pinned arm by arm, so the 24-hour sweep
     /// the charter asks for is a fact about the source, not an assumption.
-    @Test("TimeOfDay.current's six hour bands are pinned")
+    @Test("TimeOfDay.current’s six hour bands are pinned")
     func hourBandsArePinned() throws {
         let source = try SourcePin.read(Self.timeOfDayPath)
         guard let range = source.range(of: "public static var current: TimeOfDay {") else {

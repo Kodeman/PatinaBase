@@ -67,7 +67,7 @@ struct NounConsistencyTests {
     /// in `Features/Collections/**` beyond the schema side — no W1 lane
     /// (steward.md §5.1's residue row) — so it is L1-E's under the same
     /// clause `Coordinator.swift` was edited under.
-    @Test("the Saved screen's tab says 'All pieces', matching the empty state below it")
+    @Test("the Saved screen’s tab says 'All pieces', matching the empty state below it")
     func theSavedTabsSayPieces() throws {
         let source = try SourcePin.read("Patina/Features/Collections/ViewModels/CollectionsViewModel.swift")
         #expect(!source.contains("\"All items\""))
@@ -80,13 +80,13 @@ struct NounConsistencyTests {
         #expect(!source.contains("\"All Items\""))
     }
 
-    @Test("the room screen's section eyebrow says 'pieces'")
+    @Test("the room screen’s section eyebrow says 'pieces'")
     func roomProjectViewSaysPieces() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/RoomProjectView.swift")
         #expect(!source.contains("\"Your Items\""))
     }
 
-    @Test("the profile's saved stat announces pieces, not items")
+    @Test("the profile’s saved stat announces pieces, not items")
     func profileSavedStatSaysPieces() throws {
         let source = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
         #expect(!source.contains("Saved items:"))
@@ -148,7 +148,7 @@ struct NounConsistencyTests {
         #expect(!source.contains("room-aware edit for"))
     }
 
-    @Test("the browse grid's card prints no rationale when there is no real match")
+    @Test("the browse grid’s card prints no rationale when there is no real match")
     func recommendationCardsCarryNoBoilerplate() throws {
         let source = try SourcePin.read("Patina/Features/Recommendations/Views/RecommendationsView.swift")
         #expect(!source.contains("room-aware edit for"))
@@ -159,7 +159,7 @@ struct NounConsistencyTests {
     /// `RL1E2-08`: the deck carries `A-13` and nothing pinned it.
     /// `Features/StyleQuiz/**` is L1-A's, which has applied it by deleting
     /// `companionNudgeLabel` outright.
-    @Test("the quiz's dead 'Next question' nudge is gone")
+    @Test("the quiz’s dead 'Next question' nudge is gone")
     func theQuizNudgeIsGone() throws {
         let literals = BrandVoiceLintTests.stringLiterals(
             in: try SourcePin.read("Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift")

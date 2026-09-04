@@ -45,7 +45,7 @@ struct PiecesTabTests {
         for count in [0, 1, 3] {
             #expect(
                 SavedDoorRow.accessibilityLabel(count: count) != PatinaTab.pieces.canonicalName,
-                "B-7 (b): the Saved row must not answer to the Pieces tab's label"
+                "B-7 (b): the Saved row must not answer to the Pieces tab’s label"
             )
         }
     }
@@ -124,7 +124,7 @@ struct PiecesTabTests {
                 Issue.record("chip \(filter) sends no p_category")
                 continue
             }
-            #expect(raw == raw.lowercased(), "p_category goes over the wire in the DB's vocabulary")
+            #expect(raw == raw.lowercased(), "p_category goes over the wire in the DB’s vocabulary")
             #expect(ProductCategory(rawValue: raw) != nil)
         }
         #expect(RecommendationsViewModel.category(forFilter: "All") == nil)

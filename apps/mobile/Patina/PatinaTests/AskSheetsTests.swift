@@ -104,7 +104,7 @@ struct AskSheetsTests {
         }
     }
 
-    @Test("the thread is the project's where a project exists, the direct one where a lead does")
+    @Test("the thread is the project’s where a project exists, the direct one where a lead does")
     @MainActor
     func threadChoiceFollowsTheRelationship() async throws {
         // `DesignerThreadOpener` is the one implementation; its `nil` answer is
@@ -117,7 +117,7 @@ struct AskSheetsTests {
 
     // MARK: - Path C
 
-    @Test("the lead's idempotency key is the piece's own id — one lead per client per piece")
+    @Test("the lead’s idempotency key is the piece’s own id — one lead per client per piece")
     func clientRequestIdIsTheProductId() {
         let product = PurchaseFixture.piece()
         let key = AskComposer.clientRequestId(for: product)
@@ -156,13 +156,13 @@ struct AskSheetsTests {
         #expect(params.p_description?.contains("Living Room") == true)
     }
 
-    @Test("the default question is a question, in the reader's words not the catalogue's")
+    @Test("the default question is a question, in the reader’s words not the catalogue’s")
     func defaultQuestion() {
         #expect(AskComposer.defaultQuestion(product: PurchaseFixture.piece())
                 == "Can you tell me more about the Heirloom Oak Dining Table?")
     }
 
-    @Test("the params encode to the RPC's own argument names")
+    @Test("the params encode to the RPC’s own argument names")
     func paramsEncodeToTheRPCNames() throws {
         let params = AskComposer.leadParams(
             message: "hello", product: PurchaseFixture.piece(), roomName: nil

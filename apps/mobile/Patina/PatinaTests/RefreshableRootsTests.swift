@@ -39,7 +39,7 @@ struct RefreshableRootsTests {
         return String(code[start..<end])
     }
 
-    @Test("Today's pull runs what its foreground handler runs")
+    @Test("Today’s pull runs what its foreground handler runs")
     func todayRefreshMatchesTheScenePhaseHandler() throws {
         let body = try Self.refreshableBody(of: "Patina/Features/Home/Views/DailyRoomView.swift")
 
@@ -53,7 +53,7 @@ struct RefreshableRootsTests {
                      "ProfileService.shared.mirrorLastSeenIfNeeded()",
                      "viewModel.refreshNewThisWeek()",
                      "notificationsViewModel.load()"] {
-            #expect(body.contains(call), "Today's refresh drops \(call) (C-L1B-1)")
+            #expect(body.contains(call), "Today’s refresh drops \(call) (C-L1B-1)")
         }
         #expect(body.components(separatedBy: "syncCompanionContext()").count - 1 == 2,
                 "the note runs syncCompanionContext() twice, before and after the badge refresh")
@@ -61,12 +61,12 @@ struct RefreshableRootsTests {
                 "a pull-to-refresh must not put a permission prompt in front of someone")
     }
 
-    @Test("the Studio's pull reaches the network, not only the local store")
+    @Test("the Studio’s pull reaches the network, not only the local store")
     func studioRefreshRefetches() throws {
         let body = try Self.refreshableBody(of: "Patina/Features/Profile/Views/ProfileView.swift")
         #expect(body.contains("StudioHubViewModel.shared.load()"),
                 """
-                the Studio's refresh only re-read local SwiftData, so a failed \
+                the Studio’s refresh only re-read local SwiftData, so a failed \
                 backend read could not be recovered from on a tab root (R-03)
                 """)
         #expect(body.contains("viewModel.loadData(context: modelContext)"))
@@ -76,7 +76,7 @@ struct RefreshableRootsTests {
     func decisionDetailRefreshes() throws {
         let body = try Self.refreshableBody(of: "Patina/Features/Decisions/Views/DecisionDetailView.swift")
         #expect(body.contains("viewModel.load(decisionId: decisionId)"),
-                "the refresh must call exactly what the screen's .task calls (C-L1B-2)")
+                "the refresh must call exactly what the screen’s .task calls (C-L1B-2)")
     }
 
     @Test("the other two roots kept theirs")

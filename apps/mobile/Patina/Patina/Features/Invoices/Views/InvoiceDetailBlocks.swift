@@ -20,7 +20,7 @@ struct InvoiceLineItemsBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MonoLabel(text: "What's included")
+            MonoLabel(text: "What’s included")
                 .padding(.horizontal, 24)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in

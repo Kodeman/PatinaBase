@@ -229,7 +229,7 @@ struct HouseFirstRootTests {
 
         #expect(
             overlayObservesTheFlag || !slotTogglesTheFlag,
-            "the bar's Companion slot toggles isCompanionExpanded and nothing expands the panel"
+            "the bar’s Companion slot toggles isCompanionExpanded and nothing expands the panel"
         )
         #expect(
             root.contains(".accessibilityHidden(coordinator.isCompanionExpanded)"),

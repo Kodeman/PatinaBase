@@ -356,7 +356,7 @@ struct ProductDetailView: View {
 
                             HelpTooltip(
                                 surfaceKey: SurfaceKeys.IOSApp.Home.matchPill,
-                                fallback: "Match score blends your room's dimensions, style cues, and palette against this piece. Higher means a better fit for the room you're viewing."
+                                fallback: "Match score blends your room’s dimensions, style cues, and palette against this piece. Higher means a better fit for the room you’re viewing."
                             ) {
                                 Text(product.matchLabel)
                                     .font(PatinaTypography.mono)
@@ -399,7 +399,7 @@ struct ProductDetailView: View {
                                     .foregroundStyle(PatinaColors.Text.secondary)
                                 HelpInfoIcon(
                                     surfaceKey: SurfaceKeys.IOSApp.ProductDetail.spatialContext,
-                                    fallback: "Spatial cues compare the piece against your room's scale, lighting, and existing palette. Pills below summarize what fits and what to watch for.",
+                                    fallback: "Spatial cues compare the piece against your room’s scale, lighting, and existing palette. Pills below summarize what fits and what to watch for.",
                                     size: 12
                                 )
                             }
@@ -694,7 +694,7 @@ struct ProductDetailView: View {
 
             Spacer()
             PatinaErrorState(
-                message: viewModel.error ?? "Couldn't load this piece",
+                message: viewModel.error ?? "Couldn’t load this piece",
                 action: retry
             )
             .padding(.horizontal, 32)

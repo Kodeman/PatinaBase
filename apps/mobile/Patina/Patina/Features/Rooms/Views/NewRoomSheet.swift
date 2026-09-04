@@ -41,7 +41,7 @@ struct NewRoomSheet: View {
             option(
                 icon: "ruler",
                 title: "Enter manually",
-                subtitle: "Type in room size and details. You'll still get style-matched picks."
+                subtitle: "Type in room size and details. You’ll still get style-matched picks."
             ) {
                 dismiss()
                 coordinator.navigate(to: .manualRoomEntry)

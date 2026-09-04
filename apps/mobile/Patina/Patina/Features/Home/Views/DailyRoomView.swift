@@ -478,7 +478,7 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
             HomeStoryRetryRow(onRetry: { viewModel.refreshTodaysStory() })
                 .accessibilityIdentifier("DailyRoomView.EditorialStory")
         } else {
-            ProgressView("Loading today's story…")
+            ProgressView("Loading today’s story…")
                 .font(PatinaTypography.caption)
                 .tint(PatinaColors.Text.interactive)
                 .frame(maxWidth: .infinity, minHeight: 120)

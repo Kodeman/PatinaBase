@@ -142,7 +142,7 @@ struct PieceActMatrixTests {
         ))
     }
 
-    @Test("Path B names her by her first name, and says so plainly when it doesn't know one")
+    @Test("Path B names her by her first name, and says so plainly when it doesn’t know one")
     func askDesignerLabel() {
         let relationship = DesignerRelationship.project(
             projectId: UUID(), designerId: designerId, studioName: nil
@@ -166,7 +166,7 @@ struct PieceActMatrixTests {
 
     // MARK: - Path A
 
-    @Test("no live designer, flag on, gate passes → Buy at the piece's real price")
+    @Test("no live designer, flag on, gate passes → Buy at the piece’s real price")
     func buyDrawsForANonLiveClient() {
         for relationship in notLive {
             let act = PieceActResolver.act(
@@ -210,7 +210,7 @@ struct PieceActMatrixTests {
         }
     }
 
-    @Test("a failed gate falls to Path C carrying the gate's own sentence")
+    @Test("a failed gate falls to Path C carrying the gate’s own sentence")
     func gateFailureCarriesItsReason() {
         let act = PieceActResolver.act(
             product: PurchaseFixture.piece(dimensions: nil),
@@ -218,7 +218,7 @@ struct PieceActMatrixTests {
             designerName: nil,
             directOrdersEnabled: true
         )
-        #expect(act == .askAboutPiece(reason: "We don't have this piece's size yet."))
+        #expect(act == .askAboutPiece(reason: "We don’t have this piece’s size yet."))
         #expect(act.reason != nil)
     }
 
@@ -231,7 +231,7 @@ struct PieceActMatrixTests {
             directOrdersEnabled: true
         )
         #expect(!act.isBuy)
-        #expect(act.reason == "This piece doesn't have a price yet.")
+        #expect(act.reason == "This piece doesn’t have a price yet.")
     }
 
     // MARK: - Analytics
@@ -246,12 +246,12 @@ struct PieceActMatrixTests {
 
     // MARK: - The Companion mirrors the bar
 
-    @Test("the Companion's piece row carries the bar's exact label and performs its act")
+    @Test("the Companion’s piece row carries the bar’s exact label and performs its act")
     func companionRowMirrorsTheBar() {
         let acts: [PieceAct] = [
             .askDesigner(firstName: "Leah"),
             .buy(priceCents: 420_000),
-            .askAboutPiece(reason: "We don't have this piece's size yet.")
+            .askAboutPiece(reason: "We don’t have this piece’s size yet.")
         ]
         for act in acts {
             let row = CompanionActionProvider.pieceActRow(act, isAuthenticated: true)

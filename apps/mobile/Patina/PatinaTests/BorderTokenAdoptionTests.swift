@@ -31,14 +31,14 @@ struct BorderTokenAdoptionTests {
     /// The field's resting outline, asserted by behaviour rather than by
     /// grep: it never contained `pearl`, so the string check below passed
     /// vacuously on it while the real border stayed `clay.opacity(0.2)`.
-    @Test("the text field's resting outline is a border token, not a tinted accent")
+    @Test("the text field’s resting outline is a border token, not a tinted accent")
     func theTextFieldOutlineIsABorderToken() throws {
         let source = try SourcePin.readCode(
             "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaTextField.swift"
         )
         #expect(
             source.contains("PatinaColors.Border.strong"),
-            "PatinaTextField's outline does not use a Border token — a field's edge is the rule a tester is most meant to see"
+            "PatinaTextField’s outline does not use a Border token — a field’s edge is the rule a tester is most meant to see"
         )
         #expect(
             !source.contains("PatinaColors.clay.opacity"),

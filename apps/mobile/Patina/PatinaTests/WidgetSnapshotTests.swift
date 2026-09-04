@@ -90,7 +90,7 @@ struct WidgetSnapshotTests {
 
     // MARK: - Shape
 
-    @Test("saving a record writes the widget's own file beside it")
+    @Test("saving a record writes the widget’s own file beside it")
     func savingWritesTheWidgetFile() throws {
         let store = fallbackStore()
         store.save(record(), houseLine: "Living Room", now: referenceDate)
@@ -140,7 +140,7 @@ struct WidgetSnapshotTests {
         #expect(!text.contains("decision:d1"))
     }
 
-    @Test("a row's destination round-trips as the same token the record uses")
+    @Test("a row’s destination round-trips as the same token the record uses")
     func routeTokensUseTheRecordVocabulary() throws {
         let store = fallbackStore()
         store.save(record(), now: referenceDate)
@@ -341,7 +341,7 @@ struct WidgetSnapshotTests {
     /// The whole reason the payload carries no owner id: sign-out deletes it.
     /// `LocalStoreReset` and the foreign-record discard both go through
     /// `remove()`, so this is the single path that has to be right.
-    @Test("removing the record takes the widget's file with it, and redraws")
+    @Test("removing the record takes the widget’s file with it, and redraws")
     func removeClearsTheWidgetAndReloads() throws {
         let reloads = ReloadCounter()
         let store = fallbackStore(reloads: reloads)

@@ -650,7 +650,7 @@ public struct CompanionOverlay: View {
     /// The transient first-nav acknowledgement, reusing the compact bubble.
     private var navAckBubbleView: some View {
         CompanionIntroBubble(
-            compactText: "That's the way. I'm always down here when you need your next step."
+            compactText: "That’s the way. I’m always down here when you need your next step."
         )
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
         .accessibilitySortPriority(1)
@@ -720,7 +720,7 @@ public struct CompanionOverlay: View {
     /// own "Got it", not a modal.
     private var companionCoachmark: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
+            Text("These are your next steps. They change with every room you’re in — tap one and I’ll take you there.")
                 .font(PatinaTypography.patinaVoice)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -745,7 +745,7 @@ public struct CompanionOverlay: View {
         .patinaShadow(PatinaShadows.md)
         .padding(.horizontal, 12)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
+        .accessibilityLabel("These are your next steps. They change with every room you’re in — tap one and I’ll take you there.")
     }
 
     // MARK: - State 4: Journey Mode

@@ -160,7 +160,7 @@ struct SelectedStateTests {
         let deferred = [
             ("AuthenticationView.swift", 0, "C3-06 ×2, closed on w1-l1a"),
             ("StyleQuizView.swift", 0, "closed on w1-l1a, note D-L1A-5"),
-            ("RoomTypePillRow.swift", 0, "L1-C's file, notes D→C-6 / D→C-7")
+            ("RoomTypePillRow.swift", 0, "L1-C’s file, notes D→C-6 / D→C-7")
         ]
         let deferredNames = deferred.map(\.0)
         let mine = offenders.filter { name in

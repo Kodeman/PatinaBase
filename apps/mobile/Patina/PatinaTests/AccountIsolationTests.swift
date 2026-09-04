@@ -83,7 +83,7 @@ struct AccountIsolationTests {
     func aPendingClaimHoldsTheHydrate() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
-        _ = store.createRoom(name: "Guest's Studio", roomType: "other", manualEntry: true)
+        _ = store.createRoom(name: "Guest’s Studio", roomType: "other", manualEntry: true)
 
         let claim = LocalStoreClaim()
         #expect(claim.askIfNeeded(previousOwner: nil, context: context))
@@ -114,7 +114,7 @@ struct AccountIsolationTests {
     func startFreshClearsOnlyTheRoomsThatNeverSynced() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
-        let guestRoom = store.createRoom(name: "Guest's Studio", roomType: "other", manualEntry: true)
+        let guestRoom = store.createRoom(name: "Guest’s Studio", roomType: "other", manualEntry: true)
         let mirrored = store.createRoom(name: "Guest Bedroom", roomType: "bedroom", manualEntry: true)
         mirrored.remoteId = "c0000000-0000-4000-8000-000000000001"
         context.insert(TableItemModel(name: "A piece", productId: "p-1"))

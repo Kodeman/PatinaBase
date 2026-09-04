@@ -53,11 +53,11 @@ struct MessagingThreadCreationTests {
 
         #expect(
             sql.contains("FUNCTION public.\(ThreadCreationRPC.directFunction)(\(ThreadCreationRPC.directParameter) UUID)"),
-            "rpc_start_direct_thread's signature moved"
+            "rpc_start_direct_thread’s signature moved"
         )
         #expect(
             sql.contains("FUNCTION public.\(ThreadCreationRPC.projectFunction)(\(ThreadCreationRPC.projectParameter) UUID)"),
-            "rpc_start_project_thread's signature moved"
+            "rpc_start_project_thread’s signature moved"
         )
         #expect(
             sql.contains("GRANT EXECUTE ON FUNCTION public.\(ThreadCreationRPC.projectFunction)(UUID) TO authenticated")

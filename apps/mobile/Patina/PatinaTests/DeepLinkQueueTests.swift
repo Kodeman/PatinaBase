@@ -69,7 +69,7 @@ struct DeepLinkQueueTests {
 
     // MARK: - C2-21 — every non-main phase queues, and the queue is a FIFO
 
-    @Test("a link arriving at any non-main phase is queued, not pushed at a stack that isn't mounted")
+    @Test("a link arriving at any non-main phase is queued, not pushed at a stack that isn’t mounted")
     func everyNonMainPhaseQueues() throws {
         for phase in [AppPhase.launching, .auth, .onboarding] {
             let handler = DeepLinkHandler.makeForTests(queue: queue())
@@ -205,7 +205,7 @@ struct DeepLinkQueueTests {
     @Test("the notice names no vendor, no URL and no error")
     func theNoticeIsAHomeownerSentence() {
         let line = AppCoordinator.pendingLinkNoticeLine
-        #expect(line == "We'll open what you tapped once you're in.")
+        #expect(line == "We’ll open what you tapped once you’re in.")
         #expect(!line.contains("http"))
         #expect(!line.lowercased().contains("error"))
     }

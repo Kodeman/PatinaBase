@@ -92,7 +92,7 @@ struct RoomSyncTests {
         #expect(rooms.first?.syncStatus == .synced)
     }
 
-    @Test("a local edit newer than the server's row stands")
+    @Test("a local edit newer than the server’s row stands")
     func aLocalEditNewerThanTheServerIsKept() throws {
         let store = try makeStore()
         let room = store.createRoom(name: "Guest Bedroom", roomType: "bedroom", manualEntry: true)
@@ -125,7 +125,7 @@ struct RoomSyncTests {
     @Test("a room that never synced is never merged into an account (SP-06)")
     func aRoomThatNeverSyncedIsNeverMerged() throws {
         let store = try makeStore()
-        let guestRoom = store.createRoom(name: "Guest's Studio", roomType: "other", manualEntry: true)
+        let guestRoom = store.createRoom(name: "Guest’s Studio", roomType: "other", manualEntry: true)
         store.setBudget(guestRoom, cents: 120_000)
         let guestId = guestRoom.id
 
@@ -134,7 +134,7 @@ struct RoomSyncTests {
         let rooms = store.allRooms()
         #expect(rooms.count == 2)
         let kept = rooms.first { $0.id == guestId }
-        #expect(kept?.name == "Guest's Studio")
+        #expect(kept?.name == "Guest’s Studio")
         #expect(kept?.budgetCents == 120_000)
         #expect(kept?.remoteId == nil)
 
@@ -195,7 +195,7 @@ struct RoomSyncTests {
 
     // MARK: - The owner boundary (SP-06)
 
-    @Test("the request asks for the account's own rooms and no one else's")
+    @Test("the request asks for the account’s own rooms and no one else’s")
     func theRequestCarriesTheOwnerFilter() throws {
         let url = RoomsAPIClient.roomsListURL(
             base: URL(string: "https://example.supabase.co")!,
@@ -211,7 +211,7 @@ struct RoomSyncTests {
         let store = try makeStore()
         let foreign = remote(
             id: "d0000000-0000-4000-8000-000000000009",
-            name: "A Client's Living Room"
+            name: "A Client’s Living Room"
         )
         // `rooms` lets a designer read every room of every client on her
         // roster, so a row reaching this device is not proof it is this
@@ -226,13 +226,13 @@ struct RoomSyncTests {
         #expect(store.allRooms().isEmpty)
     }
 
-    @Test("the account's own row still lands when a foreign row rides beside it")
+    @Test("the account’s own row still lands when a foreign row rides beside it")
     func theOwnRowLandsBesideAForeignOne() throws {
         let store = try makeStore()
         let foreign = RemoteRoom(
             id: "d0000000-0000-4000-8000-000000000009",
             user_id: "f0000000-0000-0000-0000-00000000000f",
-            name: "A Client's Living Room",
+            name: "A Client’s Living Room",
             type: "living_room",
             length_meters: 5, width_meters: 4, height_meters: 2.7,
             floor_area_sqm: 20, volume_cbm: 54,
@@ -261,7 +261,7 @@ struct RoomSyncTests {
         #expect(coordinator.revision == 1)
     }
 
-    @Test("a room mirrored in this session reaches Today's house rail")
+    @Test("a room mirrored in this session reaches Today’s house rail")
     func aMirroredRoomReachesTheRail() throws {
         let schema = Schema([RoomModel.self, SavedItem.self, TableItemModel.self, StylePreferenceModel.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

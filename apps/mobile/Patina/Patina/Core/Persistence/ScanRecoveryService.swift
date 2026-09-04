@@ -80,7 +80,7 @@ public final class ScanRecoveryService {
         var summary: String {
             switch self {
             case .manifestMissing:    return "Scan saved on this phone — its index file is missing"
-            case .manifestUnreadable: return "Scan saved on this phone — its index file couldn't be read"
+            case .manifestUnreadable: return "Scan saved on this phone — its index file couldn’t be read"
             }
         }
     }

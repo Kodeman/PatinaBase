@@ -45,7 +45,7 @@ struct SentenceCaseTests {
 
     // MARK: - The auth sheet and the account screen (L1-A)
 
-    @Test("the auth sheet's buttons are sentence case")
+    @Test("the auth sheet’s buttons are sentence case")
     func authSheetIsSentenceCase() throws {
         // Code only: :139 is a COMMENT quoting the Title Case it replaced,
         // and the wrapper this case used to carry was masking that, not a
@@ -64,13 +64,13 @@ struct SentenceCaseTests {
         #expect(!source.contains("\"Sign Out\""))
     }
 
-    @Test("the QR scanner's permission CTA is sentence case")
+    @Test("the QR scanner’s permission CTA is sentence case")
     func qrScannerIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/QRAuth/Views/QRScannerView.swift")
         #expect(!source.contains("\"Open Settings\""))
     }
 
-    @Test("the camera permission screen's CTA is sentence case")
+    @Test("the camera permission screen’s CTA is sentence case")
     func cameraPermissionIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/FirstLaunch/Views/CameraPermissionView.swift")
         #expect(!source.contains("\"Open Settings\""))
@@ -109,7 +109,7 @@ struct SentenceCaseTests {
 
     /// `RL1E-11`: the taste-portrait screen's primary button. `StyleQuiz/**`
     /// is L1-A's.
-    @Test("the taste portrait's primary CTA is sentence case and names the piece")
+    @Test("the taste portrait’s primary CTA is sentence case and names the piece")
     func stylePortraitCTAIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleResultView.swift")
         #expect(!source.contains("\"View Recommendations\""))
@@ -119,7 +119,7 @@ struct SentenceCaseTests {
     /// `RL1E-11`: Title Case and sentence case adjacent inside one section —
     /// "Retake Style Quiz" sits directly above "Get design help" and
     /// "Settings". `ProfileView.swift` is L1-C's.
-    @Test("the Studio's action rows do not mix casing inside one section")
+    @Test("the Studio’s action rows do not mix casing inside one section")
     func studioActionRowsShareOneCasing() throws {
         let source = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
         #expect(!source.contains("\"Retake Style Quiz\""))

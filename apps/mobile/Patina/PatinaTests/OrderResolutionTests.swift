@@ -37,7 +37,7 @@ struct OrderResolutionTests {
 
     // MARK: - The token, and the id the purchase path hands over
 
-    @Test("the routing token is minted in one place and matches the row's id")
+    @Test("the routing token is minted in one place and matches the row’s id")
     func theTokenHasOneMint() {
         let row = Self.order(rail: .direct, recordId: "d-1")
         #expect(row.id == ClientOrder.routingToken(rail: .direct, recordId: "d-1"))
@@ -45,7 +45,7 @@ struct OrderResolutionTests {
         #expect(ClientOrder.routingToken(rail: .fulfillment, recordId: "f-1") == "fulfillment:f-1")
     }
 
-    @Test("a bare direct_orders id resolves — the purchase path's terminal CTA")
+    @Test("a bare direct_orders id resolves — the purchase path’s terminal CTA")
     func aBareDirectIdResolves() {
         // `Order placed.` → `See your order` navigates straight off the row it
         // just created, carrying the raw `direct_orders.id`. Before the fix

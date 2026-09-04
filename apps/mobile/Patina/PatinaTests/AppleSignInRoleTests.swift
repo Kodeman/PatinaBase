@@ -49,7 +49,7 @@ struct AppleSignInRoleTests {
     }
 
     /// Rule 1 — scoped to `id = self`, from the session this sign-in returned.
-    @Test("scoped to the caller's own id, taken from the returned session")
+    @Test("scoped to the caller’s own id, taken from the returned session")
     func scopedToSelf() throws {
         let live = try liveWriteBody()
         #expect(live.contains(".eq(\"id\", value: userId)"))
@@ -87,7 +87,7 @@ struct AppleSignInRoleTests {
         #expect(googleBlock.contains("await applyHomeownerRoleAfterOAuth(userId: session.user.id)"))
     }
 
-    @Test("it is not in a view's onAppear or a retry timer")
+    @Test("it is not in a view’s onAppear or a retry timer")
     func notInAViewOrARetry() {
         for path in SourcePin.swiftFiles(under: "Patina/Features") {
             guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }

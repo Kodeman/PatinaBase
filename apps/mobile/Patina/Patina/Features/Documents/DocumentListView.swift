@@ -34,7 +34,7 @@ struct DocumentListView: View {
             .ignoresSafeArea()
         }
         .alert(
-            "Couldn't open this file",
+            "Couldn’t open this file",
             isPresented: Binding(
                 get: { viewModel.openError != nil },
                 set: { if !$0 { viewModel.openError = nil } }

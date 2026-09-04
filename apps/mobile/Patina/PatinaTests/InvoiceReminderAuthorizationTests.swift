@@ -107,7 +107,7 @@ struct InvoiceReminderAuthorizationTests {
     /// notifications, and it spends Q7's once-per-install ask — none of which
     /// describes what a person tapping "Remind me the day before it's due" is
     /// about to get.
-    @Test("an undecided install is shown the reminder's own primer, not the system alert")
+    @Test("an undecided install is shown the reminder’s own primer, not the system alert")
     func anUndecidedInstallSeesTheRemindersOwnPrimer() async throws {
         let scheduler = StubScheduler()
         scheduler.status = .notDetermined
@@ -131,7 +131,7 @@ struct InvoiceReminderAuthorizationTests {
             InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
         )
         #expect(offer.promise.contains(offer.body))
-        #expect(InvoiceReminder.primerTitle == "The day before it's due")
+        #expect(InvoiceReminder.primerTitle == "The day before it’s due")
         #expect(InvoiceReminder.primerAllowLabel == "Turn on the reminder")
         // It does not repeat SP-08's promise about what a designer sends.
         #expect(!offer.promise.contains("your designer"))

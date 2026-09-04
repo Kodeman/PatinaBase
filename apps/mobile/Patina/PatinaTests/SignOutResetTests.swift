@@ -52,7 +52,7 @@ struct SignOutResetTests {
         coordinator.forcePhaseForTesting(.auth)
 
         for tab in PatinaTab.allCases {
-            #expect(coordinator.tabs.stack(for: tab).isEmpty, "\(tab) kept the previous account's stack")
+            #expect(coordinator.tabs.stack(for: tab).isEmpty, "\(tab) kept the previous account’s stack")
         }
         #expect(coordinator.tabs.selected == .today)
         #expect(coordinator.currentScreen == .heroFrame)
@@ -139,7 +139,7 @@ struct SignOutResetTests {
 
         coordinator.forcePhaseForTesting(.auth)
 
-        #expect(queue.isEmpty, "account A's link would have drained into account B's session")
+        #expect(queue.isEmpty, "account A’s link would have drained into account B’s session")
     }
 
     /// And the wiring that makes the test above true in the product: the

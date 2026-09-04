@@ -65,7 +65,7 @@ struct OrderRecordRowTests {
 
     // MARK: What does NOT draw
 
-    @Test("'Order placed' is the reader's own act and is NOT a row")
+    @Test("'Order placed' is the reader’s own act and is NOT a row")
     func placingAnOrderIsNotNews() {
         // Both shapes of "I just bought this": the direct-rail paid window and
         // the fulfillment intake it settles into.
@@ -108,7 +108,7 @@ struct OrderRecordRowTests {
 
     // MARK: The date
 
-    @Test("the shipment's own date wins over the line's when both exist")
+    @Test("the shipment’s own date wins over the line’s when both exist")
     func theShipmentDates() {
         let shippedAt = base.addingTimeInterval(86_400)
         let rows = HouseRecordBuilder.orderRows([
@@ -117,7 +117,7 @@ struct OrderRecordRowTests {
         #expect(rows[0].date == shippedAt)
     }
 
-    @Test("without a shipment the line's own entry date is used, never 'now'")
+    @Test("without a shipment the line’s own entry date is used, never 'now'")
     func theLineDates() {
         let entered = base.addingTimeInterval(-3600)
         let rows = HouseRecordBuilder.orderRows([order(state: .shipped, entered: entered)])
@@ -166,7 +166,7 @@ struct OrderRecordRowTests {
         #expect(!record.moved.contains { $0.kind == .orderMoved })
     }
 
-    @Test("the record snapshot round-trips an order row's route")
+    @Test("the record snapshot round-trips an order row’s route")
     func theRouteSurvivesAColdLaunch() throws {
         let row = HouseRecordBuilder.orderRows([order(state: .shipped)])[0]
         let record = HouseRecord(

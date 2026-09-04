@@ -105,7 +105,7 @@ struct DynamicTokenTests {
     /// comment false: the reader became a mid warm-grey. This pins the split
     /// so the next person to add a full-screen dark ground does not reach for
     /// the object token.
-    @Test("the immersive reader's ground is static charcoal, not the object token")
+    @Test("the immersive reader’s ground is static charcoal, not the object token")
     func theImmersiveReaderStaysCharcoal() throws {
         #expect(
             !PatinaContrast.isAdaptive(PatinaColors.charcoal),

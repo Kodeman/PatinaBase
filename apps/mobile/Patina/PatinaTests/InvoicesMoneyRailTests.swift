@@ -146,7 +146,7 @@ struct InvoicesMoneyRailTests {
 
     // MARK: - SP-15 · the failure speaks Patina, never the vendor
 
-    @Test("an unknown checkout failure never carries the vendor's words")
+    @Test("an unknown checkout failure never carries the vendor’s words")
     func unknownCheckoutErrorDropsTheVendorDetail() {
         let vendor = "Invalid API Key provided: sk_test_********************alls"
         let failure = MoneyFailureCopy.checkout(CheckoutError.from(code: nil, detail: vendor))
@@ -229,7 +229,7 @@ struct InvoicesMoneyRailTests {
                          "stripe_payment_intent_id": "pi_1" }] }
         """)
         #expect(InvoiceSettleCopy.unconfirmed(card)
-                == "We haven't seen this payment yet. We'll update this as soon as it clears.")
+                == "We haven’t seen this payment yet. We’ll update this as soon as it clears.")
         #expect(!InvoiceSettleCopy.processing(card).contains("3–5 business days"))
 
         let bank = try decode(RemoteInvoice.self, """
@@ -268,7 +268,7 @@ struct InvoicesMoneyRailTests {
     /// The dock height is the sum of what `CompanionHearthView.collapsedView`
     /// and the overlay actually draw. Pinned here so a change to either one
     /// fails this instead of silently re-colliding with the Pay button.
-    @Test("the dock's height matches what the Companion draws")
+    @Test("the dock’s height matches what the Companion draws")
     func dockHeightTracksTheCompanion() {
         #expect(CompanionHearthMetrics.collapsedDiameter == CompanionConstants.buttonSize)
         #expect(CompanionHearthMetrics.captionRowHeight == CompanionConstants.minimumTouchTarget)
@@ -277,7 +277,7 @@ struct InvoicesMoneyRailTests {
 
     /// The money clearance is measured against the dock, not against
     /// `reservedHeight` — which is 20 points shorter than the dock draws.
-    @Test("a money screen's bottom inset clears the dock, not just the Hearth")
+    @Test("a money screen’s bottom inset clears the dock, not just the Hearth")
     func moneyClearanceClearsTheDock() {
         #expect(MoneyScreenMetrics.bottomClearance(houseFirst: false)
                 >= CompanionHearthMetrics.dockHeight)

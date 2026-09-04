@@ -82,7 +82,7 @@ struct EditorialReadTimeTests {
         let source = try SourcePin.read("Patina/Core/Network/EditorialStoriesAPIClient.swift")
         #expect(
             !source.contains("readMinutes: remote.readMinutes"),
-            "DailyStory still takes the row's read_minutes verbatim — A3-17"
+            "DailyStory still takes the row’s read_minutes verbatim — A3-17"
         )
         #expect(source.contains("EditorialReadTime.claim("), "the mapping does not clamp the claim")
     }

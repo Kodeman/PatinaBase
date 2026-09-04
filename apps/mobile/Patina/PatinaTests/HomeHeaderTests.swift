@@ -56,7 +56,7 @@ struct HomeHeaderTests {
     /// flag-off root and not where the bar carries the Studio tab — and the
     /// tour anchor it hosts travels with it rather than being left mounted on
     /// a control that is not there.
-    @Test("the Studio pill is the root-without-a-bar's door, and only that root's")
+    @Test("the Studio pill is the root-without-a-bar’s door, and only that root’s")
     func theStudioPillIsGatedOffWhereTheBarDraws() throws {
         let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         #expect(header.contains("var showsStudioControl: Bool = true"))

@@ -74,7 +74,7 @@ struct QuizProgressTests {
         #expect(viewModel.answeredCount == 0)
     }
 
-    @Test("the pill's fraction reads the view model, not the question index")
+    @Test("the pill’s fraction reads the view model, not the question index")
     func pillReadsAnswers() throws {
         let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView.swift")
         #expect(source.contains("let fraction = Double(viewModel.progress)"))
@@ -168,7 +168,7 @@ struct QuizProgressTests {
         #expect(viewModel.currentQuestion == 2)
     }
 
-    @Test("'I'll do this later' exists and saves before it leaves")
+    @Test("'I’ll do this later' exists and saves before it leaves")
     func deferControlSavesFirst() throws {
         let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView.swift")
         #expect(source.contains("StyleQuiz.DeferButton"))

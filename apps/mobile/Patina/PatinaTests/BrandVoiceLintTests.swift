@@ -180,11 +180,23 @@ struct BrandVoiceLintTests {
     /// A-06's lint rule: one apostrophe glyph, U+2019, in anything a reader
     /// sees. Only apostrophes *between letters* are checked, so a literal
     /// carrying a Swift selector or a possessive-free path is untouched.
-    private static func lintApostrophes(_ source: String, file: String) {
-        for literal in copyLiterals(in: source).map(copyText) {
+    static func lintApostrophes(_ source: String, file: String) {
+        for literal in copyLiterals(in: source) {
+            // The reader-facing scan, with interpolations removed.
+            let copy = copyText(literal)
             #expect(
-                literal.range(of: "[A-Za-z]'[A-Za-z]", options: .regularExpression) == nil,
-                "\(file) ships \"\(literal)\" with a straight apostrophe (U+0027); A-06 wants U+2019"
+                copy.range(of: "[A-Za-z]'[A-Za-z]", options: .regularExpression) == nil,
+                "\(file) ships \"\(copy)\" with a straight apostrophe (U+0027); A-06 wants U+2019"
+            )
+            // …and the possessive that hangs off an interpolation, which the
+            // scan above cannot see: `copyText` turns `\(room.name)'s` into
+            // ` 's`, so "Your Living Room's longest wall is 18 ft." passed the
+            // lint for the whole of W1 while rendering a straight apostrophe on
+            // screen (`W1-B-07`). Read on the RAW literal, where the closing
+            // paren of the interpolation is still there to anchor against.
+            #expect(
+                literal.range(of: "\\)'[A-Za-z]", options: .regularExpression) == nil,
+                "\(file) ships \"\(literal)\" with a straight apostrophe after an interpolation"
             )
         }
     }
@@ -299,7 +311,6 @@ struct BrandVoiceLintTests {
             Self.lintApostrophes(file.source, file: file.path)
         }
     }
-
 }
 
 // MARK: - The deck's rows in files another lane owns (`RL1E2-01`)

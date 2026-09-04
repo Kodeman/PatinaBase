@@ -25,7 +25,7 @@ struct EdgeToastView: View {
 
         var title: String {
             switch self {
-            case .lowLight:     return "Let's brighten things up"
+            case .lowLight:     return "Let’s brighten things up"
             case .fastMovement: return "Easy does it"
             case .featureLoss:  return "I need a bit more detail"
             }
@@ -34,7 +34,7 @@ struct EdgeToastView: View {
         var body: String {
             switch self {
             case .lowLight:     return "The room needs a bit more light."
-            case .fastMovement: return "The room isn't going anywhere."
+            case .fastMovement: return "The room isn’t going anywhere."
             case .featureLoss:  return "Try pointing at something with texture."
             }
         }

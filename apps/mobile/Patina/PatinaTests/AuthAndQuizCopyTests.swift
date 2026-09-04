@@ -41,7 +41,7 @@ struct AuthAndQuizCopyTests {
     /// The primary button on the screen every first-run tester lands on after
     /// the quiz shipped Title Case, and named a class of thing rather than the
     /// thing: "View Recommendations".
-    @Test("the taste portrait's primary CTA is sentence case, and names pieces")
+    @Test("the taste portrait’s primary CTA is sentence case, and names pieces")
     func stylePortraitCTAIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleResultView.swift")
         #expect(source.contains("Text(\"See your pieces\")"))

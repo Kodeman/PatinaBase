@@ -186,7 +186,7 @@ struct ThreadListView: View {
         PatinaEmptyState(
             icon: "bubble.left.and.bubble.right",
             title: "No conversations yet",
-            message: "Messages with your designer land here once you're working together.",
+            message: "Messages with your designer land here once you’re working together.",
             ctaTitle: isOpeningThread ? "Opening\u{2026}" : emptyCTATitle,
             ctaAction: performEmptyCTA
         )

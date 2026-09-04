@@ -57,7 +57,7 @@ struct ConversationHeaderView: View {
 #Preview {
     VStack {
         ConversationHeaderView(
-            whisperTop: "Your room is captured · Let's discover your style",
+            whisperTop: "Your room is captured · Let’s discover your style",
             question: "Which room speaks to you?",
             subtext: "Choose one that pulls you in"
         )

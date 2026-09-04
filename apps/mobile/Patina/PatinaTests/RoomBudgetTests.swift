@@ -104,7 +104,7 @@ struct RoomBudgetTests {
         #expect(space.budgetLine == "budget $9,000")
     }
 
-    @Test("the room's figure line labels the pieces total and never reads as spend")
+    @Test("the room’s figure line labels the pieces total and never reads as spend")
     func theFigureLineIsLabelled() {
         let space = room()
         #expect(space.savedPiecesFigureLine == nil)
@@ -203,7 +203,7 @@ struct RoomBudgetTests {
             == "TYPED, NOT SCANNED")
     }
 
-    @Test("the room screen's figures and dated state line are the room's own")
+    @Test("the room screen’s figures and dated state line are the room’s own")
     func theRoomScreenFiguresAndState() {
         let space = room()
         space.budgetCents = 900_000
@@ -271,7 +271,7 @@ struct RoomBudgetTests {
         #expect(RoomScreenLines.make(room: space).meta.hasPrefix("20 × 15 ft"))
     }
 
-    @Test("the Spaces gallery card's Budget cell is the budget, not the pieces total")
+    @Test("the Spaces gallery card’s Budget cell is the budget, not the pieces total")
     func theGalleryCardPrintsTheBudget() {
         let space = room()
         saved("Brass Arc Floor Lamp", cents: 89_000, at: Self.day(8, 25), in: space)
@@ -329,7 +329,7 @@ struct RoomBudgetTests {
 
     // MARK: - The bar measures the budget its owner set (integration.md §6.3)
 
-    @Test("the bar measures against the room's own budget")
+    @Test("the bar measures against the room’s own budget")
     func theBarMeasuresAgainstTheStoredBudget() {
         #expect(BudgetAssessment.level(totalCents: 100_000, budgetCents: 900_000) == .below50)
         #expect(BudgetAssessment.level(totalCents: 600_000, budgetCents: 900_000) == .approaching)

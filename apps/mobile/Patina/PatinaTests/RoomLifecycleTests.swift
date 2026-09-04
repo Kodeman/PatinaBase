@@ -150,7 +150,7 @@ struct RoomLifecycleTests {
                 .components(separatedBy: "\n    }").first
         )
         let pops = delete.split(separator: "\n").filter { $0.contains("coordinator.goBack()") }
-        #expect(pops.count == 2, "one pop lands on the deleted room's own detail")
+        #expect(pops.count == 2, "one pop lands on the deleted room’s own detail")
     }
 
     /// The not-found state is still there for the case it is actually about:
@@ -158,7 +158,7 @@ struct RoomLifecycleTests {
     @Test
     func theNotFoundStateSurvivesForRealMisses() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/RoomProjectView.swift")
-        #expect(source.contains("This room isn’t on this phone") || source.contains("This room isn't on this phone"))
+        #expect(source.contains("This room isn’t on this phone") || source.contains("This room isn’t on this phone"))
     }
 
     // MARK: - B-03's other half: a synced room does not come back

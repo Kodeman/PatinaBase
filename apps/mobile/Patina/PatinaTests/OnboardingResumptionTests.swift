@@ -275,7 +275,7 @@ struct OnboardingResumptionTests {
     ///
     /// 2 s is inside L1-B's 8 s `LaunchWatchdog.stallDeadline`. Pinned so a
     /// later change to the budget has to be deliberate rather than incidental.
-    @Test("the server read's share of the launch path is a pinned two seconds")
+    @Test("the server read’s share of the launch path is a pinned two seconds")
     func theServerReadBudgetIsTwoSeconds() {
         #expect(OnboardingCompletion.serverReadBudget == .seconds(2))
     }

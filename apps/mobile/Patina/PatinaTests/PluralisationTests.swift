@@ -35,7 +35,7 @@ struct PluralisationTests {
     /// inflected and the visible one did not. Pinning that the announcement
     /// is composed from the same `label` the eye reads is what stops the two
     /// diverging a second time.
-    @Test("the stat's accessibility label is composed from the visible word")
+    @Test("the stat’s accessibility label is composed from the visible word")
     func statAccessibilityLabelSharesTheVisibleWord() throws {
         let source = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
         #expect(

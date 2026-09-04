@@ -160,7 +160,7 @@ enum SavedItemMirror {
     /// two things the app actually knows — the piece is saved here, and the
     /// account copy did not get written — and neither blames a connection the
     /// app cannot see nor promises a retry that does not exist.
-    static let deferredNotice = "Saved on this phone. We couldn't reach your account just now."
+    static let deferredNotice = "Saved on this phone. We couldn’t reach your account just now."
 
     /// `saved_items.source` names **where the piece was discovered**, and the
     /// column has carried a CHECK since `00055_saved_items.sql:32`:

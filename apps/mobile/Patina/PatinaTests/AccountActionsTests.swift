@@ -27,7 +27,7 @@ struct AccountActionsTests {
     /// C5: no vendor or system error text is ever rendered to a homeowner.
     /// The Pay failure printed Stripe's raw "Invalid API Key provided:
     /// sk_test_…"; this is the same class of failure and gets Patina's voice.
-    @Test("a deletion failure is rendered in Patina's voice, never the server's")
+    @Test("a deletion failure is rendered in Patina’s voice, never the server’s")
     func deletionFailureCopyCarriesNoVendorText() {
         let copy = AccountDeletionService.failureCopy
         // A-101 / L1-E copy deck (W1): "close" → "delete", so the row, the
@@ -38,7 +38,7 @@ struct AccountActionsTests {
         #expect(!copy.contains("401"))
     }
 
-    @Test("the deletion error type never carries the server's words")
+    @Test("the deletion error type never carries the server’s words")
     func deletionErrorDescriptionIsTheSameCopy() {
         #expect(AccountDeletionError.failed.errorDescription == AccountDeletionService.failureCopy)
     }
@@ -80,7 +80,7 @@ struct AccountActionsTests {
 
     /// The deck's three shapes, from the pure function the sheet renders.
     /// Never asked at zero — `LocalStoreClaim.shouldAsk` requires guest work.
-    @Test("the claim sheet's title is composed from the real counts")
+    @Test("the claim sheet’s title is composed from the real counts")
     func theClaimSheetTitleNamesWhatIsActuallyThere() {
         #expect(LocalStoreClaimSheet.title(rooms: 0, pieces: 1)
             == "Keep the 1 piece you saved on this phone?")

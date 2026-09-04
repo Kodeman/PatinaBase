@@ -98,7 +98,7 @@ struct TestAccountLoginFallbackTests {
         #expect(sent.withLock { $0 } == 2)
     }
 
-    @Test("THE ALLOW-LIST IS THE SERVER'S — the app carries no address list")
+    @Test("THE ALLOW-LIST IS THE SERVER’S — the app carries no address list")
     func noAllowListInTheBinary() throws {
         let service = try SourcePin.read("Patina/Services/Auth/TestAccountLoginFallback.swift")
         // A domain, never an address: nothing in the binary names a person,
@@ -126,7 +126,7 @@ struct TestAccountLoginFallbackTests {
         }
     }
 
-    @Test("redeems as magiclink, matching the function's generateLink type")
+    @Test("redeems as magiclink, matching the function’s generateLink type")
     func redeemsAsMagiclink() throws {
         let service = try SourcePin.read("Patina/Services/Auth/TestAccountLoginFallback.swift")
         #expect(service.contains("type: .magiclink"))

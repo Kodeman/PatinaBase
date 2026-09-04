@@ -100,13 +100,13 @@ public actor CompletionAnalyzer {
         public var companionMessage: String {
             switch self {
             case .complete:
-                return "I think I have it. We can move on whenever you're ready."
+                return "I think I have it. We can move on whenever you’re ready."
             case .acceptAndContinue:
                 return "We have a good scan. Want to capture a bit more for better accuracy?"
             case .suggestMoreScanning:
-                return "I'm missing a few areas. Mind looking around a bit more?"
+                return "I’m missing a few areas. Mind looking around a bit more?"
             case .requireMoreScanning:
-                return "I need a bit more to work with. Let's keep going."
+                return "I need a bit more to work with. Let’s keep going."
             }
         }
 
@@ -336,16 +336,16 @@ extension CompletionAnalyzer {
             case .incompleteWall:
                 return "Try moving along the walls slowly to capture more detail."
             case .lowCoverage:
-                return "I haven't seen all of this space yet. Mind exploring a bit more?"
+                return "I haven’t seen all of this space yet. Mind exploring a bit more?"
             case .insufficientWalls(let current, let required):
                 let remaining = required - current
-                return "I'm only seeing \(current) wall\(current == 1 ? "" : "s"). Can you show me \(remaining) more?"
+                return "I’m only seeing \(current) wall\(current == 1 ? "" : "s"). Can you show me \(remaining) more?"
             case .lowConfidence:
                 return "Some areas are a bit unclear. Moving more slowly might help."
             case .insufficientLighting:
-                return "The room's a bit dim — mind turning on a light?"
+                return "The room’s a bit dim — mind turning on a light?"
             case .excessiveMotion:
-                return "I'm having trouble tracking your motion. Mind slowing your sweeps?"
+                return "I’m having trouble tracking your motion. Mind slowing your sweeps?"
             }
         }
 

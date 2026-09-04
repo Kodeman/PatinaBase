@@ -143,12 +143,12 @@ struct TypographyAdoptionTests {
     /// each glyph passes 80 pt and an 11-character name runs off-canvas.
     /// `.fixedSize(horizontal: false, vertical: true)` — which the view already
     /// had — does nothing for a horizontal overflow.
-    @Test("the reveal's per-character hero can shrink instead of running off-canvas")
+    @Test("the reveal’s per-character hero can shrink instead of running off-canvas")
     func theRevealHeroSurvivesAccessibilitySizes() throws {
         let source = try SourcePin.readCode("Patina/Features/StyleReveal/Views/RevealView.swift")
         #expect(
             source.contains("minimumScaleFactor"),
-            "RevealView's hero has no scale floor — at AX sizes an 11-character aesthetic name leaves the screen"
+            "RevealView’s hero has no scale floor — at AX sizes an 11-character aesthetic name leaves the screen"
         )
         #expect(
             source.contains("PatinaTypography.display2Regular"),

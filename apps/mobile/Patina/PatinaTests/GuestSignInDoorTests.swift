@@ -14,7 +14,7 @@ import Foundation
 import Testing
 @testable import Patina
 
-@Suite("The guest's door back in")
+@Suite("The guest’s door back in")
 struct GuestSignInDoorTests {
 
     @Test("the guest Studio card presents the auth sheet, not Settings")

@@ -58,7 +58,7 @@ final class NotificationsViewModel {
             self.notifications = Self.merge(real: real, fallback: Self.currentFallbackRows())
             self.isLoading = false
         } catch {
-            self.error = "Couldn't load notifications"
+            self.error = "Couldn’t load notifications"
             self.isLoading = false
             #if DEBUG
             PatinaLog.ui.error("[Notifications] load failed: \(error.localizedDescription)")

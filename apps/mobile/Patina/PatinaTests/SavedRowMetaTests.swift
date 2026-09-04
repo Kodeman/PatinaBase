@@ -38,7 +38,7 @@ struct SavedRowMetaTests {
         #expect(SavedRowMeta.line(savedAt: savedAt, roomName: "  ", calendar: utc) == "Saved Aug 24")
     }
 
-    @Test("the date is fixed-locale, not the device's")
+    @Test("the date is fixed-locale, not the device’s")
     func fixedLocale() {
         // The same trap `HouseRecordDates` documents: a French device would
         // otherwise print "24 août" inside English copy.
@@ -127,7 +127,7 @@ struct SavedItemReconcileTests {
         #expect(item.savedAt == june)
     }
 
-    @Test("the server's room becomes the local room the row names")
+    @Test("the server’s room becomes the local room the row names")
     func theRoomCrosses() throws {
         let item = try #require(CollectionsViewModel.localRow(
             from: try remote(createdAt: "2026-06-14T18:22:07.418293+00:00"),

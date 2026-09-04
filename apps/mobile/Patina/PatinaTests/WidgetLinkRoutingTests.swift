@@ -122,7 +122,7 @@ struct WidgetLinkRoutingTests {
 
     // MARK: - The row's door
 
-    @Test("a row id resolves to that row's own route")
+    @Test("a row id resolves to that row’s own route")
     func aRowIdResolvesToItsRoute() {
         let record = Self.record(moved: [
             Self.row(id: "order:direct:abc", route: .orderDetail(orderId: "direct:abc")),
@@ -169,7 +169,7 @@ struct WidgetLinkRoutingTests {
 
     // MARK: - Where every route lands (RouteTabTable, exhaustive)
 
-    @Test("every route a record row can carry lands on that route's own tab")
+    @Test("every route a record row can carry lands on that route’s own tab")
     func everyRouteLandsOnItsTab() {
         #expect(Self.everyRoute.count == 37, "one entry per AppRoute case")
 
@@ -197,7 +197,7 @@ struct WidgetLinkRoutingTests {
         ])
         let coordinator = AppCoordinator(houseFirstRoot: false)
         guard let resolved = route("patina://record/order:direct:abc", in: record) else {
-            Issue.record("the row's route did not resolve")
+            Issue.record("the row’s route did not resolve")
             return
         }
         coordinator.openExternal(resolved)
@@ -265,7 +265,7 @@ struct WidgetLinkRoutingTests {
         #expect(guardIndex.lowerBound < hostIndex.lowerBound)
     }
 
-    @Test("the widget's scheme is the app's scheme")
+    @Test("the widget’s scheme is the app’s scheme")
     func theSchemesAgree() {
         #expect(PatinaWidgetLinks.scheme == APIConfiguration.appURLScheme)
         #expect(PatinaWidgetLinks.todayHost == DeepLinkHandler.widgetTodayHost)

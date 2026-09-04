@@ -65,7 +65,7 @@ struct ProductDetailRoomSaveTests {
     /// which PostgREST refused with a 400 (23514) on every save this app has
     /// ever made; the local row is the saved thing, so the failure only ever
     /// logged. Caught on the fix walk.
-    @Test("the payload's source is one the column accepts")
+    @Test("the payload’s source is one the column accepts")
     func thePayloadSourceIsLegal() {
         let allowed = ["emergence", "search", "companion", "extension"]
         let payload = ProductDetailViewModel.savePayload(
@@ -94,7 +94,7 @@ struct ProductDetailRoomSaveTests {
 
     // MARK: - The local write
 
-    @Test("the save lands the room on the saved row and in the room's own list")
+    @Test("the save lands the room on the saved row and in the room’s own list")
     func theSaveLandsTheRoomOnTheLocalRow() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
@@ -149,7 +149,7 @@ struct ProductDetailRoomSaveTests {
         #expect(store.room(id: room.id)?.totalInvestmentCents == 0)
     }
 
-    @Test("un-saving one piece leaves the room's other pieces alone")
+    @Test("un-saving one piece leaves the room’s other pieces alone")
     func unsavingLeavesTheOtherPieces() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
@@ -174,7 +174,7 @@ struct ProductDetailRoomSaveTests {
 
     // MARK: - What the reader then sees
 
-    @Test("the saved row's meta line names the room")
+    @Test("the saved row’s meta line names the room")
     func theRowMetaDrawsTheRoom() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
@@ -190,7 +190,7 @@ struct ProductDetailRoomSaveTests {
         )
     }
 
-    @Test("the room's own Saved list holds the piece, and another room's does not")
+    @Test("the room’s own Saved list holds the piece, and another room’s does not")
     func theRoomScopedSavedListFiltersByRoom() throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
@@ -206,7 +206,7 @@ struct ProductDetailRoomSaveTests {
 
     // MARK: - The mount
 
-    @Test("the piece screen's Add to Room reaches a room, not just the save toggle")
+    @Test("the piece screen’s Add to Room reaches a room, not just the save toggle")
     func theActWritesARoom() throws {
         let source = try SourcePin.read("Patina/Features/ProductDetail/Views/ProductDetailView.swift")
         #expect(source.contains("AddToRoomSheet("))

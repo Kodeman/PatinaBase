@@ -239,7 +239,7 @@ struct HomeMountTests {
         #expect(buildIndex.lowerBound < stampIndex.lowerBound)
     }
 
-    @Test("the push primer's trigger survives the recomposition")
+    @Test("the push primer’s trigger survives the recomposition")
     func thePushPrimerStillFires() throws {
         let source = try home()
         #expect(source.contains("PushPrimerView"))

@@ -104,7 +104,7 @@ struct ThreadHeaderTests {
 
     // MARK: - C-14, the audit line
 
-    @Test("the studio's bookkeeping line is not the client's transcript")
+    @Test("the studio’s bookkeeping line is not the client’s transcript")
     func theAuditLineIsSuppressed() {
         let messages = [
             message(id: "m0", body: "Project conversation opened.", system: true),
@@ -210,7 +210,7 @@ struct ThreadHeaderTests {
         #expect(!code.contains("FeatureFlags.shared.isOn(.houseFirst)"))
     }
 
-    @Test("the clearance is the flag-off dock's on the flag-off root")
+    @Test("the clearance is the flag-off dock’s on the flag-off root")
     func theFlagOffRootStillClearsItsDock() {
         #expect(
             CompanionHearthMetrics.pinnedFooterClearance(houseFirst: false)
@@ -239,7 +239,7 @@ struct ThreadHeaderTests {
         #expect(chrome.contains(".padding(.leading, 18)"))
 
         let clearance: CGFloat = 18 + 36.5 + 1.5
-        #expect(clearance > 54.25, "the chevron's trailing edge on the measured frame")
+        #expect(clearance > 54.25, "the chevron’s trailing edge on the measured frame")
     }
 
     /// C4-12 — L1-B's note F-L1B-4. The fourth of the five Studio detail

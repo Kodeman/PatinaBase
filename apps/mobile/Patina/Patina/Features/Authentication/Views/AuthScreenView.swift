@@ -466,5 +466,5 @@ struct AuthProviderRow: View {
 }
 
 #Preview("With error") {
-    AuthScreenView(errorMessage: "Apple Sign In couldn't be completed. Please try again.")
+    AuthScreenView(errorMessage: "Apple Sign In couldn’t be completed. Please try again.")
 }

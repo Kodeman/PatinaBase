@@ -40,7 +40,7 @@ struct CaptionEditorSheet: View {
                         .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
 
                     if caption.isEmpty {
-                        Text("What's worth noticing here?")
+                        Text("What’s worth noticing here?")
                             .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.Text.muted.opacity(0.7))
                             .padding(.horizontal, 16)

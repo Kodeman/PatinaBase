@@ -282,7 +282,7 @@ struct DesignerSeatTests {
         #expect(seat?.meta == "Designer matched")
     }
 
-    @Test("a Next Move saying something else leaves the seat's own line alone")
+    @Test("a Next Move saying something else leaves the seat’s own line alone")
     func adifferentNextMoveLeavesTheSeatAlone() {
         let seat = DesignerSeat.make(
             liveLead: lead(status: "accepted"), projects: [],

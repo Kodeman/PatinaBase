@@ -89,7 +89,7 @@ struct WidgetSnapshotOwnershipTests {
 
     /// The widget's own decoder has to be able to read it, or the field is a
     /// note to nobody.
-    @Test("the widget's decoder reads the owner the app wrote")
+    @Test("the widget’s decoder reads the owner the app wrote")
     func theWidgetReadsTheOwner() throws {
         let reloads = ReloadCounter()
         let store = store(reloads: reloads)
@@ -145,7 +145,7 @@ struct WidgetSnapshotOwnershipTests {
         #expect(payload.drawableRows.isEmpty)
     }
 
-    @Test("the last account's house line does not survive the sign-out")
+    @Test("the last account’s house line does not survive the sign-out")
     func theHouseLineIsDroppedToo() throws {
         let reloads = ReloadCounter()
         let store = store(reloads: reloads)
@@ -201,7 +201,7 @@ struct WidgetSnapshotOwnershipTests {
 
     /// And the production default is the stamp's own `clear()` — not a
     /// look-alike that clears something else.
-    @Test("the default clear is the stamp's own")
+    @Test("the default clear is the stamp’s own")
     func theDefaultClearIsTheStamps() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Core/Persistence/RecordSnapshotStore.swift")

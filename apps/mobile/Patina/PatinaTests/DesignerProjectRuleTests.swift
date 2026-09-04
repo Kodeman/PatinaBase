@@ -96,7 +96,7 @@ struct DesignerProjectRuleTests {
         #expect(threadPick?.id == aspenLoft)
     }
 
-    @Test("the record's row can also be a proposal or an invoice")
+    @Test("the record’s row can also be a proposal or an invoice")
     func theOtherTwoNeedsYouKinds() throws {
         let proposal = try decode(RemoteProposal.self, """
         { "id": "p-1", "project_id": "\(aspenLoft)", "status": "sent",

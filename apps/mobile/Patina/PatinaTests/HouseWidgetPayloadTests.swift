@@ -196,7 +196,7 @@ struct HouseWidgetPayloadTests {
 
     // MARK: - Copy
 
-    @Test("the empty variant is M6b's line, with the day from the window")
+    @Test("the empty variant is M6b’s line, with the day from the window")
     func theEmptyLineNamesTheDayTheWindowNames() {
         let snapshot = HouseWidgetPayload(
             flagOn: true, refreshedAt: Self.refreshed, movedRows: [],
@@ -214,7 +214,7 @@ struct HouseWidgetPayloadTests {
         #expect(snapshot.eyebrow(locale: Self.posix, timeZone: Self.utc) == "What moved")
     }
 
-    @Test("the no-data copy is the screen sheet's, verbatim")
+    @Test("the no-data copy is the screen sheet’s, verbatim")
     func theNoDataCopyIsTheRuledOne() {
         #expect(HouseWidgetCopy.noData == "Open Patina to see your house.")
     }
@@ -264,13 +264,13 @@ struct HouseWidgetPayloadTests {
 
     // MARK: - The link vocabulary
 
-    @Test("the widget's plain door is patina://today")
+    @Test("the widget’s plain door is patina://today")
     func theWidgetOpensTodayPlain() {
         #expect(PatinaWidgetLinks.today.absoluteString == "patina://today")
         #expect(PatinaWidgetLinks.scheme == "patina")
     }
 
-    @Test("a row's door carries its id, colons and all")
+    @Test("a row’s door carries its id, colons and all")
     func aRowsDoorCarriesItsId() {
         #expect(PatinaWidgetLinks.record(rowId: "thread:abc").absoluteString == "patina://record/thread:abc")
         // `ClientOrder.id` is itself a prefixed token, so a row id can carry

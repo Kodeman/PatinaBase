@@ -95,7 +95,7 @@ struct AuthErrorRoutingTests {
         #expect(!sheet.contains("errorMessage: AuthService.shared.errorMessage"))
     }
 
-    @Test("Cancel clears the sheet's error rather than leaving it standing")
+    @Test("Cancel clears the sheet’s error rather than leaving it standing")
     func cancelClearsTheSheetError() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
         let start = try #require(source.range(of: "Button(\"Cancel\") {"))
@@ -149,7 +149,7 @@ struct AuthErrorRoutingTests {
         let empty = height(AuthStatusSlot(errorMessage: nil))
         let short = height(AuthStatusSlot(errorMessage: "Invalid login credentials"))
         let long = height(AuthStatusSlot(
-            errorMessage: "Apple Sign In couldn't be completed. Please try again."
+            errorMessage: "Apple Sign In couldn’t be completed. Please try again."
         ))
         #expect(empty == short, "\(size): empty \(empty) vs short \(short)")
         #expect(empty == long, "\(size): empty \(empty) vs long \(long)")
@@ -178,7 +178,7 @@ struct AuthErrorRoutingTests {
             body()
         }
 
-        @Test("a sheet's error is never the root's error")
+        @Test("a sheet’s error is never the root’s error")
         func sheetScopedErrorDoesNotReachTheRoot() {
             withRestoredError {
                 AuthService.shared.setError("Invalid login credentials", scope: .sheet)
@@ -188,11 +188,11 @@ struct AuthErrorRoutingTests {
             }
         }
 
-        @Test("a root's error is never a presented sheet's error")
+        @Test("a root’s error is never a presented sheet’s error")
         func rootScopedErrorDoesNotReachTheSheet() {
             withRestoredError {
-                AuthService.shared.reportExternalError("Apple Sign In couldn't be completed.")
-                #expect(AuthService.shared.rootErrorMessage == "Apple Sign In couldn't be completed.")
+                AuthService.shared.reportExternalError("Apple Sign In couldn’t be completed.")
+                #expect(AuthService.shared.rootErrorMessage == "Apple Sign In couldn’t be completed.")
                 #expect(AuthService.shared.sheetErrorMessage == nil)
             }
         }
@@ -217,7 +217,7 @@ struct AuthErrorRoutingTests {
     @Test("the notice yields to an error, and neither changes the geometry")
     @MainActor
     func theNoticeYieldsToAnError() {
-        let notice = "We'll open what you tapped once you're in."
+        let notice = "We’ll open what you tapped once you’re in."
         let both = AuthStatusSlot(errorMessage: "Invalid login credentials", pendingLinkNotice: notice)
         #expect(both.message?.text == "Invalid login credentials")
         #expect(both.message?.isError == true)
@@ -247,7 +247,7 @@ struct AuthErrorRoutingTests {
     /// expanding. Round one wrapped the whole screen unconditionally, and the
     /// legal footer rose from y≈771 to y≈607 with ~200 pt of dead space under
     /// it at the default text size — measured on the AX tree, light and dark.
-    @Test("the Welcome content is given the viewport's height as a floor")
+    @Test("the Welcome content is given the viewport’s height as a floor")
     func welcomeContentFillsTheViewport() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
         #expect(source.contains("GeometryReader { proxy in"))
@@ -341,7 +341,7 @@ struct AuthErrorRoutingTests {
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
-    @Test("the root's status never renders a filled red panel (VISION §6)")
+    @Test("the root’s status never renders a filled red panel (VISION §6)")
     func statusIsTintedTextNotAColouredPanel() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
         #expect(!source.contains("Color.red"))

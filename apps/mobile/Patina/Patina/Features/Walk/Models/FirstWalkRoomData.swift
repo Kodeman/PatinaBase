@@ -219,7 +219,7 @@ public enum FeatureCategory: String, Codable, CaseIterable {
         case .tallCeiling:
             return "Tall ceilings... that opens possibilities."
         case .window:
-            return "Light coming in. That's important."
+            return "Light coming in. That’s important."
         case .largeWindow:
             return "That window is doing a lot of work in here."
         case .door:
@@ -229,7 +229,7 @@ public enum FeatureCategory: String, Codable, CaseIterable {
         case .bookshelf:
             return "Books. Always a good sign."
         case .hardwoodFloor:
-            return "Real wood floors. They've seen some life."
+            return "Real wood floors. They’ve seen some life."
         case .cornerNook:
             return "I see a corner that wants something."
         case .openArea:

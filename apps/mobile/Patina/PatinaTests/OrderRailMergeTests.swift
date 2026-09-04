@@ -127,7 +127,7 @@ struct OrderRailMergeTests {
         #expect(rows[0].directOrderId == "dir-1")
     }
 
-    @Test("a settled direct order is marked as the reader's own, not the designer's")
+    @Test("a settled direct order is marked as the reader’s own, not the designer’s")
     func aSettledDirectOrderIsTheReadersOwn() {
         let rows = ClientOrderBuilder.build(
             fulfillmentOrders: [fulfillment(designerProfileId: "leah", designerName: "Leah Hartwell")],
@@ -141,7 +141,7 @@ struct OrderRailMergeTests {
         #expect(rows[0].designerId == "leah")
     }
 
-    @Test("a fulfillment order with no direct order behind it is the designer's, by first name")
+    @Test("a fulfillment order with no direct order behind it is the designer’s, by first name")
     func anUnmatchedFulfillmentRowIsDesignerSourced() {
         let rows = ClientOrderBuilder.build(
             fulfillmentOrders: [fulfillment(designerProfileId: "leah", designerName: "Leah Hartwell")],
@@ -166,7 +166,7 @@ struct OrderRailMergeTests {
                 == "Your designer ordered this for you.")
     }
 
-    @Test("the app's own designer name is used only where the order's embed brought none")
+    @Test("the app’s own designer name is used only where the order’s embed brought none")
     func theFallbackNameFillsTheGap() {
         let rows = ClientOrderBuilder.build(
             fulfillmentOrders: [fulfillment(designerProfileId: "leah")],
@@ -191,7 +191,7 @@ struct OrderRailMergeTests {
         #expect(rows[0].state == .paidNotOnRail)
         #expect(!rows[0].state.drawsRail)
         #expect(ClientOrderCopy.stateLine(rows[0])
-                .hasSuffix("We'll email you when it ships."))
+                .hasSuffix("We’ll email you when it ships."))
     }
 
     @Test("an unpaid or abandoned direct order is not an order and is not listed")
@@ -263,7 +263,7 @@ struct OrderRailMergeTests {
 
     // MARK: Shipments — the attribution rule
 
-    @Test("with exactly one order on the rail, the policy proves the shipment is that order's")
+    @Test("with exactly one order on the rail, the policy proves the shipment is that order’s")
     func oneOrderMakesTheShipmentCertain() {
         let rows = ClientOrderBuilder.build(
             fulfillmentOrders: [fulfillment()],
@@ -310,7 +310,7 @@ struct OrderRailMergeTests {
 
     @Test("an unknown carrier resolves to no URL rather than a guessed one")
     func anUnknownCarrierHasNoLink() {
-        #expect(CarrierTracking.url(carrier: "Bob's Vans", tracking: "12345") == nil)
+        #expect(CarrierTracking.url(carrier: "Bob’s Vans", tracking: "12345") == nil)
         #expect(CarrierTracking.url(carrier: "UPS", tracking: "  ") == nil)
         #expect(CarrierTracking.url(carrier: nil, tracking: "1Z9") == nil)
     }

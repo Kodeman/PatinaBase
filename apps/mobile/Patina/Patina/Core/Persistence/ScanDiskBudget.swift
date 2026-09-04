@@ -67,7 +67,7 @@ public final class ScanDiskBudget {
             case .ok:
                 return nil
             case .advise:
-                return "Storage is getting tight. Scans you've saved on this phone stay here until you send them to a designer — send one to free up space."
+                return "Storage is getting tight. Scans you’ve saved on this phone stay here until you send them to a designer — send one to free up space."
             case .blocked(let reason):
                 return "\(reason). Scans saved on this phone are kept until you send them to a designer — send one to free up space."
             }

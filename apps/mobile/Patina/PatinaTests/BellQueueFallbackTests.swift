@@ -116,7 +116,7 @@ struct BellQueueFallbackTests {
 
     // MARK: - The fallback
 
-    @Test("the fallback prints the Studio's own awaiting rows")
+    @Test("the fallback prints the Studio’s own awaiting rows")
     func fallbackMirrorsTheStudioQueue() {
         let rows = NotificationsViewModel.fallbackRows(from: Self.snapshot(), now: Self.now)
         #expect(rows.count == 3)
@@ -134,7 +134,7 @@ struct BellQueueFallbackTests {
     }
 
     /// Tapping the bell must land where tapping the Studio would.
-    @Test("a composed row routes to the Studio row's own destination")
+    @Test("a composed row routes to the Studio row’s own destination")
     func fallbackRowsCarryTheStudioRoute() {
         let rows = NotificationsViewModel.fallbackRows(from: Self.snapshot(), now: Self.now)
         let routes = Set(rows.compactMap(\.route))

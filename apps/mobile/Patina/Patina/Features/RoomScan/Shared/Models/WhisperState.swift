@@ -56,7 +56,7 @@ public struct WhisperState: Equatable {
         case 0..<0.10:
             return WhisperState(
                 progress: clamped,
-                text: "Let's walk your room together.",
+                text: "Let’s walk your room together.",
                 subtext: "Move slowly to begin",
                 haptic: .none,
                 band: .threshold
@@ -64,7 +64,7 @@ public struct WhisperState: Equatable {
         case 0.10..<0.25:
             return WhisperState(
                 progress: clamped,
-                text: "That's it. Nice and slow.",
+                text: "That’s it. Nice and slow.",
                 subtext: "Keep moving · Walls detected",
                 haptic: .soft,
                 band: .early
@@ -104,7 +104,7 @@ public struct WhisperState: Equatable {
         default:
             return WhisperState(
                 progress: clamped,
-                text: "Your room is captured. Now let's talk about you.",
+                text: "Your room is captured. Now let’s talk about you.",
                 subtext: "Scan complete · Style discovery begins",
                 haptic: .success,
                 band: .complete
@@ -118,7 +118,7 @@ public struct WhisperState: Equatable {
     public static var lowLight: WhisperState {
         WhisperState(
             progress: 0,
-            text: "Try a light switch — I'll wait.",
+            text: "Try a light switch — I’ll wait.",
             subtext: "Low light detected",
             haptic: .none,
             band: .threshold
@@ -129,7 +129,7 @@ public struct WhisperState: Equatable {
     public static var fastMovement: WhisperState {
         WhisperState(
             progress: 0,
-            text: "Easy does it. The room isn't going anywhere.",
+            text: "Easy does it. The room isn’t going anywhere.",
             subtext: "Slow down",
             haptic: .none,
             band: .threshold
@@ -151,7 +151,7 @@ public struct WhisperState: Equatable {
     public static var roomTooLarge: WhisperState {
         WhisperState(
             progress: 0,
-            text: "That's a lot of space. Let's focus on this area first.",
+            text: "That’s a lot of space. Let’s focus on this area first.",
             subtext: "Section scanning enabled",
             haptic: .none,
             band: .threshold

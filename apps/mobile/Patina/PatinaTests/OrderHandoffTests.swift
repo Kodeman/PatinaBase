@@ -146,7 +146,7 @@ struct OrderHandoffTests {
         )
         await machine.begin(productId: PurchaseFixture.productId)
 
-        #expect(machine.failure?.sentence == "We don't have this piece's size yet.")
+        #expect(machine.failure?.sentence == "We don’t have this piece’s size yet.")
         #expect(events.properties(of: "order_failed")?["reason"] == "dimensions")
         #expect(!events.names.contains("order_checkout_opened"))
     }
@@ -276,7 +276,7 @@ struct OrderHandoffTests {
 
     // MARK: - The guest
 
-    @Test("a guest's tap goes to the wall, on every act that would write")
+    @Test("a guest’s tap goes to the wall, on every act that would write")
     func aGuestMeetsTheWallBeforeAnythingIsWritten() {
         // The previous version of this test built a machine, never called
         // `begin`, and asserted the phase was `.idle` — which would pass with

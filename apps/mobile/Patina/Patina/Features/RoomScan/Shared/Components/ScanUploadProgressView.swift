@@ -101,7 +101,7 @@ public struct ScanUploadProgressView: View {
         case .synced:    return "Uploaded"
         case .failed:    return "Upload failed — will retry"
         case .heldLocal: return "Saved on this phone"
-        case .quarantined: return package.lastError ?? "Saved on this phone — we couldn't read it"
+        case .quarantined: return package.lastError ?? "Saved on this phone — we couldn’t read it"
         }
     }
 

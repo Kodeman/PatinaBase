@@ -144,7 +144,7 @@ struct ContrastTests {
     /// Welcome screen and on a card inside a sheet, so its label owes the body
     /// bar against **both** grounds, which is the case the `filledCases` loop
     /// above could not see.
-    @Test("the outline button's label holds on both grounds it is used on")
+    @Test("the outline button’s label holds on both grounds it is used on")
     func secondaryButtonLabelHoldsOnEveryGround() {
         for style in PatinaContrast.appearances {
             for (groundName, ground) in Self.grounds {
@@ -172,7 +172,7 @@ struct ContrastTests {
     /// because no W1 finding measured them and inventing three text-grade
     /// status tokens is a palette decision this lane was not asked to make.
     /// They are reported as an open gap rather than left unnamed.
-    @Test("the status badge's error ink clears AA on its own wash")
+    @Test("the status badge’s error ink clears AA on its own wash")
     func theStatusBadgeInkClearsAAOnItsOwnWash() {
         for style in PatinaContrast.appearances {
             for (groundName, ground) in Self.grounds {
@@ -186,7 +186,7 @@ struct ContrastTests {
                 )
                 #expect(
                     measured >= 4.5,
-                    "the error badge's ink on its own wash over \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below the 4.5:1 body bar"
+                    "the error badge’s ink on its own wash over \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below the 4.5:1 body bar"
                 )
             }
         }
@@ -194,7 +194,7 @@ struct ContrastTests {
 
     /// The counterfactual, so a future "just use the status colour" is met with
     /// the number rather than an opinion.
-    @Test("the raw status colour still cannot carry the badge's label")
+    @Test("the raw status colour still cannot carry the badge’s label")
     func theRawErrorColourStillCannotCarryTheLabel() {
         let washed = PatinaContrast.compositedGround(
             PatinaColors.error, opacity: 0.14, on: PatinaColors.Background.primary, .light
@@ -208,7 +208,7 @@ struct ContrastTests {
 
     /// `C3-05`. The tier badge is a 10 pt uppercase numeral on a filled pill —
     /// the exact shape the finding measured at 2.33:1.
-    @Test("the tier pill's label clears AA on its own fill")
+    @Test("the tier pill’s label clears AA on its own fill")
     func tierPillLabelClearsAA() {
         for style in PatinaContrast.appearances {
             let measured = PatinaContrast.ratio(TierPill.labelColor, on: TierPill.fillColor, style)

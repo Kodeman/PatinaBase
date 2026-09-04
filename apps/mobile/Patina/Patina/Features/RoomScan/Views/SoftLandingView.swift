@@ -40,7 +40,7 @@ struct SoftLandingView: View {
             VStack {
                 Spacer()
                 if showTransitionText && !transitionTextFadedOut {
-                    Text("Now let's talk about you.")
+                    Text("Now let’s talk about you.")
                         .font(PatinaTypography.patinaVoiceLarge)
                         .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
                         .transition(.opacity)
@@ -105,7 +105,7 @@ struct SoftLandingView: View {
 
     private func returningUserPrompt(for profile: StyleProfileResponse) -> some View {
         VStack(spacing: 16) {
-            Text("You've done this before.")
+            Text("You’ve done this before.")
                 .font(PatinaTypography.patinaVoice)
                 .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
             Text("Your style: \(profile.aestheticName)")

@@ -143,7 +143,7 @@ struct AskAboutPieceSheet: View {
         switch outcome {
         case .none: return "A designer will come back to you about this piece."
         case .sent: return "A designer will come back to you about this piece."
-        case .alreadyAsked: return "You've already asked about this one. It's still with us."
+        case .alreadyAsked: return "You’ve already asked about this one. It’s still with us."
         }
     }
 
@@ -169,7 +169,7 @@ struct AskAboutPieceSheet: View {
         } catch {
             MoneyFailureCopy.log("ask-about-piece", error)
             failure = MoneyFailure(
-                "We couldn't send that. Nobody has seen it yet.",
+                "We couldn’t send that. Nobody has seen it yet.",
                 offersDesignerMessage: false
             )
         }

@@ -74,7 +74,7 @@ struct AuthStatusRegionTests {
         #expect(code.components(separatedBy: "statusRegion").count - 1 == 2)
     }
 
-    @Test("a verify clears the send's success line before it starts")
+    @Test("a verify clears the send’s success line before it starts")
     func verifyClearsTheSuccessLine() throws {
         // RL2A-12 moved the in-flight flag out of the Task and onto the
         // synchronous pass, so this anchors on the function rather than on the

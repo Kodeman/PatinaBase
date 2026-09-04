@@ -29,7 +29,7 @@ import Foundation
 enum InvoiceReminder {
 
     /// The act, as the screen prints it.
-    static let actLabel = "Remind me the day before it's due"
+    static let actLabel = "Remind me the day before it’s due"
 
     /// The morning of the day before. Day precision everywhere else on the
     /// money rail; a due date is a Postgres `date` and carries no time of its
@@ -68,7 +68,7 @@ enum InvoiceReminder {
     /// The promise printed under the act, so nobody opts into a sentence they
     /// have not read.
     static func promise(balanceCents: Int, currencyCode: String) -> String {
-        "We'll send one notification: \u{201C}\(body(balanceCents: balanceCents, currencyCode: currencyCode))\u{201D}"
+        "We’ll send one notification: \u{201C}\(body(balanceCents: balanceCents, currencyCode: currencyCode))\u{201D}"
     }
 
     /// Said once when authorization is off, and never repeated.
@@ -83,7 +83,7 @@ enum InvoiceReminder {
     // for (steward §7). So: the sentence this will send, what it will not do,
     // and the two ways out.
 
-    static let primerTitle = "The day before it's due"
+    static let primerTitle = "The day before it’s due"
 
     /// Everything this reminder is, past the sentence itself. No badge, no
     /// repeat, and it is not the notifications Patina sends about your project.

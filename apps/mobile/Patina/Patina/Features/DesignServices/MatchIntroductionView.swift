@@ -133,7 +133,7 @@ struct MatchIntroductionView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Portfolio")
-                .accessibilityHint("Opens \(studioName)'s portfolio in the browser.")
+                .accessibilityHint("Opens \(studioName)’s portfolio in the browser.")
             }
         }
         .padding(20)

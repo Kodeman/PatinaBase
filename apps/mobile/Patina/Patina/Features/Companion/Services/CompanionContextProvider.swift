@@ -212,7 +212,7 @@ enum CompanionActionProvider {
     private static func panelTitleDetail(for screen: AppRoute) -> String {
         switch screen {
         case .roomProject:
-            return "What's next for this room?"
+            return "What’s next for this room?"
         case .roomSettings:
             return "All set here?"
         case .manualRoomEntry:
@@ -233,9 +233,9 @@ enum CompanionActionProvider {
     private static func studioPanelTitle(for screen: AppRoute) -> String {
         switch screen {
         case .studio:
-            return "What's next?"
+            return "What’s next?"
         case .projectList:
-            return "What's on your plate?"
+            return "What’s on your plate?"
         case .projectDetail:
             return "Anything for this project?"
         case .decisionList:
@@ -245,7 +245,7 @@ enum CompanionActionProvider {
         case .threadList:
             return "Anything else?"
         case .threadDetail:
-            return "While you're here"
+            return "While you’re here"
         case .designerConsultation:
             return "Working with your designer"
         case .designRequests:

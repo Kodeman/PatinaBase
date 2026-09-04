@@ -71,7 +71,7 @@ struct PrivacyManifestTests {
         )
     }
 
-    @Test("the app's manifest declares no tracking")
+    @Test("the app’s manifest declares no tracking")
     func appManifestDeclaresNoTracking() throws {
         try assertNoTracking(try manifest(at: appManifestURL), "app")
     }
@@ -96,7 +96,7 @@ struct PrivacyManifestTests {
         )
     }
 
-    @Test("the widget's manifest declares no tracking")
+    @Test("the widget’s manifest declares no tracking")
     func widgetManifestDeclaresNoTracking() throws {
         try assertNoTracking(try manifest(at: widgetManifestURL), "widget")
     }

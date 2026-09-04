@@ -54,7 +54,7 @@ struct YourHouseRailTests {
         #expect(HouseRoomCard.card(for: rooms[0]).meta == "budget $9,000")
     }
 
-    @Test("the person's own rooms come first, then the project's")
+    @Test("the person’s own rooms come first, then the project’s")
     func personsRoomsComeFirst() throws {
         let rooms = try projectRooms("""
         [{ "id": "r1", "project_id": "b1", "name": "Dining Room", "budget_cents": 0 }]
@@ -66,7 +66,7 @@ struct YourHouseRailTests {
         #expect(cards[1].isReadOnly)
     }
 
-    @Test("with two project rooms the person's room is still the first card")
+    @Test("with two project rooms the person’s room is still the first card")
     func theRoomSheMadeIsNeverPushedOffTheEdge() throws {
         // The shape of walk FAIL 1/2: two project rooms drawn before hers put
         // `Guest Bedroom` at x = 524 on a 402 pt screen.
@@ -79,7 +79,7 @@ struct YourHouseRailTests {
         #expect(cards.map(\.name) == ["Guest Bedroom", "Dining Room", "Living Room"])
     }
 
-    @Test("the person's rooms are newest first")
+    @Test("the person’s rooms are newest first")
     func thePersonsRoomsAreNewestFirst() {
         let older = RoomModel(name: "Garage", roomType: "other")
         older.createdAt = Date(timeIntervalSince1970: 1_000)
@@ -106,7 +106,7 @@ struct YourHouseRailTests {
         #expect(YourHouseRail.cardWidth(inContainerOfWidth: 1024) == 280)
     }
 
-    @Test("on the walk's 402 pt screen the second card starts on screen")
+    @Test("on the walk’s 402 pt screen the second card starts on screen")
     func theSecondCardStartsOnScreen() {
         let viewport: CGFloat = 402
         let leading: CGFloat = 20
@@ -174,7 +174,7 @@ struct YourHouseRailTests {
         #expect(HouseRoomCard.card(for: local).meta == "252 sq ft")
     }
 
-    @Test("a room the project owns stays read-only, with the designer's figures")
+    @Test("a room the project owns stays read-only, with the designer’s figures")
     func aProjectRoomStaysReadOnly() throws {
         let rooms = try projectRooms("""
         [{ "id": "r1", "project_id": "b1", "name": "Dining Room",
@@ -191,7 +191,7 @@ struct YourHouseRailTests {
         }
     }
 
-    @Test("an activeProject client whose rooms are all the designer's still has a house")
+    @Test("an activeProject client whose rooms are all the designer’s still has a house")
     func projectRoomsAloneAreAHouse() throws {
         let rooms = try projectRooms("""
         [{ "id": "r1", "project_id": "b1", "name": "Dining Room", "budget_cents": 0 },

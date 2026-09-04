@@ -114,7 +114,7 @@ struct OrderStateDerivationTests {
 
     // MARK: - The date
 
-    @Test("the state's date is the LATEST entry among the lines that define it")
+    @Test("the state’s date is the LATEST entry among the lines that define it")
     func theDateIsTheLastDefiningLineToArrive() {
         let early = base
         let late = base.addingTimeInterval(3600)

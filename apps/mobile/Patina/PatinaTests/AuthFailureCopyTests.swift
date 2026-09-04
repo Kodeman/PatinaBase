@@ -40,7 +40,7 @@ struct AuthFailureCopyTests {
         )
     }
 
-    @Test("no auth failure renders the server's own sentence")
+    @Test("no auth failure renders the server’s own sentence")
     func noRawServerStringOnAnyPath() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
         #expect(!source.contains("setError(error.localizedDescription"))
@@ -61,7 +61,7 @@ struct AuthFailureCopyTests {
         #expect(sentence(.emailNotConfirmed).contains("confirmed"))
     }
 
-    @Test("an unrecognised failure still gets ours, not the server's")
+    @Test("an unrecognised failure still gets ours, not the server’s")
     func theFallbackIsOursToo() {
         struct Boom: LocalizedError {
             var errorDescription: String? { "PGRST301: JWSError JWSInvalidSignature" }
@@ -127,7 +127,7 @@ struct AuthFailureCopyTests {
 
     /// Brand voice: sentence case, one apostrophe glyph, none of the banned
     /// lexicon, and no interpolation of a thrown value.
-    @Test("every sentence reads in Patina's voice")
+    @Test("every sentence reads in Patina’s voice")
     func everySentenceIsInVoice() {
         let all = [
             sentence(.invalidCredentials),

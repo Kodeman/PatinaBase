@@ -230,7 +230,7 @@ extension SessionMetricsService {
             case .none:
                 return ""
             case .longDwellNoInteraction:
-                return "Need help finding what you're looking for?"
+                return "Need help finding what you’re looking for?"
             case .indecisiveScrolling:
                 return "Looking for something specific? I can help narrow it down."
             case .both:

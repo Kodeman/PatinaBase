@@ -68,7 +68,7 @@ struct RoomPlanUnsupportedView: View {
                     .font(PatinaTypography.h2)
                     .foregroundStyle(PatinaColors.Text.primary)
 
-                Text("Your device doesn't support room scanning. You can still explore Patina and see what pieces might work for your space.")
+                Text("Your device doesn’t support room scanning. You can still explore Patina and see what pieces might work for your space.")
                     .font(PatinaTypography.body)
                     .foregroundStyle(PatinaColors.Text.secondary)
                     .multilineTextAlignment(.center)

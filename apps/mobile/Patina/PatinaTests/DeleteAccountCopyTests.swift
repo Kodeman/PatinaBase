@@ -81,7 +81,7 @@ struct DeleteAccountCopyTests {
         #expect(AccountDeletionService.confirmationBody.contains("can’t be undone"))
     }
 
-    @Test("the failure sentence is ours, never the server's")
+    @Test("the failure sentence is ours, never the server’s")
     func failureCopyIsOurs() {
         #expect(AccountDeletionService.failureCopy
             == "We couldn’t delete your account just now. Try again, or write to hello@patina.cloud.")

@@ -206,7 +206,7 @@ struct HouseRecordCardTests {
         #expect(!String(body[..<end.lowerBound]).contains("See all"))
     }
 
-    @Test("the record's own event carries the gap it is reporting on")
+    @Test("the record’s own event carries the gap it is reporting on")
     func theShownEventCarriesTheGap() throws {
         let source = try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
         #expect(source.contains("\"days_since_last_seen\""))

@@ -116,7 +116,7 @@ struct BadgeFreshnessTests {
     /// The feed's view model is the one writer, and it publishes on every
     /// mutation — load, mark-read, mark-all-read, and each rollback. A path
     /// that changes `notifications` without publishing is the bug coming back.
-    @Test("every mutation of the feed's rows publishes the count")
+    @Test("every mutation of the feed’s rows publishes the count")
     func everyMutationPublishes() throws {
         let source = try SourcePin.read(
             "Patina/Features/Notifications/ViewModels/NotificationsViewModel.swift"

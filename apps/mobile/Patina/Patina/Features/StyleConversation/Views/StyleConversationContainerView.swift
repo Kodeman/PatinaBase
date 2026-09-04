@@ -99,7 +99,7 @@ struct StyleConversationContainerView: View {
         case 1: return ("Which room speaks to you?", nil)
         case 2: return ("How do you actually live in this space?", "Select all that apply")
         case 3: return ("What texture calls to you?", "Choose up to three")
-        case 4: return ("Let's talk about investment.", "What feels right for this room?")
+        case 4: return ("Let’s talk about investment.", "What feels right for this room?")
         case 5: return ("What would change everything?", nil)
         default: return ("", nil)
         }

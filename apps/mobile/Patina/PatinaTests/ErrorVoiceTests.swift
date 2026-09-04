@@ -40,7 +40,7 @@ struct ErrorVoiceTests {
         #expect(PickIntroductionError.failed(canary).errorDescription?.contains(canary) == false)
     }
 
-    @Test("DesignServicesError.submissionFailed reads the fix's exact sentence")
+    @Test("DesignServicesError.submissionFailed reads the fix’s exact sentence")
     func submissionFailedReadsExactSentence() {
         #expect(
             DesignServicesError.submissionFailed.errorDescription
@@ -48,7 +48,7 @@ struct ErrorVoiceTests {
         )
     }
 
-    @Test("the sending step's fallback matches the app's one canonical generic sentence")
+    @Test("the sending step’s fallback matches the app’s one canonical generic sentence")
     func sendingStepFallbackIsCanonical() throws {
         let source = try SourcePin.read("Patina/Features/DesignServices/DesignRequestFlowView+Steps.swift")
         // Positive form only. The negative form this test used to carry
@@ -67,7 +67,7 @@ struct ErrorVoiceTests {
         #expect(CompanionAPIError.serverError(statusCode: 599).errorDescription?.contains("599") == false)
     }
 
-    @Test("CompanionAPIError's generic failures read one of the three canonical sentences")
+    @Test("CompanionAPIError’s generic failures read one of the three canonical sentences")
     func companionGenericFailuresAreCanonical() {
         let canonical: Set<String> = [
             "Something went wrong.",
@@ -132,7 +132,7 @@ struct ErrorVoiceTests {
 
     // MARK: - The raw detail is logged, not discarded
 
-    @Test("dropping the raw text from the reader's sentence did not drop it from the log")
+    @Test("dropping the raw text from the reader’s sentence did not drop it from the log")
     func rawDetailIsStillLogged() throws {
         // `RL1E2-16`: this asserted `contains("PatinaLog.")`, which any log
         // call anywhere in the file satisfied. The site the message names is
@@ -154,7 +154,7 @@ struct ErrorVoiceTests {
         let saveLog = try #require(arViewModel.range(of: marker))
         #expect(
             !arViewModel[..<saveLog.lowerBound].suffix(140).contains("#if DEBUG"),
-            "the save-failure log is compiled out of Release, where a tester's failure needs it most"
+            "the save-failure log is compiled out of Release, where a tester’s failure needs it most"
         )
     }
 
@@ -164,7 +164,7 @@ struct ErrorVoiceTests {
     /// `ScanUploadProgressView`, which is one `Text(err)` away from `C4-08`
     /// on a second surface, and the column outlives the process. Both now
     /// carry one fixed sentence and the cause goes to the log.
-    @Test("the scan-upload coordinator never stores a thrown error's text")
+    @Test("the scan-upload coordinator never stores a thrown error’s text")
     func scanUploadCoordinatorNeverStoresRawErrorText() throws {
         let source = try SourcePin.read("Patina/Services/DesignServices/DesignRequestCoordinator.swift")
         #expect(!source.contains(".failed(error.localizedDescription)"))
@@ -181,14 +181,14 @@ struct ErrorVoiceTests {
     /// constant's bytes keeps those three sites one sentence — and keeps its
     /// apostrophe U+2019, which the payload's own lint cannot see because
     /// `.failed`'s argument is a constant reference, not a literal.
-    @Test("every failed upload phase carries the coordinator's one fixed line")
+    @Test("every failed upload phase carries the coordinator’s one fixed line")
     func failedUploadPhaseIsOneFixedLine() {
         #expect(DesignRequestCoordinator.uploadFailureLine == "Upload didn’t finish")
     }
 
     // MARK: - L1-E's own files, already applied here
 
-    @Test("PatinaErrorState's own preview text is the canonical bare headline")
+    @Test("PatinaErrorState’s own preview text is the canonical bare headline")
     func patinaErrorStatePreviewIsCanonical() throws {
         let source = try SourcePin.read("Patina/Design/Components/PatinaErrorState.swift")
         #expect(!source.contains("Something went wrong loading this."))
@@ -202,7 +202,7 @@ struct ErrorVoiceTests {
     // renames used to leave the wrapper green forever — the detector failed
     // open. Only the assertions are known-issue-tolerated now.
 
-    @Test("ScanReviewView's error headline carries a terminal period, matching the app's one voice")
+    @Test("ScanReviewView’s error headline carries a terminal period, matching the app’s one voice")
     func scanReviewHeadlineHasPeriod() throws {
         let source = try SourcePin.read("Patina/Features/RoomScan/Views/ScanReviewView.swift")
         #expect(!source.contains("Text(\"Something went wrong\")\n"))

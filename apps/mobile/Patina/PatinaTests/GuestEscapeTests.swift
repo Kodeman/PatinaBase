@@ -41,7 +41,7 @@ struct GuestEscapeTests {
         defaults.removePersistentDomain(forName: suite)
     }
 
-    @Test("returnToSignIn clears both the persisted opt-in and the coordinator's copy")
+    @Test("returnToSignIn clears both the persisted opt-in and the coordinator’s copy")
     func returnToSignInClearsBothHalves() throws {
         let source = try SourcePin.read("Patina/Services/Auth/GuestSessionStore.swift")
         let start = try #require(source.range(of: "static func returnToSignIn("))

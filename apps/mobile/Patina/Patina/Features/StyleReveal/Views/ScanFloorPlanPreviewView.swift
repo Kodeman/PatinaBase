@@ -29,7 +29,7 @@ struct ScanFloorPlanPreviewView: View {
             VStack(spacing: 0) {
                 ConversationHeaderView(
                     whisperTop: "Your space",
-                    question: "Here's what I see.",
+                    question: "Here’s what I see.",
                     whisperGeometryNamespace: whisperNamespace
                 )
                 .padding(.bottom, 24)

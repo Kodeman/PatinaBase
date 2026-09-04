@@ -173,7 +173,7 @@ enum TodayExperience {
                 title: "Find the first piece for \(room.name)",
                 detail: room.hasBeenScanned
                     ? "See the room-aware edit for this space."
-                    : "Browse Patina's edit and begin shaping the room.",
+                    : "Browse Patina’s edit and begin shaping the room.",
                 symbol: "sparkles",
                 targetID: room.id.uuidString
             )

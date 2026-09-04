@@ -204,7 +204,7 @@ struct AuthProviderVisibilityTests {
         #expect(catalog.providers == [.email])
     }
 
-    @Test("both auth surfaces thread the service's loading state in (C1-05)")
+    @Test("both auth surfaces thread the service’s loading state in (C1-05)")
     func callSitesThreadIsLoading() throws {
         let content = try SourcePin.read("Patina/ContentView.swift")
         #expect(content.contains("isLoading: AuthService.shared.isLoading"))
@@ -218,7 +218,7 @@ struct AuthProviderVisibilityTests {
     /// label — with `.font(.system(size: 16, weight: .regular))`, which does
     /// not. At accessibility-XXXL the envelope stayed a small glyph beside a
     /// two-line ~40 pt "Continue with email": a regression inside the fix.
-    @Test("the provider row's symbol takes the same type ramp as its title")
+    @Test("the provider row’s symbol takes the same type ramp as its title")
     func theProviderGlyphScalesWithItsLabel() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
         let start = try #require(source.range(of: "struct AuthProviderRow: View {"))

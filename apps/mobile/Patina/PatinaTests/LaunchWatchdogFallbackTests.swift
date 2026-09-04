@@ -113,7 +113,7 @@ struct LaunchWatchdogFallbackTests {
 
     /// The floor an unresolved launch pays is `LaunchWatchdog`'s, not the 1.5 s
     /// that put ~3 s between a tap and content.
-    @Test("the splash floor is the watchdog's, not the old 1.5")
+    @Test("the splash floor is the watchdog’s, not the old 1.5")
     func theFloorIsTheSharedOne() {
         #expect(
             AppCoordinator.splashMinimumDuration
@@ -124,7 +124,7 @@ struct LaunchWatchdogFallbackTests {
 
     /// And a fresh coordinator's own deadline is that floor, not a longer one
     /// written separately — one number, one place.
-    @Test("a fresh coordinator's splash deadline is that floor")
+    @Test("a fresh coordinator’s splash deadline is that floor")
     func theInitialDeadlineIsTheFloor() {
         let coordinator = AppCoordinator(houseFirstRoot: true)
         let remaining = coordinator.splashMinimumDeadline.timeIntervalSinceNow

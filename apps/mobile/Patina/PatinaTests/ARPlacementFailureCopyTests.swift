@@ -31,7 +31,7 @@ struct ARPlacementFailureCopyTests {
     /// by no view in the target, so this is a landmine rather than a live
     /// defect — one `Text(manager.errorMessage ?? "")` away from being `C4-08`
     /// again, in the file `C4-08` is filed about.
-    @Test("the AR load failure speaks in the app's voice, not the SDK's")
+    @Test("the AR load failure speaks in the app’s voice, not the SDK’s")
     func loadFailureMessageIsInTheAppVoice() throws {
         let source = try SourcePin.read("Patina/Features/ARPlacement/Services/ARPlacementManager.swift")
         #expect(!source.contains("\"Couldn't load 3D model\""))

@@ -134,7 +134,7 @@ struct BadgeCountPersistenceTests {
     /// The bell is not restored. Its count is the feed's own rows, read state
     /// and all; a number carried across a process boundary would badge updates
     /// this process has never fetched — `C2-07` in the other direction.
-    @Test("the bell's count is not part of the floor")
+    @Test("the bell’s count is not part of the floor")
     func theBellIsNotRestored() throws {
         let store = defaults()
         let first = BadgeCountService.makeForTests(defaults: store)

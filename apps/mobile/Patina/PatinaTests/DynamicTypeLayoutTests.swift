@@ -70,7 +70,7 @@ struct DynamicTypeLayoutTests {
         #expect(eyebrow.contains("minimumScaleFactor("))
     }
 
-    @Test("the Companion's own rows scale too — C-06's other half")
+    @Test("the Companion’s own rows scale too — C-06's other half")
     func theCompanionRowsScaleBeforeTheyBreak() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Companion/Views/CompanionOverlay.swift")
@@ -82,7 +82,7 @@ struct DynamicTypeLayoutTests {
         for row in ["Text(label)", "Text(hint)"] {
             let chain = Self.chain(after: row, in: code)
             #expect(chain.contains("minimumScaleFactor("),
-                    "the Companion row's \(row) still breaks inside a word (C-06)")
+                    "the Companion row’s \(row) still breaks inside a word (C-06)")
             #expect(chain.contains("allowsTightening(true)"))
         }
         // …and the modifiers alone are not the fix. `minimumScaleFactor` shrinks
@@ -119,7 +119,7 @@ struct DynamicTypeLayoutTests {
                 "the panel is bounded but not clipped, so its rows still paint through the shell")
     }
 
-    @Test("the Companion panel's own header scales too")
+    @Test("the Companion panel’s own header scales too")
     func theCompanionHeaderScalesBeforeItBreaks() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Companion/Components/CompanionHearthView.swift")
@@ -136,7 +136,7 @@ struct DynamicTypeLayoutTests {
         let start = try #require(code.range(of: "private func headerText")?.upperBound)
         let header = String(code[start...].prefix(900))
         #expect(header.components(separatedBy: "minimumScaleFactor(").count - 1 >= 2,
-                "the panel's title and detail still break inside a word (C-06)")
+                "the panel’s title and detail still break inside a word (C-06)")
         #expect(header.components(separatedBy: "allowsTightening(true)").count - 1 >= 2)
         #expect(code.contains("if dynamicTypeSize.isAccessibilitySize {"),
                 "the header never stacks, so its words keep a ~230 pt column (C-06)")
@@ -190,7 +190,7 @@ struct DynamicTypeLayoutTests {
     /// one row at every text size, so at an accessibility size the badge took
     /// the width the title needed and the title broke inside a word — on the
     /// list a client opens to answer the thing Procurement is waiting on.
-    @Test("a decision card's title does not break mid-word")
+    @Test("a decision card’s title does not break mid-word")
     func theDecisionCardTitleStacksAtAccessibilitySizes() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionListView.swift")
@@ -207,7 +207,7 @@ struct DynamicTypeLayoutTests {
 
     /// "TOTA / L" and "EXPI / RY", on the sheet where a client signs. The
     /// restated-terms label column was a hard 78 pt at every text size.
-    @Test("the sign sheet's term labels keep a column they fit in")
+    @Test("the sign sheet’s term labels keep a column they fit in")
     func theSignSheetLabelColumnScales() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Proposals/Views/ProposalSignSheet.swift")

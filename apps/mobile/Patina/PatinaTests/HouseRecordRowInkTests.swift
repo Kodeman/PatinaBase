@@ -99,8 +99,8 @@ struct HouseRecordRowInkTests {
             #expect(
                 abs(quiet - tappable) < 0.02,
                 """
-                the route-less row's ink is \(PatinaContrast.rounded(quiet)) and the tappable \
-                row's is \(PatinaContrast.rounded(tappable)) in \(PatinaContrast.name(style)) — \
+                the route-less row’s ink is \(PatinaContrast.rounded(quiet)) and the tappable \
+                row’s is \(PatinaContrast.rounded(tappable)) in \(PatinaContrast.name(style)) — \
                 SwiftUI is dimming the disabled row, which is C-20's rendered 4.27:1
                 """
             )
@@ -109,7 +109,7 @@ struct HouseRecordRowInkTests {
 
     /// The rendered bar itself, so the suite says what the finding asked for
     /// rather than only "the two rows match".
-    @Test("the quiet row's ink clears the body bar against the card it sits on")
+    @Test("the quiet row’s ink clears the body bar against the card it sits on")
     func theQuietRowClearsTheBodyBar() {
         for style in PatinaContrast.appearances {
             let ground = RenderPin.groundLuminance(PatinaColors.Background.secondary, style)
@@ -131,7 +131,7 @@ struct HouseRecordRowInkTests {
         let source = try SourcePin.readCode("Patina/Features/Home/Views/HouseRecordCard.swift")
         #expect(
             !source.contains(".disabled("),
-            "HouseRecordCard disables a row again — SwiftUI halves a disabled plain button's ink and that is C-20's rendered failure"
+            "HouseRecordCard disables a row again — SwiftUI halves a disabled plain button’s ink and that is C-20's rendered failure"
         )
     }
 }

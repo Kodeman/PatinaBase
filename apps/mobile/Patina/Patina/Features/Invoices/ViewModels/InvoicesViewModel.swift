@@ -43,7 +43,7 @@ final class InvoiceListViewModel {
         do {
             self.invoices = try await InvoicesAPIClient.shared.listInvoices()
         } catch {
-            self.error = "Couldn't load invoices"
+            self.error = "Couldn’t load invoices"
             #if DEBUG
             PatinaLog.ui.error("[Invoices] list failed: \(error.localizedDescription)")
             #endif
@@ -90,9 +90,9 @@ final class InvoiceDetailViewModel {
         error = nil
         do {
             self.invoice = try await InvoicesAPIClient.shared.fetchInvoice(id: invoiceId)
-            if self.invoice == nil { self.error = "Couldn't load this invoice" }
+            if self.invoice == nil { self.error = "Couldn’t load this invoice" }
         } catch {
-            self.error = "Couldn't load this invoice"
+            self.error = "Couldn’t load this invoice"
             #if DEBUG
             PatinaLog.ui.error("[Invoices] detail failed: \(error.localizedDescription)")
             #endif

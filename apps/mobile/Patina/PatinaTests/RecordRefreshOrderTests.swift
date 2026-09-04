@@ -158,7 +158,7 @@ struct RecordRefreshOrderTests {
 
     // MARK: - B-1: the record must not outlive the account
 
-    @Test("another account's record is discarded before it can be painted or built against")
+    @Test("another account’s record is discarded before it can be painted or built against")
     func aForeignRecordNeverReachesTheScreen() {
         let (snapshots, lastSeen, owner) = stores()
         let visit = Date(timeIntervalSince1970: 1_755_500_000)

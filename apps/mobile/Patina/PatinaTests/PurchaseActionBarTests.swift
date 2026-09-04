@@ -20,7 +20,7 @@ struct PurchaseActionBarTests {
         PurchaseActionBar(act: act, isSaved: isSaved, onPrimary: {}, onAddToRoom: {})
     }
 
-    @Test("the primary is the act's own label, one act per bar")
+    @Test("the primary is the act’s own label, one act per bar")
     func primaryLabelIsTheActsOwn() {
         #expect(bar(.askDesigner(firstName: "Leah")).act.primaryLabel
                 == "Ask Leah to source this")
@@ -34,10 +34,10 @@ struct PurchaseActionBarTests {
         #expect(bar(.buy(priceCents: 1), isSaved: true).isSaved)
     }
 
-    @Test("the gate's reason prints under Path C and nowhere else")
+    @Test("the gate’s reason prints under Path C and nowhere else")
     func reasonDrawsOnlyForPathC() {
-        #expect(bar(.askAboutPiece(reason: "We don't have this piece's size yet."))
-                .act.reason == "We don't have this piece's size yet.")
+        #expect(bar(.askAboutPiece(reason: "We don’t have this piece’s size yet."))
+                .act.reason == "We don’t have this piece’s size yet.")
         #expect(bar(.askAboutPiece(reason: nil)).act.reason == nil)
         #expect(bar(.buy(priceCents: 1)).act.reason == nil)
         #expect(bar(.askDesigner(firstName: "Leah")).act.reason == nil)

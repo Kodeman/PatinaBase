@@ -141,7 +141,7 @@ struct SignInCodeNamingTests {
     /// above a submit button reading "Sign in" and a switcher reading
     /// "Sign up". The deck named the button and the switcher; this was the
     /// residue.
-    @Test("the sheet's header is sentence case, like everything under it")
+    @Test("the sheet’s header is sentence case, like everything under it")
     func everyHeaderIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
         #expect(!source.contains("return viewModel.mode.rawValue"))
@@ -172,7 +172,7 @@ struct SignInCodeNamingTests {
     /// `.title2` monospaced with `.tracking(8)`, in a 339 pt field. It rendered
     /// "E n t e r   t h e   6 – d …" — an unreadable placeholder on the screen
     /// every tester walks. Measured, not asserted about the string.
-    @Test("the empty field's prompt fits inside the field")
+    @Test("the empty field’s prompt fits inside the field")
     @MainActor
     func theEmptyFieldsPromptIsNotClipped() throws {
         // The observed field is 339 pt wide (AXFrame, iPhone 16 Pro sheet);

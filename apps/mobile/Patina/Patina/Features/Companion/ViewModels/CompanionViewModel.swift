@@ -384,7 +384,7 @@ public final class CompanionViewModel { // swiftlint:disable:this type_body_leng
             // invitation in Patina's voice, no error styling.
             isThinking = false
             let invite = Message(
-                content: "I can chat once you're signed in. Until then, feel free to browse — sign in any time and we'll pick this up.",
+                content: "I can chat once you’re signed in. Until then, feel free to browse — sign in any time and we’ll pick this up.",
                 sender: .patina
             )
             conversationMessages.append(invite)
@@ -395,7 +395,7 @@ public final class CompanionViewModel { // swiftlint:disable:this type_body_leng
             // pretending the API answered. That mock now lives strictly
             // behind `--companionmock` inside CompanionService; by the time
             // this catch runs there is nothing left to fake.
-            errorMessage = "Couldn't reach Patina. Please try again."
+            errorMessage = "Couldn’t reach Patina. Please try again."
             lastFailedMessageText = text
             PatinaLog.companion.error("Failed to send message: \(error)")
 

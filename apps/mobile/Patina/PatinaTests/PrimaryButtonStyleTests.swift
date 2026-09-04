@@ -85,7 +85,7 @@ struct PrimaryButtonStyleTests {
     /// guest bell's "Sign in" measured 50.17 × 53.5 pt, a circle cutting its own
     /// text. `GAP1B-07`: `.ghost` has a clear background and no content shape, so
     /// its hit region was the text's bounds — 17.6 pt on both decision sheets.
-    @Test("the capsule is wider than its label, and every style's hit region is the capsule")
+    @Test("the capsule is wider than its label, and every style’s hit region is the capsule")
     func theCapsuleIsAControlNotAnOutline() throws {
         let source = try SourcePin.read(
             "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaButton.swift"
@@ -96,7 +96,7 @@ struct PrimaryButtonStyleTests {
         )
         #expect(
             source.contains(".contentShape(Capsule())"),
-            "PatinaButton's hit region is still the label's bounds for .ghost — GAP1B-07"
+            "PatinaButton’s hit region is still the label’s bounds for .ghost — GAP1B-07"
         )
         // The padding has to sit INSIDE the frame, or an .infinity-width call
         // site grows by 48 pt and every sheet footer moves.
@@ -132,7 +132,7 @@ struct PrimaryButtonStyleTests {
     /// scaled around it — "Continue with email" wrapped to two lines inside its
     /// own button — and "Sign in with Apple" became the smallest text on the
     /// screen, sitting on top of them.
-    @Test("Sign in with Apple grows with the reader's text size")
+    @Test("Sign in with Apple grows with the reader’s text size")
     func appleButtonHeightScalesWithDynamicType() throws {
         let source = try SourcePin.read(
             "Patina/Features/Authentication/Views/SignInWithAppleButton.swift"
@@ -143,7 +143,7 @@ struct PrimaryButtonStyleTests {
         )
         #expect(
             source.contains("@ScaledMetric(relativeTo: .body)"),
-            "the Apple button's height is not tied to the text size"
+            "the Apple button’s height is not tied to the text size"
         )
         // …and it is capped, or at accessibility5 it would be taller than the
         // two buttons under it put together.

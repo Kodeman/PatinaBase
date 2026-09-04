@@ -41,7 +41,7 @@ struct CompanionInsetTests {
 
     // MARK: - The metric
 
-    @Test("the modifier's two answers are the shared metric, not a third constant")
+    @Test("the modifier’s two answers are the shared metric, not a third constant")
     func theModifierDerivesFromTheHearthMetric() {
         for houseFirst in [true, false] {
             #expect(CompanionBottomClearance.height(houseFirst: houseFirst, rootReserves: false)
@@ -54,7 +54,7 @@ struct CompanionInsetTests {
                 < CompanionBottomClearance.height(houseFirst: false, rootReserves: false))
     }
 
-    @Test("the clearance does not stack on top of the root's own reservation")
+    @Test("the clearance does not stack on top of the root’s own reservation")
     func theClearanceKnowsWhenTheRootAlreadyReserved() {
         // `pinnedFooterClearance` is documented as the figure a PUSHED screen
         // needs, *because* a root `safeAreaInset` does not reach a

@@ -43,7 +43,7 @@ final class ProposalListViewModel {
         do {
             self.proposals = try await ProposalsAPIClient.shared.listProposals()
         } catch {
-            self.error = "Couldn't load proposals"
+            self.error = "Couldn’t load proposals"
             #if DEBUG
             PatinaLog.ui.error("[Proposals] list failed: \(error.localizedDescription)")
             #endif

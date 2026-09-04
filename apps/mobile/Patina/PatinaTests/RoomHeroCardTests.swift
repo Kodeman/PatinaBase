@@ -59,7 +59,7 @@ struct RoomHeroCardTests {
 
     // MARK: - The room's own numbers
 
-    @Test("the hero prints the room's real dimensions and area")
+    @Test("the hero prints the room’s real dimensions and area")
     func theRoomPrintsItsFigures() {
         let hero = RoomHero.make(
             room: room(), now: Self.day(8, 26), calendar: Self.calendar
@@ -85,7 +85,7 @@ struct RoomHeroCardTests {
         #expect(RoomHero.make(room: room(scanned: true)).provenance == "SCANNED")
     }
 
-    @Test("the saved count is the room's real count, singular where it is one")
+    @Test("the saved count is the room’s real count, singular where it is one")
     func theSavedCountIsReal() {
         let space = room()
         _ = saved("Brass Arc Floor Lamp", at: Self.day(8, 25), in: space)
@@ -98,7 +98,7 @@ struct RoomHeroCardTests {
 
     // MARK: - The budget (W4)
 
-    @Test("the hero prints the room's budget beside its pieces, as M2 draws it")
+    @Test("the hero prints the room’s budget beside its pieces, as M2 draws it")
     func theHeroPrintsTheBudget() {
         let space = room()
         _ = saved("Brass Arc Floor Lamp", at: Self.day(8, 25), in: space)
@@ -172,7 +172,7 @@ struct RoomHeroCardTests {
         #expect(!blocks.contains(.startWithARoom))
     }
 
-    @Test("from engaged upward the rail holds the designer's rooms beside the person's")
+    @Test("from engaged upward the rail holds the designer’s rooms beside the person’s")
     func engagedKeepsTheRail() {
         let blocks = HomeComposition.blocks(for: HomeCompositionInput(
             isSignedIn: true, tier: .engaged, roomCount: 1, localRoomCount: 1
@@ -190,7 +190,7 @@ struct RoomHeroCardTests {
         #expect(!blocks.contains(.roomHero))
     }
 
-    @Test("a project room is not the person's own room to draw whole")
+    @Test("a project room is not the person’s own room to draw whole")
     func aProjectRoomIsNotTheHero() {
         let blocks = HomeComposition.blocks(for: HomeCompositionInput(
             isSignedIn: true, tier: .discovering, roomCount: 1, localRoomCount: 0

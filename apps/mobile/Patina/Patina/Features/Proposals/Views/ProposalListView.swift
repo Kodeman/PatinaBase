@@ -99,7 +99,7 @@ struct ProposalListView: View {
         PatinaEmptyState(
             icon: "doc.text",
             title: "Nothing to review yet",
-            message: "Your designer's proposals land here for your signature.",
+            message: "Your designer’s proposals land here for your signature.",
             ctaTitle: studioCTATitle,
             ctaAction: presentStudioCTA
         )

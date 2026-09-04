@@ -29,7 +29,7 @@ struct RecordForegroundTests {
 
     // MARK: - One rebuild per foreground
 
-    @Test("the root's ask and Today's ask rebuild the record once")
+    @Test("the root’s ask and Today’s ask rebuild the record once")
     func overlappingAsksCoalesce() async {
         let counter = Counter()
         async let root = RecordForeground.coalesce {
@@ -72,7 +72,7 @@ struct RecordForegroundTests {
         #expect(hook.upperBound < background.lowerBound)
     }
 
-    @Test("Today's rebuild is the same entry point the root calls")
+    @Test("Today’s rebuild is the same entry point the root calls")
     func todayGoesThroughTheSameEntryPoint() throws {
         let viewModel = try SourcePin.read(
             "Patina/Features/Home/ViewModels/DailyRoomViewModel.swift"
@@ -111,7 +111,7 @@ struct RecordForegroundTests {
     /// it. `stampVisit: false` is what keeps "when you last saw the Record"
     /// honest about that; the joiner's stamp in `run` is what keeps a
     /// foreground ONTO Today from losing the visit altogether.
-    @Test("the root's foreground pass does not stamp the visit")
+    @Test("the root’s foreground pass does not stamp the visit")
     func theRootDoesNotClaimAVisit() throws {
         let source = try SourcePin.read(
             "Patina/Features/Home/ViewModels/RecordForeground.swift"

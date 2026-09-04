@@ -375,7 +375,7 @@ struct CompanionActionMatrixTests {
         ).map(\.label)
         #expect(labels == [
             "Questions? Message your designer",
-            "See what's been billed",
+            "See what’s been billed",
             "All proposals",
             "Home",
             "Your studio"

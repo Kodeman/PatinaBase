@@ -47,7 +47,7 @@ struct PushAuthorizationCopyTests {
 
     // MARK: - What it says, and where it sends them
 
-    @Test("the denied line is the app's own sentence, and the app's only one")
+    @Test("the denied line is the app’s own sentence, and the app’s only one")
     func theDeniedLineIsOneSentence() {
         let line = PushTokenService.deniedLine
         #expect(line == "Notifications are off for Patina. You can turn them on in Settings.")

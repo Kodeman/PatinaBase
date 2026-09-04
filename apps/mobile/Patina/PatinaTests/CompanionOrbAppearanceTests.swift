@@ -55,7 +55,7 @@ struct CompanionOrbAppearanceTests {
             )
             #expect(
                 edge >= 3.0,
-                "the companion surface's edge on the page in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(edge)):1, below PROGRAM.md's 3:1; C-01 measured the fill at 1.15:1 in dark"
+                "the companion surface’s edge on the page in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(edge)):1, below PROGRAM.md’s 3:1; C-01 measured the fill at 1.15:1 in dark"
             )
 
             // The fill still has to move off 1.15:1 — the edge is the bar, not
@@ -158,7 +158,7 @@ struct CompanionOrbAppearanceTests {
     // sites untouched. These pin the fix.
 
     /// `C-02`. The panel's status line, by name.
-    @Test("the companion panel's subtitle is painted with on-dark ink, not the flipping token")
+    @Test("the companion panel’s subtitle is painted with on-dark ink, not the flipping token")
     func thePanelSubtitleUsesOnDarkInk() throws {
         let source = try SourcePin.readCode(
             "Patina/Features/Companion/Components/CompanionHearthView.swift"

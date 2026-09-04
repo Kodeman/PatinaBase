@@ -30,7 +30,7 @@ struct RoomFitLine: Equatable {
         guard let wall = longestWallFeet(of: room) else { return nil }
         guard let piece = longestHorizontalFeet(of: product.dimensions) else { return nil }
         return RoomFitLine(
-            text: "Your \(room.name)'s longest wall is \(feet(wall)). "
+            text: "Your \(room.name)’s longest wall is \(feet(wall)). "
                 + "This \(noun(for: product.category)) is \(feet(piece))."
         )
     }

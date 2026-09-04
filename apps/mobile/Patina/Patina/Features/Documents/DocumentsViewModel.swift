@@ -34,7 +34,7 @@ final class DocumentListViewModel {
             let documents = try await DocumentsAPIClient.shared.listDocuments()
             self.groups = DocumentGrouping.byProject(documents)
         } catch {
-            self.error = "Couldn't load your documents"
+            self.error = "Couldn’t load your documents"
             #if DEBUG
             PatinaLog.ui.error("[Documents] list failed: \(error.localizedDescription)")
             #endif
@@ -54,7 +54,7 @@ final class DocumentListViewModel {
                 self.previewURL = IdentifiableURL(url: fileURL)
             } catch {
                 self.openError = (error as? LocalizedError)?.errorDescription
-                    ?? "We couldn't open this file. Please try again."
+                    ?? "We couldn’t open this file. Please try again."
                 #if DEBUG
                 PatinaLog.ui.error("[Documents] open failed: \(error.localizedDescription)")
                 #endif

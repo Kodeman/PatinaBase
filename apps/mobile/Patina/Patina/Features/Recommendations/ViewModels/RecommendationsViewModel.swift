@@ -139,7 +139,7 @@ final class RecommendationsViewModel {
             }
         } catch {
             await MainActor.run {
-                self.error = "Couldn't load recommendations"
+                self.error = "Couldn’t load recommendations"
                 self.products = []
                 self.isLoading = false
             }

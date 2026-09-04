@@ -106,7 +106,7 @@ public final class AppCoordinator: Coordinator {
     /// That line, ruled here rather than in the view, so a test can hold it to
     /// its word: it names no vendor, no URL and no error — it is a promise the
     /// app keeps two taps later.
-    public static let pendingLinkNoticeLine = "We'll open what you tapped once you're in."
+    public static let pendingLinkNoticeLine = "We’ll open what you tapped once you’re in."
 
     /// Called by `DeepLinkHandler` when an arrival had to be kept rather than
     /// opened.

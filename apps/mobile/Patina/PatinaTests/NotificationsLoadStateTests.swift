@@ -62,15 +62,15 @@ struct NotificationsLoadStateTests {
 
     @Test("a failure is a failure, not an emptiness")
     func aFailureIsNotAnEmptiness() {
-        #expect(state(hasResolved: true, error: "Couldn't load notifications")
-                == .failed("Couldn't load notifications"))
+        #expect(state(hasResolved: true, error: "Couldn’t load notifications")
+                == .failed("Couldn’t load notifications"))
     }
 
     @Test("rows outrank every other answer — a refresh that fails keeps them")
     func rowsOutrankEverything() {
         #expect(state(hasResolved: true, rowCount: 5) == .rows)
         #expect(state(hasResolved: true, isLoading: true, rowCount: 5) == .rows)
-        #expect(state(hasResolved: true, error: "Couldn't load notifications", rowCount: 5) == .rows)
+        #expect(state(hasResolved: true, error: "Couldn’t load notifications", rowCount: 5) == .rows)
     }
 
     @Test("a signed-out reader only ever sees the invitation")
@@ -109,7 +109,7 @@ struct NotificationsLoadStateTests {
 
     // MARK: - A-63, the half this lane can hold
 
-    @Test("the guest invitation is the empty state's own CTA, not a second control")
+    @Test("the guest invitation is the empty state’s own CTA, not a second control")
     func theGuestInvitationUsesTheDesignSystemState() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Notifications/Views/NotificationFeedView.swift")
