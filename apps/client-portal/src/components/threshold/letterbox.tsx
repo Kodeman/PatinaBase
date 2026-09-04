@@ -1,11 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+import type { Invoice } from '@patina/supabase';
 
 import { ScoredAction } from '@/components/making/scored-action';
-import { SpineToll } from '@/components/making/spine-toll';
 import { moneyInWords } from '@/components/making/standing-sentence';
+import { clientEvents } from '@/lib/analytics/events';
+import { useCheckoutReturn } from '@/lib/threshold/checkout-return';
 import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
+
+import { EarlierInvoices } from './earlier-invoices';
+import { Settlement } from './settlement';
 
 /* ── The letterbox ──────────────────────────────────────────────────────────
    One letter, standing half out of the slot. The drawing states the fact
@@ -36,6 +42,10 @@ const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
 export interface LetterboxProps {
   /** The soonest-due open invoice, or null when nothing has come. */
   invoice: InvoiceModel | null;
+  /** Every invoice on the project — what is kept behind the one letter. */
+  invoices?: Invoice[];
+  /** Who a check would be coming to. Falls back to the invoice's own designer. */
+  designerName?: string | null;
   /**
    * Today, for deciding whether the due date needs its year spelled out — the
    * rule `SpineToll` applies. Omitted during SSR and the first client paint,
@@ -86,9 +96,34 @@ function Drawing({ full }: { full: boolean }) {
   );
 }
 
-export function Letterbox({ invoice, today }: LetterboxProps) {
+export function Letterbox({ invoice, invoices = [], designerName, today }: LetterboxProps) {
   const [open, setOpen] = useState(false);
   const due = invoice ? formatDue(invoice.dueDate, today) : null;
+
+  // The return from the till. A return that names an order belongs to the road,
+  // not to the letterbox.
+  const returned = useCheckoutReturn();
+  const settlement = returned && !returned.orderId ? returned : null;
+
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!settlement || reported.current || !settlement.invoiceId) return;
+    reported.current = true;
+    if (settlement.outcome === 'settled') {
+      clientEvents.paymentCompleted({ invoiceId: settlement.invoiceId });
+    } else {
+      clientEvents.paymentCancelled({ invoiceId: settlement.invoiceId });
+    }
+  }, [settlement]);
+
+  // The row behind the model: the currency the figures are quoted in, and the
+  // designer a check would be made out to.
+  const row = invoice ? (invoices.find((candidate) => candidate.id === invoice.id) ?? null) : null;
+  const studio =
+    designerName?.trim() ||
+    row?.designer?.full_name?.trim() ||
+    row?.designer?.business_name?.trim() ||
+    'your designer';
 
   return (
     <div
@@ -101,6 +136,18 @@ export function Letterbox({ invoice, today }: LetterboxProps) {
       <p className="mb-2 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
         The letterbox
       </p>
+
+      {settlement && (
+        <p
+          role="status"
+          data-testid="letterbox-receipt"
+          className="mb-2 max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {settlement.outcome === 'settled'
+            ? `Paid ${LONG_MONTH_DAY.format(today ?? new Date())}. Receipt in your email.`
+            : 'Nothing changed.'}
+        </p>
+      )}
 
       <Drawing full={invoice !== null} />
 
@@ -140,12 +187,10 @@ export function Letterbox({ invoice, today }: LetterboxProps) {
           >
             <div className="min-h-0">
               {open && (
-                <SpineToll
-                  invoiceId={invoice.id}
-                  invoiceNumber={invoice.number}
-                  totalCents={invoice.totalCents}
-                  paidCents={invoice.paidCents}
-                  dueDate={invoice.dueDate}
+                <Settlement
+                  invoice={invoice}
+                  currency={row?.currency || 'USD'}
+                  designerName={studio}
                   today={today}
                 />
               )}
@@ -160,6 +205,8 @@ export function Letterbox({ invoice, today }: LetterboxProps) {
           Nothing in the letterbox.
         </p>
       )}
+
+      <EarlierInvoices invoices={invoices} exceptId={invoice?.id ?? null} today={today} />
     </div>
   );
 }

@@ -276,8 +276,12 @@ async function loadInvoicePayable(
     lineItemName: label,
     existingSessionId: invoice.stripe_checkout_session_id,
     metadata: { payable_type: 'invoice', invoice_id: invoice.id },
-    successUrl: `${CLIENT_PORTAL_URL}/invoices/${invoice.id}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${CLIENT_PORTAL_URL}/invoices/${invoice.id}?checkout=cancelled`,
+    // Back to the project page the client pays from — the letterbox reads
+    // ?checkout= there and states the outcome in place. `invoice` names which
+    // one settled; no fragment, because the attempt params are appended after
+    // this string (invoice-checkout-core.ts) and a fragment would swallow them.
+    successUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=cancelled`,
     processingDetail:
       'A bank transfer for this invoice is already processing. Bank transfers take 3–5 business days to clear.',
     async onStaleSession(sessionId: string) {
@@ -509,6 +513,13 @@ interface DirectOrderRow {
   project_id: string | null;
 }
 
+/** Where Checkout hands a direct-order buyer back: her project, else the list. */
+function directOrderReturnBase(order: DirectOrderRow): string {
+  return order.project_id
+    ? `${CLIENT_PORTAL_URL}/projects/${order.project_id}?order=${order.id}`
+    : `${CLIENT_PORTAL_URL}/orders?order=${order.id}`;
+}
+
 /**
  * Read fulfillment_config direct_orders.tax_shipping_enabled (00540). The I/O
  * half; parseTaxShippingConfig owns the shape and the fail-closed rule.
@@ -654,8 +665,11 @@ async function loadDirectOrderPayable(
       clientEmail: (buyer as { email?: string | null } | null)?.email ?? null,
       designerClientId,
     }),
-    successUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}&checkout=success`,
-    cancelUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}&checkout=cancelled`,
+    // The road on the order's own project page reads ?checkout= there. An
+    // order raised without a project has no house to return to and keeps the
+    // orders list.
+    successUrl: `${directOrderReturnBase(order)}&checkout=success`,
+    cancelUrl: `${directOrderReturnBase(order)}&checkout=cancelled`,
     processingDetail:
       'A bank transfer for this order is already processing. Bank transfers take 3–5 business days to clear.',
     // Nothing to fail — the pointer lives on this row and is overwritten when a

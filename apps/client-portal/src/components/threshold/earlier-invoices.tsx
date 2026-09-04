@@ -1,0 +1,136 @@
+'use client';
+
+import { useState } from 'react';
+
+import type { Invoice } from '@patina/supabase';
+
+import { ScoredAction } from '@/components/making/scored-action';
+import { moneyInWords } from '@/components/making/standing-sentence';
+import { visibleInvoices } from '@/app/budget/rollup';
+import { parseSourceDate } from '@/lib/threshold/derive';
+
+/* ── EARLIER INVOICES ────────────────────────────────────────────────────────
+   The letterbox holds one letter. Everything that came before it is kept, and
+   folded away: a dated line each, in the order they arrived, newest first.
+
+   `visibleInvoices` decides what counts — the same reader /budget uses, so the
+   house and the budget page can never disagree about which invoices exist.
+   Each line can be printed, and printing opens the invoice's own printable
+   sheet in a new tab: a print is a document, not chrome, so it keeps its
+   route. ─────────────────────────────────────────────────────────────────── */
+
+const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
+const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+/** "12 June" in the surface's own idiom, and the year too once it is not this one. */
+function longDate(value: string | null | undefined, today?: Date): string | null {
+  const date = parseSourceDate(value);
+  if (!date) return null;
+  return today && today.getFullYear() !== date.getFullYear()
+    ? LONG_MONTH_DAY_YEAR.format(date)
+    : LONG_MONTH_DAY.format(date);
+}
+
+/** What became of it, in one dated clause. */
+function receiptTrail(invoice: Invoice, today?: Date): string {
+  const balanceCents = Math.max(
+    (invoice.total_cents || 0) - (invoice.amount_paid_cents || 0),
+    0,
+  );
+  if (invoice.status === 'paid') {
+    const paid = longDate(invoice.paid_at, today);
+    return paid ? `paid ${paid}` : 'paid';
+  }
+  const due = longDate(invoice.due_date, today);
+  if (invoice.status === 'partially_paid') {
+    return due
+      ? `${moneyInWords(balanceCents)} outstanding, due ${due}`
+      : `${moneyInWords(balanceCents)} outstanding`;
+  }
+  if (due) return `due ${due}`;
+  const sent = longDate(invoice.sent_at, today);
+  return sent ? `sent ${sent}` : 'awaiting payment';
+}
+
+function byArrival(a: Invoice, b: Invoice): number {
+  const left = parseSourceDate(a.sent_at ?? a.created_at)?.getTime() ?? 0;
+  const right = parseSourceDate(b.sent_at ?? b.created_at)?.getTime() ?? 0;
+  return right - left;
+}
+
+export interface EarlierInvoicesProps {
+  /** Every invoice on the project; drafts and voids are dropped here. */
+  invoices: Invoice[];
+  /** The one standing in the letterbox — it is not also kept behind it. */
+  exceptId?: string | null;
+  today?: Date;
+}
+
+export function EarlierInvoices({ invoices, exceptId, today }: EarlierInvoicesProps) {
+  const [open, setOpen] = useState(false);
+
+  const earlier = visibleInvoices(invoices)
+    .filter((invoice) => invoice.id !== exceptId)
+    .sort(byArrival);
+
+  if (earlier.length === 0) return null;
+
+  return (
+    <div className="mt-3.5" data-testid="earlier-invoices">
+      <ScoredAction
+        actionKey="earlier_invoices"
+        regionKey="letterbox"
+        surfaceKey="the_threshold"
+        variant="secondary"
+        aria-expanded={open}
+        aria-controls="earlier-invoices-list"
+        onClick={() => setOpen((was) => !was)}
+      >
+        {open ? 'Close earlier invoices' : 'Earlier invoices'}
+      </ScoredAction>
+
+      <div
+        id="earlier-invoices-list"
+        className={`grid overflow-hidden motion-safe:transition-[grid-template-rows] motion-safe:duration-[420ms] ${
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="min-h-0">
+          {open && (
+            <ul className="mt-2 list-none">
+              {earlier.map((invoice) => (
+                <li
+                  key={invoice.id}
+                  data-earlier-invoice={invoice.id}
+                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-[var(--border-subtle)] py-2 last:border-b"
+                >
+                  <span className="text-[15px] leading-[1.62] text-[var(--text-body)]">
+                    {`${invoice.invoice_number ?? 'Invoice'} · ${moneyInWords(
+                      invoice.total_cents || 0,
+                      invoice.currency || 'USD',
+                    )} · ${receiptTrail(invoice, today)}`}
+                  </span>
+                  <ScoredAction
+                    actionKey="invoice_print"
+                    regionKey="letterbox"
+                    surfaceKey="the_threshold"
+                    variant="tertiary"
+                    href={`/invoices/${invoice.id}/print`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Print
+                  </ScoredAction>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

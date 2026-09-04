@@ -2,8 +2,28 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { FFEStageKey } from '@patina/types';
 
 import type { RoadPieceModel } from '@/lib/threshold/derive';
+import type { RoadOrderModel } from '@/lib/threshold/road-orders';
+
+// The road now also carries the pieces she bought herself, and that act owns a
+// mutation hook — mock the module it comes from.
+jest.mock('@patina/supabase', () => ({
+  __esModule: true,
+  useStartDirectOrderCheckout: jest.fn(() => ({ mutateAsync: jest.fn(), isPending: false })),
+}));
+
+import { useStartDirectOrderCheckout } from '@patina/supabase';
 
 import { TheRoad } from '../the-road';
+
+const LAMP: RoadOrderModel = {
+  id: 'ord-1',
+  name: 'Brass floor lamp',
+  quantity: 1,
+  amountCents: 42_000,
+  currency: 'USD',
+  stageIndex: 0,
+  payable: true,
+};
 
 const CREDENZA: RoadPieceModel = {
   selectionId: 'sel-credenza',
@@ -111,5 +131,32 @@ describe('TheRoad', () => {
 
     expect(screen.getByText('Nothing on the road.')).toBeInTheDocument();
     expect(screen.queryByTestId('road-pieces')).not.toBeInTheDocument();
+  });
+
+  it('carries the pieces she bought herself, and counts them among what is in motion', () => {
+    (useStartDirectOrderCheckout as jest.Mock).mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+
+    render(<TheRoad pieces={[CREDENZA]} orders={[LAMP]} />);
+
+    expect(screen.getByTestId('road-lintel')).toHaveTextContent(
+      'What is not home yet · two pieces in motion',
+    );
+    expect(screen.getByTestId('road-orders')).toBeInTheDocument();
+    expect(screen.getByText(/Brass floor lamp/)).toBeInTheDocument();
+  });
+
+  it('is a road with nothing on it only when neither kind of piece is moving', () => {
+    (useStartDirectOrderCheckout as jest.Mock).mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+
+    render(<TheRoad pieces={[]} orders={[LAMP]} />);
+    expect(screen.queryByText('Nothing on the road.')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('road-pieces')).not.toBeInTheDocument();
+    expect(screen.getByTestId('road-orders')).toBeInTheDocument();
   });
 });

@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
 import {
+  useDirectOrders,
   useMarkProjectRead,
   usePreviousReadingMark,
   useProjectInvoices,
@@ -41,6 +42,7 @@ import {
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
+import { toRoadOrders } from '@/lib/threshold/road-orders';
 import { keySentence, previouslyLine, thresholdStanding } from '@/lib/threshold/standing';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
@@ -251,6 +253,7 @@ export function Threshold({
   const identityQuery = useStudioIdentity({ projectId });
   const teamQuery = useProjectTeamMembers(projectId);
   const partiesQuery = useProjectParties(projectId);
+  const ordersQuery = useDirectOrders();
   useProjectNotesRealtime(projectId);
   // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
   // effect depending on the object would re-run every render for the ref-guard
@@ -421,6 +424,7 @@ export function Threshold({
     proposalsQuery.isPending ||
     selectionsQuery.isPending ||
     invoicesQuery.isPending ||
+    ordersQuery.isPending ||
     notesQuery.isPending ||
     roomsQuery.isPending ||
     planQuery.isPending ||
@@ -605,8 +609,19 @@ export function Threshold({
   );
 
   const ledger = <HouseLedger ledger={model.ledger} />;
-  const letterbox = <Letterbox invoice={model.letterbox} today={today} />;
-  const road = model.road.length > 0 ? <TheRoad pieces={model.road} /> : null;
+  const letterbox = (
+    <Letterbox
+      invoice={model.letterbox}
+      invoices={invoicesQuery.data ?? []}
+      designerName={studioName}
+      today={today}
+    />
+  );
+  const roadOrders = toRoadOrders(ordersQuery.data, projectId);
+  const road =
+    model.road.length > 0 || roadOrders.length > 0 ? (
+      <TheRoad pieces={model.road} orders={roadOrders} today={today} />
+    ) : null;
   const note = (
     <TheNote
       note={model.note}

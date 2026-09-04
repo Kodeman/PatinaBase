@@ -1,7 +1,41 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { Invoice } from '@patina/supabase';
 
 import type { InvoiceModel } from '@/lib/threshold/derive';
+import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
+
+// ── Boundaries ──────────────────────────────────────────────────────────────
+// Opening the letterbox now unfolds the settlement, which owns the pay path's
+// three hooks. Mock the module they come from; the ceremony itself is covered
+// in settlement.test.tsx.
+
+jest.mock('@patina/supabase', () => ({
+  __esModule: true,
+  InvoiceCheckoutError: class InvoiceCheckoutError extends Error {},
+  useInvoicePaymentOptions: jest.fn(),
+  useStartCheckout: jest.fn(),
+  useNotifyCheckIntent: jest.fn(),
+}));
+
+jest.mock('@/lib/analytics/events', () => ({
+  __esModule: true,
+  clientEvents: {
+    paymentCompleted: jest.fn(),
+    paymentCancelled: jest.fn(),
+    paymentMethodSelected: jest.fn(),
+    checkIntentSubmitted: jest.fn(),
+    paymentStarted: jest.fn(),
+  },
+  makingEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+}));
+
+import {
+  useInvoicePaymentOptions,
+  useNotifyCheckIntent,
+  useStartCheckout,
+} from '@patina/supabase';
+import { clientEvents } from '@/lib/analytics/events';
 
 import { Letterbox } from '../letterbox';
 
@@ -20,7 +54,74 @@ function invoice(overrides: Partial<InvoiceModel> = {}): InvoiceModel {
   };
 }
 
+function invoiceRow(overrides: Partial<Invoice> = {}): Invoice {
+  return {
+    id: 'inv-3',
+    project_id: 'project-1',
+    studio_id: 'studio-1',
+    designer_id: 'designer-1',
+    client_id: 'client-1',
+    invoice_number: 'Invoice No. 3',
+    status: 'paid',
+    issue_date: '2026-06-01',
+    due_date: '2026-06-15',
+    payment_terms_days: 14,
+    currency: 'USD',
+    subtotal_cents: 912_500,
+    tax_rate: 0,
+    tax_cents: 0,
+    total_cents: 912_500,
+    amount_paid_cents: 912_500,
+    memo: null,
+    internal_notes: null,
+    stripe_checkout_session_id: null,
+    sent_at: '2026-06-01T10:00:00Z',
+    paid_at: '2026-06-12T10:00:00Z',
+    voided_at: null,
+    void_reason: null,
+    reminder_count: 0,
+    last_reminder_at: null,
+    ar_flagged_at: null,
+    ar_last_chased_at: null,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-12T10:00:00Z',
+    ...overrides,
+  } as Invoice;
+}
+
+const originalLocation = window.location;
+
+function standAt(search: string) {
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: {
+      search,
+      href: `https://client.test/projects/p1${search}`,
+      pathname: '/projects/p1',
+    },
+  });
+}
+
 describe('Letterbox — one letter, half out of the slot', () => {
+  beforeEach(() => {
+    resetCheckoutReturn();
+    standAt('');
+    jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
+    (useInvoicePaymentOptions as jest.Mock).mockReturnValue({
+      isPending: false,
+      data: { card_surcharge_bps: 300, check_remit_to: null },
+    });
+    (useStartCheckout as jest.Mock).mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+    (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: jest.fn() });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+  });
+
   it('carries the anchor, the unit, and never opts into dimming', () => {
     render(<Letterbox invoice={invoice()} />);
 
@@ -70,23 +171,24 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(body).not.toHaveTextContent('due');
   });
 
-  it('unfolds to the toll when the letterbox is opened, and folds back', async () => {
+  it('unfolds to the settlement when the letterbox is opened, and folds back', async () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    expect(screen.queryByTestId('spine-toll')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
 
+    expect(screen.getByTestId('settlement')).toBeInTheDocument();
     const toll = screen.getByTestId('spine-toll');
-    expect(toll).toBeInTheDocument();
     expect(toll).toHaveAttribute('data-invoice-id', 'b0000000-0000-0000-0000-0000000000i4');
+    expect(screen.getByTestId('threshold-payment-methods')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /close the letterbox/i }),
     ).toHaveAttribute('aria-expanded', 'true');
 
     await userEvent.click(screen.getByRole('button', { name: /close the letterbox/i }));
 
-    expect(screen.queryByTestId('spine-toll')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /open the letterbox/i }),
     ).toHaveAttribute('aria-expanded', 'false');
@@ -102,5 +204,58 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(
       screen.getByRole('img', { name: 'An empty letterbox' }),
     ).toBeInTheDocument();
+  });
+
+  it('keeps the earlier invoices behind the one letter, even when the slot is empty', () => {
+    render(<Letterbox invoice={null} invoices={[invoiceRow()]} today={TODAY} />);
+
+    expect(screen.getByTestId('earlier-invoices')).toBeInTheDocument();
+  });
+
+  it('does not keep the letter it is already holding', () => {
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-3' })}
+        invoices={[invoiceRow({ id: 'inv-3' })]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.queryByTestId('earlier-invoices')).not.toBeInTheDocument();
+  });
+
+  it('reads a settled return from the till and says so once', () => {
+    standAt('?invoice=inv-4&checkout=success&session_id=cs_1');
+
+    render(<Letterbox invoice={null} today={new Date(2026, 8, 4)} />);
+
+    expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
+      'Paid September 4. Receipt in your email.',
+    );
+    expect(clientEvents.paymentCompleted).toHaveBeenCalledTimes(1);
+    expect(clientEvents.paymentCompleted).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
+  });
+
+  it('says nothing changed when she came back from a cancelled till', () => {
+    standAt('?invoice=inv-4&checkout=cancelled');
+
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent('Nothing changed.');
+    expect(clientEvents.paymentCancelled).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
+  });
+
+  it('leaves an order’s return to the road', () => {
+    standAt('?order=ord-1&checkout=success');
+
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
+  });
+
+  it('says nothing about a till it was never sent to', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
   });
 });

@@ -5,7 +5,9 @@ import { useState } from 'react';
 import { GOODS_JOURNEY_STAGES } from '@/components/commercial/journey-stepper';
 import { countInWords } from '@/components/making/standing-sentence';
 import type { RoadPieceModel } from '@/lib/threshold/derive';
+import type { RoadOrderModel } from '@/lib/threshold/road-orders';
 
+import { RoadOrders } from './road-orders';
 import { ThresholdJourney } from './room-band';
 
 /* ── THE ROAD ────────────────────────────────────────────────────────────────
@@ -49,10 +51,14 @@ function pieceX(pieces: RoadPieceModel[], piece: RoadPieceModel): number {
 
 export interface TheRoadProps {
   pieces: RoadPieceModel[];
+  /** Pieces she bought herself — the same road, and the act that pays for them. */
+  orders?: RoadOrderModel[];
+  today?: Date;
 }
 
-export function TheRoad({ pieces }: TheRoadProps) {
+export function TheRoad({ pieces, orders = [], today }: TheRoadProps) {
   const [liftedId, setLiftedId] = useState<string | null>(null);
+  const inMotion = pieces.length + orders.length;
 
   return (
     <section
@@ -73,9 +79,9 @@ export function TheRoad({ pieces }: TheRoadProps) {
           data-testid="road-lintel"
           className="max-w-[34ch] text-[15px] leading-normal text-[var(--text-body)] sm:text-right"
         >
-          {pieces.length > 0
-            ? `What is not home yet · ${countInWords(pieces.length)} ${
-                pieces.length === 1 ? 'piece' : 'pieces'
+          {inMotion > 0
+            ? `What is not home yet · ${countInWords(inMotion)} ${
+                inMotion === 1 ? 'piece' : 'pieces'
               } in motion`
             : 'What is not home yet'}
         </p>
@@ -123,11 +129,11 @@ export function TheRoad({ pieces }: TheRoadProps) {
         </g>
       </svg>
 
-      {pieces.length === 0 ? (
+      {inMotion === 0 ? (
         <p className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]">
           Nothing on the road.
         </p>
-      ) : (
+      ) : pieces.length === 0 ? null : (
         <ul data-testid="road-pieces" className="mt-4 list-none">
           {pieces.map((piece) => {
             const lifted = liftedId === piece.selectionId;
@@ -179,6 +185,8 @@ export function TheRoad({ pieces }: TheRoadProps) {
           })}
         </ul>
       )}
+
+      {orders.length > 0 && <RoadOrders orders={orders} today={today} />}
     </section>
   );
 }
