@@ -42,6 +42,12 @@ jest.mock('@patina/supabase', () => ({
   useStudioIdentity: jest.fn(),
   useMarkProjectRead: jest.fn(),
   usePreviousReadingMark: jest.fn(),
+  // The doorstep ask answers in place now; these are its boundary.
+  useConfirmProjectApprovalReview: jest.fn(),
+  useRespondProjectApproval: jest.fn(),
+  useDecisionComments: jest.fn(),
+  useCreateDecisionComment: jest.fn(),
+  useDecisionRealtime: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-commercial-client', () => ({
@@ -73,8 +79,12 @@ jest.mock('@/lib/analytics/events', () => ({
 }));
 
 import {
+  useConfirmProjectApprovalReview,
+  useCreateDecisionComment,
+  useDecisionComments,
   useMarkProjectRead,
   usePreviousReadingMark,
+  useRespondProjectApproval,
   useProjectInvoices,
   useProjectNotes,
   useProjectParties,
@@ -357,6 +367,25 @@ beforeEach(() => {
   );
   markReadMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
   previousMarkMock.mockReturnValue({ data: undefined, isPending: false, isError: false });
+  // The doorstep ask answers in place; jest.config resets mocks per test, so
+  // its five hooks are re-armed here rather than at the factory.
+  (useConfirmProjectApprovalReview as jest.Mock).mockReturnValue({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  });
+  (useRespondProjectApproval as jest.Mock).mockReturnValue({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  });
+  (useDecisionComments as jest.Mock).mockReturnValue({
+    data: [],
+    isLoading: false,
+    isError: false,
+  });
+  (useCreateDecisionComment as jest.Mock).mockReturnValue({
+    mutate: jest.fn(),
+    isPending: false,
+  });
   bundles = {
     'prop-7': AUTHORIZATION_BUNDLE,
     'prop-paint': TRADE_BUNDLE,
@@ -559,8 +588,16 @@ const PHASE_APPROVAL = {
   lifecycleStatus: 'pending',
   outcome: null,
   disposition: 'active',
-  completedReviewCount: 0,
+  completedReviewCount: 1,
   requiredReviewCount: 1,
+  authorityRevision: 3,
+  artifactChecksum: 'a'.repeat(64),
+  costCentsDelta: 0,
+  scheduleDaysDelta: 0,
+  leadTimeDaysDelta: 0,
+  context: null,
+  respondedAt: null,
+  updatedAt: '2026-08-12T10:00:00Z',
 } as unknown as ProjectApprovalReview;
 
 function renderWithApprovals(approvals: ProjectApprovalReview[]) {
@@ -586,21 +623,26 @@ describe('Threshold — the doorstep’s own asks', () => {
     const gate = screen.getByTestId('doorstep-approval');
     expect(gate).toHaveTextContent('Do the library elevations read right to you?');
     expect(gate).toHaveTextContent('Library elevations · Edition 3 · Due August 20');
-    expect(screen.getByRole('link', { name: /respond/i })).toHaveAttribute(
-      'href',
-      '/decisions/dec-1',
-    );
+    // The ask is answered where it stands — no link off the page.
+    expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /respond/i })).not.toBeInTheDocument();
   });
 
   it('reads a draft approval as a review rather than a response', () => {
     renderWithApprovals([
-      { ...PHASE_APPROVAL, lifecycleStatus: 'draft' } as ProjectApprovalReview,
+      {
+        ...PHASE_APPROVAL,
+        lifecycleStatus: 'draft',
+        completedReviewCount: 0,
+      } as ProjectApprovalReview,
     ]);
 
     expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
       'your review is required',
     );
-    expect(screen.getByRole('link', { name: /review exact edition/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /review exact edition/i }),
+    ).toBeInTheDocument();
   });
 
   it('stands a roomless paper on the doorstep, not inside a band', () => {
