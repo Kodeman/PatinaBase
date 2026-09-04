@@ -125,6 +125,7 @@ import { ScheduleRuleRegion } from '@/components/document/schedule/schedule-rule
 import { SectionStageLineMount } from '@/components/document/section-stage-line-mount';
 import { ProjectApprovalDocumentMount } from '@/components/document/project-approval-document-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
+import { ClientNoteComposer } from '@/components/document/client-note-composer';
 import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
 import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet';
 import { HouseholdChip } from '@/components/document/household-chip';
@@ -2677,6 +2678,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         {row.engagement_kind === 'project' && row.project_id && (
           <FolioLetterhead projectId={row.project_id} />
         )}
+        {row.engagement_kind === 'project' && row.project_id && <ClientNoteComposer projectId={row.project_id} clientFirstName={row.client_name?.split(' ')[0]} openProposals={[]} openTradeScopes={[]} openInvoices={[]} />}
 
         {/* D-B30: the letterhead margin chips block is retired at 390 — the
             Margin sheet (mobile-bar's "In this document" door) replaces it.
