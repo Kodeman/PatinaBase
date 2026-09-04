@@ -934,3 +934,138 @@ describe('deriveThreshold — it reads, it does not rearrange', () => {
     expect(invoices.map((entry) => entry.id)).toEqual(['inv-5', 'inv-4']);
   });
 });
+
+describe('deriveThreshold — a room against its target', () => {
+  function bandFor(targetCents: number | null | undefined, lineCents: number) {
+    const model = deriveThreshold(
+      input({
+        rooms: [{ ...LIBRARY, targetCents }, ENTRY],
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({ id: 's-1', roomId: 'r-lib', clientLineTotalCents: lineCents }),
+          ],
+        },
+      }),
+    );
+    return model.bands.find((band) => band.roomId === 'r-lib')!;
+  }
+
+  it('carries the target and the agreed figure beside each other', () => {
+    const band = bandFor(500_000, 400_000);
+    expect(band.targetCents).toBe(500_000);
+    expect(band.agreedCents).toBe(400_000);
+    expect(band.totalCents).toBe(band.agreedCents);
+  });
+
+  it('says how far past its target a room has run', () => {
+    expect(bandFor(500_000, 610_000).varianceLine).toBe(
+      'about eleven hundred past its target',
+    );
+  });
+
+  it('says how far under its target a room is sitting', () => {
+    expect(bandFor(610_000, 500_000).varianceLine).toBe(
+      'about eleven hundred under its target',
+    );
+  });
+
+  it('says nothing when the room has no target, or lands on it', () => {
+    expect(bandFor(null, 400_000).targetCents).toBeNull();
+    expect(bandFor(null, 400_000).varianceLine).toBeNull();
+    expect(bandFor(undefined, 400_000).varianceLine).toBeNull();
+    expect(bandFor(400_000, 400_000).varianceLine).toBeNull();
+  });
+
+  it('treats a gap that rounds away as landing on the target', () => {
+    expect(bandFor(400_000, 404_000).varianceLine).toBeNull();
+  });
+
+  it('gives an empty room its target and the whole of it as variance', () => {
+    // $500 — five hundreds, so the word still helps.
+    const model = deriveThreshold(input({ rooms: [{ ...LIBRARY, targetCents: 50_000 }] }));
+    const band = model.bands[0];
+    expect(band.agreedCents).toBe(0);
+    expect(band.varianceLine).toBe('about five hundred under its target');
+  });
+
+  it('falls to figures once the hundreds stop helping', () => {
+    // $5,000 is fifty hundreds — standing-sentence's own twelve-and-under rule.
+    expect(bandFor(500_000, 0).varianceLine).toBe('about $5,000 under its target');
+  });
+});
+
+describe('deriveThreshold — what became of each thing behind her', () => {
+  it('reads a retired note she answered as answered', () => {
+    const model = deriveThreshold(
+      input({
+        notes: [
+          note({
+            id: 'n-1',
+            state: 'retired',
+            retiredAt: '2026-07-20T00:00:00.000Z',
+            answeredAt: '2026-07-19T00:00:00.000Z',
+          }),
+        ],
+      }),
+    );
+    expect(model.previously[0].state).toBe('answered');
+  });
+
+  it('reads a retired note she never answered as sent', () => {
+    const model = deriveThreshold(
+      input({
+        notes: [note({ id: 'n-1', state: 'retired', retiredAt: '2026-07-20T00:00:00.000Z' })],
+      }),
+    );
+    expect(model.previously[0].state).toBe('sent');
+  });
+
+  it('reads a note the studio marked answered as answered', () => {
+    const model = deriveThreshold(
+      input({ notes: [note({ id: 'n-1', state: 'answered', retiredAt: null })] }),
+    );
+    expect(model.note).toBeNull();
+    expect(model.previously).toEqual([]);
+  });
+
+  it('signs the instruments', () => {
+    const model = deriveThreshold(
+      input({
+        proposals: {
+          signatureGates: [],
+          instrumentReceipts: [
+            { id: 'r-1', label: 'Fourteen selections agreed', date: '2026-06-19' },
+          ],
+        },
+      }),
+    );
+    expect(model.previously[0].state).toBe('signed');
+    expect(model.previously[0].kind).toBe('instrument');
+  });
+
+  it('gives every entry a state', () => {
+    const model = deriveThreshold(
+      input({
+        notes: [
+          note({ id: 'n-a', state: 'retired', retiredAt: '2026-07-20T00:00:00.000Z' }),
+          note({
+            id: 'n-b',
+            state: 'retired',
+            retiredAt: '2026-07-21T00:00:00.000Z',
+            answeredAt: '2026-07-20T00:00:00.000Z',
+          }),
+        ],
+        proposals: {
+          signatureGates: [],
+          instrumentReceipts: [{ id: 'r-1', label: 'Agreed', date: '2026-06-19' }],
+        },
+      }),
+    );
+    expect(model.previously.map((entry) => entry.state)).toEqual([
+      'answered',
+      'sent',
+      'signed',
+    ]);
+  });
+});
