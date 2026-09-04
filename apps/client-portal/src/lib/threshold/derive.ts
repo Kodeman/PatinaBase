@@ -105,6 +105,8 @@ export interface ThresholdInput {
   heldDrawCentsByProposalId?: Record<string, number> | null;
   /** When each selection last moved, keyed by selection id, where known. */
   selectionUpdatedAt?: Record<string, string> | null;
+  /** When each letter on the project's correspondence thread was sent. */
+  messageSentAts?: (string | null)[] | null;
 }
 
 // ── model ────────────────────────────────────────────────────────────────────
@@ -538,6 +540,14 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   });
 
   if (previously.some((entry) => movedSinceMoment(entry.date?.getTime() ?? null))) {
+    changed.add('previously');
+  }
+
+  // A letter that arrived since her last reading ticks BOTH the note she would
+  // answer it under and the record it is filed in — the correspondence has one
+  // moment and two places on the page.
+  if ((input.messageSentAts ?? []).some((sentAt) => movedSince(sentAt))) {
+    changed.add('note');
     changed.add('previously');
   }
 

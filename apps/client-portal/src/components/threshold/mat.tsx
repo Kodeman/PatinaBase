@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import { ScoredAction } from '@/components/making/scored-action';
 
@@ -38,6 +39,8 @@ export interface MatProps {
   papers: MatPaper[];
   accountHref: '/account';
   onSignOut: () => void;
+  /** The act that governs the letters, wired next door. */
+  correspondence?: ReactNode;
 }
 
 const LINE_CLASS =
@@ -63,7 +66,7 @@ function Paper({ paper }: { paper: MatPaper }) {
   return <span className={LINE_CLASS}>{paper.label}</span>;
 }
 
-export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
+export function Mat({ people, papers, accountHref, onSignOut, correspondence }: MatProps) {
   return (
     <section
       id="mat"
@@ -114,6 +117,7 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
             >
               Your details
             </ScoredAction>
+            {correspondence}
             <ScoredAction
               actionKey="mat_sign_out"
               regionKey="mat"

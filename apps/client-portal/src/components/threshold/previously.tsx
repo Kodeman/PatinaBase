@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { PreviouslyEntry, PreviouslyState } from '@/lib/threshold/derive';
 
@@ -39,12 +40,16 @@ function isTruncated(label: string): boolean {
 
 export interface PreviouslyProps {
   entries: PreviouslyEntry[];
+  /** The letters and the notices, wired next door. */
+  correspondence?: ReactNode;
 }
 
-export function Previously({ entries }: PreviouslyProps) {
+export function Previously({ entries, correspondence }: PreviouslyProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
-  if (entries.length === 0) return null;
+  // The correspondence is back matter too: a house with no closed instruments
+  // but a letter in it still has a Previously to keep the letter in.
+  if (entries.length === 0 && !correspondence) return null;
 
   return (
     <section
@@ -126,6 +131,8 @@ export function Previously({ entries }: PreviouslyProps) {
           );
         })}
       </ul>
+
+      {correspondence}
     </section>
   );
 }

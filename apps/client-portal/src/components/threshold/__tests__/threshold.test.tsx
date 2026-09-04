@@ -59,6 +59,14 @@ jest.mock('@/hooks/use-auth', () => ({
   useAuth: jest.fn(),
 }));
 
+jest.mock('@/hooks/use-project-correspondence', () => ({
+  __esModule: true,
+  useProjectCorrespondence: jest.fn(),
+  useMarkNoticesRead: jest.fn(),
+  useWriteBack: jest.fn(),
+  useMuteLetters: jest.fn(),
+}));
+
 jest.mock('@/lib/analytics/events', () => ({
   __esModule: true,
   clientEvents: { projectView: jest.fn() },
@@ -85,6 +93,12 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import {
+  useMarkNoticesRead,
+  useMuteLetters,
+  useProjectCorrespondence,
+  useWriteBack,
+} from '@/hooks/use-project-correspondence';
+import {
   clientCommercialDocumentQueryOptions,
   useAcceptTradeScope,
   useClientCommercialDocument,
@@ -109,6 +123,10 @@ const bundleMock = useClientCommercialDocument as jest.Mock;
 const queryOptionsMock = clientCommercialDocumentQueryOptions as jest.Mock;
 const acceptMock = useAcceptTradeScope as jest.Mock;
 const authMock = useAuth as jest.Mock;
+const correspondenceMock = useProjectCorrespondence as jest.Mock;
+const markNoticesReadMock = useMarkNoticesRead as jest.Mock;
+const writeBackMock = useWriteBack as jest.Mock;
+const muteLettersMock = useMuteLetters as jest.Mock;
 
 // ── Fixtures — the Vale residence, as the seed tells it ─────────────────────
 
@@ -356,6 +374,17 @@ beforeEach(() => {
     ]),
   );
   markReadMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  correspondenceMock.mockReturnValue({
+    threadId: null,
+    muted: false,
+    letters: [],
+    notices: [],
+    sentAts: [],
+    isPending: false,
+  });
+  markNoticesReadMock.mockReturnValue(jest.fn());
+  writeBackMock.mockReturnValue({ send: jest.fn(), isPending: false });
+  muteLettersMock.mockReturnValue({ toggle: jest.fn(), isPending: false });
   previousMarkMock.mockReturnValue({ data: undefined, isPending: false, isError: false });
   bundles = {
     'prop-7': AUTHORIZATION_BUNDLE,

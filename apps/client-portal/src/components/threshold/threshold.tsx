@@ -28,6 +28,10 @@ import {
   useClientSelections,
 } from '@/hooks/use-commercial-client';
 import { useHydrated } from '@/hooks/use-hydrated';
+import {
+  useMarkNoticesRead,
+  useProjectCorrespondence,
+} from '@/hooks/use-project-correspondence';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
 import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
@@ -45,6 +49,7 @@ import { keySentence, previouslyLine, thresholdStanding } from '@/lib/threshold/
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
 import { KIND_LABEL } from './consent-copy';
+import { Letters, MuteLetters, WriteBack } from './correspondence';
 import { DoorGate, type DoorProposal } from './door-gate';
 import { Doorplate } from './doorplate';
 import { Doorstep } from './doorstep';
@@ -252,6 +257,8 @@ export function Threshold({
   const teamQuery = useProjectTeamMembers(projectId);
   const partiesQuery = useProjectParties(projectId);
   useProjectNotesRealtime(projectId);
+  const correspondence = useProjectCorrespondence(projectId);
+  const markNoticesRead = useMarkNoticesRead();
   // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
   // effect depending on the object would re-run every render for the ref-guard
   // below to swallow.
@@ -277,7 +284,10 @@ export function Threshold({
     if (markedProject.current === projectId) return;
     markedProject.current = projectId;
     markProjectRead({ projectId });
-  }, [hydrated, markProjectRead, projectId]);
+    // The notices ARE the reading mark's business: /inbox's one control, fired
+    // by the act of arriving rather than by a second one the client must find.
+    markNoticesRead();
+  }, [hydrated, markNoticesRead, markProjectRead, projectId]);
 
   // undefined = the mark has not resolved this session; null = no previous
   // mark, so this is a first visit and nothing can have changed since.
@@ -403,6 +413,7 @@ export function Threshold({
     ),
     heldDrawCentsByProposalId,
     selectionUpdatedAt,
+    messageSentAts: correspondence.sentAts,
   });
 
   const phases = useMemo(() => splitSpinePhases(milestones), [milestones]);
@@ -424,6 +435,7 @@ export function Threshold({
     notesQuery.isPending ||
     roomsQuery.isPending ||
     planQuery.isPending ||
+    correspondence.isPending ||
     heldBundles.some((bundle) => bundle.isPending);
 
   // ── the doorstep's sentence ────────────────────────────────────────────────
@@ -601,7 +613,15 @@ export function Threshold({
   ];
 
   const mat = (
-    <Mat people={people} papers={papers} accountHref="/account" onSignOut={() => void signOut()} />
+    <Mat
+      people={people}
+      papers={papers}
+      accountHref="/account"
+      onSignOut={() => void signOut()}
+      correspondence={
+        <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
+      }
+    />
   );
 
   const ledger = <HouseLedger ledger={model.ledger} />;
@@ -614,9 +634,17 @@ export function Threshold({
       enclosures={enclosures}
       authorName={studioName}
       today={today}
+      reply={<WriteBack threadId={correspondence.threadId} today={today} />}
     />
   );
-  const previouslySection = <Previously entries={model.previously} />;
+  const previouslySection = (
+    <Previously
+      entries={model.previously}
+      correspondence={
+        <Letters letters={correspondence.letters} notices={correspondence.notices} />
+      }
+    />
+  );
 
   const doorstep = (
     <Doorstep
