@@ -1,5 +1,6 @@
 /**
- * The Threshold folds the seven old top-level destinations into anchors on
+ * The Threshold folds the eight old top-level destinations (the seven
+ * `nav-config.ts` routes plus the `/messages` corner link) into anchors on
  * the one project page. `ROUTE_COLLAPSE` names the anchor each old route
  * lands on; `collapsedHref` turns an exact match into the in-page href.
  *
@@ -7,7 +8,22 @@
  * nested route under one of these prefixes (`/proposals/abc/sign`,
  * `/decisions/req-1`) keeps its own page and is never collapsed.
  */
-export const ROUTE_COLLAPSE: Record<string, string> = {
+
+/**
+ * The fixed set of Threshold section ids these old routes can collapse to —
+ * a cross-lane contract: Lane 3's leaf components must put one of these ids
+ * on the matching section root.
+ */
+export type ThresholdAnchor =
+  | 'doorstep'
+  | 'door'
+  | 'letterbox'
+  | 'ledger'
+  | 'mat-papers'
+  | 'road'
+  | 'note';
+
+export const ROUTE_COLLAPSE: Record<string, ThresholdAnchor> = {
   '/today': 'doorstep',
   '/decisions': 'doorstep',
   '/proposals': 'door',

@@ -79,7 +79,7 @@ function AuthenticatedAppChrome({
 
   return (
     <>
-      <ThresholdChromeGate pathname={pathname}>
+      <ThresholdChromeGate pathname={pathname} projectCount={projects.length}>
         <ClientHeader
           projects={projects}
           activeProjectId={activeProjectId}

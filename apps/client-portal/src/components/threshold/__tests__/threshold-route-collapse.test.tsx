@@ -1,12 +1,16 @@
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 
 /* ── The route hop ──────────────────────────────────────────────────────────
-   A solo-project client on one of the seven old destinations should land on
+   A solo-project client on one of the eight old destinations should land on
    the matching anchor of their one project page, not the old standalone
    route. That only holds once the flag has resolved true and the client has
    exactly one project — every other combination (loading, flag off, two-or-
    more projects, an unmapped path) must leave the client exactly where they
-   are, same as SinglePaneSoloRedirect. ─────────────────────────────────────── */
+   are, same as SinglePaneSoloRedirect. There is deliberately no once-only
+   guard: the redirect must fire again for a second old destination visited
+   later in the session (e.g. via the header nav before it itself collapses
+   away), and it self-terminates the same way SinglePaneSoloRedirect does —
+   the destination pathname is unmapped, so nothing fires on it. ──────────── */
 
 let mockPathname = '/invoices';
 
@@ -35,6 +39,10 @@ const flagMock = useFeatureFlag as jest.Mock;
 beforeEach(() => {
   replace.mockClear();
   mockPathname = '/invoices';
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 describe('ThresholdRouteCollapse', () => {
@@ -77,10 +85,92 @@ describe('ThresholdRouteCollapse', () => {
     expect(replace).toHaveBeenCalledWith('/projects/p1#letterbox');
   });
 
+  it('hops once the flag resolves, not while it is still loading', () => {
+    mockPathname = '/invoices';
+    flagMock.mockReturnValue({ value: false, isLoading: true });
+    const { rerender } = render(<ThresholdRouteCollapse projectIds={['p1']} />);
+    expect(replace).not.toHaveBeenCalled();
+
+    flagMock.mockReturnValue({ value: true, isLoading: false });
+    rerender(<ThresholdRouteCollapse projectIds={['p1']} />);
+    rerender(<ThresholdRouteCollapse projectIds={['p1']} />);
+
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
+  it('collapses again for a second old destination after landing on the project page', () => {
+    flagMock.mockReturnValue({ value: true, isLoading: false });
+    mockPathname = '/invoices';
+    const { rerender } = render(<ThresholdRouteCollapse projectIds={['p1']} />);
+    expect(replace).toHaveBeenNthCalledWith(1, '/projects/p1#letterbox');
+
+    // Arrives at the destination — a bare project route, which is unmapped,
+    // so nothing fires again yet.
+    mockPathname = '/projects/p1';
+    rerender(<ThresholdRouteCollapse projectIds={['p1']} />);
+    expect(replace).toHaveBeenCalledTimes(1);
+
+    // Client visits a second old destination later in the session (e.g. a
+    // stale header link before that header itself collapses away).
+    mockPathname = '/budget';
+    rerender(<ThresholdRouteCollapse projectIds={['p1']} />);
+
+    expect(replace).toHaveBeenCalledTimes(2);
+    expect(replace).toHaveBeenNthCalledWith(2, '/projects/p1#ledger');
+  });
+
   it('renders nothing of its own', () => {
     flagMock.mockReturnValue({ value: true, isLoading: false });
     const { container } = render(<ThresholdRouteCollapse projectIds={['p1']} />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  describe('anchor scroll', () => {
+    it('scrolls the destination anchor into view once it appears in the DOM', () => {
+      jest.useFakeTimers();
+      mockPathname = '/invoices';
+      flagMock.mockReturnValue({ value: true, isLoading: false });
+
+      render(<ThresholdRouteCollapse projectIds={['p1']} />);
+      expect(replace).toHaveBeenCalledWith('/projects/p1#letterbox');
+
+      // The anchor doesn't exist yet — the Threshold hydrates it from
+      // client-side data — so the first poll tick finds nothing.
+      act(() => {
+        jest.advanceTimersByTime(16);
+      });
+
+      const anchorEl = document.createElement('div');
+      anchorEl.id = 'letterbox';
+      anchorEl.scrollIntoView = jest.fn();
+      document.body.appendChild(anchorEl);
+
+      act(() => {
+        jest.advanceTimersByTime(16);
+      });
+
+      expect(anchorEl.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+
+      document.body.removeChild(anchorEl);
+    });
+
+    it('gives up polling after ~2s if the anchor never appears', () => {
+      jest.useFakeTimers();
+      mockPathname = '/invoices';
+      flagMock.mockReturnValue({ value: true, isLoading: false });
+
+      render(<ThresholdRouteCollapse projectIds={['p1']} />);
+      expect(replace).toHaveBeenCalledTimes(1);
+
+      // Advance well past the cap — nothing to assert on scrollIntoView
+      // (the element never appeared); this proves the poll stops rather
+      // than looping or throwing forever.
+      act(() => {
+        jest.advanceTimersByTime(2500);
+      });
+
+      expect(replace).toHaveBeenCalledTimes(1);
+    });
   });
 });
