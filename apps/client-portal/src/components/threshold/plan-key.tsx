@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { moneyInWords } from '@/components/making/standing-sentence';
 import type { ThresholdMark } from '@/lib/threshold/derive';
@@ -46,6 +46,30 @@ export function planPhoneViewBox(viewBox: string): string {
   return `${minX} ${minY} ${Math.min(width, PHONE_MAX_VIEWBOX)} ${height}`;
 }
 
+/**
+ * A stubbed matchMedia (jsdom, jest's `resetMocks`) can answer with nothing at
+ * all; the drawing then simply stays at its desktop measure.
+ */
+function phoneQuery(): MediaQueryList | undefined {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+  return window.matchMedia(PHONE_QUERY) as MediaQueryList | undefined;
+}
+
+function subscribeToPhone(onChange: () => void): () => void {
+  const query = phoneQuery();
+  query?.addEventListener?.('change', onChange);
+  return () => query?.removeEventListener?.('change', onChange);
+}
+
+function isPhone(): boolean {
+  return phoneQuery()?.matches === true;
+}
+
+/** The server has no viewport, so it draws the house at its desktop measure. */
+function isPhoneOnServer(): boolean {
+  return false;
+}
+
 export interface PlanKeyProps {
   geometry: PlanKeyGeometry;
   marks: ThresholdMark[];
@@ -71,23 +95,11 @@ function markSentence(mark: ThresholdMark): string {
 }
 
 export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
-  const [phone, setPhone] = useState(false);
+  // The crop is an ATTRIBUTE, so CSS cannot do it — the mock swaps it in
+  // script for the same reason (`cropDrawings`). The type bump rides along
+  // rather than living in a second stylesheet that could disagree.
+  const phone = useSyncExternalStore(subscribeToPhone, isPhone, isPhoneOnServer);
   const phoneViewBox = planPhoneViewBox(geometry.viewBox);
-
-  // The crop is an attribute, so CSS cannot do it — the mock swaps it in
-  // script for the same reason (`cropDrawings`).
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
-    // A stubbed matchMedia (jsdom, jest's `resetMocks`) can answer with
-    // nothing at all; the drawing then simply stays at its desktop measure.
-    const query = window.matchMedia(PHONE_QUERY) as MediaQueryList | undefined;
-    if (!query) return undefined;
-    setPhone(query.matches === true);
-    const listen = (event: MediaQueryListEvent) => setPhone(event.matches);
-    query.addEventListener?.('change', listen);
-    return () => query.removeEventListener?.('change', listen);
-  }, []);
-
   const type = phone ? PLAN_PHONE_TYPE : LEADER_TYPE;
 
   return (
