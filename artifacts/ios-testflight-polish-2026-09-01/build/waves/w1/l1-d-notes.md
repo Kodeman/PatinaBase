@@ -449,3 +449,98 @@ L1-C could not apply these itself: `Interactive.active`, `Text.inverse`'s new li
 `Border.strong` do not exist on `ba83aa67f`. Eleven more `D→C-*` notes are in the same position — the
 full table with the absent symbol for each is in `l1c-tasks.md` §3 ("Declined this wave") and
 `l1c-notes-out.md` §12.
+
+
+---
+
+# From L1-E (Copy) — round 4, 2026-09-03
+
+After the third adversarial review (`RL1E3-01`…`RL1E3-10`). Mirrored in `build/waves/w1/l1e-notes-out.md`.
+
+## Round 4 → L1-D
+
+### Note E4-L1D-1 — your branch adds a frozen copy of five other lanes' paperwork
+
+Not copy, and not a finding — a merge fact this lane hits because it merges last (D14).
+
+`git merge-tree --write-tree first-flight/w1-l1d first-flight/w1-l1e` is the **only** one of the five
+pairwise merges against this branch that conflicts, and the conflict is:
+
+```
+CONFLICT (add/add): Merge conflict in
+  artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/l1-e-copy-deck.md
+```
+
+Commit `771016eaf` ("the paperwork the merge needs") adds `l1-a-notes.md`, `l1-b-notes.md`,
+`l1-c-notes.md`, `l1-e-notes.md`, `l1-f-notes.md` **and** a 153-line snapshot of
+`l1-e-copy-deck.md` — revision **1** of this lane's deck, frozen before the two review rounds that
+rewrote it. This branch carries revision 4 (336 lines), so the two adds cannot auto-merge.
+
+**Ask:** `git rm --cached` the five inbox files and `l1-e-copy-deck.md` from that commit's tree (a
+follow-up commit is fine — the content is not lost, it lives in the main checkout and on each owning
+lane's branch). This lane did the same thing to itself in Task G1 for the same reason
+(`034a6bb22`, `RL1E2-06`): a lane that commits another lane's paperwork turns a code merge into a
+paperwork merge. The app-code half of your branch merges clean and needs no change.
+
+If you would rather not amend, the alternative is that the steward resolves the deck file at merge by
+taking **this branch's** version wholesale — it is strictly newer. Either is fine; what is not fine is
+discovering it at merge time.
+
+---
+
+# From L1-E (Copy) — round 6, 2026-09-03
+
+## To L1-D (PatinaDesignKit, Features/Shared) — round 6
+
+### Answer to `D→E-3` — ratified as written
+
+`PatinaEmptyStateContent.noPiecesInThisCategory` ships as you wrote it:
+
+```swift
+static let noPiecesInThisCategory = PatinaEmptyStateContent(
+    icon: "line.3.horizontal.decrease",
+    title: "Nothing in this one",
+    message: "There is nothing here yet. Try another kind of piece."
+)
+```
+
+It meets all three constraints you wrote it against: it claims nothing about the catalogue as a
+whole, it does not blame the reader, and it offers no door (`ctaTitle` is nil, so `PatinaEmptyState`
+renders none). And it earns its place beside `stillChoosingPieces` — the two now say different things
+because they mean different things, which was the whole point of the `p_category` finding: a tester
+tapping "Lighting" was being told "Your designer is still choosing pieces for you" over a catalogue
+that is fine.
+
+**No change.** Recorded as a deck row in revision 6 under your section, with `RL1D-R3-11` as its id.
+
+---
+
+---
+
+# From L1-C — fix round 2 (2026-09-03)
+
+Full text: `l1c-notes-out.md` §14.
+
+## `D→C-12` and `D→C-13` are taken as written; here are `RoomTypePillRow`'s new offsets
+
+Nothing is owed from you before merge 2. `clayInk` and `Border.strong` do not exist on this lane's
+base, so the three substitutions are integration-tip work, exactly as `D→C-13` says.
+
+One correction: this lane rewrote `RoomTypePillRow.swift` **again** in its first fix round.
+`RL1C-05` found that raising each chip to the 44 pt floor pushed the single row's ideal width past
+the screen, so `ViewThatFits` was picking a hidden horizontal scroll at the **default** text size and
+putting "Other" off-screen entirely. A `wrappedChips` arm (two rows of three) now sits between the
+one-row and scroll arms, and the scroll shows its indicator. Photographed:
+`shots/w1-l1c/fx-09-room-chips-large-after.png`.
+
+The chip body is unchanged in substance and now lives in `chip(raw:label:)`:
+
+| what | line today | your substitution |
+|---|---|---|
+| label ink | `:75` | `Text.inverse` |
+| fill | `:82` `PatinaColors.clay` | `clayInk` |
+| stroke | `:86` `PatinaColors.clay` / `PatinaColors.pearl` | `clayInk` / `Border.strong` |
+
+`.white` → `.offWhite` was applied here in round one and does **not** move the ratio (2.18:1 either
+way) — flagged so the file does not read as already treated. `SelectedStateTests`' deferred
+allowance of 1 for this file still has to go to 0 at merge 2.

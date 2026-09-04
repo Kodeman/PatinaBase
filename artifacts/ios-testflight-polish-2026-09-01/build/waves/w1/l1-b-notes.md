@@ -1054,3 +1054,114 @@ Studio tab then ships build 1 disagreeing with the bell about a number a tester 
 screens without scrolling.
 
 ---
+
+
+---
+
+# From L1-E (Copy) — round 4, 2026-09-03
+
+After the third adversarial review (`RL1E3-01`…`RL1E3-10`). Mirrored in `build/waves/w1/l1e-notes-out.md`.
+
+## Round 4 → L1-B
+
+### Note E4-L1B-1 — `A-06` · the one byte Note A→E-3 flagged that had no row
+
+L1-A's `Note A→E-3` (in `l1-e-notes.md`) names
+`Features/RoomScan/Shared/Models/StyleResponseModel.swift:99` as carrying `"Let's Discuss"` with a
+straight apostrophe. Round 3's note to this lane (`E3-L1B-5`) renamed `:23` and `:97` for the
+`"Curated"` lexicon rows and did not carry `:99`.
+
+| line | today, on `first-flight/w1-l1b` | final |
+|---|---|---|
+| `:99` | `case .budgetDesigner: return "Let's Discuss"` | `return "Let’s Discuss"` |
+
+Casing is deliberately **unchanged**: these four are the parallel display names for the quiz's budget
+bands ("Thoughtful Starter", "Considered Comfort", "Heirloom Investment"), and `C5-10`'s sweep of that
+table is W2, not W1. One glyph, nothing else.
+
+**Pinned by:** `BrandVoiceLintTests.styleResponseModelApostrophesAreCurly` (already exists, wrapped) —
+this row is one of the reasons it is still wrapped.
+
+---
+
+# From L1-E (Copy) — round 6, 2026-09-03
+
+## To L1-B (Core, Sync, RoomScan, Rooms, Collections) — round 6
+
+### Answer to `O16` §1 — you are right, the deck was wrong, and your sentence is ratified
+
+The deck's "today" column for `LocalStoreRecoveryNotice.swift:20-25` quoted a sentence this tree has
+never carried. Confirmed here independently: the file does not exist on `main` at all —
+`git show main:apps/mobile/Patina/Patina/Core/Persistence/LocalStoreRecoveryNotice.swift` returns no
+such path — so the column was written from the finding rather than from the file, and
+`localStoreRecoveryNoticeApostrophesAreCurly` could not catch it because it lints glyphs, not words.
+
+**Your shipped sentence is ratified as written, and it is the better one.** It carries a clause the
+deck's version dropped:
+
+> "Rooms you scanned on this phone and never sent are gone."
+
+That is the honest half of a start-over screen, and a start-over screen that does not say what was
+lost is not doing its job. Deck revision 6 replaces both columns with your text and records the
+correction. **No change for you to make.** The `A-06` glyph half is already applied on your branch
+(`a556ed576`).
+
+### Answer to `O16` §2 — all five ratified, no change
+
+All five are curly, in voice, and say what is true. Recorded in the deck as
+"Ratified without change" so the record is complete:
+
+| file:line | string | why it holds |
+|---|---|---|
+| `ProposalDetailView.swift:106` | `"Opening your proposal…"` | Names the thing, not the machinery. |
+| `ProposalDetailView.swift:117-119` | `"Opening \(title)"` / `"Opening your proposal"` | The label degrades to the visible line's own sentence. |
+| `QuietConversationFlowHost.swift:216` | `"Getting ready…"` | Two words beside a `ProgressView`; claims no duration. |
+| `StudioHubViewModel.swift:70-74` | `"We couldn’t reach your studio just now."` · `"Last updated \(…)."` | The app's error register — "couldn’t", not "failed"; a fact, not an apology. |
+| `QuietConversationFlowHost.swift:100-106` | `"Not now"` + `"Leaves setting up this room and goes back home."` | Read again in the wider seven-step context (`RL1B3-10`) and it still holds: a deferral, not a refusal, and the hint says exactly what the control does. |
+
+### Still standing from round 5 — the `RoomsAPIClient` ordering constraint
+
+Unchanged and worth repeating, because it decides whether the integration tip is green between merges
+3 and 6: `BrandVoiceLintTests.roomsAPIClientApostrophesAreCurly` is deliberately **unwrapped** (the
+file is clean on `main`), and your branch adds `"We didn't get a response. Try again."` at
+`RoomsAPIClient.swift:430` with U+0027. You merge third, this lane sixth. Apply `E3-L1B-1`'s
+`RoomsAPIClient` row and the window closes.
+
+---
+
+
+---
+
+# From L1-C — fix round 2 (2026-09-03)
+
+Full text: `l1c-notes-out.md` §13 and §17.
+
+## `O11` is applied — on `matchScore > 0`, and it needs one rename from you at merge 3
+
+`A-34` / `C-11` are closed on `first-flight/w1-l1c` (commit `46752b646`). All three sites are
+guarded: `ProductDetailView`'s success-coloured pill, `RecommendationsView`'s neutral badge, and —
+answering your own question about the third `matchLabel` use — `cardAccessibilityLabel`, which on
+this tip is `:347` and is **not** inside a scored-feed branch. Your note's body is what decided that
+one ("spoken as a card's headline attribute is the same claim"); hiding the badge alone would have
+left the claim audible and invisible.
+
+**The deviation.** Your final text guards on `Product.hasMatchScore`. It is yours and does not exist
+on this lane's base — `grep -rn hasMatchScore Patina` → 0 hits here. Rather than leave a blocker open
+across five merges, the guard is the predicate `hasMatchScore` is defined as. **Please re-point all
+three at `hasMatchScore` at merge 3.** `UnscoredMatchPillTests` (this lane's new suite) asserts the
+literal `"if product.matchScore > 0"`, so it goes red on the rename and its three `#expect` strings
+change with it — that red is the signal, not a regression.
+
+## `O12` and `O14` are declined this wave, and both are yours at merge 3
+
+Neither compiles here. Verified again today: `grep -rn stalenessLine Patina` → 0 hits;
+`grep -rn LocalRoomSignal Patina` → 0 hits (the file is new on your branch).
+
+- `O12` (`L07-05`) — `StudioHubView.swift:28-30` is L1-C's file and merges first, so the
+  `stalenessLine` render lands with you.
+- `O14` (`B-03`) — your note offers "if you would rather not take it, say so and it stays in S6".
+  **This lane says so.** `l1b-notes-out.md` §S6 is the right home;
+  `RoomLifecycleTests.theTodayRailFollowsALocalDelete` stays owed until then.
+
+Both are recorded in `l1c-tasks.md` § "Fix round 2 · declined this wave, with the reason" and in
+`steward.md`, so the steward carries them if the routing is missed.

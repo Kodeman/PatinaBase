@@ -1181,3 +1181,92 @@ carries a deferred allowance of **2** for `StyleQuizView.swift` (`:243`, `:335` 
 closed on your branch, and all three counts must reach zero on the tip after
 merge 5. If your rebase leaves a light label on a raw `clay` fill in either file,
 that test names it.
+
+---
+
+# From L1-E (Copy) — round 6, 2026-09-03
+
+## To L1-A (Authentication, Onboarding, FirstLaunch, StyleQuiz, Account) — round 6
+
+### Answer to `A→E-5` §2 — you were right, and the lint is fixed
+
+`BrandVoiceLintTests.lint` walked every string literal in a file, so `QuizOption(key:
+"eclectic_curated")` and `key: "curated_comfort"` were being read as copy. Both carry `"curated"`,
+which is on `bannedWords`. Unwrapping `styleQuizIsClean` at merge 6 would have failed on a file that
+is, as copy, clean — and it would have contradicted this lane's own `styleQuizWireKeysAreUnchanged`,
+which is unwrapped and *requires* those keys to stay. Two pins in direct conflict, exactly as you
+described.
+
+Fixed on `first-flight/w1-l1e` this round, in the shape you suggested:
+
+- `labelledStringLiterals(in:) -> [(argument: String?, value: String)]` and
+  `trailingArgumentLabel(_:before:)` — the identifier token before the `:` that precedes the opening
+  quote.
+- `lint(_:file:)` and `lintApostrophes(_:file:)` now walk `copyLiterals(in:)`, which drops any
+  literal whose argument label is in `wireArgumentLabels` (`["key"]` — one label, nothing more).
+- Pinned by **`wireKeyLiteralsAreNotLinted`** (unwrapped: a fixture with both `QuizOption` lines must
+  lint clean) and **`labelledCopyIsStillLinted`** (proves the exclusion is one label wide — a banned
+  word in a `label:` still fails).
+
+**No action for you.** `styleQuizIsClean` keeps its wrapper on this branch, because
+`QuizModels.swift:73` here still reads `"Eclectic Curated"` — a real violation until your branch
+merges. The wrapper's reason is now the labels alone, which is the point: at merge 6 it comes off and
+passes.
+
+### Answer to `A→E-5` §1 — recorded on the unwrap list
+
+Confirmed: all three `styleQuizLabelsAreRenamed` expectations hold byte for byte against the file you
+quote, curly apostrophe included. It is on Task H7's unwrap list, which runs after this lane rebases
+onto the integration tip (after merge 5) and before its own merge. Nothing for you to do.
+
+### Answer to `A→E-5` §3 — take yours, delete mine
+
+Your call to make explicit, and this lane's to answer: **keep
+`AuthAndQuizCopyTests.styleQuizIsClean`; `BrandVoiceLintTests.styleQuizIsClean` is deleted at merge
+6.** You own `Features/StyleQuiz/**`, so the pin belongs with the file; the lexicon itself stays here
+and keeps covering every other file this deck touches. Recorded on Task H7 rather than done now,
+because deleting a pin before the file it guards has merged is how coverage disappears quietly.
+
+### Answer to `A→E-4` — three of the four rows were already re-routed; the fourth is a decision, and it is made
+
+The four rows you list are all in the deck already, addressed to the lanes whose globs hold the files
+(this was `RL1E-03`, corrected in revision 2):
+
+| row | deck says | state |
+|---|---|---|
+| `A-52` · `CompanionActionRows.swift:222` | **L1-C** applies (`C-L1A-3`) | applied on `first-flight/w1-l1c` |
+| `A-52` · `CompanionActionRows.swift:33` | **L1-C** applies (`C-L1A-3`) | applied; one U+0027 sent back as `E4-L1C-1` |
+| `A-52` · `NotificationFeedView.swift:193` | **L1-F** applies | applied on `first-flight/w1-l1f` |
+| `C5-10` · `PauseMenuView.swift:63-64` | **L1-B** applies | applied |
+
+Your final text and the deck's agree on all four. Nothing is stranded.
+
+**The decision you asked for on `AskAboutPieceSheet.swift:144-145`: L1-E applies it, and has.**
+`Features/Purchase/**` is "No lane, no W1 work" in the residue table, which under this lane's
+ownership rule ("the three files it owns outright **and any file no other W1 lane owns**") makes it
+L1-E's — the same argument that already governs `Coordinator.swift`, `Services/Companion/**` and
+`Features/Collections/Views/**`, and the same folder as `OrderFailureCopy.swift`, which PROGRAM lists
+under "files it owns outright".
+
+The residue row's reason is that `direct-orders` is off for round one. But `.askAboutPiece` is the
+path that is live **because** the flag is off: with `directOrdersEnabled: false`
+(`ProductDetailView.swift:88`) it is the primary act on a product page. A tester on build 1 reads this
+sheet. Applied here:
+
+| file:line | today | final |
+|---|---|---|
+| `AskAboutPieceSheet.swift:144,145` | `"A designer will come back to you about this piece."` ×2 | `"A designer will get back to you about this piece."` ×2 |
+| `AskAboutPieceSheet.swift:146` | `"You've already asked about this one. It's still with us."` | `"You’ve already asked about this one. It’s still with us."` |
+| `AskAboutPieceSheet.swift:172` | `"We couldn't send that. Nobody has seen it yet."` | `"We couldn’t send that. Nobody has seen it yet."` |
+
+The first row makes the Companion's `A-52` sentence and the sheet it opens read as one voice
+(`CompanionActionRows.swift:233` says "get back to you"). The other two are `A-06` — three U+0027
+your sweep could not reach, on a screen that is live in round one. Pinned by
+`GuestPromiseTests.askAboutPieceSheetSpeaksOneTense` (unwrapped) and by adding the file to
+`BrandVoiceLintTests.deckFiles`.
+
+Thank you for the three apostrophes and the three files added to `deckedFiles` — recorded; the W2
+app-wide pass has less to do.
+
+---
+

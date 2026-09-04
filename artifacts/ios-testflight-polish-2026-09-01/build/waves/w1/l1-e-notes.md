@@ -433,3 +433,236 @@ claim anything about the catalogue as a whole, must not blame the reader, and
 must not offer a door — `PatinaEmptyState` renders no CTA when `ctaTitle` is nil,
 and this one has none. If you want different words, they land in the same
 constant and no other file changes.
+
+
+---
+
+# From L1-A — fix round 3, 2026-09-03
+
+## To L1-E (Copy) — Note A→E-4 · four deck rows L1-A cannot reach, with the final text
+
+These are the four `l1-e-copy-deck.md` § "L1-A applies" rows whose files are in no L1-A glob (see
+A→S-5). L1-E merges last and owns the words; whoever ends up applying them, the text is settled:
+
+| id | file:line | today | final |
+|---|---|---|---|
+| `A-52` | `Features/Companion/Services/CompanionActionRows.swift:222` (`pieceActRow`, `.askAboutPiece`) | `hint = "A designer will come back to you"` | **guest:** `"Sign in and a designer will get back to you"` · **signed-in, no designer yet:** `"A designer will get back to you"` |
+| `A-52` | `Features/Companion/Services/CompanionActionRows.swift:33` (`homeRow`) | `item("house", "Home", "Back to your space", route: .heroFrame, id: "home")` | **guest with no local work:** hint `"See what's on Patina"` · otherwise unchanged |
+| `A-52` | `Features/Notifications/Views/NotificationFeedView.swift:193` (`guestInviteView`) | `message: "Updates from your designer will land here. Sign in to stay in the loop."` | `message: "Sign in to see updates on your projects and messages here."` (the title `"Nothing yet"` at `:192` stays) |
+| `C5-10` | `Features/RoomScan/Shared/Components/PauseMenuView.swift:63-64` | `Button("Discard Scan", …)` / `Button("Keep Scanning", …)` | `"Discard scan"` / `"Keep scanning"` |
+
+Two notes the deck already carries and the applier will need:
+
+1. Both `CompanionActionRows` rows need the same `isAuthenticated` parameter threaded into
+   `pieceActRow(_:isAuthenticated:)` and `homeRow()`, so they belong in **one** task, not two.
+   `PieceActResolver.entry(for:isAuthenticated:)` (`Features/Purchase/PieceAct.swift:114-127`)
+   already auth-walls the tap; these rows only fix what a guest reads *before* the wall.
+2. `Features/Purchase/AskAboutPieceSheet.swift:144-145` carries the same
+   `"A designer will come back to you about this piece."` sentence twice. It is **not** a deck row
+   and this lane has not touched it — but if the tense-neutral cleanup ("come back to" → "get back
+   to") is meant to be applied "everywhere this phrase appears", as the deck's own note says, that
+   file is where the other two live. `Features/Purchase/**` is "no lane, no W1 work" in the residue
+   table, so it needs a decision rather than a silent edit.
+
+**Also for the record (no action):** the seven straight apostrophes `A-06`'s sweep did not reach are
+now fixed here, and `AuthAndQuizCopyTests.deckedFiles` grew by three of this lane's own files —
+`AuthenticationView.swift`, `StyleConversationViewModel.swift`, `QRAuthModels.swift`. The W2 app-wide
+pass has three fewer files to do.
+
+---
+
+# From L1-B — round 4 (fix round 3, 2026-09-03)
+
+Full text: `build/waves/w1/l1b-notes-out.md` §O16.
+
+## Note O16 → **L1-E** · two copy questions, one a ratification and one a gap
+
+### 1. `LocalStoreRecoveryNotice.body` — the deck quotes a sentence this branch has never had
+
+`E3-L1B-3` gives the body's "today" column as:
+
+> `"Something on this phone became unreadable, so we started fresh. Your account's rooms and saved
+> pieces come back the next time you're online."`
+
+`first-flight/w1-l1b` has never carried that text. `Core/Persistence/LocalStoreRecoveryNotice.swift:20-25`
+reads, and has read since `497cf8bf6`:
+
+> `"Something went wrong with the copy of your home kept on this phone, and we couldn’t read it.
+> Anything saved to your account is still there and will come back as you go. Rooms you scanned on
+> this phone and never sent are gone."`
+
+`git log -p` on the file shows round 3's commit `a556ed576` changed only the apostrophe — the body has
+been this text throughout. No gate catches the divergence:
+`BrandVoiceLintTests.localStoreRecoveryNoticeApostrophesAreCurly` lints glyphs, not words (review
+`RL1B3-06`).
+
+**The ask is ratification, not a rewrite.** The shipped sentence names what was lost — *"Rooms you
+scanned on this phone and never sent are gone"* — and the deck's version does not. That third clause
+is the honest half of a start-over screen. If you agree, replace the deck row's "final" column with
+the shipped text so the two stop disagreeing. If you prefer the shorter version, say so and L1-B
+applies it — but the deck should then say where the unsent scans went.
+
+### 2. Five strings that arrived after `O13` and have no deck row
+
+`O13` asked for seven and `E3-L1B-3` answered all seven. These five landed in rounds 2–4 and were
+never sent. All are in files L1-B owns; all are curly and, as far as this lane can judge, in voice —
+so this is a ratification ask (review `RL1B3-07`).
+
+| file:line | string | what it is |
+|---|---|---|
+| `Features/Proposals/Views/ProposalDetailView.swift:106` | `"Opening your proposal…"` | the `R-05` skeleton's own line, under the proposal's title when the app knows it |
+| `Features/Proposals/Views/ProposalDetailView.swift:117-119` | `"Opening \(title)"` / `"Opening your proposal"` | the same skeleton's accessibility label, with and without a known title |
+| `Features/RoomScan/Views/QuietConversationFlowHost.swift:216` | `"Getting ready…"` | `GAP4-25`'s `.initial` waiting state, beside a `ProgressView` |
+| `Features/Profile/ViewModels/StudioHubViewModel.swift:70-74` | `"We couldn’t reach your studio just now."` · `"Last updated \(…)."` | `L07-05`'s `stalenessLine`, the two halves of "this is not current" |
+| `Features/RoomScan/Views/QuietConversationFlowHost.swift:100-106` | `"Not now"` + hint `"Leaves setting up this room and goes back home."` | `GAP4-02`'s exit control. **Round 4 widened it from two steps to seven** (`RL1B3-10`), so the same two strings now appear on the style, reveal, soft-landing, floor-plan and threshold steps — worth a read in that wider context |
+
+L1-E merges last and its lint sweeps only the files it pins, so nothing else will catch these.
+
+---
+
+# From L1-A — fix round 4 (tail fix), 2026-09-03
+
+## To L1-E (Copy) — Note A→E-5 · `QuizModels.swift` is clean; one of your three wrappers comes off at merge 6 and one must be edited first
+
+`RL4A-01`. All three `C5-20` rows on `QuizModels.swift` are applied on `first-flight/w1-l1a` as of
+this round, and the wire keys are untouched:
+
+| line | now reads |
+|---|---|
+| `:73` | `QuizOption(label: "Collected Eclectic", gradient: PatinaGradients.rattan, key: "eclectic_curated")` |
+| `:105` | `QuizOption(label: "Considered Comfort", subtitle: "$2,000 – $5,000 per room", icon: "sparkle", key: "curated_comfort")` |
+| `:112` | `title: "What’s bringing you here?",` — `E3-L1A-2`'s final text, U+2019 |
+
+### 1. `styleQuizLabelsAreRenamed` — **unwrap at merge 6**
+
+Its three `#expect(source.contains(…))` clauses read `"Collected Eclectic"`, `"Considered Comfort"`
+and `"What’s bringing you here?"`. All three hold on the file above, byte for byte including the
+curly apostrophe. Drop the `withKnownIssue("deck rows C5-20 / QuizModels.swift:73,105,112 are
+L1-A's; unwrap after L1-A merges")` wrapper once L1-A is on the tip (merge 5) and the bare
+expectations pass. **This is the ask in `RL4A-01`.**
+
+### 2. `styleQuizIsClean` — **do not unwrap as written; it will red on the wire keys**
+
+Not the same story, and worth knowing before merge 6 rather than during it. `lint(_:file:)` walks
+everything `stringLiterals(in:)` returns, and two of those literals are `"eclectic_curated"` and
+`"curated_comfort"` — both carry `"curated"`, which is on `bannedWords`. Remove that wrapper and the
+suite fails on a file that is, as copy, clean.
+
+Those two strings are also pinned **unwrapped** by your own
+`styleQuizWireKeysAreUnchanged`, and matched on by `StyleQuizViewModel.swift:221,242,296`. So the two
+tests would be in direct conflict: one requires the keys to stay, the other would demand they go.
+
+The fix is one clause — exclude a literal that is the value of a `key:` argument. L1-A hit the same
+wall this round and solved it by keeping the argument label alongside each literal while scanning
+(`AuthAndQuizCopyTests.labelledStringLiterals(in:)` → `(argument: "key", value: "eclectic_curated")`,
+with `trailingArgumentLabel(of:)` reading the token before the colon that precedes the opening
+quote). Lift it or write your own; the shape is the point, not the code.
+
+If you would rather not touch `lint`, the alternative is to keep `styleQuizIsClean`'s wrapper
+permanently and let `styleQuizWireKeysAreUnchanged` be the file's only unwrapped pin — but then the
+quiz's *copy* has no live lint, which is what `RL1E2-02` was filed about in the first place.
+
+### 3. One name collides across suites (no action, just so it is not a surprise)
+
+`first-flight/w1-l1a` now carries `AuthAndQuizCopyTests.styleQuizIsClean` — the same whole-file lint
+over the same file, with the `key:` exclusion above, plus the two wire-key assertions. Yours is
+`BrandVoiceLintTests.styleQuizIsClean`. Different suites, so nothing breaks on the merged tip; there
+will simply be two tests with one name, and duplicate coverage over `QuizModels.swift`. If you want
+one of them gone at merge 6, take L1-A's — this lane owns `Features/StyleQuiz/**` and the copy deck
+is yours, so the lint belongs with the lexicon.
+
+---
+
+# From L1-D — fix round 4, 2026-09-03
+
+Full text: `build/waves/w1/l1d-notes-out-round5.md`.
+
+## `D5→E-1` → **L1-E** · `E4-L1D-1` is applied, and two more files went with it
+
+Thank you for measuring it rather than reporting it — the add/add was real.
+
+```
+$ git merge-tree --write-tree HEAD first-flight/w1-l1e     # before
+CONFLICT (add/add): Merge conflict in
+  artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/l1-e-copy-deck.md
+
+$ git merge-tree --write-tree HEAD first-flight/w1-l1e     # after bb38980e7
+clean
+```
+
+`bb38980e7` untracks **eight** files, not six. The six you named:
+`l1-a-notes.md`, `l1-b-notes.md`, `l1-c-notes.md`, `l1-e-notes.md`,
+`l1-f-notes.md`, `l1-e-copy-deck.md`. Two more went with them for the same
+reason, each with its own measurement:
+
+| file | measurement |
+|---|---|
+| `steward.md` | frozen at **1321** lines; the live copy is **1635**. A merge into the main checkout would either refuse on the untracked difference or replace the steward's own record with a snapshot 314 lines behind it. |
+| `l1-d-notes.md` | this lane's inbox, but written by every other lane. The frozen copy predates `E4-L1D-1` itself — it does not contain the note this commit answers. |
+
+Six paperwork files remain on the branch, all authored by this lane
+(`l1d-tasks*.md`, `l1d-notes-out*.md`) plus `shots/w1-l1d*/`. Every one was
+checksummed against the live main-checkout copy before the commit and is
+byte-identical, so none of them can conflict either.
+
+The content is not lost. It lives in the main checkout and on each owning lane's
+branch; whoever commits the W1 paperwork set should commit it whole, once, rather
+than in six lanes' fragments.
+
+**No amend was needed** — a follow-up commit removes the paths from the branch
+tip, which is what the merge reads.
+
+## `D5→E-2` → **L1-E** · the deck's `L1-D applies` block, row by row, at the tip
+
+Revision 4 of `l1-e-copy-deck.md` is on `first-flight/w1-l1e`; the main-checkout
+copy is still revision 1, so this was read from your branch. Its three L1-D rows:
+
+| row | state on `first-flight/w1-l1d` |
+|---|---|
+| `C5-09` · `PatinaEmptyState.swift` `#Preview` default | **applied.** `title: "Still building the collection"`, `message: "New pieces are added by hand — check back soon."` — verbatim. |
+| `C5-09` · `PatinaEmptyStateContent.stillChoosingPieces` | **unchanged, as ratified.** `title: "Nothing here yet"`, `message: "Your designer is still choosing pieces for you. This fills in as they do."` — byte-identical to the deck's final column. |
+| `C5-14` · the money formatter's output | no string to apply; the formatter selection is closed (`compactFormatterCeiling = 0`). |
+
+One row outside that block needs saying, because getting it wrong costs merge 6 a
+conflict: **`C5-06` · `TimeOfDay.swift:29-41`** sits under *your* section
+(`### L1-E applies — its own worktree, its own files`), and
+`git show first-flight/w1-l1e:…/TimeOfDay.swift` shows the three-greeting
+collapse already applied there. `TimeOfDay.swift` is inside `PatinaDesignKit/**`,
+which is L1-D's glob — so on the glob alone this lane would have taken it.
+**It deliberately has not**, and the file is untouched on this branch. Do not
+expect a second copy of that edit at merge 2.
+
+The deck's string inventory also lists `EditorialStoriesAPIClient` and
+`PatinaTextField` as two-string L1-D files with no W1 finding, held for **W2**.
+Neither has a string change on this branch. Agreed as deferred.
+
+---
+
+# From L1-C — fix round 2 (2026-09-03)
+
+Full text: `l1c-notes-out.md` §15.
+
+## All five apostrophe rows are applied; your known issues can come off at merge 6
+
+`E3-L1C-1`, `E4-L1C-1`, `E4-L1C-2` and `E5-L1C-1` are on `first-flight/w1-l1c` (commit `da4068eb5`),
+all spelled U+2019: `HomeStoryRetryRow.swift:24` (both apostrophes) and `:31`;
+`CompanionActionRows.swift:38`, `:73`, `:88`; `DesignerConsultationView.swift:25`.
+
+`E4-L1C-2` cites `:67`/`:82` for the two money hints — on this tip they are `:73`/`:88`, moved by
+this lane's own edits. Same strings, same change.
+
+This lane also carries `PatinaTests/CurlyApostropheTests.swift`, which asserts the same six strings
+with both codepoints written as `\u{...}` escapes. That is deliberate duplication: L1-C merges first
+and L1-E merges last, so nothing on the integration tip held these bytes for five merges. Delete it
+at merge 6 if you would rather have one home for the rule.
+
+## `E3-L1C-3` / `E4-L1C-3` — this lane accepts the greeting wrap
+
+Both rounds say accepting it is legitimate and neither gives final text. The reason, from this
+lane's own charter: `DailyGreetingHeader.stacksControls(at:)` already puts the greeting on its own
+row above `.accessibility1` (`GAP1B-03`), so at the size `r3-09-today-dark-axxxl.png` photographs it
+has the full width of the screen and breaks **between words** — which is what `C-06` asks for.
+Forcing one line would mean shrinking the app's signature serif on its first screen or truncating a
+four-word greeting. `C5-06`'s strings stay as ruled. No change.
+
+`E3-L1C-2`, `E3-L1C-4` and your round-6 note are recorded as no-action in `l1c-tasks.md`.

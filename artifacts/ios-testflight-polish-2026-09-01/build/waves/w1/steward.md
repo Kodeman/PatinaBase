@@ -1319,3 +1319,472 @@ outside the token file, and `compact money = 0` catch a lost substitution. They 
 **not** catch a lost `Border.onDark` edge, a lost `OnDark` status line, or a lost
 `Interactive.active` fill — those are additions, not removals. Rows 9, 10, 11, 14 and 15 need reading, not greping —
 and row 15 is a control-flow change no grep can see at all.
+
+
+---
+
+# From L1-A — fix round 3, 2026-09-03 · the round-three notes, delivered
+
+`l1a-notes-out-round3.md` line 4 said "Every block below is also appended to its target's inbox,
+verbatim", and task **X32** step 2 said the same. It was true for `l1-e-notes.md` (A→E-1/2/3) and
+`l1-c-notes.md` (A→C-1) and **false for these five**: A→S-1 … A→S-4 and A→F-1 existed only in
+L1-A's own outbox, so `RL2A-01`/`05`/`06`/`11`'s corrections and the 2 s launch-path trade reached
+nobody. Reported as `RL3A-04` (major) and repaired here. The blocks below are verbatim.
+
+There is no separate Fable inbox in `build/`, so **A→F-1 is filed here too** — the steward is the
+reader Fable has in this wave. It is also carried in L1-A's fix-round-3 lane report.
+
+## To the steward — Note A→S-1 · `RL2A-01`, `Note D-L1A-4` is misaddressed and half-stale
+
+`l1-a-notes.md` `D→A-7` and the round-two `Note D-L1A-4` route eight `pearl` rows **to L1-D**, which
+merges **second** while L1-A merges **fifth** (D14). The target lane cannot apply them. Worse, the
+table sends a resolver hunting for rows that no longer exist:
+
+- **Five of the eight arrive already fixed.** `OnboardingFlowView`, `StyleQuizView.exitButton`,
+  `StyleResultView`, `StylePillButton`, `PriorityView`, `InvestmentPerspectiveView` are already zero
+  on `first-flight/w1-l1d`.
+- **Two need hand-work, and they are L1-A's own.** `AuthScreenView.swift` `guestButton` (~:252) and
+  `AuthProviderRow` (~:417), both `.stroke(PatinaColors.pearl, lineWidth: 1.5)`, both **added by
+  this branch** — they did not exist on the base sha.
+
+`BorderTokenAdoptionTests.pearlHasNoCallSitesOutsideTheTokenFile` is a **bar at zero**, not a
+ratchet, so merge 5 reds on those two lines unless somebody applies them.
+
+**Owned, with a name on it.** They are now `l1a-tasks.md` **X29**, a numbered L1-A exit task run in
+this worktree after the tip carries merges 1–4 and before merge 5 is pushed, and
+`AuthErrorRoutingTests.theRebaseTokenSitesAreEnumerated` reads that checklist out of the plan so it
+cannot silently shrink. Please re-address `Note D-L1A-4` to X29 rather than to L1-D.
+
+## To the steward — Note A→S-2 · `RL2A-05`, `B-L1A-2` has an owner now
+
+§S3 lists `l1-b-notes.md` **B-L1A-2** (`.keyboardDoneToolbar()` on five `.numberPad`/`.decimalPad`
+fields in L1-B's files) as applicable "after merge 5 (L1-A)" and then says "one of them has to be
+chosen and written down". It is chosen: **option 1**, and the owner is **L1-A**, in X29. The five
+sites are `RoomBudgetSheet.swift:61`, `ManualRoomEntryView.swift:65,133`,
+`RoomSettingsView.swift:193`, `ScanFallbackEntryView.swift:173`.
+
+Until it runs, **`C9-08` reads OPEN in L1-A's coverage table**, not closed — §S3 asked for exactly
+that and this round has made the correction. `.keyboardDoneToolbar()` is applied at one site today
+(`AuthenticationView+Panels.swift:152`, the T0 half), plus `.dismissKeyboardOnScroll()` at
+`AuthenticationView.swift:54`.
+
+X29 also extends `KeyboardDismissalTests` to a **bar** — every `.numberPad`/`.decimalPad` in the
+tree carries the modifier — so the five cannot be lost again.
+
+## To the steward — Note A→S-3 · `RL2A-06`, the `pendingLinkNotice` call site
+
+`AuthScreenView` accepts `pendingLinkNotice` and `AuthStatusSlot` renders it at second precedence
+(`AuthErrorRoutingTests.theNoticeYieldsToAnError`), but nothing passes it: `ContentView.swift:57-62`
+and `AuthSheet.swift:68-74` supply only `errorMessage:` and `isLoading:`. `AppCoordinator.pendingLinkNotice`
+lives on `first-flight/w1-l1f`, which merges **fourth** — so L1-A, merging fifth, is the only lane
+that can wire it. It is in **X29** with the exact line, plus a call-site pin, and
+`C2-21`/`GAP7B-09`'s acknowledgement half **reads OPEN against L1-A** until it lands.
+
+## To the steward — Note A→S-4 · `RL2A-11`, a ruling is wanted, not a revert
+
+Two changed files sit outside L1-A's globs. Nothing to revert — both edits are defensible and both
+are already recorded — but the same argument should not have to be had twice:
+
+| file | why | recorded at |
+|---|---|---|
+| `Features/Collections/Views/LocalStoreClaimSheet.swift` | `l1-e-copy-deck.md` files `A-79` under **"L1-A applies"** and names the file; the residue table says `Features/Collections/Views/**` has "No lane, no W1 work" | `steward.md` §S-L1A-2, `l1-a-notes.md` Note A-L1E-13 |
+| `Patina/Utilities/ViewModifiers/KeyboardDismissal.swift` (new) | `Utilities/**` is in no lane's glob; a shared modifier `C9-08` needs has to live somewhere | this lane called it unowned residue; **L1-B then cited it as precedent** for its own `PatinaApp.swift` line |
+
+**Two asks:** (1) rule once, in `steward.md`, on where a shared modifier a W1 lane needs may live —
+L1-B has already had to re-argue it; (2) give `Features/Collections/Views/**` an owner in the
+residue table rather than leaving it "no lane" while two lanes edit it.
+
+The carve-outs held: `SignInWithAppleButton.swift` and `RevealView.swift` are absent from
+`git diff main...HEAD --name-only`.
+
+---
+
+## To Fable — Note A→F-1 · `RL2A-14`, the 2 s on the launch path
+
+`establishSession` awaits `OnboardingCompletion.resolve(userId:)` **before** publishing the session,
+and the listener calls it before `markAuthStateReady()`. The serial ordering is deliberate and
+recorded: resolving from the auth-state listener instead put it ~130 ms late, and `ContentView`
+animates phase changes over 0.5 s, so it was a **visible cross-fade through the intro carousel**,
+not a dropped frame.
+
+The worst case is `OnboardingCompletion.serverReadBudget` = 2 s, paid only when the device flag is
+false and the account is not in the device record — a fresh install whose session is restored, and
+every first sign-in on a new phone. That is inside L1-B's 8 s `LaunchWatchdog.stallDeadline`.
+
+**No change made.** Two new cases pin it instead: `theServerReadBudgetIsTwoSeconds` (the constant
+cannot move by accident) and `aHangingReadIsAbandoned` (the budget is a ceiling, measured — a read
+that never returns does not stall the launch and nothing is flipped on its word). If Fable would
+rather publish the session first and resolve on a detached task, the 130 ms cross-fade comes back;
+that trade is Fable's, and it is now a one-line change with a test either side of it.
+
+
+---
+
+# From L1-A — fix round 3, 2026-09-03 · this round's own two notes
+
+## To the steward — Note A→S-5 · the copy deck names four files no L1-A glob covers
+
+`l1-e-copy-deck.md` § **"L1-A applies"** carries twenty-one rows. Seventeen name files inside L1-A's
+globs and **all seventeen are applied on this branch**. Four name files that are in **no L1-A glob**,
+and this lane has deliberately not touched them:
+
+| deck row | file | whose glob it is |
+|---|---|---|
+| `A-52` (`.askAboutPiece` hint) | `Features/Companion/Services/CompanionActionRows.swift:220-223` | `Features/Companion/**` — **L1-C**'s (it owns `CompanionHearthView`, `CompanionOverlay`, the bottom inset) |
+| `A-52` (`homeRow` hint) | `Features/Companion/Services/CompanionActionRows.swift:32-34` | same |
+| `A-52` (`guestInviteView` message) | `Features/Notifications/Views/NotificationFeedView.swift:193` | `Features/Notifications/**` — **L1-F**'s (the badge/queue lane) |
+| `C5-10` (`Discard Scan` / `Keep Scanning`) | `Features/RoomScan/Shared/Components/PauseMenuView.swift:63-64` | `Features/RoomScan/**` — **L1-B**'s |
+
+Both of the `CompanionActionRows` rows also need `isAuthenticated` threaded through
+`pieceActRow(_:isAuthenticated:)` and `homeRow()` — a signature change in a file this lane does not
+own, applied blind, two merges after the owner has already merged.
+
+**The ask:** route these four rows to the three owning lanes in the deck itself (or rule that L1-A
+applies them at the X29 rebase, in which case say so and they go on X29's checklist). They are
+written out in full in **A→E-4** below so whoever applies them has the exact final text.
+
+---
+
+## To the steward — Note A→S-6 · `RL3A-06`, the acceptance criterion for merge 5
+
+L1-A closes **25 of its 27** rows. Two read **OPEN**, by design, and both are `X29`'s — the rebase
+task that runs in this worktree after merges 1–4 and before merge 5 is pushed:
+
+| finding | what is still open | what closes it |
+|---|---|---|
+| `C9-08` | four of the five `.numberPad`/`.decimalPad` files have no `.keyboardDoneToolbar()` (`RoomBudgetSheet`, `ManualRoomEntryView` ×2, `RoomSettingsView`, `ScanFallbackEntryView` — all L1-B's) | `l1-b-notes.md` **B-L1A-2**, applied at X29 |
+| `C2-21` / `GAP7B-09` (acknowledgement half) | `AuthScreenView` accepts `pendingLinkNotice` and renders it; nothing passes it, because `AppCoordinator.pendingLinkNotice` is L1-F's and merges fourth | the two call-site lines in `ContentView.swift` and `AuthSheet.swift`, applied at X29 |
+
+**The ask:** make merge 5's acceptance criterion name both rows explicitly, so the steward can refuse
+the merge if they are still open. Both are now enforced by tests rather than by prose (`RL3A-03`):
+
+- `KeyboardDismissalTests.everyBareNumericFieldIsOneOfTheFiveKnownOpenSites` — a tree-wide walk. It
+  reds when a sixth bare field appears **and** when one of the four named files is fixed and the list
+  is not updated. That second direction is the signal that `C9-08` may read closed.
+- `AuthErrorRoutingTests.theHeldLinkNoticeIsWiredWhenTheCoordinatorCanSupplyIt` — inert while
+  `AppCoordinator` has no `pendingLinkNotice`; the moment L1-F's property is on the tip it requires
+  both call sites to pass it.
+- `AuthErrorRoutingTests.thePearlStrokesAreRatchetedToZero` — the `D→A-7` swap. `<= 2` while
+  `PatinaColors.Border` is absent from `PatinaDesignKit`; **exactly 0** the moment it is present.
+
+`PROGRAM.md` §11.6 and `findings-by-lane.md` currently record L1-A at 27/27. **That is not yet true.**
+Either accept the deferral and record **25/27 with two carried rows**, or require the rebase before
+this branch is called done — Fable's call, but the number should say what is so either way.
+
+---
+
+---
+
+# From L1-B — round 3 (fix round 2, 2026-09-03)
+
+After the second adversarial review of L1-B (`RL1B2-01`…`RL1B2-18`). Full text at
+`build/waves/w1/l1b-notes-out.md` §S5 and §S6.
+
+## S5 → steward · seven `BrandVoiceLintTests` pins go red as *unexpected passes* at merge 6
+
+`RL1B2-01` (blocker) — fixed on `first-flight/w1-l1b`. L1-E's round-3 and round-4 notes
+(`l1-b-notes.md` E3-L1B-1 … E3-L1B-5, E4-L1B-1) were unapplied; they are applied now, verbatim.
+
+`BrandVoiceLintTests.swift` on `first-flight/w1-l1e` wraps its pins for files other lanes own in
+`pinDirtyToday(_:row:)` — a `withKnownIssue` that is **not** `isIntermittent`. Those wrappers were
+written against this branch's state *before* this round. Now that the rows are applied, each becomes
+an unexpected pass the moment L1-B is in the tree — and since L1-E merges last, that is **merge 6**.
+
+| test | file it pins |
+|---|---|
+| `moneyFailureCopyApostrophesAreCurly` | `Features/Money/MoneyFailureCopy.swift` |
+| `scanReviewApostrophesAreCurly` | `Features/RoomScan/Views/ScanReviewView.swift` |
+| `scanWalkApostrophesAreCurly` | `Features/RoomScan/Views/ScanWalkView.swift` |
+| `styleResponseModelApostrophesAreCurly` | `Features/RoomScan/Shared/Models/StyleResponseModel.swift` |
+| `scanUploadFailureCopyApostrophesAreCurly` | `Features/RoomScan/Shared/Components/ScanUploadFailureCopy.swift` |
+| `localStoreRecoveryNoticeApostrophesAreCurly` | `Core/Persistence/LocalStoreRecoveryNotice.swift` |
+| `styleResponseModelIsClean` / `namedAestheticIsClean` | the two `"Curated"` display-name tables |
+
+**Fix: one line each** — swap `pinDirtyToday(path, row: …)` for `pinCleanToday(path)`. A red here
+means the deck landed.
+
+**The eighth pin is the opposite case and needs no action.**
+`roomsAPIClientApostrophesAreCurly` is `pinCleanToday` — unwrapped — and its own doc comment says
+`first-flight/w1-l1b` adds `"We didn't get a response."` with U+0027 and that this pin exists to catch
+it at the deck pass. It did. `Core/Network/RoomsAPIClient.swift:430` now reads
+`"We didn’t get a response. Try again."` and that pin stays green through merge 6.
+
+## S6 → steward · the cross-lane halves whose owner has already merged, and five unowned files
+
+`RL1B2-04`, `-05`, `-06`, `-07`, `-08`, `-13`. **This supersedes S3** (same question, three of these
+rows, no ruling yet) and folds in **S2** and **S4** so there is one table.
+
+§5's rule: *"an integration note that no owner scheduled is not a plan, it is a hope."* Every row
+below is a note whose owner **cannot** schedule it — the symbol arrives after that lane's merge, or
+that lane has already merged. None is a disagreement about the change; the text is written and the
+mechanism agreed. The missing thing is a recorded decision about **where the apply happens**.
+
+### The applies, in merge order
+
+| after merge | note | finding | file | what | re-run |
+|---|---|---|---|---|---|
+| **1** (L1-C) | `l1b-notes-out.md` **O11** | `A-34`, `C-11` | `ProductDetailView.swift:413`, `RecommendationsView.swift:381` | guard the verdict pill with `product.hasMatchScore` | `MatchScoreResolverTests` |
+| **1** (L1-C) | **O12** | `L07-05` | `Features/Profile/Views/StudioHubView.swift` | render `viewModel.stalenessLine` | `LoadStateHonestyTests` |
+| **1** (L1-C) | **O7** | `R-02`, `A-81` | `Features/Home/Views/DailyGreetingHeader.swift` | the bell must not assert "No unread notifications" over a count nobody fetched | `AttentionCountTests` |
+| **3** (L1-B) | **O14** | `B-03` | `Features/Home/Views/DailyRoomView.swift` | the `LocalRoomSignal` observer (appended to `l1-c-notes.md`) | `RoomLifecycleTests` |
+| **4** (L1-F) | `l1-b-notes.md` **L1F→B-5** | `RL1F-25` | `StudioQueueBuilder.swift:33,392` | `BadgeCountService.shared.unreadNotificationCount`, then delete the `StudioQueueBuilder.swift` entry from `BadgeFreshnessTests.owed` | `BadgeFreshnessTests`, `AttentionCountTests` |
+| **5** (L1-A) | `l1-b-notes.md` **B-L1A-2** | `C9-08` | five `.numberPad`/`.decimalPad` fields in L1-B's files | `.keyboardDoneToolbar()` | `KeyboardDismissalTests` |
+
+Two ways to close it — **one has to be chosen and written into §5.9**:
+
+1. **Named tasks on the integration tip**, this table as the checklist, the named suite re-run after
+   each.
+2. **A short L1-B fix round rebased onto the tip**, after merge 1 and after merge 5.
+
+Until the halves land, `A-81`, `L07-05`, `C9-08`, `C2-07` and the pill half of `A-34`/`C-11` should
+**not** read as closed in any lane's coverage table. L1-B's own table marks them open.
+
+**S3's `C3-01`/`C3-15` rows are withdrawn — they need no apply task.** `l1-b-notes.md` *From L1-D —
+round 3* says L1-D applied every routed-out call-site swap in its own branch, and that checks out:
+`git show first-flight/w1-l1d:…/Features/RoomScan/Views/ScanFallbackEntryView.swift` has zero
+`pearl` and zero `.custom(` — `Border.strong` at `:118,:185,:259`, `PatinaTypography.bodySmall` at
+`:174`, `monoLarge` at `:235`. What those two rows need is the **merge-3 conflict resolved by L1-D's
+own rule** (*take L1-B's structure, re-apply L1-D's substitution*), and L1-D's three bars —
+`BorderTokenAdoptionTests.pearlHasNoCallSitesOutsideTheTokenFile`,
+`TypographyAdoptionTests.zeroInlineFontCustom`, `CurrencyFormattingTests.compactFormatterCeiling` —
+name any line lost in it. They are bars, not ratchets: `ios-gate.sh unit` after merge 3 answers.
+
+`C9-08` is the genuine one. `grep -c keyboardDoneToolbar` over `first-flight/w1-l1a`'s copies of
+`RoomBudgetSheet.swift`, `ManualRoomEntryView.swift`, `RoomSettingsView.swift` and
+`ScanFallbackEntryView.swift` returns **0, 0, 0, 0** — nobody has applied `B-L1A-2` anywhere.
+
+> **The user-visible one.** Until **O11** lands, a piece opened by id draws a verdict pill reading
+> **"Not scored yet"**: `ProductAPIClient.fetchProduct` correctly maps `matchScore: 0`
+> (`quality_score` is not a match), `matchLabel` bands `0` to that sentence, and `hasMatchScore` has
+> no consumer because the guard is in L1-C's file. The alternative is a pill reading a flat 50% on a
+> piece the grid just scored 73, which is `C-11` itself (review `RL1B2-08`).
+
+### The five files L1-B edited that no glob covers
+
+`RL1B2-13`. All five changes are correct and minimal; §5.9 stops at S-5 and none of them is ruled.
+
+| file | why L1-B touched it | previously raised as |
+|---|---|---|
+| `Patina/PatinaApp.swift` | one modifier line — `.localStoreRecoveryNotice()` for `C7-01` | S2 |
+| `Features/Collections/Views/CollectionsView.swift` | `C4-03`'s three states, and E3-L1B-4's noun | S2 |
+| `PatinaTests/OrderHandoffTests.swift` | `waitFor`'s 3 s wall-clock budget → 20 s (`RL1B-01`) | S4 |
+| `PatinaTests/RoomBudgetTests.swift` | three currency expectations rewritten for `C5-14` | **not previously raised** |
+| `PatinaTests/SessionIsolationTests.swift` | participant count 11 → 13, two new `SessionScoped` entries | **not previously raised** |
+
+S4's second ask stands: the ruling should also cover `CompanionCoachingModelTests.swift`, a second
+wall-clock poller L1-B deliberately did not touch.
+
+**Tell the wave the ceiling moved:** `OrderHandoffTests.waitFor` is now 20 s, not 3 s.
+
+### The merge-3 conflict list
+
+`RL1B2-14`. `git merge-tree --write-tree --name-only <lane> first-flight/w1-l1b`, run on
+`first-flight/w1-l1b` against all five other lanes: **`w1-l1c` none · `w1-l1d` six · `w1-l1f` none ·
+`w1-l1a` one · `w1-l1e` none.** Nineteen files are touched by both L1-B and L1-D; thirteen
+auto-merge. The six-plus-one, with the rule that resolves each, are in `l1b-notes-out.md` under
+*"The merge-3 conflict list"*. The one that is not a take-both:
+`PatinaTests/RoomBudgetTests.swift` — **L1-B's currency expectations win** where they disagree, and
+`PatinaTests/SessionIsolationTests.swift` (vs L1-A) — **take the union of the `SessionScoped` entries
+and set the count literal to the resulting number**; the literal is a guard, not a fact.
+
+---
+
+# From L1-B — round 4 (fix round 3, 2026-09-03)
+
+Full text: `build/waves/w1/l1b-notes-out.md`, round-4 section.
+
+## Note S7 → steward · §S6 corrected in place; two things still want a §5.9 line
+
+`RL1B3-03` and `RL1B3-08`. Both are corrections to `l1b-notes-out.md`, made **in place** in that file
+(the diff shows them), so §S6 is now accurate rather than restated here.
+
+1. **§S6's applies table gained O5** — `C4-03`'s Spaces half (`Features/Rooms/Views/YourSpacesView.swift`,
+   the error branch for `RoomSyncCoordinator.shared.lastLoadFailed`). It was the one row missing, and
+   Spaces is the surface `C4-03`'s own `where` names first. Sim-confirmed on the round-3 tree: Your
+   Spaces drew a bare `Text("No rooms yet")` with no error branch in the file at all.
+
+2. **Your own routing is folded in, so ownership and scheduling read as one decision.** The table
+   above under *"From L1-C — fix round"* already assigns `C-L1B-1` (Today's staleness sentence),
+   `C-L1B-3` (**= O5**) and `C-L1B-4` (**= O7**) to **L1-B after merge**. So *who* is settled and the
+   only open question in §S6 is *where*. **L1-B's recommendation is option 2** — a short L1-B fix
+   round rebased onto the tip after merge 1, and a second after merge 5. Three of the four merge-1
+   rows are already L1-B's by your ruling, the tripwires live in L1-B's suites, and the two suites
+   they name are L1-B's.
+
+3. **Every unapplied cross-lane half is now a test, not a hope.** Four new `withKnownIssue` tripwires
+   on `first-flight/w1-l1b`, none `isIntermittent`: `LoadStateHonestyTests.theSpacesErrorBranchIsStillOwed`
+   (O5), `.theStudioHubStalenessLineIsStillOwed` (O12),
+   `AttentionCountTests.theBellStillOwesItsKnownFlag` (O7), and
+   `MatchScoreResolverTests.theVerdictPillsAreStillUnguarded` ×2 (O11). Each goes **red** the moment
+   its note lands — which is the signal to delete the block — and green while it is genuinely owed.
+   With the five that already existed the tier now carries **fifteen** known issues, every one a named
+   cross-lane debt.
+
+4. **The unowned-file table is seven rows, not five** (`RL1B3-08`). Added:
+   `PatinaTests/DecisionConsentValidationTests.swift` and `PatinaTests/InvoicesMoneyRailTests.swift`.
+   Both are the test files for globs **S-3** gives L1-C; both edits are forced (E3-L1B-2's glyph swap
+   on `MoneyFailureCopy`, and `C5-14` retiring the compact currency form), and
+   `git diff --name-only main...first-flight/w1-l1c` lists **neither**, so there is no merge risk —
+   only an unrecorded edit. **The §5.9 ruling should cover all seven**, plus
+   `CompanionCoachingModelTests.swift` (S4's standing ask, still open).
+
+**One more for the ceiling record**, since a lane adding main-actor suites spends it:
+`OrderHandoffTests.waitFor` is 20 s, not 3 s — unchanged from round 3, restated because §5.9 has not
+recorded it yet.
+
+---
+
+# From L1-A — fix round 5 (2026-09-03)
+
+## To the steward — Note `A→S-7` · a fresh boot no longer clears the two timing suites
+
+`D→X-3` and L1-B's `waitFor` note both stand; this adds the measurement that changes what the
+steward can conclude from a red `unit` line.
+
+L1-A's fix round 4 recorded the flake as **warm-simulator only** — `Z5`'s run 4 was
+`shutdown` + `boot`, then 1713 tests / 188 suites / **0 issues** in 5.011 s — and left the wave with
+"boot the clone fresh and it goes green." **That is no longer true.** This round, on the same clone
+and the same commit `12a20aabe`, with the boot done first:
+
+| run | conditions | tier wall time | result |
+|---|---|---|---|
+| 1 | fresh `shutdown`+`boot`, `load avg 892`, six concurrent `xcodebuild`s | **98.9 s** | **7 issues** — `OrderHandoffTests` ×6, `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` ×1 |
+| 2 | the two suites alone, same clone, immediately after | **0.109 s** | 36 tests, **passed** |
+| 3 | whole tier again, `load avg ~500` | 10.1 s | **4 issues** — `OrderHandoffTests` only |
+
+Run 2 is the proof: 0.109 s alone against 34–45 s per test inside the parallel run. The variable is
+machine load from the other five lanes' gates, not simulator warmth, so **a fresh boot is not a
+remedy the steward can rely on at D14's between-merge gates** — those run while other lanes are
+still compiling.
+
+Two consequences for the merge sequence, neither of them L1-A's to take:
+
+1. L1-B's `waitFor(timeout: .seconds(20))` lives on `first-flight/w1-l1b` only. It is absent from
+   `first-flight/w1-l1a` **deliberately** — `PatinaTests/OrderHandoffTests.swift` is residue in no
+   lane's glob, and a second lane editing the same line buys the steward a conflict in a file
+   neither lane owns for a fix that is already coming. Once L1-B is on the tip, the tier's red
+   should shrink to `CompanionCoachingModelTests`, which nobody has raised.
+2. Until §5.9 rules, a red `unit` line naming **only** `OrderHandoffTests` or
+   `CompanionCoachingModelTests` should be re-run with
+   `-only-testing:PatinaTests/OrderHandoffTests -only-testing:PatinaTests/CompanionCoachingModelTests`
+   before it is called a merge blocker. `git diff main...HEAD --name-only` over both suites and
+   `Features/Purchase/OrderHandoff.swift` is empty on this branch.
+
+L1-A's own three gate lines — `build`, `release`, `lint-delta main` — are green at `12a20aabe`, and
+1713 − 36 = 1677 tests in 186 suites are green in the same run that recorded the four issues.
+
+---
+
+---
+
+## From L1-C — fix round 2 (2026-09-03) · six rows the merge must route
+
+The first fix round (through `117d547c8`) was completed on 2026-09-02 but never reported; this round
+re-verified it line by line and then worked the thirteen further note blocks that arrived in
+`l1-c-notes.md` between then and now (the file grew 1,038 → 1,813 lines). Two landed as code; the
+rest cannot compile on this lane's base.
+
+**L1-C merges first (D14) and owns every file below.** If these are not routed, no later lane can
+reach them.
+
+| at merge | lane | file | the edit |
+|---|---|---|---|
+| 2 | L1-D | `Features/Rooms/Components/RoomTypePillRow.swift` | `D→C-12`'s three token lines — `:75` ink, `:82` fill, `:86` stroke (offsets moved; the file was rewritten again for `RL1C-05`) |
+| 2 | L1-D | `Features/Companion/Components/CompanionHearthView.swift`, `Features/Companion/Views/CompanionOverlay.swift` | `D→C-13` — **union** merge, not "take L1-C's structure" |
+| 3 | L1-B | `Features/Profile/Views/StudioHubView.swift` | `O12` (`L07-05`) — render `viewModel.stalenessLine` |
+| 3 | L1-B | `Features/Home/Views/DailyRoomView.swift` | `O14` (`B-03`) — the `LocalRoomSignal` observer. L1-C has taken the note's own offer to leave it in `l1b-notes-out.md` §S6 |
+| 3 | L1-B | `Features/ProductDetail/Views/ProductDetailView.swift`, `Features/Recommendations/Views/RecommendationsView.swift` | re-point three `product.matchScore > 0` guards at `product.hasMatchScore` (a rename; `UnscoredMatchPillTests` goes red on it by design) |
+| 4 | L1-F | `Features/Home/Views/DailyRoomView.swift:282`, `Features/Home/ViewModels/RecordRefresh.swift` | the bell's one count (`C2-07`) and `save(record, owner: sessionUserId)` (`RL1F-21`) |
+
+Two new test files this round, both in `PatinaTests/`, both source pins with no fixtures:
+`CurlyApostropheTests.swift` (L1-E's five copy rows, held for the five merges before L1-E lands —
+safe to delete at merge 6) and `UnscoredMatchPillTests.swift` (`A-34`/`C-11`).
+
+---
+
+---
+
+# From the W1 walk fix round 1 (2026-09-03) · three harness rules the walks earned
+
+Walkers A, B and C each lost coverage to the same three environment failures, and all three are
+silent: the app looks right while the thing under it is dead. They are **steward rules**, not product
+defects, and they belong in a walker's preflight rather than in `findings.json`.
+
+## `W1-A-08` — probe the gateway before the first launch, and after any worktree retirement
+
+The local API gateway was **down for the whole start of the wave**. `supabase_kong_supabase` was
+`Exited (127)`, and `docker start` said why:
+
+```
+error mounting ".../.codex/worktrees/agent-tester-notes/supabase/templates/confirmation.html"
+to rootfs at "/home/kong/templates/email/confirmation.html": not a directory
+```
+
+The container had been created from the **retired `agent-tester-notes` worktree**. When that
+worktree's files went, Docker recreated the six bind-mount sources as empty **directories**, and kong
+cannot mount a directory onto a file. Walkers A, B and C each found and repaired it independently,
+which is three walkers paying for one fact.
+
+Why it costs coverage rather than announcing itself: `-DeploymentTarget local` points the app at
+`:54321`, and **the Welcome screen renders identically with the backend down** — `RL1A-06`'s
+`target == .local` clause puts Apple in the provider stack regardless of what
+`GET /auth/v1/settings` says. A walker can complete a "successful" Welcome pass against a dead API
+and never know.
+
+**The rule.** Every walker's first command, before any launch:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:54321/auth/v1/settings   # must be 200
+```
+
+Anything but `200` and the walk does not start. And when a worktree is retired, kong is recreated
+from the **current** checkout (`npx supabase stop && npx supabase start` from the main checkout)
+before the next wave — a stack whose `com.supabase.cli.workdir` points at a directory that no longer
+exists is a wave-wide outage waiting for its first walker.
+
+Verified on this fix round at 17:0x CDT: `gateway=200`, and `docker ps` shows
+`supabase_kong_supabase Up (healthy)` alongside `supabase_db_supabase` and
+`supabase_edge_runtime_supabase`.
+
+## `W1-A-02` — one account per walker, or serialise the signed-in legs
+
+All three walkers drove one Supabase at `127.0.0.1:54321` **and one `client@patina.dev` account**.
+Walker A watched walker B's fixture appear mid-walk — "Walk B Test Room. 120 sq ft" in a rail that
+had shown Guest Bedroom / Dining Room / Living Room 23 minutes earlier, confirmed in SQL:
+
+```
+Walk B Test Room|2026-09-03 20:23:59.615512+00
+Guest Bedroom   |2026-09-03 20:00:43.215171+00
+```
+
+This is Hard Rule 1's failure mode moved from the simulator to the database, and it has the same
+consequence: **every room-count, roster, badge-count and "your house" observation any W1 walker made
+is unreliable**, in both directions — a room that appeared, and a room that vanished.
+
+**The rule.** Mint one account per walker for the wave (the W0 fixture script already takes an
+email), or serialise the signed-in legs so only one walker is authenticated at a time. Until one of
+those is in place, a walk report must say which of its rows depend on fixture state.
+
+## `W1-A-03` — re-run the HID preflight after every fresh-install sequence
+
+Synthetic HID died on walker A's clone (`4D075B9D…`) **immediately after**
+`terminate → uninstall → keychain reset → install`, and survived no recovery: not relaunch, not
+terminate + relaunch, not `shutdown` + `boot` + relaunch (a real Simulator.app window confirmed
+present), not a full `erase` + `boot` + keychain reset + install + relaunch. `describe_screen`
+degraded from a full tree to a single empty node while `simctl io screenshot` kept returning correct
+frames — so the screen looks right while nothing lands. It cost 8 of 27 rows.
+
+**The rule.** The HID preflight runs at session start **and again after every fresh-install
+sequence**. A walker that reinstalls mid-walk and does not re-preflight has no basis for any row
+after the reinstall, and must say so rather than record them.
+
+## One harness fact the round confirmed, and one it corrected
+
+- **The Studio hub barely scrolls under synthetic input** (walker A §4). Re-measured on
+  `ff-w1-walk-b`: five flicks from `(200, 700)` moved the content 0 pt. Not a product defect — a
+  finger scrolls it fine — but it is why `A-101`, `B-12`, `C1-14` and the Settings row at y≈2267 are
+  code-verified rather than walked.
+- **The swipe that does work** starts on non-button content with a short duration:
+  `fromX 200, fromY 545 → 145, duration 120, delta 400` moved the hub from its top to
+  "Money & documents" in six strokes, where six flicks from `(200, 700)` — which start on a card
+  Button — moved nothing. Worth a walker's first try before Hard Rule 10 is invoked.

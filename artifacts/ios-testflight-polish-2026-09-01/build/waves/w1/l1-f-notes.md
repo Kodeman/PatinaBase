@@ -519,3 +519,162 @@ path is still empty. `PatinaTests/LaunchWatchdogTests.swift` line 96 is **droppe
 the two assertions above it stay.
 
 ---
+
+
+---
+
+# From L1-E (Copy) — round 4, 2026-09-03
+
+After the third adversarial review (`RL1E3-01`…`RL1E3-10`). Mirrored in `build/waves/w1/l1e-notes-out.md`.
+
+## Round 4 → L1-F
+
+### Note E4-L1F-1 — `A-06` · the send-failure sentence, and three more in the same file
+
+`RL1E3-04`. L1-F is the one lane the round-3 apostrophe sweep skipped entirely, because the sweep
+walked a hand-maintained file list and this lane's new copy had no deck row to put it on the list.
+
+**File:** `apps/mobile/Patina/Patina/Features/Messaging/ViewModels/MessagingViewModel.swift`.
+
+| line | today, on `first-flight/w1-l1f` | final |
+|---|---|---|
+| `:413` | `static let sendFailureLine = "We couldn't send that. Nothing was lost — your message is still here."` | `"We couldn’t send that. Nothing was lost — your message is still here."` |
+| `:75` | `self.error = "Couldn't load conversations"` | `"We couldn’t load your messages. Try again."` |
+| `:331` | `self.error = "Couldn't load messages"` | `"We couldn’t load this conversation. Try again."` |
+
+`:413` is the row that matters — it is rendered at `ThreadDetailView.swift:198` (`Text(sendError)`)
+and it is new, reader-facing copy on a round-one path. The sentence itself is right: it says nothing
+was lost and names no server string, exactly the `MoneyFailureCopy` shape. Only the glyph is wrong.
+
+`:75` and `:331` are older strings in the same file; they carry the same wrong glyph *and* are
+sentence fragments where the rest of the app ships whole sentences with a recovery. The final text
+above is offered, not imposed — if you would rather change only the glyph this wave and leave the
+wording, say so and the deck records it that way.
+
+**Pinned by:** `PatinaTests/BrandVoiceLintTests.messagingViewModelApostrophesAreCurly` — new this
+round, `withKnownIssue` today, unwraps when the rows land.
+
+### Note E4-L1F-2 — `AppCoordinator.swift:109` is a **W2** row, not a W1 one
+
+Same glyph, different urgency, and the difference is worth stating rather than sending both as equals.
+
+`App/Coordinators/AppCoordinator.swift:109`
+`public static let pendingLinkNoticeLine = "We'll open what you tapped once you're in."`
+
+No view binds it. `grep -rn "pendingLinkNotice" apps/mobile/Patina/Patina/` outside the coordinator
+returns only `DeepLinkQueueTests` and `SignOutResetTests`. So it is a landmine, not a live defect, and
+it belongs in W2 · L1-E's 48-row sweep rather than in your W1 exit criteria. **No action asked this
+wave.** Recorded here so nobody re-files it as a blocker later.
+
+---
+
+---
+
+# From L1-B — round 3 (fix round 2, 2026-09-03)
+
+After the second adversarial review of L1-B (`RL1B2-01`…`RL1B2-18`). Full text at
+`build/waves/w1/l1b-notes-out.md`.
+
+## O15 → **L1-F** · reply to `L1F→B-5`: the note is right, and it lands at merge 4
+
+**Your note.** `L1F→B-5` (`RL1F-25`): `StudioQueueBuilder.swift:33` and `:392` count
+`context.unreadNotifications` — the raw table, which 00534 writes two rows per event into — so the
+Studio row said *"6 unread updates"* beside a bell reading 3 and a feed reading 0. Your evidence,
+`shots/w1-review-l1f-r2/07-studio-six-unread-updates-third-count.png`, is the shipped four-tab root.
+You asked for an explicit reply if the lane would rather not touch the file. **This is not that
+reply.**
+
+**The note is accepted.** `Features/Profile/ViewModels/**` is L1-B's under steward ruling **S-3**, the
+replacement you wrote is the right one, and `C2-07`'s ruling — one count of what needs you, from the
+one service — is the reason.
+
+**It cannot be applied on `first-flight/w1-l1b`.** `BadgeCountService.unreadNotificationCount` does
+not exist on that branch:
+
+```
+$ grep -n "unreadNotificationCount" Patina/Services/Badges/BadgeCountService.swift
+(no output)
+
+$ git show first-flight/w1-l1f:apps/mobile/Patina/Patina/Services/Badges/BadgeCountService.swift \
+    | grep -n "unreadNotificationCount"
+52:    private(set) var unreadNotificationCount: Int = 0
+58:        unreadNotificationCount = rows.filter { !$0.isStudioFallback && !$0.isRead }.count
+```
+
+`Services/Badges/**` is yours, the property arrives with your merge, and D14 puts **L1-B at 3 and
+L1-F at 4**. Writing your two lines there would not compile. There is also no local substitute worth
+having: `RemoteNotification` — the builder's row type, `Core/Network/NotificationsAPIClient.swift:18`
+— carries no `isStudioFallback`, so any dedup inside the builder would be a *second* count computed a
+second way, which is the thing `C2-07` forbids.
+
+**So it is scheduled, not dropped.** `l1b-notes-out.md` §S6 carries it as a named apply on the
+integration tip immediately after **merge 4**, with your exact replacement text, and with the
+instruction to delete the `StudioQueueBuilder.swift` entry from `BadgeFreshnessTests.owed` in the same
+commit. If you would rather take it yourself at merge 4 — your file is already open at that point —
+that is better still; S6 is the fallback, not a claim on the work.
+
+**L1-B pins its own half meanwhile.**
+`AttentionCountTests.theStudioRowStillOwesTheSharedUnreadCount` (on `first-flight/w1-l1b`) records the
+same known issue from that side, greps the same expression, and is deliberately **not**
+`isIntermittent`. So `BadgeFreshnessTests.thereIsNoSecondCount` and that test go red together the
+moment the binding lands. Both reds are the signal, not a regression — delete both blocks in the same
+commit.
+
+---
+
+# From L1-B — round 4 (fix round 3, 2026-09-03)
+
+Full text: `build/waves/w1/l1b-notes-out.md` §O17.
+
+## Note O17 → **L1-F** · `LaunchWatchdog.swift` is no longer byte-identical
+
+Answering `L1F→B-4`, which recorded the two copies of `Core/State/LaunchWatchdog.swift` as identical.
+They now differ, on purpose.
+
+**`stallDeadline` is unchanged at 8 s.** It is your forced-`.auth` deadline in
+`AppCoordinator.scheduleLaunchWatchdog`, and nothing about `F-L1B-1` changes — same constant, same
+value, same meaning.
+
+What is new is **`LaunchWatchdog.splashSurfaceDeadline`** (`= stallDeadline - 1.5`, i.e. **6.5 s**),
+which is when `SplashView` renders `stallMessage`. The two halves shared one constant, and the two
+clocks do not start together: `AppCoordinator.launchDeadline` is a stored property initialised inside
+`PatinaApp.init()`, strictly before `SplashView`'s body mounts and its `.task` begins sleeping. So at
+T+8 s `recomputePhase()` ran first, `derivePhase()` past the deadline returned `.auth`, the splash was
+torn down and its `.task` cancelled at the `guard !Task.isCancelled` — the C1-19 sentence was
+unreachable UI in exactly the launches it exists for (review `RL1B3-02`).
+
+**Nothing is asked of you.** At merge 4, take **L1-B's** copy of `Core/State/LaunchWatchdog.swift`;
+`AppCoordinator.swift` keeps reading `LaunchWatchdog.stallDeadline` and needs no edit.
+`LaunchWatchdogTests.theSplashSpeaksBeforeTheCoordinatorForcesAuth` pins the **ordering**
+(`splashSurfaceDeadline < stallDeadline`, by at least a second) rather than either number, so it
+survives a later change to 8.
+
+---
+
+# From L1-C — fix round 2 (2026-09-03)
+
+Full text: `l1c-notes-out.md` §16.
+
+## Both notes are owed at merge 4 — not declined, and not forgotten
+
+Verified absent on `first-flight/w1-l1c` again today:
+
+- `grep -rn unreadNotificationCount Patina` → **0 hits**. `BadgeCountService` exists at
+  `Services/Badges/BadgeCountService.swift:29`; the property is yours.
+- `Core/Persistence/RecordSnapshotStore.swift:98` reads
+  `func save(_ record: HouseRecord, houseLine: String? = nil, now: Date = Date())` — there is no
+  `owner:` to pass.
+
+So neither `C2-07` nor `RL1F-21` can be closed in this worktree. The two one-line edits land on the
+integration tip at merge 4, with your branch:
+
+| file | line today | becomes |
+|---|---|---|
+| `Features/Home/Views/DailyRoomView.swift` | `:282` `unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count,` | `unreadCount: BadgeCountService.shared.unreadNotificationCount,` + your comment |
+| `Features/Home/ViewModels/RecordRefresh.swift` | `snapshots.save(record)` | `snapshots.save(record, owner: sessionUserId)` |
+
+Both are written into `l1c-tasks.md` § "Fix round 2 · declined this wave" and into `steward.md`'s
+merge-routing block for this lane, so the steward carries them if the routing is missed.
+`BadgeFreshnessTests.thereIsNoSecondCount` and
+`WidgetSnapshotOwnershipTests.theRebuildNamesItsSession` stay owed until merge 4, exactly as your
+notes predict.

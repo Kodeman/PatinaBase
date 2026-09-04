@@ -1638,3 +1638,176 @@ cleanly.
 
 `D→C-6` and `D→C-7` (RoomTypePillRow) stand exactly as sent. L1-C merges first,
 so those are applied at merge 2 on the integration tip, not by L1-C.
+
+
+---
+
+# From L1-E (Copy) — round 4, 2026-09-03
+
+After the third adversarial review (`RL1E3-01`…`RL1E3-10`). Mirrored in `build/waves/w1/l1e-notes-out.md`.
+
+## Round 4 → L1-C
+
+### Note E4-L1C-1 — `A-52` landed with the wrong apostrophe, and here is the byte
+
+`RL1E3-01`, and it is this lane's fault twice over: the deck wrote the sentence, and neither of this
+lane's two detectors could see the file it landed in.
+
+**File:** `apps/mobile/Patina/Patina/Features/Companion/Services/CompanionActionRows.swift:38`
+(`homeRow`, the guest leg).
+
+| today, on `first-flight/w1-l1c` | final |
+|---|---|
+| `            : "See what's on Patina"` | `            : "See what’s on Patina"` |
+
+That is one character: `'` (U+0027) → `’` (U+2019). Nothing else on the line changes. The deck row
+(`l1-e-copy-deck.md`, `A-52` / `CompanionActionRows.swift:32-34`) has always carried the curly form;
+the round-3 note to this lane (`E3-L1C-1`) swept `HomeStoryRetryRow.swift` and did not mention this
+line, because the cross-lane apostrophe pin set had no entry for this file.
+
+**Pinned by:** `PatinaTests/BrandVoiceLintTests.companionActionRowsApostrophesAreCurly` — new this
+round, `withKnownIssue` today, and it unwraps when this row lands.
+
+**`pieceActRow`'s sentence is clean** — `"Sign in and a designer will get back to you"`
+(`:233`) has no apostrophe at all. Checked in the same sweep so you do not have to.
+
+### Note E4-L1C-2 — two more straight apostrophes in the same file, no finding id
+
+Found by the new pin, in literals the Companion menu draws:
+
+| line | today | final |
+|---|---|---|
+| `:67` | `item("chart.pie", label, "What's been billed", …)` | `"What’s been billed"` |
+| `:82` | `item("creditcard", label, "What's due", …)` | `"What’s due"` |
+
+Both are hints under the money rows, both reader-facing, neither cited by any W1 finding. They are in
+the same file as `E4-L1C-1` and the same one-character edit, so they are cheapest applied in the same
+commit. `A-06`'s ruled scope is "every user-facing string in a file this deck names" — this deck names
+this file — so they are in scope rather than a W2 carry-forward.
+
+### Note E4-L1C-3 — a correction to `E3-L1C-3`: the four-tab root wraps too
+
+`RL1E3-09`. Round 3's note said "The four-tab root has the width and renders one line". That is true
+**at default Dynamic Type** and I should have said so. On the four-tab root at
+accessibility-extra-extra-extra-large, dark, the greeting wraps as "Good / evening" with the `?`
+affordance stranded beside "Good" (`shots/w1-review-l1e/r3-09-today-dark-axxxl.png`).
+
+This does **not** change the row's owner or its verdict: `"Good night."` (11 characters) wrapped at
+that size too, and `"Good afternoon"` (14) will wrap sooner, so `C5-06` is not the regression. But the
+note as written told a lane whose charter is Dynamic Type that the wrap was a flags-off-only concern,
+and that was the wrong brief. Accepting the wrap is still a legitimate answer on both roots.
+
+---
+
+---
+
+# From L1-B — round 3 (fix round 2, 2026-09-03)
+
+After the second adversarial review of L1-B (`RL1B2-01`…`RL1B2-18`). Full text at
+`build/waves/w1/l1b-notes-out.md`.
+
+## O14 → **L1-C** · `B-03`: a deleted room stays on the Today rail until the next foreground
+
+**Finding.** `B-03`, second half, found by the review as `RL1B2-04`. Evidence on the shipped four-tab
+root, L1-B's clone: `shots/w1-review-l1b/15-today-house-rail-stale.png`,
+`16-today-after-tab-roundtrip.png`, `17-today-after-foreground.png`.
+
+After deleting a synced room, Spaces drew the correct empty state and Studio read `0 ROOMS`
+(shots 11, 18) — but Today's **YOUR HOUSE** rail still drew *"Guest Bedroom · 158 sq ft"*: after a
+scroll, after a full Today → Spaces → Today round trip, and only cleared after a background/foreground
+cycle.
+
+**Mechanism.** `RoomStore.delete` fires `LocalRoomSignal.shared.changed()`
+(`Core/Persistence/RoomStore.swift:132,316`). `grep -rn LocalRoomSignal Patina` finds exactly one
+consumer — `ProfileViewModel` (`:90,:102,:124`), which is why Studio is correct.
+`DailyRoomView.swift:149` reloads the rail only from `.onChange(of: roomSync.revision)`, and
+`RoomSyncCoordinator.revision` is the *server merge* signal: a local delete never bumps it. `B-03`'s
+own fix line says *"drive both from one observable store"*, and Today is the tester's first screen
+under D1.
+
+### The change — `Features/Home/Views/DailyRoomView.swift`
+
+Beside the existing `@State private var roomSync = RoomSyncCoordinator.shared` at `:39`:
+
+```swift
+    /// B-03: `roomSync.revision` is the server merge. A room deleted on this
+    /// phone bumps `LocalRoomSignal` instead, and without this the rail keeps
+    /// drawing it until the app is backgrounded (l1b-notes-out.md O14).
+    @State private var localRooms = LocalRoomSignal.shared
+```
+
+and beside the existing `.onChange(of: roomSync.revision)` at `:149`:
+
+```swift
+        .onChange(of: localRooms.revision) { _, _ in
+            viewModel.reloadRooms()
+        }
+```
+
+`LocalRoomSignal` is `@MainActor @Observable` and lives at
+`Patina/Core/Persistence/LocalRoomSignal.swift` on `first-flight/w1-l1b`. **The file is new this
+wave, so it does not exist on `first-flight/w1-l1c`** — this cannot compile in your worktree today.
+`viewModel.reloadRooms()` is `DailyRoomViewModel.swift:190` and is already what the `roomSync`
+handler calls; this adds no new work, only a second reason to run it.
+
+**Scheduling.** D14 merges L1-C **first**, so if this is not applied before your branch closes it is
+carried as a named apply on the integration tip after **merge 3**, in `l1b-notes-out.md` §S6. Either
+is fine; what is not fine is neither. If you would rather not take it, say so and it stays in S6.
+
+**Pinned by** `RoomLifecycleTests.theTodayRailFollowsALocalDelete` on `first-flight/w1-l1b` — a known
+issue, **not** `isIntermittent`, so it goes red the moment this lands. That red is the signal to
+delete the block, not a regression.
+
+---
+
+## From L1-E (Copy) — Round 5, 2026-09-03
+
+Mirrored from `build/waves/w1/l1e-notes-out.md` § "Round 5 → L1-C". One row, one character.
+
+### Note E5-L1C-1 — `A-06` · one apostrophe in the consultation hero
+
+**File:** `apps/mobile/Patina/Patina/Features/DesignServices/DesignerConsultationView.swift:25` —
+the paragraph under the screen's heading, the first thing a reader sees on the design-services door.
+
+| today, on `first-flight/w1-l1c` | final |
+|---|---|
+| `They'll reach out to help bring your space to life` | `They’ll reach out to help bring your space to life` |
+
+One character: `'` (U+0027) → `’` (U+2019). Nothing else in the sentence changes — the em dash later
+in the line is already U+2014 and is correct. Byte read off `first-flight/w1-l1c` on 2026-09-03 with
+`git show`, glyph confirmed with `cat -v`.
+
+**Why this is a row and not an edit.** `RL1E4-01` widened L1-E's brand-voice walk from the two
+directories PROGRAM.md §3 spells as globs to all six the ownership rule gives it, which now includes
+`Features/DesignServices/**`. `steward.md` §5.4 lists
+`Features/DesignServices/DesignerConsultationView.swift` in **your** globs by name, so it is excluded
+from that walk by name (`BrandVoiceLintTests.ownedGlobExclusions`) and sent here instead.
+
+**Pinned by:** `PatinaTests/BrandVoiceLintTests.designerConsultationApostrophesAreCurly` on
+`first-flight/w1-l1e` — `withKnownIssue` today, and it unwraps when this row lands.
+
+**The file's other straight apostrophe needs nothing from you.** `:68`'s
+`"We'll pair you with a designer who understands your aesthetic"` is inside `designerCard`, which
+your `A1-14` commit deletes whole. It is already gone on your branch — recorded so you do not go
+looking for a second byte that is not there.
+
+---
+
+# From L1-E (Copy) — round 6, 2026-09-03
+
+## To L1-C (Design, Companion, Home, Decisions, Help, Settings, Profile, Recommendations) — round 6
+
+### One voice across the Companion row and the sheet it opens
+
+No row for you to apply — a heads-up so the pair is not surprising at integration.
+
+`CompanionActionRows.swift:233` on your branch reads `"Sign in and a designer will get back to you"`
+(the `A-52` row). The sheet that row opens, `Features/Purchase/AskAboutPieceSheet.swift:144-145`, said
+`"A designer will come back to you about this piece."` — the older tense, twice. That file is in no
+W1 lane's globs, so this lane has applied the cleanup itself this round (deck revision 6, and
+`A→E-4`'s closing question answered). The Companion row and the sheet now read as one voice.
+
+Nothing in your worktree changes.
+
+---
+

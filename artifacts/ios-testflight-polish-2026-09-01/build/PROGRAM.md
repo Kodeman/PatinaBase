@@ -4126,3 +4126,241 @@ three tour bodies in Sanity · **G** the two ASC writes, the testers, the age ra
 **H** the three PostHog flags and error tracking · **I** the archive dry run, the export and the
 entitlement check · **J** the two conditional steps — L0.7's studio probe, and the catalogue seed the
 day Leah's manifest lands.
+
+---
+
+## 12. W1 closure (2026-09-03)
+
+Written by the **W1 closer** at wave close. The full record is
+[`build/waves/w1/wave-report.md`](waves/w1/wave-report.md); the Kody-run steps this wave produced are
+in [`build/waves/w1/KODY-RUNBOOK-W1.md`](waves/w1/KODY-RUNBOOK-W1.md), continuing W0's lettering at
+**K**; the release chain is [`build/waves/w1/R1-READINESS.md`](waves/w1/R1-READINESS.md).
+**Nothing in this section authorises a production write, and no agent made one in this wave.**
+
+### 12.1 What landed
+
+Integration branch `first-flight/w1-integration`, base `ba83aa67f` (W0 close on `main`), tip
+**`08397a7d21441baee0c0ea634f75e68fd410f2d8`** — clean tree, no writer lock, **nothing pushed**.
+218 commits: 178 lane commits, 7 lane merges in **D14**'s full order
+(**L1-C → L1-D → L1-B → L1-F → L1-X → L1-A → L1-E**), 6 steward integration commits, 12 across two
+walk fix rounds.
+
+Of the wave's **137 findings, 97 are closed and 40 open**, where *closed* means **review-closed and
+walk-verified on glass** — a lane's own coverage table is not a close, and neither is a source pin.
+Two W0 rows closed with them (`C5-02`, `R-10`): §11.4 put their app-side halves in W1 code, and walk B
+verified both.
+
+| lane | merge | closed | open | review findings | new test suites |
+|---|---|---:|---:|---:|---:|
+| L1-A Welcome, sign-in, onboarding | `a04b2d99b` | 20 | 7 | 56 (4 rounds) | 17 |
+| L1-B Data, persistence, resilience | `de1fa5196` | 20 | 8 | 51 (3 rounds) | 12 |
+| L1-C Layout, Companion, Dynamic Type | `d0d5c048c` | **26** | **2** | 19 | 10 |
+| L1-D Tokens, dark mode, contrast | `b8413ee29` | 15 | 3 | 40 (4 rounds) | 14 files |
+| L1-E Copy | `5657ab492` | 4 | 14 | 16 | 8 |
+| L1-F Notifications, messaging, widget, links | `52aa910ea` | 12 | 5 | 35 | 11 |
+| L0.2 / L1-X backend | `2beb09278` | 0 | 1 | — | 1 SQL |
+| **W1** | | **97** | **40** | **217** | **73** |
+
+**Gates on the tip**, `IOS_GATE_UDID=089A3512-86D6-4415-8423-98D5625FCD5A`, re-run by this closer:
+
+```
+━ Test run with 2253 tests in 245 suites passed after 8.545 seconds with 4 known issues.
+```
+
+Up from **1552** at W0 close. `build` 0 · `release` 0 · `lint-delta` 0 · `type-check` 30/30 ·
+`supabase:reset` 0 · SQL suite **149/149 effective-green** (21 expected failures, matching
+`KNOWN_FAILURES.md` exactly in both directions). The four known issues are each honest and each named
+in `waves/w1/wave-report.md` §2; two of them are `A-34`/`C-11`'s unscored-piece guard, which sits on an
+**unmerged** L1-C commit (`46752b646`) and is filed as `W1-S-01`.
+
+**Three acceptance walks and four re-walks** ran on three clones, launched with **no `-PatinaFlags`**
+per **D1a** — the first real look at the four-tab root §11.2 warned the corpus had barely observed.
+They filed **49** new findings, of which **29 were fixed and re-walked inside the wave** and one
+(`W1-B-02`, a blocker) was **withdrawn** as a harness artefact. **By the end of re-walk 2 no row in
+scope was walked and found still behaving as its finding described.**
+
+### 12.2 What is open
+
+Forty W1 rows, in four groups. Each carries its own `openReason` in `findings.json`.
+
+1. **36 rows no walk could reach** — the style quiz (7 rows, unreached *because* `A-05` passes and Skip
+   genuinely skips), "Get design help" (3), device-only claims (7: LiDAR, a real upload, a placed
+   widget, an Apple Account), rows invisible from the UI (3), states the fixture cannot produce (6),
+   and **eleven L1-E rows on surfaces no walk entered** (§12.5).
+2. **2 rows the second fix round re-opened.** `L07-05` — `4790ab8eb`'s cold-launch floor carries the
+   Studio count but not `lastLoadedAt`, so an offline **cold** launch prints a retained count as
+   current with no staleness line (the warm shape still prints it); mechanism filed as `W1-B-16`.
+   `GAP3-18` — the same commit seeds `settledUserId`, which makes a sign-out (`A → nil`) stop reading
+   as a scope change, so the guest Your Spaces still lists the previous account's room; mechanism filed
+   as `W1-B-17`, and on a shared phone it is a privacy leak.
+3. **1 backend row.** `L07-01`: the migration is written, proven red→green locally and its RLS test is
+   green; it is **not** on Strata and its file must be renumbered first (§12.6).
+4. **1 row that changed shape rather than closing.** `W1-B-03` — the Approval decision now says *"There
+   is nothing to choose here yet — your designer has not added the options."* instead of drawing a
+   screen with a missing button, but a tester still cannot unblock Procurement, because
+   `apply_client_decision` raises `insufficient_privilege` unless `coordination_kind = 'selection'`.
+   It moved to **W2 · L0.2** as a backend row.
+
+**Twenty of the 49 new rows are open**, all in W2, none a blocker. The four majors are `W1-B-16`,
+`W1-B-17`, `W1-B-18` (at accessibility sizes the tour bubble clips its own content and offers **no
+Skip and no Next** — created by `W1-B-09`'s own wrap fix) and `W1-A-02` (all three walkers shared one
+database and one account, and peer data reached a walker's screen mid-walk).
+
+### 12.3 Amended counts
+
+`build/findings.json` and `build/findings-by-lane.md` carry these as their live values. **§3's and
+§5's per-lane tables were again deliberately NOT rewritten**; `findings-by-lane.md` is the live copy
+and its W1 tables now carry a **W1 status** column.
+
+| wave | at W0 close | at W1 close | Δ |
+|---|---:|---:|---:|
+| W0 | 34 | 34 | — |
+| W1 | 137 | 137 | — *(97 closed · 40 open)* |
+| W2 | 365 | **385** | +20 |
+| W3 | 100 | 100 | — |
+| closed | 4 | **33** | +29 |
+| **Total** | **640** | **689** | **+49** |
+
+**Scheduled: 34 + 137 + 385 + 100 = 656, + 33 closed = 689.** §10's closing line and §11.6's amendment
+of it are superseded by this one.
+
+W2 by lane after the twenty arrivals: L0.1 9 · **L0.2 4** *(+`W1-B-03`)* · L0.3 2 · L0.4 1 ·
+**L1-A 45** *(+4)* · **L1-B 55** *(+3)* · **L1-C 135** *(+10)* · L1-D 51 · L1-E 48 ·
+**L1-F 28** *(+1)* · **L2-G 7** *(+1)*.
+
+**Two corrections to earlier numbers, both this closer's to make:**
+
+- **§11.6 and `findings-by-lane.md` recorded L1-A at 27/27.** `A→S-7` ruled it **25/27 with two carried
+  rows**, and both carried rows (`C9-08`, and `C2-21`/`GAP7B-09`'s acknowledgement half) closed at
+  integration. The correct line is **"25/27 at merge, both carried rows closed at integration, 20/27
+  walked."**
+- **Seven of the twenty new open rows are `polish` and carry `T2` inside W2.** That is the first time
+  W2 holds a T2 row. It follows §7's rule as this closer received it (blocker → a W1 follow-up,
+  everything else → W2) and it is recorded rather than settled: one word from Fable moves them to W3.
+
+### 12.4 R1 readiness — which of G1–G8 now has evidence
+
+| gate | state at W1 close |
+|---|---|
+| **G1** It archives and uploads | **Partial, and the untested half is the whole point of R1 Step 2.** `ios-gate.sh release` is green on every tip this wave produced, and the W0 merge tip was product-inspected: `CFBundleVersion 3` on app **and** appex, `MinimumOSVersion 26.0`, `UIDeviceFamily [1]`, `ITSAppUsesNonExemptEncryption false`, both privacy manifests present. **`archive`, the export, and the `aps-environment` rewrite are unproven** — they need an authenticated Xcode account and are R1 Steps 2 and 3 |
+| **G2** Production carries the contract the binary calls | **Weaker than at W0 close, deliberately.** The binary now calls two objects Strata does not have: the `notification_log` UPDATE policy (**00562**) and the multi-studio signing repair (**00559 → 00563**). Both are written, both replay clean locally, both are Kody's — runbook **§L** and **§K**. Until §L runs, a tester's bell can never reach zero on production, and that was walked three times |
+| **G3** Three exposures closed, and The Document still works | **Unchanged by W1.** W0's, gated on runbook §A → §B. No W1 lane touched a portal read path |
+| **G4** The first screen and the first sign-in cannot fail | **The wave's strongest result.** Eighteen L1-A rows closed and walked, including all three blockers: `A3-06` (Google is gone from the tree, not just from the screen), `P-29` (measured to the third decimal in both directions — a root error now costs zero layout shift and a sheet error never reaches the root) and `A-101` (walked on glass, and it names the retention period). Plus `P-20`, `P-22`, `C1-37`, `P-30`, `C9-08`, `C3-06`, `C1-30`, `C5-04`, `A-05`, `P-18`, `B-12`, `C1-14`, `B-13`, `B-21`. **Two things G4 still needs and W1 could not give it:** a working demo credential (`A3-16` — runbook §D, then R1 `D-04`) and the Apple path's `profiles.role` (`A3-07` — R1 `D-02`) |
+| **G5a** The daily Studio surfaces do not lie | **Evidenced, with one hole.** `R-01`, `R-02`, `R-03`, `C4-03`, `C4-12`, `C1-19`, `A-81`, `R-05` all closed and walked offline: an offline cold launch keeps the record, the designer seat and a `Last updated …` line, proven at t≈4 s, t≈35 s and after the fetch failed; the Studio's failure state no longer prints "Nothing needs your attention right now." above its own error card. **The hole is the cold-launch staleness line** (`L07-05` / `W1-B-16`), which R1 `D-16` will meet |
+| **G5b** The surfaces nobody walked have been walked | **Passes on its own terms, with `L07-01` named.** L0.7 walked them and produced two blockers. `L07-02` (the composer under the tab bar) is **closed and walked** — the composer is tappable, accepts text and sends. `L07-01` is scheduled, written and tested, and its apply is Kody's; §2's wording allows exactly this, provided it is named in What to Test if the K2 probe says Leah is in two studios |
+| **G6** The marketplace shows real pieces or an honest "still curating" state | **Half evidenced.** It is definitively **not a grid of grey blocks**: `A-36`, `C-27`, `B-18`, `R-06` closed and walked, with a designed placeholder (brand mark + "Tap to retry") that distinguishes a failed load from a miss, and `A-34`/`C-11` closed — qualitative bands, no percentages, one verdict per piece per session. **The honest empty state itself is unproven** (`A3-01`): the local catalogue has 16 published pieces so it never renders, and **D2**'s end-of-day-6 call still stands |
+| **G7** Nothing crash-loops on build 2 | **Unit evidence only.** `PersistenceMigrationTests` is in and `C7-02` walked weakly (the Saved surface renders, save/unsave round-trips, no `BoardModel` trap). `C7-01` is **open and not walkable** — it needs a deliberately corrupt store; three cold launches produced no crash-loop and no recovery notice. This gate cannot be claimed higher than it is until a corrupt store is manufactured, which is a W2 test task, not a walk |
+| **G8** The device pass | **Not started.** R1 §4 Step 6. `R1-READINESS.md` §6 records W1's state against all eighteen rows, including the five things R1 will meet |
+
+### 12.5 The four coverage gaps this wave leaves, stated as gaps
+
+A thin section in a ledger reads exactly like a clean one, so:
+
+1. **L1-E was never walked.** Fourteen of eighteen rows are review-closed on source and were not read
+   on a screen. The cause is structural: L1-E's deliverable is a copy deck applied into *other lanes'*
+   files, so it had no surfaces of its own to hand a walker, and the three walk briefs were cut from
+   the other lanes' coverage tables. The fix for W2 is one line in the walk brief — a copy walker, or
+   an L1-E column on every other walker's route. (`A-06` is the exception and closed properly: walk C
+   counted the app target — **282** literals carry U+2019 between letters, **2** carry U+0027 and both
+   are trailing comments — and `AppApostropheLintTests` walks every `.swift` under `Patina/` with a
+   >300-file floor so an empty walk cannot pass.)
+2. **The style quiz and "Get design help" are two closed doors** behind which ten rows sit. Both are
+   reachable — the quiz with `--resetonboarding`, design help with one tap — and neither was on any
+   route. W2's walk brief should name them.
+3. **The placed widget has never been seen by anyone.** Three `GAP7B-*` rows and R1's `D-10` rest on
+   the springboard gallery, which synthetic taps cannot open (three attempts). It is now formally a
+   device-only claim, and What to Test asks testers to place it.
+4. **§11.2's warning held.** W1's walkers were the first real look at the shipped four-tab root and
+   filed 49 rows on it. Expect W2's four-tab surfaces to keep producing.
+
+### 12.6 What R1 needs from Kody
+
+In order. The release chain itself is [`R1-READINESS.md`](waves/w1/R1-READINESS.md), pre-filled with
+today's values, build number **3**, and the four ASC ids resolved
+(`INTERNAL 71f90727-fc35-4499-824a-3794c06095de`, `EXTERNAL 2231934a-d514-4f96-aae1-1745561f9353`).
+
+1. **A repo decision before anything else: the `00559` renumber.** `main` carries
+   `00559_first_document_opened.sql`, `00560_invite_handoff_note.sql` and
+   `00561_onboarding_drip_state_triggers.sql` from a peer session. This branch carries a **different**
+   `00559` (L1-X's proposal-signing repair) and `00562`. **`00562` is free on `main`; `00559` is not.**
+   L1-X's file becomes **`00563`**, with its RLS test and this runbook's step numbers. That is a code
+   change on the branch, not a production write.
+2. **Runbook §L — apply `00562`.** This one blocks build 1: without it a tester's notification bell can
+   never reach zero, because the app's PATCH answers `200` with an empty array. Verify by the objects
+   (a new UPDATE policy, and `authenticated` holding UPDATE on **exactly** `opened_at`, `clicked_at`,
+   `status` with no table-wide grant). Rollback is two lines and is in the block.
+3. **Runbook §K — the read-only studio probe, then the apply.** K2 decides whether this is urgent: if
+   Leah belongs to **one** active studio, `L07-01` is latent for round one; if **two or more**, it
+   blocks build 1 for her studio and must be applied before the invites or named in What to Test.
+4. **W0's blocks A–J, unchanged, and two of them now matter more.** **§D** (mint
+   `firstflight@patina.cloud` + the Vault allow-list) is why `A3-16` is open — no allow-listed pair
+   exists to walk, and it is R1's `D-04`. **§F** has changed shape rather than closed: `C5-02` and
+   `R-10` are **closed in the app** (the six `?` doors print a local fallback and never reach Sanity),
+   so §F is no longer "the help doors are empty" — it is `A4-01`/`C5-01`, *production Sanity serving
+   retired tour copy that **overrides** the correct in-app text*. Publish it, or the first three coach
+   marks a tester sees describe a UI that no longer exists.
+5. **§H's PostHog payload, exactly as §11.5 resolved it** — `house-first` at **100% / everyone /
+   active**, the other two at 0% / active. W1's three walkers all ran with no flags argument and saw
+   the four-tab bar, which is **D1a** working; that is the *default*, not the payload, and a 0%
+   `house-first` still arrives as an answer and fires the kill switch on launch 2.
+6. **Then R1 Steps 1–7.** `R1-READINESS.md` §6 lists the five things the device pass will meet:
+   `W1-B-17` at `D-17`, `W1-B-16` at `D-16`, `W1-C-11` at `D-07` and `D-16`, `W1-B-18` at `D-14`, and
+   the widget's first sighting at `D-10`.
+
+### 12.7 The two outages this wave survived
+
+**Outage 1 — the integration steward died mid-merge, and the resume made it worse.** The first
+steward (**S9**) died on a network outage **after merge 4 and L1-X and before merges 5 and 6**; a later
+botched resume then added unreviewed commits to three lane branches and left uncommitted edits behind
+in three worktrees. **Lost:** merges 6 (L1-A) and 7 (L1-E) and the cross-lane note batch — none had
+run. **Redone by S9b:** both merges, including L1-A's four conflicts resolved on the charter's side;
+seven cross-lane notes (`1773570b1`, `4bd4da83b`); the whole copy-deck pass (`05e1ffaaa`); and the **42**
+`withKnownIssue` wrappers across six suites that stopped recording once every lane was on the tip —
+L1-B's note S5 had predicted seven — unwrapped at `2b82b47c1`. **Discarded, not committed:**
+uncommitted edits by dead agents in `CompanionCoachingModelTests.swift`, `OrderHandoffTests.swift`,
+`l1-e-copy-deck.md`, `MessagingViewModel.swift` and `ThreadHeaderTests.swift`; three `.writer.lock.d`
+belonging to dead agents were broken. The two `MessagingViewModel` edits among them were **real deck
+rows** and were re-applied properly, from the deck, in the integration worktree. **The residue it left
+is permanent for this wave:** three lanes are merged **below their branch tip**, because S9b's brief
+forbade touching commits nobody had reviewed. That is the right call, and it costs `A-34`/`C-11` their
+unscored-piece guard (`W1-S-01`) and leaves L1-E's copy-deck **revision 6** and two of its code commits
+unmerged.
+
+**Outage 2 — the Mac's boot volume filled and Docker wedged.** During the session's first full unit
+run the boot volume filled (`Macintosh HD` out of space, in `.gatelogs/merge6-unit-1.log`) and
+`com.docker.backend` stopped answering. **Lost:** the local Supabase stack, and with it the wave's
+`supabase:reset` + SQL-suite gate. **Redone:** `~/Library/Developer/Xcode/DerivedData` cleared,
+returning **109 GiB**; the wedged daemon ignored SIGTERM and needed SIGKILL; Docker.app and
+`supabase start` came up clean; then `pnpm supabase:reset` (27 seed files, including W0's client
+fixture) and `bash scripts/run-sql-tests.sh` → **149 total, 128 green, 21 expected failures, 0
+unexpected, 149/149 effective-green**.
+
+**And two harness faults, which are findings rather than outages — both closed, both after they had
+already cost coverage.** `W1-A-08`: the local kong gateway was `Exited (127)` for the whole start of
+the walk phase, mounting six email templates from a **retired worktree** Docker had replaced with empty
+directories; `/auth/v1/settings` returned `000`, and **the Welcome screen renders identically with the
+backend down**, so a walker can pass a Welcome check against a dead API and never know. `W1-A-03`:
+synthetic HID died on two clones — reads stayed healthy (full `describe_screen` trees, correct
+`simctl io` frames) while **every tap returned a success string and changed nothing**, three of them
+verified byte-identical with `cmp -s`; root-caused at re-walk 2 to a stale per-udid `idb shell`
+orphaned by the walker's own device reboots. Between them they cost walk A eight of its twenty-seven
+rows on the first pass and cost walk C its entire first re-walk.
+
+**Three amendments to §7's hard rules that this wave earned**, offered rather than applied, because §7
+is the charter's:
+
+1. **Rule 1 needs a second half.** "One simulator clone per lane. Never shared" is not enough — W1's
+   three walkers shared one **database and one account**, and peer data reached a walker's screen
+   mid-walk (`W1-A-02`). *One account per walker, not just one clone.*
+2. **Rule 8's preflight must be repeated, and must prove a tap landed.** A `device_action` success
+   string is not evidence: assert the frame **changed** (`cmp -s` against the pre-tap shot), and re-run
+   the preflight after **every** fresh-install sequence and every device reboot, not once at session
+   start (`W1-A-03`).
+3. **A new rule: probe the gateway before the first row.** `curl -s -o /dev/null -w '%{http_code}'
+   http://127.0.0.1:54321/auth/v1/settings` must be `200` or the walk does not start, and kong is
+   recreated from the current worktree after any worktree retirement (`W1-A-08`).
+
+And one for the steward's own practice: **gate logs get the tip's sha in the filename.** Both fix
+rounds reused `.gatelogs/tip-*.log`, so `tip-unit.log` now reads 2221 rather than the 2193
+`integration.md` §5 recorded, and fix round 2 left no log at all. Its 2253 figure was the fixer's
+report until this closer re-ran the tier and reproduced it.
