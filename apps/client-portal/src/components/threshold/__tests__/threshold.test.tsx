@@ -301,13 +301,13 @@ function settled<T>(data: T) {
  */
 let bundles: Record<string, unknown> = {};
 
-function renderThreshold() {
+function renderThreshold(milestones: MilestoneDetail[] = MILESTONES) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <Threshold projectId={PROJECT_ID} project={PROJECT} milestones={MILESTONES} />
+      <Threshold projectId={PROJECT_ID} project={PROJECT} milestones={milestones} />
     </QueryClientProvider>,
   );
 }
@@ -501,6 +501,15 @@ describe('Threshold — the five facts', () => {
     expect(screen.getAllByTestId('door-note-pin')).toHaveLength(1);
     expect(screen.getByTestId('door-note-read')).toHaveAttribute('href', '#note');
   });
+
+  it('pins nothing on the ground floor, where the letter is already set above', () => {
+    roomsMock.mockReturnValue(settled([]));
+    renderThreshold();
+
+    expect(screen.getByTestId('ground-floor')).toBeInTheDocument();
+    expect(screen.getAllByTestId('note-body')).toHaveLength(1);
+    expect(screen.queryByTestId('door-note-pin')).not.toBeInTheDocument();
+  });
 });
 
 describe('Threshold — the reading mark', () => {
@@ -540,6 +549,55 @@ describe('Threshold — the reading mark', () => {
     expect(
       screen.getByRole('button', { name: /what changed since yesterday/i }),
     ).toBeInTheDocument();
+  });
+
+  it('dates that reading beside the control', () => {
+    // Noon UTC: the mark is a timestamptz and is read as the LOCAL calendar day
+    // the client stood here, so a midnight-UTC fixture would be the day before
+    // in every American zone.
+    previousMarkMock.mockReturnValue({
+      data: '2026-08-04T12:00:00Z',
+      isPending: false,
+      isError: false,
+    });
+    renderThreshold();
+
+    expect(screen.getByTestId('doorstep-reading-mark')).toHaveTextContent(
+      'Read here on the fourth of August.',
+    );
+  });
+
+  it('dates nothing on a first visit', () => {
+    previousMarkMock.mockReturnValue({ data: null, isPending: false, isError: false });
+    renderThreshold();
+
+    expect(screen.queryByTestId('doorstep-reading-mark')).not.toBeInTheDocument();
+  });
+});
+
+/* ── The pole with no register behind it ────────────────────────────────────
+   Most real projects carry no `project_phases` rows. The page must still rule
+   a pole, and it must rule the house's own six chapters — this is the call
+   site, not the helper. ─────────────────────────────────────────────────── */
+
+describe('the story pole when the studio never opened the phase register', () => {
+  it('graduates the house’s six canonical chapters', () => {
+    renderThreshold([]);
+
+    const rail = screen.getByTestId('story-pole-rail');
+    expect(rail.querySelectorAll('li')).toHaveLength(6);
+    expect(rail).toHaveTextContent('Discovery');
+    expect(rail).toHaveTextContent('Completion');
+  });
+
+  it('holds the chapter the project itself names', () => {
+    renderThreshold([]);
+
+    expect(screen.getByTestId('story-pole-graduation-procurement')).toHaveAttribute(
+      'data-held',
+      'true',
+    );
+    expect(screen.queryByTestId('story-pole-span-procurement')).not.toBeInTheDocument();
   });
 });
 

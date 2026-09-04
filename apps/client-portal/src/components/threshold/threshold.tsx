@@ -31,6 +31,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
 import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
+import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import {
   deriveThreshold,
   parseSourceDate,
@@ -40,7 +41,6 @@ import {
   type ThresholdReceipt,
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
-import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
 import {
   keySentence,
@@ -464,7 +464,11 @@ export function Threshold({
   // are unique ids: the collapsed /proposals route lands on exactly one door.
   const doorMarks = model.marks.filter((mark) => mark.kind === 'door');
   const wallMarks = model.marks.filter((mark) => mark.kind === 'wall');
-  const firstDoorId = doorMarks[0]?.id ?? null;
+  // The first door that will actually RENDER: `renderDoor` answers null for a
+  // mark whose paper is missing, and a pin or a `#door` anchor on a door that
+  // is not drawn is simply lost.
+  const firstDoorId =
+    doorMarks.find((mark) => paperById.has(mark.proposalId ?? ''))?.id ?? null;
   const firstWallId = wallMarks[0]?.id ?? null;
 
   /** The gate's own element id, which is `door`/`wall` only for the first one. */
@@ -482,8 +486,10 @@ export function Threshold({
         mark={mark}
         proposal={paper}
         // Pinned to the FIRST door only, and only ever as its opening: the
-        // letter itself is set once, by `TheNote`.
-        note={mark.id === firstDoorId ? model.note : null}
+        // letter itself is set once, by `TheNote`. Never on the ground floor,
+        // whose order sets the whole letter ABOVE the doors — there the pin's
+        // way back would point at a paragraph read one section ago.
+        note={!model.groundFloor && mark.id === firstDoorId ? model.note : null}
         projectId={projectId}
         first={mark.id === firstDoorId}
         studioName={studioName}
@@ -612,7 +618,7 @@ export function Threshold({
     <Mat people={people} papers={papers} accountHref="/account" onSignOut={() => void signOut()} />
   );
 
-  const ledger = <HouseLedger ledger={model.ledger} />;
+  const ledger = <HouseLedger ledger={model.ledger} today={today} />;
   const letterbox = <Letterbox invoice={model.letterbox} today={today} />;
   const road = model.road.length > 0 ? <TheRoad pieces={model.road} /> : null;
   const note = (

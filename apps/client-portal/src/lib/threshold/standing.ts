@@ -236,14 +236,28 @@ export function readingMarkLine(at: Date | null | undefined): string | null {
 }
 
 /**
- * What the owed row adds to its figure. One open invoice owes on one day;
+ * What the owed row adds to its figure. One dated invoice owes on one day;
  * several owe on several, and the row names the first of them as the first —
  * a bare "due 15 August" against a sum of three invoices would say the whole
- * balance falls due that day, which is not true.
+ * balance falls due that day, which is not true. `datedCount` is how many open
+ * invoices actually carry a due date, not how many are open: three invoices of
+ * which one is dated has exactly one day to name.
+ *
+ * The year is spelled out the moment it is not this year — the rule
+ * `SpineToll` and the letterbox already keep. `today` is omitted during SSR
+ * and the first client paint, which simply drops the year.
  */
-export function owedDueLine(due: Date | null | undefined, invoiceCount: number): string | null {
+export function owedDueLine(
+  due: Date | null | undefined,
+  datedCount: number,
+  today?: Date,
+): string | null {
   if (!due || Number.isNaN(due.getTime())) return null;
-  return `${tally(invoiceCount) > 1 ? 'first due' : 'due'} ${dayAndMonth(due)}`;
+  const day =
+    today && today.getFullYear() !== due.getFullYear()
+      ? `${dayAndMonth(due)} ${due.getFullYear()}`
+      : dayAndMonth(due);
+  return `${tally(datedCount) > 1 ? 'first due' : 'due'} ${day}`;
 }
 
 /**
@@ -257,6 +271,9 @@ export function noteInBrief(body: string, budget = 140): string {
   if (text.length <= budget) return text;
   const cut = text.slice(0, budget);
   const lastSpace = cut.lastIndexOf(' ');
-  const kept = (lastSpace > budget / 2 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:—-]+$/, '');
+  // The raw cut is the fallback only for text with no space at all inside the
+  // budget — one unbroken run of characters. Anything else cuts on its last
+  // word, so no quote is left broken mid-word.
+  const kept = (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:—.!?-]+$/, '');
   return `${kept}…`;
 }

@@ -78,6 +78,13 @@ describe('canonicalPhases — the house’s own six graduations', () => {
   it('does not settle a project that is merely active', () => {
     expect(canonicalPhases(null, 'active').settled).toEqual([]);
   });
+
+  it('does not settle a project that was only archived', () => {
+    // `archived` means withdrawn from view, not finished: a project archived
+    // mid-Procurement has not walked its Installation.
+    expect(canonicalPhases(null, 'archived').settled).toEqual([]);
+    expect(canonicalPhases(null, 'archived').future).toHaveLength(6);
+  });
 });
 
 describe('thresholdPhases — the register wins where there is one', () => {

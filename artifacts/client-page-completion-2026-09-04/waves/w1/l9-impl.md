@@ -232,3 +232,165 @@ No `@patina/supabase` hook was added, so the vitest / admin-build arm of the gat
   the client portal; I did not open the page on a 390px viewport to confirm nothing else overlaps the
   letterbox act.
 - Coverage thresholds (70/60/70/70) were not measured for this lane in isolation.
+
+---
+
+# Fix round — against `l9-review.md` (19 findings: 0 blocker, 4 major, 7 minor, 8 nit)
+
+Reviewed at `69767259e`. Every blocker and major applied; minors and nits applied except the
+three recorded below. No new feature was added, no unrequested refactor, no shared file touched
+beyond the lines a finding names.
+
+## Fixed, by finding number
+
+1. **(major) A finished house drew six ungraduated chapters.** `story-pole.tsx` gains `walkedAt()`:
+   walked-ness is `index < heldAt` while something is held, and falls back to the graduation's own
+   `status === 'completed'` when nothing is (`heldAt === -1`, which is exactly the canonical
+   `finished` branch). The rail entry now carries `data-walked` and strikes its tick in
+   `var(--text-primary)` — the same idiom the phone dots already used, so the desktop rail and the
+   dots agree. Pinned by two new cases in `threshold-robustness.test.tsx` (six walked when the
+   project is `completed`; none when it is `archived`).
+
+2. **(major) The owed row's due date carried no year.** `owedDueLine(due, datedCount, today?)` now
+   appends `due.getFullYear()` the moment it differs from `today`'s — the rule `spine-toll.tsx`
+   and `letterbox.tsx` already keep. `HouseLedger` takes an optional `today`, and `threshold.tsx`
+   feeds it the same `today` the letterbox gets (undefined during SSR and the first paint, which
+   simply drops the year, so hydration is unchanged). Tests in `dateline.test.ts` (both counts,
+   plus the same-year case) and `threshold-robustness.test.tsx`.
+
+3. **(major) `owedDueDate` had no test at the derive layer.** Two cases added to `derive.test.ts`:
+   three open invoices supplied out of due order with one carrying a null `due_date` asserts
+   `owedDueDate` is the soonest and `owedDatedCount` is 2; and an all-undated set asserts
+   `owedDueDate` is null. This pins the part that was silent — that a null `due_date` sorts to the
+   BACK, so `[0].due_date` is null only when nothing is dated.
+
+4. **(major) Neither (a) nor (c) was tested at the call site.** `renderThreshold()` in
+   `threshold.test.tsx` now takes an optional `milestones` (defaulted to `MILESTONES`, so every
+   existing call is unchanged). Four new cases on the real page: `milestones: []` rules six rail
+   entries lettered Discovery…Completion and holds `procurement` with no span; a previous reading
+   mark renders `doorstep-reading-mark` with the dateline; a first visit renders none.
+   *Incidental:* writing the reading-mark case surfaced that the fixture must be noon UTC, not
+   midnight — `previousReadAt` is a timestamptz and is correctly read as the LOCAL calendar day
+   the client stood here, so a midnight-UTC fixture is the day before in every American zone. The
+   implementation is right; the comment now says so.
+
+5. **(minor) The door opening's geometry was invented and left a floating tick.** The wall now has
+   two faces, as the mock's section does (`WALL_L_OUTER = 30`, `WALL_L = 42`): both stop at the
+   head, and the head closes between them. The opening reads as a wall cut through rather than a
+   38-unit stub standing over a 52-unit gap, and the head returns into something. The dashed
+   threshold from `x=0` is unchanged — it is the mock's own line. `room-band.test.tsx` now asserts
+   the head's endpoints and that BOTH faces stop at `y=52` (`FLOOR_Y - OPENING_H`), which was the
+   reviewer's smaller gap in §8: restoring a full-height wall now fails an assertion, not a count.
+
+6. **(minor) The file-head comment named two lines.** Reworded to name the four strokes and the
+   dashed threshold, and why the dashed one is not a piece the client owns.
+
+7. **(minor) `#note` could not take focus.** `tabIndex={-1}` added to the note `<section>`.
+
+8. **(minor) The pin pointed backwards on the ground floor.** That path sets the whole letter ABOVE
+   the doors, so `threshold.tsx` now passes `note={!model.groundFloor && mark.id === firstDoorId …}`.
+   New case in `threshold.test.tsx`: with the rooms settled empty, the body is set once and no pin
+   is drawn.
+
+9. **(minor) "first due" counted every open invoice, not the dated ones.** `HouseLedgerModel` gains
+   `owedDatedCount` (`openInvoices.filter(i => !!i.due_date).length`); the row reads "due" when one
+   invoice carries a day and "first due" only when several do. Covered in `derive.test.ts` and
+   `threshold-robustness.test.tsx` (three open, one dated → "due 15 August").
+
+10. **(minor) `archived` settled all six chapters.** `FINISHED_STATUSES` is replaced by a single
+    `FINISHED_STATUS` typed as `Database['public']['Enums']['project_status']` and set to
+    `'completed'`, so a rename in the column reaches this file at compile time and the free-text
+    values the enum cannot produce are gone. `canonical-phases.test.ts` pins that `archived`
+    settles nothing.
+
+11. **(minor) A third link idiom.** The pin's way back is now
+    `<ScoredAction actionKey="door_read_note" regionKey="gate" surfaceKey="the_threshold"
+    variant="tertiary" href="#note">` — the 44px control box and `makingEvents` telemetry come with
+    it. Because `Link` handles the hash navigation itself and preventDefaults, an `onClick` focuses
+    `#note` explicitly, so finding 7's `tabIndex` is actually reached. The `door-note-read` testid
+    and its `href="#note"` are unchanged, so both existing assertions stand.
+
+13. **(nit) The `|| readingMark` guard.** Kept and documented as defensive, per the finding's second
+    option: the page sets it from the same mark that decides `showSince`, and the prop doc now says
+    a caller holding only the dateline still gets a row to put it in.
+
+14. **(nit) `noteInBrief`'s trailing strip and its mid-word fallback.** `.`, `!` and `?` added to
+    the strip class, so a cut landing past a sentence end no longer prints `…Friday.…`; the raw-cut
+    fallback now fires only when the budget genuinely contains no space at all. Three cases added
+    to `dateline.test.ts`.
+
+16. **(nit) A missing paper could lose the pin entirely.** `firstDoorId` is now the first door mark
+    whose proposal is present in `paperById` — the same `paperById.has(mark.proposalId ?? '')` test
+    the mat's paper list already uses — so the pin and the `#door` anchor land on a door that
+    actually renders.
+
+18. **(nit) Import order.** `@/lib/threshold/canonical-phases` moved above `@/lib/threshold/derive`,
+    so the block reads alphabetically again for the lanes that merge after L9.
+
+## Rejected, with the reason
+
+- **12 — (f) tester-notes widget.** Nothing to fix; the finding is a record, and it agrees with the
+  lane. Restated here so integration closes (f) deliberately: the widget exists only in the designer
+  portal, so there is no footprint on this surface to pad to. Re-open it with a measured footprint
+  if it is ever mounted in the client portal.
+- **15 — `spine-toll.tsx`'s "due August 15".** Rejected in this lane: `making/*` is reuse-only for
+  L9 and the finding itself says so ("Not L9's file to change"). Bringing `formatDue` onto the
+  mock's day-first idiom changes a surface L9 does not own and would collide with the making lanes;
+  it belongs to integration.
+- **17 — the `lib/` → `components/making` import.** No change required by the finding itself
+  (`standing.ts:11` already does this and it is the house pattern). Recorded here for the retirement
+  inventory rather than inverted in a fix round.
+- **19 — the pin's caption (`— N. · Nora Quist · 4 August, yesterday`).** The finding says "none in
+  L9". The caption is a copy change against the mock that L9 did not author and that needs the
+  note's author, not the studio name, threaded through `DoorGateProps`; it goes on the mock-fidelity
+  backlog with the "Owed on invoice No. 4" label.
+
+## Rulings held
+
+Legal and confirmation copy is byte-identical to the old route — `consent-copy.ts`, the countersign
+line and the signing ceremony are still absent from the diff. No act leaves the page: the one new
+act is an in-page fragment. Nothing printed reverses. Shared-file edits stayed minimal — `derive.ts`
++7 lines (one field, its doc, one literal entry), `standing.ts` still append-only apart from the two
+helpers the findings named, `threshold.tsx` five small hunks, `making/*` untouched.
+
+## Gate output (verbatim)
+
+`pnpm --dir <worktree>/apps/client-portal type-check`:
+
+```
+> @patina/client-portal@0.1.0 type-check /Users/kody/Code/patina-merged/.codex/worktrees/agent-cpc-l9/apps/client-portal
+> tsc --noEmit
+```
+
+(clean — no diagnostics)
+
+`pnpm --dir <worktree>/apps/client-portal test -- threshold making`:
+
+```
+Test Suites: 33 passed, 33 total
+Tests:       618 passed, 618 total
+Snapshots:   0 total
+Time:        4.888 s
+Ran all test suites matching /threshold|making/i.
+```
+
+(602 → 618: sixteen new cases across the four findings that asked for tests.)
+
+`npx eslint src/components/threshold src/lib/threshold` (from `apps/client-portal`):
+
+```
+(no output — 0 errors, 0 warnings)
+```
+
+Full `pnpm test` for `@patina/client-portal` (insurance, not the lane gate) — the same two
+pre-existing module-resolution failures the lane already reported, unchanged and untouched by L9:
+
+```
+Test Suites: 2 failed, 133 passed, 135 total
+Tests:       1 failed, 1447 passed, 1448 total
+```
+
+## Still not verified
+
+No browser pass. The room-band opening and the walked rail tick are asserted in jsdom by geometry
+and by attribute, not looked at; the first-viewport render belongs to Wave 2's integration report.

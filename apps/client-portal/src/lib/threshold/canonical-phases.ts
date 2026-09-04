@@ -16,11 +16,12 @@
 
    NOTHING IS HELD UNLESS THE PROJECT SAYS SO. The open chapter is taken from
    `project.currentPhase` and only when `recognisePhaseSlug` actually
-   recognises it, or from a project whose own status says the work is finished.
+   recognises it, or from a project whose own status is `completed`.
    A project that names no phase gets six ungraduated chapters and no caret,
    because guessing which one is open is exactly the copy that later reverses.
    ────────────────────────────────────────────────────────────────────────── */
 
+import type { Database } from '@patina/supabase';
 import { ALL_PHASE_SLUGS, PHASE_DISPLAY_CONFIG, getPhaseLabel } from '@patina/types';
 import type { PhaseSlug } from '@patina/types';
 
@@ -32,8 +33,13 @@ import {
 } from '@/components/making/making-spine';
 import type { MilestoneDetail } from '@/types/project';
 
-/** Project statuses that mean the work itself is over, not merely quiet. */
-const FINISHED_STATUSES = new Set(['completed', 'complete', 'closed', 'archived']);
+/**
+ * The one project status that means the work itself is over. `archived` means
+ * withdrawn from view, not finished — a project archived mid-Procurement would
+ * otherwise be told its Installation and Completion are behind it. Typed
+ * against the generated enum so a rename in the column reaches this file.
+ */
+const FINISHED_STATUS: Database['public']['Enums']['project_status'] = 'completed';
 
 function canonicalGraduation(
   slug: PhaseSlug,
@@ -69,7 +75,7 @@ export function canonicalPhases(
 ): SpinePhases {
   const slugs = [...ALL_PHASE_SLUGS];
   const open = recognisePhaseSlug(currentPhase);
-  const finished = FINISHED_STATUSES.has((status ?? '').trim().toLowerCase());
+  const finished = (status ?? '').trim().toLowerCase() === FINISHED_STATUS;
 
   if (open === null) {
     return finished

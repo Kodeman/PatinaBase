@@ -163,6 +163,12 @@ export interface HouseLedgerModel {
   owedInvoiceCount: number;
   /** The soonest day the house owes on, off the first open invoice. */
   owedDueDate: string | null;
+  /**
+   * How many of those open invoices actually carry a due date — the count the
+   * owed row's "first due" reads. Three open invoices of which one is dated
+   * has one day to name, not a first of three.
+   */
+  owedDatedCount: number;
   heldCents: number | null;
   awaitingCents: number;
   /** "The dining room stands about forty-nine hundred past its target." */
@@ -484,6 +490,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
       openInvoices.length > 0 ? computeInvoiceRollup(openInvoices).outstandingCents : null,
     owedInvoiceCount: openInvoices.length,
     owedDueDate: openInvoices[0]?.due_date ?? null,
+    owedDatedCount: openInvoices.filter((invoice) => !!invoice.due_date).length,
     heldCents: heldDraws
       ? [...heldInstruments].reduce((sum, proposalId) => sum + (heldDraws[proposalId] ?? 0), 0)
       : null,

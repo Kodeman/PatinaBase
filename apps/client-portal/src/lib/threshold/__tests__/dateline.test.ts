@@ -38,12 +38,25 @@ describe('owedDueLine — what the owed row adds to its figure', () => {
     expect(owedDueLine(new Date(2026, 7, 15), 1)).toBe('due 15 August');
   });
 
-  it('names the FIRST day when the figure spans several invoices', () => {
+  it('names the FIRST day when the figure spans several DATED invoices', () => {
     expect(owedDueLine(new Date(2026, 7, 15), 3)).toBe('first due 15 August');
   });
 
   it('says nothing when no invoice carries a due date', () => {
     expect(owedDueLine(null, 1)).toBeNull();
+  });
+
+  it('spells the year out once the day is not in this one', () => {
+    expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2027, 0, 4))).toBe(
+      'due 15 August 2026',
+    );
+    expect(owedDueLine(new Date(2026, 7, 15), 3, new Date(2027, 0, 4))).toBe(
+      'first due 15 August 2026',
+    );
+  });
+
+  it('leaves the year off in the year the day falls in', () => {
+    expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2026, 0, 4))).toBe('due 15 August');
   });
 });
 
@@ -73,5 +86,16 @@ describe('noteInBrief — the note’s opening, not its body', () => {
 
   it('keeps the budget it is given', () => {
     expect(noteInBrief('one two three four five', 12)).toBe('one two…');
+  });
+
+  it('does not leave a full stop standing in front of the mark', () => {
+    // A cut landing just past a sentence end would otherwise read "…Friday.…"
+    expect(noteInBrief('Ordered by Friday. Then the runner.', 19)).toBe('Ordered by Friday…');
+    expect(noteInBrief('Is it ready? Then the runner.', 13)).toBe('Is it ready…');
+  });
+
+  it('falls to the raw cut only for text with no space in it at all', () => {
+    expect(noteInBrief('a bbbbbbbbbbbbbbbbbbbb', 12)).toBe('a…');
+    expect(noteInBrief('aaaaaaaaaaaaaaaaaaaaaa', 12)).toBe('aaaaaaaaaaaa…');
   });
 });

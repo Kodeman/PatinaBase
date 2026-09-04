@@ -41,6 +41,7 @@ function ledger(overrides: Partial<HouseLedgerModel> = {}): HouseLedgerModel {
     owedCents: 912_500,
     owedInvoiceCount: 1,
     owedDueDate: '2026-08-15',
+    owedDatedCount: 1,
     heldCents: 144_000,
     awaitingCents: 689_000,
     overageLine: null,
@@ -74,6 +75,22 @@ describe('the story pole on a project with no phase rows', () => {
     expect(screen.queryByTestId('story-pole-span-installation')).not.toBeInTheDocument();
   });
 
+  it('walks all six when the project itself is completed', () => {
+    render(<StoryPole phases={thresholdPhases([], null, 'completed')} sections={sections} />);
+
+    const rail = screen.getByTestId('story-pole-rail');
+    expect(rail.querySelectorAll('[data-walked]')).toHaveLength(6);
+    expect(rail.querySelectorAll('[data-held]')).toHaveLength(0);
+  });
+
+  it('walks nothing when the project is merely archived', () => {
+    render(<StoryPole phases={thresholdPhases([], null, 'archived')} sections={sections} />);
+
+    const rail = screen.getByTestId('story-pole-rail');
+    expect(rail.querySelectorAll('[data-walked]')).toHaveLength(0);
+    expect(rail.querySelectorAll('[data-held]')).toHaveLength(0);
+  });
+
   it('holds nothing when the project names no phase it recognises', () => {
     render(
       <StoryPole
@@ -95,11 +112,25 @@ describe('the owed row’s due date', () => {
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125 · due 15 August');
   });
 
-  it('names the FIRST day when the figure spans several invoices', () => {
-    render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3 })} />);
+  it('names the FIRST day when the figure spans several DATED invoices', () => {
+    render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedDatedCount: 3 })} />);
 
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
       '$9,125 · first due 15 August',
+    );
+  });
+
+  it('names one day as THE day when only one of several invoices is dated', () => {
+    render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedDatedCount: 1 })} />);
+
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125 · due 15 August');
+  });
+
+  it('spells the year out once the day is not in this one', () => {
+    render(<HouseLedger ledger={ledger()} today={new Date(2027, 0, 4)} />);
+
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
+      '$9,125 · due 15 August 2026',
     );
   });
 

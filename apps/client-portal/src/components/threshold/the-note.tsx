@@ -82,6 +82,10 @@ export function TheNote({
   return (
     <section
       id="note"
+      // The door's "Read the note" targets this section; without a tab index
+      // the fragment moves the viewport but neither the keyboard's focus nor
+      // the screen reader's cursor.
+      tabIndex={-1}
       data-threshold-unit="note"
       aria-label="The note"
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"

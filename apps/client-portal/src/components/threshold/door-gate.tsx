@@ -405,13 +405,22 @@ export function DoorGate({
                     .filter((part): part is string => !!part)
                     .join(' · ')}
                 </figcaption>
-                <a
-                  data-testid="door-note-read"
-                  href="#note"
-                  className="mt-3 inline-block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-body)] underline decoration-[var(--border-default)] underline-offset-4"
-                >
-                  Read the note
-                </a>
+                <div className="mt-3">
+                  <ScoredAction
+                    data-testid="door-note-read"
+                    actionKey="door_read_note"
+                    regionKey="gate"
+                    surfaceKey="the_threshold"
+                    variant="tertiary"
+                    href="#note"
+                    // The hash alone would only scroll: `Link` handles the
+                    // navigation itself, so the letter is focused here or a
+                    // keyboard reader is left standing on the door leaf.
+                    onClick={() => document.getElementById('note')?.focus()}
+                  >
+                    Read the note
+                  </ScoredAction>
+                </div>
               </figure>
             )}
 

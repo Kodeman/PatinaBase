@@ -22,6 +22,12 @@ import { owedDueLine } from '@/lib/threshold/standing';
 
 export interface HouseLedgerProps {
   ledger: HouseLedgerModel;
+  /**
+   * Today, for deciding whether the owed row's due date needs its year spelled
+   * out — the same rule the letterbox and `SpineToll` keep. Omitted during SSR
+   * and the first client paint, which simply drops the year.
+   */
+  today?: Date;
 }
 
 interface LedgerRow {
@@ -59,7 +65,7 @@ function standsSentence(ledger: HouseLedgerModel): string | null {
   return null;
 }
 
-export function HouseLedger({ ledger }: HouseLedgerProps) {
+export function HouseLedger({ ledger, today }: HouseLedgerProps) {
   const stands = standsSentence(ledger);
 
   const rows: LedgerRow[] = [
@@ -67,7 +73,7 @@ export function HouseLedger({ ledger }: HouseLedgerProps) {
       key: 'owed' as const,
       words: owedWords(ledger.owedInvoiceCount),
       cents: ledger.owedCents,
-      due: owedDueLine(parseSourceDate(ledger.owedDueDate), ledger.owedInvoiceCount),
+      due: owedDueLine(parseSourceDate(ledger.owedDueDate), ledger.owedDatedCount, today),
     },
     { key: 'held' as const, words: 'Held on finished work', cents: ledger.heldCents },
     { key: 'awaiting' as const, words: 'Awaiting your name', cents: ledger.awaitingCents },

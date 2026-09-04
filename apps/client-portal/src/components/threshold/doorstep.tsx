@@ -36,7 +36,12 @@ export interface DoorstepProps {
   /** True while the house is being read as it moved. */
   sinceActive: boolean;
   onToggleSince?: () => void;
-  /** "Read here on the fourth of August." — null on a first visit. */
+  /**
+   * "Read here on the fourth of August." — null on a first visit. The page
+   * sets this from the same previous mark that decides `showSince`, so in
+   * practice the two arrive together; the row's guard names it anyway so a
+   * caller that has only the dateline still gets a row to put it in.
+   */
   readingMark?: string | null;
   /** The house ledger and the letterbox stand here. */
   children?: ReactNode;
