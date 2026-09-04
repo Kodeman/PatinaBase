@@ -52,6 +52,7 @@ import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
 import { Letterbox } from './letterbox';
 import { Mat, type MatPaper, type MatPerson } from './mat';
+import type { OtherHouse } from './other-houses';
 import { PlanKey } from './plan-key';
 import { Previously } from './previously';
 import { RoomBand } from './room-band';
@@ -222,6 +223,8 @@ export interface ThresholdProps {
   milestones: MilestoneDetail[];
   projectApprovals?: ProjectApprovalReview[];
   projectApprovalsLoading?: boolean;
+  /** Every other project this client can open. Empty for a solo client. */
+  otherHouses?: OtherHouse[];
   /**
    * Taken and deliberately unread, for parity with `TheMaking`'s signature.
    * The Making prints "Project approvals could not be read just now"; the
@@ -237,6 +240,7 @@ export function Threshold({
   milestones,
   projectApprovals = [],
   projectApprovalsLoading = false,
+  otherHouses = [],
 }: ThresholdProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
@@ -601,7 +605,13 @@ export function Threshold({
   ];
 
   const mat = (
-    <Mat people={people} papers={papers} accountHref="/account" onSignOut={() => void signOut()} />
+    <Mat
+      people={people}
+      papers={papers}
+      otherHouses={otherHouses}
+      accountHref="/account"
+      onSignOut={() => void signOut()}
+    />
   );
 
   const ledger = <HouseLedger ledger={model.ledger} />;

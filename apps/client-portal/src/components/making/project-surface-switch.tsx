@@ -3,95 +3,46 @@
 import { useEffect } from 'react';
 import { useProjectApprovals } from '@patina/supabase';
 
-import { ProjectViewWrapper } from '@/components/project-view-wrapper';
 import { Threshold } from '@/components/threshold/threshold';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import type { OtherHouse } from '@/components/threshold/other-houses';
 import { clientEvents } from '@/lib/analytics/events';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
-
-import { TheMaking } from './the-making';
 
 interface ProjectSurfaceSwitchProps {
   projectId: string;
   project: ClientProjectOverview;
   milestones: MilestoneDetail[];
+  /** Every other project this client can open. Empty for a solo client. */
+  otherHouses?: OtherHouse[];
 }
 
 /**
- * Chooses between today's project dashboard, The Making and The Threshold.
+ * Renders the client's project. There is one surface now — the Threshold —
+ * and every client gets it: no flag is read here, so nothing renders one
+ * tree and then replaces it a commit later.
  *
- * The page above stays a server component and keeps its fetch and its
- * `notFound()`; only the rendered surface moves here, because the flag can
- * only be read in the browser.
- *
- * Fail-closed, and specifically: while the flag is loading we render *today's
- * tree*, not a spinner and not a skeleton. A client opening their own project
- * must never watch it assemble. If PostHog never answers — no key, blocked
- * network, a homeowner with an ad blocker — the stable state is the portal
- * they already know.
- *
- * Three surfaces now pass through here. `threshold` is read FIRST and wins
- * outright: it is the newer, narrower rollout, and a client in both pilots
- * gets the house rather than The Making. Each flag is independently
- * fail-closed — a loading flag never renders its surface. Both reads settle
- * off the same PostHog `onFeatureFlags` callback, so a client in both pilots
- * cannot watch The Making resolve first and then be replaced by the house;
- * the window is one commit, the same one §4 already licenses for the header.
- *
- * THIS COMPONENT IS THE SOLE EMITTER OF `client_project_view`. Both branches
- * pass through here exactly once per project, and neither branch emits on its
- * own (`ProjectViewWrapper` takes `emitProjectView={false}`). That matters
- * because the flag can only resolve from an effect: every flagged open renders
- * today's tree for at least one commit first, and child effects run before the
- * parent's, so an emitter inside either branch would fire twice on the flag's
- * own primary flow — corrupting the exact metric the rollout is judged on.
+ * THIS COMPONENT IS THE SOLE EMITTER OF `client_project_view`. Both pages
+ * that render a project (`/` and `/projects/[id]`) pass through here exactly
+ * once per project, and the Threshold does not emit on its own.
  */
 export function ProjectSurfaceSwitch({
   projectId,
   project,
   milestones,
+  otherHouses = [],
 }: ProjectSurfaceSwitchProps) {
-  const { value: threshold, isLoading: thresholdLoading } = useFeatureFlag('threshold');
-  const { value: singlePane, isLoading } = useFeatureFlag('single-pane');
   const approvalsQuery = useProjectApprovals(projectId);
 
   useEffect(() => {
     clientEvents.projectView(projectId);
   }, [projectId]);
 
-  if (!thresholdLoading && threshold) {
-    return (
-      <Threshold
-        projectId={projectId}
-        project={project}
-        milestones={milestones}
-        projectApprovals={approvalsQuery.data ?? []}
-        projectApprovalsLoading={approvalsQuery.isLoading}
-        projectApprovalsError={approvalsQuery.isError}
-      />
-    );
-  }
-
-  if (!isLoading && singlePane) {
-    return (
-      <TheMaking
-        projectId={projectId}
-        project={project}
-        milestones={milestones}
-        projectApprovals={approvalsQuery.data ?? []}
-        projectApprovalsLoading={approvalsQuery.isLoading}
-        projectApprovalsError={approvalsQuery.isError}
-      />
-    );
-  }
-
   return (
-    <ProjectViewWrapper
+    <Threshold
       projectId={projectId}
       project={project}
       milestones={milestones}
-      showOverview={true}
-      emitProjectView={false}
+      otherHouses={otherHouses}
       projectApprovals={approvalsQuery.data ?? []}
       projectApprovalsLoading={approvalsQuery.isLoading}
       projectApprovalsError={approvalsQuery.isError}

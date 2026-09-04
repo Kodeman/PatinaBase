@@ -4,6 +4,8 @@ import Link from 'next/link';
 
 import { ScoredAction } from '@/components/making/scored-action';
 
+import { OtherHouses, type OtherHouse } from './other-houses';
+
 /* ── The mat ────────────────────────────────────────────────────────────────
    What you find by the door on the way out: who is working on the house and
    where, the papers that belong to her, and the two acts every house owes its
@@ -36,13 +38,15 @@ export interface MatPaper {
 export interface MatProps {
   people: MatPerson[];
   papers: MatPaper[];
+  /** Every other project this client can open. Empty for a solo client. */
+  otherHouses?: OtherHouse[];
   accountHref: '/account';
   onSignOut: () => void;
 }
 
-const LINE_CLASS =
+export const LINE_CLASS =
   'block w-full border-t border-[var(--border-subtle)] py-2 text-left text-[15px] leading-[1.5] text-[var(--text-body)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
-const COLUMN_HEAD_CLASS =
+export const COLUMN_HEAD_CLASS =
   'mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
 
 function Paper({ paper }: { paper: MatPaper }) {
@@ -63,7 +67,7 @@ function Paper({ paper }: { paper: MatPaper }) {
   return <span className={LINE_CLASS}>{paper.label}</span>;
 }
 
-export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
+export function Mat({ people, papers, otherHouses = [], accountHref, onSignOut }: MatProps) {
   return (
     <section
       id="mat"
@@ -100,6 +104,8 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
             <Paper key={`${paper.label}-${index}`} paper={paper} />
           ))}
         </div>
+
+        <OtherHouses houses={otherHouses} />
 
         {/* No column head here: "Your details" is the act itself, and a heading
             of the same words would put the name twice in one region. */}

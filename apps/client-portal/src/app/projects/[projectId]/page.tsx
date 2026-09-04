@@ -26,12 +26,15 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
         {/* The page stays server-side: same fetch, same notFound(). Only the
-            choice of surface moves to the client, where the `single-pane` flag
-            can be read. Flag off or still loading = today's tree, exactly. */}
+            surface itself is a client component, because the house reads its
+            own data. */}
         <ProjectSurfaceSwitch
           projectId={project.id}
           project={project}
           milestones={milestones}
+          otherHouses={projects
+            .filter((house) => house.id !== project.id)
+            .map((house) => ({ id: house.id, name: house.name, location: house.location }))}
         />
       </main>
     </div>
