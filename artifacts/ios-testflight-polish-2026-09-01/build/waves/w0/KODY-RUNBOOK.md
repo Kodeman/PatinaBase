@@ -513,7 +513,7 @@ pnpm supabase:reset
 bash scripts/run-sql-tests.sh 2>&1 | tee /tmp/first-flight-sql.log
 tail -20 /tmp/first-flight-sql.log
 grep -E '^(FAIL|EXPECTED-FAIL) ' /tmp/first-flight-sql.log
-grep -oE '[a-z0-9_/.-]+\.test\.sql' "$REPO/supabase/tests/KNOWN_FAILURES.md" | sort -u
+grep -oE '[a-z0-9_/.-]+_test\.sql' "$REPO/supabase/tests/KNOWN_FAILURES.md" | sort -u
 grep -E '0055[57]' /tmp/first-flight-sql.log
 ```
 
