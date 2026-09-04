@@ -531,8 +531,9 @@ DECLARE
   v_keys text[];
   v_required text[] := ARRAY[
     'id', 'kind', 'name', 'roomId', 'roomName', 'quantity',
-    'clientLineTotalCents', 'itemType', 'logisticsStatus', 'instrument'
+    'clientLineTotalCents', 'itemType', 'logisticsStatus', 'instrument', 'updatedAt'
   ];
+  v_stamp timestamptz;
   v_key text;
   v_kinds text[];
   v_leak text;
@@ -561,6 +562,26 @@ BEGIN
 
   ASSERT 'clientUnitPriceCents' = ANY(v_keys) OR 'allowance' = ANY(v_keys),
     'a furnishings line must carry the client''s own price';
+
+  -- updatedAt is GREATEST(item.updated_at, item.last_status_change_at,
+  -- doc.executed_at). Every line on both branches joins an executed instrument,
+  -- so it is never null here, and it must parse as a timestamp — the page reads
+  -- it to say what has moved since the client last looked. It is a TIME: the
+  -- money/vendor rule below covers it like every other key.
+  FOR v_key IN
+    SELECT line->>'updatedAt'
+      FROM jsonb_array_elements(v_payload->'selections') AS line
+  LOOP
+    ASSERT v_key IS NOT NULL,
+      'every selection must carry updatedAt';
+    BEGIN
+      v_stamp := v_key::timestamptz;
+    EXCEPTION WHEN OTHERS THEN
+      ASSERT false, 'updatedAt must be an ISO timestamp, got ' || v_key;
+    END;
+    ASSERT v_stamp <= now(),
+      'updatedAt must not be in the future, got ' || v_key;
+  END LOOP;
 
   -- Both branches are present, and the trade one carries its journey.
   SELECT array_agg(DISTINCT s->>'kind') INTO v_kinds
