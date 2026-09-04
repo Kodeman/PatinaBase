@@ -41,6 +41,8 @@ export interface MatProps {
   onSignOut: () => void;
   /** Lays the papers sheet over the page — every paper, not only the named few. */
   onOpenPapers?: () => void;
+  /** Whether that sheet is down, so the act can say so where it is read. */
+  papersOpen?: boolean;
 }
 
 const LINE_CLASS =
@@ -66,7 +68,14 @@ function Paper({ paper }: { paper: MatPaper }) {
   return <span className={LINE_CLASS}>{paper.label}</span>;
 }
 
-export function Mat({ people, papers, accountHref, onSignOut, onOpenPapers }: MatProps) {
+export function Mat({
+  people,
+  papers,
+  accountHref,
+  onSignOut,
+  onOpenPapers,
+  papersOpen = false,
+}: MatProps) {
   return (
     <section
       id="mat"
@@ -108,6 +117,8 @@ export function Mat({ people, papers, accountHref, onSignOut, onOpenPapers }: Ma
               regionKey="mat"
               surfaceKey="the_threshold"
               variant="tertiary"
+              aria-expanded={papersOpen}
+              aria-controls="papers-sheet"
               onClick={onOpenPapers}
             >
               {PAPERS_TAB_LABEL}

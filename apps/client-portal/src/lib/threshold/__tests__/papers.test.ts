@@ -1,10 +1,16 @@
 import type { ClientPlanSheet, ProjectDocument } from '@patina/supabase';
 
+import type { ClientDocument } from '@/hooks/use-documents-client';
+
 import {
+  documentKindLabel,
   groupClientPlanSet,
   isExecutedInstrument,
+  looseDocuments,
   paperKindLabel,
+  papersForProject,
   PAPERS_TAB_LABEL,
+  visibleDocuments,
 } from '../papers';
 
 function sheet(overrides: Partial<ClientPlanSheet> = {}): ClientPlanSheet {
@@ -84,5 +90,82 @@ describe('the papers, named', () => {
 
   it('names the tab once, for the mat and the sheet both', () => {
     expect(PAPERS_TAB_LABEL).toBe('The papers, in full');
+  });
+});
+
+
+function filed(overrides: Partial<ClientDocument> = {}): ClientDocument {
+  return {
+    id: 'file-1',
+    project_id: 'project-1',
+    proposal_id: null,
+    title: 'Signed design agreement',
+    doc_type: 'pdf',
+    category: null,
+    section_key: null,
+    storage_path: 'folio/agreement.pdf',
+    size_bytes: 4096,
+    client_visible: true,
+    created_at: '2026-06-19T10:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('the studio\u2019s filed papers', () => {
+  it('keeps only the client-visible rows', () => {
+    expect(
+      visibleDocuments([filed(), filed({ id: 'file-2', client_visible: false })]),
+    ).toHaveLength(1);
+  });
+
+  it('leaves the plan-room rows to the drawing set', () => {
+    expect(
+      looseDocuments([filed(), filed({ id: 'file-2', section_key: 'plan-room' })]).map(
+        (doc) => doc.id,
+      ),
+    ).toEqual(['file-1']);
+  });
+
+  it('prefers the semantic category, and falls back to the file format', () => {
+    expect(documentKindLabel({ category: 'site_photo', doc_type: 'png' })).toBe('Site Photo');
+    expect(documentKindLabel({ category: '  ', doc_type: 'xlsx' })).toBe('XLSX');
+    expect(documentKindLabel({ category: null, doc_type: 'heic' })).toBe('HEIC');
+  });
+
+  it('files this house\u2019s papers newest first, plan-room rows excluded', () => {
+    const { papers } = papersForProject(
+      [
+        filed({ id: 'old', created_at: '2026-05-01T00:00:00Z' }),
+        filed({ id: 'new', created_at: '2026-07-01T00:00:00Z' }),
+        filed({ id: 'drawing', section_key: 'plan-room' }),
+        filed({ id: 'hidden', client_visible: false }),
+        filed({ id: 'elsewhere', project_id: 'project-2' }),
+      ],
+      'project-1',
+    );
+
+    expect(papers.map((doc) => doc.id)).toEqual(['new', 'old']);
+  });
+
+  it('folds a proposal-anchored row into the house that proposal became', () => {
+    const { papers, earlier } = papersForProject(
+      [filed({ id: 'anchored', project_id: null, proposal_id: 'prop-1' })],
+      'project-1',
+      { 'prop-1': 'project-1' },
+    );
+
+    expect(papers.map((doc) => doc.id)).toEqual(['anchored']);
+    expect(earlier).toEqual([]);
+  });
+
+  it('keeps a row no house can claim rather than losing it', () => {
+    const { papers, earlier } = papersForProject(
+      [filed({ id: 'unactivated', project_id: null, proposal_id: 'prop-9' })],
+      'project-1',
+      { 'prop-9': null },
+    );
+
+    expect(papers).toEqual([]);
+    expect(earlier.map((doc) => doc.id)).toEqual(['unactivated']);
   });
 });

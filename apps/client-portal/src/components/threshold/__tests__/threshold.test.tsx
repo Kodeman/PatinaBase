@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
 import type { Invoice, ProjectApprovalReview, Proposal } from '@patina/supabase';
@@ -34,9 +35,29 @@ jest.mock('next/link', () => ({
 // tested in `room-capture.test.tsx`.
 jest.mock('../room-capture', () => ({
   __esModule: true,
-  RoomCapture: ({ roomName }: { roomName: string }) => (
-    <div data-testid="room-capture-stub">{roomName}</div>
+  RoomCapture: ({ roomId, roomName }: { roomId: string; roomName: string }) => (
+    <div data-testid="room-capture-stub" data-room-id={roomId}>
+      {roomName}
+    </div>
   ),
+  StrayCaptures: ({ userId }: { userId: string }) => (
+    <div data-testid="stray-captures-stub">{userId}</div>
+  ),
+}));
+
+// The sheet reads three registers of its own; this suite is about the wiring
+// from the mat, so it stands in as a marker and is tested in
+// `papers-sheet.test.tsx`.
+jest.mock('../papers-sheet', () => ({
+  __esModule: true,
+  PapersSheet: ({ open, onDismiss }: { open: boolean; onDismiss: () => void }) =>
+    open ? (
+      <div role="dialog" data-testid="papers-sheet-stub">
+        <button type="button" onClick={onDismiss}>
+          Dismiss the papers
+        </button>
+      </div>
+    ) : null,
 }));
 
 jest.mock('@patina/supabase', () => ({
@@ -323,7 +344,10 @@ function renderThreshold() {
 }
 
 beforeEach(() => {
-  authMock.mockReturnValue({ user: { name: 'Harper Vale' }, signOut: jest.fn() });
+  authMock.mockReturnValue({
+    user: { id: 'client-1', name: 'Harper Vale' },
+    signOut: jest.fn(),
+  });
   proposalsMock.mockReturnValue(settled([AUTHORIZATION, SIGNED_AGREEMENT]));
   selectionsMock.mockReturnValue(
     settled({ origin: 'commercial', selections: [CREDENZA, PAINTWORK] }),
@@ -671,16 +695,31 @@ describe('Threshold — the acts the house owes', () => {
     expect(papers).toHaveTextContent('Invoice No. 4');
   });
 
-  it('offers the papers in full from the mat, and stands a capture in every room', () => {
+  it('lays the papers over the house from the mat, and takes them away again', async () => {
     renderThreshold();
 
-    expect(
-      screen.getByRole('button', { name: /the papers, in full/i }),
-    ).toBeInTheDocument();
+    const act = screen.getByRole('button', { name: /the papers, in full/i });
+    expect(act).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await userEvent.click(act);
+    expect(screen.getByTestId('papers-sheet-stub')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /the papers, in full/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /dismiss the papers/i }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('stands a capture in every room, and the strays after the last one', () => {
+    renderThreshold();
 
     const captures = screen.getAllByTestId('room-capture-stub');
     expect(captures).toHaveLength(screen.getAllByTestId('room-band-lintel').length);
+    expect(captures.every((capture) => capture.getAttribute('data-room-id'))).toBe(true);
+    expect(screen.getByTestId('stray-captures-stub')).toBeInTheDocument();
   });
 
   it('resolves an invoice enclosure on the note from the invoice cache', () => {

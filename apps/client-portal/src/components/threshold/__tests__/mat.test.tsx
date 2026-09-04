@@ -112,6 +112,21 @@ describe('Mat — the people, the papers, and the way out', () => {
     expect(onOpenPapers).toHaveBeenCalledTimes(1);
   });
 
+  it('says at the mat whether the papers are already down', () => {
+    const onOpenPapers = jest.fn();
+    const { rerender } = render(<Mat {...mat({ onOpenPapers })} />);
+
+    const act = screen.getByRole('button', { name: /the papers, in full/i });
+    expect(act).toHaveAttribute('aria-expanded', 'false');
+    expect(act).toHaveAttribute('aria-controls', 'papers-sheet');
+
+    rerender(<Mat {...mat({ onOpenPapers, papersOpen: true })} />);
+    expect(screen.getByRole('button', { name: /the papers, in full/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
   it('offers the way out, and takes it', async () => {
     const onSignOut = jest.fn();
     render(<Mat {...mat({ onSignOut })} />);

@@ -56,7 +56,7 @@ import { PapersSheet } from './papers-sheet';
 import { PlanKey } from './plan-key';
 import { Previously } from './previously';
 import { RoomBand } from './room-band';
-import { RoomCapture } from './room-capture';
+import { RoomCapture, StrayCaptures } from './room-capture';
 import { SinceYesterday } from './since-yesterday';
 import { StoryPole } from './story-pole';
 import { TheNote, type NoteEnclosure } from './the-note';
@@ -610,6 +610,7 @@ export function Threshold({
       accountHref="/account"
       onSignOut={() => void signOut()}
       onOpenPapers={() => setPapersOpen(true)}
+      papersOpen={papersOpen}
     />
   );
 
@@ -748,9 +749,21 @@ export function Threshold({
               {band.marks.map((mark) =>
                 mark.kind === 'door' ? renderDoor(mark) : renderWall(mark),
               )}
-              <RoomCapture projectId={projectId} roomName={band.name} />
+              <RoomCapture
+                projectId={projectId}
+                roomId={band.roomId}
+                roomName={band.name}
+              />
             </RoomBand>
           ))}
+
+          {user?.id && (
+            <StrayCaptures
+              projectId={projectId}
+              userId={user.id}
+              rooms={model.bands.map((band) => ({ roomId: band.roomId, name: band.name }))}
+            />
+          )}
 
           {road}
           {note}

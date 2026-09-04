@@ -14,7 +14,7 @@ import {
 } from '@/components/making/standing-sentence';
 import { TrackingRow } from '@/components/making/tracking-row';
 import type { ClientSelection } from '@/lib/commercial-documents';
-import { parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
+import { DAY_MONTH, parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
 
 /* ── THE ROOM BAND ───────────────────────────────────────────────────────────
    One room of the house, read as a sheet from a drawing set: a lintel that
@@ -38,9 +38,6 @@ import { parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
 
 /** A piece has reached the house at this stop; before it, it is still coming. */
 const DELIVERED_STOP = journeyStageIndexForStatus('delivered');
-
-/** "19 June" — the deck's own date idiom. */
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 // ── the drawing ──────────────────────────────────────────────────────────────
 
