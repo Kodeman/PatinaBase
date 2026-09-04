@@ -46,12 +46,20 @@ describe('Doorplate — the letterhead, minus the corner links', () => {
     expect(container.querySelectorAll('a')).toHaveLength(0);
   });
 
-  it('carries the anchor and the threshold unit', () => {
+  it('carries the anchor, and is deliberately not a threshold unit', () => {
     render(<Doorplate {...vale()} />);
 
     const root = screen.getByTestId('doorplate');
     expect(root).toHaveAttribute('id', 'doorplate');
-    expect(root).toHaveAttribute('data-threshold-unit', 'doorplate');
+    expect(root).not.toHaveAttribute('data-threshold-unit');
+    expect(root).not.toHaveAttribute('data-dimmable');
+  });
+
+  it('reads whitespace as absence', () => {
+    render(<Doorplate {...vale({ studioName: '   ', preparedFor: '  ' })} />);
+
+    expect(screen.getByTestId('doorplate-line')).toHaveTextContent('Des Moines');
+    expect(screen.getByTestId('doorplate-line')).not.toHaveTextContent('prepared for');
   });
 
   it('goes silent rather than printing half an attribution', () => {

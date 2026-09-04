@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 
 import { splitSpinePhases } from '@/components/making/making-spine';
 import type { MilestoneDetail } from '@/types/project';
@@ -42,13 +42,44 @@ function pole(sections = SECTIONS) {
   return <StoryPole phases={splitSpinePhases(VALE)} sections={sections} />;
 }
 
+/** Swap in an observer whose callback this test can pull. */
+function captureObserver() {
+  const original = window.IntersectionObserver;
+  let fire: ((entries: Array<{ isIntersecting: boolean; target: Element }>) => void) | null = null;
+
+  Object.defineProperty(window, 'IntersectionObserver', {
+    writable: true,
+    configurable: true,
+    value: class {
+      observe = jest.fn();
+      unobserve = jest.fn();
+      disconnect = jest.fn();
+      constructor(callback: (entries: unknown[]) => void) {
+        fire = callback as typeof fire;
+      }
+    },
+  });
+
+  return {
+    fire: (entries: Array<{ isIntersecting: boolean; target: Element }>) => fire?.(entries),
+    observed: () => fire !== null,
+    restore: () =>
+      Object.defineProperty(window, 'IntersectionObserver', {
+        writable: true,
+        configurable: true,
+        value: original,
+      }),
+  };
+}
+
 describe('StoryPole — six graduations, and one caret that moves', () => {
-  it('carries the anchor and the threshold unit', () => {
+  it('carries the anchor and is deliberately not a threshold unit', () => {
     render(pole());
 
     const root = screen.getByTestId('story-pole');
     expect(root).toHaveAttribute('id', 'story-pole');
-    expect(root).toHaveAttribute('data-threshold-unit', 'story-pole');
+    expect(root).not.toHaveAttribute('data-threshold-unit');
+    expect(root).not.toHaveAttribute('data-dimmable');
   });
 
   it('rules one graduation per phase, in order', () => {
@@ -71,10 +102,13 @@ describe('StoryPole — six graduations, and one caret that moves', () => {
     expect(screen.getByTestId('story-pole-graduation-ph1')).not.toHaveAttribute('data-held');
   });
 
-  it('collapses to one dot per graduation for the narrow reading', () => {
+  it('collapses to one dot per graduation, walked, held and ahead', () => {
     render(pole());
 
-    expect(screen.getByTestId('story-pole-dots').children).toHaveLength(6);
+    const dots = Array.from(screen.getByTestId('story-pole-dots').children).map((dot) =>
+      dot.getAttribute('data-dot'),
+    );
+    expect(dots).toEqual(['walked', 'walked', 'walked', 'held', 'ahead', 'ahead']);
   });
 
   it('stands still, and says where she starts, without an IntersectionObserver', () => {
@@ -96,35 +130,34 @@ describe('StoryPole — six graduations, and one caret that moves', () => {
     }
   });
 
-  it('watches each named section when the runtime can', () => {
-    const observe = jest.fn();
-    const observer = window.IntersectionObserver;
-    Object.defineProperty(window, 'IntersectionObserver', {
-      writable: true,
-      configurable: true,
-      value: class {
-        observe = observe;
-        unobserve = jest.fn();
-        disconnect = jest.fn();
-      },
-    });
+  it('moves the caret as she reads, and never the pole', () => {
+    const io = captureObserver();
 
     try {
       render(
         <>
-          <div id="doorstep" />
-          <div id="key" />
-          <div id="mat" />
+          <div id="doorstep" data-testid="s-doorstep" />
+          <div id="key" data-testid="s-key" />
+          <div id="mat" data-testid="s-mat" />
           {pole()}
         </>,
       );
-      expect(observe).toHaveBeenCalledTimes(3);
-    } finally {
-      Object.defineProperty(window, 'IntersectionObserver', {
-        writable: true,
-        configurable: true,
-        value: observer,
+      expect(io.observed()).toBe(true);
+
+      act(() => {
+        io.fire([{ isIntersecting: true, target: screen.getByTestId('s-mat') }]);
       });
+
+      expect(screen.getByTestId('story-pole-here')).toHaveTextContent('You stand on the mat');
+      // The pole is struck once and never re-struck.
+      expect(screen.getByTestId('story-pole-graduation-ph4')).toHaveAttribute(
+        'data-held',
+        'true',
+      );
+      expect(screen.getByTestId('story-pole-graduation-ph3')).not.toHaveAttribute('data-held');
+      expect(screen.getByTestId('story-pole-graduation-ph5')).not.toHaveAttribute('data-held');
+    } finally {
+      io.restore();
     }
   });
 });

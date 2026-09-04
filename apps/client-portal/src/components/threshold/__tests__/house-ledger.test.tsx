@@ -9,6 +9,7 @@ function ledger(overrides: Partial<HouseLedgerModel> = {}): HouseLedgerModel {
     plannedCents: 8_500_000,
     agreedCents: 6_140_000,
     owedCents: 912_500,
+    owedInvoiceCount: 1,
     heldCents: 144_000,
     awaitingCents: 689_000,
     ...overrides,
@@ -47,6 +48,30 @@ describe('HouseLedger — the house in figures, with its words', () => {
     expect(screen.getByTestId('house-ledger-awaiting')).toHaveTextContent('Awaiting your name');
   });
 
+  it('counts the invoices the owed figure is spread across', () => {
+    const { unmount } = render(<HouseLedger ledger={ledger({ owedInvoiceCount: 1 })} />);
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('Owed on the open invoice');
+    unmount();
+
+    render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3 })} />);
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
+      'Owed across 3 open invoices',
+    );
+  });
+
+  it('reads the rows in the accountant’s order', () => {
+    render(<HouseLedger ledger={ledger()} />);
+
+    const order = screen
+      .getAllByTestId(/^house-ledger-(owed|held|awaiting)$/)
+      .map((row) => row.getAttribute('data-testid'));
+    expect(order).toEqual([
+      'house-ledger-owed',
+      'house-ledger-held',
+      'house-ledger-awaiting',
+    ]);
+  });
+
   it('never renders a bare figure without words', () => {
     render(<HouseLedger ledger={ledger()} />);
 
@@ -58,8 +83,21 @@ describe('HouseLedger — the house in figures, with its words', () => {
     }
   });
 
-  it('suppresses a row at zero, and a row it does not know', () => {
-    render(<HouseLedger ledger={ledger({ owedCents: 0, heldCents: null, awaitingCents: 0 })} />);
+  it('lets each row be quieted, but never the sentence above them', () => {
+    render(<HouseLedger ledger={ledger()} />);
+
+    expect(screen.getByTestId('house-ledger')).not.toHaveAttribute('data-dimmable');
+    for (const row of screen.getAllByTestId(/^house-ledger-(owed|held|awaiting)$/)) {
+      expect(row).toHaveAttribute('data-dimmable');
+    }
+  });
+
+  it('suppresses a row at zero, a row it does not know, and a row below zero', () => {
+    render(
+      <HouseLedger
+        ledger={ledger({ owedCents: 0, heldCents: null, awaitingCents: -500 })}
+      />,
+    );
 
     expect(screen.queryByTestId('house-ledger-owed')).not.toBeInTheDocument();
     expect(screen.queryByTestId('house-ledger-held')).not.toBeInTheDocument();

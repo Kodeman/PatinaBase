@@ -11,6 +11,10 @@ import { StrataMark } from '@/components/strata-mark';
    destinations have collapsed into anchors on this one page and a plate that
    sends you elsewhere would re-open them.
 
+   It is deliberately NOT a threshold unit: it carries no `data-threshold-unit`
+   and no `data-dimmable`, so nothing about the house's state can quiet the
+   plate that says whose house it is.
+
    Presentational by construction. Every fact arrives as a prop; a fact the
    surface does not know is simply not printed. A line with nothing in it is
    not rendered at all rather than printed as an empty rule. ─────────────── */
@@ -54,7 +58,6 @@ export function Doorplate({
   return (
     <header
       id="doorplate"
-      data-threshold-unit="doorplate"
       data-testid="doorplate"
       className="border-b border-[var(--border-default)] pb-3"
     >

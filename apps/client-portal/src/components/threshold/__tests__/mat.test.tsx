@@ -21,12 +21,13 @@ function mat(overrides: Partial<MatProps> = {}): MatProps {
 }
 
 describe('Mat — the people, the papers, and the way out', () => {
-  it('carries the anchor and the threshold unit', () => {
+  it('carries the anchor, the unit, and opts into dimming', () => {
     render(<Mat {...mat()} />);
 
     const root = screen.getByTestId('mat');
     expect(root).toHaveAttribute('id', 'mat');
     expect(root).toHaveAttribute('data-threshold-unit', 'mat');
+    expect(root).toHaveAttribute('data-dimmable');
   });
 
   it('gives the papers their own sub-anchor', () => {
@@ -41,6 +42,15 @@ describe('Mat — the people, the papers, and the way out', () => {
     const people = screen.getByTestId('mat-people');
     expect(within(people).getByText(/Nora Quist/)).toBeInTheDocument();
     expect(within(people).getByText(/on the letterhead/)).toBeInTheDocument();
+    expect(within(people).getByText('Quist Interiors')).toBeInTheDocument();
+  });
+
+  it('says nothing about a person whose place it does not know', () => {
+    render(<Mat {...mat({ people: [{ name: 'Dan Okafor', role: 'on the site line', where: '' }] })} />);
+
+    const people = screen.getByTestId('mat-people');
+    expect(within(people).getByText('Dan Okafor · on the site line')).toBeInTheDocument();
+    expect(within(people).getAllByText(/./)).toHaveLength(2); // the head and the one line
   });
 
   it('lists the papers — linked, openable, or simply named', async () => {
@@ -63,9 +73,27 @@ describe('Mat — the people, the papers, and the way out', () => {
     expect(within(papers).getByText('The design set')).toBeInTheDocument();
   });
 
-  it('keeps a way to her own details', () => {
+  it('reads a paper that both links and opens as a link', () => {
+    const onOpen = jest.fn();
+    render(<Mat {...mat({ papers: [{ label: 'Invoice No. 4', href: '/invoices/4', onOpen }] })} />);
+
+    const papers = screen.getByTestId('mat-papers');
+    expect(within(papers).getByRole('link', { name: 'Invoice No. 4' })).toBeInTheDocument();
+    expect(within(papers).queryByRole('button', { name: 'Invoice No. 4' })).not.toBeInTheDocument();
+  });
+
+  it('lists two papers of the same name without losing one', () => {
+    render(
+      <Mat {...mat({ papers: [{ label: 'Change order' }, { label: 'Change order' }] })} />,
+    );
+
+    expect(within(screen.getByTestId('mat-papers')).getAllByText('Change order')).toHaveLength(2);
+  });
+
+  it('keeps a way to her own details, named once', () => {
     render(<Mat {...mat()} />);
 
+    expect(screen.getAllByText('Your details')).toHaveLength(1);
     expect(screen.getByRole('link', { name: /your details/i })).toHaveAttribute(
       'href',
       '/account',

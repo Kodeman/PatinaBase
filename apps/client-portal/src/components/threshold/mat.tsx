@@ -16,7 +16,10 @@ import { ScoredAction } from '@/components/making/scored-action';
    The papers are read as lines, not as acts: a paper that opens somewhere is a
    link, a paper the caller opens itself is a button, and a paper that is only
    named is named. Scored ink is reserved for the two acts at the foot, which
-   are the only things on this section anybody DOES. ─────────────────────── */
+   are the only things on this section anybody DOES.
+
+   The mat opts into dimming: on the way out, in the since-yesterday reading,
+   it is the one block that can go quiet without hiding an ask. ──────────── */
 
 export interface MatPerson {
   name: string;
@@ -38,7 +41,9 @@ export interface MatProps {
 }
 
 const LINE_CLASS =
-  'block w-full border-t border-[var(--border-subtle)] py-2 text-left text-[15px] leading-[1.5] text-[var(--text-body)]';
+  'block w-full border-t border-[var(--border-subtle)] py-2 text-left text-[15px] leading-[1.5] text-[var(--text-body)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
+const COLUMN_HEAD_CLASS =
+  'mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
 
 function Paper({ paper }: { paper: MatPaper }) {
   if (paper.href) {
@@ -63,6 +68,7 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
     <section
       id="mat"
       data-threshold-unit="mat"
+      data-dimmable
       data-testid="mat"
       className="mt-[clamp(34px,4vw,58px)] border-t border-[var(--border-default)] pb-[clamp(90px,10vw,140px)] pt-4"
     >
@@ -72,9 +78,7 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
 
       <div className="mt-4 grid gap-[clamp(18px,2.6vw,38px)] [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
         <div data-testid="mat-people">
-          <h3 className="mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
-            The people, where they work
-          </h3>
+          <h2 className={COLUMN_HEAD_CLASS}>The people, where they work</h2>
           {people.map((person) => (
             <div
               key={`${person.name}-${person.role}`}
@@ -91,18 +95,15 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
         </div>
 
         <div id="mat-papers" data-testid="mat-papers">
-          <h3 className="mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
-            The papers
-          </h3>
-          {papers.map((paper) => (
-            <Paper key={paper.label} paper={paper} />
+          <h2 className={COLUMN_HEAD_CLASS}>The papers</h2>
+          {papers.map((paper, index) => (
+            <Paper key={`${paper.label}-${index}`} paper={paper} />
           ))}
         </div>
 
+        {/* No column head here: "Your details" is the act itself, and a heading
+            of the same words would put the name twice in one region. */}
         <div data-testid="mat-details">
-          <h3 className="mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
-            Your details
-          </h3>
           <div className="flex flex-wrap items-baseline gap-x-5">
             <ScoredAction
               actionKey="mat_account"

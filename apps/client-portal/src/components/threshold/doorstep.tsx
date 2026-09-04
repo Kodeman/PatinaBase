@@ -20,19 +20,21 @@ import { countInWords } from '@/components/making/standing-sentence';
 
    The since toggle is offered only when there IS a yesterday. A client reading
    the page for the first time is not asked what changed since a moment that
-   never happened. ─────────────────────────────────────────────────────────── */
+   never happened — and once she is in that reading, the toggle is the only way
+   back out, which is why the doorstep is a unit (it can earn a change tick)
+   but is never `data-dimmable`. ────────────────────────────────────────────── */
 
 export interface DoorstepProps {
   /** The standing sentence, or null while the surface cannot yet speak. */
   sentence: string | null;
   /** The one line of history behind it, or null when there is none. */
   previously: string | null;
-  /** How much of the drawing waits on her hand, already in words. */
-  keySentence: string;
   /** How many units moved since her last reading. */
   changedCount: number;
   /** True only when there was a previous read to compare against. */
   showSince: boolean;
+  /** True while the house is being read as it moved. */
+  sinceActive: boolean;
   onToggleSince?: () => void;
   /** The house ledger and the letterbox stand here. */
   children?: ReactNode;
@@ -53,9 +55,9 @@ function movedLine(count: number): string | null {
 export function Doorstep({
   sentence,
   previously,
-  keySentence,
   changedCount,
   showSince,
+  sinceActive,
   onToggleSince,
   children,
 }: DoorstepProps) {
@@ -97,13 +99,6 @@ export function Doorstep({
         </p>
       )}
 
-      <p
-        data-testid="doorstep-key-sentence"
-        className="mt-2 text-[15px] leading-[1.62] text-[var(--text-body)]"
-      >
-        {keySentence}
-      </p>
-
       {(showSince || moved) && (
         <div className="mt-[14px] flex flex-wrap items-baseline gap-x-[22px] gap-y-1">
           {showSince && (
@@ -112,9 +107,10 @@ export function Doorstep({
               regionKey="doorstep"
               surfaceKey="the_threshold"
               variant="tertiary"
+              aria-pressed={sinceActive}
               onClick={onToggleSince}
             >
-              What changed since yesterday
+              {sinceActive ? 'Show the whole house' : 'What changed since yesterday'}
             </ScoredAction>
           )}
           {moved && (

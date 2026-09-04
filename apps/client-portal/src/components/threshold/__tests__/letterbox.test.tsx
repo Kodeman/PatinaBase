@@ -1,9 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { InvoiceModel } from '@/lib/threshold/derive';
 
 import { Letterbox } from '../letterbox';
+
+/** 5 August 2026 — the deck's "today". */
+const TODAY = new Date(2026, 7, 5);
 
 function invoice(overrides: Partial<InvoiceModel> = {}): InvoiceModel {
   return {
@@ -18,12 +21,14 @@ function invoice(overrides: Partial<InvoiceModel> = {}): InvoiceModel {
 }
 
 describe('Letterbox — one letter, half out of the slot', () => {
-  it('carries the anchor and the threshold unit', () => {
+  it('carries the anchor, the unit, and never opts into dimming', () => {
     render(<Letterbox invoice={invoice()} />);
 
     const root = screen.getByTestId('letterbox');
     expect(root).toHaveAttribute('id', 'letterbox');
     expect(root).toHaveAttribute('data-threshold-unit', 'letterbox');
+    expect(root).not.toHaveAttribute('data-dimmable');
+    expect(root).toHaveAttribute('data-never-dim');
   });
 
   it('draws the letterbox with the letter standing out of it', () => {
@@ -37,7 +42,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
   });
 
   it('states the letter in words and figures before it is opened', () => {
-    render(<Letterbox invoice={invoice()} />);
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     const body = screen.getByTestId('letterbox-body');
     expect(body).toHaveTextContent('Invoice No. 4');
@@ -46,8 +51,27 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(body).toHaveTextContent('due August 15');
   });
 
-  it('unfolds to the toll when the letterbox is opened', async () => {
-    render(<Letterbox invoice={invoice()} />);
+  it('spells the year out once the letter falls in another one', async () => {
+    render(<Letterbox invoice={invoice({ dueDate: '2027-01-15' })} today={TODAY} />);
+
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('due January 15, 2027');
+
+    await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
+    expect(within(screen.getByTestId('spine-toll')).getByTestId('spine-toll-due')).toHaveTextContent(
+      'due January 15, 2027',
+    );
+  });
+
+  it('names an unnumbered letter, and omits a due date it does not have', () => {
+    render(<Letterbox invoice={invoice({ number: null, dueDate: null })} today={TODAY} />);
+
+    const body = screen.getByTestId('letterbox-body');
+    expect(body).toHaveTextContent('Invoice · $18,250 total');
+    expect(body).not.toHaveTextContent('due');
+  });
+
+  it('unfolds to the toll when the letterbox is opened, and folds back', async () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     expect(screen.queryByTestId('spine-toll')).not.toBeInTheDocument();
 
@@ -59,6 +83,13 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(
       screen.getByRole('button', { name: /close the letterbox/i }),
     ).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(screen.getByRole('button', { name: /close the letterbox/i }));
+
+    expect(screen.queryByTestId('spine-toll')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /open the letterbox/i }),
+    ).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('stands empty, and says so, when nothing has come', () => {

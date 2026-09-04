@@ -13,7 +13,11 @@ import type { HouseLedgerModel } from '@/lib/threshold/derive';
 
    Nothing is ever reported as zero. A line with nothing to say says nothing —
    the same rule the standing sentence keeps — and a figure the surface does
-   not yet know is silence, not "—". ─────────────────────────────────────── */
+   not yet know is silence, not "—".
+
+   The ROWS opt into dimming (`data-dimmable`), not the whole block: in the
+   since-yesterday reading the sentence that says where the house stands is
+   still the thing worth reading. ─────────────────────────────────────────── */
 
 export interface HouseLedgerProps {
   ledger: HouseLedgerModel;
@@ -22,21 +26,26 @@ export interface HouseLedgerProps {
 interface LedgerRow {
   key: 'owed' | 'held' | 'awaiting';
   words: string;
-  cents: number | null;
+  cents: number;
 }
 
-function figure(cents: number | null | undefined): boolean {
+function figure(cents: number | null | undefined): cents is number {
   return typeof cents === 'number' && Number.isFinite(cents) && cents > 0;
+}
+
+/** One open invoice is "the open invoice"; several are counted in words. */
+function owedWords(count: number): string {
+  return count > 1 ? `Owed across ${count} open invoices` : 'Owed on the open invoice';
 }
 
 export function HouseLedger({ ledger }: HouseLedgerProps) {
   const stands = figure(ledger.agreedCents) && figure(ledger.plannedCents);
 
   const rows: LedgerRow[] = [
-    { key: 'owed', words: 'Owed on the open invoice', cents: ledger.owedCents },
-    { key: 'held', words: 'Held on finished work', cents: ledger.heldCents },
-    { key: 'awaiting', words: 'Awaiting your name', cents: ledger.awaitingCents },
-  ].filter((row) => figure(row.cents)) as LedgerRow[];
+    { key: 'owed' as const, words: owedWords(ledger.owedInvoiceCount), cents: ledger.owedCents },
+    { key: 'held' as const, words: 'Held on finished work', cents: ledger.heldCents },
+    { key: 'awaiting' as const, words: 'Awaiting your name', cents: ledger.awaitingCents },
+  ].flatMap((row) => (figure(row.cents) ? [{ ...row, cents: row.cents }] : []));
 
   return (
     <div
@@ -59,6 +68,7 @@ export function HouseLedger({ ledger }: HouseLedgerProps) {
       {rows.map((row) => (
         <div
           key={row.key}
+          data-dimmable
           data-testid={`house-ledger-${row.key}`}
           className="flex justify-between gap-[14px] border-b border-[var(--border-subtle)] py-1.5 text-[15px] leading-[1.5] text-[var(--text-body)]"
         >
@@ -67,7 +77,7 @@ export function HouseLedger({ ledger }: HouseLedgerProps) {
             data-ledger-figure
             className="font-mono text-[13.5px] tabular-nums text-[var(--text-primary)]"
           >
-            {moneyInWords(row.cents as number)}
+            {moneyInWords(row.cents)}
           </span>
         </div>
       ))}
