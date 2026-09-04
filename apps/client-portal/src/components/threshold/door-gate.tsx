@@ -76,6 +76,12 @@ export interface DoorProposal extends ThresholdProposal {
    * branch — never the furnishings copy by default.
    */
   kind?: CommercialDocumentKind;
+  /**
+   * `proposals.valid_until`. The old `/proposals/[id]` page treated a passed
+   * date as expired for actionability even before the expiry job ran, and the
+   * acts on the leaf keep that gate.
+   */
+  validUntil?: string | null;
 }
 
 export interface DoorGateProps {
@@ -119,6 +125,7 @@ export function DoorGate({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedAt, setSignedAt] = useState<Date | null>(null);
+  const [declined, setDeclined] = useState(false);
   const [deliveryPending, setDeliveryPending] = useState(false);
   const [replay, setReplay] = useState<string | null>(null);
   const [doorState, setDoorState] = useState<DoorState>('shut');
@@ -144,8 +151,12 @@ export function DoorGate({
   const consentId = `door-consent-${fieldId}`;
   const hintId = `door-hint-${fieldId}`;
 
-  const kind: CommercialDocumentKind =
-    proposal.kind ?? bundle.data?.document?.kind ?? 'legacy';
+  // Null until the paper says what it is. The copy has to name something, so
+  // it falls back to the route's own `else` branch — but an act that branches
+  // on the rail (Decline) may not, and takes the null instead.
+  const resolvedKind: CommercialDocumentKind | null =
+    proposal.kind ?? bundle.data?.document?.kind ?? null;
+  const kind: CommercialDocumentKind = resolvedKind ?? 'legacy';
   const isFurnishings = kind === 'furnishings_authorization';
 
   const items = isFurnishings ? (bundle.data?.furnishings?.items ?? []) : [];
@@ -159,8 +170,10 @@ export function DoorGate({
 
   // The paper has to be on the leaf before the act is offered.
   const drawn = !bundle.isLoading && !bundle.isError;
-  // The same validation the shipped sign page runs.
-  const ready = drawn && agreed && name.trim().length >= 2;
+  // The same validation the shipped sign page runs. A declined paper is not
+  // signable, so the block that asks for her name disarms with it — a page
+  // may not go on offering an answer she has already given.
+  const ready = drawn && !declined && agreed && name.trim().length >= 2;
 
   async function onSign() {
     if (!ready || inFlight.current) return;
@@ -296,9 +309,11 @@ export function DoorGate({
         <p className="max-w-[34ch] text-[15px] leading-normal text-[var(--text-body)] sm:text-right">
           {signedAt
             ? 'Open. It opened on your name.'
-            : sent
-              ? `Shut since ${DAY_MONTH.format(sent)} · it opens on your name`
-              : 'Shut · it opens on your name'}
+            : declined
+              ? 'Shut. You declined it.'
+              : sent
+                ? `Shut since ${DAY_MONTH.format(sent)} · it opens on your name`
+                : 'Shut · it opens on your name'}
         </p>
       </div>
 
@@ -444,7 +459,7 @@ export function DoorGate({
                       id={consentId}
                       type="checkbox"
                       checked={agreed}
-                      disabled={submitting || !!signedAt}
+                      disabled={submitting || !!signedAt || declined}
                       onChange={(event) => setAgreed(event.target.checked)}
                       className="mt-1 h-4 w-4 shrink-0 border border-current"
                     />
@@ -463,7 +478,7 @@ export function DoorGate({
                       type="text"
                       value={name}
                       autoComplete="name"
-                      disabled={submitting || !!signedAt}
+                      disabled={submitting || !!signedAt || declined}
                       onChange={(event) => setName(event.target.value)}
                       data-testid="door-sign-name"
                       className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
@@ -486,13 +501,15 @@ export function DoorGate({
                     data-testid="door-hint"
                     className="mt-2 text-[15px] leading-normal text-[var(--text-muted)]"
                   >
-                    {!drawn
-                      ? bundle.isError
-                        ? 'This paper could not be drawn just now. Reload to try again.'
-                        : 'Drawing this paper.'
-                      : ready
-                        ? `Ready when you are. ${SIGNATURE_NOTICE}`
-                        : `Type your full name and tick the line to sign. ${SIGNATURE_NOTICE}`}
+                    {declined
+                      ? 'You declined this paper. Your studio has been told.'
+                      : !drawn
+                        ? bundle.isError
+                          ? 'This paper could not be drawn just now. Reload to try again.'
+                          : 'Drawing this paper.'
+                        : ready
+                          ? `Ready when you are. ${SIGNATURE_NOTICE}`
+                          : `Type your full name and tick the line to sign. ${SIGNATURE_NOTICE}`}
                   </p>
                   {/* A refused signature is a genuine error, so it takes the
                       error ink — NOT terracotta, which on this surface is the
@@ -516,7 +533,14 @@ export function DoorGate({
                 while the paper is still asking: once it opens on her name the
                 leaf goes, and with it the acts. */}
             {!signedAt && (
-              <DoorActs proposalId={proposal.id} projectId={projectId} kind={kind} />
+              <DoorActs
+                proposalId={proposal.id}
+                projectId={projectId}
+                title={proposal.title}
+                kind={resolvedKind}
+                validUntil={proposal.validUntil ?? null}
+                onDeclined={() => setDeclined(true)}
+              />
             )}
           </div>
         </div>

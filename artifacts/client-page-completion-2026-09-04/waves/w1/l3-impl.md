@@ -142,3 +142,183 @@ exit=0
   new `ScoredAction` action keys; nothing downstream consumes them yet.
 - Coverage thresholds were not run (`test -- <dirs>` only); the full jest + coverage pass is
   integration's gate.
+
+---
+
+# Fix round
+
+Against `artifacts/client-page-completion-2026-09-04/waves/w1/l3-review.md` (21 findings: 0 blockers,
+6 major, 9 minor, 6 nit). **Every finding was acted on — none rejected.** #5 and #15 are absorb gaps
+the review itself offered a ruling for instead of code; both take the ruling branch and are recorded
+below.
+
+## Fixed, by finding number
+
+**1 · major — an unresolved kind is no longer read as legacy.**
+`door-gate.tsx` now resolves `resolvedKind: CommercialDocumentKind | null`
+(`proposal.kind ?? bundle.data?.document?.kind ?? null`) and keeps the old `kind` (`?? 'legacy'`) only
+for the copy that must name something. `DoorActs.kind` is `CommercialDocumentKind | null`; while it is
+null, **Decline** is withheld (so nothing can take the legacy rail and skip
+`POST /api/proposals/[id]/decline`'s fail-closed resolution) and so is **Read it in full**.
+Ask and Request a change stand — neither branches on the rail.
+
+**2 · major — the leaf stops asking for her name once she declines.**
+`DoorGate` passes `onDeclined` and holds a `declined` flag: the header line reads
+`Shut. You declined it.` instead of `…it opens on your name`, the consent box and the name field go
+`disabled`, `ready` is false so **Sign** disarms, and the hint reads
+`You declined this paper. Your studio has been told.` No copy now reverses itself while the refetch
+is in flight.
+
+**3 · major — the reading always says something.** `instrument-reading.tsx` folds `!bundle.data` into
+the refusal branch (`This paper could not be drawn just now. Reload to try again.`, `role="alert"`)
+and gives a legacy row its own quiet line (`This is an older paper. Ask your studio for a copy of
+it.`, testid `instrument-reading-unprinted`). No unfold can now open `aria-expanded="true"` on an
+empty region — in the door or in Previously.
+
+**4 · major — focus comes back to the act that opened the panel.** `toggle(key, event)` parks
+`event.currentTarget` on an `openerRef`; that ref is passed as `restoreFocusRef` to both the confirm
+and the "Never mind" act of every panel, which is what `ScoredAction`'s `restoreFocus` (rAF →
+`.focus()`, run in the click handler's `finally`) exists for.
+
+**5 · major — RULING, not code: legacy papers and the per-line verdict loop are RETIRED, not
+absorbed.** `threshold.tsx:295/316` drops `kind === 'legacy'` from both `signatureGates` and
+`instrumentReceipts`, so a legacy proposal is already invisible on the Threshold; the C3 per-line
+feedback loop (`proposals.feedback_enabled`, 00267) was gated on the old route's `isActionable` and
+has no surface here. Ruling for integration to carry into the retirement plan: **when
+`/proposals/[id]` is retired, legacy proposals and per-line feedback go with it.** The legacy decline
+rail is still kept in code for fidelity (and is what #1 protects), because a legacy row can still be
+reached by id even though the Threshold does not list one. If the studio still holds live legacy
+papers at cutover, this ruling has to be reversed before the route is deleted — that is a
+plan-level call, not a lane one.
+
+**6 · major — the old page's expiry gate is back.** `DoorProposal` gains `validUntil?: string | null`;
+`threshold.tsx` fills it from the row (`proposal.valid_until`, one line — the commercial summary does
+not carry the date). `DoorActs.hasPassed()` is the old page's guard verbatim (falsy → not expired,
+`NaN` → not expired, `< Date.now()` → expired), and once it has passed **Ask / Request a change /
+Decline** are all withheld. **Read it in full** stays: reading a paper is not acting on it, and the
+old route printed the document for an expired proposal too. Signing is unaffected here — the sign
+route enforces `valid_until` itself (`sign/route.ts:117`).
+
+**7 · minor — the ask is not offered where there is no thread.** `'question'` drops out of the acts
+array when `projectId` is null. The in-handler refusal sentence stays as the type narrowing and a
+belt-and-braces guard, but it is now unreachable by clicking.
+
+**8 · minor — in-flight latches.** `askLatch` / `changeLatch` / `declineLatch` refs, each set before
+the await and cleared in `finally`, mirroring `door-gate.tsx:131-133`. Two clicks in one tick now
+send once.
+
+**9 · minor — a receipt no longer stands over the next panel.** `toggle()` clears `receipt` as well as
+`error`; `onDecline` clears it too, so the stamp is alone.
+
+**10 · minor — a cut instrument line keeps its own words.** `previously.tsx` hoists
+`truncated = isTruncated(entry.label)` and, when an instrument line is truncated, prints the full
+label above the reading rather than instead of it.
+
+**11 · minor — the declined stamp is announced.** `role="status"` on `door-declined`.
+
+**12 · minor — the six missing cases.** Added to `door-acts.test.tsx`: "Never mind" closes a panel and
+leaves the acts standing; the pending state (loading label `Sending`, disabled textarea, disabled
+dismiss); the stale receipt (#9); the ask panel's description copy (plus its heading, #18); the
+double-click latch (#8); the withheld ask (#7); the null-kind withholding (#1); expired / not-expired
+(#6); the announced stamp (#11); the danger variant and per-act `aria-controls` (#17, #19).
+`instrument-reading.test.tsx`: the two dead-read branches now assert sentences (#3).
+`previously.test.tsx`: a truncated instrument line printing its own words (#10) and an instrument
+entry whose id does **not** match `instrument:<id>` falling back to the label unfold.
+`door-gate.test.tsx`: the stub now witnesses `kind` and `validUntil` and can fire `onDeclined`, with
+cases for the null kind (#1), the carried `validUntil` (#6) and the disarmed signature block (#2).
+
+**13 · minor — the letter names the paper.** `DoorActs` takes `title` and posts
+`About <title>\n\n<question>` (bare question when the title is empty). The old flow put the client
+*in* the thread holding the proposal, which supplied that context; a letter has to carry it, and a
+page with two open doors gives the studio nothing to tell them apart otherwise. **Copy ruling for
+integration to confirm with L4**: the prefix is plain (`About …`), not a rendered reference chip, and
+it is the only new sentence this lane invents on the send path.
+
+**14 · minor — `onDeclined` is no longer dead surface.** Resolved by #2.
+
+**15 · minor — RULING for integration: archived papers.** Declined / expired / superseded proposals
+(`partitionProposals.archived`) and the old list's "This edition was replaced… Open the current
+edition" guidance still have no home: doors take only `sent`, Previously only `accepted`. This lane
+does not invent a Previously state for them (that is `derive.ts`'s shape, which L3 is forbidden to
+touch, and the words are a copy call). **Raised as a plan-level ruling: `/proposals` may not be
+retired until archived papers land somewhere on the Threshold — most naturally as Previously entries
+with their own state words.**
+
+**16 · nit — copy-fidelity correction.** The review is right that the report's byte-copy claim has one
+exception. **Corrected here: the confirm *loading* labels drop the old dialogs' ellipsis** —
+"Declining…" → `Declining`, "Sending…" → `Sending` — to match the house idiom the shipped door
+already set (`door-gate.tsx:477`, `Signing`). Everything else (dialog titles, descriptions, field
+labels, placeholders including the `’` in "What’s holding you back?", validation sentences, error
+fallbacks, the 1000-char caps and the `n / 1000` counters) remains byte-identical to
+`ProposalDeclineDialog` / `CommercialDeclineDialog` / `ProposalRequestChangeDialog`.
+
+**17 · nit — the decline confirm carries `variant="danger"`**, the weight without a colour (`Panel`
+gained a `confirmVariant` prop defaulting to `secondary`).
+
+**18 · nit — the panel title is an `<h3>`**, styled as it was, so the panel is reachable by heading.
+
+**19 · nit — one panel id per act.** `panelIdFor(key)`; a collapsed act carries no `aria-controls` at
+all, so nothing advertises a region holding another act's content.
+
+**20 · nit — print.** Confirmed and recorded: **"Download PDF" (`window.print()`,
+`/proposals/[id]` page.tsx:172-179) is retired for proposals**, not absorbed. The inventory does not
+count it as an act (§85 = decline / request change / clarify / replay), the reading is now on the page
+itself, and invoices keep their print route via L2 (`/invoices/[id]/print`).
+
+**21 · nit — no colon in the id.** `previously-body-${entry.id.replace(/:/g, '-')}`.
+
+## Rejected
+
+None. (#5 and #15 are absorb gaps taken as rulings — the branch the review itself offered — rather
+than absorbed in code; the reasoning for each is above.)
+
+## Files touched in the fix round
+
+- `apps/client-portal/src/components/threshold/door-acts.tsx` (#1, #4, #6, #7, #8, #9, #11, #13, #17,
+  #18, #19)
+- `apps/client-portal/src/components/threshold/door-gate.tsx` (#1, #2, #6, #14) — 8 small hunks, all
+  inside the existing signature block plus the `DoorActs` call
+- `apps/client-portal/src/components/threshold/instrument-reading.tsx` (#3)
+- `apps/client-portal/src/components/threshold/previously.tsx` (#10, #21)
+- `apps/client-portal/src/components/threshold/threshold.tsx` (#6) — **one added field**
+  (`validUntil: proposal.valid_until ?? null`) in the `signatureGates` map; no other change
+- the four test files above
+
+## Gate output (fix round, verbatim tails)
+
+`pnpm --dir /Users/kody/Code/patina-merged/.codex/worktrees/agent-cpc-l3/apps/client-portal type-check`
+```
+> @patina/client-portal@0.1.0 type-check /Users/kody/Code/patina-merged/.codex/worktrees/agent-cpc-l3/apps/client-portal
+> tsc --noEmit
+```
+(no diagnostics)
+
+`pnpm --dir …/apps/client-portal test -- threshold making`
+```
+Test Suites: 32 passed, 32 total
+Tests:       603 passed, 603 total
+Snapshots:   0 total
+Time:        5.861 s, estimated 6 s
+Ran all test suites matching /threshold|making/i.
+```
+(588 → 603; +15 cases, none removed — the two rewritten cases replaced behaviours that changed)
+
+`npx eslint src/components/threshold` (from `apps/client-portal`)
+```
+exit=0
+```
+(no output, 0 errors, 0 warnings)
+
+## Still not verified after the fix round
+
+Everything under "Not verified" above still stands, minus the legacy-decline note, which is now a
+recorded ruling (#5). Three additions:
+
+- **Focus restoration (#4) is not asserted in a test.** It is wired through `ScoredAction`'s existing
+  `restoreFocusRef` path (rAF + `.focus()`); jsdom would need an rAF flush to prove it and the
+  assertion would test `ScoredAction`, which has its own suite. Worth one keyboard pass in the
+  browser walk.
+- **The expiry gate (#6) reads `Date.now()` at render.** A door left open across the boundary does not
+  re-render itself; the acts withdraw on the next render. The old page had the same property.
+- **The question prefix (#13) has not been seen in a real thread** — check it against L4's letters
+  after the merge, and confirm the studio side reads `About <title>` as intended.

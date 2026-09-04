@@ -80,9 +80,14 @@ export function Previously({ entries }: PreviouslyProps) {
       <ul className="mt-3 list-none">
         {entries.map((entry) => {
           const open = openId === entry.id;
-          const bodyId = `previously-body-${entry.id}`;
+          // An instrument's id carries a colon (`instrument:<uuid>`), which is
+          // legal in an id but has to be escaped in every selector that ever
+          // reaches for it; the rest of this tree strips colons for the same
+          // reason.
+          const bodyId = `previously-body-${entry.id.replace(/:/g, '-')}`;
           const proposalId = instrumentProposalId(entry);
-          const foldable = isTruncated(entry.label) || proposalId !== null;
+          const truncated = isTruncated(entry.label);
+          const foldable = truncated || proposalId !== null;
 
           const line = (
             <>
@@ -134,6 +139,14 @@ export function Previously({ entries }: PreviouslyProps) {
                   open &&
                   (proposalId ? (
                     <div data-testid="previously-body" className="pb-4">
+                      {/* A cut line still owes the client its own words: the
+                          reading is what the unfold gained, not what it
+                          replaced. */}
+                      {truncated && (
+                        <p className="max-w-[56ch] text-[15px] leading-relaxed text-[var(--text-body)]">
+                          {entry.label}
+                        </p>
+                      )}
                       <InstrumentReading proposalId={proposalId} />
                     </div>
                   ) : (

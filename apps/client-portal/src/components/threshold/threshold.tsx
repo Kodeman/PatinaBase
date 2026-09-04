@@ -302,6 +302,9 @@ export function Threshold({
         sentAt: commercial.sentAt,
         updatedAt: proposal.updated_at ?? null,
         kind: commercial.kind,
+        // The acts on the leaf keep the old route's expiry gate; the summary
+        // does not carry the date, so it comes off the row.
+        validUntil: proposal.valid_until ?? null,
       },
     ];
   });

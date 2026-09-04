@@ -131,6 +131,41 @@ describe('Previously', () => {
     expect(screen.queryByTestId('instrument-reading-stub')).not.toBeInTheDocument();
   });
 
+  it('keeps a cut instrument line’s own words above the reading it unfolds into', () => {
+    const signed: PreviouslyEntry = {
+      id: 'instrument:prop-7',
+      kind: 'instrument',
+      label: 'Furnishings authorization · Library, lounge and the upstairs landing, in full',
+      date: new Date('2026-08-05T12:00:00Z'),
+      state: 'signed',
+    };
+
+    render(<Previously entries={[signed]} />);
+    fireEvent.click(screen.getByRole('button'));
+
+    // The unfold used to be for the words the line could not hold; the reading
+    // is what it gained, not what it replaced.
+    const body = screen.getByTestId('previously-body');
+    expect(body).toHaveTextContent('Furnishings authorization · Library, lounge and the upstairs landing, in full');
+    expect(within(body).getByTestId('instrument-reading-stub')).toHaveTextContent('prop-7');
+  });
+
+  it('falls back to the label unfold when an instrument line carries no paper id', () => {
+    const odd: PreviouslyEntry = {
+      id: 'instrument-prop-7',
+      kind: 'instrument',
+      label: 'Furnishings authorization · Library, lounge and the upstairs landing, in full',
+      date: new Date('2026-08-05T12:00:00Z'),
+      state: 'signed',
+    };
+
+    render(<Previously entries={[odd]} />);
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(screen.getByTestId('previously-body')).toHaveTextContent('Furnishings authorization · Library, lounge and the upstairs landing, in full');
+    expect(screen.queryByTestId('instrument-reading-stub')).not.toBeInTheDocument();
+  });
+
   it('renders nothing when there is no history to read', () => {
     const { container } = render(<Previously entries={[]} />);
     expect(container).toBeEmptyDOMElement();

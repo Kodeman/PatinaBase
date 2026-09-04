@@ -94,21 +94,29 @@ describe('InstrumentReading', () => {
     expect(screen.getByText('Brass library sconces')).toBeInTheDocument();
   });
 
-  it('holds its tongue over a legacy row, which has no shell to draw', () => {
+  it('says a legacy row is not printed here rather than opening on nothing', () => {
     bundleMock.mockReturnValue({
       isLoading: false,
       isError: false,
       data: bundle({ kind: 'legacy' }),
     });
 
-    const { container } = render(<InstrumentReading proposalId="prop-7" />);
-    expect(container).toBeEmptyDOMElement();
+    render(<InstrumentReading proposalId="prop-7" />);
+
+    expect(screen.getByTestId('instrument-reading-unprinted')).toHaveTextContent(
+      'This is an older paper. Ask your studio for a copy of it.',
+    );
+    expect(screen.queryByTestId('commercial-document-shell')).not.toBeInTheDocument();
   });
 
-  it('holds its tongue when the read came back with nothing', () => {
+  it('refuses out loud when the read came back with nothing', () => {
     bundleMock.mockReturnValue({ isLoading: false, isError: false, data: null });
 
-    const { container } = render(<InstrumentReading proposalId="prop-7" />);
-    expect(container).toBeEmptyDOMElement();
+    render(<InstrumentReading proposalId="prop-7" />);
+
+    // An unfold that opens on an empty region is an offer that leads nowhere.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This paper could not be drawn just now. Reload to try again.',
+    );
   });
 });

@@ -19,12 +19,32 @@ jest.mock('@/hooks/use-commercial-client', () => ({
 }));
 
 // The other four answers live in their own file, with their own suite
-// (door-acts.test.tsx). Here they are a witness to the mount and to the leaf
-// taking them with it when the door opens.
+// (door-acts.test.tsx). Here they are a witness to the mount, to what the door
+// hands them, to the leaf taking them with it when it opens — and to the door
+// hearing a decline come back.
 jest.mock('../door-acts', () => ({
   __esModule: true,
-  DoorActs: ({ proposalId }: { proposalId: string }) => (
-    <div data-testid="door-acts-stub">{proposalId}</div>
+  DoorActs: ({
+    proposalId,
+    kind,
+    validUntil,
+    onDeclined,
+  }: {
+    proposalId: string;
+    kind: string | null;
+    validUntil?: string | null;
+    onDeclined?: () => void;
+  }) => (
+    <div
+      data-testid="door-acts-stub"
+      data-kind={kind ?? 'unresolved'}
+      data-valid-until={validUntil ?? ''}
+    >
+      {proposalId}
+      <button type="button" onClick={() => onDeclined?.()}>
+        stub decline
+      </button>
+    </div>
   ),
 }));
 
@@ -305,6 +325,35 @@ describe('DoorGate', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('door-acts-stub')).not.toBeInTheDocument();
     });
+  });
+
+  it('hands the acts a null kind rather than calling an unresolved paper legacy', () => {
+    bundleMock.mockReturnValue({ isLoading: false, isError: false, data: undefined });
+    renderGate({ proposal: { ...PROPOSAL, kind: undefined } });
+
+    expect(screen.getByTestId('door-acts-stub')).toHaveAttribute('data-kind', 'unresolved');
+  });
+
+  it('carries the paper’s own valid_until down to the acts', () => {
+    renderGate({ proposal: { ...PROPOSAL, validUntil: '2026-08-30T00:00:00Z' } });
+
+    expect(screen.getByTestId('door-acts-stub')).toHaveAttribute(
+      'data-valid-until',
+      '2026-08-30T00:00:00Z',
+    );
+  });
+
+  it('stops asking for her name once she has declined the paper', () => {
+    renderGate();
+    fireEvent.click(screen.getByRole('button', { name: 'stub decline' }));
+
+    expect(screen.getByText('Shut. You declined it.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Type your full name')).toBeDisabled();
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(signAction()).toBeDisabled();
+    expect(screen.getByTestId('door-hint')).toHaveTextContent(
+      'You declined this paper. Your studio has been told.',
+    );
   });
 
   it('stops claiming never-dim once it has been signed', async () => {

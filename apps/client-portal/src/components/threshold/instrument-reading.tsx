@@ -12,10 +12,11 @@ import { useClientCommercialDocument } from '@/hooks/use-commercial-client';
    (the door's "Read it in full", a signed instrument in Previously, the papers
    sheet) instead of behind a route the client has to leave the house for.
 
-   A LEGACY ROW HAS NO SHELL. `CommercialDocumentShell` returns null for
-   `kind: 'legacy'`, so this holds its tongue rather than unfolding an empty
-   panel; the acts that offer the reading decide not to offer it at all.
-   ────────────────────────────────────────────────────────────────────────── */
+   IT ALWAYS SAYS SOMETHING. An unfold that opens on nothing is an offer that
+   leads nowhere, so every branch prints a sentence: a read that came back
+   empty takes the door's own refusal, and a legacy row — which
+   `CommercialDocumentShell` has no shell for — says so plainly rather than
+   opening an empty region. ─────────────────────────────────────────────── */
 
 export interface InstrumentReadingProps {
   proposalId: string;
@@ -36,8 +37,9 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
   }
 
   // The one sentence the door already says when the read fails; a refusal the
-  // client can act on, not a thrown error string printed as content.
-  if (bundle.isError) {
+  // client can act on, not a thrown error string printed as content. A read
+  // that resolves to nothing is the same refusal in a quieter form.
+  if (bundle.isError || !bundle.data) {
     return (
       <p
         role="alert"
@@ -49,7 +51,16 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
     );
   }
 
-  if (!bundle.data || bundle.data.document.kind === 'legacy') return null;
+  if (bundle.data.document.kind === 'legacy') {
+    return (
+      <p
+        data-testid="instrument-reading-unprinted"
+        className="mt-3 text-[15px] leading-normal text-[var(--text-muted)]"
+      >
+        This is an older paper. Ask your studio for a copy of it.
+      </p>
+    );
+  }
 
   return (
     <div

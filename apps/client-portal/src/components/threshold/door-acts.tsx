@@ -1,6 +1,7 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import type { MouseEvent, RefObject } from 'react';
 import type { CommercialDocumentKind } from '@patina/types';
 import {
   useDeclineProposal,
@@ -27,13 +28,23 @@ import { InstrumentReading } from './instrument-reading';
    `useDeclineProposal` (decline_proposal directly); everything else went
    through `useDeclineCommercialDocument` (POST /api/proposals/[id]/decline,
    which resolves the kind fail-closed first). Both are kept, chosen by the
-   resolved kind, so a door over a legacy paper declines exactly as it did.
+   resolved kind — and an UNRESOLVED kind is not a legacy row. A null `kind`
+   means the door has not learned what this paper is yet, so Decline is
+   withheld rather than sent down the rail that skips the fail-closed route.
+
+   AN ACT THAT CANNOT COMPLETE IS NOT OFFERED. No project on the paper, no
+   thread to ask in — so no "Ask a question". Past `valid_until`, the old page
+   held every act back (`isActionable`, page.tsx:124-133) even before the
+   expiry job ran, and neither `decline_proposal` nor `request_proposal_change`
+   checks the date itself; the same gate is kept here.
 
    ASKING IS A LETTER, NOT A ROUTE. `ProposalClarifyButton` started the
    project thread and then navigated to `/messages?thread=…`. The thread is
    still started the same way — the question is simply posted into it from
    here, because a page that opens in place may not send the client away to
-   finish a sentence she has already typed. ─────────────────────────────── */
+   finish a sentence she has already typed. The letter names the paper it is
+   about: standing in the thread, the old flow supplied that context by where
+   the client was; a letter has to carry it. ────────────────────────────── */
 
 /** "5 August" — the deck's own date idiom, as the door itself dates things. */
 const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
@@ -44,16 +55,39 @@ const QUESTION_MAX = 1000;
 
 type ActKey = 'read' | 'question' | 'change' | 'decline';
 
+/** The old page's expiry gate, verbatim: a passed date is expired even when
+ *  the status column still says "sent" because the cron has not run. */
+function hasPassed(validUntil: string | null | undefined): boolean {
+  if (!validUntil) return false;
+  const at = new Date(validUntil).getTime();
+  return !Number.isNaN(at) && at < Date.now();
+}
+
 export interface DoorActsProps {
   proposalId: string;
   /** Null on a paper minted from the schedule; the ask then has no thread. */
   projectId: string | null;
-  /** The resolved kind, as the door resolves it. Decides the decline rail. */
-  kind: CommercialDocumentKind;
+  /** The paper's own title, carried into the question so the studio knows
+   *  which door it was asked at. */
+  title: string;
+  /**
+   * The resolved kind, as the door resolves it. Decides the decline rail.
+   * Null while the door has not resolved one — never read as legacy.
+   */
+  kind: CommercialDocumentKind | null;
+  /** `proposals.valid_until`, when the paper carries one. */
+  validUntil?: string | null;
   onDeclined?: () => void;
 }
 
-export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsProps) {
+export function DoorActs({
+  proposalId,
+  projectId,
+  title,
+  kind,
+  validUntil,
+  onDeclined,
+}: DoorActsProps) {
   const panelId = `door-acts-${useId().replace(/:/g, '')}`;
 
   const startThread = useStartProjectThread();
@@ -70,16 +104,32 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
   const [receipt, setReceipt] = useState<string | null>(null);
   const [declinedAt, setDeclinedAt] = useState<Date | null>(null);
 
+  // Where focus goes when a panel closes: the act that opened it. Without it a
+  // "Never mind" or a successful send unmounts the focused control and drops
+  // the keyboard on <body>.
+  const openerRef = useRef<HTMLElement | null>(null);
+  // State is render-time, so two clicks in one tick both read `isPending`
+  // false. A latch per act closes that, as the gate's own does.
+  const askLatch = useRef(false);
+  const changeLatch = useRef(false);
+  const declineLatch = useRef(false);
+
   const isLegacy = kind === 'legacy';
+  const expired = hasPassed(validUntil);
   const asking = startThread.isPending || sendMessage.isPending;
   const declining = declineLegacy.isPending || declineDocument.isPending;
 
-  function toggle(key: ActKey) {
+  function toggle(key: ActKey, event: MouseEvent<HTMLButtonElement>) {
+    openerRef.current = event.currentTarget;
     setError(null);
+    // A receipt belongs to the act that earned it; it may not stand over the
+    // next panel the client opens.
+    setReceipt(null);
     setOpen((current) => (current === key ? null : key));
   }
 
   async function onAsk() {
+    if (askLatch.current) return;
     setError(null);
     const trimmed = question.trim();
     if (!trimmed) {
@@ -90,24 +140,33 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
       setError('This paper is not filed under a project, so there is no thread to ask in.');
       return;
     }
+    askLatch.current = true;
     try {
       const threadId = await startThread.mutateAsync(projectId);
-      await sendMessage.mutateAsync({ threadId, body: trimmed });
+      const named = title.trim();
+      await sendMessage.mutateAsync({
+        threadId,
+        body: named ? `About ${named}\n\n${trimmed}` : trimmed,
+      });
       setQuestion('');
       setOpen(null);
       setReceipt('Your question was sent.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send your question');
+    } finally {
+      askLatch.current = false;
     }
   }
 
   async function onRequestChange() {
+    if (changeLatch.current) return;
     setError(null);
     const trimmed = feedback.trim();
     if (!trimmed) {
       setError('Add a note so your designer knows what to change.');
       return;
     }
+    changeLatch.current = true;
     try {
       await requestChange.mutateAsync({ proposalId, feedback: trimmed });
       setFeedback('');
@@ -115,12 +174,16 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
       setReceipt('Your note was sent');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send your note');
+    } finally {
+      changeLatch.current = false;
     }
   }
 
   async function onDecline() {
+    if (declineLatch.current) return;
     setError(null);
     const trimmed = reason.trim() || undefined;
+    declineLatch.current = true;
     try {
       if (isLegacy) {
         await declineLegacy.mutateAsync({ proposalId, reason: trimmed });
@@ -129,6 +192,7 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
       }
       setReason('');
       setOpen(null);
+      setReceipt(null);
       setDeclinedAt(new Date());
       onDeclined?.();
     } catch (err) {
@@ -139,19 +203,27 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
             ? 'Failed to decline proposal'
             : 'Failed to decline this document.',
       );
+    } finally {
+      declineLatch.current = false;
     }
   }
 
+  // A paper still asking takes every answer. One already declined takes none,
+  // and one past its date takes none either — the reading stays, because
+  // reading a paper is not acting on it.
+  const answerable = !declinedAt && !expired;
   const acts: { key: ActKey; label: string }[] = [
-    ...(isLegacy ? [] : [{ key: 'read' as const, label: 'Read it in full' }]),
-    ...(declinedAt
-      ? []
-      : [
-          { key: 'question' as const, label: 'Ask a question' },
-          { key: 'change' as const, label: 'Request a change' },
-          { key: 'decline' as const, label: 'Decline' },
-        ]),
+    ...(kind && !isLegacy ? [{ key: 'read' as const, label: 'Read it in full' }] : []),
+    ...(answerable && projectId
+      ? [{ key: 'question' as const, label: 'Ask a question' }]
+      : []),
+    ...(answerable ? [{ key: 'change' as const, label: 'Request a change' }] : []),
+    ...(answerable && kind ? [{ key: 'decline' as const, label: 'Decline' }] : []),
   ];
+
+  if (acts.length === 0 && !declinedAt && !receipt) return null;
+
+  const panelIdFor = (key: ActKey) => `${panelId}-${key}`;
 
   return (
     <div
@@ -166,8 +238,8 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
             regionKey="door"
             variant="tertiary"
             aria-expanded={open === act.key}
-            aria-controls={panelId}
-            onClick={() => toggle(act.key)}
+            aria-controls={open === act.key ? panelIdFor(act.key) : undefined}
+            onClick={(event) => toggle(act.key, event)}
           >
             {act.label}
           </ScoredAction>
@@ -177,6 +249,7 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
       {declinedAt && (
         <p
           data-testid="door-declined"
+          role="status"
           className="mt-3 font-mono text-[11px] leading-relaxed tracking-[0.04em] text-[var(--text-body)]"
         >
           {`Declined ${DAY_MONTH.format(declinedAt)}.`}
@@ -193,7 +266,7 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
         </p>
       )}
 
-      <div id={panelId}>
+      <div id={open ? panelIdFor(open) : undefined}>
         {open === 'read' && <InstrumentReading proposalId={proposalId} />}
 
         {open === 'question' && (
@@ -212,6 +285,7 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
             confirmLabel="Send"
             confirmLoadingLabel="Sending"
             pending={asking}
+            restoreFocusRef={openerRef}
             onConfirm={onAsk}
             onDismiss={() => setOpen(null)}
           />
@@ -233,6 +307,7 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
             confirmLabel="Send note"
             confirmLoadingLabel="Sending"
             pending={requestChange.isPending}
+            restoreFocusRef={openerRef}
             onConfirm={onRequestChange}
             onDismiss={() => setOpen(null)}
           />
@@ -257,7 +332,9 @@ export function DoorActs({ proposalId, projectId, kind, onDeclined }: DoorActsPr
             confirmKey="door_decline_confirm"
             confirmLabel={isLegacy ? 'Decline proposal' : 'Decline document'}
             confirmLoadingLabel="Declining"
+            confirmVariant="danger"
             pending={declining}
+            restoreFocusRef={openerRef}
             onConfirm={onDecline}
             onDismiss={() => setOpen(null)}
           />
@@ -281,7 +358,9 @@ interface PanelProps {
   confirmKey: string;
   confirmLabel: string;
   confirmLoadingLabel: string;
+  confirmVariant?: 'secondary' | 'danger';
   pending: boolean;
+  restoreFocusRef: RefObject<HTMLElement | null>;
   onConfirm: () => void;
   onDismiss: () => void;
 }
@@ -300,13 +379,19 @@ function Panel({
   confirmKey,
   confirmLabel,
   confirmLoadingLabel,
+  confirmVariant = 'secondary',
   pending,
+  restoreFocusRef,
   onConfirm,
   onDismiss,
 }: PanelProps) {
   return (
     <div data-testid={`${testId}-panel`} className="mt-4 max-w-[56ch]">
-      <p className="font-heading text-[1.05rem] text-[var(--text-primary)]">{title}</p>
+      {/* A heading, not a paragraph: the old dialog's title was one, and it is
+          how a screen reader finds the panel the act just opened. */}
+      <h3 className="font-heading text-[1.05rem] font-normal text-[var(--text-primary)]">
+        {title}
+      </h3>
       <p className="mt-1 text-[15px] leading-relaxed text-[var(--text-body)]">{description}</p>
 
       <label
@@ -340,9 +425,10 @@ function Panel({
         <ScoredAction
           actionKey={confirmKey}
           regionKey="door"
-          variant="secondary"
+          variant={confirmVariant}
           loading={pending}
           loadingLabel={confirmLoadingLabel}
+          restoreFocusRef={restoreFocusRef}
           onClick={onConfirm}
         >
           {confirmLabel}
@@ -352,6 +438,7 @@ function Panel({
           regionKey="door"
           variant="tertiary"
           disabled={pending}
+          restoreFocusRef={restoreFocusRef}
           onClick={onDismiss}
         >
           Never mind

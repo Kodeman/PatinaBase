@@ -67,6 +67,7 @@ function renderActs(props: Partial<React.ComponentProps<typeof DoorActs>> = {}) 
     <DoorActs
       proposalId="prop-7"
       projectId="proj-1"
+      title="Furnishings authorization No. 7"
       kind="furnishings_authorization"
       {...props}
     />,
@@ -131,9 +132,11 @@ describe('DoorActs', () => {
     fireEvent.click(act('Send'));
 
     await waitFor(() => expect(startThread).toHaveBeenCalledWith('proj-1'));
+    // The letter names the paper: standing in the thread, the old flow got
+    // that context from where the client was.
     expect(sendMessage).toHaveBeenCalledWith({
       threadId: 'thread-9',
-      body: 'Can the sconces come in an aged brass?',
+      body: 'About Furnishings authorization No. 7\n\nCan the sconces come in an aged brass?',
     });
     expect(await screen.findByTestId('door-acts-receipt')).toHaveTextContent(
       'Your question was sent.',
@@ -230,15 +233,127 @@ describe('DoorActs', () => {
     expect(screen.queryByTestId('door-declined')).not.toBeInTheDocument();
   });
 
-  it('holds the ask when the paper is filed under no project', async () => {
+  it('does not offer the ask at all when the paper is filed under no project', () => {
     renderActs({ projectId: null });
-    fireEvent.click(act('Ask a question'));
-    type('door-ask-question', 'Who hangs these?');
-    fireEvent.click(act('Send'));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This paper is not filed under a project, so there is no thread to ask in.',
+    expect(screen.queryByRole('button', { name: 'Ask a question' })).not.toBeInTheDocument();
+    expect(act('Request a change')).toBeInTheDocument();
+    expect(act('Decline')).toBeInTheDocument();
+  });
+
+  it('withholds the decline until the paper has said what it is', () => {
+    renderActs({ kind: null });
+
+    // An unresolved kind is not a legacy row: declining it here would take the
+    // legacy rail and skip the route that resolves the kind fail-closed.
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Read it in full' })).not.toBeInTheDocument();
+    expect(act('Ask a question')).toBeInTheDocument();
+    expect(act('Request a change')).toBeInTheDocument();
+  });
+
+  it('takes no answer on a paper whose date has passed, but still reads it', () => {
+    renderActs({ validUntil: '2020-01-01T00:00:00.000Z' });
+
+    expect(act('Read it in full')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask a question' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request a change' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+  });
+
+  it('still takes every answer on a paper whose date has not passed', () => {
+    renderActs({ validUntil: '2999-01-01T00:00:00.000Z' });
+
+    expect(act('Ask a question')).toBeInTheDocument();
+    expect(act('Decline')).toBeInTheDocument();
+  });
+
+  it('says what the ask is for in the panel it opens', () => {
+    renderActs();
+    fireEvent.click(act('Ask a question'));
+
+    expect(screen.getByTestId('door-ask-question-panel')).toHaveTextContent(
+      'Your question goes to your studio as a letter. It won’t decline the paper — it stays open while they answer.',
     );
-    expect(startThread).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Ask a question' })).toBeInTheDocument();
+  });
+
+  it('closes a panel on “Never mind”, leaving the acts standing', () => {
+    renderActs();
+    fireEvent.click(act('Request a change'));
+    expect(screen.getByTestId('door-request-change-panel')).toBeInTheDocument();
+
+    fireEvent.click(act('Never mind'));
+
+    expect(screen.queryByTestId('door-request-change-panel')).not.toBeInTheDocument();
+    expect(act('Request a change')).toHaveAttribute('aria-expanded', 'false');
+    expect(requestChange).not.toHaveBeenCalled();
+  });
+
+  it('holds the pen while a send is in flight', () => {
+    requestChangeMock.mockReturnValue(mutation(requestChange, true));
+    renderActs();
+    fireEvent.click(act('Request a change'));
+
+    expect(act('Sending')).toBeInTheDocument();
+    expect(screen.getByTestId('door-request-change')).toBeDisabled();
+    expect(act('Never mind')).toBeDisabled();
+  });
+
+  it('sends one question however fast the second click lands', async () => {
+    let release: (value: string) => void = () => {};
+    startThread.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          release = resolve;
+        }),
+    );
+    renderActs();
+    fireEvent.click(act('Ask a question'));
+    type('door-ask-question', 'Twice?');
+    const send = act('Send');
+    fireEvent.click(send);
+    fireEvent.click(send);
+
+    await waitFor(() => expect(startThread).toHaveBeenCalledTimes(1));
+    release('thread-9');
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not leave one act’s receipt standing over the next act’s panel', async () => {
+    renderActs();
+    fireEvent.click(act('Request a change'));
+    type('door-request-change', 'Swap the runner.');
+    fireEvent.click(act('Send note'));
+    await screen.findByTestId('door-acts-receipt');
+
+    fireEvent.click(act('Decline'));
+
+    expect(screen.queryByTestId('door-acts-receipt')).not.toBeInTheDocument();
+  });
+
+  it('announces the declined stamp rather than leaving it to be noticed', async () => {
+    renderActs();
+    fireEvent.click(act('Decline'));
+    fireEvent.click(act('Decline document'));
+
+    const stamp = await screen.findByTestId('door-declined');
+    expect(stamp).toHaveAttribute('role', 'status');
+  });
+
+  it('gives the decline its weight without a colour, and points each act at its own panel', () => {
+    renderActs();
+    const decline = act('Decline');
+    expect(decline).not.toHaveAttribute('aria-controls');
+
+    fireEvent.click(decline);
+
+    const panelId = decline.getAttribute('aria-controls');
+    expect(panelId).toBeTruthy();
+    expect(document.getElementById(panelId as string)).toContainElement(
+      screen.getByTestId('door-decline-panel'),
+    );
+    expect(act('Read it in full')).not.toHaveAttribute('aria-controls');
+    expect(act('Decline document')).toHaveAttribute('data-action-variant', 'danger');
   });
 });
