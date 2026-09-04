@@ -100,3 +100,39 @@ Consequences of the same ruling: `artifacts/ios-testflight-polish-2026-09-01/bui
 (twelve findings re-tiered against the shipped root) and `build/PROGRAM.md` §11.
 
 *Entries add: C1 · S1–S6 · V1–V6 · V7 · last id = V7*
+
+---
+
+## Ruled — 2026-09-04 (the client page)
+
+### V8 · The web client page is surface #1's client-facing face, not a fourth surface — 2026-09-04
+
+**Question:** S1 ranks three surfaces — The Document → iOS app → marketplace. The client portal
+(`apps/client-portal`, `client.patina.cloud`) is a fourth codebase with its own deploy, its own domain,
+its own route tree. Does it stand as a fourth surface alongside the ranked three, or is it part of one
+of them?
+
+**Decision:** **The web client page is surface #1's client-facing face — the homeowner-facing side of
+The Document — not a fourth ranked surface.** The Document is where the studio keeps the record; the
+client page is where the studio's own client reads it. One record, two doors. This is a naming and
+ranking correction, not a rebuild: the client portal keeps its own codebase, deploy, and domain: what
+changes is how it counts against S1. Ranking a fourth surface never served the point of S1, which was to
+force a choice under constraint ("the designer tool is the one surface kept if only one could be") — a
+homeowner-facing view of the studio's own document was never a candidate for that trade, because cutting
+it would not free the studio from anything; it would just stop delivering what The Document already
+promises the studio's client.
+
+**Consequence for S4.** S4's promise is two-sided: the studio "won't notice Patina," the homeowner is
+"engaged daily on one agreed direction," and the rule "never optimize the studio surface for
+engagement" binds explicitly to **the studio's own surface** — The Document and the iOS app's Studio
+tab, the tools a designer uses to run her practice. It does not bind the homeowner-facing page. The web
+client page **may be designed for daily return** the same way the iOS client app already is under V7:
+a person checking in on her own house is not the engagement Patina refuses to chase in a designer's
+working tools. Nothing here licenses tabs, badges, shadows, or engagement chrome in The Document itself
+— those refusals in VISION §6 are unchanged and unrelated to this ruling.
+
+**Source:** Kody, 2026-09-04, in the same interview that ruled the client portal's retirement
+(`docs/design/the-document/DECISIONS.md` **R135**; `docs/superpowers/plans/2026-09-04-client-portal-retirement.md`;
+`docs/superpowers/plans/2026-09-04-client-page-completion.md`; `docs/design/the-client-page/README.md`).
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · last id = V8*
