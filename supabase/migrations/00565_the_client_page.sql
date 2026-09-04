@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00565 — The Client Page: the note, the reading mark, and the payload the
+-- 00565 — The Client Page: the note, the reading mark, and the reader the
 --         client's own page is drawn from
 --
 -- Three things, one file.
@@ -10,10 +10,31 @@
 -- 2. public.project_reading_marks + public.mark_project_read — "since you were
 --    last here". The RPC returns the PREVIOUS stamp and then advances the row,
 --    so the page can dim what has not moved without a second round trip.
--- 3. The repair of public.get_client_project_selections.
+-- 3. public.get_client_project_threshold — a NEW reader carrying the client
+--    payload The Client Page needs.
 --
--- ── Lineage of get_client_project_selections ───────────────────────────────
---   00422 → 00423 → 00433 → 00435 → 00439 → 00441 → 00565 (this file)
+-- ── Why a new reader and not a repair ──────────────────────────────────────
+--   public.get_client_project_selections is DELIBERATELY NOT TOUCHED by this
+--   file. An earlier draft of 00565 rewrote it in place, and cross-lane review
+--   (2026-09-04) found two shipped surfaces read it, neither behind the
+--   `threshold` flag:
+--     · the iOS Patina client app — ProjectsAPIClient.swift:248 `listFFEItems`
+--       returns `bundle.selections` straight into the app. The restored payload
+--       only emits lines standing under an EXECUTED instrument, so a client on a
+--       legacy project, or on a commercial project whose lines are selected but
+--       not yet authorized, would have opened a shipped app to an EMPTY list.
+--       That is a regression with no client release behind it and no flag to
+--       turn off — a migration is not revertible by a flag.
+--     · The Making v1 (`single-pane`, live) gates on origin === 'commercial',
+--       which the head never emits, so restoring it would have revealed prices
+--       on a surface whose flag does not gate this read.
+--   So the payload moves to its own function. Nothing that reads
+--   get_client_project_selections today sees any change from 00565, and the
+--   client portal's adapter is repointed at the new reader behind `threshold`.
+--
+-- ── Lineage of the payload get_client_project_threshold carries ────────────
+--   get_client_project_selections: 00422 → 00423 → 00433 → 00435 → 00439 → 00441
+--   (head, and it STAYS the head).
 --
 --   00422  introduced it: the client's read of what she actually authorized.
 --   00423  added the trade branch and the full client payload — origin, kind,
@@ -39,20 +60,19 @@
 --          design_disposition = 'selected'. What it withdrew were 00433's LIVE,
 --          UNSIGNED working-row prices — money the client had not agreed to and
 --          that moves under her — not 00423's signed snapshot. That distinction
---          is why this file restores the snapshot prices and leaves the live
+--          is why the new reader carries the snapshot prices and leaves the live
 --          working-row prices withdrawn.
 --   00441  head. Renamed 'status' to 'logisticsStatus' and fixed the ORDER BY to
 --          (room.sort_order NULLS FIRST, item.sort_order, item.created_at,
---          item.id). No payload rationale of its own.
+--          item.id). It emits id/threadId/name/category/assignmentScope/roomId/
+--          roomName/quantity/productId/logisticsStatus and nothing else, which
+--          is why apps/client-portal/src/lib/commercial-documents.ts defaults
+--          origin to 'legacy' and every selection-derived region of the client's
+--          page goes dark. UNCHANGED by this file.
 --
---   The head therefore emits id/threadId/name/category/assignmentScope/roomId/
---   roomName/quantity/productId/logisticsStatus and nothing else, so
---   apps/client-portal/src/lib/commercial-documents.ts defaults origin to
---   'legacy' and every selection-derived region of the client's page goes dark.
---
---   00565 restores 00423's CLIENT-FACING payload and keeps every later
---   hardening that is not about that payload:
---     · the head's authorization preamble (00441), verbatim;
+--   get_client_project_threshold carries 00423's CLIENT-FACING payload and every
+--   later hardening that is not about that payload:
+--     · 00441's authorization preamble, verbatim;
 --     · 'logisticsStatus' as the key name (00441);
 --     · the ORDER BY (00441);
 --     · the LEFT JOIN products for imageUrl (00435);
@@ -64,8 +84,13 @@
 --       REPLACED. A signed-then-superseded line would otherwise stand on the
 --       page beside the line that replaced it.
 --     · projectId / projectName, so nothing the head emitted is lost.
---   Four deliberate departures from the head, each narrow:
---     · One ADDITIVE key beyond 00423: updatedAt, on both branches. It is
+--   Four deliberate departures from 00423 and the head, each narrow:
+--     · allowance.resolvedCents is snapshot-only. 00423 resolved it off the LIVE
+--       schedule line, the one path on which the client would still have been
+--       handed an unsigned working-row figure. An allowance is RESOLVED here when
+--       a later EXECUTED authorization snapshots the same live line as 'fixed',
+--       and the resolved figure is that snapshot's own client_line_total_cents.
+--     · One ADDITIVE key: updatedAt, on both branches. It is
 --       GREATEST(project_ffe_items.updated_at,
 --       project_ffe_items.last_status_change_at, <instrument>.executed_at) —
 --       the live line's own edit stamp, the logistics stamp that
@@ -74,40 +99,22 @@
 --       is null only when a line carries none of the three, which cannot happen
 --       on either branch (updated_at is NOT NULL and executed_at is joined
 --       NOT NULL). It exists so the client's page can say what has moved since
---       she last looked without a second read. It is a TIME, not money: the
---       trade cost / vendor / markup rule is untouched.
---     · jsonb_strip_nulls is NOT carried over. The client page's derivations and
---       its tests read a stable key set; an absent key and a null one are not
---       the same contract. Emitting an explicit null discloses nothing.
+--       she last looked without a second read. It is a TIME, not money.
+--     · No jsonb_strip_nulls. The client page's derivations and its tests read a
+--       stable key set; an absent key and a null one are not the same contract.
+--       Emitting an explicit null discloses nothing.
 --     · The trade branch emits the SAME key set as the furnishings branch rather
 --       than 00423's narrower ten, so one shape serves both and the page needs no
 --       per-kind adapter. The added keys are threadId, category, assignmentScope,
 --       quantity, productId, imageUrl, docCode, and explicit nulls for
 --       clientUnitPriceCents and allowance. None carries the studio's side of the
 --       money.
---     · The function is marked STABLE. 00423 was STABLE; 00441's head carried no
---       volatility marker and so defaulted to VOLATILE. STABLE is correct for a
---       read-only projection and lets the planner hoist it.
 --   NEVER returned, at any depth: trade_price_cents, trade_unit_cost_cents,
 --   markup_percent, vendor identity, purchase orders, bids, and no live,
---   unsigned project_ffe_items money on ANY path — allowance.resolvedCents
---   included (see 1d). Enforced by supabase/tests/rls/project_notes_test.sql §7
---   and supabase/tests/ffe/release_security_test.sql.
---
---   Two existing SQL tests asserted the 00439 contract this reverses and are
---   RE-CONTRACTED to 00565 in the same commit as this file, not silenced:
---     · supabase/tests/ffe/release_security_test.sql — was "curated selection
---       projection must omit price"; now asserts the projection exposes ONLY
---       lines under an executed instrument, that the emitted price is the frozen
---       furnishing_authorization_items client figure and not the live
---       project_ffe_items working row (its fixture signs one line at a
---       deliberately different figure to make that observable), and that no key
---       matches trade|cost|markup|vendor at any depth — tradeJourney exempt by
---       name, being 00423's money-free progress vocabulary.
---     · supabase/tests/ffe/domain_and_placement_test.sql — was "curated client
---       reader must remain available" asserting a non-empty list for a fixture
---       carrying no commercial documents; now asserts that same fixture reads
---       origin 'legacy' with an empty selections array and does not error.
+--   unsigned project_ffe_items money on ANY path. Enforced by
+--   supabase/tests/rls/project_notes_test.sql §7 and
+--   supabase/tests/ffe/release_security_test.sql, both of which also keep their
+--   assertions about the UNCHANGED get_client_project_selections.
 --
 -- Reuses, never redefines: public.is_studio_comember (head body 00556).
 -- Policy-only predicates live in app_private (precedent 00467).
@@ -118,7 +125,7 @@
 -- because project_parties.party_kind admits 'vendor' and 'gc' — a sub the studio
 -- would never hand its private prose to. Nothing else in this file wanted the
 -- party read: the reading mark and mark_project_read follow the same predicate,
--- and get_client_project_selections keeps 00441's preamble, which never admitted
+-- and get_client_project_threshold takes 00441's preamble, which never admitted
 -- parties either.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql
@@ -432,11 +439,12 @@ COMMENT ON FUNCTION public.mark_project_read(uuid) IS
   'Stamps the caller''s reading mark on a project and returns the PREVIOUS stamp (NULL on a first visit). Refuses anyone who is neither the project''s client nor a member of its studio.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 1d. public.get_client_project_selections — the restored client payload
+-- 1d. public.get_client_project_threshold — The Client Page's own reader
 --     (see the lineage block at the top of this file)
+--     public.get_client_project_selections is NOT redefined here: iOS reads it.
 -- ═══════════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE FUNCTION public.get_client_project_selections(p_project_id uuid)
+CREATE OR REPLACE FUNCTION public.get_client_project_threshold(p_project_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
@@ -605,13 +613,13 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid)
+REVOKE ALL ON FUNCTION public.get_client_project_threshold(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid)
+GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid)
   TO authenticated, service_role;
 
-COMMENT ON FUNCTION public.get_client_project_selections(uuid) IS
-  'Client-safe read of what a client authorized on a project: furnishings snapshot lines (kind furnishings, money from the signed furnishing_authorization_items snapshot) and trade scope presence lines (kind trade, with tradeJourney). Trade cost, vendor cost, markup, purchase-order fields and bids never appear. 00423 payload restored in 00565 over 00441''s preamble, key names and ordering.';
+COMMENT ON FUNCTION public.get_client_project_threshold(uuid) IS
+  'The Client Page''s reader: what a client authorized on a project — furnishings snapshot lines (kind furnishings, money from the signed furnishing_authorization_items snapshot) and trade scope presence lines (kind trade, with tradeJourney). Trade cost, vendor cost, markup, purchase-order fields and bids never appear, and no live unsigned project_ffe_items money on any path. Carries 00423''s client-facing payload over 00441''s authorization preamble, key names and ordering. public.get_client_project_selections is deliberately NOT redefined by 00565 — the iOS Patina app reads it and must not narrow.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 1e. The plan key reads rooms in order

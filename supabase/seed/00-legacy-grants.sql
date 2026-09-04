@@ -12964,12 +12964,12 @@ END $g$;
 
 -- 00565_the_client_page.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC, anon, authenticated, service_role;
+  REVOKE ALL ON FUNCTION public.get_client_project_threshold(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00565_the_client_page.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated, service_role;
+  GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
