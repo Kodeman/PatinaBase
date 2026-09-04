@@ -186,3 +186,6 @@ eslint exit: 0
   (all `surfaceKey="the_threshold"`, `regionKey="doorstep"`). Any PostHog insight on the old key
   stops receiving events.
 - **Shared-file merge risk**, listed above: the three removed imports in `threshold.tsx`.
+- **Pre-push hook printed `Affected verification has advisory failures.`** on `git push` (the push
+  succeeded). It runs the repo-wide affected build/type/lint sweep, which is noisy on `main` too; the
+  three lane gates above are green. Not diagnosed further in this lane.
