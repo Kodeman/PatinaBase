@@ -31,6 +31,7 @@ jest.mock('next/link', () => ({
 
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
+  useDirectOrders: jest.fn(),
   useProjectInvoices: jest.fn(),
   useClientSafeProposals: jest.fn(),
   useClientSafeProposalBundle: jest.fn(),
@@ -84,6 +85,7 @@ import {
   useCreateDecisionComment,
   useDecisionComments,
   useDecisionRealtime,
+  useDirectOrders,
   useMarkProjectRead,
   usePreviousReadingMark,
   useRespondProjectApproval,
@@ -111,6 +113,7 @@ const invoicesMock = useProjectInvoices as jest.Mock;
 const proposalsMock = useClientSafeProposals as jest.Mock;
 const roomsMock = useProjectRooms as jest.Mock;
 const notesMock = useProjectNotes as jest.Mock;
+const ordersMock = useDirectOrders as jest.Mock;
 const partiesMock = useProjectParties as jest.Mock;
 const teamMock = useProjectTeamMembers as jest.Mock;
 const identityMock = useStudioIdentity as jest.Mock;
@@ -332,6 +335,7 @@ beforeEach(() => {
     settled({ origin: 'commercial', selections: [CREDENZA, PAINTWORK] }),
   );
   invoicesMock.mockReturnValue(settled([INVOICE]));
+  ordersMock.mockReturnValue(settled([]));
   roomsMock.mockReturnValue(settled(ROOMS));
   notesMock.mockReturnValue(settled([NOTE]));
   planMock.mockReturnValue(

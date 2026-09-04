@@ -276,8 +276,20 @@ async function loadInvoicePayable(
     lineItemName: label,
     existingSessionId: invoice.stripe_checkout_session_id,
     metadata: { payable_type: 'invoice', invoice_id: invoice.id },
-    successUrl: `${CLIENT_PORTAL_URL}/invoices/${invoice.id}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${CLIENT_PORTAL_URL}/invoices/${invoice.id}?checkout=cancelled`,
+    // Back to the project page the client pays from — the letterbox reads
+    // ?checkout= there and states the outcome in place. `invoice` names which
+    // one settled; no fragment, because the attempt params are appended after
+    // this string (invoice-checkout-core.ts) and a fragment would swallow them.
+    //
+    // ⚠ DEPLOY ORDER — this function must NOT ship before the flagless client
+    // portal. `/projects/[projectId]` renders the Threshold only behind the
+    // `threshold` PostHog flag and is fail-closed, so a client outside the
+    // flag would land on the old project dashboard, which reads no
+    // `?checkout=` at all: no receipt, no cancellation notice, the till's
+    // params left on the address. Gate this deploy on the lane that removes
+    // the flag (client-page-completion L8) plus the portal deploy.
+    successUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=cancelled`,
     processingDetail:
       'A bank transfer for this invoice is already processing. Bank transfers take 3–5 business days to clear.',
     async onStaleSession(sessionId: string) {
@@ -510,6 +522,21 @@ interface DirectOrderRow {
 }
 
 /**
+ * Where Checkout hands a direct-order buyer back: her project, else the list.
+ *
+ * ⚠ Same deploy gate as the invoice successUrl above (flagless portal first).
+ * stripe-webhook's own emails still link `/orders?order=<id>` and
+ * `/invoices/<id>` on purpose: those addresses must keep working for mail
+ * already sent, so the retirement plan owns them as redirects rather than this
+ * change set repointing them.
+ */
+function directOrderReturnBase(order: DirectOrderRow): string {
+  return order.project_id
+    ? `${CLIENT_PORTAL_URL}/projects/${order.project_id}?order=${order.id}`
+    : `${CLIENT_PORTAL_URL}/orders?order=${order.id}`;
+}
+
+/**
  * Read fulfillment_config direct_orders.tax_shipping_enabled (00540). The I/O
  * half; parseTaxShippingConfig owns the shape and the fail-closed rule.
  */
@@ -654,8 +681,11 @@ async function loadDirectOrderPayable(
       clientEmail: (buyer as { email?: string | null } | null)?.email ?? null,
       designerClientId,
     }),
-    successUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}&checkout=success`,
-    cancelUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}&checkout=cancelled`,
+    // The road on the order's own project page reads ?checkout= there. An
+    // order raised without a project has no house to return to and keeps the
+    // orders list.
+    successUrl: `${directOrderReturnBase(order)}&checkout=success`,
+    cancelUrl: `${directOrderReturnBase(order)}&checkout=cancelled`,
     processingDetail:
       'A bank transfer for this order is already processing. Bank transfers take 3–5 business days to clear.',
     // Nothing to fail — the pointer lives on this row and is overwritten when a

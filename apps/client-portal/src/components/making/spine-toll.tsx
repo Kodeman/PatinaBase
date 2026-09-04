@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import { invoiceBalanceCents } from '@patina/shared';
 
 import { parseSpineDate } from './making-spine';
@@ -50,6 +52,18 @@ export interface SpineTollProps {
   today?: Date;
   /** Fired when the client takes the act — the caller reports `tollFollowed`. */
   onFollow?: () => void;
+  /**
+   * Settling IN PLACE. Given, the act stops being a way out of the page and
+   * becomes the act itself; withheld, the toll keeps its outbound link to the
+   * invoice — which is what The Making still passes.
+   */
+  settle?: {
+    onSettle: () => void;
+    pending?: boolean;
+    disabled?: boolean;
+  };
+  /** Laid in between the figures and the act — the way she would like to pay. */
+  children?: ReactNode;
 }
 
 /** "due August 15", and the year too, once it is not this year. */
@@ -69,6 +83,8 @@ export function SpineToll({
   dueDate,
   today,
   onFollow,
+  settle,
+  children,
 }: SpineTollProps) {
   // Derived, never passed in: the balance a client is asked to settle must be
   // the same arithmetic the ledger runs. `invoiceBalanceCents` floors at zero,
@@ -104,13 +120,26 @@ export function SpineToll({
         <Figure label="Balance" cents={balanceCents} emphasis />
       </dl>
 
+      {children}
+
       <div className="mt-3">
+        {/* One act, two ways out of it: in place when the caller settles here,
+            and the invoice's own page when it does not. `onFollow` reports the
+            toll either way. */}
         <ScoredAction
           actionKey="toll_settle"
           regionKey="toll"
           variant="primary"
-          href={`/invoices/${invoiceId}`}
-          onClick={onFollow}
+          {...(settle
+            ? {
+                loading: settle.pending,
+                disabled: settle.disabled,
+                onClick: () => {
+                  onFollow?.();
+                  settle.onSettle();
+                },
+              }
+            : { href: `/invoices/${invoiceId}`, onClick: onFollow })}
         >
           Settle the balance
         </ScoredAction>

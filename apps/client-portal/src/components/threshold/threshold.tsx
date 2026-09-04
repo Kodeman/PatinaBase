@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
 import {
+  useDirectOrders,
   useMarkProjectRead,
   usePreviousReadingMark,
   useProjectInvoices,
@@ -41,6 +42,7 @@ import {
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
+import { toClosedOrders, toRoadOrders } from '@/lib/threshold/road-orders';
 import {
   keySentence,
   previouslyLine,
@@ -209,6 +211,7 @@ export function Threshold({
   const identityQuery = useStudioIdentity({ projectId });
   const teamQuery = useProjectTeamMembers(projectId);
   const partiesQuery = useProjectParties(projectId);
+  const ordersQuery = useDirectOrders();
   useProjectNotesRealtime(projectId);
   // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
   // effect depending on the object would re-run every render for the ref-guard
@@ -586,8 +589,32 @@ export function Threshold({
   );
 
   const ledger = <HouseLedger ledger={model.ledger} today={today} />;
-  const letterbox = <Letterbox invoice={model.letterbox} today={today} />;
-  const road = model.road.length > 0 ? <TheRoad pieces={model.road} /> : null;
+  const letterbox = (
+    <Letterbox
+      invoice={model.letterbox}
+      invoices={invoicesQuery.data ?? []}
+      designerName={studioName}
+      onRefetch={invoicesQuery.refetch}
+      today={today}
+    />
+  );
+  // direct_orders is client-wide and unfiltered, and most clients have no rows
+  // in it — it decides what the ROAD says, not what the house says, so it
+  // gates the road alone rather than the whole page's first paint. The road
+  // holds until it settles, so the count never rewrites itself.
+  const ordersSettled = !ordersQuery.isPending;
+  const roadOrders = ordersSettled ? toRoadOrders(ordersQuery.data, projectId) : [];
+  const closedOrders = ordersSettled ? toClosedOrders(ordersQuery.data, projectId) : [];
+  const road =
+    ordersSettled && (model.road.length > 0 || roadOrders.length > 0 || closedOrders.length > 0) ? (
+      <TheRoad
+        pieces={model.road}
+        orders={roadOrders}
+        closedOrders={closedOrders}
+        onOrdersRefetch={ordersQuery.refetch}
+        today={today}
+      />
+    ) : null;
   const note = (
     <TheNote
       note={model.note}
