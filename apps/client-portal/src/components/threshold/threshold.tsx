@@ -45,6 +45,7 @@ import { keySentence, previouslyLine, thresholdStanding } from '@/lib/threshold/
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
 import { KIND_LABEL } from './consent-copy';
+import { DetailsSheet } from './details-sheet';
 import { DoorGate, type DoorProposal } from './door-gate';
 import { Doorplate } from './doorplate';
 import { Doorstep } from './doorstep';
@@ -259,6 +260,7 @@ export function Threshold({
   const previousMark = usePreviousReadingMark(projectId);
 
   const [sinceActive, setSinceActive] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const today = useMemo(
     () => (hydrated ? new Date() : undefined),
@@ -601,7 +603,12 @@ export function Threshold({
   ];
 
   const mat = (
-    <Mat people={people} papers={papers} accountHref="/account" onSignOut={() => void signOut()} />
+    <Mat
+      people={people}
+      papers={papers}
+      onOpenDetails={() => setDetailsOpen((open) => !open)}
+      onSignOut={() => void signOut()}
+    />
   );
 
   const ledger = <HouseLedger ledger={model.ledger} />;
@@ -757,6 +764,7 @@ export function Threshold({
       <SinceYesterday active={sinceActive} changed={model.changed}>
         {body}
       </SinceYesterday>
+      <DetailsSheet open={detailsOpen} onClose={() => setDetailsOpen(false)} />
     </div>
   );
 }

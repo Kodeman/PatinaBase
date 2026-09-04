@@ -36,7 +36,8 @@ export interface MatPaper {
 export interface MatProps {
   people: MatPerson[];
   papers: MatPaper[];
-  accountHref: '/account';
+  /** Opens the details sheet in place (L7 absorbs /account — never a route). */
+  onOpenDetails: () => void;
   onSignOut: () => void;
 }
 
@@ -63,7 +64,7 @@ function Paper({ paper }: { paper: MatPaper }) {
   return <span className={LINE_CLASS}>{paper.label}</span>;
 }
 
-export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
+export function Mat({ people, papers, onOpenDetails, onSignOut }: MatProps) {
   return (
     <section
       id="mat"
@@ -110,7 +111,7 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
               regionKey="mat"
               surfaceKey="the_threshold"
               variant="tertiary"
-              href={accountHref}
+              onClick={onOpenDetails}
             >
               Your details
             </ScoredAction>

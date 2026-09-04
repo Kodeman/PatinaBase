@@ -14,7 +14,7 @@ function mat(overrides: Partial<MatProps> = {}): MatProps {
       { label: 'Invoice No. 4', onOpen: jest.fn() },
       { label: 'The design set' },
     ],
-    accountHref: '/account',
+    onOpenDetails: jest.fn(),
     onSignOut: jest.fn(),
     ...overrides,
   };
@@ -90,14 +90,14 @@ describe('Mat — the people, the papers, and the way out', () => {
     expect(within(screen.getByTestId('mat-papers')).getAllByText('Change order')).toHaveLength(2);
   });
 
-  it('keeps a way to her own details, named once', () => {
-    render(<Mat {...mat()} />);
+  it('keeps a way to her own details, named once, opened in place', async () => {
+    const onOpenDetails = jest.fn();
+    render(<Mat {...mat({ onOpenDetails })} />);
 
     expect(screen.getAllByText('Your details')).toHaveLength(1);
-    expect(screen.getByRole('link', { name: /your details/i })).toHaveAttribute(
-      'href',
-      '/account',
-    );
+    const yourDetails = screen.getByRole('button', { name: /your details/i });
+    await userEvent.click(yourDetails);
+    expect(onOpenDetails).toHaveBeenCalledTimes(1);
   });
 
   it('offers the way out, and takes it', async () => {
