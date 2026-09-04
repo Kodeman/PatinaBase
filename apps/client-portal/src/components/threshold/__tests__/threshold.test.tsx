@@ -67,6 +67,14 @@ jest.mock('@/hooks/use-auth', () => ({
   useAuth: jest.fn(),
 }));
 
+// The door's other four answers (read in full / ask / request a change /
+// decline) are their own component with their own suite — door-acts.test.tsx.
+// Stubbed here so this file's boundary stays the wiring it is about.
+jest.mock('../door-acts', () => ({
+  __esModule: true,
+  DoorActs: () => null,
+}));
+
 jest.mock('@/lib/analytics/events', () => ({
   __esModule: true,
   clientEvents: { projectView: jest.fn() },

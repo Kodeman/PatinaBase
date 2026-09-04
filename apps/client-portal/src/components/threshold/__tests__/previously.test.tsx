@@ -2,6 +2,16 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { PreviouslyEntry } from '@/lib/threshold/derive';
 
+// A signed instrument unfolds into the same reading the door offers. That
+// component has its own suite (instrument-reading.test.tsx); here it is a
+// witness that the line reaches it with the right paper.
+jest.mock('../instrument-reading', () => ({
+  __esModule: true,
+  InstrumentReading: ({ proposalId }: { proposalId: string }) => (
+    <div data-testid="instrument-reading-stub">{proposalId}</div>
+  ),
+}));
+
 import { Previously } from '../previously';
 
 const ENTRIES: PreviouslyEntry[] = [
@@ -96,6 +106,64 @@ describe('Previously', () => {
 
     fireEvent.click(control);
     expect(screen.queryByTestId('previously-body')).not.toBeInTheDocument();
+  });
+
+  it('unfolds a signed instrument into the paper itself, however short its line', () => {
+    const signed: PreviouslyEntry = {
+      id: 'instrument:prop-7',
+      kind: 'instrument',
+      label: 'Furnishings authorization · No. 7',
+      date: new Date('2026-08-05T12:00:00Z'),
+      state: 'signed',
+    };
+
+    render(<Previously entries={[signed]} />);
+
+    const control = screen.getByRole('button');
+    expect(control).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(control);
+
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('instrument-reading-stub')).toHaveTextContent('prop-7');
+
+    fireEvent.click(control);
+    expect(screen.queryByTestId('instrument-reading-stub')).not.toBeInTheDocument();
+  });
+
+  it('keeps a cut instrument line’s own words above the reading it unfolds into', () => {
+    const signed: PreviouslyEntry = {
+      id: 'instrument:prop-7',
+      kind: 'instrument',
+      label: 'Furnishings authorization · Library, lounge and the upstairs landing, in full',
+      date: new Date('2026-08-05T12:00:00Z'),
+      state: 'signed',
+    };
+
+    render(<Previously entries={[signed]} />);
+    fireEvent.click(screen.getByRole('button'));
+
+    // The unfold used to be for the words the line could not hold; the reading
+    // is what it gained, not what it replaced.
+    const body = screen.getByTestId('previously-body');
+    expect(body).toHaveTextContent('Furnishings authorization · Library, lounge and the upstairs landing, in full');
+    expect(within(body).getByTestId('instrument-reading-stub')).toHaveTextContent('prop-7');
+  });
+
+  it('falls back to the label unfold when an instrument line carries no paper id', () => {
+    const odd: PreviouslyEntry = {
+      id: 'instrument-prop-7',
+      kind: 'instrument',
+      label: 'Furnishings authorization · Library, lounge and the upstairs landing, in full',
+      date: new Date('2026-08-05T12:00:00Z'),
+      state: 'signed',
+    };
+
+    render(<Previously entries={[odd]} />);
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(screen.getByTestId('previously-body')).toHaveTextContent('Furnishings authorization · Library, lounge and the upstairs landing, in full');
+    expect(screen.queryByTestId('instrument-reading-stub')).not.toBeInTheDocument();
   });
 
   it('renders nothing when there is no history to read', () => {
