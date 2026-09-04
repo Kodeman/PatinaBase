@@ -14775,7 +14775,7 @@
    "L1-E"
   ],
   "status": "open",
-  "openReason": "code half done, apply owed. 00559 is written, proven red→green in a rolled-back local transaction, and its RLS test is green on the local stack — but it is NOT applied to Strata (a Kody-run step, runbook §K) and the app path is unproven: the finding needs a designer in two active studios, which the fixture does not create, and completing a signature would have mutated the shared fixture. ⚠ the file must be renumbered off 00559 before it meets main (see the wave report §8)"
+  "openReason": "code half done, apply owed. 00563 (renumbered off 00559 at pre-merge, 2026-09-03, because main took 00559) is written, proven red→green in a rolled-back local transaction, and its RLS test is green on the local stack — but it is NOT applied to Strata (a Kody-run step, runbook §K) and the app path is unproven: the finding needs a designer in two active studios, which the fixture does not create, and completing a signature would have mutated the shared fixture."
  },
  {
   "id": "L07-02",

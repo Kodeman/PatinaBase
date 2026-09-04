@@ -16,7 +16,7 @@ on this page**; every value is a literal or a variable assigned at the top of it
 | | | |
 |---|---|---|
 | ☐ | **W1 is merged to `main`** and you are archiving from a `main` checkout | `first-flight/w1-integration` tip `08397a7d21441baee0c0ea634f75e68fd410f2d8`. It has **no remote**; Fable merges it |
-| ☐ | **The 00559 renumber is settled** | `main` already holds a different `00559`, plus `00560` and `00561`. L1-X's `00559_proposal_signing_multi_studio.sql` must become **`00563`**, with its RLS test. `00562` is free and needs nothing. `KODY-RUNBOOK-W1.md` §K1 |
+| ☑ | **The 00559 renumber is settled** | Done on the branch by the W1 steward. `main` holds a different `00559`, plus `00560` and `00561`; L1-X's file is now **`00563_proposal_signing_multi_studio.sql`** with its RLS test at `supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql`. `00562` was free and is unchanged. `KODY-RUNBOOK-W1.md` §K1 |
 | ☐ | **W0 blocks A–J are done** | `build/waves/w0/KODY-RUNBOOK.md`. §D (the demo account) gates Step 5's review notes; §G gates Steps 1, 5 and 7; §H is the flag payload |
 | ☐ | **W1 block L is done** | `KODY-RUNBOOK-W1.md` §L — 00562. Without it the notification bell can never reach zero for a tester, and `D-07` will fail on a real device |
 | ☐ | **The lane worktrees and simulator clones are retired** | six `ff-w1-l1*` clones plus three `ff-w1-walk-*`; `scripts/repo-gc.sh` sweeps stragglers |

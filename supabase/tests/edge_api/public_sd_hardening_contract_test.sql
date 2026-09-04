@@ -1701,7 +1701,7 @@ VALUES
     ARRAY[]::text[]
   ),
   (
-    -- 00559 rewrote the studio-discovery branch (00511's hash was
+    -- 00563 rewrote the studio-discovery branch (00511's hash was
     -- 8113ca8a0b99edcce6220e97983ddf1f71576d099f5e3311044c571027929a02).
     -- Everything this file pins about the function is unchanged: still
     -- SECURITY INVOKER, still no direct grants, and the canonical
@@ -1709,7 +1709,7 @@ VALUES
     -- untouched — the new branch takes no lock.
     'public.set_project_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '8aca199be7f059b37c7b0148d39a4b38e0a725f77cb0aa4e939730712ca050f8',
+    'b81c185e313072b20ab573858ce9a8e1506d927bcb39a586568c1b2ddccaadb0',
     ARRAY[]::text[]
   ),
   (

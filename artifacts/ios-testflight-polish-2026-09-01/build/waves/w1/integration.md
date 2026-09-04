@@ -230,6 +230,15 @@ is empty in both directions. **L1-X's own test is green:**
 > **`00559_first_document_opened.sql`** — a different peer session's file at the same number as L1-X's
 > `00559_proposal_signing_multi_studio.sql`. The reset above replayed **this branch's** 00559. One of
 > the two has to be renumbered before either lands on `main`.
+>
+> ✅ **SETTLED 2026-09-03 by the pre-merge steward.** `main` won the number. L1-X's file and its RLS
+> test were renumbered to **`00563_proposal_signing_multi_studio.sql`** /
+> `supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql` before `main` was merged in.
+> Every `00559` in this section is the pre-renumber record and is left as it was measured; the file
+> on disk today is `00563`. `00562` was free on `main` and is unchanged. The one in-body comment
+> that names the migration number moved too, so the `set_project_studio_id()` body hash pinned by
+> `supabase/tests/edge_api/public_sd_hardening_contract_test.sql` and by `KODY-RUNBOOK-W1.md` §K5 is
+> now `b81c185e313072b20ab573858ce9a8e1506d927bcb39a586568c1b2ddccaadb0`.
 
 ---
 
@@ -302,7 +311,8 @@ starts cold.
    rows closed at integration". The closer owns that edit.
 3. **`SettingsView` still ships one Title-Case string the deck does not name** — nothing; the alert was
    the last one and it is applied. Recorded so the next reader does not go looking.
-4. **The 00559 collision** in §5. It has to be settled before this branch or the peer's meets `main`.
+4. **The 00559 collision** in §5 — **settled 2026-09-03**: L1-X's file is now `00563`, the peer's
+   `00559` on `main` is untouched, and `main` has been merged into this branch.
 5. **Nothing was pushed and nothing production was touched.** No `db push`, no `functions deploy`, no
    portal deploy, no remote write of any kind. The only database this session wrote to is
    `127.0.0.1:54322`.

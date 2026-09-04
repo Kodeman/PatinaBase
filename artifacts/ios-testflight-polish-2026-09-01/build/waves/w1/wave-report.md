@@ -236,7 +236,7 @@ device row **D-10**.
 |---|---|
 | Merge | `2beb09278`, second parent `0058771ec` = the branch tip |
 | Commits | 2 non-merge |
-| Tests added | `supabase/tests/rls/00559_proposal_signing_multi_studio.test.sql` — green, and 00559 is the applied head on the local stack |
+| Tests added | `supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql` (filed as `00559` in-wave; renumbered at pre-merge — see §8.2) — green, and the migration is in the applied head on the local stack |
 | Findings | **0 closed · 1 open** of 1 |
 
 `L07-01` is closed *at the level this lane can reach*: the migration is written, proven red→green in
@@ -425,13 +425,19 @@ round trip on hardware.
    tip carries **revision 5** and a hand-applied equivalent of `0720ff55a` (`A→E-5`, in `2b82b47c1`).
    Whoever lands W1 on `main` should diff revision 6 against revision 5 before discarding the branch.
 
-2. **The 00559 collision is now a three-way problem, and it must be settled before this branch meets
-   `main`.** `main` carries `00559_first_document_opened.sql`, `00560_invite_handoff_note.sql` and
-   `00561_onboarding_drip_state_triggers.sql` from a peer session. This branch carries
+2. **The 00559 collision — ✅ SETTLED 2026-09-03 by the pre-merge steward.** `main` carries
+   `00559_first_document_opened.sql`, `00560_invite_handoff_note.sql` and
+   `00561_onboarding_drip_state_triggers.sql` from a peer session. This branch carried
    `00559_proposal_signing_multi_studio.sql` (L1-X) and `00562_notification_log_owner_opened.sql`
-   (fix round 2). **`00562` is free on `main`; `00559` is not.** L1-X's file must be renumbered —
-   `00563` is the next free number — and its ledger row, its RLS test filename and the runbook step
-   renumbered with it. `00562` needs no change.
+   (fix round 2). **`00562` was free on `main`; `00559` was not.** L1-X's file is now
+   **`00563_proposal_signing_multi_studio.sql`**, with its RLS test at
+   `supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql`, its banner and lineage
+   (`00317 → 00511 → 00563`) and `KODY-RUNBOOK-W1.md` §K renumbered with it. `00562` needed no
+   change and got none. Because the migration number also appears in one comment *inside* the
+   `set_project_studio_id()` body, the body hash pinned by
+   `supabase/tests/edge_api/public_sd_hardening_contract_test.sql` moved to
+   `b81c185e313072b20ab573858ce9a8e1506d927bcb39a586568c1b2ddccaadb0` and was updated there and in
+   the runbook's §K5 expectation.
 
 3. **`PROGRAM.md` §11.6 / `findings-by-lane.md` said L1-A 27/27.** Corrected in §3 above and in
    PROGRAM.md §12.
@@ -444,7 +450,8 @@ round trip on hardware.
 ## 9. Kody-run items
 
 Every one is in **[`KODY-RUNBOOK-W1.md`](KODY-RUNBOOK-W1.md)**, in the order it must run: **K** apply
-`00559` (renumbered) after `00555`/`00557`, with its read-only probe before and after · **L** apply
+`00563` (L1-X's, renumbered from `00559`) after `00555`/`00557`, with its read-only probe before and
+after · **L** apply
 `00562`, without which the notification bell can never clear for a real person · **M** the read-only
 verification probes both blocks share. W0's runbook blocks **A–J** are unchanged and still gate
 these; W1 produced no new PostHog and no new App Store Connect step — those stay at W0 §G and §H.

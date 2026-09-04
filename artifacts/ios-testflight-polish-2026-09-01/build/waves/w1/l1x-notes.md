@@ -6,6 +6,17 @@ Lane **L1-X** (PROGRAM.md §3 calls it W1 · L0.2), branch `first-flight/w1-l1x`
 No Swift, no simulator, no clone. **Nothing in this file authorises a production write.** §3 is the
 Kody-run block.
 
+> **Renumbered at pre-merge, 2026-09-03.** This lane minted the migration as `00559`. `main` had
+> meanwhile taken `00559` (`00559_first_document_opened.sql`), `00560` and `00561` from a peer
+> session, so the W1 integration steward renumbered L1-X's file and its RLS test to **`00563`**
+> before merging `main` in. **Every number in this file has been rewritten to `00563`**, including
+> the quoted `psql` transcripts — those runs printed `00559` when they were made; re-running them
+> today prints `00563`, because the number lives in the files' own `RAISE NOTICE` text. The one
+> in-body comment that names the number moved too, so the pinned `set_project_studio_id()` body hash
+> is now `b81c185e313072b20ab573858ce9a8e1506d927bcb39a586568c1b2ddccaadb0` (was
+> `8aca199be7f0…`), updated in `public_sd_hardening_contract_test.sql` and in the runbook.
+> `00562_notification_log_owner_opened.sql` was free on `main` and is unchanged.
+
 **Notes addressed TO this lane: none.** `build/waves/w1/*-notes.md` held `l1-a-notes.md`,
 `l1-b-notes.md` and `l1-c-notes.md` at start; none of the three mentions L1-X, L0.2 or `L07-01`
 (`grep -n "L1-X\|L0.2\|L07-01"` returned nothing across all three). `build/waves/w1/l1-e-copy-deck.md`
@@ -19,35 +30,35 @@ changes no message text, and the sheet copy the client sees (`ProposalSignError`
 
 | File | State |
 |---|---|
-| `supabase/migrations/00559_proposal_signing_multi_studio.sql` | new, **not applied anywhere** |
-| `supabase/tests/rls/00559_proposal_signing_multi_studio.test.sql` | new |
+| `supabase/migrations/00563_proposal_signing_multi_studio.sql` | new, **not applied anywhere** |
+| `supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql` | new |
 | `supabase/tests/edge_api/public_sd_hardening_contract_test.sql` | one pinned body hash updated |
 
 Commits: `ea85416db` (the failing test), `0058771ec` (the migration + the hash).
 
 **Number.** Repo head in both this worktree and the main checkout is `00557`; `00558`
 (`feedback_bug_reports_github`) is a peer session's, applied to the shared local DB but present in no
-first-flight branch. **00559 was free and is taken.** Re-check before applying: `ls
+first-flight branch. **00563 was free and is taken.** Re-check before applying: `ls
 supabase/migrations/*.sql | sort -V | tail -5` and `supabase migration list`.
 
 ---
 
 ## 2. Notes I am sending
 
-### N1 → **the steward / Fable** · both changed test files are RED until 00559 is applied
+### N1 → **the steward / Fable** · both changed test files are RED until 00563 is applied
 
 This is expected and it is not a regression. Neither file can pass against a database that does not
-carry 00559:
+carry 00563:
 
 ```
-psql … -f supabase/tests/rls/00559_proposal_signing_multi_studio.test.sql
+psql … -f supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql
   → exit 3, ERROR: studio_id_not_designer_studio   (the defect, still live)
 
 psql … -f supabase/tests/edge_api/public_sd_hardening_contract_test.sql
   → exit 3, ERROR: a public 00511 identity, semantic profile, or body hash drifted
 ```
 
-Both go green on the wave's `pnpm supabase:reset` at integration, which replays 00559. Until then, a
+Both go green on the wave's `pnpm supabase:reset` at integration, which replays 00563. Until then, a
 lane that runs `bash scripts/run-sql-tests.sh` will see two unexpected failures with those names.
 **Do not add either file to `supabase/tests/KNOWN_FAILURES.md`** — they are not known failures, they
 are ahead of the database. Proof that they pass *with* the migration is in §4 below.
@@ -83,7 +94,7 @@ INSERT INTO public.projects (designer_id, created_by, name, status) VALUES (…s
   → P0001 studio_id_not_designer_studio
 ```
 
-00559 leaves that path exactly as 00511 wrote it (the fix is gated on a proposal-backed INSERT), and
+00563 leaves that path exactly as 00511 wrote it (the fix is gated on a proposal-backed INSERT), and
 section 5 of the new test **pins** it as still failing closed. It is outside `L07-01` and outside W1's
 scope; it wants its own finding if Fable wants it fixed. Related and equally out of scope: because
 discovery fails closed, **every seeded project for that designer carries `studio_id = NULL`**, which
@@ -118,11 +129,11 @@ ORDER BY active_design_studios DESC, p.email;
 ```
 
 **How to read it.** Any row with `active_design_studios >= 2` is a designer whose clients cannot sign
-a proposal today. If Leah's row reads `1`, `L07-01` is latent for round one and 00559 is a
+a proposal today. If Leah's row reads `1`, `L07-01` is latent for round one and 00563 is a
 scheduled repair rather than a build-1 blocker. If it reads `2` or more, it blocks build 1 for that
-studio and 00559 must go to Strata before the invites, or the defect must be named in What to Test.
+studio and 00563 must go to Strata before the invites, or the defect must be named in What to Test.
 
-A **second read-only probe** worth running in the same session, because 00559 also stops leaving
+A **second read-only probe** worth running in the same session, because 00563 also stops leaving
 `studio_id` NULL — it says how many rows the ambiguity has already stranded:
 
 ```sql
@@ -132,7 +143,7 @@ FROM public.projects
 WHERE studio_id IS NULL;
 ```
 
-00559 does **not** backfill those rows; it only stops new ones being created. A backfill would be a
+00563 does **not** backfill those rows; it only stops new ones being created. A backfill would be a
 separate, deliberate migration.
 
 ### The apply — selective `psql`, after 00555 and 00557, never `supabase db push`
@@ -141,22 +152,22 @@ separate, deliberate migration.
 already opens itself, then write the ledger row.
 
 ```bash
-# 1. Confirm 00555 and 00557 are already on Strata and 00559 is not.
-psql "$STRATA_DB_URL" -X -At -c "SELECT version FROM supabase_migrations.schema_migrations WHERE version IN ('00555','00556','00557','00558','00559') ORDER BY version;"
+# 1. Confirm 00555 and 00557 are already on Strata and 00563 is not.
+psql "$STRATA_DB_URL" -X -At -c "SELECT version FROM supabase_migrations.schema_migrations WHERE version IN ('00555','00556','00557','00558','00563') ORDER BY version;"
 
 # 2. Read the live body hash BEFORE, so the apply can be proved by the object and not the ledger.
 psql "$STRATA_DB_URL" -X -At -c "SELECT encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex') FROM pg_proc WHERE oid='public.set_project_studio_id()'::regprocedure;"
 #    expect 8113ca8a0b99edcce6220e97983ddf1f71576d099f5e3311044c571027929a02 (00511's body)
 
 # 3. Apply the one file. It carries its own BEGIN/COMMIT and its own preflight.
-psql "$STRATA_DB_URL" -X -v ON_ERROR_STOP=1 -f supabase/migrations/00559_proposal_signing_multi_studio.sql
+psql "$STRATA_DB_URL" -X -v ON_ERROR_STOP=1 -f supabase/migrations/00563_proposal_signing_multi_studio.sql
 
 # 4. Prove it by the object, not the ledger.
 psql "$STRATA_DB_URL" -X -At -c "SELECT encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex') FROM pg_proc WHERE oid='public.set_project_studio_id()'::regprocedure;"
-#    expect 8aca199be7f059b37c7b0148d39a4b38e0a725f77cb0aa4e939730712ca050f8
+#    expect b81c185e313072b20ab573858ce9a8e1506d927bcb39a586568c1b2ddccaadb0
 
 # 5. Ledger row, so a later `db push` does not replay it.
-psql "$STRATA_DB_URL" -X -v ON_ERROR_STOP=1 -c "INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('00559','proposal_signing_multi_studio') ON CONFLICT (version) DO NOTHING;"
+psql "$STRATA_DB_URL" -X -v ON_ERROR_STOP=1 -c "INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('00563','proposal_signing_multi_studio') ON CONFLICT (version) DO NOTHING;"
 ```
 
 `$STRATA_DB_URL` is the Strata connection string Kody already uses for selective applies (the same one
@@ -164,7 +175,7 @@ psql "$STRATA_DB_URL" -X -v ON_ERROR_STOP=1 -c "INSERT INTO supabase_migrations.
 
 ### K2 — after the apply, the same probe again, plus one behavioural check
 
-Re-run **J1/K1** unchanged. The count itself will not change — 00559 does not move anyone between
+Re-run **J1/K1** unchanged. The count itself will not change — 00563 does not move anyone between
 studios; it makes the count irrelevant to signing. The real confirmation is behavioural and belongs to
 the device pass: **have a tester sign the demo proposal and watch the sheet reach the signed state.**
 A real signature on production is not a probe, so this is a walk step, not a SQL step.
@@ -173,15 +184,15 @@ A real signature on production is not a probe, so this is a walk step, not a SQL
 
 ## 4. The local proof, without a reset
 
-`pnpm supabase:reset` is the steward's at integration and this lane does not own it, so 00559 was
+`pnpm supabase:reset` is the steward's at integration and this lane does not own it, so 00563 was
 never committed to the shared local database. Instead each proof applied the migration inside a
 transaction and rolled it back.
 
 **Red, before the fix** — the new test against the current schema:
 
 ```
-psql … -X -q -v ON_ERROR_STOP=1 -f supabase/tests/rls/00559_proposal_signing_multi_studio.test.sql
-NOTICE:  00559 fixture: 3 candidate studios
+psql … -X -q -v ON_ERROR_STOP=1 -f supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql
+NOTICE:  00563 fixture: 3 candidate studios
 ERROR:  studio_id_not_designer_studio
 CONTEXT:  PL/pgSQL function set_project_studio_id() line 211 at RAISE
           SQL statement "INSERT INTO projects ( … )"
@@ -195,38 +206,38 @@ EXIT=3
 **Green, with the fix applied transaction-locally and rolled back:**
 
 ```
---- applying 00559 (transaction-local) ---
---- running 00559 test ---
-NOTICE:  00559 fixture: 3 candidate studios
-NOTICE:  00559 section 1+2 passed: project ac0db74d-36c0-464d-b044-ebdd7b3cd2a4 stamped studio a6ea1eed-08df-4e79-9744-b9b9ad3de4da
-NOTICE:  00559 section 3 passed: relationship studio 59000000-0000-4000-8000-000000000001 chosen over a6ea1eed-08df-4e79-9744-b9b9ad3de4da
-NOTICE:  00559 section 4 passed: studio_id_not_designer_studio still raised
-NOTICE:  00559 section 5a passed: direct INSERT still fails closed
-NOTICE:  00559 section 5b passed: the branch names both gates
+--- applying 00563 (transaction-local) ---
+--- running 00563 test ---
+NOTICE:  00563 fixture: 3 candidate studios
+NOTICE:  00563 section 1+2 passed: project ac0db74d-36c0-464d-b044-ebdd7b3cd2a4 stamped studio a6ea1eed-08df-4e79-9744-b9b9ad3de4da
+NOTICE:  00563 section 3 passed: relationship studio 59000000-0000-4000-8000-000000000001 chosen over a6ea1eed-08df-4e79-9744-b9b9ad3de4da
+NOTICE:  00563 section 4 passed: studio_id_not_designer_studio still raised
+NOTICE:  00563 section 5a passed: direct INSERT still fails closed
+NOTICE:  00563 section 5b passed: the branch names both gates
 --- rolling back ---
 EXIT=0
 ```
 
 **Neighbours** — every other SQL test that names `studio_id_not_designer_studio` or
-`set_project_studio_id`, each run twice (untouched database, then with 00559 applied in-transaction):
+`set_project_studio_id`, each run twice (untouched database, then with 00563 applied in-transaction):
 
 ```
-supabase/tests/document/proposal_phase_authority_atomicity_test.sql baseline=0 with00559=0
-supabase/tests/billing/invoice_checkout_integrity_test.sql          baseline=0 with00559=0
-supabase/tests/rls/00555_ios_round_one_security.test.sql            baseline=0 with00559=0
-supabase/tests/security/extension_execute_authenticated_test.sql    baseline=0 with00559=0
-supabase/tests/edge_api/public_sd_hardening_contract_test.sql       baseline=0 with00559=0 (after the hash update)
+supabase/tests/document/proposal_phase_authority_atomicity_test.sql baseline=0 with00563=0
+supabase/tests/billing/invoice_checkout_integrity_test.sql          baseline=0 with00563=0
+supabase/tests/rls/00555_ios_round_one_security.test.sql            baseline=0 with00563=0
+supabase/tests/security/extension_execute_authenticated_test.sql    baseline=0 with00563=0
+supabase/tests/edge_api/public_sd_hardening_contract_test.sql       baseline=0 with00563=0 (after the hash update)
 ```
 
 The contract test is the one that had to move: it pins `set_project_studio_id`'s body sha256, and the
 body changed. Nothing else it pins moved — still `SECURITY INVOKER`, still no direct EXECUTE for any
-app role, still the canonical `roles → user_roles → memberships → organization` lock order (00559 adds
+app role, still the canonical `roles → user_roles → memberships → organization` lock order (00563 adds
 no lock).
 
-**What was NOT run:** `bash scripts/run-sql-tests.sh` over the whole tree with 00559 applied. It
+**What was NOT run:** `bash scripts/run-sql-tests.sh` over the whole tree with 00563 applied. It
 cannot be — each file is a separate `psql` invocation, so a transaction-local apply cannot span them,
-and committing 00559 to the shared local database is the steward's reset, not this lane's.
-`pnpm db:generate` was also not run and does not need to be: 00559 adds no public function and no
+and committing 00563 to the shared local database is the steward's reset, not this lane's.
+`pnpm db:generate` was also not run and does not need to be: 00563 adds no public function and no
 column, and trigger functions are not emitted into `packages/supabase/src/database.types.ts`
 (`grep -c set_project_studio_id` there is 0).
 

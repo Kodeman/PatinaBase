@@ -4243,7 +4243,7 @@ W2 by lane after the twenty arrivals: L0.1 9 · **L0.2 4** *(+`W1-B-03`)* · L0.
 | gate | state at W1 close |
 |---|---|
 | **G1** It archives and uploads | **Partial, and the untested half is the whole point of R1 Step 2.** `ios-gate.sh release` is green on every tip this wave produced, and the W0 merge tip was product-inspected: `CFBundleVersion 3` on app **and** appex, `MinimumOSVersion 26.0`, `UIDeviceFamily [1]`, `ITSAppUsesNonExemptEncryption false`, both privacy manifests present. **`archive`, the export, and the `aps-environment` rewrite are unproven** — they need an authenticated Xcode account and are R1 Steps 2 and 3 |
-| **G2** Production carries the contract the binary calls | **Weaker than at W0 close, deliberately.** The binary now calls two objects Strata does not have: the `notification_log` UPDATE policy (**00562**) and the multi-studio signing repair (**00559 → 00563**). Both are written, both replay clean locally, both are Kody's — runbook **§L** and **§K**. Until §L runs, a tester's bell can never reach zero on production, and that was walked three times |
+| **G2** Production carries the contract the binary calls | **Weaker than at W0 close, deliberately.** The binary now calls two objects Strata does not have: the `notification_log` UPDATE policy (**00562**) and the multi-studio signing repair (**00563**, renumbered from `00559`). Both are written, both replay clean locally, both are Kody's — runbook **§L** and **§K**. Until §L runs, a tester's bell can never reach zero on production, and that was walked three times |
 | **G3** Three exposures closed, and The Document still works | **Unchanged by W1.** W0's, gated on runbook §A → §B. No W1 lane touched a portal read path |
 | **G4** The first screen and the first sign-in cannot fail | **The wave's strongest result.** Eighteen L1-A rows closed and walked, including all three blockers: `A3-06` (Google is gone from the tree, not just from the screen), `P-29` (measured to the third decimal in both directions — a root error now costs zero layout shift and a sheet error never reaches the root) and `A-101` (walked on glass, and it names the retention period). Plus `P-20`, `P-22`, `C1-37`, `P-30`, `C9-08`, `C3-06`, `C1-30`, `C5-04`, `A-05`, `P-18`, `B-12`, `C1-14`, `B-13`, `B-21`. **Two things G4 still needs and W1 could not give it:** a working demo credential (`A3-16` — runbook §D, then R1 `D-04`) and the Apple path's `profiles.role` (`A3-07` — R1 `D-02`) |
 | **G5a** The daily Studio surfaces do not lie | **Evidenced, with one hole.** `R-01`, `R-02`, `R-03`, `C4-03`, `C4-12`, `C1-19`, `A-81`, `R-05` all closed and walked offline: an offline cold launch keeps the record, the designer seat and a `Last updated …` line, proven at t≈4 s, t≈35 s and after the fetch failed; the Studio's failure state no longer prints "Nothing needs your attention right now." above its own error card. **The hole is the cold-launch staleness line** (`L07-05` / `W1-B-16`), which R1 `D-16` will meet |
@@ -4279,12 +4279,15 @@ In order. The release chain itself is [`R1-READINESS.md`](waves/w1/R1-READINESS.
 today's values, build number **3**, and the four ASC ids resolved
 (`INTERNAL 71f90727-fc35-4499-824a-3794c06095de`, `EXTERNAL 2231934a-d514-4f96-aae1-1745561f9353`).
 
-1. **A repo decision before anything else: the `00559` renumber.** `main` carries
+1. ~~**A repo decision before anything else: the `00559` renumber.**~~ **✅ DONE on the branch,
+   2026-09-03, by the pre-merge steward — nothing for Kody here.** `main` carries
    `00559_first_document_opened.sql`, `00560_invite_handoff_note.sql` and
-   `00561_onboarding_drip_state_triggers.sql` from a peer session. This branch carries a **different**
-   `00559` (L1-X's proposal-signing repair) and `00562`. **`00562` is free on `main`; `00559` is not.**
-   L1-X's file becomes **`00563`**, with its RLS test and this runbook's step numbers. That is a code
-   change on the branch, not a production write.
+   `00561_onboarding_drip_state_triggers.sql` from a peer session. This branch carried a **different**
+   `00559` (L1-X's proposal-signing repair) and `00562`. **`00562` was free on `main`; `00559` was
+   not.** L1-X's file is now **`00563_proposal_signing_multi_studio.sql`**, with its RLS test at
+   `supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql` and the runbook's step numbers
+   moved with it; `main` has since been merged into the branch. That was a code change on the branch,
+   not a production write.
 2. **Runbook §L — apply `00562`.** This one blocks build 1: without it a tester's notification bell can
    never reach zero, because the app's PATCH answers `200` with an empty array. Verify by the objects
    (a new UPDATE policy, and `authenticated` holding UPDATE on **exactly** `opened_at`, `clicked_at`,

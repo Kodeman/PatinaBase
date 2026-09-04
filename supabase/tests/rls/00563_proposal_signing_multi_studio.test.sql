@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00559 — signing a proposal resolves a studio instead of counting memberships
+-- 00563 — signing a proposal resolves a studio instead of counting memberships
 --
 -- NOTE ON STYLE: supabase/tests/** is not pgTAP. Every file in that tree is a
 -- plain psql script — BEGIN, fixtures, pg_temp role-assumption helpers, DO
@@ -9,7 +9,7 @@
 -- Run (single file, for iteration):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
 --     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/rls/00559_proposal_signing_multi_studio.test.sql
+--     -f supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql
 --
 -- Run (the actual gate — whole suite against KNOWN_FAILURES.md):
 --   bash scripts/run-sql-tests.sh
@@ -19,7 +19,7 @@
 -- proposal b0000000-…-0002 in status 'sent'). The test adds ONE extra active
 -- design studio and a non-owner active membership in it, so the designer is
 -- unambiguously in two or more active studios — the exact state that made
--- sign_proposal raise `studio_id_not_designer_studio` before 00559 (L07-01).
+-- sign_proposal raise `studio_id_not_designer_studio` before 00563 (L07-01).
 -- Every section runs inside a SAVEPOINT and the file ROLLBACKs.
 --
 -- Covers:
@@ -150,7 +150,7 @@ BEGIN
   ASSERT n >= 2,
     'FIXTURE: the designer must be in two or more active studios or nothing '
     'below is the L07-01 case; got ' || n;
-  RAISE NOTICE '00559 fixture: % candidate studios', n;
+  RAISE NOTICE '00563 fixture: % candidate studios', n;
 END $$;
 
 -- ─── 1 + 2. the signature lands, and the winner is 00317's order ───────────
@@ -199,7 +199,7 @@ BEGIN
     'order (owner first, earliest joined, organization_id last); expected '
       || v_expected || ' got ' || v_studio;
 
-  RAISE NOTICE '00559 section 1+2 passed: project % stamped studio %',
+  RAISE NOTICE '00563 section 1+2 passed: project % stamped studio %',
     v_project, v_studio;
 END $$;
 
@@ -248,7 +248,7 @@ BEGIN
     'project for this designer-client pair, expected 59000000-…-0001 got '
       || COALESCE(v_studio::text, '<null>');
 
-  RAISE NOTICE '00559 section 3 passed: relationship studio % chosen over %',
+  RAISE NOTICE '00563 section 3 passed: relationship studio % chosen over %',
     v_studio, v_last;
 END $$;
 
@@ -291,7 +291,7 @@ BEGIN
            WHERE id = 'b0000000-0000-0000-0000-000000000002'::uuid) = 'sent',
     'FAIL 4b: a failed activation must roll the signature back';
 
-  RAISE NOTICE '00559 section 4 passed: % still raised', v_message;
+  RAISE NOTICE '00563 section 4 passed: % still raised', v_message;
 END $$;
 
 ROLLBACK TO SAVEPOINT s_zero;
@@ -319,7 +319,7 @@ BEGIN
     'FAIL 5a: a direct authenticated INSERT carries no proposal and must keep '
     '00511''s fail-closed behaviour, got ' || COALESCE(v_message, 'no error');
 
-  RAISE NOTICE '00559 section 5a passed: direct INSERT still fails closed';
+  RAISE NOTICE '00563 section 5a passed: direct INSERT still fails closed';
 END $$;
 
 DO $$
@@ -331,13 +331,13 @@ BEGIN
    WHERE n.nspname = 'public' AND p.proname = 'set_project_studio_id';
 
   ASSERT v_src LIKE '%v_candidate_studio_count > 1%',
-    'FAIL 5b: the ambiguity branch is missing — 00559 was not applied';
+    'FAIL 5b: the ambiguity branch is missing — 00563 was not applied';
   ASSERT v_src LIKE '%NEW.proposal_id IS NOT NULL%'
      AND v_src LIKE '%app.proposal_activation_id%',
     'FAIL 5c: the ambiguity branch must stay gated on a proposal-backed INSERT '
     'inside the activation bridge';
 
-  RAISE NOTICE '00559 section 5b passed: the branch names both gates';
+  RAISE NOTICE '00563 section 5b passed: the branch names both gates';
 END $$;
 
 ROLLBACK TO SAVEPOINT s_confined;

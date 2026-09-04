@@ -61,24 +61,22 @@ Set `STRATA_DB_URL` before anything else in this block, and confirm it points wh
 psql "$STRATA_DB_URL" -X -At -c "select current_database(), current_user, inet_server_addr();"
 ```
 
-### K1 — ⚠ THE RENUMBER, WHICH IS A REPO STEP AND MUST HAPPEN FIRST
+### K1 — THE RENUMBER — ✅ ALREADY DONE ON THE BRANCH, NOTHING FOR YOU HERE
 
-`first-flight/w1-integration` carries **`supabase/migrations/00559_proposal_signing_multi_studio.sql`**.
-`main` already carries a **different** `00559` — `00559_first_document_opened.sql` — from a peer
-session, plus `00560_invite_handoff_note.sql` and `00561_onboarding_drip_state_triggers.sql`.
-
-**00562 is free on `main`. 00559 is not.** Before the branch meets `main`, L1-X's file is renumbered
-to the next free number, **00563**, together with its RLS test and this block's step numbers:
+`main` carries a **different** `00559` — `00559_first_document_opened.sql` — from a peer session, plus
+`00560_invite_handoff_note.sql` and `00561_onboarding_drip_state_triggers.sql`. **00562 was free on
+`main`; 00559 was not.** The W1 integration steward renumbered L1-X's file to the next free number,
+**00563**, together with its RLS test, before merging `main` into the branch:
 
 ```
 supabase/migrations/00559_proposal_signing_multi_studio.sql
-  → supabase/migrations/00563_proposal_signing_multi_studio.sql
+  → supabase/migrations/00563_proposal_signing_multi_studio.sql      ← done
 supabase/tests/rls/00559_proposal_signing_multi_studio.test.sql
-  → supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql
+  → supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql  ← done
 ```
 
-That is a code change on the branch, not a production write, and it belongs to whoever lands W1 on
-`main`. **This block reads the number off disk rather than assuming it**, so it is correct either way:
+That was a code change on the branch, not a production write. **This block still reads the number off
+disk rather than assuming it**, so run it as written and confirm it prints `00563`:
 
 ```bash
 cd "$REPO"
@@ -177,7 +175,7 @@ psql "$STRATA_DB_URL" -X -At -c "
 SELECT encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex')
 FROM pg_proc WHERE oid='public.set_project_studio_id()'::regprocedure;" \
   | tee "$APPLY_LOG/k5-prosrc-after.txt"
-# expect 8aca199be7f059b37c7b0148d39a4b38e0a725f77cb0aa4e939730712ca050f8
+# expect b81c185e313072b20ab573858ce9a8e1506d927bcb39a586568c1b2ddccaadb0
 
 # ledger row
 psql "$STRATA_DB_URL" -X -v ON_ERROR_STOP=1 -c \
@@ -196,7 +194,7 @@ the error and stop. Do not re-run K5 against a half-applied state; there is no s
 ### K7 — after the apply, the same probe again
 
 Re-run **K2** unchanged, into `k7-studio-probe-after.txt`. **The count itself will not change** —
-00559/00563 does not move anyone between studios; it makes the count irrelevant to signing. The real
+00563 does not move anyone between studios; it makes the count irrelevant to signing. The real
 confirmation is behavioural and belongs to the device pass: **have a tester sign the demo proposal and
 watch the sheet reach the signed state.** A real signature on production is not a probe, so that is a
 walk step, and it is R1 §6's row.
@@ -353,7 +351,7 @@ WHERE polrelid='public.notification_log'::regclass
 psql "$STRATA_DB_URL" -X -At -c "
 SELECT encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex')
 FROM pg_proc WHERE oid='public.set_project_studio_id()'::regprocedure;"
-# want 8aca199be7f059b37c7b0148d39a4b38e0a725f77cb0aa4e939730712ca050f8 after Block K
+# want b81c185e313072b20ab573858ce9a8e1506d927bcb39a586568c1b2ddccaadb0 after Block K
 ```
 
 ### M3 — the behavioural checks, which are walk steps and not SQL
@@ -389,5 +387,5 @@ at W1 close:
 
 - No `supabase db push`, no `supabase functions deploy`, no `wrangler deploy`, no `asc` write, no
   Sanity write, no PostHog change, no `execute_sql` against Strata.
-- No agent applied `00559`/`00563` or `00562` anywhere but `127.0.0.1:54322`.
+- No agent applied `00563` or `00562` anywhere but `127.0.0.1:54322`.
 - `first-flight/w1-integration` has **no remote** and nothing was pushed.

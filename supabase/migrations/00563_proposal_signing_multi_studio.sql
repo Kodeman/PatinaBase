@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00559 — Proposal signing must resolve a studio, not count memberships
+-- 00563 — Proposal signing must resolve a studio, not count memberships
 --
--- Lineage: set_project_studio_id 00317 → 00511 → 00559.
+-- Lineage: set_project_studio_id 00317 → 00511 → 00563.
 -- Reconciles: 00511's discovery narrowing, which reverted 00317's deterministic
 --             `_primary_studio_for` default to "exactly one candidate or NULL".
 --
@@ -73,7 +73,7 @@ BEGIN;
 DO $preflight$
 BEGIN
   IF to_regprocedure('public.set_project_studio_id()') IS NULL THEN
-    RAISE EXCEPTION '00559 requires public.set_project_studio_id() (00317/00511)';
+    RAISE EXCEPTION '00563 requires public.set_project_studio_id() (00317/00511)';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM pg_trigger
@@ -81,7 +81,7 @@ BEGIN
       AND tgname = 'set_project_studio_id'
       AND NOT tgisinternal
   ) THEN
-    RAISE EXCEPTION '00559 requires the set_project_studio_id trigger on public.projects';
+    RAISE EXCEPTION '00563 requires the set_project_studio_id trigger on public.projects';
   END IF;
 END
 $preflight$;
@@ -242,7 +242,7 @@ BEGIN
           AND current_setting('app.proposal_activation_id', true)
                 IS NOT DISTINCT FROM NEW.proposal_id::text
     THEN
-      -- 00559. Ambiguity used to fail closed here, which made a proposal
+      -- 00563. Ambiguity used to fail closed here, which made a proposal
       -- unsignable for every client of a designer in two active studios
       -- (L07-01). Inside the activation bridge the proposal names its own
       -- relationship, so resolve rather than refuse: same candidate set, so
@@ -452,7 +452,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.set_project_studio_id() IS
-  'Invoker trigger derives a missing studio only when the designer has a live designer-domain role and an active non-guest membership in an active design studio, then locks and revalidates the selected authority tuple; zero candidates fails closed, and ambiguity fails closed for every caller except a proposal-backed INSERT inside the exact app.proposal_activation_id bridge, where the studio is resolved from the proposal''s own designer-client relationship (a studio already hosting a project for that pair) and then the 00317 order — owner first, earliest joined, organization_id last (00559). Project id, created_at, and created_by are immutable on UPDATE. Every app/service tuple requires the locked current live lead and exact actor/capability rules; proposal authorship remains immutable history across the exact reassignment path. A true postgres/no-SET-ROLE fixture or owner-maintenance session returns only after best-effort derivation and UPDATE immutability checks.';
+  'Invoker trigger derives a missing studio only when the designer has a live designer-domain role and an active non-guest membership in an active design studio, then locks and revalidates the selected authority tuple; zero candidates fails closed, and ambiguity fails closed for every caller except a proposal-backed INSERT inside the exact app.proposal_activation_id bridge, where the studio is resolved from the proposal''s own designer-client relationship (a studio already hosting a project for that pair) and then the 00317 order — owner first, earliest joined, organization_id last (00563). Project id, created_at, and created_by are immutable on UPDATE. Every app/service tuple requires the locked current live lead and exact actor/capability rules; proposal authorship remains immutable history across the exact reassignment path. A true postgres/no-SET-ROLE fixture or owner-maintenance session returns only after best-effort derivation and UPDATE immutability checks.';
 
 -- Grant hygiene, asserted rather than re-granted. 00511 left this function
 -- with EXECUTE for its owner alone ({postgres=X/postgres}); a trigger function
@@ -472,7 +472,7 @@ BEGIN
 
   IF v_holders IS NOT NULL THEN
     RAISE EXCEPTION
-      '00559: public.set_project_studio_id() must hold no EXECUTE for app roles (00511 revoked it); found: %',
+      '00563: public.set_project_studio_id() must hold no EXECUTE for app roles (00511 revoked it); found: %',
       v_holders;
   END IF;
 END
