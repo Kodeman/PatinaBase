@@ -27,6 +27,7 @@ import {
   signLabelFor,
   summaryLineFor,
 } from './consent-copy';
+import { DoorActs } from './door-acts';
 
 /* ── THE DOOR ────────────────────────────────────────────────────────────────
    A paper waiting for the client's name is not a card in a list: it is a door
@@ -509,6 +510,14 @@ export function DoorGate({
                 </div>
               }
             />
+
+            {/* The other four answers the old /proposals/[id] page took, on
+                the leaf rather than at the end of a route. They stand only
+                while the paper is still asking: once it opens on her name the
+                leaf goes, and with it the acts. */}
+            {!signedAt && (
+              <DoorActs proposalId={proposal.id} projectId={projectId} kind={kind} />
+            )}
           </div>
         </div>
       )}

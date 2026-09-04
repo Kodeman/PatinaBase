@@ -18,6 +18,16 @@ jest.mock('@/hooks/use-commercial-client', () => ({
   invalidateSignedCommercialDocument: jest.fn().mockResolvedValue(undefined),
 }));
 
+// The other four answers live in their own file, with their own suite
+// (door-acts.test.tsx). Here they are a witness to the mount and to the leaf
+// taking them with it when the door opens.
+jest.mock('../door-acts', () => ({
+  __esModule: true,
+  DoorActs: ({ proposalId }: { proposalId: string }) => (
+    <div data-testid="door-acts-stub">{proposalId}</div>
+  ),
+}));
+
 jest.mock('@/lib/analytics/events', () => ({
   __esModule: true,
   proposalClientEvents: { signed: jest.fn() },
@@ -279,6 +289,22 @@ describe('DoorGate', () => {
       kind: 'furnishings_authorization',
     });
     expect(onSigned).toHaveBeenCalledTimes(1);
+  });
+
+  it('hangs the other four answers on the leaf while the paper is still asking', () => {
+    renderGate();
+    expect(screen.getByTestId('door-acts-stub')).toHaveTextContent('prop-7');
+  });
+
+  it('takes the acts away with the leaf once it opens on her name', async () => {
+    renderGate();
+    signWith();
+    await act(async () => {
+      fireEvent.click(signAction());
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('door-acts-stub')).not.toBeInTheDocument();
+    });
   });
 
   it('stops claiming never-dim once it has been signed', async () => {

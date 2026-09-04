@@ -2,6 +2,16 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { PreviouslyEntry } from '@/lib/threshold/derive';
 
+// A signed instrument unfolds into the same reading the door offers. That
+// component has its own suite (instrument-reading.test.tsx); here it is a
+// witness that the line reaches it with the right paper.
+jest.mock('../instrument-reading', () => ({
+  __esModule: true,
+  InstrumentReading: ({ proposalId }: { proposalId: string }) => (
+    <div data-testid="instrument-reading-stub">{proposalId}</div>
+  ),
+}));
+
 import { Previously } from '../previously';
 
 const ENTRIES: PreviouslyEntry[] = [
@@ -96,6 +106,29 @@ describe('Previously', () => {
 
     fireEvent.click(control);
     expect(screen.queryByTestId('previously-body')).not.toBeInTheDocument();
+  });
+
+  it('unfolds a signed instrument into the paper itself, however short its line', () => {
+    const signed: PreviouslyEntry = {
+      id: 'instrument:prop-7',
+      kind: 'instrument',
+      label: 'Furnishings authorization · No. 7',
+      date: new Date('2026-08-05T12:00:00Z'),
+      state: 'signed',
+    };
+
+    render(<Previously entries={[signed]} />);
+
+    const control = screen.getByRole('button');
+    expect(control).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(control);
+
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('instrument-reading-stub')).toHaveTextContent('prop-7');
+
+    fireEvent.click(control);
+    expect(screen.queryByTestId('instrument-reading-stub')).not.toBeInTheDocument();
   });
 
   it('renders nothing when there is no history to read', () => {

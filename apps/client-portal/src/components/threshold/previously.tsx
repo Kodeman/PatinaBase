@@ -4,6 +4,8 @@ import { useState } from 'react';
 
 import type { PreviouslyEntry, PreviouslyState } from '@/lib/threshold/derive';
 
+import { InstrumentReading } from './instrument-reading';
+
 /* ── PREVIOUSLY ──────────────────────────────────────────────────────────────
    The house's own back matter: one dated line per thing that has closed, ruled
    with a dotted leader out to the word for how it closed, and unfolding in
@@ -37,6 +39,20 @@ function isTruncated(label: string): boolean {
   return label.replace(/\s+/g, ' ').trim().length > ONE_LINE;
 }
 
+/**
+ * The signed instrument behind a receipt, when the line stands for one.
+ * `threshold.tsx` mints an instrument receipt's id as `instrument:<proposalId>`
+ * — the same id `deriveThreshold` carries through untouched — so the paper the
+ * client signed is one unfold away from its own line, read here in full rather
+ * than at the end of the retired `/proposals/[id]` route.
+ */
+const INSTRUMENT_ID = /^instrument:(.+)$/;
+
+function instrumentProposalId(entry: PreviouslyEntry): string | null {
+  if (entry.kind !== 'instrument') return null;
+  return INSTRUMENT_ID.exec(entry.id)?.[1] ?? null;
+}
+
 export interface PreviouslyProps {
   entries: PreviouslyEntry[];
 }
@@ -65,7 +81,8 @@ export function Previously({ entries }: PreviouslyProps) {
         {entries.map((entry) => {
           const open = openId === entry.id;
           const bodyId = `previously-body-${entry.id}`;
-          const foldable = isTruncated(entry.label);
+          const proposalId = instrumentProposalId(entry);
+          const foldable = isTruncated(entry.label) || proposalId !== null;
 
           const line = (
             <>
@@ -113,14 +130,20 @@ export function Previously({ entries }: PreviouslyProps) {
                 <p className="flex min-h-[44px] w-full items-baseline gap-3 py-3">{line}</p>
               )}
               <div id={bodyId}>
-                {foldable && open && (
-                  <p
-                    data-testid="previously-body"
-                    className="max-w-[56ch] pb-4 text-[15px] leading-relaxed text-[var(--text-body)]"
-                  >
-                    {entry.label}
-                  </p>
-                )}
+                {foldable &&
+                  open &&
+                  (proposalId ? (
+                    <div data-testid="previously-body" className="pb-4">
+                      <InstrumentReading proposalId={proposalId} />
+                    </div>
+                  ) : (
+                    <p
+                      data-testid="previously-body"
+                      className="max-w-[56ch] pb-4 text-[15px] leading-relaxed text-[var(--text-body)]"
+                    >
+                      {entry.label}
+                    </p>
+                  ))}
               </div>
             </li>
           );
