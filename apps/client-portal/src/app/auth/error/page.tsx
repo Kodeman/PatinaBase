@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { PortalAuthNotice } from '@patina/design-system/PortalAuth';
 import { ClientAuthShell } from '@/components/auth/ClientAuthShell';
@@ -42,12 +43,12 @@ function AuthErrorContent() {
           >
             Try signing in again
           </a>
-          <a
-            href="/projects"
+          <Link
+            href="/"
             className="inline-flex min-h-11 items-center underline underline-offset-4"
           >
-            Go to your projects
-          </a>
+            Go to your house
+          </Link>
         </div>
       </div>
     </ClientAuthShell>

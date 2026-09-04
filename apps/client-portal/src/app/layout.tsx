@@ -4,8 +4,6 @@ import { Inter, Playfair_Display, DM_Mono } from 'next/font/google';
 
 import { Providers } from './providers';
 import { AppChrome } from '@/components/layout/app-chrome';
-import { ThresholdRouteCollapse } from '@/components/threshold/threshold-route-collapse';
-import { fetchClientProjects } from '@/lib/data/projects';
 import './globals.css';
 
 const inter = Inter({
@@ -48,13 +46,12 @@ const bodyClassName = `${inter.variable} ${playfair.variable} ${dmMono.variable}
 const supabaseOriginRuntime =
   process.env.SUPABASE_ORIGIN_RUNTIME || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 
-export default async function RootLayout({ children }: RootLayoutProps) {
-  // Fetched once for the whole app so the global header/switcher is available
-  // on every authenticated page. Returns [] with no session (RLS) or on error,
-  // so public/auth routes render fine; layouts are not re-run on client-side
-  // navigation, so this is cheaper than the old per-page fetch.
-  const projects = await fetchClientProjects().catch(() => []);
-
+// The layout fetches nothing. It used to read every project for the header's
+// switcher; the header is gone, the one page reads its own house, and the
+// fetch ran `auth.getUser()` + a projects select + counts on EVERY request —
+// the token and guest routes (/share, /field, /rfq, /plans, /piece, /evidence)
+// included, where the answer is always [].
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" className="bg-[var(--bg-primary)]">
       <body className={bodyClassName}>
@@ -77,8 +74,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
         </Script>
         <Providers>
           <div className="min-h-screen bg-[var(--bg-primary)]">
-            <ThresholdRouteCollapse projectIds={projects.map((p) => p.id)} />
-            <AppChrome projects={projects}>{children}</AppChrome>
+            <AppChrome>{children}</AppChrome>
           </div>
         </Providers>
       </body>

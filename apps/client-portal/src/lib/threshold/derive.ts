@@ -19,11 +19,10 @@ import type { Invoice } from '@patina/supabase';
 import type { FFEStageKey } from '@patina/types';
 import { invoiceBalanceCents } from '@patina/shared';
 
-// The client Budget rollup owns which invoices count at all (drafts are
-// pre-issue, voids are cancelled). Imported rather than restated so the
-// threshold and /budget can never disagree about what is open; the module
-// lives under app/budget and stays there.
-import { computeInvoiceRollup, visibleInvoices } from '@/app/budget/rollup';
+// The ledger rollup owns which invoices count at all (drafts are pre-issue,
+// voids are cancelled). Imported rather than restated so the ledger and the
+// letterbox can never disagree about what is open.
+import { computeInvoiceRollup, visibleInvoices } from '@/lib/threshold/invoice-rollup';
 import { journeyStageIndexForStatus } from '@/components/commercial/journey-stepper';
 import type { ClientProjectSelections, ClientSelection } from '@/lib/commercial-documents';
 
@@ -105,6 +104,8 @@ export interface ThresholdInput {
   heldDrawCentsByProposalId?: Record<string, number> | null;
   /** When each selection last moved, keyed by selection id, where known. */
   selectionUpdatedAt?: Record<string, string> | null;
+  /** When each letter on the project's correspondence thread was sent. */
+  messageSentAts?: (string | null)[] | null;
 }
 
 // ── model ────────────────────────────────────────────────────────────────────
@@ -161,6 +162,14 @@ export interface HouseLedgerModel {
   owedCents: number | null;
   /** How many invoices that total is spread across. */
   owedInvoiceCount: number;
+  /** The soonest day the house owes on, off the first open invoice. */
+  owedDueDate: string | null;
+  /**
+   * How many of those open invoices actually carry a due date — the count the
+   * owed row's "first due" reads. Three open invoices of which one is dated
+   * has one day to name, not a first of three.
+   */
+  owedDatedCount: number;
   heldCents: number | null;
   awaitingCents: number;
   /** "The dining room stands about forty-nine hundred past its target." */
@@ -237,6 +246,12 @@ export function parseSourceDate(value: string | null | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+/** "19 June" — the house's date idiom, read the same way everywhere. */
+export const DAY_MONTH = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+});
+
 function parseMoment(value: string | null | undefined): number | null {
   return parseSourceDate(value)?.getTime() ?? null;
 }
@@ -264,7 +279,9 @@ function positive(cents: number | null | undefined): number | null {
   return typeof cents === 'number' && Number.isFinite(cents) && cents > 0 ? cents : null;
 }
 
-function toInvoiceModel(invoice: Invoice): InvoiceModel {
+/** The letterbox's own reading of a row. Exported so the letter a mailed
+ *  `/invoices/<id>` names can stand in the slot the model chose. */
+export function toInvoiceModel(invoice: Invoice): InvoiceModel {
   return {
     id: invoice.id,
     number: invoice.invoice_number,
@@ -481,6 +498,8 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     owedCents:
       openInvoices.length > 0 ? computeInvoiceRollup(openInvoices).outstandingCents : null,
     owedInvoiceCount: openInvoices.length,
+    owedDueDate: openInvoices[0]?.due_date ?? null,
+    owedDatedCount: openInvoices.filter((invoice) => !!invoice.due_date).length,
     heldCents: heldDraws
       ? [...heldInstruments].reduce((sum, proposalId) => sum + (heldDraws[proposalId] ?? 0), 0)
       : null,
@@ -538,6 +557,15 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   });
 
   if (previously.some((entry) => movedSinceMoment(entry.date?.getTime() ?? null))) {
+    changed.add('previously');
+  }
+
+  // A letter that arrived since her last reading ticks the record it is filed
+  // in, and the note she would answer it under — but only where a note is
+  // standing to be answered: the doorstep's count names regions the page
+  // actually prints, and an unprinted region is a mark she cannot find.
+  if ((input.messageSentAts ?? []).some((sentAt) => movedSince(sentAt))) {
+    if (standing) changed.add('note');
     changed.add('previously');
   }
 

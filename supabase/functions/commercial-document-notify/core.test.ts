@@ -43,7 +43,7 @@ Deno.test('working budget copy cannot imply purchasing authority', () => {
     documentKind: 'design_services',
     recipientName: 'Jamie Client',
     counterpartyName: 'Morgan Studio',
-    portalUrl: 'https://client.patina.cloud/budget',
+    portalUrl: 'https://client.patina.cloud/projects/project-1#ledger',
   });
 
   assertStringIncludes(email.html, 'does not authorize purchasing');
@@ -62,7 +62,7 @@ Deno.test('furnishings and deposit transitions remain distinct', () => {
     audience: 'client',
     documentTitle: 'Living Room Wave',
     documentKind: 'furnishings_authorization',
-    portalUrl: 'https://client.patina.cloud/invoices',
+    portalUrl: 'https://client.patina.cloud/projects/project-1#letterbox',
   });
 
   assert(!executed.html.includes('Complete the required deposit'));
@@ -130,7 +130,7 @@ Deno.test('trade draw ready copy mirrors deposit-ready payment framing', () => {
     audience: 'client',
     documentTitle: 'Kitchen Millwork',
     documentKind: 'trade_scope',
-    portalUrl: 'https://client.patina.cloud/invoices',
+    portalUrl: 'https://client.patina.cloud/projects/project-1#letterbox',
   });
 
   assertStringIncludes(email.subject, 'Draw invoice ready');

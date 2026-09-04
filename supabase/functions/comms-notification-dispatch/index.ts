@@ -22,6 +22,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { clientProjectLink } from "../_shared/client-portal-links.ts";
 import {
   signCommsMuteToken,
   buildMuteUrl,
@@ -198,7 +199,10 @@ serve(async (req) => {
     if (role === "designer" || role === "admin") {
       return `${designerHost}/people?thread=${msg.thread_id}`;
     }
-    return `${clientHost}/messages/${msg.thread_id}`;
+    // /messages/<threadId> never resolved on the client portal, and the route
+    // tree is retired regardless: a homeowner reads the studio's words in the
+    // note on her project page.
+    return clientProjectLink(clientHost, thread.project_id, "note");
   };
 
   // ─── 6. Enqueue notify() jobs ──────────────────────────────────────────

@@ -1,11 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { SpineToll } from '@/components/making/spine-toll';
-import { moneyInWords } from '@/components/making/standing-sentence';
-import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
+import type { Invoice } from '@patina/supabase';
+import { invoiceBalanceCents } from '@patina/shared';
+
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+import { clientEvents } from '@/lib/analytics/events';
+import {
+  revealReturnAnchor,
+  useCheckoutConfirmation,
+  useCheckoutReturn,
+  useNamedInvoice,
+} from '@/lib/threshold/checkout-return';
+import {
+  parseSourceDate,
+  toInvoiceModel,
+  type InvoiceModel,
+} from '@/lib/threshold/derive';
+
+import { EarlierInvoices } from './earlier-invoices';
+import { Settlement } from './settlement';
 
 /* ── The letterbox ──────────────────────────────────────────────────────────
    One letter, standing half out of the slot. The drawing states the fact
@@ -36,6 +52,16 @@ const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
 export interface LetterboxProps {
   /** The soonest-due open invoice, or null when nothing has come. */
   invoice: InvoiceModel | null;
+  /** Every invoice on the project — what is kept behind the one letter. */
+  invoices?: Invoice[];
+  /** Who a check would be coming to. Falls back to the invoice's own designer. */
+  designerName?: string | null;
+  /**
+   * Re-read the project's invoices. Polled while a return from the till is
+   * waiting for the webhook, and taken after a settle attempt that ended in a
+   * standing fact rather than a session.
+   */
+  onRefetch?: () => void | Promise<unknown>;
   /**
    * Today, for deciding whether the due date needs its year spelled out — the
    * rule `SpineToll` applies. Omitted during SSR and the first client paint,
@@ -86,12 +112,93 @@ function Drawing({ full }: { full: boolean }) {
   );
 }
 
-export function Letterbox({ invoice, today }: LetterboxProps) {
+export function Letterbox({
+  invoice: soonestDue,
+  invoices = [],
+  designerName,
+  onRefetch,
+  today,
+}: LetterboxProps) {
   const [open, setOpen] = useState(false);
+
+  // A mailed `/invoices/<id>` folds to `?invoice=<id>`, and the letter it
+  // names is the one the client came to read — not the soonest-due one the
+  // model would otherwise pick. An id this house is not holding names nothing
+  // and changes nothing: the slot never states a letter it has no row for.
+  const namedId = useNamedInvoice();
+  const namedRow = namedId ? (invoices.find((row) => row.id === namedId) ?? null) : null;
+  const invoice = namedRow ? toInvoiceModel(namedRow) : soonestDue;
   const due = invoice ? formatDue(invoice.dueDate, today) : null;
+
+  // The return from the till. A return that names an order belongs to the road,
+  // not to the letterbox — and a return naming a letter this house is not
+  // holding is not spoken to at all: the address is the client's to type, and
+  // the house states no payment fact it cannot see a row for.
+  const returned = useCheckoutReturn();
+  const returnedRow =
+    returned && !returned.orderId && returned.invoiceId
+      ? (invoices.find((row) => row.id === returned.invoiceId) ?? null)
+      : null;
+  const settlement = returnedRow ? returned : null;
+
+  // The row's own word, not the address's: `paid`, or nothing left to pay.
+  const rowSettled = Boolean(
+    returnedRow && (returnedRow.status === 'paid' || invoiceBalanceCents(returnedRow) <= 0),
+  );
+  const confirm = useCheckoutConfirmation(
+    settlement?.outcome === 'settled',
+    rowSettled,
+    onRefetch,
+  );
+
+  // client_payment_completed counts money that MOVED, so it waits for the row
+  // — an abandoned ACH debit must never be counted as revenue. A cancellation
+  // is reported on the return itself, with no amount: only exact attempt
+  // evidence is authoritative, and this surface has none.
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!settlement || reported.current || !settlement.invoiceId) return;
+    if (settlement.outcome === 'settled') {
+      if (confirm !== 'confirmed') return;
+      reported.current = true;
+      clientEvents.paymentCompleted({ invoiceId: settlement.invoiceId });
+      return;
+    }
+    reported.current = true;
+    clientEvents.paymentCancelled({ invoiceId: settlement.invoiceId });
+  }, [confirm, settlement]);
+
+  const slot = useRef<HTMLDivElement | null>(null);
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (!settlement || revealed.current) return;
+    revealed.current = true;
+    revealReturnAnchor(slot.current);
+  }, [settlement]);
+
+  // The letter the address named is unfolded and brought into view: she asked
+  // for this one by following a link about it, and the letterbox sits well
+  // below the first viewport.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!namedRow || opened.current) return;
+    opened.current = true;
+    setOpen(true);
+    revealReturnAnchor(slot.current);
+  }, [namedRow]);
+
+  // The row behind the model: the currency the figures are quoted in, and the
+  // designer a check would be made out to.
+  const row = invoice ? (invoices.find((candidate) => candidate.id === invoice.id) ?? null) : null;
+  const studio =
+    designerName?.trim() ||
+    row?.designer?.full_name?.trim() ||
+    row?.designer?.business_name?.trim() ||
+    'your designer';
 
   return (
     <div
+      ref={slot}
       id="letterbox"
       data-threshold-unit="letterbox"
       data-never-dim
@@ -101,6 +208,23 @@ export function Letterbox({ invoice, today }: LetterboxProps) {
       <p className="mb-2 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
         The letterbox
       </p>
+
+      {settlement && (
+        <p
+          role="status"
+          data-testid="letterbox-receipt"
+          data-confirm={confirm ?? undefined}
+          className="mb-2 max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {settlement.outcome !== 'settled'
+            ? 'Nothing changed.'
+            : confirm === 'confirmed'
+              ? `${returnedRow?.invoice_number ?? 'Your invoice'} · Payment confirmed — thank you. Your invoice has been updated.`
+              : confirm === 'unconfirmed'
+                ? 'Checkout returned, but Patina has not confirmed a payment yet. Do not submit another payment until the status is known.'
+                : 'Confirming payment… This usually takes a few seconds.'}
+        </p>
+      )}
 
       <Drawing full={invoice !== null} />
 
@@ -115,7 +239,7 @@ export function Letterbox({ invoice, today }: LetterboxProps) {
             )} paid. Balance ${moneyInWords(invoice.balanceCents)}${due ? `, due ${due}` : ''}.`}
           </p>
 
-          <div className="mt-3.5">
+          <div className="mt-3.5 flex flex-wrap items-baseline gap-x-4">
             <ScoredAction
               actionKey="letterbox_open"
               regionKey="letterbox"
@@ -126,6 +250,21 @@ export function Letterbox({ invoice, today }: LetterboxProps) {
               onClick={() => setOpen((was) => !was)}
             >
               {open ? 'Close the letterbox' : 'Open the letterbox'}
+            </ScoredAction>
+            {/* The letter in the slot keeps its printable sheet too: the line
+                items, the tax, the memo and the payments live on it, and the
+                one invoice being paid must not be the only one that cannot be
+                read in full. */}
+            <ScoredAction
+              actionKey="invoice_print"
+              regionKey="letterbox"
+              surfaceKey="the_threshold"
+              variant="tertiary"
+              href={`/invoices/${invoice.id}/print`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Print
             </ScoredAction>
           </div>
 
@@ -140,12 +279,17 @@ export function Letterbox({ invoice, today }: LetterboxProps) {
           >
             <div className="min-h-0">
               {open && (
-                <SpineToll
-                  invoiceId={invoice.id}
-                  invoiceNumber={invoice.number}
-                  totalCents={invoice.totalCents}
-                  paidCents={invoice.paidCents}
-                  dueDate={invoice.dueDate}
+                <Settlement
+                  invoice={invoice}
+                  currency={row?.currency || 'USD'}
+                  designerName={studio}
+                  // The old detail page refused a second attempt while a return
+                  // was still unconfirmed. Same rule, same reason.
+                  hold={
+                    settlement?.invoiceId === invoice.id &&
+                    (confirm === 'confirming' || confirm === 'unconfirmed')
+                  }
+                  onRefetch={onRefetch}
                   today={today}
                 />
               )}
@@ -160,6 +304,22 @@ export function Letterbox({ invoice, today }: LetterboxProps) {
           Nothing in the letterbox.
         </p>
       )}
+
+      {/* The letter taken to the till may be one of these, not the one in the
+          slot: the same refusal has to reach the line that carries its act, or
+          the client is invited to press an act the edge function will refuse. */}
+      <EarlierInvoices
+        invoices={invoices}
+        exceptId={invoice?.id ?? null}
+        designerName={studio}
+        heldInvoiceId={
+          confirm === 'confirming' || confirm === 'unconfirmed'
+            ? (settlement?.invoiceId ?? null)
+            : null
+        }
+        onRefetch={onRefetch}
+        today={today}
+      />
     </div>
   );
 }

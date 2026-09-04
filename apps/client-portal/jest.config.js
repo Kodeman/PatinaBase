@@ -65,7 +65,6 @@ const customJestConfig = {
     '!src/**/*.d.ts',
     '!src/**/*.stories.{ts,tsx}',
     '!src/app/layout.tsx',
-    '!src/app/page.tsx',
   ],
 
   // Coverage thresholds

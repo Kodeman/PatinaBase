@@ -38,7 +38,7 @@ export default function RootError({ error, reset }: RootErrorProps) {
             Try again
           </button>
           <Link
-            href="/projects"
+            href="/"
             className="inline-flex items-center justify-center rounded-[3px] border border-[var(--border-default)] px-5 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--text-primary)]"
           >
             Back to your projects

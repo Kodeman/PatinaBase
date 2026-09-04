@@ -18,6 +18,7 @@ import {
   resolveCommercialNotificationAudiences,
   type NotificationChannel,
 } from './lib.ts';
+import { clientProjectLink } from '../_shared/client-portal-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -372,13 +373,17 @@ Deno.serve(async (req: Request) => {
       results[audience] = { skipped: 'recipient_missing' };
       continue;
     }
+    // /budget and /invoices were list pages; both are sections of the client's
+    // project page now. /proposals/<id> stays put: the Patina iOS app claims
+    // `/proposals/*` in its applinks entitlement, and the portal's middleware
+    // folds it onto `#door` for everyone reading on the web.
     const portalUrl =
       audience === 'studio'
         ? `${DESIGNER_PORTAL_URL}/doc/${documentId}`
         : transition === 'budget_published'
-          ? `${CLIENT_PORTAL_URL}/budget`
+          ? clientProjectLink(CLIENT_PORTAL_URL, proposal.project_id, 'ledger')
           : transition === 'deposit_ready' || transition === 'trade_draw_ready'
-            ? `${CLIENT_PORTAL_URL}/invoices`
+            ? clientProjectLink(CLIENT_PORTAL_URL, proposal.project_id, 'letterbox')
             : `${CLIENT_PORTAL_URL}/proposals/${documentId}`;
     const signerName = transition === 'trade_scope_accepted'
       ? ((tradeScopeTermsRow as any)?.accepted_signed_name ?? proposal.signed_by_name)

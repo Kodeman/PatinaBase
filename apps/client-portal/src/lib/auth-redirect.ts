@@ -6,7 +6,9 @@ import {
   safeAuthReturnPath,
 } from '@patina/supabase/auth';
 
-export const CLIENT_AUTH_DESTINATION = '/projects';
+import { CLIENT_AUTH_DESTINATION } from './client-auth-destination';
+
+export { CLIENT_AUTH_DESTINATION };
 
 /** Keep every client auth method on the shared, encoded-open-redirect-safe policy. */
 export function resolveAuthReturnPath(raw: string | null | undefined): string {

@@ -1,8 +1,18 @@
 # The Client Page — two paths for the homeowner's page
 
-**Status: proposed, unruled — 3 September 2026.** No migration was minted, no
-component written, no route touched, no feature flag created. These files exist
-to earn a ruling, not to document one.
+**Status: shipped, no flag — 4 September 2026.** Path B · The Threshold is
+ruled and built. Kody's ruling of 2026-09-04 (`docs/design/the-document/DECISIONS.md`
+**R135**; `docs/vision/VISION-DECISIONS.md` **V8**) sent it to every client on
+the platform with no `threshold`/`single-pane` gate: the client portal's
+authenticated surface is now the single page this document proposed, not a
+proposal awaiting a decision. The delivery plans are
+`docs/superpowers/plans/2026-09-04-client-page-completion.md` (built the
+Threshold out to cover every act the old routes performed) and
+`docs/superpowers/plans/2026-09-04-client-portal-retirement.md` (deleted the
+old route tree, the header, and both flags once the Threshold covered them).
+The rest of this file is kept as written — the diagnosis and the two paths are
+still the record of how B was chosen over A — with the route map and instrument
+locations below describing what actually shipped.
 
 ## The ask
 
@@ -88,6 +98,53 @@ against the ranked surfaces.
 2. **Where the drawing comes from** — the room scans, the plan set, or a key the
    studio draws once per project? Generated, imported and authored are three
    different builds.
+
+## Shipped: the single-page route map
+
+`apps/client-portal`'s authenticated surface is one page per project, opened
+at `/` (the client's active project) or `/projects/[projectId]` (a named
+one). Every other address a client, an email, a cron job, iOS, or the
+extension might still hold redirects to an anchor on that page rather than
+rendering a route of its own — the full map lives in
+`apps/client-portal/README.md` and the redirect table in
+`docs/superpowers/plans/2026-09-04-client-portal-retirement.md`'s End state
+section; in short: approvals and design reviews land on `#doorstep`,
+proposals on `#door`, invoices on `#letterbox`, budget on `#ledger`,
+documents on `#mat-papers`, orders on `#road`, messages and inbox on `#note`,
+a named decision on its own ask (`#approval-<decisionId>`), room scans on
+`#doorstep`, and account/preferences/settings on `#mat`. Public, token,
+auth, and system routes (share links, the sign endpoints, the checkout
+return URL, `/preferences/unsubscribe`) are untouched — they were never part
+of the header's route tree and carry no anchor.
+
+## Shipped: where the instruments live
+
+Every act the old route tree performed now happens in place, inside
+`apps/client-portal/src/components/threshold/`. `threshold.tsx` composes the
+page from its instruments: `doorplate.tsx` (names the house),
+`doorstep.tsx`/`approval-ask.tsx`/`review-ask.tsx`/`scope-change-ask.tsx`
+(what's owed — approvals, design reviews, scope-change decisions),
+`door-gate.tsx`/`door-acts.tsx` (proposals — sign, ask a question, request
+changes, decline, read in full), `letterbox.tsx`/`earlier-invoices.tsx`/
+`payment-method-chooser.tsx`/`settlement.tsx` (money — settle the balance,
+prior invoices, the checkout return-URL reader), `the-road.tsx`/
+`road-orders.tsx` (pieces and direct orders), `the-note.tsx`/
+`correspondence.tsx` (the studio's note and the reply thread),
+`papers-sheet.tsx` (the plan set and executed instruments, a laid-in sheet
+overlay), `room-band.tsx`/`room-capture.tsx` (rooms as captured, with
+share/revoke), `house-ledger.tsx`/`story-pole.tsx` (the money standing and
+the phase), `previously.tsx`/`since-yesterday.tsx`/`instrument-reading.tsx`
+(the record of what's already settled), `mat.tsx`/`details-sheet.tsx`/
+`other-houses.tsx` (a client's own details, notification preferences, and —
+for a multi-project client — the other houses she can switch to), and
+`plan-key.tsx`/`wall-gate.tsx`/`ground-floor.tsx` (the section drawing and
+its gates). The six instruments Path B inherited from The Making v1 —
+`scored-action`, `spine-gate`, `spine-toll`, `tracking-row`,
+`standing-sentence`, `making-spine` — moved from `components/making/` to
+`components/threshold/instruments/`, imports updated, their tests kept
+green; `commercial/journey-stepper` stayed where it was. Nothing opens a new
+route: every one of these renders in place, unfolding, lifting, or laying a
+sheet over the page the client is already standing on.
 
 ## Lineage
 

@@ -11,10 +11,10 @@ import {
   countInWords,
   joinClauses,
   moneyInWords,
-} from '@/components/making/standing-sentence';
-import { TrackingRow } from '@/components/making/tracking-row';
+} from '@/components/threshold/instruments/standing-sentence';
+import { TrackingRow } from '@/components/threshold/instruments/tracking-row';
 import type { ClientSelection } from '@/lib/commercial-documents';
-import { parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
+import { DAY_MONTH, parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
 
 /* ── THE ROOM BAND ───────────────────────────────────────────────────────────
    One room of the house, read as a sheet from a drawing set: a lintel that
@@ -39,16 +39,16 @@ import { parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
 /** A piece has reached the house at this stop; before it, it is still coming. */
 const DELIVERED_STOP = journeyStageIndexForStatus('delivered');
 
-/** "19 June" — the deck's own date idiom. */
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
-
 // ── the drawing ──────────────────────────────────────────────────────────────
 
-/* A section, not a picture. Two lines carry the room — the floor everything
-   stands on and the wall it stands against — and every other stroke on the
-   sheet is a piece the client actually owns. The old drawing ruled a closed
-   rectangle, which on a room with one piece read as a large empty box; a
-   floor and a wall read as a room whatever is standing in it. */
+/* A section, not a picture. Four strokes carry the room — the floor everything
+   stands on, the two faces of the wall it stands against, and the head of the
+   door opening cut through them — plus the floor carried out through that
+   opening, dashed, because what lies beyond the door is not this room. Every
+   other stroke on the sheet is a piece the client actually owns. The old
+   drawing ruled a closed rectangle, which on a room with one piece read as a
+   large empty box; a floor and a wall read as a room whatever is standing in
+   it. */
 
 const DRAW_W = 1000;
 /** The drawn room. At the band's measure this lands near 140 rendered px. */
@@ -56,9 +56,15 @@ const DRAW_H = 140;
 /** A room with nothing on its floor: the outline, and its own name inside. */
 const EMPTY_H = 80;
 const WALL_L = 42;
+/** The wall's outer face, at the mock's own thickness (28→42). The opening cut
+ *  through it is this surface's departure from the section: the mock rules the
+ *  wall full height and cuts nothing through it. */
+const WALL_L_OUTER = 28;
 const WALL_R = 944;
 const WALL_TOP = 14;
 const FLOOR_Y = 104;
+/** The door opening in the left-hand wall, measured up off the floor line. */
+const OPENING_H = 52;
 const FOOT_H = 18;
 /** Mono under each footprint, in user units. */
 const FOOT_TYPE = 11;
@@ -164,10 +170,46 @@ function RoomDrawing({
       style={{ stroke: 'currentColor', fill: 'none', strokeWidth: 1, color: 'inherit' }}
     >
       <g vectorEffect="non-scaling-stroke">
-        {/* the wall the room stands against */}
-        <line data-testid="room-band-wall" x1={WALL_L} y1={WALL_TOP} x2={WALL_L} y2={FLOOR_Y} />
+        {/* the wall the room stands against, cut through by the door opening:
+            both faces stop at the head and the head closes between them, so the
+            wall reads as a wall with a way through it rather than a stub. The
+            room is entered from its left-hand side, which is the side the plan
+            key strikes its door mark on (plan-key.ts draws every mark at
+            `rect.x`), so the two drawings agree about where the door is */}
+        <line
+          data-testid="room-band-wall"
+          x1={WALL_L}
+          y1={WALL_TOP}
+          x2={WALL_L}
+          y2={FLOOR_Y - OPENING_H}
+        />
+        <line
+          data-testid="room-band-wall-outer"
+          x1={WALL_L_OUTER}
+          y1={WALL_TOP}
+          x2={WALL_L_OUTER}
+          y2={FLOOR_Y - OPENING_H}
+        />
+        {/* the head of the opening, closing the two faces across the wall */}
+        <line
+          data-testid="room-band-door-head"
+          x1={WALL_L_OUTER}
+          y1={FLOOR_Y - OPENING_H}
+          x2={WALL_L}
+          y2={FLOOR_Y - OPENING_H}
+        />
         {/* the floor line the whole room stands on */}
         <line data-testid="room-band-floor" x1={WALL_L} y1={FLOOR_Y} x2={WALL_R} y2={FLOOR_Y} />
+        {/* and the floor carried out through the opening, dashed: what is
+            beyond the door is not this room and is not drawn as if it were */}
+        <line
+          data-testid="room-band-threshold"
+          x1={0}
+          y1={FLOOR_Y}
+          x2={WALL_L}
+          y2={FLOOR_Y}
+          strokeDasharray="2 4"
+        />
         {feet.map((foot) => (
           <g key={foot.id}>
             <rect

@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
 import { safeAuthReturnPath } from '@patina/supabase/auth';
+import { CLIENT_AUTH_DESTINATION } from '@/lib/client-auth-destination';
 import {
   resolvePortalDecision,
   type RoleDomain,
   type RoleLookup,
 } from '@/lib/portal-access';
-import { env } from '@/lib/env';
+import { retiredRouteTarget } from '@/lib/retired-routes';
 
 // Look up the user's role domains. Returns a tri-state so the caller can
 // distinguish "no permitted role" (redirect) from "could not check" (skip).
@@ -64,15 +65,12 @@ function logRoleCheckSkipped(reason: string, path: string, userId: string): void
 }
 
 export async function middleware(req: NextRequest) {
+  // Nothing is stamped onto the request here any more: the `/proposals` page
+  // tree is retired and folds before it renders, and the two routes that
+  // record a signing IP (`/api/proposals/[id]/sign`, `/api/trade-scopes/[id]/
+  // accept`) never matched that stamp — API routes short-circuit below —
+  // reading `cf-connecting-ip` / `x-forwarded-for` directly instead.
   const requestHeaders = new Headers(req.headers);
-  if (req.nextUrl.pathname.startsWith('/proposals')) {
-    const forwarded = req.headers.get('x-forwarded-for');
-    const realIp = req.headers.get('x-real-ip');
-    const clientIp = forwarded?.split(',')[0]?.trim() || realIp;
-    if (clientIp) {
-      requestHeaders.set('x-client-ip', clientIp);
-    }
-  }
 
   const res = NextResponse.next({ request: { headers: requestHeaders } });
 
@@ -131,6 +129,14 @@ export async function middleware(req: NextRequest) {
   // The read behind it is anon-scoped by RLS (products_catalog_select_anon,
   // 00152:298) — no session data is reachable from here.
   const isPiecePage = req.nextUrl.pathname.startsWith('/piece/');
+  // /preferences/unsubscribe is the landing page GET /api/unsubscribe redirects
+  // to after applying the token. The recipient clicking it from an email has no
+  // session more often than not; gating it bounced her to
+  // /auth/signin?callbackUrl=/preferences/unsubscribe, i.e. a sign-in wall in
+  // front of an outcome page for an action already taken.
+  const isUnsubscribeOutcomePage =
+    req.nextUrl.pathname === '/preferences/unsubscribe' ||
+    req.nextUrl.pathname === '/preferences/unsubscribe/';
   // Bearer-URL surfaces must never be cached by an intermediary: the HTML is
   // keyed on the token URL, so a cached copy would keep serving a revoked
   // link's sheet list. force-dynamic + meta tags govern Next and crawlers that
@@ -139,9 +145,12 @@ export async function middleware(req: NextRequest) {
     res.headers.set('Cache-Control', 'private, no-store, max-age=0');
     res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
+  // `/` is NOT public. It used to be a bare redirect to `/projects`; it now
+  // renders the client's house, so it needs the same signed-out redirect and
+  // the same portal-role gate `/projects` had — otherwise a designer or
+  // manufacturer carrying the .patina.cloud SSO cookie lands on the client
+  // shell instead of /wrong-portal.
   const isPublicPage =
-    req.nextUrl.pathname === '/' ||
-    req.nextUrl.pathname.startsWith('/demo') ||
     isInviteLanding ||
     isQuizPage ||
     isSharePage ||
@@ -149,7 +158,8 @@ export async function middleware(req: NextRequest) {
     isRfqPage ||
     isEvidencePage ||
     isPlansPage ||
-    isPiecePage;
+    isPiecePage ||
+    isUnsubscribeOutcomePage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   // The wrong-portal interstitial is the redirect target for wrong-role users;
   // it must be exempt from the gate or a wrong-role user would loop. /unauthorized
@@ -166,8 +176,10 @@ export async function middleware(req: NextRequest) {
   // Use the object-set form so domain/secure/sameSite/path/httpOnly/TTL
   // attributes carry over — the (name, value) shorthand drops them, which
   // would defeat the cross-subdomain cookie scoping from Task 2.1.
-  const redirectWithCookies = (url: URL) => {
-    const redirect = NextResponse.redirect(url);
+  const redirectWithCookies = (url: URL, status?: number) => {
+    const redirect = status
+      ? NextResponse.redirect(url, status)
+      : NextResponse.redirect(url);
     res.cookies.getAll().forEach((cookie) => {
       redirect.cookies.set({
         name: cookie.name,
@@ -184,14 +196,6 @@ export async function middleware(req: NextRequest) {
     return redirect;
   };
 
-  // /demo/* is sample/showcase content, not something real traffic should
-  // reach in production. Gate it ahead of the public/auth classification
-  // below (which still treats /demo as public in dev) so this short-circuits
-  // cleanly instead of layering onto the role-aware checks further down.
-  if (env.isProduction && req.nextUrl.pathname.startsWith('/demo')) {
-    return redirectWithCookies(new URL('/', baseUrl));
-  }
-
   // Authenticated user on an auth page: send them home (or to callbackUrl),
   // but first verify they belong on this portal. Without this gate, a user
   // with no consumer/admin role would be redirected to `/`, then bounced back
@@ -202,9 +206,11 @@ export async function middleware(req: NextRequest) {
     // be an open redirect via `new URL(callbackUrl, baseUrl)` below, since
     // new URL() ignores its base argument when the first argument already
     // parses as an absolute URL. Keep this on the shared auth redirect policy.
+    // Sign-in lands on `/` — the client's active project page. `/projects` (the
+    // old list) is itself retired below, so landing there would only cost a hop.
     const callbackUrl = safeAuthReturnPath(
       req.nextUrl.searchParams.get('callbackUrl'),
-      '/projects',
+      CLIENT_AUTH_DESTINATION,
     );
     const decision = resolvePortalDecision(
       await getClientPortalRoleLookup(user!.id),
@@ -250,6 +256,42 @@ export async function middleware(req: NextRequest) {
       logRoleCheckSkipped(decision.reason, req.nextUrl.pathname, user!.id);
       res.headers.set('x-patina-role-check', 'skipped');
     }
+  }
+
+  // The old route tree is retired: every authenticated destination is now a
+  // section of the one project page. Mail, SMS, cron notifications and
+  // Universal Links sent before the cutover still carry the old addresses, so
+  // they are answered here with a permanent redirect to the anchor.
+  //
+  // Deliberately after the sign-in gate: an unauthenticated visitor is sent to
+  // /auth/signin with the OLD path as callbackUrl, comes back to it, and is
+  // folded then — which keeps the anchor. Folding first would hand sign-in a
+  // bare `/` and drop the section she was asked to come to.
+  const retired = retiredRouteTarget(req.nextUrl.pathname);
+  if (retired) {
+    const target = new URL(retired.path, baseUrl);
+    req.nextUrl.searchParams.forEach((value, key) => {
+      target.searchParams.set(key, value);
+    });
+    for (const [key, value] of Object.entries(retired.params ?? {})) {
+      target.searchParams.set(key, value);
+    }
+    // The fragment goes on last — a URL's hash always follows its query, and
+    // the Threshold reads both (`?invoice=`/`?order=` name the row, `#letterbox`
+    // names the section).
+    if (retired.anchor) target.hash = retired.anchor;
+    const folded = redirectWithCookies(target, 308);
+    // 308 is permanent, and a permanent redirect with no ceiling may be cached
+    // by a browser or an intermediary for good. The anchors are a design
+    // decision and will move; an hour is long enough to spare the round trip
+    // on a mail campaign's burst and short enough that a changed map reaches
+    // everyone the same day.
+    // `private` is load-bearing, not decoration: redirectWithCookies copies
+    // the refreshed Supabase auth cookies onto this response, so a bare
+    // `max-age` would invite any intermediary that honours it alone to hold
+    // one homeowner's session and hand it to the next reader of the same URL.
+    folded.headers.set('Cache-Control', 'private, max-age=3600');
+    return folded;
   }
 
   return res;

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession as useSupabaseSession } from '@patina/supabase';
+import { CLIENT_AUTH_DESTINATION } from '@/lib/client-auth-destination';
 import { Permission, Role, hasPermission, hasRole, type Session } from '@/lib/rbac';
 
 export function useAuth() {
@@ -41,7 +42,7 @@ export function useAuth() {
   const user = session?.user ?? undefined;
 
   const handleSignIn = useCallback(
-    async (callbackUrl = '/projects') => {
+    async (callbackUrl = CLIENT_AUTH_DESTINATION) => {
       router.push(`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
     },
     [router]

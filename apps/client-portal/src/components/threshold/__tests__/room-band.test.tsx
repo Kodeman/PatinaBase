@@ -146,16 +146,27 @@ describe('RoomBand', () => {
     );
   });
 
-  it('rules a floor and a wall, and nothing else, on a drawing 140 units deep', () => {
+  it('rules a floor, a wall and the door opening, on a drawing 140 units deep', () => {
     const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
 
     const drawing = screen.getByTestId('room-band-drawing');
     expect(drawing).toHaveAttribute('viewBox', '0 0 1000 140');
     expect(drawing.className.baseVal ?? drawing.getAttribute('class')).toContain('max-h-[140px]');
     expect(screen.getByTestId('room-band-floor')).toBeInTheDocument();
-    expect(screen.getByTestId('room-band-wall')).toBeInTheDocument();
-    // Two lines and no closed outline: the old rectangle read as an empty box.
-    expect(container.querySelectorAll('svg line')).toHaveLength(2);
+    // The opening is struck on the left-hand side — the side the plan key
+    // marks its doors on — and carried out as a dashed threshold. Both wall
+    // faces STOP at the head (y = 104 - 52), and the head closes between them,
+    // or the wall would be a stub standing over a gap.
+    expect(screen.getByTestId('room-band-wall')).toHaveAttribute('y2', '52');
+    expect(screen.getByTestId('room-band-wall-outer')).toHaveAttribute('y2', '52');
+    const head = screen.getByTestId('room-band-door-head');
+    // The mock's own wall thickness: faces at x=28 and x=42.
+    expect(head).toHaveAttribute('x1', '28');
+    expect(head).toHaveAttribute('x2', '42');
+    expect(head).toHaveAttribute('y1', '52');
+    expect(screen.getByTestId('room-band-threshold')).toHaveAttribute('stroke-dasharray', '2 4');
+    // Line work and no closed outline: the old rectangle read as an empty box.
+    expect(container.querySelectorAll('svg line')).toHaveLength(5);
     expect(container.querySelectorAll('svg rect')).toHaveLength(2);
   });
 

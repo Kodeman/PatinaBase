@@ -35,6 +35,7 @@ import {
   resolveApprovalArtifactCitation,
   toOne,
 } from "../_shared/project-approval-notification.ts";
+import { clientProjectLink } from "../_shared/client-portal-links.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -88,7 +89,7 @@ async function collectItems(
     .select(`
       id, user_id, kind, created_at,
       decision:client_decisions(
-        id, title, approval_contract,
+        id, title, project_id, approval_contract,
         approval_artifact:project_approval_artifacts(
           source_kind, source_version, artifact_hash, artifact_title
         ),
@@ -142,7 +143,14 @@ async function collectItems(
     items.push({
       category: "decision",
       title: row.kind === "decision_overdue" ? `${title} (overdue)` : title,
-      link: `${CLIENT_PORTAL_URL}/decisions`,
+      // /decisions is retired; a decision is answered on the doorstep of the
+      // project it belongs to, at the ask's own anchor so a client with
+      // several standing asks is put in front of the one this line names.
+      link: clientProjectLink(
+        CLIENT_PORTAL_URL,
+        dec?.project_id ?? null,
+        dec?.id ? `approval-${dec.id}` : "doorstep",
+      ),
       decisionId: dec?.id,
       artifact,
     });

@@ -5,12 +5,9 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import {
-  CONSENT_LINES,
   KIND_LABEL,
   REFUSAL_TOKENS,
   SIGNATURE_NOTICE,
-  SIGN_LABELS,
-  SUMMARY_FRAGMENTS,
   consentLineFor,
   refusalSentence,
   signLabelFor,
@@ -18,44 +15,34 @@ import {
 } from '../consent-copy';
 
 // ── The drift guard ─────────────────────────────────────────────────────────
-// consent-copy.ts is a COPY of the sign route's legal line. Read the route off
-// disk and assert every string still appears in it verbatim. When the route's
-// copy changes, this fails and consent-copy.ts is updated from the route —
-// never the other way round.
+// The sign ceremony's own page (`app/proposals/[id]/sign/page.tsx`) and the
+// awaiting-signature cards retired with the old portal, so the strings below
+// no longer have a second author to drift from: the door signs in place and
+// this file is where the legal line lives. What survives the retirement is the
+// API the door still posts to — `POST /api/proposals/[id]/sign` — so its
+// refusal tokens stay guarded against the route's source on disk, and the
+// branch structure and the refusal sentences are pinned below.
 
 const SRC = join(__dirname, '..', '..', '..');
-const SIGN_PAGE = readFileSync(join(SRC, 'app/proposals/[id]/sign/page.tsx'), 'utf8');
 const SIGN_ROUTE = readFileSync(join(SRC, 'app/api/proposals/[id]/sign/route.ts'), 'utf8');
-const KIND_CARDS = readFileSync(
-  join(SRC, 'components/commercial/awaiting-signature-cards.tsx'),
-  'utf8',
-);
 
-describe('consent copy is the sign route’s, verbatim', () => {
-  it.each(CONSENT_LINES)('consent line appears in the route: %s', (line) => {
-    expect(SIGN_PAGE).toContain(line);
-  });
-
-  it.each(SIGN_LABELS)('act label appears in the route: %s', (label) => {
-    expect(SIGN_PAGE).toContain(label);
-  });
-
-  it.each(SUMMARY_FRAGMENTS)('summary fragment appears in the route: %s', (fragment) => {
-    expect(SIGN_PAGE).toContain(fragment);
-  });
-
-  it('the signature notice appears in the route', () => {
-    expect(SIGN_PAGE).toContain(SIGNATURE_NOTICE);
-  });
-
+describe('the API can still answer every refusal the door reads', () => {
   it.each(REFUSAL_TOKENS)('the API can still answer with the token: %s', (token) => {
     expect(SIGN_ROUTE).toContain(`error: '${token}'`);
   });
+});
+
+describe('the copy the door shows', () => {
+  it('keeps the signature notice the retired ceremony carried', () => {
+    expect(SIGNATURE_NOTICE).toBe(
+      'Your typed name acts as your electronic signature.',
+    );
+  });
 
   it.each(Object.entries(KIND_LABEL))(
-    'kind label %s matches the portal vocabulary',
-    (kind, label) => {
-      expect(KIND_CARDS).toContain(`${kind}: '${label}'`);
+    'names the kind %s in the portal\u2019s own words',
+    (_kind, label) => {
+      expect(label).not.toContain('_');
     },
   );
 });

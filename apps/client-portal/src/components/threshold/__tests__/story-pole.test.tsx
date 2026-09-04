@@ -1,6 +1,6 @@
 import { act, render, screen, within } from '@testing-library/react';
 
-import { splitSpinePhases } from '@/components/making/making-spine';
+import { splitSpinePhases } from '@/components/threshold/instruments/making-spine';
 import type { MilestoneDetail } from '@/types/project';
 
 import { StoryPole } from '../story-pole';

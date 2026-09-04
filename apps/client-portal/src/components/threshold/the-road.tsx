@@ -3,9 +3,11 @@
 import { useState } from 'react';
 
 import { GOODS_JOURNEY_STAGES } from '@/components/commercial/journey-stepper';
-import { countInWords } from '@/components/making/standing-sentence';
+import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 import type { RoadPieceModel } from '@/lib/threshold/derive';
+import type { ClosedOrderModel, RoadOrderModel } from '@/lib/threshold/road-orders';
 
+import { RoadOrders } from './road-orders';
 import { ThresholdJourney } from './room-band';
 
 /* ── THE ROAD ────────────────────────────────────────────────────────────────
@@ -49,10 +51,31 @@ function pieceX(pieces: RoadPieceModel[], piece: RoadPieceModel): number {
 
 export interface TheRoadProps {
   pieces: RoadPieceModel[];
+  /** Pieces she bought herself — the same road, and the act that pays for them. */
+  orders?: RoadOrderModel[];
+  /** Bought direct and not coming: refunded, cancelled. Never in the count. */
+  closedOrders?: ClosedOrderModel[];
+  /** Re-read the direct orders while a return from the till is waiting. */
+  onOrdersRefetch?: () => void | Promise<unknown>;
+  /**
+   * The direct-orders read failed. "Nothing on the road." is an assertion, and
+   * a read that never answered has no standing to make it — the road says the
+   * register could not be read instead.
+   */
+  ordersUnread?: boolean;
+  today?: Date;
 }
 
-export function TheRoad({ pieces }: TheRoadProps) {
+export function TheRoad({
+  pieces,
+  orders = [],
+  closedOrders = [],
+  onOrdersRefetch,
+  ordersUnread = false,
+  today,
+}: TheRoadProps) {
   const [liftedId, setLiftedId] = useState<string | null>(null);
+  const inMotion = pieces.length + orders.length;
 
   return (
     <section
@@ -73,9 +96,9 @@ export function TheRoad({ pieces }: TheRoadProps) {
           data-testid="road-lintel"
           className="max-w-[34ch] text-[15px] leading-normal text-[var(--text-body)] sm:text-right"
         >
-          {pieces.length > 0
-            ? `What is not home yet · ${countInWords(pieces.length)} ${
-                pieces.length === 1 ? 'piece' : 'pieces'
+          {inMotion > 0
+            ? `What is not home yet · ${countInWords(inMotion)} ${
+                inMotion === 1 ? 'piece' : 'pieces'
               } in motion`
             : 'What is not home yet'}
         </p>
@@ -123,11 +146,26 @@ export function TheRoad({ pieces }: TheRoadProps) {
         </g>
       </svg>
 
-      {pieces.length === 0 ? (
-        <p className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]">
-          Nothing on the road.
+      {/* "Nothing on the road." is an assertion, and a refunded piece standing
+          under it in the next element takes it straight back. Where the road
+          holds only pieces that are no longer coming, the list speaks for
+          itself and the sentence is not said. */}
+      {ordersUnread ? (
+        <p
+          data-testid="road-orders-error"
+          className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]"
+        >
+          Couldn&rsquo;t load what you bought direct. Please refresh.
         </p>
-      ) : (
+      ) : null}
+
+      {inMotion === 0 ? (
+        closedOrders.length > 0 || ordersUnread ? null : (
+          <p className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]">
+            Nothing on the road.
+          </p>
+        )
+      ) : pieces.length === 0 ? null : (
         <ul data-testid="road-pieces" className="mt-4 list-none">
           {pieces.map((piece) => {
             const lifted = liftedId === piece.selectionId;
@@ -178,6 +216,15 @@ export function TheRoad({ pieces }: TheRoadProps) {
             );
           })}
         </ul>
+      )}
+
+      {(orders.length > 0 || closedOrders.length > 0) && (
+        <RoadOrders
+          orders={orders}
+          closed={closedOrders}
+          onRefetch={onOrdersRefetch}
+          today={today}
+        />
       )}
     </section>
   );

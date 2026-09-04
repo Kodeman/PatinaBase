@@ -8,7 +8,7 @@
    and string-pinned by its own tests. This module is the house's vocabulary
    laid over that grammar, and nothing else. ────────────────────────────── */
 
-import { countInWords, joinClauses, moneyInWords } from '@/components/making/standing-sentence';
+import { countInWords, joinClauses, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 
 const MONTHS = [
   'January',
@@ -178,4 +178,117 @@ export function keySentence(markCount: number): string {
   if (marks === 0) return 'Nothing stands open on this drawing.';
   if (marks === 1) return 'One mark stands open on this drawing.';
   return `${capitalize(countInWords(marks))} marks stand open on this drawing.`;
+}
+
+/* ── the day, in words ──────────────────────────────────────────────────────
+   The dateline speaks a day the way a person says it out loud — "the fourth
+   of August" — because it is a sentence about her last visit, not a stamp.
+   The ledger's figure keeps the deck's numeric idiom ("due 15 August"): it
+   stands beside money, and money is set in figures on this page. ─────────── */
+
+const ONES = [
+  '',
+  'first',
+  'second',
+  'third',
+  'fourth',
+  'fifth',
+  'sixth',
+  'seventh',
+  'eighth',
+  'ninth',
+  'tenth',
+  'eleventh',
+  'twelfth',
+  'thirteenth',
+  'fourteenth',
+  'fifteenth',
+  'sixteenth',
+  'seventeenth',
+  'eighteenth',
+  'nineteenth',
+  'twentieth',
+] as const;
+
+const TENS = ['', '', 'twentieth', 'thirtieth'] as const;
+const TENS_PREFIX = ['', '', 'twenty', 'thirty'] as const;
+
+/** "fourth", "twenty-first", "thirtieth" — a calendar day as it is spoken. */
+export function dayInWords(day: number): string | null {
+  if (!Number.isFinite(day)) return null;
+  const value = Math.trunc(day);
+  if (value < 1 || value > 31) return null;
+  if (value <= 20) return ONES[value];
+  const tens = Math.floor(value / 10);
+  const ones = value % 10;
+  return ones === 0 ? TENS[tens] : `${TENS_PREFIX[tens]}-${ONES[ones]}`;
+}
+
+/**
+ * The dateline beside the since control: when she last stood here. Null when
+ * there is no previous mark — a first visit has no "here" to have read from,
+ * and the page says nothing rather than inventing one.
+ */
+export function readingMarkLine(at: Date | null | undefined): string | null {
+  if (!at || Number.isNaN(at.getTime())) return null;
+  const day = dayInWords(at.getDate());
+  return day ? `Read here on the ${day} of ${MONTHS[at.getMonth()]}.` : null;
+}
+
+/**
+ * What the owed row adds to its figure. One dated invoice, and nothing else
+ * open, owes on one day and the row says "due 15 August". Anything else — two
+ * dated invoices, or three of which one is dated — has a day that belongs to
+ * the soonest of them and to no other, so the row says "soonest due 15
+ * August": a bare "due" would put the whole balance on that day, and "first
+ * due" would promise the rest have days of their own.
+ *
+ * `datedCount` is how many open invoices actually carry a due date;
+ * `totalCount` is how many are open at all.
+ *
+ * The year is spelled out the moment it is not this year — the rule
+ * `SpineToll` and the letterbox already keep. `today` is omitted during SSR
+ * and the first client paint, which simply drops the year.
+ */
+export function owedDueLine(
+  due: Date | null | undefined,
+  datedCount: number,
+  today?: Date,
+  /** How many invoices are open in all, dated or not. Defaults to the dated. */
+  totalCount: number = datedCount,
+): string | null {
+  if (!due || Number.isNaN(due.getTime())) return null;
+  const day =
+    today && today.getFullYear() !== due.getFullYear()
+      ? `${dayAndMonth(due)} ${due.getFullYear()}`
+      : dayAndMonth(due);
+  // Neither "due" nor "first due" is true of a partly-dated set: a bare "due"
+  // against a sum of three says the whole balance falls that day, and "first
+  // due" says the other two have days of their own. `soonest due` names what
+  // the day actually belongs to. Plain "due" is kept for the one case it is
+  // exactly true of: a single dated invoice, and nothing else open.
+  if (datedCount === totalCount && totalCount <= 1) return `due ${day}`;
+  return `soonest due ${day}`;
+}
+
+/**
+ * The note as a door pins it: its opening, not its body. The full letter is
+ * rendered once, by `TheNote`, and the pin carries a quote short enough to
+ * read at a glance with "Read the note" beneath it. The cut lands on a word
+ * and is marked, so no sentence is left looking finished when it is not.
+ */
+export function noteInBrief(body: string, budget = 140): string {
+  const text = body.trim().replace(/\s+/g, ' ');
+  if (text.length <= budget) return text;
+  const cut = text.slice(0, budget);
+  const lastSpace = cut.lastIndexOf(' ');
+  // The raw cut is the fallback only for text with no space at all inside the
+  // budget — one unbroken run of characters. Anything else cuts on its last
+  // word, so no quote is left broken mid-word.
+  // The word cut is kept unless it would throw away most of the budget — a
+  // first word followed by one long unbroken run must not quote the first word
+  // alone.
+  const onWord = lastSpace > budget / 4;
+  const kept = (onWord ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:—.!?-]+$/, '');
+  return `${kept}…`;
 }

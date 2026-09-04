@@ -1,183 +1,126 @@
-# Patina Client Portal - Mobile-First Experience
+# Patina Client Portal
 
-A high-performance, mobile-optimized client portal for tracking custom home furnishing projects.
+The homeowner's page — the client-facing face of The Document
+(`docs/vision/VISION-DECISIONS.md` **V8**; `docs/design/the-client-page/README.md`).
+One page per project, no chrome above it: every fact a homeowner needs
+surfaces on that page, and every act she can take happens in place.
 
-## Features
-
-### Mobile-First Architecture
-- Touch-optimized gestures (swipe, pinch-to-zoom, long-press)
-- Pull-to-refresh functionality
-- Haptic feedback
-- Bottom navigation
-- Progressive Web App (PWA) support
-
-### Timeline Experience
-- Scroll-driven animations
-- Interactive milestone cards
-- Real-time status updates
-- Media galleries with touch gestures
-- Progress tracking
-
-### Offline Support
-- Service Worker for offline functionality
-- Automatic request queueing
-- Sync when connection restored
-- Offline indicators
-
-### Camera Integration
-- Photo/video capture
-- Direct upload from device
-- Gallery selection
-- Permission handling
-
-### Performance Optimizations
-- Lazy loading images
-- Code splitting
-- Virtual scrolling
-- Reduced motion support
-- Web Vitals monitoring
-
-### Notifications
-- In-app notifications
-- Push notification support
-- Toast notifications
-- Sound/vibration preferences
-
-## Getting Started
+## Getting started
 
 ### Prerequisites
 - Node.js 20+
-- pnpm 8+
+- pnpm `9.0.0` (corepack pin — see the repo root `CLAUDE.md`/`AGENTS.md`)
 
-### Installation
-
-```bash
-cd apps/client-portal
-pnpm install
-```
-
-### Development
+### Install and run
 
 ```bash
-pnpm dev
+pnpm install                              # from the repo root
+pnpm --dir apps/client-portal dev         # http://localhost:3002
 ```
 
-The app will be available at `http://localhost:3002`
+`pnpm dev` at the repo root starts every app — use a selective `dev:*` script
+instead; see **patina-local-dev**.
 
 ### Build
 
 ```bash
-pnpm build
-pnpm start
+pnpm --dir apps/client-portal build
 ```
 
-## Performance Targets
+Production deploys always go through `./infra/deploy-portal.sh client` —
+never `opennextjs-cloudflare build` directly. See **patina-deploy**.
 
-- LCP (Largest Contentful Paint): < 2.5s
-- FID (First Input Delay): < 100ms
-- CLS (Cumulative Layout Shift): < 0.1
-- TTI (Time to Interactive): < 3.5s
-- Lighthouse Score: 90+
+## Route map
 
-## Testing Performance
+The authenticated surface is one page per project, ruled 2026-09-04
+(`docs/design/the-document/DECISIONS.md` **R135**) and shipped with no
+feature flag.
 
-### Lighthouse (Mobile)
-```bash
-pnpm lighthouse:mobile
-```
+### Authenticated routes
 
-### Lighthouse (Desktop)
-```bash
-pnpm lighthouse
-```
+| Route | Renders |
+|---|---|
+| `/` | The client's **active project** — the project with the most recent activity among `projects.client_id = auth.uid()`. A solo client always lands here on the same project; a multi-project client lands on whichever house last moved. |
+| `/projects/[projectId]` | That specific project's page — reached from `/`'s "Your other houses" (in the mat) or a deep link that names a project. |
 
-## Project Structure
+Both routes render the same component, `<Threshold>`
+(`src/components/threshold/threshold.tsx`) — there is no separate list view,
+no header, no project switcher outside the mat. Everything else
+authenticated is a **redirect** (`src/middleware.ts`), not a route: an old
+address a client, an email, a cron job, iOS, or the extension might still
+hold lands on `/` or `/projects/[projectId]` opened to an anchor —
 
-```
-src/
-├── app/
-│   ├── (dashboard)/
-│   │   ├── timeline/          # Timeline page
-│   │   ├── notifications/     # Notifications page
-│   │   └── profile/          # Profile page
-│   ├── layout.tsx            # Root layout
-│   └── globals.css           # Global styles
-├── components/
-│   ├── mobile/               # Mobile-specific components
-│   │   ├── mobile-timeline-card.tsx
-│   │   ├── mobile-approval-sheet.tsx
-│   │   └── touch-optimized-gallery.tsx
-│   ├── camera/               # Camera components
-│   │   └── camera-capture.tsx
-│   ├── layout/               # Layout components
-│   │   └── bottom-navigation.tsx
-│   ├── notifications/        # Notification system
-│   │   └── notification-system.tsx
-│   └── ui/                   # UI components
-│       ├── lazy-image.tsx
-│       └── floating-action-button.tsx
-├── hooks/
-│   ├── use-touch-gestures.ts
-│   ├── use-offline.ts
-│   ├── use-pull-to-refresh.ts
-│   └── use-performance.ts
-└── lib/                      # Utilities
+| Old route(s) | Anchor |
+|---|---|
+| `/today`, `/decisions`, `/reviews`, `/projects/[id]/reviews/*` | `#doorstep` |
+| `/decisions/[id]` | `#approval-<decisionId>` — the standing ask's own element id, so a client with several is put in front of the one the mail named. An answered decision is no longer drawn, the fragment does not resolve, and she lands at the top of the page, which is the doorstep. |
+| `/proposals`, `/proposals/[id]`, `/proposals/[id]/sign` | `#door` |
+| `/invoices`, `/invoices/[id]` | `#letterbox` |
+| `/budget` | `#ledger` |
+| `/documents` | `#mat-papers` |
+| `/orders` | `#road` |
+| `/messages`, `/messages/*`, `/inbox` | `#note` |
+| `/scans`, `/scans/[id]` | `#doorstep`. The End state asked for `#room-<roomId>` when resolvable; a scan id is not a room id, and the only way to turn one into the other is a database read inside edge middleware on every scan link. Ruled not worth it (2026-09-04 review, finding 10) — the doorstep carries the captures a band did not claim. |
+| `/account`, `/preferences`, `/settings/*` | `#mat` |
+| `/projects` | `/` (the active-project redirect, not an anchor) |
 
-```
+A redirect carries the project id when the old URL had one; otherwise it
+targets `/`. See the retirement plan's End state section
+(`docs/superpowers/plans/2026-09-04-client-portal-retirement.md`) for the
+full middleware contract and the edge-function/email/iOS/extension literals
+that were updated alongside it.
 
-## Mobile Features
+### Public, token, auth, and system routes
 
-### Touch Gestures
-- Swipe left/right: Navigate between items
-- Long press: Quick actions menu
-- Pinch to zoom: Image galleries
-- Double tap: Expand content
-- Pull down: Refresh content
+Untouched by the retirement — these were never part of the header's route
+tree:
 
-### Offline Mode
-- Automatic offline detection
-- Queue actions when offline
-- Auto-sync when online
-- Offline indicators
+- `/auth/*` — sign-in, magic link, and session handling.
+- `/share/[token]` and other token-bearing links a studio hands out.
+- `/preferences/unsubscribe` — made **public** as part of this cutover (it
+  was bouncing signed-out recipients). It never unsubscribes anyone on a GET:
+  a public GET that mutates is taken by link scanners, mail proxies and
+  browser prefetch, so a `?token=` arriving here renders a one-button confirm
+  that POSTs to `/api/unsubscribe`. That route redirects a browser (303) back
+  to this page's `?status=` render, and still answers a mail client's RFC 8058
+  one-click POST with a bare 200.
+- Checkout return URLs (`?checkout=success|cancel` on `/projects/<id>#letterbox`) —
+  read on mount by the letterbox, then cleaned from the query string.
+- `/wrong-portal`, `/unauthorized`, `/error`, `/not-found` — system pages.
 
-### Camera Integration
-- Take photos in-app
-- Direct upload to timeline
-- Gallery access
-- Permission management
+## Where things live
 
-## Architecture Decisions
+- `src/components/threshold/` — the page and every instrument it composes
+  (doorstep, door, letterbox, the road, the note, papers sheet, room band,
+  house ledger, mat, plan key). See
+  `docs/design/the-client-page/README.md` ("Shipped: where the instruments
+  live") for the full inventory.
+- `src/components/threshold/instruments/` — the six devices inherited from
+  The Making v1 (`scored-action`, `spine-gate`, `spine-toll`, `tracking-row`,
+  `standing-sentence`, `making-spine`), moved here from `components/making/`.
+- `src/middleware.ts` — the redirect map above, plus the active-project
+  sign-in destination.
+- `src/hooks/` — portal-local hooks; Supabase data comes through
+  `@patina/supabase` hooks per **patina-portal-features**.
 
-### Next.js 15
-- React Server Components
-- App Router
-- Image Optimization
-- Automatic code splitting
+## Retirement note
 
-### Framer Motion
-- Smooth animations
-- Touch gesture support
-- Layout animations
-- Scroll-driven effects
+This portal shipped in 2026 as a mobile-first, multi-route PWA (timeline,
+notifications, and profile pages under a `(dashboard)/` group, a bottom
+navigation bar, touch-gesture and offline support). That route tree, its
+header/nav/drawer, The Making v1's flagged body, and both feature flags
+(`threshold`, `single-pane`) were retired in the 2026-09-04 client-page
+program in favor of the single page above —
+`docs/superpowers/plans/2026-09-04-client-page-completion.md` built the
+Threshold out to cover every act the old routes performed, and
+`docs/superpowers/plans/2026-09-04-client-portal-retirement.md` deleted the
+old surface once it did. No client-visible feature is behind a flag: the
+ruling (Kody, 2026-09-04) shipped to everyone because zero clients were live
+on the platform to stage a rollout against.
 
-### PWA Support
-- Service Worker caching
-- Offline functionality
-- Install prompt
-- App-like experience
-
-### Performance
-- Lazy loading with Intersection Observer
-- Virtual scrolling for long lists
-- Image optimization with Next/Image
-- Code splitting by route
-
-## Browser Support
-
-- iOS Safari 14+
-- Chrome Mobile 90+
-- Samsung Internet 14+
-- Firefox Mobile 88+
+Performance and mobile-support goals from the original build (LCP < 2.5s,
+CLS < 0.1, offline queueing, PWA install) still apply to the single page —
+only the route shape changed.
 
 ## License
 

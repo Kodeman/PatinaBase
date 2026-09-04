@@ -125,9 +125,17 @@ export function AvatarUploadField({
             </Button>
           )}
         </div>
-        <p className="text-xs text-[#7A736C]">PNG, JPEG, or WebP — up to 2MB.</p>
+        <p className="text-xs text-[var(--text-muted,#7A736C)]">PNG, JPEG, or WebP — up to 2MB.</p>
+        {/* A refusal is set in body ink under a hairline — never
+            --color-error, which is red (VISION §6, Kody 2026-09-04). This
+            field is rendered inside the mat's details sheet, i.e. on the one
+            authenticated page, and takes that page's refusal style verbatim
+            (details-sheet.tsx). */}
         {error && (
-          <p className="text-xs text-[#C45B4A]" role="alert">
+          <p
+            className="border-t border-[var(--border-subtle)] pt-2 text-[13px] text-[var(--text-body)]"
+            role="alert"
+          >
             {error}
           </p>
         )}

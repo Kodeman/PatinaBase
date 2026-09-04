@@ -1,8 +1,13 @@
-'use client';
+"use client";
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { PAPERS_TAB_LABEL } from '@/lib/threshold/papers';
+
+import { COLUMN_HEAD_CLASS, LINE_CLASS, SUBLINE_CLASS } from './mat-classes';
+import { OtherHouses, type OtherHouse } from './other-houses';
 
 /* ── The mat ────────────────────────────────────────────────────────────────
    What you find by the door on the way out: who is working on the house and
@@ -36,14 +41,23 @@ export interface MatPaper {
 export interface MatProps {
   people: MatPerson[];
   papers: MatPaper[];
-  accountHref: '/account';
+  /** Every other project this client can open. Empty for a solo client. */
+  otherHouses?: OtherHouse[];
+  /** Opens the details sheet in place (L7 absorbs /account — never a route). */
+  onOpenDetails: () => void;
+  /** Whether the details sheet is currently open, for aria-expanded on the act that opens it. */
+  detailsOpen?: boolean;
   onSignOut: () => void;
+  /** The act that governs the letters, wired next door. */
+  correspondence?: ReactNode;
+  /** Lays the papers sheet over the page — every paper, not only the named few. */
+  onOpenPapers?: () => void;
+  /** Whether that sheet is down, so the act can say so where it is read. */
+  papersOpen?: boolean;
+  /** L6 — "Ask for a change" (scope-change-ask.tsx), house-wide rather than
+   * room-scoped. Optional so every other caller of `Mat` is unaffected. */
+  extraActs?: ReactNode;
 }
-
-const LINE_CLASS =
-  'block w-full border-t border-[var(--border-subtle)] py-2 text-left text-[15px] leading-[1.5] text-[var(--text-body)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
-const COLUMN_HEAD_CLASS =
-  'mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
 
 function Paper({ paper }: { paper: MatPaper }) {
   if (paper.href) {
@@ -63,7 +77,18 @@ function Paper({ paper }: { paper: MatPaper }) {
   return <span className={LINE_CLASS}>{paper.label}</span>;
 }
 
-export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
+export function Mat({
+  people,
+  papers,
+  otherHouses = [],
+  onOpenDetails,
+  detailsOpen,
+  onSignOut,
+  correspondence,
+  onOpenPapers,
+  papersOpen = false,
+  extraActs,
+}: MatProps) {
   return (
     <section
       id="mat"
@@ -86,9 +111,7 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
             >
               <span>{`${person.name} · ${person.role}`}</span>
               {person.where && (
-                <span className="block font-mono text-[11px] leading-[1.5] tracking-[0.04em] text-[var(--text-muted)]">
-                  {person.where}
-                </span>
+                <span className={SUBLINE_CLASS}>{person.where}</span>
               )}
             </div>
           ))}
@@ -99,7 +122,24 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
           {papers.map((paper, index) => (
             <Paper key={`${paper.label}-${index}`} paper={paper} />
           ))}
+          {onOpenPapers && (
+            <ScoredAction
+              actionKey="mat_papers"
+              regionKey="mat"
+              surfaceKey="the_threshold"
+              variant="tertiary"
+              aria-expanded={papersOpen}
+              // The sheet exists only while it is open; a dangling IDREF is
+              // what a closed one would leave.
+              aria-controls={papersOpen ? 'papers-sheet' : undefined}
+              onClick={onOpenPapers}
+            >
+              {PAPERS_TAB_LABEL}
+            </ScoredAction>
+          )}
         </div>
+
+        <OtherHouses houses={otherHouses} />
 
         {/* No column head here: "Your details" is the act itself, and a heading
             of the same words would put the name twice in one region. */}
@@ -110,7 +150,9 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
               regionKey="mat"
               surfaceKey="the_threshold"
               variant="tertiary"
-              href={accountHref}
+              onClick={onOpenDetails}
+              aria-haspopup="dialog"
+              aria-expanded={!!detailsOpen}
             >
               Your details
             </ScoredAction>
@@ -124,6 +166,10 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
               Leave the house
             </ScoredAction>
           </div>
+          {extraActs}
+          {/* Its own line: an act that governs the letters is not part of the
+              client's own record, and reads as one when it sits inside it. */}
+          {correspondence && <div className="mt-2">{correspondence}</div>}
         </div>
       </div>
     </section>

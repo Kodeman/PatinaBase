@@ -19,7 +19,7 @@
  * the client's own projects; the `.eq('client_visible', true)` below is
  * defensive/explicit, matching the client-mirror's own query and the
  * codebase's established pattern of also filtering client-side (see
- * ../app/budget/rollup.ts `visibleInvoices`).
+ * ../lib/threshold/invoice-rollup.ts `visibleInvoices`).
  */
 
 import { useQuery } from '@tanstack/react-query';

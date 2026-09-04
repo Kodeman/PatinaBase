@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import {
   parseSourceDate,
   type NoteModel,
@@ -63,6 +64,8 @@ export interface TheNoteProps {
   enclosures: NoteEnclosure[];
   authorName?: string | null;
   today?: Date;
+  /** The reply field, wired next door. Absent when there is nothing to write to. */
+  reply?: ReactNode;
 }
 
 export function TheNote({
@@ -71,6 +74,7 @@ export function TheNote({
   enclosures,
   authorName,
   today = new Date(),
+  reply,
 }: TheNoteProps) {
   const [unrolled, setUnrolled] = useState(false);
 
@@ -82,6 +86,10 @@ export function TheNote({
   return (
     <section
       id="note"
+      // The door's "Read the note" targets this section; without a tab index
+      // the fragment moves the viewport but neither the keyboard's focus nor
+      // the screen reader's cursor.
+      tabIndex={-1}
       data-threshold-unit="note"
       aria-label="The note"
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
@@ -129,6 +137,8 @@ export function TheNote({
           ))}
         </ul>
       )}
+
+      {reply}
 
       {earlier.length > 0 && (
         <div className="mt-3">

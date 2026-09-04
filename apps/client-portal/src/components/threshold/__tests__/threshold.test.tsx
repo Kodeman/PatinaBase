@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
 import type { Invoice, ProjectApprovalReview, Proposal } from '@patina/supabase';
@@ -29,8 +30,39 @@ jest.mock('next/link', () => ({
   },
 }));
 
+// The capture reads room_scans and the sharing table of its own accord; this
+// suite is about the wiring, so the band's plate is a marker here and is
+// tested in `room-capture.test.tsx`.
+jest.mock('../room-capture', () => ({
+  __esModule: true,
+  RoomCapture: ({ roomId, roomName }: { roomId: string; roomName: string }) => (
+    <div data-testid="room-capture-stub" data-room-id={roomId}>
+      {roomName}
+    </div>
+  ),
+  StrayCaptures: ({ userId }: { userId: string }) => (
+    <div data-testid="stray-captures-stub">{userId}</div>
+  ),
+}));
+
+// The sheet reads three registers of its own; this suite is about the wiring
+// from the mat, so it stands in as a marker and is tested in
+// `papers-sheet.test.tsx`.
+jest.mock('../papers-sheet', () => ({
+  __esModule: true,
+  PapersSheet: ({ open, onDismiss }: { open: boolean; onDismiss: () => void }) =>
+    open ? (
+      <div role="dialog" data-testid="papers-sheet-stub">
+        <button type="button" onClick={onDismiss}>
+          Dismiss the papers
+        </button>
+      </div>
+    ) : null,
+}));
+
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
+  useDirectOrders: jest.fn(),
   useProjectInvoices: jest.fn(),
   useClientSafeProposals: jest.fn(),
   useClientSafeProposalBundle: jest.fn(),
@@ -41,7 +73,28 @@ jest.mock('@patina/supabase', () => ({
   useProjectTeamMembers: jest.fn(),
   useStudioIdentity: jest.fn(),
   useMarkProjectRead: jest.fn(),
+  useMyProjectApprovalReviews: jest.fn(),
   usePreviousReadingMark: jest.fn(),
+  // The doorstep ask answers in place now; these are its boundary.
+  useConfirmProjectApprovalReview: jest.fn(),
+  useRespondProjectApproval: jest.fn(),
+  useDecisionComments: jest.fn(),
+  useCreateDecisionComment: jest.fn(),
+  useDecisionRealtime: jest.fn(),
+  // L6 — the review and scope-change asks (review-ask.tsx, scope-change-ask.tsx)
+  // mount inside `asks`/`previouslySection`/the mat/every room band, so any
+  // threshold.tsx render exercises their hooks too. `resetMocks: true`
+  // (jest.config.js) strips these bare `jest.fn()`s before every test, so the
+  // "nothing pending" shape they need is set for real in the shared
+  // `beforeEach` below, alongside every other hook this file mocks.
+  useMyPendingReviewRequests: jest.fn(),
+  useMySubmittedReviews: jest.fn(),
+  useSubmitReview: jest.fn(),
+  useScopeChangeRequests: jest.fn(),
+  useApproveScopeChange: jest.fn(),
+  useDeclineScopeChange: jest.fn(),
+  useCreateClientScopeChangeRequest: jest.fn(),
+  useCancelClientScopeChangeRequest: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-commercial-client', () => ({
@@ -51,12 +104,36 @@ jest.mock('@/hooks/use-commercial-client', () => ({
   useClientCommercialDocument: jest.fn(),
   clientCommercialDocumentQueryOptions: jest.fn(),
   useAcceptTradeScope: jest.fn(),
+  useProjectWorkingBudget: jest.fn(),
   invalidateSignedCommercialDocument: jest.fn().mockResolvedValue(undefined),
+  // L6 — SelectionEditionAsk (review-ask.tsx) reads no edition id from any of
+  // this file's fixtures (no `?review=` in jsdom's default URL), so it never
+  // calls these with a real id; the shared `beforeEach` gives them a safe
+  // default regardless (see the note above `useMyPendingReviewRequests`).
+  useClientProjectReviewBundle: jest.fn(),
+  useRecordProjectReviewFeedback: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
   __esModule: true,
   useAuth: jest.fn(),
+}));
+
+// The door's other four answers (read in full / ask / request a change /
+// decline) are their own component with their own suite — door-acts.test.tsx.
+// Stubbed here so this file's boundary stays the wiring it is about.
+jest.mock('../door-acts', () => ({
+  __esModule: true,
+  DoorActs: () => null,
+}));
+
+jest.mock('@/hooks/use-project-correspondence', () => ({
+  __esModule: true,
+  useProjectCorrespondence: jest.fn(),
+  useMarkNoticesRead: jest.fn(),
+  useMarkLettersRead: jest.fn(),
+  useWriteBack: jest.fn(),
+  useMuteLetters: jest.fn(),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({
@@ -73,8 +150,15 @@ jest.mock('@/lib/analytics/events', () => ({
 }));
 
 import {
+  useConfirmProjectApprovalReview,
+  useCreateDecisionComment,
+  useDecisionComments,
+  useDecisionRealtime,
+  useDirectOrders,
   useMarkProjectRead,
+  useMyProjectApprovalReviews,
   usePreviousReadingMark,
+  useRespondProjectApproval,
   useProjectInvoices,
   useProjectNotes,
   useProjectParties,
@@ -82,22 +166,41 @@ import {
   useProjectTeamMembers,
   useStudioIdentity,
   useClientSafeProposals,
+  useMyPendingReviewRequests,
+  useMySubmittedReviews,
+  useSubmitReview,
+  useScopeChangeRequests,
+  useApproveScopeChange,
+  useDeclineScopeChange,
+  useCreateClientScopeChangeRequest,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import {
+  useMarkLettersRead,
+  useMarkNoticesRead,
+  useMuteLetters,
+  useProjectCorrespondence,
+  useWriteBack,
+} from '@/hooks/use-project-correspondence';
 import {
   clientCommercialDocumentQueryOptions,
   useAcceptTradeScope,
   useClientCommercialDocument,
   useClientPlan,
   useClientSelections,
+  useClientProjectReviewBundle,
+  useProjectWorkingBudget,
+  useRecordProjectReviewFeedback,
 } from '@/hooks/use-commercial-client';
 
 import { Threshold } from '../threshold';
 
+const approvalsMock = useMyProjectApprovalReviews as jest.Mock;
 const invoicesMock = useProjectInvoices as jest.Mock;
 const proposalsMock = useClientSafeProposals as jest.Mock;
 const roomsMock = useProjectRooms as jest.Mock;
 const notesMock = useProjectNotes as jest.Mock;
+const ordersMock = useDirectOrders as jest.Mock;
 const partiesMock = useProjectParties as jest.Mock;
 const teamMock = useProjectTeamMembers as jest.Mock;
 const identityMock = useStudioIdentity as jest.Mock;
@@ -105,10 +208,24 @@ const markReadMock = useMarkProjectRead as jest.Mock;
 const previousMarkMock = usePreviousReadingMark as jest.Mock;
 const selectionsMock = useClientSelections as jest.Mock;
 const planMock = useClientPlan as jest.Mock;
+const pendingReviewMock = useMyPendingReviewRequests as jest.Mock;
+const submittedReviewMock = useMySubmittedReviews as jest.Mock;
+const submitReviewMock = useSubmitReview as jest.Mock;
+const scopeChangesMock = useScopeChangeRequests as jest.Mock;
+const approveScopeChangeMock = useApproveScopeChange as jest.Mock;
+const declineScopeChangeMock = useDeclineScopeChange as jest.Mock;
+const createScopeChangeMock = useCreateClientScopeChangeRequest as jest.Mock;
+const reviewBundleMock = useClientProjectReviewBundle as jest.Mock;
+const reviewFeedbackMock = useRecordProjectReviewFeedback as jest.Mock;
 const bundleMock = useClientCommercialDocument as jest.Mock;
 const queryOptionsMock = clientCommercialDocumentQueryOptions as jest.Mock;
 const acceptMock = useAcceptTradeScope as jest.Mock;
 const authMock = useAuth as jest.Mock;
+const correspondenceMock = useProjectCorrespondence as jest.Mock;
+const markNoticesReadMock = useMarkNoticesRead as jest.Mock;
+const markLettersReadMock = useMarkLettersRead as jest.Mock;
+const writeBackMock = useWriteBack as jest.Mock;
+const muteLettersMock = useMuteLetters as jest.Mock;
 
 // ── Fixtures — the Vale residence, as the seed tells it ─────────────────────
 
@@ -301,24 +418,29 @@ function settled<T>(data: T) {
  */
 let bundles: Record<string, unknown> = {};
 
-function renderThreshold() {
+function renderThreshold(milestones: MilestoneDetail[] = MILESTONES) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <Threshold projectId={PROJECT_ID} project={PROJECT} milestones={MILESTONES} />
+      <Threshold projectId={PROJECT_ID} project={PROJECT} milestones={milestones} />
     </QueryClientProvider>,
   );
 }
 
 beforeEach(() => {
-  authMock.mockReturnValue({ user: { name: 'Harper Vale' }, signOut: jest.fn() });
+  approvalsMock.mockReturnValue({ data: [], isLoading: false, isError: false });
+  authMock.mockReturnValue({
+    user: { id: 'client-1', name: 'Harper Vale' },
+    signOut: jest.fn(),
+  });
   proposalsMock.mockReturnValue(settled([AUTHORIZATION, SIGNED_AGREEMENT]));
   selectionsMock.mockReturnValue(
     settled({ origin: 'commercial', selections: [CREDENZA, PAINTWORK] }),
   );
   invoicesMock.mockReturnValue(settled([INVOICE]));
+  ordersMock.mockReturnValue(settled([]));
   roomsMock.mockReturnValue(settled(ROOMS));
   notesMock.mockReturnValue(settled([NOTE]));
   planMock.mockReturnValue(
@@ -356,7 +478,48 @@ beforeEach(() => {
     ]),
   );
   markReadMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  correspondenceMock.mockReturnValue({
+    threadId: null,
+    muted: false,
+    letters: [],
+    notices: [],
+    hasEarlierLetters: false,
+    readEarlierLetters: jest.fn(),
+    isReadingEarlierLetters: false,
+    unreadNoticeIds: [],
+    sentAts: [],
+    isPending: false,
+  });
+  markNoticesReadMock.mockReturnValue(jest.fn());
+  markLettersReadMock.mockReturnValue(jest.fn());
+  writeBackMock.mockReturnValue({ send: jest.fn(), isPending: false });
+  muteLettersMock.mockReturnValue({ toggle: jest.fn(), isPending: false });
   previousMarkMock.mockReturnValue({ data: undefined, isPending: false, isError: false });
+  // The doorstep ask answers in place; jest.config resets mocks per test, so
+  // its six hooks are re-armed here rather than at the factory.
+  (useConfirmProjectApprovalReview as jest.Mock).mockReturnValue({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  });
+  (useRespondProjectApproval as jest.Mock).mockReturnValue({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  });
+  (useDecisionComments as jest.Mock).mockReturnValue({
+    data: [],
+    isLoading: false,
+    isError: false,
+  });
+  (useCreateDecisionComment as jest.Mock).mockReturnValue({
+    mutate: jest.fn(),
+    isPending: false,
+  });
+  (useDecisionRealtime as jest.Mock).mockReturnValue(undefined);
+  (useProjectWorkingBudget as jest.Mock).mockReturnValue({
+    data: null,
+    isLoading: false,
+    isError: false,
+  });
   bundles = {
     'prop-7': AUTHORIZATION_BUNDLE,
     'prop-paint': TRADE_BUNDLE,
@@ -379,6 +542,19 @@ beforeEach(() => {
     staleTime: Infinity,
   }));
   acceptMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+  // L6 — the review and scope-change asks, reset to "nothing pending" for
+  // every test in this file (the suite's jest config resets mocks between
+  // tests, so the module factory's own default never survives past the
+  // first). A test in the L6 describe block below overrides one of these.
+  pendingReviewMock.mockReturnValue({ data: [], isLoading: false, isPending: false });
+  submittedReviewMock.mockReturnValue({ data: [], isLoading: false, isPending: false });
+  submitReviewMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  scopeChangesMock.mockReturnValue({ data: [], isLoading: false, isPending: false });
+  approveScopeChangeMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  declineScopeChangeMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  createScopeChangeMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  reviewBundleMock.mockReturnValue({ data: null, isLoading: false, isError: false });
+  reviewFeedbackMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
 });
 
 describe('Threshold — which house', () => {
@@ -448,6 +624,39 @@ describe('Threshold — which house', () => {
     expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
   });
 
+  // React Query drops `isPending` on error. A failed register that settles
+  // into an empty one tells the client her house has no rooms because a read
+  // failed — a failure dressed as a fact.
+  it('says the rooms could not be read rather than standing an empty house', () => {
+    roomsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+    });
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-rooms-error')).toHaveTextContent(
+      'Couldn’t load your rooms. Please refresh.',
+    );
+    expect(screen.queryByTestId('ground-floor')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
+  });
+
+  it('says what she bought direct could not be read rather than “Nothing on the road.”', () => {
+    ordersMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch: jest.fn(),
+    });
+    renderThreshold();
+
+    expect(screen.getByTestId('road-orders-error')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing on the road.')).not.toBeInTheDocument();
+  });
+
   it('says nothing at all while the queries are in flight', () => {
     notesMock.mockReturnValue({ data: undefined, isPending: true, isLoading: true, isError: false });
     renderThreshold();
@@ -494,9 +703,19 @@ describe('Threshold — the five facts', () => {
     expect(container.querySelectorAll('#wall')).toHaveLength(1);
   });
 
-  it('prints the standing note once, not twice on a door leaf as well', () => {
+  it('sets the note’s body once, and pins only its opening to the door', () => {
     renderThreshold();
 
+    expect(screen.getAllByTestId('note-body')).toHaveLength(1);
+    expect(screen.getAllByTestId('door-note-pin')).toHaveLength(1);
+    expect(screen.getByTestId('door-note-read')).toHaveAttribute('href', '#note');
+  });
+
+  it('pins nothing on the ground floor, where the letter is already set above', () => {
+    roomsMock.mockReturnValue(settled([]));
+    renderThreshold();
+
+    expect(screen.getByTestId('ground-floor')).toBeInTheDocument();
     expect(screen.getAllByTestId('note-body')).toHaveLength(1);
     expect(screen.queryByTestId('door-note-pin')).not.toBeInTheDocument();
   });
@@ -540,6 +759,55 @@ describe('Threshold — the reading mark', () => {
       screen.getByRole('button', { name: /what changed since yesterday/i }),
     ).toBeInTheDocument();
   });
+
+  it('dates that reading beside the control', () => {
+    // Noon UTC: the mark is a timestamptz and is read as the LOCAL calendar day
+    // the client stood here, so a midnight-UTC fixture would be the day before
+    // in every American zone.
+    previousMarkMock.mockReturnValue({
+      data: '2026-08-04T12:00:00Z',
+      isPending: false,
+      isError: false,
+    });
+    renderThreshold();
+
+    expect(screen.getByTestId('doorstep-reading-mark')).toHaveTextContent(
+      'Read here on the fourth of August.',
+    );
+  });
+
+  it('dates nothing on a first visit', () => {
+    previousMarkMock.mockReturnValue({ data: null, isPending: false, isError: false });
+    renderThreshold();
+
+    expect(screen.queryByTestId('doorstep-reading-mark')).not.toBeInTheDocument();
+  });
+});
+
+/* ── The pole with no register behind it ────────────────────────────────────
+   Most real projects carry no `project_phases` rows. The page must still rule
+   a pole, and it must rule the house's own six chapters — this is the call
+   site, not the helper. ─────────────────────────────────────────────────── */
+
+describe('the story pole when the studio never opened the phase register', () => {
+  it('graduates the house’s six canonical chapters', () => {
+    renderThreshold([]);
+
+    const rail = screen.getByTestId('story-pole-rail');
+    expect(rail.querySelectorAll('li')).toHaveLength(6);
+    expect(rail).toHaveTextContent('Discovery');
+    expect(rail).toHaveTextContent('Completion');
+  });
+
+  it('holds the chapter the project itself names', () => {
+    renderThreshold([]);
+
+    expect(screen.getByTestId('story-pole-graduation-procurement')).toHaveAttribute(
+      'data-held',
+      'true',
+    );
+    expect(screen.queryByTestId('story-pole-span-procurement')).not.toBeInTheDocument();
+  });
 });
 
 /* ── What stands on the doorstep ────────────────────────────────────────────
@@ -559,22 +827,36 @@ const PHASE_APPROVAL = {
   lifecycleStatus: 'pending',
   outcome: null,
   disposition: 'active',
-  completedReviewCount: 0,
+  completedReviewCount: 1,
   requiredReviewCount: 1,
+  authorityRevision: 3,
+  artifactChecksum: 'a'.repeat(64),
+  costCentsDelta: 0,
+  scheduleDaysDelta: 0,
+  leadTimeDaysDelta: 0,
+  context: null,
+  respondedAt: null,
+  updatedAt: '2026-08-12T10:00:00Z',
 } as unknown as ProjectApprovalReview;
 
-function renderWithApprovals(approvals: ProjectApprovalReview[]) {
+function renderWithApprovals(
+  approvals: ProjectApprovalReview[],
+  { error = false }: { error?: boolean } = {},
+) {
+  // The house reads its own approvals now — `list_my_project_decision_reviews`
+  // is caller-global, so the rows come back for every project this client has
+  // and the Threshold filters them to this one.
+  approvalsMock.mockReturnValue({
+    data: approvals,
+    isLoading: false,
+    isError: error,
+  });
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <Threshold
-        projectId={PROJECT_ID}
-        project={PROJECT}
-        milestones={MILESTONES}
-        projectApprovals={approvals}
-      />
+      <Threshold projectId={PROJECT_ID} project={PROJECT} milestones={MILESTONES} />
     </QueryClientProvider>,
   );
 }
@@ -586,21 +868,48 @@ describe('Threshold — the doorstep’s own asks', () => {
     const gate = screen.getByTestId('doorstep-approval');
     expect(gate).toHaveTextContent('Do the library elevations read right to you?');
     expect(gate).toHaveTextContent('Library elevations · Edition 3 · Due August 20');
-    expect(screen.getByRole('link', { name: /respond/i })).toHaveAttribute(
-      'href',
-      '/decisions/dec-1',
-    );
+    // The ask is answered where it stands — no link off the page.
+    expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /respond/i })).not.toBeInTheDocument();
   });
 
   it('reads a draft approval as a review rather than a response', () => {
     renderWithApprovals([
-      { ...PHASE_APPROVAL, lifecycleStatus: 'draft' } as ProjectApprovalReview,
+      {
+        ...PHASE_APPROVAL,
+        lifecycleStatus: 'draft',
+        completedReviewCount: 0,
+      } as ProjectApprovalReview,
     ]);
 
     expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
       'your review is required',
     );
-    expect(screen.getByRole('link', { name: /review exact edition/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /review exact edition/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the record of an approval answered on an earlier visit', () => {
+    renderWithApprovals([
+      {
+        ...PHASE_APPROVAL,
+        outcome: 'approved',
+        lifecycleStatus: 'responded',
+        respondedAt: '2026-08-14T12:00:00Z',
+      } as ProjectApprovalReview,
+    ]);
+
+    expect(screen.queryByTestId('doorstep-approval')).not.toBeInTheDocument();
+    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Approved 14 August');
+  });
+
+  it('says so where the asks would stand when the approvals cannot be read', () => {
+    renderWithApprovals([], { error: true });
+
+    expect(screen.getByTestId('threshold-approvals-error')).toHaveTextContent(
+      'The approvals could not be read just now. Please refresh before taking action.',
+    );
   });
 
   it('stands a roomless paper on the doorstep, not inside a band', () => {
@@ -659,6 +968,33 @@ describe('Threshold — the acts the house owes', () => {
     expect(papers).toHaveTextContent('The drawing set');
     expect(papers).toHaveTextContent('Furnishings authorization No. 7');
     expect(papers).toHaveTextContent('Invoice No. 4');
+  });
+
+  it('lays the papers over the house from the mat, and takes them away again', async () => {
+    renderThreshold();
+
+    const act = screen.getByRole('button', { name: /the papers, in full/i });
+    expect(act).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await userEvent.click(act);
+    expect(screen.getByTestId('papers-sheet-stub')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /the papers, in full/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /dismiss the papers/i }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('stands a capture in every room, and the strays after the last one', () => {
+    renderThreshold();
+
+    const captures = screen.getAllByTestId('room-capture-stub');
+    expect(captures).toHaveLength(screen.getAllByTestId('room-band-lintel').length);
+    expect(captures.every((capture) => capture.getAttribute('data-room-id'))).toBe(true);
+    expect(screen.getByTestId('stray-captures-stub')).toBeInTheDocument();
   });
 
   it('resolves an invoice enclosure on the note from the invoice cache', () => {
@@ -966,6 +1302,100 @@ describe('Threshold — enclosures and history', () => {
   });
 });
 
+/* ── The post, where the page files it ──────────────────────────────────────
+   The seam these assert is the CALL SITE's, not the component's: a React
+   element is truthy even when it renders nothing, so only the page can decide
+   whether Previously has back matter and where the reply belongs. ────────── */
+
+describe('Threshold — the post', () => {
+  const LETTER = {
+    id: 'm-1',
+    body: 'The sconces ship Friday.',
+    from: 'studio' as const,
+    authorName: 'Nora Quist',
+    sentAt: new Date(2026, 7, 4, 9, 0, 0),
+    enclosures: [],
+  };
+
+  function post(over: Record<string, unknown> = {}) {
+    correspondenceMock.mockReturnValue({
+      threadId: null,
+      muted: false,
+      letters: [],
+      notices: [],
+      hasEarlierLetters: false,
+      readEarlierLetters: jest.fn(),
+      isReadingEarlierLetters: false,
+      unreadNoticeIds: [],
+      sentAts: [],
+      isPending: false,
+      ...over,
+    });
+  }
+
+  it('keeps Previously silent when there is neither back matter nor post', () => {
+    proposalsMock.mockReturnValue(settled([]));
+    notesMock.mockReturnValue(settled([]));
+    post();
+
+    const { container } = renderThreshold();
+    expect(container.querySelector('#previously')).toBeNull();
+  });
+
+  it('files the letters in Previously when there are any', () => {
+    post({ threadId: 'thr-1', letters: [LETTER] });
+    renderThreshold();
+    expect(screen.getByTestId('previously-correspondence')).toHaveTextContent(
+      'The sconces ship Friday.',
+    );
+  });
+
+  it('keeps the reply under the note while one is standing', () => {
+    post({ threadId: 'thr-1', letters: [LETTER] });
+    renderThreshold();
+
+    const note = screen.getByTestId('write-back').closest('#note');
+    expect(note).not.toBeNull();
+  });
+
+  it('heads the record with the reply when no note is standing', () => {
+    notesMock.mockReturnValue(settled([]));
+    post({ threadId: 'thr-1', letters: [LETTER] });
+
+    const { container } = renderThreshold();
+    expect(container.querySelector('#note')).toBeNull();
+    expect(screen.getByTestId('write-back').closest('#previously')).not.toBeNull();
+  });
+
+  it('marks this house’s thread and its own unread notices read, once', () => {
+    const markLetters = jest.fn();
+    const markNotices = jest.fn();
+    markLettersReadMock.mockReturnValue(markLetters);
+    markNoticesReadMock.mockReturnValue(markNotices);
+    post({ threadId: 'thr-1', letters: [LETTER], unreadNoticeIds: ['n-1', 'n-2'] });
+
+    renderThreshold();
+
+    expect(markLetters).toHaveBeenCalledTimes(1);
+    expect(markLetters).toHaveBeenCalledWith('thr-1');
+    expect(markNotices).toHaveBeenCalledTimes(1);
+    expect(markNotices).toHaveBeenCalledWith(['n-1', 'n-2']);
+  });
+
+  it('marks nothing read while the post is still arriving', () => {
+    const markLetters = jest.fn();
+    const markNotices = jest.fn();
+    markLettersReadMock.mockReturnValue(markLetters);
+    markNoticesReadMock.mockReturnValue(markNotices);
+    post({ threadId: 'thr-1', unreadNoticeIds: ['n-1'], isPending: true });
+
+    renderThreshold();
+
+    expect(markLetters).not.toHaveBeenCalled();
+    expect(markNotices).not.toHaveBeenCalled();
+  });
+});
+
 /* ── The RPC's own shape ────────────────────────────────────────────────────
    `updatedAt` reaches the page through `adaptClientSelections`, so the test
    feeds a RAW row the way 00565's get_client_project_selections emits it —
@@ -1018,5 +1448,207 @@ describe('Threshold — updatedAt off the raw payload', () => {
 
     expect(container.querySelector(`#room-${LIBRARY}`)).toHaveAttribute('data-changed', 'true');
     expect(container.querySelector(`#room-${ENTRY}`)).not.toHaveAttribute('data-changed');
+  });
+});
+
+describe('Threshold — L6, the review and scope-change asks mounted in place', () => {
+  it('stands the studio review request on the doorstep, naming this project', () => {
+    pendingReviewMock.mockReturnValue({
+      data: [
+        {
+          id: 'rev-1',
+          request_status: 'sent',
+          project: { id: PROJECT_ID, name: 'Vale Residence' },
+          designer: { full_name: 'Nora Quist', business_name: null, avatar_url: null },
+          custom_message: null,
+        },
+      ],
+      isLoading: false,
+      isPending: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('studio-review-ask')).toHaveAttribute('id', 'review-rev-1');
+  });
+
+  it('stands a studio-sent scope change on the doorstep, not inside a band', () => {
+    scopeChangesMock.mockReturnValue({
+      data: [
+        {
+          id: 'sc-1',
+          title: 'Add a runner to the stair hall',
+          description: 'A runner underfoot in the stair hall.',
+          status: 'sent',
+          request_origin: 'designer_amendment',
+          additional_ffe_budget_cents: 0,
+          additional_design_fee_cents: 0,
+          timeline_impact_weeks: 0,
+          new_total_budget_cents: 0,
+        },
+      ],
+      isLoading: false,
+      isPending: false,
+    });
+
+    const { container } = renderThreshold();
+
+    const ask = container.querySelector('#scope-change-sc-1');
+    expect(ask).not.toBeNull();
+    expect(ask?.closest('section[id^="room-"]')).toBeNull();
+  });
+
+  it('offers "Ask for a change" on the mat', () => {
+    renderThreshold();
+
+    expect(within(screen.getByTestId('mat')).getByText('Ask for a change')).toBeInTheDocument();
+  });
+
+  it('offers "Ask for a change" inside a room band, naming the room', () => {
+    renderThreshold();
+
+    const band = document.querySelector(`#room-${LIBRARY}`);
+    expect(band).not.toBeNull();
+    expect(within(band as HTMLElement).getByText(/Ask for a change in/)).toBeInTheDocument();
+  });
+
+  // Finding #10 — the settle gate must hold the whole house, asks included,
+  // while any of the three ask queries this file mocks is still in flight,
+  // not just the sources `loading` already covered.
+  it('holds the house while a pending scope-change is still in flight', () => {
+    scopeChangesMock.mockReturnValue(IN_FLIGHT);
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+    expect(screen.getByTestId('doorstep-sentence-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('mat')).not.toBeInTheDocument();
+  });
+
+  // Finding #27 — SubmittedReviewsPrevious and SelectionEditionAsk were
+  // mounted into threshold.tsx with no test exercising either mount point.
+  it('lines a submitted review up in Previously', () => {
+    submittedReviewMock.mockReturnValue({
+      data: [
+        {
+          id: 's1',
+          project: { id: PROJECT_ID },
+          rating: 5,
+          review_text: null,
+          created_at: '2026-08-01T00:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isPending: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('submitted-reviews-previously')).toBeInTheDocument();
+  });
+
+  it('mounts the selection-edition ask off ?review= on the URL', () => {
+    window.history.pushState({}, '', `/projects/${PROJECT_ID}?review=ed-1`);
+    reviewBundleMock.mockReturnValue({
+      data: {
+        projectId: PROJECT_ID,
+        editionId: 'ed-1',
+        publishedAt: null,
+        status: 'published',
+        items: [
+          {
+            id: 'item-1',
+            name: 'Wingback chair',
+            roomName: 'Library',
+            imageUrl: null,
+            clientPriceCents: null,
+            currency: 'USD',
+            verdict: null,
+            comment: null,
+            mediaAssetIds: [],
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('review-edition-ask')).toBeInTheDocument();
+    window.history.pushState({}, '', `/projects/${PROJECT_ID}`);
+  });
+});
+
+describe('the settle gate — a query that cannot answer may not hold the house', () => {
+  // A DISABLED TanStack v5 query reports `status: 'pending'` for as long as it
+  // is mounted: it never runs, so it never resolves. Reading `isPending`
+  // straight off one puts the whole page behind a query that will not answer.
+  it('opens the house while a disabled query reports pending forever', () => {
+    authMock.mockReturnValue({ user: undefined, signOut: jest.fn() });
+    // `useMyPendingReviewRequests` / `useMySubmittedReviews` are
+    // `enabled: !!clientUserId` — with no user they are disabled, and this is
+    // exactly what they report.
+    pendingReviewMock.mockReturnValue({ data: undefined, isLoading: true, isPending: true });
+    submittedReviewMock.mockReturnValue({ data: undefined, isLoading: true, isPending: true });
+
+    renderThreshold();
+
+    expect(screen.queryByTestId('threshold-hold')).not.toBeInTheDocument();
+    expect(document.querySelector('#doorstep')).toBeInTheDocument();
+  });
+
+  it('does not hold on the edition bundle when no ?review= link came', () => {
+    reviewBundleMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isPending: true,
+      isError: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.queryByTestId('threshold-hold')).not.toBeInTheDocument();
+  });
+
+  it('still holds while a query that CAN answer has not', () => {
+    // The control: an enabled query that is genuinely in flight holds, or the
+    // gate would prove nothing.
+    invoicesMock.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isLoading: true,
+      isError: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+  });
+});
+
+describe('the reply, when the record is empty', () => {
+  it('stands the reply on its own line rather than heading an empty Previously', () => {
+    correspondenceMock.mockReturnValue({
+      threadId: 'thread-1',
+      muted: false,
+      letters: [],
+      notices: [],
+      hasEarlierLetters: false,
+      readEarlierLetters: jest.fn(),
+      isReadingEarlierLetters: false,
+      unreadNoticeIds: [],
+      sentAts: [],
+      isPending: false,
+    });
+    notesMock.mockReturnValue(settled([]));
+
+    renderThreshold();
+
+    const reply = screen.getByTestId('standing-reply');
+    expect(reply).toBeInTheDocument();
+    // Not inside Previously: a record with nothing previous in it may not be
+    // opened just to carry the reply.
+    expect(document.querySelector('#previously')?.contains(reply) ?? false).toBe(false);
+    expect(document.querySelector('#previously')).not.toHaveTextContent('Write back');
   });
 });

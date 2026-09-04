@@ -2,8 +2,8 @@
 
 import type { ReactNode } from 'react';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { countInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 
 /* ── The doorstep ───────────────────────────────────────────────────────────
    Where she is standing when the page opens. One sentence in Playfair says
@@ -36,6 +36,13 @@ export interface DoorstepProps {
   /** True while the house is being read as it moved. */
   sinceActive: boolean;
   onToggleSince?: () => void;
+  /**
+   * "Read here on the fourth of August." — null on a first visit. The page
+   * sets this from the same previous mark that decides `showSince`, so in
+   * practice the two arrive together; the row's guard names it anyway so a
+   * caller that has only the dateline still gets a row to put it in.
+   */
+  readingMark?: string | null;
   /** The house ledger and the letterbox stand here. */
   children?: ReactNode;
 }
@@ -59,6 +66,7 @@ export function Doorstep({
   showSince,
   sinceActive,
   onToggleSince,
+  readingMark = null,
   children,
 }: DoorstepProps) {
   const moved = movedLine(changedCount);
@@ -99,7 +107,7 @@ export function Doorstep({
         </p>
       )}
 
-      {(showSince || moved) && (
+      {(showSince || moved || readingMark) && (
         <div className="mt-[14px] flex flex-wrap items-baseline gap-x-[22px] gap-y-1">
           {showSince && (
             <ScoredAction
@@ -112,6 +120,14 @@ export function Doorstep({
             >
               {sinceActive ? 'Show the whole house' : 'What changed since yesterday'}
             </ScoredAction>
+          )}
+          {readingMark && (
+            <span
+              data-testid="doorstep-reading-mark"
+              className="font-mono text-[11px] leading-[1.5] tracking-[0.04em] text-[var(--text-muted)]"
+            >
+              {readingMark}
+            </span>
           )}
           {moved && (
             <span

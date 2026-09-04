@@ -33,16 +33,10 @@
   ],
   "shortcuts": [
     {
-      "name": "View Projects",
-      "short_name": "Projects",
-      "description": "View all your projects",
-      "url": "/projects"
-    },
-    {
-      "name": "Pending Approvals",
-      "short_name": "Approvals",
-      "description": "View pending approvals",
-      "url": "/approvals"
+      "name": "Your project",
+      "short_name": "Project",
+      "description": "Open your project",
+      "url": "/"
     }
   ]
 }

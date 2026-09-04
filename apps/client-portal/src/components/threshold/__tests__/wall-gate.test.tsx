@@ -226,7 +226,7 @@ describe('WallGate', () => {
   });
 
   it('surfaces a refused acceptance', async () => {
-    mutateAsync.mockRejectedValue(new Error('The scope is not complete.'));
+    mutateAsync.mockRejectedValue(new Error('trade_scope_progress refused: 42501'));
     renderGate();
 
     fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
@@ -236,7 +236,10 @@ describe('WallGate', () => {
       fireEvent.click(screen.getByRole('button', { name: /accept/i }));
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('The scope is not complete.');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Unable to accept this work right now.',
+    );
+    expect(screen.getByRole('alert')).not.toHaveTextContent('42501');
     expect(screen.queryByTestId('wall-stamp')).not.toBeInTheDocument();
   });
 });

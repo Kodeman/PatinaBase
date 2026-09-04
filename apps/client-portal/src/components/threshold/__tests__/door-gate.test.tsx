@@ -18,6 +18,36 @@ jest.mock('@/hooks/use-commercial-client', () => ({
   invalidateSignedCommercialDocument: jest.fn().mockResolvedValue(undefined),
 }));
 
+// The other four answers live in their own file, with their own suite
+// (door-acts.test.tsx). Here they are a witness to the mount, to what the door
+// hands them, to the leaf taking them with it when it opens — and to the door
+// hearing a decline come back.
+jest.mock('../door-acts', () => ({
+  __esModule: true,
+  DoorActs: ({
+    proposalId,
+    kind,
+    validUntil,
+    onDeclined,
+  }: {
+    proposalId: string;
+    kind: string | null;
+    validUntil?: string | null;
+    onDeclined?: () => void;
+  }) => (
+    <div
+      data-testid="door-acts-stub"
+      data-kind={kind ?? 'unresolved'}
+      data-valid-until={validUntil ?? ''}
+    >
+      {proposalId}
+      <button type="button" onClick={() => onDeclined?.()}>
+        stub decline
+      </button>
+    </div>
+  ),
+}));
+
 jest.mock('@/lib/analytics/events', () => ({
   __esModule: true,
   proposalClientEvents: { signed: jest.fn() },
@@ -279,6 +309,65 @@ describe('DoorGate', () => {
       kind: 'furnishings_authorization',
     });
     expect(onSigned).toHaveBeenCalledTimes(1);
+  });
+
+  it('hangs the other four answers on the leaf while the paper is still asking', () => {
+    renderGate();
+    expect(screen.getByTestId('door-acts-stub')).toHaveTextContent('prop-7');
+  });
+
+  it('takes the acts away with the leaf once it opens on her name', async () => {
+    renderGate();
+    signWith();
+    await act(async () => {
+      fireEvent.click(signAction());
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('door-acts-stub')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hands the acts a null kind rather than calling an unresolved paper legacy', () => {
+    bundleMock.mockReturnValue({ isLoading: false, isError: false, data: undefined });
+    renderGate({ proposal: { ...PROPOSAL, kind: undefined } });
+
+    expect(screen.getByTestId('door-acts-stub')).toHaveAttribute('data-kind', 'unresolved');
+  });
+
+  it('carries the paper’s own valid_until down to the acts', () => {
+    renderGate({ proposal: { ...PROPOSAL, validUntil: '2026-08-30T00:00:00Z' } });
+
+    expect(screen.getByTestId('door-acts-stub')).toHaveAttribute(
+      'data-valid-until',
+      '2026-08-30T00:00:00Z',
+    );
+  });
+
+  it('disarms the signature block on the date the acts withdrew', () => {
+    // The old page held every act back under ONE `isActionable`. A block that
+    // still says "Ready when you are." past `valid_until` offers a signature
+    // /api/proposals/[id]/sign refuses on the same date.
+    renderGate({ proposal: { ...PROPOSAL, validUntil: '2020-01-01T00:00:00Z' } });
+
+    expect(screen.getByLabelText('Type your full name')).toBeDisabled();
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(signAction()).toBeDisabled();
+    expect(screen.getByTestId('door-hint')).toHaveTextContent(
+      'This paper is past its date. Ask your studio to reissue it.',
+    );
+  });
+
+  it('stops asking for her name once she has declined the paper', () => {
+    renderGate();
+    fireEvent.click(screen.getByRole('button', { name: 'stub decline' }));
+
+    expect(screen.getByText('Shut. You declined it.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Type your full name')).toBeDisabled();
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(signAction()).toBeDisabled();
+    expect(screen.getByTestId('door-hint')).toHaveTextContent(
+      'You declined this paper. Your studio has been told.',
+    );
   });
 
   it('stops claiming never-dim once it has been signed', async () => {

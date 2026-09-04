@@ -10,7 +10,7 @@ import {
   startOfWeek,
   type SpinePhase,
   type splitSpinePhases,
-} from '@/components/making/making-spine';
+} from '@/components/threshold/instruments/making-spine';
 
 /* ── The story pole ─────────────────────────────────────────────────────────
    A carpenter's story pole is marked once and then never re-marked: the
@@ -103,6 +103,13 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
     }));
   const heldAt = graduations.findIndex((graduation) => graduation.held);
 
+  // A finished house holds nothing: `current` is null, so `heldAt` is -1. Its
+  // walked chapters are then read off their own status, or the pole would draw
+  // six ungraduated chapters and tell a client whose house is done that
+  // nothing has begun.
+  const walkedAt = (index: number): boolean =>
+    heldAt >= 0 ? index < heldAt : graduations[index]?.phase.status === 'completed';
+
   const sectionIds = sections.map((section) => section.id).join('|');
 
   useEffect(() => {
@@ -148,7 +155,7 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
         className="mb-2.5 hidden items-center gap-2.5 max-[600px]:flex"
       >
         {graduations.map((graduation, index) => {
-          const walked = heldAt >= 0 && index < heldAt;
+          const walked = walkedAt(index);
           return (
             <span
               key={graduation.phase.id}
@@ -170,11 +177,12 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
         data-testid="story-pole-rail"
         className="relative m-0 list-none border-l border-[var(--border-default)] py-0 pl-4 pr-0 max-[600px]:hidden"
       >
-        {graduations.map((graduation) => (
+        {graduations.map((graduation, index) => (
           <li
             key={graduation.phase.id}
             data-testid={`story-pole-graduation-${graduation.phase.id}`}
             data-held={graduation.held || undefined}
+            data-walked={walkedAt(index) || undefined}
             style={graduation.held ? { color: ACCENT } : undefined}
             className={
               graduation.held
@@ -187,7 +195,9 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
               style={
                 graduation.held
                   ? { backgroundColor: ACCENT }
-                  : { backgroundColor: 'var(--border-default)' }
+                  : walkedAt(index)
+                    ? { backgroundColor: 'var(--text-primary)' }
+                    : { backgroundColor: 'var(--border-default)' }
               }
               className={
                 graduation.held

@@ -13,11 +13,10 @@ export default function NotFound() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+          {/* `/` is the house now; the second link beside it went to the list
+              the route collapse retired. */}
           <Link href="/" className="rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 no-underline">
             Go to home
-          </Link>
-          <Link href="/projects" className="rounded-[3px] border border-[var(--border-default)] px-5 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--text-primary)] no-underline">
-            View projects
           </Link>
         </div>
       </div>

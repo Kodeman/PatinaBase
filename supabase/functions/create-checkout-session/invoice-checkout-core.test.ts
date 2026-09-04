@@ -73,6 +73,24 @@ Deno.test('invoice Checkout: both return paths carry exact local attempt evidenc
   );
 });
 
+Deno.test('invoice Checkout: the section fragment stays last, after the claim', () => {
+  const claimed = attempt({ attemptId: 'a1', paymentId: 'p1' });
+  // The client page reads the query (which row settled) AND the fragment
+  // (which section states it). A claim appended after the hash would be read
+  // as part of the fragment and neither would survive.
+  assertEquals(
+    invoiceCheckoutReturnUrl(
+      'https://client.test/projects/p?invoice=i&checkout=success#letterbox',
+      claimed
+    ),
+    'https://client.test/projects/p?invoice=i&checkout=success&checkout_attempt_id=a1&payment_id=p1#letterbox'
+  );
+  assertEquals(
+    invoiceCheckoutReturnUrl('https://client.test/#road', claimed),
+    'https://client.test/?checkout_attempt_id=a1&payment_id=p1#road'
+  );
+});
+
 Deno.test(
   'invoice Checkout: concurrent tabs share one claim, idempotency key, session, and payment identity',
   async () => {

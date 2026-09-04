@@ -48,6 +48,13 @@ export interface DirectOrder {
   shipping: DirectOrderShipping | null;
   created_at: string;
   paid_at: string | null;
+  /**
+   * The project this order was raised against, when it was raised against one
+   * — already in DIRECT_ORDER_COLUMNS below, and what a project surface needs
+   * to know which of a client's orders belong to the house she is standing in.
+   * Optional because create_direct_order's returned row predates the column.
+   */
+  project_id?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -99,6 +106,11 @@ export function useDirectOrders() {
       if (error) throw error;
       return (data ?? []) as unknown as DirectOrder[];
     },
+    // The Threshold holds its road until this settles, so an unfiltered,
+    // client-wide round trip on every navigation would make the house grow a
+    // road after it looked finished. Fresh for half a minute; a settle attempt
+    // refetches it explicitly.
+    staleTime: 30_000,
   });
 }
 

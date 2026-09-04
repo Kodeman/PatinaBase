@@ -2,9 +2,9 @@
 
 import { useId, useRef, useState } from 'react';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { SpineGate } from '@/components/making/spine-gate';
-import { countInWords, moneyInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { SpineGate } from '@/components/threshold/instruments/spine-gate';
+import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   useAcceptTradeScope,
   useClientCommercialDocument,
@@ -12,6 +12,7 @@ import {
 import { makingEvents } from '@/lib/analytics/events';
 import type { ClientSelection } from '@/lib/commercial-documents';
 import type { ThresholdMark } from '@/lib/threshold/derive';
+import { refusalSentence } from '@/lib/threshold/refusal';
 
 import { KIND_LABEL } from './consent-copy';
 
@@ -165,7 +166,7 @@ export function WallGate({
       setAcceptedAt(new Date());
       onAccepted?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to accept this work right now.');
+      setError(refusalSentence(err, 'Unable to accept this work right now.'));
     } finally {
       inFlight.current = false;
     }
@@ -282,7 +283,7 @@ export function WallGate({
                   {error && (
                     <p
                       role="alert"
-                      className="mt-2 text-[15px] leading-normal text-[var(--color-error)]"
+                      className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
                     >
                       {error}
                     </p>

@@ -4,9 +4,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CommercialDocumentKind } from '@patina/types';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { SpineGate } from '@/components/making/spine-gate';
-import { countInWords, moneyInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { SpineGate } from '@/components/threshold/instruments/spine-gate';
+import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   invalidateSignedCommercialDocument,
   useClientCommercialDocument,
@@ -18,6 +18,8 @@ import {
   type ThresholdMark,
   type ThresholdProposal,
 } from '@/lib/threshold/derive';
+import { hasPassed } from '@/lib/threshold/expiry';
+import { noteInBrief } from '@/lib/threshold/standing';
 
 import {
   KIND_LABEL,
@@ -27,6 +29,7 @@ import {
   signLabelFor,
   summaryLineFor,
 } from './consent-copy';
+import { DoorActs } from './door-acts';
 
 /* ── THE DOOR ────────────────────────────────────────────────────────────────
    A paper waiting for the client's name is not a card in a list: it is a door
@@ -75,6 +78,12 @@ export interface DoorProposal extends ThresholdProposal {
    * branch — never the furnishings copy by default.
    */
   kind?: CommercialDocumentKind;
+  /**
+   * `proposals.valid_until`. The old `/proposals/[id]` page treated a passed
+   * date as expired for actionability even before the expiry job ran, and the
+   * acts on the leaf keep that gate.
+   */
+  validUntil?: string | null;
 }
 
 export interface DoorGateProps {
@@ -83,10 +92,10 @@ export interface DoorGateProps {
   /**
    * The studio's standing note, pinned to the leaf. Null pins nothing.
    *
-   * CONTRACT: the standing note is rendered EITHER here or by `TheNote`, never
-   * both — the two components take the same `NoteModel` and neither dedupes,
-   * so passing it to both prints the same first-person paragraph twice and has
-   * a screen reader announce it twice. A door that pins the note owns it.
+   * CONTRACT: the pin carries the note's OPENING and a way back to it, never
+   * its body — `TheNote` sets the letter itself, once, under `#note`. Pin it
+   * on ONE door: the same quote on three leaves is three voices asking for the
+   * same signature.
    */
   note: NoteModel | null;
   projectId: string;
@@ -118,6 +127,7 @@ export function DoorGate({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedAt, setSignedAt] = useState<Date | null>(null);
+  const [declined, setDeclined] = useState(false);
   const [deliveryPending, setDeliveryPending] = useState(false);
   const [replay, setReplay] = useState<string | null>(null);
   const [doorState, setDoorState] = useState<DoorState>('shut');
@@ -143,8 +153,12 @@ export function DoorGate({
   const consentId = `door-consent-${fieldId}`;
   const hintId = `door-hint-${fieldId}`;
 
-  const kind: CommercialDocumentKind =
-    proposal.kind ?? bundle.data?.document?.kind ?? 'legacy';
+  // Null until the paper says what it is. The copy has to name something, so
+  // it falls back to the route's own `else` branch — but an act that branches
+  // on the rail (Decline) may not, and takes the null instead.
+  const resolvedKind: CommercialDocumentKind | null =
+    proposal.kind ?? bundle.data?.document?.kind ?? null;
+  const kind: CommercialDocumentKind = resolvedKind ?? 'legacy';
   const isFurnishings = kind === 'furnishings_authorization';
 
   const items = isFurnishings ? (bundle.data?.furnishings?.items ?? []) : [];
@@ -158,8 +172,15 @@ export function DoorGate({
 
   // The paper has to be on the leaf before the act is offered.
   const drawn = !bundle.isLoading && !bundle.isError;
-  // The same validation the shipped sign page runs.
-  const ready = drawn && agreed && name.trim().length >= 2;
+  // The old page held every act back under one `isActionable`, expiry
+  // included. The acts row withdraws Ask / Request a change / Decline past
+  // `valid_until`; the block that asks for her name disarms on the same date,
+  // or the door offers a signature `/api/proposals/[id]/sign` will refuse.
+  const expired = hasPassed(proposal.validUntil ?? null);
+  // The same validation the shipped sign page runs. A declined paper is not
+  // signable, so the block that asks for her name disarms with it — a page
+  // may not go on offering an answer she has already given.
+  const ready = drawn && !declined && !expired && agreed && name.trim().length >= 2;
 
   async function onSign() {
     if (!ready || inFlight.current) return;
@@ -295,9 +316,11 @@ export function DoorGate({
         <p className="max-w-[34ch] text-[15px] leading-normal text-[var(--text-body)] sm:text-right">
           {signedAt
             ? 'Open. It opened on your name.'
-            : sent
-              ? `Shut since ${DAY_MONTH.format(sent)} · it opens on your name`
-              : 'Shut · it opens on your name'}
+            : declined
+              ? 'Shut. You declined it.'
+              : sent
+                ? `Shut since ${DAY_MONTH.format(sent)} · it opens on your name`
+                : 'Shut · it opens on your name'}
         </p>
       </div>
 
@@ -320,6 +343,7 @@ export function DoorGate({
           <ScoredAction
             actionKey="door_notice_replay"
             regionKey="door"
+            surfaceKey="the_threshold"
             variant="secondary"
             onClick={onReplay}
           >
@@ -387,8 +411,12 @@ export function DoorGate({
                 {/* The quote marks are load-bearing: this is the one first-person
                     paragraph on a third-person page, and unattributed it reads
                     as the page speaking. */}
+                {/* The OPENING of the note, never the whole of it: the letter
+                    itself is set once, under `#note`, and a door that reprinted
+                    it would have the client read the same paragraph twice on
+                    one page. */}
                 <blockquote className="font-heading text-[1.1rem] italic leading-relaxed">
-                  {`“${note.body}”`}
+                  {`“${noteInBrief(note.body)}”`}
                 </blockquote>
                 <figcaption className="mt-2.5 font-mono text-[11px] uppercase not-italic tracking-[0.1em] text-[var(--text-muted)]">
                   {[
@@ -400,6 +428,22 @@ export function DoorGate({
                     .filter((part): part is string => !!part)
                     .join(' · ')}
                 </figcaption>
+                <div className="mt-3">
+                  <ScoredAction
+                    data-testid="door-note-read"
+                    actionKey="door_read_note"
+                    regionKey="gate"
+                    surfaceKey="the_threshold"
+                    variant="tertiary"
+                    href="#note"
+                    // The hash alone would only scroll: `Link` handles the
+                    // navigation itself, so the letter is focused here or a
+                    // keyboard reader is left standing on the door leaf.
+                    onClick={() => document.getElementById('note')?.focus()}
+                  >
+                    Read the note
+                  </ScoredAction>
+                </div>
               </figure>
             )}
 
@@ -443,7 +487,7 @@ export function DoorGate({
                       id={consentId}
                       type="checkbox"
                       checked={agreed}
-                      disabled={submitting || !!signedAt}
+                      disabled={submitting || !!signedAt || declined || expired}
                       onChange={(event) => setAgreed(event.target.checked)}
                       className="mt-1 h-4 w-4 shrink-0 border border-current"
                     />
@@ -462,7 +506,7 @@ export function DoorGate({
                       type="text"
                       value={name}
                       autoComplete="name"
-                      disabled={submitting || !!signedAt}
+                      disabled={submitting || !!signedAt || declined || expired}
                       onChange={(event) => setName(event.target.value)}
                       data-testid="door-sign-name"
                       className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
@@ -470,6 +514,7 @@ export function DoorGate({
                     <ScoredAction
                       actionKey="gate_sign"
                       regionKey="gate"
+                      surfaceKey="the_threshold"
                       variant="primary"
                       disabled={!ready}
                       loading={submitting}
@@ -485,13 +530,17 @@ export function DoorGate({
                     data-testid="door-hint"
                     className="mt-2 text-[15px] leading-normal text-[var(--text-muted)]"
                   >
-                    {!drawn
-                      ? bundle.isError
-                        ? 'This paper could not be drawn just now. Reload to try again.'
-                        : 'Drawing this paper.'
-                      : ready
-                        ? `Ready when you are. ${SIGNATURE_NOTICE}`
-                        : `Type your full name and tick the line to sign. ${SIGNATURE_NOTICE}`}
+                    {declined
+                      ? 'You declined this paper. Your studio has been told.'
+                      : expired
+                        ? 'This paper is past its date. Ask your studio to reissue it.'
+                        : !drawn
+                        ? bundle.isError
+                          ? 'This paper could not be drawn just now. Reload to try again.'
+                          : 'Drawing this paper.'
+                        : ready
+                          ? `Ready when you are. ${SIGNATURE_NOTICE}`
+                          : `Type your full name and tick the line to sign. ${SIGNATURE_NOTICE}`}
                   </p>
                   {/* A refused signature is a genuine error, so it takes the
                       error ink — NOT terracotta, which on this surface is the
@@ -501,7 +550,7 @@ export function DoorGate({
                   {error && (
                     <p
                       role="alert"
-                      className="mt-2 text-[15px] leading-normal text-[var(--color-error)]"
+                      className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
                     >
                       {error}
                     </p>
@@ -509,6 +558,21 @@ export function DoorGate({
                 </div>
               }
             />
+
+            {/* The other four answers the old /proposals/[id] page took, on
+                the leaf rather than at the end of a route. They stand only
+                while the paper is still asking: once it opens on her name the
+                leaf goes, and with it the acts. */}
+            {!signedAt && (
+              <DoorActs
+                proposalId={proposal.id}
+                projectId={projectId}
+                title={proposal.title}
+                kind={resolvedKind}
+                validUntil={proposal.validUntil ?? null}
+                onDeclined={() => setDeclined(true)}
+              />
+            )}
           </div>
         </div>
       )}

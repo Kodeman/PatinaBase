@@ -10,6 +10,8 @@ function ledger(overrides: Partial<HouseLedgerModel> = {}): HouseLedgerModel {
     agreedCents: 6_140_000,
     owedCents: 912_500,
     owedInvoiceCount: 1,
+    owedDueDate: null,
+    owedDatedCount: 0,
     heldCents: 144_000,
     awaitingCents: 689_000,
     overageLine: null,

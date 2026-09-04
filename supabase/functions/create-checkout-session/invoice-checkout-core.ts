@@ -97,15 +97,25 @@ export class InvoiceCheckoutIntegrityError extends Error {
   }
 }
 
-/** Attach the exact local claim to either Checkout return path. */
+/**
+ * Attach the exact local claim to either Checkout return path.
+ *
+ * The fragment stays last. A return URL names a section of the client's page
+ * (`#letterbox`, `#road`) so the receipt is on screen at first paint rather
+ * than after hydration rewrites the hash; appending the claim after the hash
+ * would bury both params inside it and the page would read neither.
+ */
 export function invoiceCheckoutReturnUrl(
   baseUrl: string,
   attempt: Pick<InvoiceCheckoutAttempt, 'attemptId' | 'paymentId'>
 ): string {
-  const separator = baseUrl.includes('?') ? '&' : '?';
+  const hashAt = baseUrl.indexOf('#');
+  const address = hashAt === -1 ? baseUrl : baseUrl.slice(0, hashAt);
+  const fragment = hashAt === -1 ? '' : baseUrl.slice(hashAt);
+  const separator = address.includes('?') ? '&' : '?';
   return (
-    `${baseUrl}${separator}checkout_attempt_id=${encodeURIComponent(attempt.attemptId)}` +
-    `&payment_id=${encodeURIComponent(attempt.paymentId)}`
+    `${address}${separator}checkout_attempt_id=${encodeURIComponent(attempt.attemptId)}` +
+    `&payment_id=${encodeURIComponent(attempt.paymentId)}${fragment}`
   );
 }
 
