@@ -118,9 +118,11 @@ struct StudioDoorTests {
 
         #expect(!code.contains("arrowEdge: .top"))
         #expect(!code.contains("arrowEdge: .bottom"))
-        // `W1-C-13` gave the call a second argument — the host's own bottom
-        // chrome — so the decision is asked for over two lines now.
-        #expect(code.contains("arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge("))
+        // `W1-C-13` gave the call the host's own bottom chrome, and `W1F-01`
+        // the bar's measured top — so the modifier asks for a whole placement
+        // (edge, and what the popover hangs from) rather than an edge.
+        #expect(code.contains("arrowEdge: placement.edge"))
+        #expect(code.contains("FirstLaunchTourPopoverPlacement.placement("))
         #expect(code.contains("for: geometry,"))
         #expect(code.contains("bottomReservation: bottomReservation"))
         // The host names the root the anchors measure themselves against.

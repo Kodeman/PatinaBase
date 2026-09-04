@@ -41,26 +41,94 @@ struct FirstLaunchTourPlacementTests {
 
     /// Walk C's step 2: a record card carrying a full attention list, whose
     /// bottom edge leaves 99 pt above the bar — a card's worth of nothing.
-    @Test("a card with no room below it is presented above the anchor instead")
-    func aTallRecordPresentsItsCardAbove() {
+    ///
+    /// `W1F-01` is the other half: there is no card's worth of room ABOVE it
+    /// either, so the card does not go beside the anchor at all. It hangs from
+    /// the anchor's own top lip, which is the only placement that draws the
+    /// whole card and leaves the bar alone.
+    @Test("a card with no room on either side hangs from the anchor's top edge")
+    func aTallRecordHangsItsCardFromItsOwnTop() throws {
         let record = anchor(300, 630)
-        #expect(
-            FirstLaunchTourPopoverPlacement.arrowEdge(
-                for: record, bottomReservation: Self.barRow
-            ) == .bottom,
-            "step 2's card is hung down across the tab bar again (W1-C-13)"
+        let placement = FirstLaunchTourPopoverPlacement.placement(
+            for: record, bottomReservation: Self.barRow
         )
+        #expect(placement.edge == .top)
+        let attachment = try #require(
+            placement.attachment,
+            "the card is hung beside a 330 pt anchor with 99 pt under it (W1F-01)"
+        )
+        #expect(attachment.height == FirstLaunchTourPopoverPlacement.anchorLip)
+        #expect(attachment.minY == 0, "the card hangs from the anchor's top, not its middle")
     }
 
+    // MARK: - W1F-01 · the geometry the app actually measures
+
+    /// The numbers this wave read off the app itself, on the fixture walk C
+    /// filed the finding against — `client@patina.dev`'s full Today record
+    /// (invoice, proposal, decision, message, story, shipped, See all) on a
+    /// 402 × 874 iPhone 17 Pro:
+    ///
+    /// ```
+    /// [tour-geom] todayRecord      rect=(0, 177.33, 402, 486.67) container=0
+    /// [tour-geom] profileMonogram  rect=(258, 729, 84, 49)       container=778
+    /// ```
+    ///
+    /// Two things the old rule could not survive. **The container is 0** for
+    /// every anchor inside Today's `ScrollView` — `proxy.bounds(of:)` resolves
+    /// nothing through the scroll — so `containerHeight - bottomReservation`
+    /// was never reachable and the first guard returned `.top` every time,
+    /// which is why the pins above passed while the screen failed. And the
+    /// record is 487 pt tall: 177 above it, 65 below it to the bar the tab-bar
+    /// anchor reports at 729. A 139 pt card (298 at accessibility-extra-large)
+    /// fits on neither side.
+    @Test("the shipping geometry: the bar is measured, and the card clears it")
+    func theShippingGeometryClearsTheBar() throws {
+        let record = FirstLaunchTourPopoverPlacement.AnchorGeometry(
+            midY: 420.67,
+            containerHeight: 0,
+            rect: CGRect(x: 0, y: 177.33, width: 402, height: 486.67)
+        )
+        let placement = FirstLaunchTourPopoverPlacement.placement(
+            for: record,
+            bottomReservation: Self.barRow,
+            chromeTop: Self.measuredBarTop
+        )
+
+        #expect(placement.edge == .top)
+        let attachment = try #require(
+            placement.attachment,
+            "a container of 0 fell through to .top with the whole record as the anchor, which is the card across the tab bar, twice walked (W1F-01)"
+        )
+
+        // Where the card is then drawn, and the two card heights walk C
+        // measured: 139.5 at the default size, 298 at accessibility-extra-large.
+        for cardHeight in [139.5, 298.0] as [CGFloat] {
+            let drawnBottom = record.rect.minY + attachment.height
+                + Self.caret + cardHeight
+            #expect(
+                drawnBottom < Self.measuredBarTop,
+                "a \(cardHeight) pt card reaches \(drawnBottom), across the bar row at \(Self.measuredBarTop)"
+            )
+        }
+    }
+
+    /// The bar's own top, as the bar reports it in the tour root's space —
+    /// screen y 791 on this device, 729 local. The chrome measures itself
+    /// because the anchors that need it cannot.
+    private static let measuredBarTop: CGFloat = 729
+    /// The popover's caret, near enough for "does the card clear the bar".
+    private static let caret: CGFloat = 13
+
     /// The same anchor with no chrome to clear — the flag-off root, whose tour
-    /// host wraps Today's content and not a bar — keeps the historical answer,
-    /// so this is not a blanket change of placement.
-    @Test("the same anchor with no reserved chrome keeps the midpoint answer")
+    /// host wraps Today's content and not a bar. The reservation changes the
+    /// room, never the shape of the answer, and an anchor with the whole
+    /// screen under it is `.top` on both roots.
+    @Test("a host with no reserved chrome measures the same way")
     func withoutChromeTheHistoricalRuleStands() {
         let record = anchor(300, 630)
         #expect(
-            FirstLaunchTourPopoverPlacement.arrowEdge(for: record) == .bottom,
-            "630 of 778 is below the midpoint, so this one was already .bottom"
+            FirstLaunchTourPopoverPlacement.arrowEdge(for: record) == .top,
+            "148 pt below and 300 above: neither holds a card, so it hangs from the top"
         )
         // …and an anchor that is genuinely high, with the whole screen under
         // it, is `.top` either way.
@@ -113,6 +181,26 @@ struct FirstLaunchTourPlacementTests {
                 for: midpointOnly, bottomReservation: Self.barRow
             ) == .bottom
         )
+    }
+
+    /// The chrome measures itself, and the placement reads it. `W1F-01`: the
+    /// derived answer was unreachable from the anchors that needed it.
+    @Test("the bar reports its own top, and the popover places against it")
+    func theBarMeasuresItself() throws {
+        let tour = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        )
+        #expect(tour.contains("chromeTop: model?.chromeTop"),
+                "the placement no longer reads the measured bar")
+        #expect(tour.contains("func reportChromeTop("))
+        #expect(tour.contains("attachmentAnchor: placement.attachment.map { .rect(.rect($0)) }"),
+                "the too-tall anchor's lip is not handed to the popover")
+
+        let root = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
+        )
+        #expect(root.contains(".firstLaunchTourChrome()"),
+                "the bar no longer tells the tour where it is (W1F-01)")
     }
 
     /// The reservation reaches the placement from the host, not from a

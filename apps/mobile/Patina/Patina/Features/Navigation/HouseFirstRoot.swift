@@ -137,6 +137,10 @@ public struct HouseFirstRoot: View {
         } trailing: {
             companionSlot
         }
+        // `W1F-01`: the bar says where it is. An anchor inside Today's
+        // ScrollView measures no container at all, so the bar's top could not
+        // be derived from one — and step 2's card was hung across it again.
+        .firstLaunchTourChrome()
     }
 
     /// M1 §6's fifth slot — the Strata mark, and the Companion's only door on

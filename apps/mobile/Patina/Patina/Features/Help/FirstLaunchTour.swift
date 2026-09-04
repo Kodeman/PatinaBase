@@ -651,6 +651,21 @@ public final class FirstLaunchTourModel {
         anchorFrames[anchor] = rect
     }
 
+    /// Where the host's bottom chrome begins, in the tour root's space.
+    ///
+    /// `W1F-01`: an anchor inside Today's `ScrollView` cannot measure the tour
+    /// root at all — `proxy.bounds(of:)` resolves nothing through the scroll
+    /// and reports a container of 0 — so the bar's top could not be derived
+    /// where it was needed. The bar is outside the scroll and measures the
+    /// space fine, so it reports its own top edge here and placement reads it.
+    public private(set) var chromeTop: CGFloat?
+
+    /// Told by `firstLaunchTourChrome()` whenever the layout moves the bar.
+    public func reportChromeTop(_ top: CGFloat) {
+        guard chromeTop != top else { return }
+        chromeTop = top
+    }
+
     /// The frame the scrim leaves un-dimmed, or nil when nothing is showing.
     ///
     /// `B-10`'s other half. The card places correctly — step 1 sits below the
@@ -894,8 +909,12 @@ private extension EnvironmentValues {
 
     /// How much of the tour root's bottom edge belongs to host chrome the card
     /// must not cover. `HouseFirstRoot` hosts the tour ABOVE `rootContent`, so
-    /// the 83 pt tab bar is inside the coordinate space every anchor measures
-    /// itself in; the flag-off root has no bar there and passes nothing.
+    /// the tab bar is inside the coordinate space every anchor measures itself
+    /// in; the flag-off root has no bar there and passes nothing.
+    ///
+    /// The figure is `PatinaTabBar.itemHeight` (49) — the row the bar occupies
+    /// INSIDE the tour root — and not `barHeight` (83), which adds the 34 pt
+    /// home indicator that `safeAreaInset` draws below the root's own bounds.
     @Entry var firstLaunchTourBottomReservation: CGFloat = 0
 }
 
@@ -909,9 +928,17 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     @Environment(\.firstLaunchTourBottomReservation) private var bottomReservation: CGFloat
 
     /// Where this anchor sits inside the tour's root, refreshed whenever the
-    /// layout moves it. Drives `arrowEdge` — see
+    /// layout moves it. Drives the placement — see
     /// `FirstLaunchTourPopoverPlacement` for why the edge cannot be a constant.
     @State private var geometry = FirstLaunchTourPopoverPlacement.AnchorGeometry.unmeasured
+
+    private var placement: FirstLaunchTourPopoverPlacement.Placement {
+        FirstLaunchTourPopoverPlacement.placement(
+            for: geometry,
+            bottomReservation: bottomReservation,
+            chromeTop: model?.chromeTop
+        )
+    }
 
     func body(content: Content) -> some View {
         content
@@ -939,12 +966,13 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
             .onDisappear { model?.unregisterAnchor(anchor) }
             .popover(
                 isPresented: isShownBinding,
-                // `W1-C-13`: the host's own bottom chrome, so a card is never
-                // hung down across the bar the tour is standing on.
-                arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge(
-                    for: geometry,
-                    bottomReservation: bottomReservation
-                )
+                // `W1-C-13` / `W1F-01`: the host's own bottom chrome, so a card
+                // is never hung down across the bar the tour is standing on —
+                // and an anchor too tall for a card on either side hands the
+                // popover its own top lip to hang from.
+                attachmentAnchor: placement.attachment.map { .rect(.rect($0)) }
+                    ?? .rect(.bounds),
+                arrowEdge: placement.edge
             ) {
                 popoverContent
                     .presentationCompactAdaptation(.popover)
@@ -986,6 +1014,24 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     }
 }
 
+/// Reports the host's bottom chrome — the tab bar — to the tour, so a card is
+/// placed against where the bar actually is rather than against a container
+/// height the anchors that matter cannot measure (`W1F-01`).
+private struct FirstLaunchTourChromeModifier: ViewModifier {
+    @Environment(\.firstLaunchTourModel) private var model: FirstLaunchTourModel?
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(
+                    in: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
+                ).minY
+            } action: { top in
+                model?.reportChromeTop(top)
+            }
+    }
+}
+
 public extension View {
     /// Tag this view as the anchor for the given tour step. The wrapping
     /// `FirstLaunchTour` decides whether to render the popover here based on
@@ -994,6 +1040,12 @@ public extension View {
     /// don't host the tour.
     func firstLaunchTourAnchor(_ anchor: FirstLaunchTourAnchor) -> some View {
         modifier(FirstLaunchTourAnchorModifier(anchor: anchor))
+    }
+
+    /// Tag this view as the host's bottom chrome: the tour will not hang a
+    /// card across it. No-op outside a `FirstLaunchTour` ancestor.
+    func firstLaunchTourChrome() -> some View {
+        modifier(FirstLaunchTourChromeModifier())
     }
 }
 
