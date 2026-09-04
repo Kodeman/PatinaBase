@@ -1,0 +1,131 @@
+import { render, screen } from '@testing-library/react';
+
+import HomePage from '../page';
+import { resolveActiveHouse } from '@/lib/data/active-project';
+import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
+
+/* ── The front door ─────────────────────────────────────────────────────────
+   `/` is a protected route: middleware owns the signed-out redirect and the
+   portal-role gate, so everything this page has to decide is which house to
+   open — and, when there is none it can open, to say so without a 404.
+   ────────────────────────────────────────────────────────────────────────── */
+
+jest.mock('@/lib/data/projects', () => ({
+  fetchClientProjects: jest.fn(),
+  fetchClientProjectView: jest.fn(),
+}));
+
+jest.mock('@/lib/data/active-project', () => ({
+  resolveActiveHouse: jest.fn(),
+}));
+
+jest.mock('@/components/making/project-surface-switch', () => ({
+  ProjectSurfaceSwitch: ({
+    projectId,
+    otherHouses,
+    viewSource,
+  }: {
+    projectId: string;
+    otherHouses?: { id: string; name: string }[];
+    viewSource?: string;
+  }) => (
+    <div
+      data-testid="surface"
+      data-project-id={projectId}
+      data-view-source={viewSource}
+      data-other-houses={(otherHouses ?? []).map((house) => house.id).join(',')}
+    />
+  ),
+}));
+
+jest.mock('@/components/projects/ProjectsEmptyState', () => ({
+  ProjectsEmptyState: () => <div data-testid="empty-state" />,
+}));
+
+const mockProjects = fetchClientProjects as jest.Mock;
+const mockProjectView = fetchClientProjectView as jest.Mock;
+const mockActiveHouse = resolveActiveHouse as jest.Mock;
+
+const listItem = (id: string, name: string) => ({
+  id,
+  name,
+  progressPercentage: 0,
+  status: 'active',
+  approvalsPending: 0,
+  nonStage2ApprovalsPending: 0,
+  unreadMessages: 0,
+});
+
+const view = (id: string) => ({
+  project: { id, name: id },
+  milestones: [],
+});
+
+describe('the front door', () => {
+  it('opens the house the active-house rule chose', async () => {
+    mockProjects.mockResolvedValue([listItem('p1', 'The Vale Residence')]);
+    mockActiveHouse.mockResolvedValue('p1');
+    mockProjectView.mockResolvedValue(view('p1'));
+
+    render(await HomePage());
+
+    expect(mockActiveHouse).toHaveBeenCalledWith(['p1']);
+    expect(mockProjectView).toHaveBeenCalledWith('p1');
+    expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p1');
+  });
+
+  it('names the client as having landed, not as having opened this house', async () => {
+    mockProjects.mockResolvedValue([listItem('p1', 'The Vale Residence')]);
+    mockActiveHouse.mockResolvedValue('p1');
+    mockProjectView.mockResolvedValue(view('p1'));
+
+    render(await HomePage());
+
+    expect(screen.getByTestId('surface')).toHaveAttribute(
+      'data-view-source',
+      'front-door',
+    );
+  });
+
+  it('never puts the house she is standing in inside its own mat', async () => {
+    mockProjects.mockResolvedValue([
+      listItem('p1', 'The Vale Residence'),
+      listItem('p2', 'The Linden house'),
+      listItem('p3', 'The Ash cottage'),
+    ]);
+    mockActiveHouse.mockResolvedValue('p2');
+    mockProjectView.mockResolvedValue(view('p2'));
+
+    render(await HomePage());
+
+    expect(screen.getByTestId('surface')).toHaveAttribute(
+      'data-other-houses',
+      'p1,p3',
+    );
+  });
+
+  it('shows the empty state, not a house, when the client has none', async () => {
+    mockProjects.mockResolvedValue([]);
+    mockActiveHouse.mockResolvedValue(null);
+
+    render(await HomePage());
+
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('surface')).not.toBeInTheDocument();
+    expect(mockProjectView).not.toHaveBeenCalled();
+  });
+
+  it('answers with the empty state, never a 404, when the chosen house will not open', async () => {
+    // The list named it and the detail read cannot open it — a deletion
+    // mid-request, or RLS skew between the two selects. A 404 belongs at
+    // `/projects/<id>`; the front door has something else to say.
+    mockProjects.mockResolvedValue([listItem('p1', 'The Vale Residence')]);
+    mockActiveHouse.mockResolvedValue('p1');
+    mockProjectView.mockResolvedValue(null);
+
+    render(await HomePage());
+
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('surface')).not.toBeInTheDocument();
+  });
+});

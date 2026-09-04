@@ -6,7 +6,14 @@ import {
   safeAuthReturnPath,
 } from '@patina/supabase/auth';
 
-export const CLIENT_AUTH_DESTINATION = '/projects';
+/**
+ * Where every client auth method lands. The house, not the retired
+ * `/projects` list — landing on the list rendered it in full server-side
+ * before the route collapse replaced it, so every sign-in flashed a page the
+ * client is never meant to see again. The collapse now serves stale bookmarks
+ * only.
+ */
+export const CLIENT_AUTH_DESTINATION = '/';
 
 /** Keep every client auth method on the shared, encoded-open-redirect-safe policy. */
 export function resolveAuthReturnPath(raw: string | null | undefined): string {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
 import { safeAuthReturnPath } from '@patina/supabase/auth';
+import { CLIENT_AUTH_DESTINATION } from '@/lib/auth-redirect';
 import {
   resolvePortalDecision,
   type RoleDomain,
@@ -139,8 +140,12 @@ export async function middleware(req: NextRequest) {
     res.headers.set('Cache-Control', 'private, no-store, max-age=0');
     res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
+  // `/` is NOT public. It used to be a bare redirect to `/projects`; it now
+  // renders the client's house, so it needs the same signed-out redirect and
+  // the same portal-role gate `/projects` had — otherwise a designer or
+  // manufacturer carrying the .patina.cloud SSO cookie lands on the client
+  // shell instead of /wrong-portal.
   const isPublicPage =
-    req.nextUrl.pathname === '/' ||
     req.nextUrl.pathname.startsWith('/demo') ||
     isInviteLanding ||
     isQuizPage ||
@@ -204,7 +209,7 @@ export async function middleware(req: NextRequest) {
     // parses as an absolute URL. Keep this on the shared auth redirect policy.
     const callbackUrl = safeAuthReturnPath(
       req.nextUrl.searchParams.get('callbackUrl'),
-      '/projects',
+      CLIENT_AUTH_DESTINATION,
     );
     const decision = resolvePortalDecision(
       await getClientPortalRoleLookup(user!.id),

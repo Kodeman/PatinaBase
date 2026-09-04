@@ -24,7 +24,11 @@ export const authEvents = {
 };
 
 export const clientEvents = {
-  projectView: (projectId: string) => track('client_project_view', { project_id: projectId }),
+  // `source` tells the two ways into a house apart: 'front-door' is the house
+  // `/` auto-selected for her, 'named' is a house she asked for by id. Without
+  // it the metric would silently start counting landings as openings.
+  projectView: (projectId: string, source: 'front-door' | 'named' = 'named') =>
+    track('client_project_view', { project_id: projectId, source }),
   // requiresConsent/optionId are new — decisionApprove had zero call sites
   // before this wave, so the signature was free to extend (design plan §1.4).
   decisionApprove: (p: { decisionId: string; optionId: string; requiresConsent: boolean }) =>

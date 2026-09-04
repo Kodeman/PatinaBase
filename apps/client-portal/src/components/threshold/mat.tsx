@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { ScoredAction } from '@/components/making/scored-action';
 
+import { COLUMN_HEAD_CLASS, LINE_CLASS, SUBLINE_CLASS } from './mat-classes';
 import { OtherHouses, type OtherHouse } from './other-houses';
 
 /* ── The mat ────────────────────────────────────────────────────────────────
@@ -43,11 +44,6 @@ export interface MatProps {
   accountHref: '/account';
   onSignOut: () => void;
 }
-
-export const LINE_CLASS =
-  'block w-full border-t border-[var(--border-subtle)] py-2 text-left text-[15px] leading-[1.5] text-[var(--text-body)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
-export const COLUMN_HEAD_CLASS =
-  'mb-2.5 font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
 
 function Paper({ paper }: { paper: MatPaper }) {
   if (paper.href) {
@@ -90,9 +86,7 @@ export function Mat({ people, papers, otherHouses = [], accountHref, onSignOut }
             >
               <span>{`${person.name} · ${person.role}`}</span>
               {person.where && (
-                <span className="block font-mono text-[11px] leading-[1.5] tracking-[0.04em] text-[var(--text-muted)]">
-                  {person.where}
-                </span>
+                <span className={SUBLINE_CLASS}>{person.where}</span>
               )}
             </div>
           ))}

@@ -1,4 +1,5 @@
 import {
+  CLIENT_AUTH_DESTINATION,
   buildAuthCallbackUrl,
   buildRecoveryCallbackUrl,
   buildSignInPath,
@@ -33,13 +34,13 @@ describe('client auth return continuity', () => {
     ).toBe(destination);
   });
 
-  it('fails closed to the projects home for external and protocol-relative targets', () => {
+  it('fails closed to the house for external and protocol-relative targets', () => {
     for (const unsafe of [
       'https://evil.test/phish',
       '//evil.test/phish',
       '/\\evil.test',
     ]) {
-      expect(resolveAuthReturnPath(unsafe)).toBe('/projects');
+      expect(resolveAuthReturnPath(unsafe)).toBe(CLIENT_AUTH_DESTINATION);
       expect(
         new URL(
           buildAuthCallbackUrl(
@@ -47,8 +48,16 @@ describe('client auth return continuity', () => {
             resolveAuthReturnPath(unsafe),
           ),
         ).searchParams.get('callbackUrl'),
-      ).toBe('/projects');
+      ).toBe(CLIENT_AUTH_DESTINATION);
     }
+  });
+
+  // Sign-in lands on the house, never on the retired `/projects` list — a
+  // list that renders in full server-side before the route collapse replaces
+  // it, so every sign-in used to flash it.
+  it('lands sign-in on the house', () => {
+    expect(CLIENT_AUTH_DESTINATION).toBe('/');
+    expect(resolveAuthReturnPath(null)).toBe('/');
   });
 
   it('carries a callback through an OAuth error retry without discarding it', () => {
@@ -102,6 +111,6 @@ describe('client auth return continuity', () => {
   it('hard-replaces only to a sanitized destination', () => {
     const replace = jest.fn();
     replaceAuthDestination('//evil.test', { replace });
-    expect(replace).toHaveBeenCalledWith('/projects');
+    expect(replace).toHaveBeenCalledWith(CLIENT_AUTH_DESTINATION);
   });
 });

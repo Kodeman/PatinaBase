@@ -40,9 +40,11 @@ const SCROLL_POLL_TIMEOUT_MS = 2000;
 export function ThresholdRouteCollapse({ projectIds }: ThresholdRouteCollapseProps) {
   const pathname = usePathname() ?? '';
   const router = useRouter();
-  // The array identity changes on every render of the server-rendered
-  // layout above; the joined key is what the effect can actually depend on.
-  const projectKey = projectIds.join(',');
+  // The array identity changes on every render of the server-rendered layout
+  // above, so the effect depends on the only two things about it that change
+  // the answer: how many houses there are, and which one is first.
+  const houseCount = projectIds.length;
+  const firstHouseId = projectIds[0];
 
   // Holds the in-flight scroll poll's cancel function so a later hop (or the
   // component's own unmount) can stop a still-running poll. Kept in a ref
@@ -53,7 +55,7 @@ export function ThresholdRouteCollapse({ projectIds }: ThresholdRouteCollapsePro
   const cancelScrollPollRef = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {
-    const href = collapsedHref(pathname, projectKey ? projectKey.split(',') : []);
+    const href = collapsedHref(pathname, projectIds);
     if (!href) return;
 
     router.replace(href);
@@ -83,7 +85,10 @@ export function ThresholdRouteCollapse({ projectIds }: ThresholdRouteCollapsePro
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [pathname, projectKey, router]);
+    // `projectIds` is a fresh array every render; `houseCount` and
+    // `firstHouseId` are the whole of what `collapsedHref` reads from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, houseCount, firstHouseId, router]);
 
   // Stop a still-running scroll poll if the component unmounts outright.
   useEffect(() => {

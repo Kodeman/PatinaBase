@@ -1,9 +1,11 @@
 /**
  * The Threshold folds the eight old top-level destinations (the seven
  * `nav-config.ts` routes plus the `/messages` corner link) plus `/projects`
- * — where sign-in lands every client (`CLIENT_AUTH_DESTINATION`) — into
- * anchors on the house. `ROUTE_COLLAPSE` names the anchor each old route
+ * into anchors on the house. `ROUTE_COLLAPSE` names the anchor each old route
  * lands on; `collapsedHref` turns an exact match into the in-page href.
+ *
+ * Sign-in lands on `/` directly (`CLIENT_AUTH_DESTINATION`), so this now
+ * catches only what is genuinely stale: a bookmark, a link in an old email.
  *
  * Where that href points depends on how many houses the client keeps. A solo
  * client goes to her one project page; a client with several goes to `/`,

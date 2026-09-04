@@ -34,11 +34,72 @@ describe('OtherHouses', () => {
     expect(screen.getByText('Des Moines')).toBeInTheDocument();
   });
 
+  it('reads the name and the place as one name, separated', () => {
+    render(<OtherHouses houses={HOUSES} />);
+
+    expect(
+      screen.getByRole('link', { name: 'The Linden house · Des Moines' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'The Ash cottage' })).toBeInTheDocument();
+  });
+
   it('says nothing about a house whose place it does not know', () => {
     render(<OtherHouses houses={[{ id: 'proj-ash', name: 'The Ash cottage' }]} />);
 
-    const link = screen.getByRole('link', { name: /The Ash cottage/ });
-    expect(link.querySelector('span')).toBeNull();
+    expect(screen.queryByText('Des Moines')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'The Ash cottage' })).toBeInTheDocument();
+  });
+
+  it('says what is waiting at another house, in prose', () => {
+    render(
+      <OtherHouses
+        houses={[
+          { id: 'proj-linden', name: 'The Linden house', approvalsPending: 1 },
+          { id: 'proj-ash', name: 'The Ash cottage', unreadMessages: 2 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('A paper is waiting there.')).toBeInTheDocument();
+    expect(screen.getByText('Notes are waiting there.')).toBeInTheDocument();
+  });
+
+  it('says nothing about a house with nothing waiting', () => {
+    render(
+      <OtherHouses
+        houses={[
+          {
+            id: 'proj-linden',
+            name: 'The Linden house',
+            approvalsPending: 0,
+            unreadMessages: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText(/waiting there/)).not.toBeInTheDocument();
+  });
+
+  it('carries what is waiting into the accessible name of the link', () => {
+    render(
+      <OtherHouses
+        houses={[
+          {
+            id: 'proj-linden',
+            name: 'The Linden house',
+            location: 'Des Moines',
+            approvalsPending: 1,
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByRole('link', {
+        name: 'The Linden house · Des Moines. A paper is waiting there.',
+      }),
+    ).toBeInTheDocument();
   });
 
   it('renders nothing at all when there is no other house', () => {

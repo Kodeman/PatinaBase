@@ -6,49 +6,38 @@ import { env } from '../env';
 import { pickActiveProjectId, type HouseActivity } from '../threshold/active-project';
 
 /* ── The house `/` opens on ─────────────────────────────────────────────────
-   `fetchClientProjects` already answers [] both for a client with no houses
-   and for a visitor with no session, so `/` — which middleware treats as a
-   public path — needs the two told apart before it decides between the empty
-   state and the sign-in page. A non-empty list is itself proof of a session
-   (the list is filtered by `client_id = auth.uid()`), so the extra auth read
-   only happens on the empty answer.
+   `/` is a protected route: middleware sends a visitor with no session to
+   sign-in and a wrong-portal role to the interstitial before this module runs
+   at all. So an empty project list here means one thing only — a signed-in
+   client with no house yet — and this file never has to tell a missing
+   session from a missing project. It asks the auth server nothing on the
+   common paths.
 
    Three clocks decide which house a multi-house client lands in. If any of
    them cannot be read the freshest known house stands: never an error, never
    a guess dressed as a fact. ─────────────────────────────────────────────── */
 
-export type ActiveHouse =
-  | { status: 'signed-out' }
-  | { status: 'ok'; activeProjectId: string | null };
+export async function resolveActiveHouse(projectIds: string[]): Promise<string | null> {
+  if (projectIds.length === 0) return null;
 
-async function hasClientSession(): Promise<boolean> {
-  if (env.useProjectFixtures) return true;
+  // `fetchClientProjects` orders by `updated_at` descending, so the first id
+  // is already the freshest house by the project's own clock — the answer to
+  // fall back on whenever the other two clocks cannot be read.
+  const freshest = projectIds[0];
+  if (projectIds.length === 1 || env.useProjectFixtures) return freshest;
 
   try {
     const supabase = (await createServerClient()) as any;
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    return !!user;
-  } catch {
-    return false;
-  }
-}
+    if (!user) return freshest;
 
-export async function resolveActiveHouse(projectIds: string[]): Promise<ActiveHouse> {
-  if (projectIds.length === 0) {
-    return (await hasClientSession())
-      ? { status: 'ok', activeProjectId: null }
-      : { status: 'signed-out' };
-  }
-
-  const freshest: ActiveHouse = { status: 'ok', activeProjectId: projectIds[0] };
-  if (projectIds.length === 1 || env.useProjectFixtures) return freshest;
-
-  try {
-    const supabase = (await createServerClient()) as any;
     const [projects, notes, invoices] = await Promise.all([
-      supabase.from('projects').select('id, updated_at').in('id', projectIds),
+      // Scoped by owner as well as by id — every other fetcher in
+      // `lib/data/projects.ts` carries this predicate, and RLS should not be
+      // the only thing standing between this read and another client's row.
+      supabase.from('projects').select('id, updated_at').eq('client_id', user.id).in('id', projectIds),
       supabase.from('project_notes').select('project_id, sent_at').in('project_id', projectIds),
       supabase.from('invoices').select('project_id, updated_at').in('project_id', projectIds),
     ]);
@@ -72,7 +61,7 @@ export async function resolveActiveHouse(projectIds: string[]): Promise<ActiveHo
       movedAt: movements.get(projectId) ?? [],
     }));
 
-    return { status: 'ok', activeProjectId: pickActiveProjectId(houses) };
+    return pickActiveProjectId(houses);
   } catch {
     return freshest;
   }

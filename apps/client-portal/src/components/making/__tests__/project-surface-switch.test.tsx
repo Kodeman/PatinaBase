@@ -148,7 +148,22 @@ describe('ProjectSurfaceSwitch — client_project_view', () => {
     renderSwitch();
 
     expect(clientEvents.projectView).toHaveBeenCalledTimes(1);
-    expect(clientEvents.projectView).toHaveBeenCalledWith(PROJECT_ID);
+    expect(clientEvents.projectView).toHaveBeenCalledWith(PROJECT_ID, 'named');
+  });
+
+  // `/` now reaches this emitter too. Without the source the metric would
+  // count a landing as an opening and no reader could tell them apart.
+  it('names the front door when `/` chose the house', () => {
+    render(
+      <ProjectSurfaceSwitch
+        projectId={PROJECT_ID}
+        project={PROJECT}
+        milestones={MILESTONES}
+        viewSource="front-door"
+      />,
+    );
+
+    expect(clientEvents.projectView).toHaveBeenCalledWith(PROJECT_ID, 'front-door');
   });
 
   it('re-reports only when the project changes', () => {
@@ -171,6 +186,6 @@ describe('ProjectSurfaceSwitch — client_project_view', () => {
       />,
     );
     expect(clientEvents.projectView).toHaveBeenCalledTimes(2);
-    expect(clientEvents.projectView).toHaveBeenLastCalledWith('proj-other');
+    expect(clientEvents.projectView).toHaveBeenLastCalledWith('proj-other', 'named');
   });
 });

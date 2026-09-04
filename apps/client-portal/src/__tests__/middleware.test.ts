@@ -142,7 +142,7 @@ describe('client middleware Universal Link exemption', () => {
     },
   );
 
-  it('rejects an authenticated open redirect and falls back to projects', async () => {
+  it('rejects an authenticated open redirect and falls back to the house', async () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
     (createMiddlewareClient as jest.Mock).mockReturnValue({
       auth: {
@@ -174,8 +174,100 @@ describe('client middleware Universal Link exemption', () => {
     } as never);
     const redirectUrl = (NextResponse.redirect as jest.Mock).mock
       .calls[0][0] as URL;
-    expect(redirectUrl.pathname).toBe('/projects');
+    expect(redirectUrl.pathname).toBe('/');
     expect(redirectUrl.host).toBe('localhost:3002');
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  });
+
+  // `/` used to be a bare redirect to `/projects`; it now renders the client's
+  // house, so it must carry `/projects`' two gates — the signed-out redirect
+  // and the portal-role check — or a designer holding the .patina.cloud SSO
+  // cookie lands on the client shell instead of /wrong-portal.
+  it('sends an unauthenticated visitor at the front door to sign-in', async () => {
+    await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: '/',
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+
+    const redirectUrl = (NextResponse.redirect as jest.Mock).mock
+      .calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe('/auth/signin');
+    expect(redirectUrl.searchParams.get('callbackUrl')).toBe('/');
+  });
+
+  it('runs the portal-role gate at the front door and bounces a wrong-portal role', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+    (createMiddlewareClient as jest.Mock).mockReturnValue({
+      auth: {
+        getUser: jest
+          .fn()
+          .mockResolvedValue({ data: { user: { id: 'designer-1' } } }),
+      },
+    });
+    (createAdminClient as jest.Mock).mockReturnValue({
+      from: jest.fn(() => ({
+        select: jest.fn(() => ({
+          eq: jest.fn().mockResolvedValue({
+            data: [{ roles: { domain: 'designer' } }],
+            error: null,
+          }),
+        })),
+      })),
+    });
+
+    await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: '/',
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+
+    const redirectUrl = (NextResponse.redirect as jest.Mock).mock
+      .calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe('/wrong-portal');
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  });
+
+  it('lets a consumer through the front door untouched', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+    (createMiddlewareClient as jest.Mock).mockReturnValue({
+      auth: {
+        getUser: jest
+          .fn()
+          .mockResolvedValue({ data: { user: { id: 'client-1' } } }),
+      },
+    });
+    (createAdminClient as jest.Mock).mockReturnValue({
+      from: jest.fn(() => ({
+        select: jest.fn(() => ({
+          eq: jest.fn().mockResolvedValue({
+            data: [{ roles: { domain: 'consumer' } }],
+            error: null,
+          }),
+        })),
+      })),
+    });
+
+    const response = (await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: '/',
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never)) as unknown as { headers: Map<string, string> };
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(response.headers.get('x-patina-role-check')).toBeUndefined();
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   });
 

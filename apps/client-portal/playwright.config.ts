@@ -31,6 +31,10 @@ const THRESHOLD_PORT = 3102;
  * :3002 is the shipped surface and carries NO override. :3102 is the Threshold,
  * and only `tests/threshold.spec.ts` runs against it.
  *
+ * The `threshold` flag is now dead — no code reads it, both servers render the
+ * same surface, and the override below is inert. The split (and the override)
+ * come out in wave 2, with the spec that depends on them.
+ *
  * The split is expressed as static `projects` and a static `webServer` array,
  * never conditioned on `--project`: Playwright re-evaluates this file in each
  * worker process WITHOUT the CLI's project flag, so an argv-conditional

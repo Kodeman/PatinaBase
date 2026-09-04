@@ -14,9 +14,11 @@ import { ThresholdChromeGate } from '../threshold-chrome-gate';
 
 const header = <div data-testid="header">header</div>;
 
-function gate(pathname: string) {
+function gate(pathname: string, hasHouse = true) {
   return render(
-    <ThresholdChromeGate pathname={pathname}>{header}</ThresholdChromeGate>,
+    <ThresholdChromeGate pathname={pathname} hasHouse={hasHouse}>
+      {header}
+    </ThresholdChromeGate>,
   );
 }
 
@@ -65,12 +67,23 @@ describe('ThresholdChromeGate', () => {
     expect(screen.getByTestId('header')).toBeInTheDocument();
   });
 
+  // A client with no house gets the empty state on `/`, and the empty state
+  // has no mat under it — dropping the header there would leave her with no
+  // sign-out, no /account and no way anywhere.
+  it('keeps the header on the front door for a client with no house', () => {
+    gate('/', false);
+
+    expect(screen.getByTestId('header')).toBeInTheDocument();
+  });
+
   it('renders the same answer on every re-render — there is nothing to resolve', () => {
     const { rerender } = gate('/projects/proj-1');
     expect(screen.queryByTestId('header')).not.toBeInTheDocument();
 
     rerender(
-      <ThresholdChromeGate pathname="/projects/proj-1">{header}</ThresholdChromeGate>,
+      <ThresholdChromeGate pathname="/projects/proj-1" hasHouse>
+        {header}
+      </ThresholdChromeGate>,
     );
 
     expect(screen.queryByTestId('header')).not.toBeInTheDocument();

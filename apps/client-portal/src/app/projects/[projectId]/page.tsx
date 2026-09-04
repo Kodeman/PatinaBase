@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 
 import { ProjectSurfaceSwitch } from '@/components/making/project-surface-switch';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
+import { toOtherHouses } from '@/lib/threshold/other-houses';
 
 interface ProjectPageProps {
   params: Promise<{ projectId: string }>;
@@ -32,9 +33,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           projectId={project.id}
           project={project}
           milestones={milestones}
-          otherHouses={projects
-            .filter((house) => house.id !== project.id)
-            .map((house) => ({ id: house.id, name: house.name, location: house.location }))}
+          otherHouses={toOtherHouses(projects, project.id)}
         />
       </main>
     </div>
