@@ -11,7 +11,7 @@
  * specifier) — jest's SWC path-aliasing means `jest.mock('@patina/help-system',
  * …)` is silently ignored (Trap 1, patina-testing skill), and the real barrel
  * reaches `@portabletext/react`, which throws a raw ESM `SyntaxError` under
- * Jest (Trap 2). The fake `TourController` below renders a "To work" button
+ * Jest (Trap 2). The fake `TourController` below renders a "Capture a lead" button
  * that calls `onComplete` directly — this pins desk-walkthrough.tsx's own
  * `onComplete` wiring, not TourController's internal persistence (already
  * covered by the help-system package's own tests).
@@ -107,7 +107,7 @@ jest.mock('../../../../../../packages/help-system/src/index.ts', () => ({
       restart: jest.fn(),
       CoachmarkSlot: () => (
         <button type="button" onClick={() => props.onComplete?.()}>
-          To work
+          Capture a lead
         </button>
       ),
     };
@@ -148,10 +148,10 @@ describe('DeskWalkthrough — step 1 anchor', () => {
 });
 
 describe('DeskWalkthrough — step 6 acts', () => {
-  it('clicking the step-6 CTA "To work" completes the tour and opens the capture-lead sheet', () => {
+  it('clicking the step-6 CTA "Capture a lead" completes the tour and opens the capture-lead sheet', () => {
     render(<DeskWalkthrough />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'To work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Capture a lead' }));
 
     expect(mockOpenCaptureLead).toHaveBeenCalledTimes(1);
     // handleComplete's other side effect — retiring the desk-first-touch
