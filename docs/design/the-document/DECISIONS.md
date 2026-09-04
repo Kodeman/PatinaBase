@@ -10662,7 +10662,7 @@ its 48px crop folded and its full plate unfolded, and neither replaces the other
 
 ### R129 · The tour's last step may act — 2026-09-03
 
-**Ruled by Kody, interviewed against `artifacts/designer-onboarding-learning-2026-09-03/synthesis/proposal.md` §12.** AMENDS R97, item 1. R97 held that no step may route into `/doc/`; it did not rule on whether a step may *act* while staying on `/desk`. Ruled now: **yes.** The walkthrough's sixth and final step, "Begin with a lead," opens `CaptureLeadSheet` over the Desk before the tour closes — the sheet, not a route, so R97's own "never leaves /desk" clause is unbroken. R4's timer still starts only on a submitted lead, never on the sheet opening.
+**Ruled by Kody, interviewed against `artifacts/designer-onboarding-learning-2026-09-03/synthesis/proposal.md` §12.** AMENDS R97, item 1. R97 held that no step may route into `/doc/`; it did not rule on whether a step may *act* while staying on `/desk`. Ruled now: **yes.** The walkthrough's sixth and final step, "Begin with a lead," opens `CaptureLeadSheet` over the Desk before the tour closes — the sheet, not a route, so R97's own "never leaves /desk" clause is unbroken. R4's timer still starts only on a submitted lead, never on the sheet opening. The closing button reads "Capture a lead" (ruled 2026-09-03), never a generic "To work."
 
 *Entries add: R129 · last id = R129*
 
@@ -10695,3 +10695,5 @@ its 48px crop folded and its full plate unfolded, and neither replaces the other
 **Ruled by Kody, same interview**, resolving the question of the Orders sheet's four tabs against R96's "a sheet stays one page" guardrail. AMENDS R96: the guardrail narrows to **documents** — `/doc/[id]` and its sections never page. **Ledgers and sheets** (Orders, Hours, Accounts, People — R96's own laid-sheet family) may page internally; the four-tab Orders sheet stands as shipped, unchanged, and the glossary entry for it is written to describe that truthfully rather than as an exception.
 
 *Entries add: R134 · last id = R134*
+
+Note (2026-09-03): the E4 and E9 drip gates reuse first_capture and payment_received respectively, accepted by Kody as the nearest available activation events; revisit if 00291 gains a library/aesthete event.
