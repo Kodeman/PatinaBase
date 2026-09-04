@@ -19,11 +19,10 @@ import type { Invoice } from '@patina/supabase';
 import type { FFEStageKey } from '@patina/types';
 import { invoiceBalanceCents } from '@patina/shared';
 
-// The client Budget rollup owns which invoices count at all (drafts are
-// pre-issue, voids are cancelled). Imported rather than restated so the
-// threshold and /budget can never disagree about what is open; the module
-// lives under app/budget and stays there.
-import { computeInvoiceRollup, visibleInvoices } from '@/app/budget/rollup';
+// The ledger rollup owns which invoices count at all (drafts are pre-issue,
+// voids are cancelled). Imported rather than restated so the ledger and the
+// letterbox can never disagree about what is open.
+import { computeInvoiceRollup, visibleInvoices } from '@/lib/threshold/invoice-rollup';
 import { journeyStageIndexForStatus } from '@/components/commercial/journey-stepper';
 import type { ClientProjectSelections, ClientSelection } from '@/lib/commercial-documents';
 

@@ -7,7 +7,7 @@ import { invoiceBalanceCents } from '@patina/shared';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
-import { visibleInvoices } from '@/app/budget/rollup';
+import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
 import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
 
 import { Settlement } from './settlement';

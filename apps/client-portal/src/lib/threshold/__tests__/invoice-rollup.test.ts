@@ -1,11 +1,11 @@
 /**
- * Rollup math for the client Budget page — pure functions, no hooks/mocks
+ * Rollup math for the house ledger — pure functions, no hooks/mocks
  * required. Mirrors the paid/outstanding math already established in
  * project-invoices-summary.tsx, extracted here so it's independently
  * testable per-project.
  */
 
-import { computeInvoiceRollup, visibleInvoices } from '../rollup';
+import { computeInvoiceRollup, visibleInvoices } from '../invoice-rollup';
 import type { Invoice } from '@patina/supabase';
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {

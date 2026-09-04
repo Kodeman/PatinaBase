@@ -23,8 +23,8 @@ jest.mock('@/lib/data/active-project', () => ({
   resolveHouseForInstrument: jest.fn(),
 }));
 
-jest.mock('@/components/making/project-surface-switch', () => ({
-  ProjectSurfaceSwitch: ({
+jest.mock('@/components/threshold/threshold', () => ({
+  Threshold: ({
     projectId,
     otherHouses,
     viewSource,
