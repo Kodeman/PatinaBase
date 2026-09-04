@@ -211,7 +211,7 @@ public final class CompanionAPIClient {
         }
 
         // Execute request
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await PatinaURLSession.shared.patinaData(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw CompanionAPIError.networkError(underlying: URLError(.badServerResponse))

@@ -114,8 +114,61 @@ struct NetworkRecoveryTests {
             PatinaURLSession.shouldFlush(lastFlushAt: Date(), now: Date()) == false
         )
         // …but an answered request says the pool is healthy again.
-        PatinaURLSession.noteSuccess()
+        PatinaURLSession.noteSuccess(requestStartedAt: Date())
         #expect(PatinaURLSession.shouldFlush(lastFlushAt: nil, now: Date()))
+        PatinaURLSession.resetRecoveryForTesting()
+    }
+
+    /// …and only a request that was actually served by the new connection
+    /// says so. On a cold launch the app fans ~16 requests at once: some were
+    /// already in flight when the stall fired, and one of THOSE answering says
+    /// nothing about the connection the flush just opened. Clearing the mark
+    /// on it re-arms the flush inside the same burst, so the next old request
+    /// to time out drops the recovery itself.
+    @Test("a request older than the flush does not re-arm it")
+    func aSuccessFromBeforeTheFlushProvesNothing() {
+        let flushed = Date()
+        #expect(
+            PatinaURLSession.successProvesFlush(
+                lastFlushAt: flushed,
+                requestStartedAt: flushed.addingTimeInterval(-1)
+            ) == false
+        )
+        #expect(
+            PatinaURLSession.successProvesFlush(
+                lastFlushAt: flushed,
+                requestStartedAt: flushed.addingTimeInterval(0.001)
+            )
+        )
+        // With no flush outstanding there is no mark to clear either way.
+        #expect(
+            PatinaURLSession.successProvesFlush(
+                lastFlushAt: nil, requestStartedAt: Date()
+            ) == false
+        )
+    }
+
+    /// The burst, end to end through the recovery's own bookkeeping: a stall
+    /// flushes, an in-flight request answers, and the pool the flush opened is
+    /// still protected for the rest of the budget.
+    @Test("one burst cannot flush the connection it just opened")
+    func aBurstDoesNotFlushItsOwnRecovery() {
+        PatinaURLSession.resetRecoveryForTesting()
+        let burstStartedAt = Date()
+        PatinaURLSession.noteFailure(URLError(.timedOut), now: burstStartedAt)
+
+        // A request from the same burst — begun before the flush — answers.
+        PatinaURLSession.noteSuccess(
+            requestStartedAt: burstStartedAt.addingTimeInterval(-2)
+        )
+
+        // The second of the burst's stalls must NOT flush again.
+        #expect(
+            PatinaURLSession.claimFlushForTesting(
+                now: burstStartedAt.addingTimeInterval(1)
+            ) == false,
+            "the burst flushed the connection its own recovery had just opened"
+        )
         PatinaURLSession.resetRecoveryForTesting()
     }
 
@@ -144,17 +197,47 @@ struct NetworkRecoveryTests {
         }
     }
 
-    /// …including the two outside `Core/Network` that reached for it directly.
-    @Test("the auth-adjacent direct callers moved too")
+    /// …including everything outside `Core/Network` that reached for it
+    /// directly. The title above is only true if this list is the whole of
+    /// the app: the nine clients, these nine callers, and the one documented
+    /// exception below.
+    @Test("the direct callers moved too")
     func theDirectCallersMovedToo() throws {
         for path in [
             "Patina/Features/QRAuth/Services/QRAuthService.swift",
-            "Patina/Features/Account/AccountDeletionService.swift"
+            "Patina/Features/Account/AccountDeletionService.swift",
+            "Patina/Services/Auth/AuthProviderCatalog.swift",
+            "Patina/Services/Companion/CompanionAPIClient.swift",
+            "Patina/Services/Analytics/DailyRoomAPI.swift",
+            "Patina/Services/API/DocumentsAPIClient.swift",
+            "Patina/Services/Sync/BackgroundScanUploader.swift",
+            "Patina/Services/Sync/RoomScanSyncService.swift",
+            "Patina/Services/DesignServices/DesignRequestStatusService.swift",
+            "Patina/Features/Help/Services/SanityHelpClient.swift"
         ] {
             let code = SourceScan.code(in: try SourcePin.read(path))
-            #expect(code.contains("PatinaURLSession.shared.patinaData(for:"))
-            #expect(!code.contains("URLSession.shared.data(for:"))
+            #expect(code.contains("PatinaURLSession.shared"),
+                    "\(path) does not send on the pool the app can flush")
+            #expect(!code.contains("URLSession.shared.data(for:"),
+                    "\(path) is back on the pool nothing can flush (W1-C-11)")
+            #expect(!code.contains("URLSession.shared.data(from:"),
+                    "\(path) is back on the pool nothing can flush (W1-C-11)")
+            #expect(!code.contains("= URLSession.shared"),
+                    "\(path) still holds the shared pool")
         }
+    }
+
+    /// The one holder left, named rather than forgotten: a one-shot asset
+    /// download that is not part of the cold-launch burst, does not run
+    /// against the API host, and writes to a file rather than returning data.
+    @Test("the AR asset download is the only URLSession.shared left, deliberately")
+    func theAssetDownloadIsTheDocumentedException() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read(
+                "Patina/Features/ARPlacement/Services/ARPlacementManager.swift"
+            )
+        )
+        #expect(code.contains("URLSession.shared.download(from:"))
     }
 
     /// Both pools are dropped, not just the app's: every request in the

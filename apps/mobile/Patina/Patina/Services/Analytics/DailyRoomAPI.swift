@@ -15,7 +15,7 @@ import Auth
 actor DailyRoomAPI {
     static let shared = DailyRoomAPI()
 
-    private let session = URLSession.shared
+    private let session = PatinaURLSession.shared
     private var baseURL: URL { APIConfiguration.clientPortalURL }
 
     // MARK: - Batch telemetry
@@ -40,7 +40,7 @@ actor DailyRoomAPI {
             request.httpBody = try JSONEncoder.telemetryEncoder.encode(
                 BatchPayload(sessionId: sessionId, events: events)
             )
-            let (_, response) = try await session.data(for: request)
+            let (_, response) = try await session.patinaData(for: request)
             if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
                 return true
             }

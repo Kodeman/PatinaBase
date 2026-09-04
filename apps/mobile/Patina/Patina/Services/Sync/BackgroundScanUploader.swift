@@ -483,7 +483,7 @@ extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, UR
         request.httpMethod = "GET"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(AppConfiguration.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await PatinaURLSession.shared.patinaData(for: request)
         guard
             let http = response as? HTTPURLResponse,
             (200..<300).contains(http.statusCode)

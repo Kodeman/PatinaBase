@@ -123,11 +123,12 @@ public actor SanityHelpClient {
 
     // MARK: Init
 
-    /// Designated initializer. The shared singleton uses `URLSession.shared`
-    /// and `Date.init`. Tests can construct their own instance with a stub
-    /// session and clock.
+    /// Designated initializer. The shared singleton uses the app's own
+    /// session (`W1-C-11`: `URLSession.shared`'s pool cannot be flushed, so a
+    /// stalled connection in it outlives every screen) and `Date.init`. Tests
+    /// can construct their own instance with a stub session and clock.
     public init(
-        session: URLSessionProtocol = URLSession.shared,
+        session: URLSessionProtocol = PatinaURLSession.shared,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.session = session
@@ -543,9 +544,10 @@ public actor SanityHelpClient {
 
 // MARK: - URLSession abstraction (for testability)
 
-/// Narrow protocol that lets `SanityHelpClient` accept either `URLSession.shared`
-/// or a stub in tests without forcing the full `URLSession` API surface on the
-/// stub. Mirrors the pattern in Apple's URLSession async test recipes.
+/// Narrow protocol that lets `SanityHelpClient` accept either the app's
+/// session or a stub in tests without forcing the full `URLSession` API
+/// surface on the stub. Mirrors the pattern in Apple's URLSession async test
+/// recipes.
 public protocol URLSessionProtocol: Sendable {
     func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }

@@ -37,7 +37,14 @@
 
 import Foundation
 
-public enum PatinaURLSession {
+// `nonisolated`: the target's `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
+// otherwise pins this enum — and `URLSession.patinaData` below — to the main
+// actor, so every request would enter and resume there, and the nine actor
+// clients that hold `shared` each drew "main actor-isolated static property
+// 'shared' can not be referenced on a nonisolated actor instance". Nothing here
+// touches main-actor state; the two places that must (`SupabaseClientManager`,
+// `PatinaLog`) hop for themselves.
+nonisolated public enum PatinaURLSession {
 
     /// The session every API client sends through.
     ///
@@ -94,6 +101,20 @@ public enum PatinaURLSession {
         return now.timeIntervalSince(lastFlushAt) >= flushCooldown
     }
 
+    /// Whether an answered request is evidence that the flush worked.
+    ///
+    /// Only a request that STARTED after the flush was served by the
+    /// connection the flush opened. On a cold launch ~16 requests are in
+    /// flight at once: several were already running when the stall fired, and
+    /// one of those answering says nothing about the new connection. Clearing
+    /// the mark on it re-arms the flush inside the same burst, so the next of
+    /// the old requests to time out drops the connection the recovery just
+    /// opened — which is the loop the cooldown exists to prevent.
+    static func successProvesFlush(lastFlushAt: Date?, requestStartedAt: Date) -> Bool {
+        guard let lastFlushAt else { return false }
+        return requestStartedAt >= lastFlushAt
+    }
+
     // MARK: - The recovery
 
     /// Recovery bookkeeping. A lock rather than an actor: the callers are the
@@ -115,11 +136,15 @@ public enum PatinaURLSession {
             return true
         }
 
-        /// A request answered, so whatever connection served it is healthy and
-        /// the next stall is a new one.
-        func noteSuccess() {
+        /// A request that BEGAN after the flush answered, so the connection
+        /// the flush opened is healthy and the next stall is a new one. A
+        /// request older than the flush proves nothing and leaves the mark.
+        func noteSuccess(requestStartedAt: Date) {
             lock.lock()
             defer { lock.unlock() }
+            guard PatinaURLSession.successProvesFlush(
+                lastFlushAt: lastFlushAt, requestStartedAt: requestStartedAt
+            ) else { return }
             lastFlushAt = nil
         }
 
@@ -132,8 +157,8 @@ public enum PatinaURLSession {
         #endif
     }
 
-    static func noteSuccess() {
-        Recovery.shared.noteSuccess()
+    static func noteSuccess(requestStartedAt: Date) {
+        Recovery.shared.noteSuccess(requestStartedAt: requestStartedAt)
     }
 
     /// Called with every failed request. A stall-shaped one drops the pooled
@@ -143,6 +168,13 @@ public enum PatinaURLSession {
         guard isStallShaped(error) else { return }
         guard Recovery.shared.claimFlush(now: now) else { return }
         shared.flush { }
+        // The SDK's session and the logger are main-actor state; the flush
+        // above is not, and belongs on the failing request's own thread.
+        Task { @MainActor in dropSDKPoolAndSaySo() }
+    }
+
+    @MainActor
+    private static func dropSDKPoolAndSaySo() {
         SupabaseClientManager.shared.sdkSession.flush { }
         PatinaLog.sync.error(
             "[network] a request stalled on a connected socket — pooled connections dropped (W1-C-11)"
@@ -154,10 +186,18 @@ public enum PatinaURLSession {
     static func resetRecoveryForTesting() {
         Recovery.shared.resetForTesting()
     }
+
+    /// Test seam: ask the live bookkeeping whether a stall now would flush,
+    /// which is the question a burst answers wrongly if a success re-arms it.
+    static func claimFlushForTesting(now: Date) -> Bool {
+        Recovery.shared.claimFlush(now: now)
+    }
     #endif
 }
 
-extension URLSession {
+// `nonisolated` for the same reason the enum above is: a request must not
+// enter or resume on the main actor to reach its own recovery.
+nonisolated extension URLSession {
     /// `data(for:)` with `W1-C-11`'s recovery attached.
     ///
     /// Every `Core/Network` client calls this instead of `data(for:)`, which is
@@ -165,13 +205,25 @@ extension URLSession {
     /// see — the stall happens inside URLSession, after the socket is ready,
     /// and the only evidence the app gets is the timeout this catches.
     func patinaData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let startedAt = Date()
         do {
             let result = try await data(for: request)
-            PatinaURLSession.noteSuccess()
+            PatinaURLSession.noteSuccess(requestStartedAt: startedAt)
             return result
         } catch {
             PatinaURLSession.noteFailure(error)
             throw error
         }
+    }
+
+    /// The same, for the reads that name a URL rather than build a request —
+    /// a signed document download, a hero frame. Same pool, same recovery.
+    func patinaData(from url: URL) async throws -> (Data, URLResponse) {
+        // A hand-built `URLRequest` carries Foundation's own 60 s default
+        // rather than the session's budget, which is what `data(from:)` would
+        // have applied.
+        var request = URLRequest(url: url)
+        request.timeoutInterval = configuration.timeoutIntervalForRequest
+        return try await patinaData(for: request)
     }
 }

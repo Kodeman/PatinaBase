@@ -523,7 +523,7 @@ public final class RoomScanSyncService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await PatinaURLSession.shared.patinaData(from: url)
             return data
         } catch {
             throw RoomScanSyncError.networkError(error)
