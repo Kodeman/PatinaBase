@@ -157,3 +157,196 @@ in the tree), and `src/lib/__tests__/portal-access.test.ts` fails one
 - **Realtime is subscribed but not exercised.** `useThreadRealtime(threadId)` is wired; the test
   asserts only that it is called with the thread id.
 - Coverage was not measured per-file; the full suite was run without `--coverage`.
+
+---
+
+# Fix round — L4 Correspondence
+
+Review read in full: `artifacts/client-page-completion-2026-09-04/waves/w1/l4-review.md`
+(1 blocker, 11 majors, 8 minors, 5 nits). Every blocker and major is fixed; 8 of 8 minors and
+5 of 5 nits are fixed. Nothing was rejected outright — the two findings whose fix is partly a
+disclosure (8, 12) are noted below with exactly what is code and what is reported.
+
+## Fixed, by finding number
+
+**1 · blocker — empty "Previously" over a house with none.** Gated at the CALL SITE, not inside
+`Previously`: `threshold.tsx` now computes `hasRecord` / `replyHeadsTheRecord` and passes the
+`correspondence` slot only when one of them holds, so the truthy-element trap cannot fire.
+`previously.tsx`'s `!correspondence` guard stays and is now honest.
+(`threshold.tsx:652-690`, `previously.tsx:52`.)
+
+**2 · major — the mute label never flipped.** `useMuteLetters` now awaits
+`queryClient.invalidateQueries({ queryKey: ['comms', 'threads'] })` after the mutation, because the
+mat reads `muted` off the THREAD LIST while `useMuteThread` invalidates only the thread detail.
+Fixed in the portal hook, not in `@patina/supabase` — shared-file edits stay minimal.
+(`use-project-correspondence.ts:130-142`.)
+
+**3 · major — floating mute promise, silent refusal.** `MuteLetters` holds `refused` state,
+calls `void mute.toggle(...).catch(...)`, `console.error`s the reason, and prints the same one-line
+`role="alert"` in `var(--color-error)` that `WriteBack` prints. The hook still rejects, so the
+refusal is the component's to state, not the hook's to swallow.
+(`correspondence.tsx:318-352`.)
+
+**4 · major — the changed rule counted things that are not letters.** `letterMoments(messages,
+readerId)` now shares `toLetters`' `isLetter` predicate (no deleted, no system, no empty body) and
+drops the reader's own hand. Her own reply no longer ticks the doorstep, and a system message no
+longer points at a change she cannot find. (`correspondence.ts:75-118`.)
+
+**5 · major — every house's notices under one house.** `toNotices(notifications, projectId)` files
+by `metadata.project_id`, falling back to the `/projects/<id>` segment of the deep link, and drops
+a row that names neither. Verified against the emitters: `invoice-reminders`,
+`comms-notification-dispatch` and their peers already put `project_id` in the job data that becomes
+`notification_log.metadata`. (`correspondence.ts:169-201`.)
+
+**6 · major — account-wide `{ids:'all'}` on every arrival.** `useMarkNoticesRead()` now takes
+`string[]` and posts nothing when the list is empty; the page passes
+`correspondence.unreadNoticeIds` — this house's unread notices only. `NoticeReceipt` carries
+`unread` off `metadata.read_at`, the same field `/inbox`'s `unreadIds` read.
+(`use-project-correspondence.ts:152-174`, `correspondence.ts:41`.)
+
+**7 · major — `useMarkThreadRead` never called.** New `useMarkLettersRead()` wraps it; the page
+fires it with the thread id. Without this, `comms_thread_participants.last_read_at` never advanced
+and every other surface went on counting letters read here. (`use-project-correspondence.ts:145-150`.)
+
+**6 + 7 together — where they fire.** Not on the `mark_project_read` mount effect: at mount the
+post has not arrived, so the ids are not known yet. They ride a SECOND ref-guarded effect that
+waits for `correspondence.isPending` to clear, then marks once per project.
+(`threshold.tsx:288-310`.)
+
+**8 · major — attachments silently lost.** `CorrespondenceLetter.enclosures` is mapped with
+`/messages`' exact naming (`filename ?? storage_path.split('/').pop() ?? 'Attachment'`, id
+`<msgId>-att-<i>`) and each letter prints them as enclosure lines in the note's own enclosure
+grammar. **Sending attachments is explicitly out of lane** and is not implemented: it needs the
+media-service upload path behind `MessageAttachmentUploader`, which is a surface of its own; the
+retirement plan should treat "attach on send" as an unabsorbed act of `/messages`.
+(`correspondence.ts:79-85`, `correspondence.tsx:133-150`.)
+
+**9 · major — no way to write back without a standing note.** `Letters` gains a `reply` slot at its
+head and the page decides where the reply lives: under the note when one stands, at the head of the
+record when none does. Exactly one `WriteBack` is ever mounted.
+(`threshold.tsx:652-690`, `correspondence.tsx:231-249`.)
+
+**10 · major — doorstep count one higher than the marks on the page.** `derive.ts` adds `'note'`
+for a new letter only when a note is standing; `'previously'` always. (`derive.ts:546-553`.)
+
+**11 · major — the notices popped a beat after the page settled.** `noticesQuery.isPending` folded
+into the hook's settle gate. (`use-project-correspondence.ts:104-107`.)
+
+**12 · major — notice deep links dropped.** `noticeAnchor()` maps a retired route's link onto the
+region of THIS page that answers for it — `invoices`/`orders` → `#letterbox`,
+`decisions`/`proposals`/`reviews` → `#doorstep`, `documents`/`scans` → `#mat`,
+`messages`/`inbox` → `#previously` — and the receipt carries it as an in-page anchor (acts never
+leave the page). **Reported, not fixed:** an absolute `http(s)` link and a link to a route with no
+home on the Threshold resolve to `null` and are dropped rather than faked; those emitters have to
+be rewritten by the retirement plan. (`correspondence.ts:147-201`, `correspondence.tsx:181-232`.)
+
+**13 · minor — asymmetric realtime.** `useInboxNotificationsRealtime()` mounted beside
+`useThreadRealtime`. (`use-project-correspondence.ts:71`.)
+
+**14 · minor — the record stopped in silence at 50 letters.** The hook exposes `hasEarlierLetters`
+/ `readEarlierLetters` / `isReadingEarlierLetters` over `fetchNextPage`, and the record prints a
+"Further back" act when there is more. (Named "Further back", not "Earlier letters" — the note
+already owns that phrase for earlier notes, and two acts of one name on one page is a lie.)
+
+**15 · minor — first-person voice from the client.** "Hold the letter notices" /
+"Send the letter notices again". (`correspondence.tsx:344`.)
+
+**16 · minor — the notice line broke Previously's affordance rule.** `oneLine` / `isTruncated` are
+now exported from `previously.tsx` (additive) and the notice label runs through them, so the two
+lists rule the same way and a long subject cannot wrap past the dotted leader.
+
+**17 · minor — hook-suite coverage gaps.** Added: `useMuteLetters` payload + the thread-list
+invalidation + its refusal propagating; `useMarkLettersRead`; `toNotices` exercised THROUGH the
+hook (project scoping, unread ids); the pagination act; the notices settle gate.
+
+**18 · minor — false-positive silence test.** Corrected in substance rather than in form. The
+reviewer's suggested assertion (`correspondence={<Letters letters={[]} notices={[]} />}` renders
+nothing) is not achievable — a parent cannot see that a child rendered `null`. The empty case is
+now asserted where it is actually decided, at the page: `threshold.test.tsx` › "the post" ›
+"keeps Previously silent when there is neither back matter nor post". The component test keeps
+"handed nothing, it says nothing" with a comment pointing at the page-level test.
+
+**19 · minor — leaked `global.fetch`.** Stashed in a const and restored in `afterEach`.
+
+**20 · minor — the refusal reason went nowhere.** The fixed line stays (never print an error string
+as content); `console.error` now carries the caught reason to the browser log. Asserted in the test.
+
+**21 · nit — `useMemo` inside the returned object literal.** Hoisted to named consts.
+
+**22 · nit — hardcoded ids in `WriteBack`.** `useId()` for the field wrapper and the textarea.
+
+**23 · nit — misleading doc comment on `pickProjectThread`.** Filter kept as a defence; the comment
+now says `useThreads({projectId})` does the filing server-side.
+
+**24 · nit — the mute act read as part of "Your details".** Moved out of the acts row onto its own
+line inside the details column (`mat.tsx`, +2 net lines, still a purely additive slot). Asserted.
+
+**25 · nit — two identical notice lines.** `NoticeReceipt.detail` carries `/inbox`'s body-preview
+chain (`preview ?? message ?? body`); a notice with a detail (or a subject too long for the line)
+folds open to show it.
+
+## Rejections
+
+None. Every finding was accepted. The two partial fixes (8's send-side, 12's unmappable links) are
+disclosed above and in "Still not verified" rather than quietly dropped.
+
+## Shared-file discipline, after the fix round
+
+`previously.tsx` +2 net (two `function` → `export function`), `mat.tsx` +2 net (the slot moved to
+its own line), `the-note.tsx` unchanged from the first round, `derive.ts` +1 net (the `standing`
+guard). `threshold.tsx` grew by the second reading-mark effect and the slot gating. Still all
+additive; the merge conflicts the reviewer predicted (import block, `loading` expression) are
+unchanged in shape.
+
+## Gate output (verbatim)
+
+```
+$ pnpm --dir .../apps/client-portal type-check
+
+> @patina/client-portal@0.1.0 type-check /Users/kody/Code/patina-merged/.codex/worktrees/agent-cpc-l4/apps/client-portal
+> tsc --noEmit
+
+(no output — clean)
+```
+
+```
+$ pnpm --dir .../apps/client-portal test -- threshold making
+
+Test Suites: 32 passed, 32 total
+Tests:       619 passed, 619 total
+Snapshots:   0 total
+Time:        8.181 s
+Ran all test suites matching /threshold|making/i.
+```
+
+```
+$ pnpm --dir .../apps/client-portal test -- correspondence
+
+PASS src/components/threshold/__tests__/correspondence.test.tsx
+PASS src/hooks/__tests__/use-project-correspondence.test.tsx
+PASS src/lib/threshold/__tests__/correspondence.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       59 passed, 59 total
+```
+
+```
+$ npx eslint src/components/threshold src/hooks/use-project-correspondence.ts \
+    src/hooks/__tests__/use-project-correspondence.test.tsx src/lib/threshold
+
+(no output — 0 errors, 0 warnings)
+```
+
+619 tests up from 596 (+23 in `threshold`/`making`); 59 up from 35 in the lane's own suites.
+The two pre-existing failures named in the first round (`lib/data/__tests__/orders.test.ts`,
+`lib/__tests__/portal-access.test.ts`) are outside this lane's paths and were not touched.
+
+## Still not verified
+
+- No browser or e2e pass; jest and `tsc` only. Nothing has been rendered against a real
+  `notification_log` row, so the project-scoping filter (finding 5) is proved by unit test and by
+  reading the emitters, not by production data.
+- Sending an attachment (finding 8) is not implemented — reading them is.
+- Deep links with no Threshold home (finding 12) are dropped, not rewritten; the emitters are the
+  retirement plan's to fix.
+- Coverage was not measured per-file; suites were run without `--coverage`.

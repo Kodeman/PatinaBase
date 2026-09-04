@@ -17,6 +17,12 @@ import { parseSourceDate } from './derive';
    System messages go the same way: they are the application talking about
    itself, and this surface has no voice for that. ────────────────────────── */
 
+/** A file that came with a letter, named the way `/messages` named it. */
+export interface LetterEnclosure {
+  id: string;
+  name: string;
+}
+
 export interface CorrespondenceLetter {
   id: string;
   body: string;
@@ -24,12 +30,18 @@ export interface CorrespondenceLetter {
   from: 'studio' | 'you';
   authorName: string | null;
   sentAt: Date | null;
+  enclosures: LetterEnclosure[];
 }
 
 /** One line of what the house sent, off `notification_log`. */
 export interface NoticeReceipt {
   id: string;
   label: string;
+  /** `/inbox`'s body preview, so two notices of a type are told apart. */
+  detail: string | null;
+  /** An anchor within this page, where the old deep link had one here. */
+  anchor: string | null;
+  unread: boolean;
   date: Date | null;
 }
 
@@ -41,11 +53,12 @@ function moment(value: string | null | undefined): number {
 /**
  * The project's thread, chosen the way `/messages` chose it.
  *
- * `useThreads` has already dropped the threads the reader left or archived, so
- * the choice left here is which of her remaining threads belongs to THIS
- * house: one filed under the project, preferring a thread the studio opened
- * for the project over a direct message that happens to carry the same
- * project_id, and the most recently spoken-in where there is more than one.
+ * `useThreads({projectId})` has already filed by project server-side and
+ * dropped the threads the reader left or archived; the filter below is a
+ * defence, not the filing. What is left to choose is which of her remaining
+ * threads speaks for THIS house: one the studio opened for the project over a
+ * direct message that happens to carry the same project_id, and the most
+ * recently spoken-in where there is more than one.
  */
 export function pickProjectThread(
   threads: ThreadSummary[] | undefined | null,
@@ -60,13 +73,25 @@ export function pickProjectThread(
   );
 }
 
+/** What survives to be a letter at all: the one predicate, used twice. */
+function isLetter(message: CommsMessage): boolean {
+  return !message.deleted_at && !message.system && message.body.trim().length > 0;
+}
+
+function enclosuresOf(message: CommsMessage): LetterEnclosure[] {
+  return (message.attachments ?? []).map((attachment, index) => ({
+    id: `${message.id}-att-${index}`,
+    name: attachment.filename ?? attachment.storage_path.split('/').pop() ?? 'Attachment',
+  }));
+}
+
 /** Newest first, the order Previously keeps its own lines in. */
 export function toLetters(
   messages: CommsMessage[] | undefined | null,
   readerId: string | null,
 ): CorrespondenceLetter[] {
   return (messages ?? [])
-    .filter((message) => !message.deleted_at && !message.system && message.body.trim().length > 0)
+    .filter(isLetter)
     .map((message) => ({
       id: message.id,
       body: message.body,
@@ -76,14 +101,25 @@ export function toLetters(
           : ('studio' as const),
       authorName: message.sender?.full_name ?? null,
       sentAt: parseSourceDate(message.created_at),
+      enclosures: enclosuresOf(message),
     }))
     .sort((a, b) => (b.sentAt?.getTime() ?? 0) - (a.sentAt?.getTime() ?? 0));
 }
 
-/** Every letter's moment, for `deriveThreshold`'s changed rule. */
-export function letterMoments(messages: CommsMessage[] | undefined | null): string[] {
+/**
+ * Every letter's moment, for `deriveThreshold`'s changed rule.
+ *
+ * The reader's own hand is not a change: a house that counted her own reply as
+ * something that had happened to her would be counting her back at herself.
+ * Anything that does not print as a letter is not a moment either — a count
+ * that points at a change she cannot find is worse than no count.
+ */
+export function letterMoments(
+  messages: CommsMessage[] | undefined | null,
+  readerId: string | null,
+): string[] {
   return (messages ?? [])
-    .filter((message) => !message.deleted_at)
+    .filter((message) => isLetter(message) && message.sender_id !== readerId)
     .map((message) => message.created_at);
 }
 
@@ -98,13 +134,77 @@ function noticeLabel(notification: InboxNotification): string {
   return notification.type.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** `/inbox`'s own body preview, so two notices of a type are told apart. */
+function noticeDetail(notification: InboxNotification): string | null {
+  const metadata = notification.metadata ?? {};
+  const body =
+    (metadata.preview as string | undefined) ||
+    (metadata.message as string | undefined) ||
+    (metadata.body as string | undefined) ||
+    '';
+  const trimmed = body.replace(/\s+/g, ' ').trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function deepLinkOf(notification: InboxNotification): string | null {
+  const metadata = notification.metadata ?? {};
+  return (
+    (metadata.deep_link as string | undefined) ?? (metadata.url as string | undefined) ?? null
+  );
+}
+
+/* Where a retired route's deep link lands on this page. Acts never leave the
+   page, so a notice can only point at a region the Threshold actually has; a
+   link with no home here is a link the retirement plan has to rewrite at the
+   emitter, and it is dropped rather than faked. */
+const ANCHOR_BY_SEGMENT: Record<string, string> = {
+  invoices: '#letterbox',
+  orders: '#letterbox',
+  decisions: '#doorstep',
+  proposals: '#doorstep',
+  reviews: '#doorstep',
+  documents: '#mat',
+  scans: '#mat',
+  messages: '#previously',
+  inbox: '#previously',
+};
+
+export function noticeAnchor(link: string | null | undefined): string | null {
+  if (!link || /^https?:/i.test(link)) return null;
+  const segments = link.split(/[?#]/)[0].split('/').filter(Boolean);
+  for (const segment of segments) {
+    const anchor = ANCHOR_BY_SEGMENT[segment];
+    if (anchor) return anchor;
+  }
+  return null;
+}
+
+/**
+ * The house this notice belongs to.
+ *
+ * `notification_log` is filed by reader, not by project, so a client with two
+ * houses would otherwise read the second house's notices under the first.
+ * A row that names no project cannot be claimed by one.
+ */
+function noticeProjectId(notification: InboxNotification): string | null {
+  const filed = (notification.metadata ?? {}).project_id;
+  if (typeof filed === 'string' && filed.length > 0) return filed;
+  const match = /\/projects\/([^/?#]+)/.exec(deepLinkOf(notification) ?? '');
+  return match ? match[1] : null;
+}
+
 export function toNotices(
   notifications: InboxNotification[] | undefined | null,
+  projectId: string,
 ): NoticeReceipt[] {
   return (notifications ?? [])
+    .filter((notification) => noticeProjectId(notification) === projectId)
     .map((notification) => ({
       id: notification.id,
       label: noticeLabel(notification),
+      detail: noticeDetail(notification),
+      anchor: noticeAnchor(deepLinkOf(notification)),
+      unread: !(notification.metadata ?? {}).read_at,
       date: parseSourceDate(notification.created_at),
     }))
     .sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));

@@ -48,6 +48,7 @@ const LETTERS: CorrespondenceLetter[] = [
     from: 'studio',
     authorName: 'Nora Quist',
     sentAt: new Date(2026, 7, 4, 9, 0, 0),
+    enclosures: [{ id: 'm-1-att-0', name: 'Sconce, as found.jpg' }],
   },
   {
     id: 'm-2',
@@ -55,11 +56,19 @@ const LETTERS: CorrespondenceLetter[] = [
     from: 'you',
     authorName: 'Harper Vale',
     sentAt: new Date(2026, 7, 4, 11, 0, 0),
+    enclosures: [],
   },
 ];
 
 const NOTICES: NoticeReceipt[] = [
-  { id: 'n-1', label: 'Invoice No. 4 is ready', date: new Date(2026, 7, 2, 9, 0, 0) },
+  {
+    id: 'n-1',
+    label: 'Invoice No. 4 is ready',
+    detail: null,
+    anchor: null,
+    unread: true,
+    date: new Date(2026, 7, 2, 9, 0, 0),
+  },
 ];
 
 beforeEach(() => {
@@ -104,6 +113,7 @@ describe('WriteBack', () => {
   });
 
   it('keeps the words in the field when the send is refused', async () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
     writeBackMock.mockReturnValue({
       send: jest.fn().mockRejectedValue(new Error('offline')),
       isPending: false,
@@ -119,6 +129,9 @@ describe('WriteBack', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.getByTestId('write-back-body')).toHaveValue('Friday works for us.');
     expect(screen.queryByTestId('write-back-receipt')).not.toBeInTheDocument();
+    // The reason reaches the browser log even though the page prints one line.
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 });
 
@@ -152,6 +165,61 @@ describe('Letters', () => {
     expect(screen.getByTestId('notice-date')).toHaveTextContent('2 August');
     expect(screen.getByTestId('notice-state')).toHaveTextContent('Sent');
   });
+
+  it('keeps what came with a letter, named', () => {
+    render(<Letters letters={LETTERS} notices={[]} />);
+    expect(screen.getByTestId('letter-enclosures')).toHaveTextContent('Sconce, as found.jpg');
+    expect(screen.getAllByTestId('letter-enclosure')).toHaveLength(1);
+  });
+
+  it('stands for the reply alone when there is no note to answer under', () => {
+    render(<Letters letters={[]} notices={[]} reply={<p data-testid="the-reply">reply</p>} />);
+    expect(screen.getByTestId('the-reply')).toBeInTheDocument();
+  });
+
+  it('unfolds a notice that has more to say than the line carries', () => {
+    render(
+      <Letters
+        letters={[]}
+        notices={[
+          {
+            ...NOTICES[0],
+            label: 'Proposal Sent',
+            detail: 'The furnishings authorization.',
+            anchor: '#doorstep',
+          },
+        ]}
+      />,
+    );
+
+    const act = screen.getByRole('button', { name: /proposal sent/i });
+    expect(act).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('notice-detail')).not.toBeInTheDocument();
+
+    fireEvent.click(act);
+    expect(screen.getByTestId('notice-detail')).toHaveTextContent(
+      'The furnishings authorization.',
+    );
+    expect(screen.getByTestId('notice-anchor')).toHaveAttribute('href', '#doorstep');
+  });
+
+  it('takes a plain notice to its own region in place, never off the page', () => {
+    render(<Letters letters={[]} notices={[{ ...NOTICES[0], anchor: '#letterbox' }]} />);
+    expect(screen.getByTestId('notice-anchor')).toHaveAttribute('href', '#letterbox');
+  });
+
+  it('says the record goes further back rather than stopping in silence', () => {
+    const onEarlier = jest.fn();
+    render(<Letters letters={LETTERS} notices={[]} hasEarlier onEarlier={onEarlier} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /further back/i }));
+    expect(onEarlier).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers nothing further back when the record is whole', () => {
+    render(<Letters letters={LETTERS} notices={[]} onEarlier={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: /further back/i })).not.toBeInTheDocument();
+  });
 });
 
 describe('MuteLetters', () => {
@@ -165,12 +233,29 @@ describe('MuteLetters', () => {
     muteMock.mockReturnValue({ toggle, isPending: false });
 
     const { rerender } = render(<MuteLetters threadId="thr-1" muted={false} />);
-    fireEvent.click(screen.getByRole('button', { name: /stop telling me about letters/i }));
+    fireEvent.click(screen.getByRole('button', { name: /hold the letter notices/i }));
     expect(toggle).toHaveBeenCalledWith({ threadId: 'thr-1', muted: true });
 
     rerender(<MuteLetters threadId="thr-1" muted />);
-    fireEvent.click(screen.getByRole('button', { name: /tell me about letters again/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send the letter notices again/i }));
     expect(toggle).toHaveBeenLastCalledWith({ threadId: 'thr-1', muted: false });
+  });
+
+  it('says so when the change is refused, rather than nothing at all', async () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+    muteMock.mockReturnValue({
+      toggle: jest.fn().mockRejectedValue(new Error('offline')),
+      isPending: false,
+    });
+
+    render(<MuteLetters threadId="thr-1" muted={false} />);
+    fireEvent.click(screen.getByRole('button', { name: /hold the letter notices/i }));
+
+    await waitFor(() => expect(screen.getByTestId('mute-refused')).toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The letter notices could not be changed just now.',
+    );
+    error.mockRestore();
   });
 });
 
@@ -203,6 +288,10 @@ describe('the mounts', () => {
     expect(screen.getByTestId('the-letters')).toBeInTheDocument();
   });
 
+  /* The slot is a ReactNode, and a React element is truthy even when it
+     renders nothing — so the empty case is the CALL SITE's to decide, and is
+     asserted where the page decides it (threshold.test.tsx, "the post"). What
+     Previously owes is this: handed nothing, it says nothing. */
   it('is still silent with neither entries nor correspondence', () => {
     const { container } = render(<Previously entries={[]} />);
     expect(container).toBeEmptyDOMElement();
@@ -218,6 +307,11 @@ describe('the mounts', () => {
         correspondence={<p data-testid="the-mute">mute</p>}
       />,
     );
-    expect(screen.getByTestId('mat-details')).toContainElement(screen.getByTestId('the-mute'));
+    const details = screen.getByTestId('mat-details');
+    expect(details).toContainElement(screen.getByTestId('the-mute'));
+    // Its own line: not inside the row that carries the client's own record.
+    expect(
+      screen.getByRole('link', { name: /your details/i }).parentElement,
+    ).not.toContainElement(screen.getByTestId('the-mute'));
   });
 });

@@ -29,6 +29,7 @@ import {
 } from '@/hooks/use-commercial-client';
 import { useHydrated } from '@/hooks/use-hydrated';
 import {
+  useMarkLettersRead,
   useMarkNoticesRead,
   useProjectCorrespondence,
 } from '@/hooks/use-project-correspondence';
@@ -259,6 +260,7 @@ export function Threshold({
   useProjectNotesRealtime(projectId);
   const correspondence = useProjectCorrespondence(projectId);
   const markNoticesRead = useMarkNoticesRead();
+  const markLettersRead = useMarkLettersRead();
   // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
   // effect depending on the object would re-run every render for the ref-guard
   // below to swallow.
@@ -284,10 +286,30 @@ export function Threshold({
     if (markedProject.current === projectId) return;
     markedProject.current = projectId;
     markProjectRead({ projectId });
-    // The notices ARE the reading mark's business: /inbox's one control, fired
-    // by the act of arriving rather than by a second one the client must find.
-    markNoticesRead();
-  }, [hydrated, markNoticesRead, markProjectRead, projectId]);
+  }, [hydrated, markProjectRead, projectId]);
+
+  // The post is the reading mark's business too — /messages marked its thread
+  // read on view and /inbox offered one control for the notices — but it can
+  // only be marked once the post has ARRIVED, so it rides its own settle
+  // rather than the mount. The notices marked are this house's alone: 'all'
+  // would empty counts on surfaces this page never showed.
+  const markedPost = useRef<string | null>(null);
+  const { threadId: postThreadId, unreadNoticeIds, isPending: postPending } = correspondence;
+  useEffect(() => {
+    if (!hydrated || !projectId || postPending) return;
+    if (markedPost.current === projectId) return;
+    markedPost.current = projectId;
+    if (postThreadId) markLettersRead(postThreadId);
+    markNoticesRead(unreadNoticeIds);
+  }, [
+    hydrated,
+    markLettersRead,
+    markNoticesRead,
+    postPending,
+    postThreadId,
+    projectId,
+    unreadNoticeIds,
+  ]);
 
   // undefined = the mark has not resolved this session; null = no previous
   // mark, so this is a first visit and nothing can have changed since.
@@ -627,6 +649,12 @@ export function Threshold({
   const ledger = <HouseLedger ledger={model.ledger} />;
   const letterbox = <Letterbox invoice={model.letterbox} today={today} />;
   const road = model.road.length > 0 ? <TheRoad pieces={model.road} /> : null;
+  // The reply belongs under the note. With no standing note there is no note
+  // to answer under and the central act of /messages would be unreachable, so
+  // it heads the record instead.
+  const replyHeadsTheRecord = model.note === null && correspondence.threadId !== null;
+  const writeBack = <WriteBack threadId={correspondence.threadId} today={today} />;
+  const hasRecord = correspondence.letters.length > 0 || correspondence.notices.length > 0;
   const note = (
     <TheNote
       note={model.note}
@@ -634,14 +662,26 @@ export function Threshold({
       enclosures={enclosures}
       authorName={studioName}
       today={today}
-      reply={<WriteBack threadId={correspondence.threadId} today={today} />}
+      reply={replyHeadsTheRecord ? undefined : writeBack}
     />
   );
+  // Gated HERE, not inside Previously: a React element is truthy even when the
+  // component renders nothing, so a slot handed down unconditionally would
+  // print an empty "Previously" over a house that has none.
   const previouslySection = (
     <Previously
       entries={model.previously}
       correspondence={
-        <Letters letters={correspondence.letters} notices={correspondence.notices} />
+        hasRecord || replyHeadsTheRecord ? (
+          <Letters
+            letters={correspondence.letters}
+            notices={correspondence.notices}
+            reply={replyHeadsTheRecord ? writeBack : undefined}
+            hasEarlier={correspondence.hasEarlierLetters}
+            onEarlier={correspondence.readEarlierLetters}
+            earlierPending={correspondence.isReadingEarlierLetters}
+          />
+        ) : undefined
       }
     />
   );

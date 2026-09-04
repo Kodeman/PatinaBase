@@ -543,11 +543,12 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     changed.add('previously');
   }
 
-  // A letter that arrived since her last reading ticks BOTH the note she would
-  // answer it under and the record it is filed in — the correspondence has one
-  // moment and two places on the page.
+  // A letter that arrived since her last reading ticks the record it is filed
+  // in, and the note she would answer it under — but only where a note is
+  // standing to be answered: the doorstep's count names regions the page
+  // actually prints, and an unprinted region is a mark she cannot find.
   if ((input.messageSentAts ?? []).some((sentAt) => movedSince(sentAt))) {
-    changed.add('note');
+    if (standing) changed.add('note');
     changed.add('previously');
   }
 

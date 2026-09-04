@@ -28,13 +28,13 @@ const STATE_WORD: Record<PreviouslyState, string> = {
 const ONE_LINE = 58;
 
 /** The line reads at a glance; the whole of it is one click away. */
-function oneLine(label: string): string {
+export function oneLine(label: string): string {
   const flat = label.replace(/\s+/g, ' ').trim();
   return flat.length <= ONE_LINE ? flat : `${flat.slice(0, ONE_LINE - 1).trimEnd()}…`;
 }
 
 /** Nothing to unfold when the line already carries the whole of it. */
-function isTruncated(label: string): boolean {
+export function isTruncated(label: string): boolean {
   return label.replace(/\s+/g, ' ').trim().length > ONE_LINE;
 }
 

@@ -117,7 +117,6 @@ export function Mat({ people, papers, accountHref, onSignOut, correspondence }: 
             >
               Your details
             </ScoredAction>
-            {correspondence}
             <ScoredAction
               actionKey="mat_sign_out"
               regionKey="mat"
@@ -128,6 +127,9 @@ export function Mat({ people, papers, accountHref, onSignOut, correspondence }: 
               Leave the house
             </ScoredAction>
           </div>
+          {/* Its own line: an act that governs the letters is not part of the
+              client's own record, and reads as one when it sits inside it. */}
+          {correspondence && <div className="mt-2">{correspondence}</div>}
         </div>
       </div>
     </section>

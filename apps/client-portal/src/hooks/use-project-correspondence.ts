@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
   useInboxNotifications,
+  useInboxNotificationsRealtime,
+  useMarkThreadRead,
   useMuteThread,
   useSendMessage,
   useThreadMessages,
@@ -35,13 +37,20 @@ export interface ProjectCorrespondence {
   muted: boolean;
   letters: CorrespondenceLetter[];
   notices: NoticeReceipt[];
+  /** True when the thread holds letters older than the page has read. */
+  hasEarlierLetters: boolean;
+  /** Reads one more page of letters, oldest-ward. */
+  readEarlierLetters: () => void;
+  isReadingEarlierLetters: boolean;
+  /** The notices this house shows that the reader has not yet been marked on. */
+  unreadNoticeIds: string[];
   /** Every letter's moment, for `deriveThreshold`'s changed rule. */
   sentAts: string[];
   /**
-   * True until the threads AND this thread's letters have answered. The page
-   * folds this into its settle gate: `changed` feeds the doorstep's count, and
-   * a count that ticks upward a beat after the page settles is the one thing
-   * this surface may not do.
+   * True until the threads, this thread's letters AND the notices have
+   * answered. The page folds this into its settle gate: `changed` feeds the
+   * doorstep's count, and a count that ticks upward a beat after the page
+   * settles is the one thing this surface may not do.
    */
   isPending: boolean;
 }
@@ -60,19 +69,43 @@ export function useProjectCorrespondence(projectId: string): ProjectCorresponden
   const messagesQuery = useThreadMessages(threadId ?? undefined);
   useThreadRealtime(threadId ?? undefined);
   const noticesQuery = useInboxNotifications({ limit: 50 });
+  useInboxNotificationsRealtime();
 
   const messages = useMemo(
     () => (messagesQuery.data?.pages ?? []).flat(),
     [messagesQuery.data],
   );
 
+  const letters = useMemo(() => toLetters(messages, readerId), [messages, readerId]);
+  const notices = useMemo(
+    () => toNotices(noticesQuery.data, projectId),
+    [noticesQuery.data, projectId],
+  );
+  const sentAts = useMemo(() => letterMoments(messages, readerId), [messages, readerId]);
+  const unreadNoticeIds = useMemo(
+    () => notices.filter((notice) => notice.unread).map((notice) => notice.id),
+    [notices],
+  );
+
+  const { fetchNextPage } = messagesQuery;
+  const readEarlierLetters = useCallback(() => {
+    void fetchNextPage();
+  }, [fetchNextPage]);
+
   return {
     threadId,
     muted: !!thread?.my_participant?.muted_at,
-    letters: useMemo(() => toLetters(messages, readerId), [messages, readerId]),
-    notices: useMemo(() => toNotices(noticesQuery.data), [noticesQuery.data]),
-    sentAts: useMemo(() => letterMoments(messages), [messages]),
-    isPending: threadsQuery.isPending || (threadId !== null && messagesQuery.isPending),
+    letters,
+    notices,
+    hasEarlierLetters: threadId !== null && !!messagesQuery.hasNextPage,
+    readEarlierLetters,
+    isReadingEarlierLetters: !!messagesQuery.isFetchingNextPage,
+    unreadNoticeIds,
+    sentAts,
+    isPending:
+      threadsQuery.isPending ||
+      (threadId !== null && messagesQuery.isPending) ||
+      noticesQuery.isPending,
   };
 }
 
@@ -98,36 +131,58 @@ export interface MuteLetters {
 }
 
 export function useMuteLetters(): MuteLetters {
+  const queryClient = useQueryClient();
   const mute = useMuteThread();
   return {
     toggle: async ({ threadId, muted }) => {
       await mute.mutateAsync({ threadId, muted });
+      // `useMuteThread` invalidates the thread detail; the mat reads its state
+      // off the THREAD LIST, so without this the word on the act does not turn
+      // until the list goes stale on its own and the client is told nothing.
+      await queryClient.invalidateQueries({ queryKey: ['comms', 'threads'] });
     },
     isPending: mute.isPending,
   };
 }
 
 /**
- * `/inbox`'s "Mark all read", fired by the Threshold's reading mark.
+ * `/messages`' own mark-read, fired by the Threshold's reading mark.
  *
- * The route is the one `/inbox` posted to; the ids are `'all'` for the same
- * reason that page offered one control for the lot — `notification_log` rows
- * are the reader's own, and the Threshold shows them as receipts of what was
- * sent rather than as a queue she has to clear.
+ * The letters are read here now, so `comms_thread_participants.last_read_at`
+ * has to advance here too — otherwise every unread count on every other
+ * surface goes on counting letters she has already read.
  */
-export function useMarkNoticesRead(): () => void {
+export function useMarkLettersRead(): (threadId: string) => void {
+  const { mutate } = useMarkThreadRead();
+  return useCallback((threadId: string) => mutate(threadId), [mutate]);
+}
+
+/**
+ * `/inbox`'s mark-read, fired by the Threshold's reading mark.
+ *
+ * The route is the one `/inbox` posted to, and the ids are the ids of the
+ * notices THIS house shows: `'all'` would stamp every notice the reader has in
+ * every project, emptying the counts on surfaces this page never displayed.
+ */
+export function useMarkNoticesRead(): (ids: string[]) => void {
   const queryClient = useQueryClient();
   const { mutate } = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (ids: string[]) => {
       await fetch('/api/inbox/mark-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: 'all' }),
+        body: JSON.stringify({ ids }),
       });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox'] });
     },
   });
-  return useCallback(() => mutate(undefined), [mutate]);
+  return useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      mutate(ids);
+    },
+    [mutate],
+  );
 }

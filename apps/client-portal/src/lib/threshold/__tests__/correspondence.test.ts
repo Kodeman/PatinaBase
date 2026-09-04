@@ -7,6 +7,7 @@ import type { CommsMessage, InboxNotification, ThreadSummary } from '@patina/sup
 import { deriveThreshold, type ThresholdInput } from '../derive';
 import {
   letterMoments,
+  noticeAnchor,
   pickProjectThread,
   toLetters,
   toNotices,
@@ -61,7 +62,7 @@ function notification(
     channel: 'email',
     status: 'sent',
     template_id: null,
-    metadata: {},
+    metadata: { project_id: PROJECT },
     opened_at: null,
     clicked_at: null,
     sent_at: '2026-08-02T09:00:00.000Z',
@@ -156,30 +157,102 @@ describe('toLetters', () => {
     const letters = toLetters([message({ id: 'm-1', sender_id: READER })], null);
     expect(letters[0].from).toBe('studio');
   });
+
+  it('keeps what came with the letter, named the way /messages named it', () => {
+    const letters = toLetters(
+      [
+        message({
+          id: 'm-1',
+          attachments: [
+            { storage_path: 'proj/vale/elevation.pdf', mime: 'application/pdf', size: 12 },
+            {
+              storage_path: 'proj/vale/x.jpg',
+              mime: 'image/jpeg',
+              size: 12,
+              filename: 'Sconce, as found.jpg',
+            },
+          ],
+        }),
+      ],
+      READER,
+    );
+    expect(letters[0].enclosures).toEqual([
+      { id: 'm-1-att-0', name: 'elevation.pdf' },
+      { id: 'm-1-att-1', name: 'Sconce, as found.jpg' },
+    ]);
+  });
 });
 
 describe('letterMoments', () => {
   it('reports every surviving letter’s moment', () => {
     expect(
-      letterMoments([
-        message({ id: 'm-1', created_at: '2026-08-04T09:00:00.000Z' }),
-        message({ id: 'm-2', created_at: '2026-08-05T09:00:00.000Z', deleted_at: '2026-08-06' }),
-      ]),
+      letterMoments(
+        [
+          message({ id: 'm-1', created_at: '2026-08-04T09:00:00.000Z' }),
+          message({ id: 'm-2', created_at: '2026-08-05T09:00:00.000Z', deleted_at: '2026-08-06' }),
+        ],
+        READER,
+      ),
     ).toEqual(['2026-08-04T09:00:00.000Z']);
+  });
+
+  it('never counts the reader’s own hand as something that changed', () => {
+    expect(
+      letterMoments(
+        [
+          message({ id: 'm-mine', sender_id: READER, created_at: '2026-08-05T09:00:00.000Z' }),
+          message({ id: 'm-theirs', created_at: '2026-08-04T09:00:00.000Z' }),
+        ],
+        READER,
+      ),
+    ).toEqual(['2026-08-04T09:00:00.000Z']);
+  });
+
+  it('counts only what actually prints as a letter', () => {
+    expect(
+      letterMoments(
+        [
+          message({ id: 'm-sys', system: true, created_at: '2026-08-05T09:00:00.000Z' }),
+          message({ id: 'm-blank', body: '  ', created_at: '2026-08-06T09:00:00.000Z' }),
+          message({ id: 'm-keep', created_at: '2026-08-04T09:00:00.000Z' }),
+        ],
+        READER,
+      ),
+    ).toEqual(['2026-08-04T09:00:00.000Z']);
+  });
+});
+
+describe('noticeAnchor', () => {
+  it('lands a retired route on the region of this page that answers for it', () => {
+    expect(noticeAnchor('/invoices/inv-4')).toBe('#letterbox');
+    expect(noticeAnchor('/projects/proj-vale/reviews/ed-1')).toBe('#doorstep');
+    expect(noticeAnchor('/scans/scan-2')).toBe('#mat');
+  });
+
+  it('drops a link with no home here rather than faking one', () => {
+    expect(noticeAnchor('/projects/proj-vale')).toBeNull();
+    expect(noticeAnchor('https://patina.cloud/invoices/inv-4')).toBeNull();
+    expect(noticeAnchor(null)).toBeNull();
   });
 });
 
 describe('toNotices', () => {
   it('titles a notice the way /inbox did, newest first', () => {
-    const notices = toNotices([
-      notification({ id: 'n-1', metadata: { subject: 'Invoice No. 4 is ready' } }),
-      notification({
-        id: 'n-2',
-        type: 'proposal_sent',
-        metadata: {},
-        created_at: '2026-08-03T09:00:00.000Z',
-      }),
-    ]);
+    const notices = toNotices(
+      [
+        notification({
+          id: 'n-1',
+          metadata: { project_id: PROJECT, subject: 'Invoice No. 4 is ready' },
+        }),
+        notification({
+          id: 'n-2',
+          type: 'proposal_sent',
+          metadata: { project_id: PROJECT },
+          created_at: '2026-08-03T09:00:00.000Z',
+        }),
+      ],
+      PROJECT,
+    );
     expect(notices.map((notice) => [notice.id, notice.label])).toEqual([
       ['n-2', 'Proposal Sent'],
       ['n-1', 'Invoice No. 4 is ready'],
@@ -188,13 +261,84 @@ describe('toNotices', () => {
 
   it('prefers subject, then headline, then title', () => {
     expect(
-      toNotices([notification({ id: 'n-1', metadata: { headline: 'Head', title: 'Title' } })])[0]
-        .label,
+      toNotices(
+        [
+          notification({
+            id: 'n-1',
+            metadata: { project_id: PROJECT, headline: 'Head', title: 'Title' },
+          }),
+        ],
+        PROJECT,
+      )[0].label,
     ).toBe('Head');
   });
 
+  it('files a notice under the house it names, and no other', () => {
+    const notices = toNotices(
+      [
+        notification({ id: 'n-mine', metadata: { project_id: PROJECT } }),
+        notification({ id: 'n-theirs', metadata: { project_id: 'proj-other' } }),
+        notification({ id: 'n-nowhere', metadata: {} }),
+      ],
+      PROJECT,
+    );
+    expect(notices.map((notice) => notice.id)).toEqual(['n-mine']);
+  });
+
+  it('reads the house out of the deep link where the metadata does not name it', () => {
+    const notices = toNotices(
+      [
+        notification({
+          id: 'n-1',
+          metadata: { deep_link: `/projects/${PROJECT}/reviews/ed-1` },
+        }),
+      ],
+      PROJECT,
+    );
+    expect(notices.map((notice) => [notice.id, notice.anchor])).toEqual([['n-1', '#doorstep']]);
+  });
+
+  it('keeps /inbox’s body preview, so two of a type are told apart', () => {
+    const notices = toNotices(
+      [
+        notification({
+          id: 'n-1',
+          type: 'proposal_sent',
+          metadata: { project_id: PROJECT, preview: 'The furnishings authorization.' },
+        }),
+        notification({
+          id: 'n-2',
+          type: 'proposal_sent',
+          metadata: { project_id: PROJECT },
+          created_at: '2026-08-01T09:00:00.000Z',
+        }),
+      ],
+      PROJECT,
+    );
+    expect(notices[0].detail).toBe('The furnishings authorization.');
+    expect(notices[1].detail).toBeNull();
+  });
+
+  it('reports which notices the reader has not been marked on', () => {
+    const notices = toNotices(
+      [
+        notification({ id: 'n-read', metadata: { project_id: PROJECT, read_at: '2026-08-03' } }),
+        notification({
+          id: 'n-unread',
+          metadata: { project_id: PROJECT },
+          created_at: '2026-08-01T09:00:00.000Z',
+        }),
+      ],
+      PROJECT,
+    );
+    expect(notices.map((notice) => [notice.id, notice.unread])).toEqual([
+      ['n-read', false],
+      ['n-unread', true],
+    ]);
+  });
+
   it('is empty with nothing to print', () => {
-    expect(toNotices(undefined)).toEqual([]);
+    expect(toNotices(undefined, PROJECT)).toEqual([]);
   });
 });
 
@@ -213,9 +357,26 @@ describe('deriveThreshold — a letter ticks the note and the record', () => {
     };
   }
 
+  const STANDING = {
+    id: 'note-1',
+    body: 'A line to you.',
+    state: 'standing' as const,
+    sentAt: '2026-07-01T09:00:00.000Z',
+    retiredAt: null,
+    enclosures: [],
+  };
+
   it('ticks note and previously for a letter sent since the last reading', () => {
-    const model = deriveThreshold(input({ messageSentAts: ['2026-08-04T09:00:00.000Z'] }));
+    const model = deriveThreshold(
+      input({ notes: [STANDING], messageSentAts: ['2026-08-04T09:00:00.000Z'] }),
+    );
     expect(model.changed.has('note')).toBe(true);
+    expect(model.changed.has('previously')).toBe(true);
+  });
+
+  it('ticks only previously where no note is standing to be answered', () => {
+    const model = deriveThreshold(input({ messageSentAts: ['2026-08-04T09:00:00.000Z'] }));
+    expect(model.changed.has('note')).toBe(false);
     expect(model.changed.has('previously')).toBe(true);
   });
 
@@ -233,6 +394,7 @@ describe('deriveThreshold — a letter ticks the note and the record', () => {
   });
 
   it('stands unchanged when no letters are given at all', () => {
-    expect(deriveThreshold(input()).changed.has('note')).toBe(false);
+    expect(deriveThreshold(input({ notes: [STANDING] })).changed.has('note')).toBe(false);
+    expect(deriveThreshold(input()).changed.has('previously')).toBe(false);
   });
 });

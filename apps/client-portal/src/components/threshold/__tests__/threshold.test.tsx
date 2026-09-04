@@ -63,6 +63,7 @@ jest.mock('@/hooks/use-project-correspondence', () => ({
   __esModule: true,
   useProjectCorrespondence: jest.fn(),
   useMarkNoticesRead: jest.fn(),
+  useMarkLettersRead: jest.fn(),
   useWriteBack: jest.fn(),
   useMuteLetters: jest.fn(),
 }));
@@ -93,6 +94,7 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import {
+  useMarkLettersRead,
   useMarkNoticesRead,
   useMuteLetters,
   useProjectCorrespondence,
@@ -125,6 +127,7 @@ const acceptMock = useAcceptTradeScope as jest.Mock;
 const authMock = useAuth as jest.Mock;
 const correspondenceMock = useProjectCorrespondence as jest.Mock;
 const markNoticesReadMock = useMarkNoticesRead as jest.Mock;
+const markLettersReadMock = useMarkLettersRead as jest.Mock;
 const writeBackMock = useWriteBack as jest.Mock;
 const muteLettersMock = useMuteLetters as jest.Mock;
 
@@ -379,10 +382,15 @@ beforeEach(() => {
     muted: false,
     letters: [],
     notices: [],
+    hasEarlierLetters: false,
+    readEarlierLetters: jest.fn(),
+    isReadingEarlierLetters: false,
+    unreadNoticeIds: [],
     sentAts: [],
     isPending: false,
   });
   markNoticesReadMock.mockReturnValue(jest.fn());
+  markLettersReadMock.mockReturnValue(jest.fn());
   writeBackMock.mockReturnValue({ send: jest.fn(), isPending: false });
   muteLettersMock.mockReturnValue({ toggle: jest.fn(), isPending: false });
   previousMarkMock.mockReturnValue({ data: undefined, isPending: false, isError: false });
@@ -992,6 +1000,100 @@ describe('Threshold — enclosures and history', () => {
     const line = screen.getByTestId('doorstep-previously');
     expect(line).toHaveTextContent('Design services agreement');
     expect(line).not.toHaveTextContent('run right off the doorstep');
+  });
+});
+
+/* ── The post, where the page files it ──────────────────────────────────────
+   The seam these assert is the CALL SITE's, not the component's: a React
+   element is truthy even when it renders nothing, so only the page can decide
+   whether Previously has back matter and where the reply belongs. ────────── */
+
+describe('Threshold — the post', () => {
+  const LETTER = {
+    id: 'm-1',
+    body: 'The sconces ship Friday.',
+    from: 'studio' as const,
+    authorName: 'Nora Quist',
+    sentAt: new Date(2026, 7, 4, 9, 0, 0),
+    enclosures: [],
+  };
+
+  function post(over: Record<string, unknown> = {}) {
+    correspondenceMock.mockReturnValue({
+      threadId: null,
+      muted: false,
+      letters: [],
+      notices: [],
+      hasEarlierLetters: false,
+      readEarlierLetters: jest.fn(),
+      isReadingEarlierLetters: false,
+      unreadNoticeIds: [],
+      sentAts: [],
+      isPending: false,
+      ...over,
+    });
+  }
+
+  it('keeps Previously silent when there is neither back matter nor post', () => {
+    proposalsMock.mockReturnValue(settled([]));
+    notesMock.mockReturnValue(settled([]));
+    post();
+
+    const { container } = renderThreshold();
+    expect(container.querySelector('#previously')).toBeNull();
+  });
+
+  it('files the letters in Previously when there are any', () => {
+    post({ threadId: 'thr-1', letters: [LETTER] });
+    renderThreshold();
+    expect(screen.getByTestId('previously-correspondence')).toHaveTextContent(
+      'The sconces ship Friday.',
+    );
+  });
+
+  it('keeps the reply under the note while one is standing', () => {
+    post({ threadId: 'thr-1', letters: [LETTER] });
+    renderThreshold();
+
+    const note = screen.getByTestId('write-back').closest('#note');
+    expect(note).not.toBeNull();
+  });
+
+  it('heads the record with the reply when no note is standing', () => {
+    notesMock.mockReturnValue(settled([]));
+    post({ threadId: 'thr-1', letters: [LETTER] });
+
+    const { container } = renderThreshold();
+    expect(container.querySelector('#note')).toBeNull();
+    expect(screen.getByTestId('write-back').closest('#previously')).not.toBeNull();
+  });
+
+  it('marks this house’s thread and its own unread notices read, once', () => {
+    const markLetters = jest.fn();
+    const markNotices = jest.fn();
+    markLettersReadMock.mockReturnValue(markLetters);
+    markNoticesReadMock.mockReturnValue(markNotices);
+    post({ threadId: 'thr-1', letters: [LETTER], unreadNoticeIds: ['n-1', 'n-2'] });
+
+    renderThreshold();
+
+    expect(markLetters).toHaveBeenCalledTimes(1);
+    expect(markLetters).toHaveBeenCalledWith('thr-1');
+    expect(markNotices).toHaveBeenCalledTimes(1);
+    expect(markNotices).toHaveBeenCalledWith(['n-1', 'n-2']);
+  });
+
+  it('marks nothing read while the post is still arriving', () => {
+    const markLetters = jest.fn();
+    const markNotices = jest.fn();
+    markLettersReadMock.mockReturnValue(markLetters);
+    markNoticesReadMock.mockReturnValue(markNotices);
+    post({ threadId: 'thr-1', unreadNoticeIds: ['n-1'], isPending: true });
+
+    renderThreshold();
+
+    expect(markLetters).not.toHaveBeenCalled();
+    expect(markNotices).not.toHaveBeenCalled();
   });
 });
 
