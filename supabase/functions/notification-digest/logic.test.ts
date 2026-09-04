@@ -95,7 +95,7 @@ Deno.test("Stage-2 digest item cites immutable artifact and logs no reviewer IDs
   const items: ReminderDigestItem[] = [{
     category: "decision",
     title: "Approve the issue",
-    link: "https://client.patina.cloud/decisions",
+    link: "https://client.patina.cloud/projects/project-1#doorstep",
     decisionId: "decision-1",
     artifact: {
       kind: "spec_book_artifact",
