@@ -15,6 +15,7 @@
 import Testing
 import Foundation
 import SwiftUI
+import Supabase
 @testable import Patina
 
 @MainActor
@@ -146,7 +147,10 @@ struct WalkFixTwoTests {
         )
         let row = try #require(code.range(of: "HStack(alignment: .top, spacing: 6) {"))
         let block = String(code[row.lowerBound...].prefix(900))
-        #expect(block.contains("Text(product.matchLabel)"))
+        // `W1-S-01` put the pill behind `matchVerdict` — an unscored piece
+        // wears no badge — so the row's first member is the unwrapped verdict.
+        #expect(block.contains("if let verdict = product.matchVerdict"))
+        #expect(block.contains("Text(verdict)"))
         #expect(block.contains("saveButton(product)"))
         #expect(block.contains("menuButton(product)"))
         #expect(block.contains(".minimumScaleFactor(0.5)"),
@@ -292,5 +296,107 @@ struct WalkFixTwoTests {
                 "Room Settings still calls typed dimensions Scan Data (W1-B-06)")
         #expect(!settings.contains("windows detected\")"),
                 "\"detected\" is still unconditional (W1-B-06)")
+    }
+}
+
+// MARK: - W1-C-10 · the half of `--resetonboarding` that is not on this device
+
+/// `WalkFixTwoTests` closed the local half of the flag; walker C's re-walk 2
+/// found the residual and located it exactly: the tour ran on the very next
+/// launch after `profiles.help_state` was set to `{}` by hand on the local
+/// stack (shots 55, 56), having refused to replay twice with the flag alone
+/// (52, 54). `forgetAllFirstLaunchTourState()` walks UserDefaults, and the
+/// tour's v2 backing is a Supabase column.
+@MainActor
+struct ResetOnboardingReachesTheServerTests {
+
+    private func makeAdapter() -> SupabaseHelpStateAdapter {
+        SupabaseHelpStateAdapter(
+            // Nothing is expected to answer: `performSave` logs and drops on
+            // failure by design (spec §13.4), and every read under test is
+            // against the in-memory cache.
+            client: SupabaseClient(
+                supabaseURL: URL(string: "http://127.0.0.1:1")!,
+                supabaseKey: "test-anon-key"
+            ),
+            userId: "00000000-0000-0000-0000-0000000000aa"
+        )
+    }
+
+    @Test("forgetting the tours empties the blob's tour entries")
+    func forgettingTheToursEmptiesThem() async {
+        let adapter = makeAdapter()
+        await adapter.setTourEntry(
+            FirstLaunchTourModel.defaultTourKey,
+            patch: HelpStateBlob.TourEntry(launched: true)
+        )
+        #expect(await adapter.cachedTourEntry(FirstLaunchTourModel.defaultTourKey) != nil)
+
+        await adapter.forgetAllTours()
+
+        #expect(
+            await adapter.cachedTourEntry(FirstLaunchTourModel.defaultTourKey) == nil,
+            "the hydrated `launched: true` survives --resetonboarding (W1-C-10)"
+        )
+    }
+
+    @Test("and leaves the feature announcements alone")
+    func forgettingTheToursLeavesAnnouncements() async {
+        let adapter = makeAdapter()
+        await adapter.setFeatureAnnouncement(
+            "spaces-tab",
+            patch: HelpStateBlob.FeatureAnnouncementEntry(dismissedAt: "2026-09-01T00:00:00Z")
+        )
+        await adapter.setTourEntry(
+            FirstLaunchTourModel.defaultTourKey,
+            patch: HelpStateBlob.TourEntry(completed: true)
+        )
+
+        await adapter.forgetAllTours()
+
+        #expect(await adapter.cachedTourEntry(FirstLaunchTourModel.defaultTourKey) == nil)
+        #expect(
+            await adapter.cachedFeatureAnnouncement("spaces-tab") != nil,
+            "the flag is named for onboarding; announcements are not it"
+        )
+    }
+
+    /// This test host launches without the flag, so the ask is absent and
+    /// nothing is cleared — which is the case every real launch takes.
+    @Test("a launch that did not ask clears nothing")
+    func aLaunchWithoutTheFlagClearsNothing() {
+        #expect(FirstLaunchTourLaunchReset.isRequested == false)
+        #expect(FirstLaunchTourLaunchReset.consume() == false)
+    }
+
+    /// The wiring, in the order it has to run: hydrate, clear, then hand the
+    /// adapter to the model. Clearing after `enableSupabaseSync` would race the
+    /// model's own first read, and clearing before `loadState()` would be
+    /// overwritten by the merge.
+    @Test("the adapter install clears the server copy between hydrate and hand-off")
+    func theInstallClearsBetweenHydrateAndHandOff() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        )
+        let hydrate = try #require(code.range(of: "await adapter.loadState()"))
+        let clear = try #require(code.range(of: "await adapter.forgetAllTours()"))
+        let handOff = try #require(code.range(of: "model.enableSupabaseSync(adapter: adapter)"))
+        #expect(hydrate.lowerBound < clear.lowerBound)
+        #expect(clear.lowerBound < handOff.lowerBound)
+        #expect(code.contains("if FirstLaunchTourLaunchReset.consume()"))
+    }
+
+    /// Spent once per process: the install runs from a `.task(id: canAutoStart)`
+    /// that re-fires whenever Today comes back on screen, and a second clear
+    /// would erase a `completed` this same launch had just recorded.
+    @Test("the ask is spent once, and reads the same flag the local clear does")
+    func theAskIsSpentOnce() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        )
+        #expect(code.contains("private static var isSpent = false"))
+        #expect(code.contains("guard isRequested, !isSpent else { return false }"))
+        #expect(code.contains("static var isRequested: Bool { PatinaApp.shouldResetOnboarding }"),
+                "the two halves of the flag can now be spelled differently (W1-C-10)")
     }
 }

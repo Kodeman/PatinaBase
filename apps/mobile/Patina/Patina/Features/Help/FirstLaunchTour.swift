@@ -787,6 +787,11 @@ public struct FirstLaunchTour<Content: View>: View {
         let userId = session.user.id.uuidString.lowercased()
         let adapter = SupabaseHelpStateAdapter.withSharedClient(userId: userId)
         await adapter.loadState()
+        // W1-C-10's other half, before anything reads the hydrated blob.
+        if FirstLaunchTourLaunchReset.consume() {
+            await adapter.forgetAllTours()
+            await adapter.flush()
+        }
         // Sweep any pre-S4-1 UserDefaults entries up to Supabase so the next
         // launch reads cleanly. Returns 0 when there's nothing to migrate.
         _ = await migrateUserDefaultsHelpStateToSupabase(
@@ -794,6 +799,36 @@ public struct FirstLaunchTour<Content: View>: View {
             knownTourKeys: [model.tourKey]
         )
         model.enableSupabaseSync(adapter: adapter)
+    }
+}
+
+// MARK: - `--resetonboarding`, the half that is not on this device
+
+/// Whether this launch asked for the tour to replay, and whether that ask has
+/// been spent.
+///
+/// `W1-C-10`: `PatinaApp.init` clears `help-system.tour.*` from UserDefaults,
+/// which is the whole of the v1 backing and none of the v2 one — the tour's
+/// authoritative state for a signed-in user is `profiles.help_state`, and the
+/// adapter's `loadState()` puts it straight back. Walker C ran the flag twice
+/// (shots 52 and 54) and the tour did not replay either time.
+///
+/// Spent once per process, because `installSupabaseAdapterIfAuthenticated` runs
+/// from a `.task(id: canAutoStart)` that re-fires whenever the host's surface
+/// comes back on screen — and a second clear would erase a `completed` this
+/// same launch had just recorded.
+@MainActor
+enum FirstLaunchTourLaunchReset {
+    private static var isSpent = false
+
+    /// One spelling of the flag, shared with the block in `PatinaApp.init`
+    /// that clears the local half.
+    static var isRequested: Bool { PatinaApp.shouldResetOnboarding }
+
+    static func consume() -> Bool {
+        guard isRequested, !isSpent else { return false }
+        isSpent = true
+        return true
     }
 }
 

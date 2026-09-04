@@ -256,6 +256,25 @@ public actor SupabaseHelpStateAdapter {
         scheduleSave()
     }
 
+    /// Forget every tour on the server copy, and schedule the write.
+    ///
+    /// `W1-C-10`: `--resetonboarding` clears `help-system.tour.*` out of
+    /// UserDefaults (`PatinaApp.init`), and then `loadState()` hydrates
+    /// `profiles.help_state` — still reading
+    /// `{"tours": {"ios-first-launch-tour": {"launched": true}}}` — straight
+    /// back over the clear. Walker C ran the flag twice and the tour did not
+    /// replay either time; it ran on the very next launch after that column was
+    /// set to `{}` by hand on the local stack. This is that, from inside the
+    /// app. Feature announcements are left alone: the flag is named for
+    /// onboarding, and they are not it.
+    public func forgetAllTours() {
+        cache = HelpStateBlob(
+            tours: nil,
+            featureAnnouncements: cache.featureAnnouncements
+        )
+        scheduleSave()
+    }
+
     /// Await any in-flight write. Call before sign-out so the user doesn't
     /// leave with a queued patch unsent.
     public func flush() async {
