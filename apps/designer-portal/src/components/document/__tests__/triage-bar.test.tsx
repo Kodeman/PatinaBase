@@ -6,6 +6,7 @@ const push = jest.fn();
 const invalidateQueries = jest.fn();
 const acceptRequestMutate = jest.fn();
 let arrivalArc = false;
+let arcIsLoading = false;
 const beginDiscoveryMutate = jest.fn(
   (_leadId: string, options: { onSuccess?: (value: unknown) => void }) => {
     options.onSuccess?.({
@@ -31,7 +32,7 @@ jest.mock('@patina/supabase', () => ({
 }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: arrivalArc, isLoading: false }),
+  useFeatureFlag: () => ({ value: arrivalArc, isLoading: arcIsLoading }),
 }));
 
 describe('TriageBar post-accept destination', () => {
@@ -42,6 +43,7 @@ describe('TriageBar post-accept destination', () => {
     beginDiscoveryMutate.mockClear();
     acceptRequestMutate.mockClear();
     arrivalArc = false;
+    arcIsLoading = false;
   });
 
   it('replaces an open Brief with the canonical Discovery document', () => {
@@ -84,5 +86,35 @@ describe('TriageBar post-accept destination', () => {
     expect(beginDiscoveryMutate).toHaveBeenCalled();
     expect(acceptRequestMutate).not.toHaveBeenCalled();
     expect(replace).toHaveBeenCalledWith('/doc/designer-client-1');
+  });
+
+  it('disables Accept and fires neither mutation for a ceremony-eligible lead while the arrival-arc flag is still resolving', () => {
+    arcIsLoading = true;
+    render(<TriageBar leadId="lead-1" variant="desk" arrivalEligible />);
+
+    const button = screen.getByRole('button', { name: 'Beginning…' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+
+    fireEvent.click(button);
+
+    expect(acceptRequestMutate).not.toHaveBeenCalled();
+    expect(beginDiscoveryMutate).not.toHaveBeenCalled();
+  });
+
+  it('leaves Accept enabled and takes the direct Discovery path for an ineligible lead while the arrival-arc flag is still resolving', () => {
+    arcIsLoading = true;
+    render(
+      <TriageBar leadId="lead-1" variant="brief" arrivalEligible={false} />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Accept · begin' });
+    expect(button).not.toBeDisabled();
+    expect(button).not.toHaveAttribute('aria-busy', 'true');
+
+    fireEvent.click(button);
+
+    expect(beginDiscoveryMutate).toHaveBeenCalled();
+    expect(acceptRequestMutate).not.toHaveBeenCalled();
   });
 });

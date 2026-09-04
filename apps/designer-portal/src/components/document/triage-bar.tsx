@@ -116,7 +116,13 @@ export function TriageBar({
   };
 
   const onAccept = () => {
-    if (!arcLoading && arrivalArc && arrivalEligible) {
+    // Fail-closed: only a ceremony-eligible lead needs to wait for the flag
+    // — while it's still resolving, don't fire either mutation for that
+    // case, since a click would otherwise silently take the non-ceremony
+    // path (see comment above `arrivalArc`). An ineligible lead's path never
+    // depends on the flag, so it should never block on it.
+    if (arcLoading && arrivalEligible) return;
+    if (arrivalArc && arrivalEligible) {
       acceptRequest.mutate(leadId, {
         onSuccess: () => {
           refreshDesk();
@@ -201,7 +207,7 @@ export function TriageBar({
         actionKey="accept-lead"
         variant="primary"
         disabled={busy && !beginDiscovery.isPending && !acceptRequest.isPending}
-        loading={beginDiscovery.isPending || acceptRequest.isPending}
+        loading={(arcLoading && arrivalEligible) || beginDiscovery.isPending || acceptRequest.isPending}
         loadingLabel="Beginning…"
         onClick={guard(onAccept)}
       >
