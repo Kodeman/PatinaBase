@@ -30,7 +30,7 @@
  *        hydrate.
  *
  *  localStorage / UserDefaults sweep on first authenticated mount lives in
- *  the consumer (designer-portal `FirstSigninTour`, iOS `FirstLaunchTour`).
+ *  the consumer (designer-portal `HelpStateProvider`, iOS `FirstLaunchTour`).
  *  The adapter exposes `migrateLocalToSupabase(...)` to do the heavy lifting
  *  once the consumer knows it's safe to clear local state.
  */
@@ -40,6 +40,8 @@ import type {
   HelpStateSupabaseClient,
   TourStateBackend,
   FeatureAnnouncementStateBackend,
+  MarginNoteStateBackend,
+  FirstAuthoredStateBackend,
 } from './types'
 import type { TourState } from '../proactive/TourController/tourState'
 import {
@@ -230,6 +232,117 @@ export function createSupabaseFeatureAnnouncementBackend(
 }
 
 /**
+ * Return shape for `createSupabaseMarginNoteBackend` — the two synchronous
+ * accessors that satisfy `MarginNoteStateBackend`, plus a `hydrate()` the
+ * caller awaits before installing the backend as "ready" (margin-note.tsx
+ * falls back to localStorage until then, and for signed-out sessions — see
+ * that file's `hasSeen`).
+ */
+export interface CreateSupabaseMarginNoteBackendResult extends MarginNoteStateBackend {
+  hydrate: () => Promise<Record<string, string>>
+  /** Flushes any pending write — `migrateLocalToSupabase` awaits this before
+   *  it returns so a caller can trust localStorage is safe to have cleared. */
+  flush: () => Promise<void>
+}
+
+/**
+ * Build a standalone margin-note backend for `userId`. Unlike the tour /
+ * feature-announcement pair above, this does not share a cache with
+ * `createSupabaseHelpStateBackends` — it keeps its own cache of the FULL
+ * `help_state` blob (hydrated once) so its write-through never clobbers
+ * sibling sub-keys it never touches, at the cost of not seeing a concurrent
+ * write to `tours`/`featureAnnouncements` made through the other cache after
+ * this one hydrated. Acceptable for margin notes: they are dismissed by user
+ * action, rarely in the same instant as a tour transition, and the adapter's
+ * whole design already accepts eventual consistency over strict locking.
+ */
+export function createSupabaseMarginNoteBackend(
+  client: HelpStateSupabaseClient,
+  userId: string,
+): CreateSupabaseMarginNoteBackendResult {
+  const cache = createCache()
+  return {
+    hasSeen(noteKey: string): boolean {
+      return Object.prototype.hasOwnProperty.call(cache.blob.marginNotes ?? {}, noteKey)
+    },
+    markSeen(noteKey: string): void {
+      const prev = cache.blob.marginNotes ?? {}
+      if (Object.prototype.hasOwnProperty.call(prev, noteKey)) return
+      cache.blob = {
+        ...cache.blob,
+        marginNotes: { ...prev, [noteKey]: new Date().toISOString() },
+      }
+      scheduleWrite(cache, client, userId)
+    },
+    async hydrate(): Promise<Record<string, string>> {
+      const blob = await loadHelpState(client, userId)
+      cache.blob = {
+        ...blob,
+        ...cache.blob,
+        marginNotes: { ...(blob.marginNotes ?? {}), ...(cache.blob.marginNotes ?? {}) },
+      }
+      cache.hydrated = true
+      return cache.blob.marginNotes ?? {}
+    },
+    async flush(): Promise<void> {
+      await cache.pendingWrite
+    },
+  }
+}
+
+/**
+ * Return shape for `createSupabaseFirstAuthoredBackend` — the synchronous
+ * accessors that satisfy `FirstAuthoredStateBackend`, plus `hydrate()`/
+ * `flush()` for the same reasons `createSupabaseMarginNoteBackend` carries
+ * them (see its doc comment).
+ */
+export interface CreateSupabaseFirstAuthoredBackendResult extends FirstAuthoredStateBackend {
+  hydrate: () => Promise<boolean>
+  flush: () => Promise<void>
+}
+
+/**
+ * Build a standalone first-authored backend for `userId` (onboarding Wave 1,
+ * L6). Same independent-cache design as `createSupabaseMarginNoteBackend` —
+ * it keeps its own cache of the full `help_state` blob (hydrated once) so
+ * its write-through never clobbers sibling sub-keys it never touches.
+ */
+export function createSupabaseFirstAuthoredBackend(
+  client: HelpStateSupabaseClient,
+  userId: string,
+): CreateSupabaseFirstAuthoredBackendResult {
+  const cache = createCache()
+  return {
+    hasAuthored(): boolean {
+      return typeof cache.blob.firstAuthoredAt === 'string'
+    },
+    markAuthored(): void {
+      if (typeof cache.blob.firstAuthoredAt === 'string') return
+      cache.blob = {
+        ...cache.blob,
+        firstAuthoredAt: new Date().toISOString(),
+      }
+      scheduleWrite(cache, client, userId)
+    },
+    async hydrate(): Promise<boolean> {
+      const blob = await loadHelpState(client, userId)
+      cache.blob = {
+        ...blob,
+        ...cache.blob,
+        // Server's firstAuthoredAt wins on first hydration; an in-flight
+        // local write (set before hydrate resolved) takes precedence.
+        firstAuthoredAt: cache.blob.firstAuthoredAt ?? blob.firstAuthoredAt,
+      }
+      cache.hydrated = true
+      return typeof cache.blob.firstAuthoredAt === 'string'
+    },
+    async flush(): Promise<void> {
+      await cache.pendingWrite
+    },
+  }
+}
+
+/**
  * Convenience: build both backends + the cache and hydrate from Supabase in
  * the background. Consumers typically call this once per signed-in mount and
  * pass the backends straight to `setTourStateBackend(...)` /
@@ -303,19 +416,47 @@ export function createSupabaseHelpStateBackends(
  *
  * Resolves with the count of (tour, featureAnnouncement) entries migrated.
  */
+/**
+ * Local-storage prefix the designer-portal `MarginNote` primitive
+ * (`apps/designer-portal/src/components/document/margin-note.tsx`) writes
+ * under. Duplicated here (rather than imported) because the help-system
+ * package must not depend on a portal app — keep the two literals in sync.
+ */
+const MARGIN_NOTE_STORAGE_PREFIX = 'patina:margin-note:'
+
+/**
+ * Local-storage key the designer-portal first-authored guard
+ * (`apps/designer-portal/src/components/document/help/first-authored-state.ts`)
+ * writes under. Duplicated here for the same reason as
+ * `MARGIN_NOTE_STORAGE_PREFIX` — the help-system package must not depend on
+ * a portal app — keep the two literals in sync.
+ */
+const FIRST_AUTHORED_STORAGE_KEY = 'patina:first-authored'
+
 export interface MigrationResult {
   toursMigrated: number
   featureAnnouncementsMigrated: number
+  marginNotesMigrated: number
+  firstAuthoredMigrated: number
 }
 
 export async function migrateLocalToSupabase(
   backends: CreateSupabaseBackendsResult,
+  marginNoteBackend?: CreateSupabaseMarginNoteBackendResult,
+  firstAuthoredBackend?: CreateSupabaseFirstAuthoredBackendResult,
 ): Promise<MigrationResult> {
   if (typeof window === 'undefined') {
-    return { toursMigrated: 0, featureAnnouncementsMigrated: 0 }
+    return {
+      toursMigrated: 0,
+      featureAnnouncementsMigrated: 0,
+      marginNotesMigrated: 0,
+      firstAuthoredMigrated: 0,
+    }
   }
   let toursMigrated = 0
   let featureAnnouncementsMigrated = 0
+  let marginNotesMigrated = 0
+  let firstAuthoredMigrated = 0
 
   // ── Tours: scan all "help-system.tour.*" keys.
   const localTourKeys: { storageKey: string; tourId: string }[] = []
@@ -330,7 +471,7 @@ export async function migrateLocalToSupabase(
     }
   } catch {
     // localStorage walk failed (private mode / quota probe) — give up.
-    return { toursMigrated, featureAnnouncementsMigrated }
+    return { toursMigrated, featureAnnouncementsMigrated, marginNotesMigrated, firstAuthoredMigrated }
   }
 
   for (const { storageKey, tourId } of localTourKeys) {
@@ -389,8 +530,72 @@ export async function migrateLocalToSupabase(
     // Same defensive posture — the migration must never crash the host.
   }
 
+  // ── Margin notes: scan all "patina:margin-note:*" keys. Independent
+  // try/catch so a failure here never aborts the tour/feature-announcement
+  // sweeps above. Only runs when the caller passes a margin-note backend
+  // (installed once it has hydrated — see help-state-provider.tsx).
+  if (marginNoteBackend) {
+    try {
+      const localNoteKeys: { storageKey: string; noteKey: string }[] = []
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i)
+        if (!key) continue
+        if (!key.startsWith(MARGIN_NOTE_STORAGE_PREFIX)) continue
+        const noteKey = key.slice(MARGIN_NOTE_STORAGE_PREFIX.length)
+        if (!noteKey) continue
+        localNoteKeys.push({ storageKey: key, noteKey })
+      }
+      for (const { storageKey, noteKey } of localNoteKeys) {
+        if (!marginNoteBackend.hasSeen(noteKey)) {
+          marginNoteBackend.markSeen(noteKey)
+          marginNotesMigrated += 1
+        }
+        try {
+          window.localStorage.removeItem(storageKey)
+        } catch {
+          // best-effort — leave the local key rather than crash the sweep.
+        }
+      }
+    } catch {
+      // localStorage walk failed (private mode / quota probe) — give up on
+      // this sweep only; tours/featureAnnouncements results still return.
+    }
+  }
+
+  // ── First-authored (FA-1): the one-time `patina:first-authored` local
+  // fallback key (written by first-authored-state.ts when a margin-rail
+  // write lands before the Supabase backend has hydrated, or while signed
+  // out). Independent try/catch, same posture as the margin-note sweep
+  // above — write once through the backend, then clear the local key so the
+  // once-ever, cross-device contract holds afterward.
+  if (firstAuthoredBackend) {
+    try {
+      const raw = window.localStorage.getItem(FIRST_AUTHORED_STORAGE_KEY)
+      if (raw !== null) {
+        if (!firstAuthoredBackend.hasAuthored()) {
+          firstAuthoredBackend.markAuthored()
+          firstAuthoredMigrated += 1
+        }
+        try {
+          window.localStorage.removeItem(FIRST_AUTHORED_STORAGE_KEY)
+        } catch {
+          // best-effort — leave the local key rather than crash the sweep.
+        }
+      }
+    } catch {
+      // localStorage read failed (private mode / quota probe) — give up on
+      // this sweep only; the other results still return.
+    }
+  }
+
   // Wait for the writes to land before we tell the caller it's safe to declare
   // localStorage authoritative-as-cleared.
   await backends.flush()
-  return { toursMigrated, featureAnnouncementsMigrated }
+  if (marginNoteBackend) {
+    await marginNoteBackend.flush()
+  }
+  if (firstAuthoredBackend) {
+    await firstAuthoredBackend.flush()
+  }
+  return { toursMigrated, featureAnnouncementsMigrated, marginNotesMigrated, firstAuthoredMigrated }
 }

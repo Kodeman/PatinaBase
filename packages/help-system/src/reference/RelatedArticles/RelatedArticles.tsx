@@ -64,6 +64,14 @@ export interface RelatedArticlesProps {
   heading?: string
   /** Additional Tailwind classes merged onto the outer container. */
   className?: string
+  /**
+   * Called once the query has settled with zero results (never while loading,
+   * and never when the component has no query inputs at all). Lets a host —
+   * e.g. the Help Center's FEATURED section — render its own empty-state copy
+   * in place of this component's intentional "render nothing", without a
+   * `:has()` CSS hack watching the DOM.
+   */
+  onEmpty?: () => void
 }
 
 // ─── Internal article shape (returned by the GROQ queries below) ──────────────
@@ -265,6 +273,7 @@ export function RelatedArticles({
   onArticleClick,
   heading = 'Related articles',
   className,
+  onEmpty,
 }: RelatedArticlesProps) {
   // Resolve mode by precedence: IDs > exact keys > prefix.
   const idsMode = Array.isArray(articleIds) && articleIds.length > 0
@@ -307,10 +316,24 @@ export function RelatedArticles({
     retry: 1,
   })
 
+  const isLoading = query.isLoading && query.isFetching
+  const rawArticles = query.data ?? []
+  // Defensive client-side max — Sanity returns at most $max but we trim again
+  // so swap-in mocks / consumers cannot exceed the cap.
+  const articles = rawArticles.slice(0, max)
+  // Settled with zero results — never while loading, never with no inputs at
+  // all (an un-enabled RelatedArticles has nothing to say is "empty").
+  const isEmpty = enabled && !isLoading && articles.length === 0
+
+  // Fires the empty-state callback (Help Center FEATURED fallback, etc.) once
+  // the query has settled. A plain effect, not a render-time call, so it
+  // never fires during React's render pass.
+  React.useEffect(() => {
+    if (isEmpty) onEmpty?.()
+  }, [isEmpty, onEmpty])
+
   // No inputs → render nothing.
   if (!enabled) return null
-
-  const isLoading = query.isLoading && query.isFetching
 
   // Loading → single skeleton row, no heading (never a noisy spinner — this
   // is a supplementary surface, and "Related articles" with no content
@@ -332,12 +355,8 @@ export function RelatedArticles({
     )
   }
 
-  const rawArticles = query.data ?? []
-  // Defensive client-side max — Sanity returns at most $max but we trim again
-  // so swap-in mocks / consumers cannot exceed the cap.
-  const articles = rawArticles.slice(0, max)
-
-  // Empty state → render NOTHING (spec §4 / task contract).
+  // Empty state → render NOTHING (spec §4 / task contract). `onEmpty` above
+  // already told the host.
   if (articles.length === 0) return null
 
   // from_surface_key precedence: explicit prop (the only signal FEATURED /

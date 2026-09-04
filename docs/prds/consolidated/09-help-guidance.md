@@ -10,18 +10,18 @@
 |---|---|
 | Layer 1 · Ambient (FieldLabel, FieldHelper, EmptyState, SmartDefault, SectionIntro) | Shipped |
 | Layer 2 · Reactive (Tooltip, InfoIcon, StrataInfoIcon, LearnMore, ContextualHelpPanel) | Shipped ⚠ (panel-open bug unconfirmed post-fix) |
-| Layer 3 · Proactive (Coachmark, WelcomeModal, TourController, FeatureAnnouncementCoachmark) | Partial (Coachmark/WelcomeModal/TourController shipped + live; FeatureAnnouncementCoachmark built but unused) |
-| Layer 4 · Reference (HelpArticle, HelpSearch, VideoPlayer, RelatedArticles) | Partial (components + Help Center routes shipped; 10 videos not recorded) |
-| Cross-device persistence (`profiles.help_state`) | Shipped (designer portal only; admin/client not wired) |
-| Sanity CMS content authoring | Planned / in progress (~142 of ~150 docs still placeholder) |
-| Designer Portal integration (utility bar, First Project Walkthrough, The Document, Help Center) | Shipped |
+| Layer 3 · Proactive (Coachmark, WelcomeModal, TourController, FeatureAnnouncementCoachmark) | Partial (Coachmark/WelcomeModal/TourController shipped + live, incl. the Wave 1 Desk Walkthrough's "Show me later" state and acting last step (R129/R130); FeatureAnnouncementCoachmark built but unused) |
+| Layer 4 · Reference (HelpArticle, HelpSearch, VideoPlayer, RelatedArticles) | Partial (components + Help Center routes shipped; Wave 1 added "The keys"/"The words" articles + the `?` shortcut overlay (R132) and ⌘K rows; `videoContent` Sanity schema + `VideoPlayer` `streamUid` wired Wave 3 — 2–3 recordings owed on Cloudflare Stream) |
+| Cross-device persistence (`profiles.help_state`) | Shipped (designer portal only; admin/client not wired). Wave 1 versioned margin notes (`key@N`, R131) and the setup-checklist arrival row (00559) both persist here. |
+| Sanity CMS content authoring | Planned / in progress (~142 of ~150 docs still placeholder; Wave 1 drafted 20 articles + 8 glossary entries for Kody's batch approval) |
+| Designer Portal integration (utility bar, host-surfaces help panel, Desk Walkthrough, The Document, Help Center) | Shipped. Wave 1 added the Desk/Document host-surfaces panel (L1), the setup checklist's arrival tracking (L3), durable versioned margin notes (L4), "The keys"/"The words" + `?` overlay (L5), and consolidated `help.*` analytics incl. `zone_flight`, `help.glossary.opened`, `help.shortcuts.opened`, `document_first_authored` (L6). First Project Walkthrough / `first-signin-tour.tsx` is retired (decision 4) — superseded by the Desk Walkthrough below. |
 | Admin Portal integration | Shipped (ambient/reactive only; no tours, no Supabase persistence) |
 | Client Portal integration | Shipped (ambient/reactive only; no tours, no Supabase persistence) |
 | iOS native Help module | Shipped (code-complete, parity-tested) but Deferred from pilot |
 | Analytics (PostHog events) | Shipped (direct `window.posthog` calls); typed `helpEvents` taxonomy unused |
 | PostHog dashboards (5 content dashboards + quarterly audit) | Planned (unverified / not built) |
 
-**Last reconciled:** 2026-07-06
+**Last reconciled:** 2026-09-03 (status table only, against Wave 1 of `artifacts/designer-onboarding-learning-2026-09-03/`; the rest of this PRD is unchanged since 2026-07-06)
 
 **Source docs:**
 - [Historical help guidance engineering handoff](../../_archive/prds/Guide/patina-help-guidance-engineering-handoff.md)
@@ -37,12 +37,12 @@
 - `packages/help-system/src/isPlaceholderContent.ts`
 - `packages/help-system/src/persistence/supabaseAdapter.ts`
 - `packages/help-system/src/reactive/ContextualHelpPanel/ContextualHelpPanel.tsx`
-- `apps/designer-portal/src/components/help/first-signin-tour.tsx`
 - `apps/designer-portal/src/components/document/help/document-help.tsx`
 - `apps/designer-portal/src/components/portal/utility-bar.tsx`
 - `apps/designer-portal/src/app/(portal)/portal/help/page.tsx`
 - `supabase/migrations/00146_profiles_help_state.sql`
 - `studios/help-system/schemas/helpContent.ts`
+- `studios/help-system/schemas/videoContent.ts`
 - `studios/help-system/schemas/index.ts`
 
 ---
@@ -89,7 +89,7 @@ All exported from `packages/help-system/src/index.ts`. Built with tsup, Storyboo
 ### Designer-portal integration (the deepest surface)
 
 - **Utility bar `?`** — `apps/designer-portal/src/components/portal/utility-bar.tsx` renders a `HelpCircle` IconButton (`aria-haspopup="dialog"`) that opens `ContextualHelpPanel`; surface key derived via `lib/help-system/pathname-to-surface-key.ts`.
-- **First Project Walkthrough** — `apps/designer-portal/src/components/help/first-signin-tour.tsx`, mounted once in `app/(portal)/portal/layout.tsx`. Shows `WelcomeModal` on first sign-in (`created_at` within a 60-second window, gated on Supabase hydration), then `TourController` runs a **5-step** tour anchored on `[data-tour-anchor="today|pipeline|aesthete|products|profile"]` nav links.
+- **First Project Walkthrough** — **retired** (decision 4, 2026-09-03). `apps/designer-portal/src/components/help/first-signin-tour.tsx` was deleted with the R21 dissolve of `app/(portal)/`: zero imports, dead `help-system.welcome-shown.*` localStorage key. The Desk world's own onboarding is the Desk Walkthrough (`components/document/help/desk-walkthrough.tsx`), installed via `HelpStateProvider` (`components/document/help/help-state-provider.tsx`).
 - **The Document** (`(document)` route group) has no utility bar, so `apps/designer-portal/src/components/document/help/document-help.tsx` wraps the shell in `SurfaceKeyProvider` (seeded from pathname) and mounts `ContextualHelpPanel` once; opened by the ⌘K "Help…" row via `openHelp()` custom event (`lib/help-system/open-help.ts`). Document surfaces refine the key via `lib/help-system/use-document-surface.ts`, `document-pathname-to-surface-key.ts`, and `document-surface-keys.ts`.
 - **Help Center (Layer 4)** — routes `apps/designer-portal/src/app/(portal)/portal/help/{page.tsx, [surfaceKey]/page.tsx, topic/[prefix]/page.tsx}` (HelpSearch + featured RelatedArticles + topic browse), mirrored under the document shell at `app/(document-help)/help/{page.tsx, [surfaceKey]/page.tsx, topic/[prefix]/page.tsx}`.
 
@@ -151,7 +151,7 @@ Data flow is entirely client-side:
 ### Designer Portal (`apps/designer-portal`)
 
 - Utility-bar `?` → `ContextualHelpPanel` (Radix Dialog slide-out) on every `(portal)` page.
-- First-signin `WelcomeModal` + 5-step First Project Walkthrough tour (`(portal)/portal/layout.tsx`).
+- Desk Walkthrough (`components/document/help/desk-walkthrough.tsx`) — the six-step, first-signin `WelcomeModal` + tour, now with a "Show me later" third state and a last step that acts (opens `CaptureLeadSheet`, R129/R130). Supersedes the retired First Project Walkthrough / `first-signin-tour.tsx` (decision 4).
 - Help Center: `/portal/help`, `/portal/help/[surfaceKey]` (single article), `/portal/help/topic/[prefix]` (category browse).
 - The Document shell: ⌘K "Help…" row → `ContextualHelpPanel`; mirror help routes at `(document-help)/help/{page, [surfaceKey], topic/[prefix]}`.
 - Ambient/reactive affordances present across: Today, Pipeline, Activation Wizard (7 steps / 47 keys), Aesthete Engine (`/portal/companion`), Products (list/detail/capture), Clients, Decisions, Inbox, FF&E, Financials, Team, Settings.
@@ -190,8 +190,8 @@ Data flow is entirely client-side:
 ### Known bugs / TODOs
 
 - ⚠ **Editorial content not authored:** ~142 of the ~150 Sanity docs are still literal "PLACEHOLDER — pending Leah review" stubs. The `isPlaceholderContent` guard deliberately treats these as misses, so production users currently see each component's inline `fallback` prop (or nothing), not CMS copy. H5 (final Leah content pass) is owed.
-- ⚠ **Missing dedicated Sanity schemas:** `welcomeModalContent` and `videoContent` were never built (spec §16 + Sprint-4 backlog). `WelcomeModal` reuses the `tooltipContent` shape; `VideoContent` exists only as a TypeScript type. Studio ships 5 schemas: `helpContent`, `tooltipContent`, `emptyStateContent`, `helpArticleContent`, `coachmarkContent`.
-- ⚠ **10 video walkthroughs (H4) not recorded** — blocked on the still-open video-hosting decision (spec §16 open question #2).
+- ⚠ **`welcomeModalContent` schema missing:** never built (spec §16 + Sprint-4 backlog); `WelcomeModal` still reuses the `tooltipContent` shape. `videoContent` shipped Wave 3 (decision 14) — `title`, `streamUid`, `surfaceKey`, `persona`, `durationSeconds`, registered in the schema index. Studio now ships 6 schemas: `helpContent`, `tooltipContent`, `emptyStateContent`, `helpArticleContent`, `coachmarkContent`, `videoContent`.
+- ⚠ **Video walkthroughs not recorded** — the hosting decision is resolved (Cloudflare Stream, decision 14, Wave 3): `VideoPlayer` accepts an optional `streamUid` and renders `https://iframe.videodelivery.net/<uid>`, wired but unused. Scope narrowed from the original 10 to **2–3** recordings (an engagement moving Brief → Proposal; the Capture gesture) — Kody owes provisioning + the recordings themselves; no interface-tour video (coachmarks cover that).
 - ⚠ **PostHog dashboards unverified:** the 5 required content dashboards (I.2, spec §10.2) were reported as built by Kody but never verified via query in the production-verification report; the quarterly content-audit dashboard (I3) is not built.
 - ⚠ **TourController persona gap:** does not thread persona context into per-step coachmark queries — the persona='all' content-side re-tag (above) is the current workaround (Sprint 5 code-refactor backlog item).
 - ⚠ **ContextualHelpPanel "did not visibly open"** when clicking `?` was left OPEN in the Round-2 production verification (needs a targeted debug session); status unconfirmed post-fix.
@@ -211,7 +211,7 @@ Data flow is entirely client-side:
 | Leah authors real CMS copy over the ~142 placeholder docs (H5); until then users see inline fallbacks, not the designed help. | P0 |
 | Confirm/fix `ContextualHelpPanel` opening on the `?` click (open item from Round-2 prod verification); run the deferred §10 E2E acceptance suite with real pilot users. | P0 |
 | Refactor `TourController` to pass persona into per-step coachmark queries, retiring the `persona='all'` content-side workaround. | P1 |
-| Build dedicated Sanity schemas for `welcomeModalContent` and `videoContent`; resolve the video-hosting decision and record the 10 walkthroughs (H4). | P1 |
+| Build a dedicated `welcomeModalContent` Sanity schema (`videoContent` shipped Wave 3). Record the 2–3 Cloudflare Stream videos (decision 14) and publish their `videoContent` docs. | P1 |
 | Verify/rebuild the 5 PostHog content dashboards (I.2) and the quarterly content-audit dashboard (I3); reconcile the unused typed `helpEvents` taxonomy with the direct `window.posthog` calls. | P1 |
 | Wire the first real `FeatureAnnouncementCoachmark`, and add the `WelcomeModal` "Show me around again" replay affordance. | P2 |
 | Wire admin-portal + client-portal Supabase help-state persistence when they ship their first tour. | P2 |

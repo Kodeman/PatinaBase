@@ -1,12 +1,19 @@
 /**
- * MarginNote — the R97 `suppressed` prop + the exported `markMarginNoteSeen`.
+ * MarginNote — the R97 `suppressed` prop + the exported `markMarginNoteSeen`,
+ * plus the cross-device Supabase backend + version-suffix exact-key
+ * semantics from decision 5 (amending R94).
  *
  * The wayfinding emitter is mocked so the test never loads posthog and can
  * assert the 'shown' beacon precisely. Visibility is checked via the `note`
  * role (the primitive renders `<aside role="note">` only when it shows).
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MarginNote, markMarginNoteSeen } from './margin-note';
+import {
+  MarginNote,
+  hasMarginNoteBeenSeen,
+  markMarginNoteSeen,
+  setMarginNoteStateBackend,
+} from './margin-note';
 
 const marginNoteEvent = jest.fn();
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -24,6 +31,11 @@ function storageKey(noteKey: string): string {
 beforeEach(() => {
   window.localStorage.clear();
   marginNoteEvent.mockClear();
+  setMarginNoteStateBackend(null);
+});
+
+afterEach(() => {
+  setMarginNoteStateBackend(null);
 });
 
 describe('MarginNote — suppressed prop', () => {
@@ -157,5 +169,58 @@ describe('MarginNote — the two-line cap (RF-03), scoped to the caller', () => 
       expect(node).not.toHaveClass('line-clamp-2');
       node = node.parentElement;
     }
+  });
+});
+
+describe('MarginNote — cross-device Supabase backend (decision 5, amending R94)', () => {
+  it('reads and writes through the installed backend once hydrated, never touching localStorage', () => {
+    const store = new Map<string, string>();
+    const backend = {
+      hasSeen: (key: string) => store.has(key),
+      markSeen: (key: string) => store.set(key, new Date().toISOString()),
+    };
+    setMarginNoteStateBackend(backend, true);
+
+    render(<MarginNote noteKey="doc-first-touch">One client, one paper.</MarginNote>);
+    expect(screen.getByRole('note')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss note' }));
+
+    expect(store.has('doc-first-touch')).toBe(true);
+    expect(window.localStorage.getItem(storageKey('doc-first-touch'))).toBeNull();
+  });
+
+  it('falls back to localStorage before the installed backend has hydrated', () => {
+    const backend = {
+      hasSeen: jest.fn(() => true),
+      markSeen: jest.fn(),
+    };
+    // Installed but NOT hydrated — hasSeen must not consult it, and the note
+    // must still reveal from the (empty) localStorage fallback.
+    setMarginNoteStateBackend(backend, false);
+
+    render(<MarginNote noteKey="doc-first-touch">One client, one paper.</MarginNote>);
+    expect(screen.getByRole('note')).toBeInTheDocument();
+    expect(backend.hasSeen).not.toHaveBeenCalled();
+  });
+
+  it('falls back to localStorage once the backend is cleared (sign-out)', () => {
+    const backend = { hasSeen: () => true, markSeen: jest.fn() };
+    setMarginNoteStateBackend(backend, true);
+    setMarginNoteStateBackend(null);
+
+    render(<MarginNote noteKey="doc-first-touch">One client, one paper.</MarginNote>);
+    // No backend installed and localStorage is empty → unseen → reveals.
+    expect(screen.getByRole('note')).toBeInTheDocument();
+  });
+
+  it('exact-key semantics: a version-suffixed key is unseen even when the base key was seen', () => {
+    markMarginNoteSeen('doc-first-touch');
+    expect(hasMarginNoteBeenSeen('doc-first-touch')).toBe(true);
+    expect(hasMarginNoteBeenSeen('doc-first-touch@2')).toBe(false);
+
+    markMarginNoteSeen('doc-first-touch@2');
+    expect(hasMarginNoteBeenSeen('doc-first-touch@2')).toBe(true);
+    // The base key's own record is untouched by the re-arm.
+    expect(hasMarginNoteBeenSeen('doc-first-touch')).toBe(true);
   });
 });

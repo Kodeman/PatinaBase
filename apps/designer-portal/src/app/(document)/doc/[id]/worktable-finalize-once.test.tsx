@@ -117,6 +117,16 @@ jest.mock('@patina/supabase', () => ({
       select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
     }),
   }),
+  // L3 (00559) — the first-hire-opened marker's own reads; this suite never
+  // exercises the checklist, so a fixed empty shape keeps the mount effect a
+  // no-op.
+  useOrganizations: () => ({ data: [] }),
+  useOrganizationMembers: () => ({ data: [] }),
+  useMarkFirstDocumentOpened: () => ({ mutate: jest.fn() }),
+}));
+
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({ user: { id: 'owner-user' } }),
 }));
 
 // W5-R1: the Margin sheet's whole-margin derivation lives in this local
@@ -320,6 +330,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
     historyToggled: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
+    zoneFlight: jest.fn(),
     wayfinding: { marginNote: jest.fn() },
   },
 }));

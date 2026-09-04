@@ -27,7 +27,23 @@ jest.mock('../../overlays/doc-sheet', () => ({
   }) => (open ? <div role="dialog">{children}</div> : null),
 }));
 
+// Default ON: most of this suite exercises the handoff-note field, which is
+// gated behind `onboarding-teammate-persona` (decisions.md row 9, "behind
+// the one flag from #6"). The "flag off" describe block below overrides this
+// to prove flag-off/loading reproduces pre-L8 behavior exactly.
+let mockFlagValue = true;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) =>
+    name === 'onboarding-teammate-persona'
+      ? { value: mockFlagValue, isLoading: false }
+      : { value: false, isLoading: false },
+}));
+
 const mockUseInviteMember = useInviteMember as jest.Mock;
+
+beforeEach(() => {
+  mockFlagValue = true;
+});
 
 function setMutateState(overrides: Partial<{
   isPending: boolean;
@@ -213,6 +229,54 @@ describe('StudioInviteModal — submit payload', () => {
     const payload = mutate.mock.calls[0][0];
     expect(payload.jobTitle).toBe('Head of Sourcing');
     expect(payload.staffRole).toBeUndefined();
+  });
+
+  it('omits handoffNote when the textarea is left blank', async () => {
+    const mutate = setMutateState();
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.handoffNote).toBeUndefined();
+  });
+
+  it('carries a trimmed handoffNote when written', async () => {
+    const mutate = setMutateState();
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.change(
+      screen.getByLabelText(/A line for her first day/),
+      { target: { value: '  start with the Olsen lake house  ' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.handoffNote).toBe('start with the Olsen lake house');
+  });
+
+  it('shows a DM Mono character counter that tracks the handoff note, capped at 280', () => {
+    setMutateState();
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    expect(screen.getByText('0/280')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/A line for her first day/), {
+      target: { value: 'a'.repeat(300) },
+    });
+
+    expect(screen.getByLabelText(/A line for her first day/)).toHaveValue(
+      'a'.repeat(280),
+    );
+    expect(screen.getByText('280/280')).toBeInTheDocument();
   });
 
   it('sends a guest invite payload with role=guest (wire member_role=guest)', async () => {
@@ -569,5 +633,35 @@ describe('StudioInviteModal — email delivery outcome', () => {
     expect(
       screen.getByText('That person is already part of this studio.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('StudioInviteModal — onboarding-teammate-persona flag off', () => {
+  beforeEach(() => {
+    mockFlagValue = false;
+  });
+
+  it('hides the handoff-note field entirely', () => {
+    setMutateState();
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    expect(
+      screen.queryByLabelText(/A line for her first day/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('never includes handoffNote in the submit payload, even with prior state', async () => {
+    const mutate = setMutateState();
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.handoffNote).toBeUndefined();
   });
 });

@@ -54,6 +54,7 @@ import {
   type InviteEmailOutcome,
   inviteEmailOutcome,
   isInvitableOrgStatus,
+  normalizeHandoffNote,
   resolveInviteActor,
   TEMPLATE_MISSING_OUTCOME,
 } from './lib.ts';
@@ -78,6 +79,9 @@ interface InviteBody {
   name?: string;
   job_title?: string;
   staff_role?: string;
+  /** L8: the owner's optional handoff line, carried on the invite and
+   *  rendered once on the invitee's Desk as a margin note. */
+  handoff_note?: string;
 }
 
 // Browser-facing: the invite modal (designer portal) calls this via
@@ -173,6 +177,14 @@ async function handleInvite(req: Request): Promise<Response> {
   if (staffRole && staffRole.length > 120) {
     return json({ error: 'invalid_job_title' }, 400);
   }
+
+  // L8: the owner's optional handoff line. Trimmed, capped at 280 — matches
+  // the 00560 CHECK on organization_members.handoff_note.
+  const normalizedHandoffNote = normalizeHandoffNote(body.handoff_note);
+  if (normalizedHandoffNote === null) {
+    return json({ error: 'invalid_handoff_note' }, 400);
+  }
+  const handoffNote = normalizedHandoffNote;
 
   // ── Target organization (email copy; the gates fire after authz) ─────────
   // Fetched here for the studio name. Existence and status are GATED BELOW,
@@ -317,6 +329,7 @@ async function handleInvite(req: Request): Promise<Response> {
   // refresh path (existing → invited → active keeps this same upsert).
   if (jobTitle) membershipUpsert.job_title = jobTitle;
   if (staffRole) membershipUpsert.staff_role = staffRole;
+  if (handoffNote) membershipUpsert.handoff_note = handoffNote;
   const { error: upsertError } = await admin.from('organization_members').upsert(
     membershipUpsert,
     { onConflict: 'user_id,organization_id' },

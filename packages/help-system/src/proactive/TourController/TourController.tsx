@@ -48,6 +48,14 @@ export interface CoachmarkStep {
   fallbackHeading?: string
   /** Hard-coded fallback body — see `fallbackHeading`. */
   fallbackBody?: string
+  /**
+   * Hard-coded fallback CTA label for when the Sanity coachmark's `ctaLabel`
+   * resolves null/empty. Same downtime guarantee as `fallbackHeading` —
+   * without it a step whose CTA carries meaning (e.g. "act, don't just
+   * advance") would silently show the package default ("Done"/"Next")
+   * during CMS downtime or before content publishes.
+   */
+  fallbackCtaLabel?: string
 }
 
 /**
@@ -609,7 +617,7 @@ function CoachmarkSlotInner({
   const cmBody = typeof cm?.body === 'string' && cm.body.length > 0 ? cm.body : null
   const heading = cmHeading ?? step.fallbackHeading ?? null
   const body = cmBody ?? step.fallbackBody ?? null
-  const ctaLabel = cm?.ctaLabel ?? null
+  const ctaLabel = cm?.ctaLabel ?? step.fallbackCtaLabel ?? null
 
   // The popover opens iff: tour says we're ready AND we have copy to show
   // (from the CMS or the step fallbacks).

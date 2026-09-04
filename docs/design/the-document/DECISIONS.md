@@ -10659,3 +10659,41 @@ is what that same line shows only once a reader unfolds it. A Piece therefore re
 its 48px crop folded and its full plate unfolded, and neither replaces the other.
 
 *Entries add: R128 · last id = R128*
+
+### R129 · The tour's last step may act — 2026-09-03
+
+**Ruled by Kody, interviewed against `artifacts/designer-onboarding-learning-2026-09-03/synthesis/proposal.md` §12.** AMENDS R97, item 1. R97 held that no step may route into `/doc/`; it did not rule on whether a step may *act* while staying on `/desk`. Ruled now: **yes.** The walkthrough's sixth and final step, "Begin with a lead," opens `CaptureLeadSheet` over the Desk before the tour closes — the sheet, not a route, so R97's own "never leaves /desk" clause is unbroken. R4's timer still starts only on a submitted lead, never on the sheet opening. The closing button reads "Capture a lead" (ruled 2026-09-03), never a generic "To work."
+
+*Entries add: R129 · last id = R129*
+
+### R130 · A third WelcomeModal state — "Show me later" — 2026-09-03
+
+**Ruled by Kody, same interview.** Narrow amendment to R97 item 3 (`desk-walkthrough-gate.ts` §4.7 dismissal semantics). The WelcomeModal gains a third choice beside "Take the tour" and "Explore on my own": **"Show me later"**, which records `tours['desk-walkthrough'] = { atStep: 0 }` — deliberately *without* `abandoned`. That distinction lets the existing `desk-walkthrough-offer` margin note re-offer the tour exactly once more; declining outright (`abandoned: true`) still suppresses the note per R97 unchanged.
+
+*Entries add: R130 · last id = R130*
+
+### R131 · Margin notes re-arm on a re-cut — 2026-09-03
+
+**Ruled by Kody, same interview.** AMENDS R94. R94's primitive "recedes permanently on use" — true within one version of a note's content, but silent on what happens when the note's *copy* is re-cut. Ruled now: a margin note may re-arm **only on a version-suffixed key** (`doc-first-touch@2`), firing once per person per version, **never on a calendar or a re-visit**. Bumping a note's suffix is an editorial act, not a scheduling one.
+
+*Entries add: R131 · last id = R131*
+
+### R132 · The shortcut reference lives behind `?`, from the start — 2026-09-03
+
+**Ruled by Kody, same interview, against the synthesis's own recommendation.** The keyboard-shortcut reference ships as a `?` overlay from day one, rendering the same content as the Help Center article "The keys" — one content source, two doorways, never a second copy. This is the first bare single-key global shortcut licensed outside the `g`-chord family R97 established, and it ships only after a collision check against Board Room's bare keys (`p`, `1`) and the input/dialog guards already in `registry-shortcuts.tsx` — `?` must never fire while focus is inside a text field or an open dialog.
+
+*Entries add: R132 · last id = R132*
+
+### R133 · The two CS calls are doctrine — 2026-09-03
+
+**Ruled by Kody, same interview** — an explicit interpretation of VISION §2, not new invention. Every studio's onboarding includes two calls, both run by Kody personally, not automated and not delegated: a **setting-up conversation** with the owner in her first two days, and a **handoff conversation** with owner and new hire together on the day she accepts the invite. Any stuck signal the product surfaces during onboarding — an unopened checklist row, a dead margin note, a stalled invite — routes to Kody, not to a support queue. Nothing in this ruling is built; it constrains the pilot runbook, outside code.
+
+*Entries add: R133 · last id = R133*
+
+### R134 · R96 amended — ledgers may page, documents may not — 2026-09-03
+
+**Ruled by Kody, same interview**, resolving the question of the Orders sheet's four tabs against R96's "a sheet stays one page" guardrail. AMENDS R96: the guardrail narrows to **documents** — `/doc/[id]` and its sections never page. **Ledgers and sheets** (Orders, Hours, Accounts, People — R96's own laid-sheet family) may page internally; the four-tab Orders sheet stands as shipped, unchanged, and the glossary entry for it is written to describe that truthfully rather than as an exception.
+
+*Entries add: R134 · last id = R134*
+
+Note (2026-09-03): the E4 and E9 drip gates reuse first_capture and payment_received respectively, accepted by Kody as the nearest available activation events; revisit if 00291 gains a library/aesthete event.

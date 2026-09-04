@@ -110,7 +110,7 @@ export function LibraryShelf({
           {items.length > 0
             ? "No pieces on this shelf match that configuration capability."
             : layer === "personal"
-              ? "Nothing captured yet. Bring something in — it lands here, raw."
+              ? "Nothing captured yet. Bring a piece in from a vendor's page with Capture, or drop a photo here — it lands raw, and you tidy it later."
               : "This shelf is empty."}
         </p>
       )}

@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>The Attendance · The Vale Residence</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+/* ------------------------------------------------------------------
+   PATH A · THE ATTENDANCE — homeowner page concept, the Vale residence.
+   Fixture: 5 August 2026, verbatim. Self-contained but for the type.
+   No shadows anywhere. No red or green. Actions are scored ink.
+   Contrast floor: prose and every live fact >= 4.5:1; quiet tiers >= 3:1.
+   ------------------------------------------------------------------ */
+
+:root{
+  --paper:#FAF7F2;
+  --sheet:#FCFAF6;
+  --sheet-2:#F3EEE4;
+
+  --ink:#2C2926;          /* 13.5:1 */
+  --ink-2:#5C4A3C;        /*  8.1:1 */
+  --quiet:#65594E;        /*  6.4:1 */
+  --pending:#7E7973;      /*  4.1:1 — the not-yet action */
+  --dim:#6F6B66;          /*  5.0:1 — settled matter under the reading mark */
+  --hush:#8C837B;         /*  3.5:1 — unreached stops, struck rows */
+
+  --rule:rgba(44,41,38,.16);
+  --rule-2:rgba(44,41,38,.30);
+  --ground:rgba(44,41,38,.025);
+
+  --gold:#A87C36;         /* the phase, as a drawn line */
+  --gold-ink:#8A6520;     /*  5.0:1 — the phase, as text or a mark */
+  --gold-40:rgba(168,124,54,.40);
+
+  --display:"Playfair Display","Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --body:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"DM Mono",ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+
+  --pad:clamp(18px,4vw,44px);
+  --spine:0px;            /* where the margin rule stands inside the rail */
+  --railpad:34px;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background-color:var(--paper);
+  background-image:repeating-linear-gradient(to bottom,var(--ground) 0 1px,transparent 1px 5px);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16.5px;
+  line-height:1.62;
+  padding-bottom:64px;
+}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+button{font:inherit;color:inherit;margin:0}
+p{margin:0 0 .85em}
+h1,h2,h3{margin:0;font-weight:500}
+
+/* ---------- page frame ---------- */
+.page{
+  max-width:1060px;margin:0 auto;padding:0 var(--pad);
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 190px;
+  column-gap:clamp(24px,3vw,44px);
+}
+.letterhead{grid-column:1/-1}
+.ledger{grid-column:2;grid-row:2}
+.rail{grid-column:1;grid-row:2;min-width:0}
+
+/* ---------- 1 · letterhead (three lines, no links) ---------- */
+.letterhead{padding:30px 0 16px;border-bottom:1px solid var(--rule-2)}
+.lh-row{display:flex;align-items:baseline;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.lh-mark{font-family:var(--display);font-size:18px;letter-spacing:.13em;font-weight:500}
+.lh-phase{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-ink);white-space:nowrap}
+.lh-house{font-family:var(--display);font-size:16px;color:var(--ink-2);margin-top:4px}
+.lh-prep{font-family:var(--display);font-style:italic;font-size:14px;color:var(--quiet);margin-top:2px}
+
+/* ---------- the ledger margin ---------- */
+.ledger{padding-top:22px;position:sticky;top:22px;align-self:start}
+.lg-cap{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--quiet);padding-bottom:7px;border-bottom:1px solid var(--rule-2)}
+.lg-state{font-family:var(--display);font-style:italic;font-size:14px;line-height:1.4;color:var(--ink-2);padding:9px 0;border-bottom:1px solid var(--rule)}
+.lg-row{padding:6px 0;border-bottom:1px solid var(--rule)}
+.lg-row b{display:block;font-family:var(--mono);font-size:15px;font-weight:400;color:var(--ink)}
+.lg-row i{display:block;font-style:normal;font-family:var(--mono);font-size:11px;letter-spacing:.04em;line-height:1.35;color:var(--quiet);margin-top:1px}
+.lg-row.struck b,.lg-row.struck i{color:var(--hush);text-decoration:line-through;text-decoration-thickness:1px}
+.lg-break{display:none}
+
+/* ---------- 7 · the margin rule, graduated ---------- */
+.rail{position:relative}
+.rail > *{position:relative;padding:16px 0 16px var(--railpad);margin:0}
+.rail > *:not(.grads)::before{content:"";position:absolute;left:var(--spine);top:0;bottom:0;width:2px;background:var(--gold)}
+.rail > .after1::before{background:var(--gold-40)}
+.rail > .gate::before{display:none}          /* a square cut: the act sits in the gap */
+.knit{position:absolute;left:var(--spine);width:2px;height:0;background:var(--gold);transition:height 700ms cubic-bezier(.42,0,.2,1)}
+.after1 .knit{background:var(--gold-40)}
+.knit-top{top:0}
+.knit-bot{bottom:0}
+.gate.knit-on .knit{height:50%}
+
+.rail > .grads{position:absolute;left:var(--spine);top:0;bottom:0;width:2px;padding:0;pointer-events:none;display:none}
+.grad{position:absolute;left:-10px;width:12px;height:1px;background:var(--gold-40)}
+.grad i{position:absolute;right:16px;top:-.62em;width:104px;text-align:right;font-style:normal;
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;line-height:1.25;color:var(--quiet)}
+.grad.held{height:2px;width:18px;left:-16px;background:var(--gold)}
+.grad.held i{right:22px;color:var(--gold-ink)}
+
+/* movement breaks */
+.rail > .mv{padding-top:62px}
+.rail > .mv::after{content:"";position:absolute;left:var(--railpad);right:0;top:30px;height:1px;background:var(--rule-2)}
+
+/* ---------- 2 · standing sentence ---------- */
+.standing{
+  font-family:var(--display);
+  font-size:clamp(1.6rem,3vw,2.35rem);
+  line-height:1.24;letter-spacing:-.011em;font-weight:400;
+  max-width:20em;margin:0 0 .5em;
+}
+.subline{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--quiet);margin:0}
+.readmark{
+  font-family:var(--display);font-style:italic;font-size:15px;color:var(--ink-2);
+  margin:12px 0 0;padding-top:6px;border-top:1px solid var(--rule);
+  display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+}
+.readingnote{
+  display:flex;align-items:center;gap:22px;flex-wrap:wrap;overflow:hidden;
+  border-top:1px solid var(--ink);
+  font-family:var(--display);font-style:italic;font-size:15px;color:var(--ink);
+}
+
+/* ---------- section labels, datelines ---------- */
+.seclab{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-ink);font-weight:500;margin:0 0 10px}
+.dateline{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.dateline .dl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--quiet);white-space:nowrap}
+.dateline .dl-rule{flex:1 1 auto;height:1px;background:var(--rule);min-width:10px}
+.dateline .dl-state{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-ink)}
+
+/* ---------- 3 · Nora's note ---------- */
+.note{margin:0;border:0;padding:0;max-width:44ch}
+.note p{font-family:var(--display);font-size:19px;line-height:1.52;color:var(--ink);margin:0 0 .5em}
+.note .sig{font-style:italic;color:var(--ink-2);text-align:right;margin:.1em 0 0}
+.sentline{font-family:var(--display);font-style:italic;font-size:16px;color:var(--ink-2);margin:0 0 12px}
+
+/* ---------- 4 · 5 · enclosures ---------- */
+.foldline{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.foldline .fl-rule{flex:1 1 auto;height:1px;background:var(--rule);min-width:10px}
+.sheet-wrap{position:relative;overflow:hidden;max-width:660px;padding:0 8px 8px 0}
+.offset{position:absolute;left:8px;top:8px;right:0;bottom:0;border:1px solid var(--rule);background:var(--sheet-2);z-index:0}
+.sheet{position:relative;z-index:1;background:var(--sheet);border:1px solid var(--rule-2);padding:16px 22px 20px}
+.sheet.primary{border-top:3px solid var(--ink);padding-top:18px}
+.sheet p{max-width:56ch}
+.sheet-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--rule);padding-bottom:8px}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink)}
+.kicker.q{color:var(--quiet);white-space:nowrap}
+.sheet-title{font-family:var(--display);font-size:30px;line-height:1.14;margin:14px 0 2px;letter-spacing:-.012em}
+.sheet-title.second{font-size:23px}
+.sheet-sub{font-family:var(--display);font-style:italic;font-size:16px;color:var(--ink-2);margin:0 0 12px;max-width:56ch}
+.hint{font-family:var(--display);font-style:italic;font-size:15.5px;color:var(--ink);margin:12px 0 0;max-width:56ch}
+
+.lines{list-style:none;margin:12px 0 0;padding:0}
+.lines li{display:flex;align-items:baseline;padding:3px 0;font-size:15px}
+.lines li.total{border-top:1px solid var(--rule-2);margin-top:6px;padding-top:7px}
+.leader{flex:1 1 auto;min-width:10px;margin:0 .55em;border-bottom:1px dotted var(--rule-2);position:relative;top:-.28em}
+.fig{font-family:var(--mono);font-size:13.5px;white-space:nowrap;color:var(--ink)}
+
+.gatefields{margin-top:16px;border-top:1px solid var(--rule);padding-top:12px}
+.flab{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--quiet);margin-bottom:1px}
+.uin{
+  width:100%;max-width:26em;appearance:none;-webkit-appearance:none;
+  border:0;border-bottom:1px solid var(--rule-2);background:transparent;border-radius:0;
+  font-family:var(--display);font-size:19px;color:var(--ink);padding:7px 0 9px;min-height:44px;
+}
+.uin::placeholder{color:var(--pending);font-style:italic}
+.uin:disabled{color:var(--ink-2);opacity:1;-webkit-text-fill-color:var(--ink-2)}
+.consent{display:flex;align-items:flex-start;gap:11px;margin-top:6px;padding:10px 0;min-height:44px;
+  font-size:15px;line-height:1.5;color:var(--ink-2);max-width:48ch;cursor:pointer}
+.consent input{margin:.15em 0 0;accent-color:var(--gold-ink);width:20px;height:20px;flex:0 0 auto}
+.acts{display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-top:2px}
+.cond{font-family:var(--display);font-style:italic;font-size:14.5px;color:var(--quiet)}
+.ack{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--quiet);margin-top:2px}
+
+/* ---------- scored ink ---------- */
+.si{display:inline-flex;align-items:center;min-height:44px;padding:0;border:0;background:none;cursor:pointer}
+.si > span{
+  position:relative;display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink);font-weight:500;line-height:1;padding-bottom:9px;white-space:nowrap;
+}
+.si > span::before{content:"";position:absolute;left:0;right:0;bottom:4.5px;height:1px;background:var(--ink)}
+.si > span::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:1px;background:var(--gold)}
+.si.sec > span{color:var(--ink-2);font-weight:400}
+.si.sec > span::before{background:rgba(92,74,60,.55)}
+.si.sec > span::after{display:none}
+.si.ter > span{color:var(--quiet);font-weight:400}
+.si.ter > span::before{background:rgba(101,89,78,.5)}
+.si.ter > span::after{display:none}
+.si.lg > span{font-size:13px;padding-bottom:11px}
+.si.lg > span::before{bottom:5.5px}
+.si.lg > span::after{bottom:1.5px}
+.si.pending > span{color:var(--pending)}
+.si.pending > span::before{background:var(--pending)}
+.si.pending > span::after{background:var(--pending)}
+
+/* ---------- stamps ---------- */
+.tag{display:inline-block;border:1px solid var(--rule-2);border-left:2px dashed var(--gold);
+  padding:6px 14px 7px;transform:rotate(-2.6deg);transform-origin:left center;max-width:100%;background:transparent}
+.tag b{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.17em;text-transform:uppercase;color:var(--gold-ink);font-weight:500}
+.tag i{display:block;font-style:normal;font-size:13px;line-height:1.42;color:var(--quiet);margin-top:2px}
+.plainstate{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--quiet)}
+.plainstate em{font-style:normal;color:var(--gold-ink)}
+.stamp{display:inline-block;margin-top:14px;border:1px solid var(--ink);padding:7px 13px 8px;transform:rotate(-1.4deg);
+  font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink)}
+
+/* ---------- reference marks & apparatus ---------- */
+.rm{
+  font-family:var(--mono);font-size:11px;line-height:1;display:inline-block;position:relative;top:-.45em;
+  color:var(--gold-ink);border:0;background:none;padding:0 1px 0 2px;cursor:pointer;font-weight:500;
+}
+.rm::after{content:"";position:absolute;left:50%;top:50%;width:22px;height:34px;transform:translate(-50%,-50%)}
+.rm.on{color:var(--ink);text-decoration:underline}
+.ap{
+  font-size:14px;line-height:1.58;color:var(--ink-2);max-width:52ch;
+  border-left:1px solid var(--rule-2);padding:7px 0 7px 13px;margin:8px 0 12px;overflow:hidden;
+}
+.ap sup{font-family:var(--mono);font-size:11px;color:var(--gold-ink);margin-right:5px;vertical-align:baseline}
+
+/* ---------- 6 · pieces and journeys ---------- */
+.piece{padding:14px 0;border-top:1px solid var(--rule)}
+.piece:first-of-type{border-top:0;padding-top:2px}
+.pline{display:flex;align-items:baseline;font-size:16.5px;margin-bottom:9px}
+.pname{font-family:var(--display);font-size:21px}
+.holds{display:none;font-family:var(--display);font-style:italic;font-size:16px;color:var(--ink);margin:10px 0 0}
+body.diff .holds{display:block}
+.journey{display:flex;flex-wrap:wrap;gap:7px 16px;margin:12px 0 0;padding:0;list-style:none}
+.journey li{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--hush);position:relative;padding-left:13px}
+.journey li::before{content:"";position:absolute;left:0;top:.36em;width:5px;height:5px;border:1px solid var(--hush)}
+.journey li.done{color:var(--quiet)}
+.journey li.done::before{background:var(--quiet);border-color:var(--quiet)}
+.journey li.here{color:var(--gold-ink);font-weight:500}
+.journey li.here::before{background:var(--gold);border-color:var(--gold-ink)}
+.footnote{font-family:var(--display);font-style:italic;font-size:15px;color:var(--ink-2);margin:16px 0 0;max-width:56ch}
+
+/* ---------- 7 · the toll ---------- */
+.tollline{font-size:17px;max-width:56ch}
+.ways{list-style:none;margin:14px 0 0;padding:0}
+.ways li{padding:9px 0;border-top:1px solid var(--rule);font-size:15px}
+.ways li:first-child{border-top:0}
+.ways .w-name{font-family:var(--display);font-size:17px}
+.ways .w-note{display:block;font-size:14px;color:var(--quiet);margin-top:1px}
+
+/* ---------- 8 · rooms ---------- */
+.roomline{display:flex;align-items:baseline;font-size:17px}
+.roomsub{font-size:15px;color:var(--ink-2);margin:5px 0 0;max-width:56ch}
+.roomhint{font-family:var(--display);font-style:italic;font-size:14.5px;color:var(--quiet);margin:-4px 0 12px}
+.roomlink{
+  border:0;background:none;padding:0;cursor:pointer;color:inherit;font:inherit;
+  border-bottom:1px dotted var(--gold-ink);
+}
+.roomlink.strong{font-family:var(--display);font-size:19px}
+.roomlink[aria-pressed="true"]{border-bottom:2px solid var(--gold-ink)}
+.materials{font-family:var(--mono);font-size:11px;letter-spacing:.11em;color:var(--quiet);margin:10px 0 0}
+.plate{margin:14px 0 0;max-width:44ch}
+.plate .hatch{
+  height:104px;border:1px solid var(--rule-2);background-color:var(--sheet-2);
+  background-image:repeating-linear-gradient(45deg,rgba(168,124,54,.2) 0 1px,transparent 1px 8px);
+}
+.plate figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--quiet);margin-top:6px}
+
+/* ---------- 9 · previously ---------- */
+.rec{border-top:1px solid var(--rule)}
+.rec:first-of-type{border-top:0}
+.recline{display:flex;align-items:baseline;width:100%;text-align:left;background:none;border:0;padding:13px 0;cursor:pointer;min-height:44px}
+.rdate{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--quiet);flex:0 0 auto;min-width:6.6em}
+.rtitle{font-family:var(--display);font-size:17px;flex:0 1 auto}
+.rstate{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-ink);flex:0 0 auto}
+.prevbody{overflow:hidden}
+.prevbody .pb-in{padding:0 0 16px;max-width:56ch}
+.reply{width:100%;max-width:34em;appearance:none;-webkit-appearance:none;border:1px solid var(--rule-2);border-radius:0;
+  background:var(--sheet);font-family:var(--body);font-size:15px;color:var(--ink);padding:10px 12px;line-height:1.5;resize:vertical}
+
+/* ---------- 10 · ahead ---------- */
+.dash{font-family:var(--display);font-size:18px;color:var(--ink-2);border-top:1px dashed var(--rule-2);padding-top:9px;margin:0 0 9px;max-width:44ch}
+
+/* ---------- 11 · colophon ---------- */
+.colophon{padding-bottom:48px !important}
+.col-lead{font-family:var(--display);font-style:italic;font-size:17px;color:var(--ink-2)}
+.coldl{margin:14px 0 0}
+.coldl dt{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--quiet);margin-top:12px}
+.coldl dd{margin:3px 0 0;font-size:15px;line-height:1.6;max-width:58ch}
+.closing{font-family:var(--display);font-size:17px;color:var(--ink);margin:22px 0 0;padding-top:14px;border-top:1px solid var(--rule);max-width:54ch}
+
+/* ---------- the reading mark's diff ---------- */
+.cbar{display:none;position:absolute;left:calc(var(--spine) + 8px);top:0;bottom:0;width:1px;background:var(--ink)}
+body.diff .entry.changed > .cbar{display:block}
+.morning{display:none;font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--gold-ink);margin:0 0 8px}
+body.diff .gate:not(.knit-on) .morning{display:block}
+.summary{display:none;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--quiet)}
+body.diff .settleable,
+body.diff .settleable *{color:var(--dim) !important;border-color:var(--rule) !important}
+body.diff .settleable .si > span::before,
+body.diff .settleable .si > span::after,
+body.diff .settleable .leader{background:none;border-color:var(--dim) !important}
+body.diff .settleable .si > span::before{background:var(--dim)}
+
+/* ---------- the specimen control ---------- */
+.specimen{
+  position:fixed;right:14px;bottom:14px;z-index:5;
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:flex-end;
+  max-width:calc(100vw - 28px);
+  background:var(--paper);border:1px solid var(--rule-2);padding:2px 14px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--quiet);
+}
+
+/* ---------- graduated gutter, desktop only ---------- */
+@media (min-width:1000px){
+  :root{--spine:118px;--railpad:150px}
+  .rail > .grads{display:block}
+  .rail > .mv::after{left:var(--railpad)}
+}
+
+/* ---------- tablet and phone ---------- */
+@media (max-width:999px){
+  .page{grid-template-columns:minmax(0,1fr)}
+  .letterhead{grid-column:1}
+  .ledger{grid-column:1;grid-row:auto;position:static;padding:12px 0 4px;border-bottom:1px solid var(--rule-2);
+    display:flex;flex-wrap:wrap;gap:2px 18px;align-items:baseline}
+  .lg-cap{width:100%;border-bottom:0;padding-bottom:2px}
+  .lg-state{display:none}
+  .lg-row{border-bottom:0;padding:2px 0;display:flex;align-items:baseline;gap:7px}
+  .lg-row b{font-size:13.5px}
+  .lg-row i{margin-top:0}
+  .lg-tail{display:none}
+  .lg-break{display:block;flex:0 0 100%;height:0}
+  .rail{grid-column:1;grid-row:auto}
+  .sheet-wrap{max-width:none}
+}
+@media (max-width:820px){
+  :root{--railpad:16px}
+  .rail > *::before,.knit{left:calc(0px - var(--pad));width:3px}
+  .cbar{left:calc(0px - var(--pad) + 7px)}
+  .offset{display:none}
+  .sheet-wrap{padding:0}
+  .sheet{padding:15px 16px 18px}
+  .specimen{position:static;margin:0 auto;max-width:none;border-left:0;border-right:0;
+    justify-content:flex-start;padding:10px var(--pad) 16px}
+  body{padding-bottom:0}
+  body.diff .settleable > *{display:none}
+  body.diff .settleable > .summary{display:block}
+  .roomline{display:block}
+  .roomline .leader{display:none}
+  .roomline .fig{display:block;white-space:normal;margin-top:3px;font-size:12.5px;color:var(--quiet)}
+}
+@media (prefers-reduced-motion: reduce){
+  .knit{height:50%;opacity:0;transition:opacity 300ms ease}
+  .gate.knit-on .knit{opacity:1}
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- 1 · LETTERHEAD -->
+  <header class="letterhead">
+    <div class="lh-row">
+      <span class="lh-mark">Quist Interiors</span>
+      <span class="lh-phase">Procurement · August 2026</span>
+    </div>
+    <div class="lh-house">The Vale Residence, Des Moines</div>
+    <div class="lh-prep">Prepared for Harper Vale by Quist Interiors.</div>
+  </header>
+
+  <!-- LEDGER MARGIN -->
+  <aside class="ledger" aria-label="The money standing">
+    <div class="lg-cap">the money standing</div>
+    <p class="lg-state" id="lgstate">Two papers wait for your name.</p>
+    <div class="lg-row"><b>$85,000</b><i>planned</i></div>
+    <div class="lg-row" id="lg-agreed"><b>$61,400</b><i>agreed</i></div>
+    <div class="lg-row"><b>$9,125</b><i>owed<span class="lg-tail">, due 15 August</span></i></div>
+    <span class="lg-break"></span>
+    <div class="lg-row" id="lg-held"><b>$1,440</b><i id="lg-held-label">held<span class="lg-tail"> on the paintwork</span></i></div>
+    <div class="lg-row" id="lg-await"><b>$6,890</b><i>awaiting a name<span class="lg-tail"> on No. 7</span></i></div>
+  </aside>
+
+  <main class="rail">
+
+    <!-- the graduated spine: six phases, the fourth held -->
+    <div class="grads" aria-hidden="true">
+      <span class="grad" style="top:2%"><i>Discovery</i></span>
+      <span class="grad" style="top:15%"><i>Design</i></span>
+      <span class="grad" style="top:28%"><i>Design Refinement</i></span>
+      <span class="grad held" style="top:44%"><i>Procurement</i></span>
+      <span class="grad" style="top:74%"><i>Installation</i></span>
+      <span class="grad" style="top:92%"><i>Completion</i></span>
+    </div>
+
+    <!-- 2 · STANDING SENTENCE + READING MARK -->
+    <section class="entry changed" id="premise">
+      <span class="cbar" aria-hidden="true"></span>
+      <p class="standing" id="standing" aria-live="polite">It is the <span id="dateword" data-d5="fifth" data-d4="fourth">fifth</span> of August. Your walnut credenza is in production, <span id="papers">two papers wait for your name</span>, and a balance of $9,125 stands open.</p>
+      <p class="subline"><span id="agreedline">$61,400 agreed of $85,000</span> · Phase four of six · Procurement</p>
+      <p class="readmark" id="readmark">
+        <span>You last read this on the fourth of August.</span>
+        <button type="button" class="si ter" id="diffbtn"><span>What changed since the fourth</span></button>
+      </p>
+      <p class="readingnote" id="readingnote" hidden>
+        <span id="readingtext" aria-live="polite">Reading one room only.</span>
+        <button type="button" class="si ter" id="readall"><span>Read everything</span></button>
+      </p>
+    </section>
+
+    <!-- 3 · THE NOTE -->
+    <section class="entry settleable" id="noteblock" data-rooms="library">
+      <p class="summary">4 August · unchanged</p>
+      <div class="dateline">
+        <span class="dl" id="notedate" data-d5="4 August · yesterday" data-d4="4 August · today">4 August · yesterday</span>
+        <span class="dl-rule"></span>
+        <span class="dl-state" id="notestate">Standing</span>
+      </div>
+      <blockquote class="note">
+        <p>Harper —</p>
+        <p>Three last pieces for the <button type="button" class="roomlink" data-room="library" aria-pressed="false">library</button> — the sconces you loved, the drapery, the runner. Sign and I&rsquo;ll have them ordered by Friday.</p>
+        <p class="sig">— N.</p>
+      </blockquote>
+    </section>
+
+    <!-- 4 · ENCLOSURE I — FURNISHINGS AUTHORIZATION No. 7 -->
+    <section class="entry gate mv changed" id="gate1" data-rooms="library">
+      <span class="cbar" aria-hidden="true"></span>
+      <span class="knit knit-top"></span><span class="knit knit-bot"></span>
+      <p class="morning">A second morning.</p>
+      <p class="sentline" id="sentline" hidden>Sent 4 August by Quist Interiors.</p>
+      <div class="foldline">
+        <button type="button" class="si ter" id="fold1" data-fold="sheet1" data-lift="1" data-alt="Draw it out" aria-expanded="true"><span>Fold it back</span></button>
+        <span class="fl-rule"></span>
+      </div>
+      <div class="sheet-wrap" id="sheet1">
+        <span class="offset" aria-hidden="true"></span>
+        <article class="sheet primary">
+          <div class="sheet-head">
+            <span class="kicker">Enclosed · No. 7 · 4 August</span>
+            <span class="kicker q" id="kicker1">In hand</span>
+          </div>
+          <h2 class="sheet-title">Furnishings authorization No. 7</h2>
+          <p class="sheet-sub"><button type="button" class="roomlink" data-room="library" aria-pressed="false">Library &amp; lounge</button>: lighting &amp; textiles</p>
+          <ul class="lines">
+            <li><span>Brass library sconces</span><span class="leader"></span><span class="fig">$2,340</span></li>
+            <li><span>Wool drapery</span><span class="leader"></span><span class="fig">$2,890</span></li>
+            <li><span>Kilim runner</span><span class="leader"></span><span class="fig">$1,660</span></li>
+            <li class="total"><span>Total</span><span class="leader"></span><span class="fig">$6,890</span></li>
+          </ul>
+          <p class="hint" id="hint1">Three pieces order the moment you sign.</p>
+
+          <div class="gatefields">
+            <label class="flab" for="sign-name">Your full name</label>
+            <input class="uin" id="sign-name" type="text" autocomplete="off" spellcheck="false"
+                   aria-label="Your full name, to authorize No. 7" placeholder="Harper Vale">
+            <label class="consent"><input type="checkbox" id="sign-consent"><span>I authorize these three pieces. Quist Interiors countersigns.</span></label>
+            <div class="acts" id="acts1">
+              <button type="button" class="si lg pending" id="signbtn" aria-disabled="true" aria-describedby="signcond"><span>Sign</span></button>
+              <span class="cond" id="signcond">Your name and the tick, then sign.</span>
+              <button type="button" class="si sec" data-fold="fa7full" data-alt="Fold the instrument" aria-expanded="false"><span>Read it in full</span></button>
+            </div>
+            <div class="ap" id="fa7full" hidden>
+              Furnishings authorization No. 7, sent 4 August by Quist Interiors to Harper Vale for the Vale residence, Des Moines. Scope: library &amp; lounge — lighting &amp; textiles. Three pieces: brass library sconces, $2,340; wool drapery, $2,890; kilim runner, $1,660. Total $6,890. On Harper Vale&rsquo;s typed name and consent the three pieces are ordered and Quist Interiors countersigns.
+            </div>
+            <div class="stamp" id="stamp1" hidden>Signed 5 August · Quist Interiors countersigns</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 5 · ENCLOSURE II · the paintwork -->
+    <section class="entry gate after1 changed" id="gate2" data-rooms="library entry">
+      <span class="cbar" aria-hidden="true"></span>
+      <span class="knit knit-top"></span><span class="knit knit-bot"></span>
+      <p class="morning">A second morning.</p>
+      <div class="foldline">
+        <button type="button" class="si ter" id="fold2" data-fold="sheet2" data-lift="1" data-alt="Draw it out" aria-expanded="true"><span>Fold it back</span></button>
+        <span class="fl-rule"></span>
+      </div>
+      <div class="sheet-wrap" id="sheet2">
+        <span class="offset" aria-hidden="true"></span>
+        <article class="sheet">
+          <div class="sheet-head">
+            <span class="kicker">Also enclosed · 1 August</span>
+            <span class="kicker q" id="kicker2">Held back</span>
+          </div>
+          <h2 class="sheet-title second">Accept the paintwork</h2>
+          <p class="sheet-sub">Prairie Coat Painting · the <button type="button" class="roomlink" data-room="library" aria-pressed="false">library</button> &amp; <button type="button" class="roomlink" data-room="entry" aria-pressed="false">stair hall</button> · $7,200</p>
+          <p style="font-size:15px;margin:0">Substantially complete 1 August<span id="heldDays" data-d5=" — a fourth day held" data-d4=" — a third day held"> — a fourth day held</span>.</p>
+          <p style="font-size:15px;margin:.5em 0 0">Draws 1 through 3 are paid. The final draw of $1,440 releases on your acceptance.</p>
+          <ul class="journey" id="tradejourney">
+            <li class="done">Agreed</li><li class="done">Engaged</li><li class="here">In progress</li><li>Complete</li>
+          </ul>
+          <div class="gatefields">
+            <label class="flab" for="accept-name">Your full name</label>
+            <input class="uin" id="accept-name" type="text" autocomplete="off" spellcheck="false"
+                   aria-label="Your full name, to accept the paintwork" placeholder="Harper Vale">
+            <div class="acts" id="acts2">
+              <button type="button" class="si lg pending" id="acceptbtn" aria-disabled="true" aria-describedby="acceptcond"><span>Accept</span></button>
+              <span class="cond" id="acceptcond">Your name, then accept.</span>
+            </div>
+            <div class="stamp" id="stamp2" hidden>Accepted 5 August · $1,440 released</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6 · FROM THE BENCH AND THE ROAD -->
+    <section class="group mv after1" id="benchgroup">
+      <h3 class="seclab">From the bench and the road</h3>
+
+      <div class="piece entry changed" id="credenza" data-rooms="">
+        <span class="cbar" aria-hidden="true"></span>
+        <div class="pline"><span class="pname">Walnut credenza</span><span class="leader"></span><span class="fig">$8,400</span></div>
+        <div class="tag">
+          <b>In production</b>
+          <i><span>Harmon Bench Works</span><button type="button" class="rm" data-ap="ap2" aria-expanded="false">2</button>, Dayton, Ohio · est. ready 28 August, <span id="credDays" data-d5="in twenty-three days" data-d4="in twenty-four days">in twenty-three days</span></i>
+        </div>
+        <div class="ap" id="ap2" hidden><sup>2</sup>Harmon Bench Works, Dayton, Ohio. The walnut credenza, $8,400, is on the bench there; estimated ready 28 August.</div>
+        <p class="holds">Still on the bench in Dayton.</p>
+        <div class="acts"><button type="button" class="si ter" data-fold="j1" data-alt="Fold the journey" aria-expanded="false"><span>See the journey</span></button></div>
+        <div id="j1" hidden><ul class="journey">
+          <li class="done">Agreed</li><li class="done">Ordered</li><li class="here">In production</li><li>Shipped</li><li>Delivered</li><li>Installed</li>
+        </ul></div>
+      </div>
+
+      <div class="piece entry settleable" data-rooms="">
+        <p class="summary">12 August · unchanged</p>
+        <div class="pline"><span class="pname">Pair of reading chairs</span><span class="leader"></span><span class="fig">on the road</span></div>
+        <p class="plainstate"><em>Shipped</em> · arriving 12 August, <span id="chairDays" data-d5="in a week" data-d4="in eight days">in a week</span></p>
+        <div class="acts"><button type="button" class="si ter" data-fold="j2" data-alt="Fold the journey" aria-expanded="false"><span>See the journey</span></button></div>
+        <div id="j2" hidden><ul class="journey">
+          <li class="done">Agreed</li><li class="done">Ordered</li><li class="done">In production</li><li class="here">Shipped</li><li>Delivered</li><li>Installed</li>
+        </ul></div>
+      </div>
+
+      <div class="piece entry settleable" data-rooms="entry">
+        <p class="summary">29 July · unchanged</p>
+        <div class="pline"><span class="pname">Kilim rug</span><span class="leader"></span><span class="fig">at home</span></div>
+        <p class="plainstate"><em>Delivered</em> · 29 July, to the <button type="button" class="roomlink" data-room="entry" aria-pressed="false">entry &amp; stair hall</button></p>
+        <div class="acts"><button type="button" class="si ter" data-fold="j3" data-alt="Fold the journey" aria-expanded="false"><span>See the journey</span></button></div>
+        <div id="j3" hidden><ul class="journey">
+          <li class="done">Agreed</li><li class="done">Ordered</li><li class="done">In production</li><li class="done">Shipped</li><li class="here">Delivered</li><li>Installed</li>
+        </ul></div>
+        <p class="footnote">The library&rsquo;s kilim runner is a different piece, $1,660, still unsigned inside No. 7.</p>
+      </div>
+    </section>
+
+    <!-- 7 · THE TOLL -->
+    <section class="group after1" id="tollgroup">
+      <h3 class="seclab">The toll</h3>
+      <div class="entry changed" id="toll" data-house="1" data-rooms="">
+        <span class="cbar" aria-hidden="true"></span>
+        <p class="tollline">Invoice No. 4<button type="button" class="rm" data-ap="ap1" aria-expanded="false">1</button> · $18,250 · paid $9,125 · balance <b>$9,125</b> due 15 August, <span id="dueIn" data-d5="in ten days" data-d4="in eleven days">in ten days</span>.</p>
+        <div class="ap" id="ap1" hidden><sup>1</sup>Invoice No. 4 stands at $18,250. Paid to date, $9,125. The balance of $9,125 falls due 15 August. Three ways to settle it sit below the line.</div>
+        <div class="acts"><button type="button" class="si sec" data-fold="tollbody" data-alt="Fold the invoice" aria-expanded="false"><span>Unfold the invoice</span></button></div>
+        <div id="tollbody" hidden>
+          <ul class="lines" style="margin-top:14px">
+            <li><span>Total</span><span class="leader"></span><span class="fig">$18,250</span></li>
+            <li><span>Paid to date</span><span class="leader"></span><span class="fig">$9,125</span></li>
+            <li class="total"><span>Balance, due 15 August</span><span class="leader"></span><span class="fig">$9,125</span></li>
+          </ul>
+          <ul class="ways">
+            <li><span class="w-name">Bank transfer (ACH)</span><span class="w-note">Preferred, lowest fee.</span></li>
+            <li><span class="w-name">Card</span><span class="w-note">A 3% processing fee is added.</span></li>
+            <li><span class="w-name">Mail a check</span><span class="w-note">Remit-to and the memo line: Vale — Inv 4.</span></li>
+          </ul>
+          <div class="acts"><button type="button" class="si" data-ack="1"><span>Settle the balance</span></button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 · THE THREE ROOMS -->
+    <section class="group after1" id="roomsgroup">
+      <h3 class="seclab">The three rooms</h3>
+      <p class="roomhint">Taking a room name anywhere on this page reads that room alone.</p>
+
+      <div class="entry roomentry" data-rooms="library" style="padding:12px 0;border-top:1px solid var(--rule)">
+        <div class="roomline">
+          <button type="button" class="roomlink strong" data-room="library" aria-pressed="false">Library &amp; lounge</button><button type="button" class="rm" data-ap="ap3" aria-expanded="false">3</button>
+          <span class="leader"></span><span class="fig">$24,900 agreed against $23,800 planned</span>
+        </div>
+        <div class="ap" id="ap3" hidden><sup>3</sup>$24,900 agreed against $23,800 planned — about eleven hundred past its target, absorbed by the bedroom&rsquo;s headroom. Three pieces for this room are still unsigned inside No. 7.</div>
+        <p class="roomsub" id="roomsub1">About eleven hundred past its target, absorbed by the bedroom&rsquo;s headroom. The drawing set<button type="button" class="rm" data-ap="ap4" aria-expanded="false">4</button> carries all three rooms.</p>
+        <div class="ap" id="ap4" hidden><sup>4</sup>The drawing set for the Vale residence. Three rooms concepted and signed off 30 May: library &amp; lounge, entry &amp; stair hall, primary bedroom.</div>
+        <div class="acts"><button type="button" class="si ter" data-fold="room1" data-alt="Close the room" aria-expanded="false"><span>Open the room</span></button></div>
+        <div id="room1" hidden>
+          <ul class="lines" style="margin-top:12px">
+            <li id="rl-sconces"><span>Brass library sconces</span><span class="leader"></span><span class="fig">unsigned in No. 7</span></li>
+            <li id="rl-drapery"><span>Wool drapery</span><span class="leader"></span><span class="fig">unsigned in No. 7</span></li>
+            <li id="rl-runner"><span>Kilim runner</span><span class="leader"></span><span class="fig">unsigned in No. 7</span></li>
+            <li><span>Interior painting, with the stair hall</span><span class="leader"></span><span class="fig">awaiting acceptance</span></li>
+          </ul>
+          <p class="materials">Brass · wool · kilim</p>
+          <figure class="plate">
+            <div class="hatch" aria-hidden="true"></div>
+            <figcaption>The library &amp; lounge, in plan</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <div class="entry roomentry" data-rooms="entry" style="padding:12px 0;border-top:1px solid var(--rule)">
+        <div class="roomline">
+          <button type="button" class="roomlink strong" data-room="entry" aria-pressed="false">Entry &amp; stair hall</button>
+          <span class="leader"></span><span class="fig">rug at home</span>
+        </div>
+        <p class="roomsub">The kilim rug landed here 29 July; the stair hall walls are painted and waiting on acceptance.</p>
+        <div class="acts"><button type="button" class="si ter" data-fold="room2" data-alt="Close the room" aria-expanded="false"><span>Open the room</span></button></div>
+        <div id="room2" hidden>
+          <ul class="lines" style="margin-top:12px">
+            <li><span>Kilim rug</span><span class="leader"></span><span class="fig">delivered 29 July</span></li>
+            <li><span>Interior painting, with the library</span><span class="leader"></span><span class="fig">awaiting acceptance</span></li>
+          </ul>
+          <p class="materials">Kilim · fresh paint</p>
+        </div>
+      </div>
+
+      <div class="entry roomentry" data-rooms="bedroom" style="padding:12px 0;border-top:1px solid var(--rule)">
+        <div class="roomline">
+          <button type="button" class="roomlink strong" data-room="bedroom" aria-pressed="false">Primary bedroom</button>
+          <span class="leader"></span><span class="fig">headroom</span>
+        </div>
+        <p class="roomsub">Quiet this month. Its headroom against the plan absorbs the library&rsquo;s overage.</p>
+        <div class="acts"><button type="button" class="si ter" data-fold="room3" data-alt="Close the room" aria-expanded="false"><span>Open the room</span></button></div>
+        <div id="room3" hidden>
+          <ul class="lines" style="margin-top:12px">
+            <li><span>Nothing in motion this month</span><span class="leader"></span><span class="fig">—</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 · PREVIOUSLY -->
+    <section class="group after1" id="prevgroup">
+      <h3 class="seclab">Previously</h3>
+      <div class="entry settleable" data-rooms="">
+        <p class="summary">Three chapters closed · unchanged</p>
+        <div class="rec">
+          <button type="button" class="recline" data-fold="prev1" aria-expanded="false">
+            <span class="rdate">19 June</span>
+            <span class="rtitle">Design refinement closed</span>
+            <span class="leader"></span>
+            <span class="rstate">Agreed</span>
+          </button>
+          <div class="prevbody" id="prev1" hidden><div class="pb-in">
+            <p>Fourteen selections agreed at $61,400 against the $85,000 planned. Procurement opened the following month.</p>
+            <label class="flab" for="r1">Write back</label>
+            <textarea class="reply" id="r1" rows="2" placeholder="A line back to the studio"></textarea>
+            <div class="acts"><button type="button" class="si sec" data-ack="1"><span>Send the reply</span></button></div>
+          </div></div>
+        </div>
+        <div class="rec">
+          <button type="button" class="recline" data-fold="prev2" aria-expanded="false">
+            <span class="rdate">30 May</span>
+            <span class="rtitle">The design set signed</span>
+            <span class="leader"></span>
+            <span class="rstate">Signed</span>
+          </button>
+          <div class="prevbody" id="prev2" hidden><div class="pb-in">
+            <p>Harper Vale signed the design set. Three rooms concepted: library &amp; lounge, entry &amp; stair hall, primary bedroom.</p>
+            <label class="flab" for="r2">Write back</label>
+            <textarea class="reply" id="r2" rows="2" placeholder="A line back to the studio"></textarea>
+            <div class="acts"><button type="button" class="si sec" data-ack="1"><span>Send the reply</span></button></div>
+          </div></div>
+        </div>
+        <div class="rec">
+          <button type="button" class="recline" data-fold="prev3" aria-expanded="false">
+            <span class="rdate">12 March</span>
+            <span class="rtitle">Design services agreement</span>
+            <span class="leader"></span>
+            <span class="rstate">Countersigned</span>
+          </button>
+          <div class="prevbody" id="prev3" hidden><div class="pb-in">
+            <p>The design services agreement was countersigned. Discovery closed and the brief was agreed.</p>
+            <label class="flab" for="r3">Write back</label>
+            <textarea class="reply" id="r3" rows="2" placeholder="A line back to the studio"></textarea>
+            <div class="acts"><button type="button" class="si sec" data-ack="1"><span>Send the reply</span></button></div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 · AHEAD -->
+    <section class="group after1" id="aheadgroup">
+      <h3 class="seclab">Ahead</h3>
+      <div class="entry settleable" data-rooms="">
+        <p class="summary">October · unchanged</p>
+        <p class="dash">Installation · the week of 12 October</p>
+        <p class="dash">Completion · late October</p>
+      </div>
+    </section>
+
+    <!-- 11 · COLOPHON -->
+    <section class="entry colophon after1 settleable">
+      <p class="summary">Colophon · unchanged</p>
+      <h3 class="seclab">Colophon</h3>
+      <p class="col-lead">Kept for Harper Vale by Quist Interiors.</p>
+      <dl class="coldl">
+        <dt>The people</dt>
+        <dd>Nora Quist, principal · <span>Dan Okafor</span><button type="button" class="rm" data-ap="ap5" aria-expanded="false">5</button>, general contractor · Prairie Coat Painting, the paintwork · Harmon Bench Works, Dayton, Ohio, the credenza</dd>
+        <dd class="ap" id="ap5" hidden><sup>5</sup>Dan Okafor, general contractor on the Vale residence.</dd>
+        <dt>The papers</dt>
+        <dd>Furnishings authorization No. 7 · Invoice No. 4 · the drawing set</dd>
+      </dl>
+      <div class="acts">
+        <button type="button" class="si sec" data-ack="1"><span>Your details</span></button>
+        <button type="button" class="si ter" data-ack="1"><span>Close the book</span></button>
+      </div>
+      <p class="closing">If nothing changes, Quist Interiors begins installing the week of 12 October, and the house completes late in the month.</p>
+    </section>
+
+  </main>
+</div>
+
+<div class="specimen">
+  <span id="speclabel">Specimen · 5 Aug 2026</span>
+  <button type="button" class="si ter" id="asof"><span>View as 4 Aug</span></button>
+  <button type="button" class="si ter" id="quiet"><span>View without a note</span></button>
+  <button type="button" class="si ter" id="resetbtn"><span>Reset</span></button>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var $ = function(id){ return document.getElementById(id); };
+  var each = function(list, fn){ Array.prototype.forEach.call(list, fn); };
+  var label = function(btn){ return btn.querySelector('span') || btn; };
+
+  var state = { day:5, signed:false, accepted:false, diff:false, room:null, note:true };
+  var ROOMNAME = { library:'library & lounge', entry:'entry & stair hall', bedroom:'primary bedroom' };
+
+  /* ---- unfolding in place ---- */
+  function slide(el, open, lift){
+    if(reduced){
+      if(open){ el.hidden = false; el.style.height=''; el.style.opacity='1'; el.style.transform='none'; }
+      else { el.hidden = true; }
+      return;
+    }
+    if(open){
+      el.hidden = false;
+      el.style.transition = 'none';
+      el.style.height = 'auto';
+      el.style.opacity = '0';
+      el.style.transform = lift ? 'translateY(16px)' : 'none';
+      var h = el.scrollHeight;
+      el.style.height = '0px';
+      el.getBoundingClientRect();
+      el.style.transition = 'height 420ms cubic-bezier(.2,.72,.2,1), opacity 380ms ease, transform 420ms cubic-bezier(.2,.72,.2,1)';
+      el.style.height = h + 'px';
+      el.style.opacity = '1';
+      el.style.transform = 'none';
+      window.setTimeout(function(){ el.style.height = 'auto'; }, 460);
+    } else {
+      el.style.transition = 'none';
+      el.style.height = el.scrollHeight + 'px';
+      el.getBoundingClientRect();
+      el.style.transition = 'height 300ms ease, opacity 260ms ease, transform 300ms ease';
+      el.style.height = '0px';
+      el.style.opacity = '0';
+      if(lift){ el.style.transform = 'translateY(12px)'; }
+      window.setTimeout(function(){ el.hidden = true; el.style.height=''; }, 330);
+    }
+  }
+
+  var folds = document.querySelectorAll('[data-fold]');
+  each(folds, function(btn){
+    btn.addEventListener('click', function(){
+      var target = $(btn.getAttribute('data-fold'));
+      if(!target) return;
+      var open = target.hidden;
+      slide(target, open, btn.getAttribute('data-lift') === '1');
+      btn.setAttribute('aria-expanded', String(open));
+      var alt = btn.getAttribute('data-alt');
+      if(alt){
+        var l = label(btn);
+        btn.setAttribute('data-alt', l.textContent);
+        l.textContent = alt;
+      }
+    });
+  });
+  function closeAllFolds(){
+    each(folds, function(btn){
+      var target = $(btn.getAttribute('data-fold'));
+      if(!target || target.hidden) return;
+      if(btn.id === 'fold1' || btn.id === 'fold2') return;   /* the enclosures stay drawn out */
+      target.hidden = true; target.style.height = '';
+      btn.setAttribute('aria-expanded','false');
+      var alt = btn.getAttribute('data-alt');
+      if(alt){ var l = label(btn); btn.setAttribute('data-alt', l.textContent); l.textContent = alt; }
+    });
+    each(document.querySelectorAll('.rm'), function(m){ m.classList.remove('on'); m.setAttribute('aria-expanded','false'); });
+    each(document.querySelectorAll('.ap'), function(a){ a.hidden = true; a.style.height = ''; });
+    each(document.querySelectorAll('.ack'), function(a){ a.parentNode.removeChild(a); });
+  }
+
+  /* ---- reference marks ---- */
+  each(document.querySelectorAll('.rm'), function(mark){
+    mark.addEventListener('click', function(){
+      var ap = $(mark.getAttribute('data-ap'));
+      if(!ap) return;
+      var open = ap.hidden;
+      slide(ap, open, false);
+      mark.classList.toggle('on', open);
+      mark.setAttribute('aria-expanded', String(open));
+    });
+  });
+
+  /* ---- drawn-but-not-wired controls answer for themselves ---- */
+  each(document.querySelectorAll('[data-ack]'), function(btn){
+    btn.addEventListener('click', function(){
+      if(btn.nextElementSibling && btn.nextElementSibling.className === 'ack') return;
+      var s = document.createElement('span');
+      s.className = 'ack';
+      s.textContent = 'Drawn for the specimen.';
+      btn.parentNode.insertBefore(s, btn.nextSibling);
+    });
+  });
+
+  /* ---- the standing sentence and the ledger ---- */
+  var PAPERS = {
+    2:'two papers wait for your name',
+    1:'one paper waits for your name',
+    0:'your name is on every paper'
+  };
+  var LEDGER_STATE = {
+    2:'Two papers wait for your name.',
+    1:'One paper waits for your name.',
+    0:'Your name is on every paper.'
+  };
+  function papersLeft(){ return (state.signed?0:1) + (state.accepted?0:1); }
+  function renderStanding(){
+    $('papers').textContent = PAPERS[papersLeft()];
+    $('lgstate').textContent = LEDGER_STATE[papersLeft()];
+    $('agreedline').textContent = (state.signed ? '$68,290' : '$61,400') + ' agreed of $85,000';
+    $('lg-agreed').querySelector('b').textContent = state.signed ? '$68,290' : '$61,400';
+  }
+
+  /* ---- the day ---- */
+  var dayNodes = document.querySelectorAll('[data-d5]');
+  function applyDay(){
+    each(dayNodes, function(n){
+      n.textContent = (state.day === 5) ? n.getAttribute('data-d5') : n.getAttribute('data-d4');
+    });
+    $('readmark').hidden = (state.day !== 5);
+    $('speclabel').textContent = 'Specimen · ' + state.day + ' Aug 2026';
+    if(state.day !== 5 && state.diff){ setDiff(false); }
+  }
+
+  /* ---- a typed full name is two words ---- */
+  function fullName(v){
+    var parts = v.trim().split(/\s+/).filter(function(p){ return p.length > 1; });
+    return parts.length >= 2;
+  }
+
+  /* ---- gate one: signing re-sets the paper, then knits the rule ---- */
+  var signName = $('sign-name'), signConsent = $('sign-consent'), signBtn = $('signbtn'), signCond = $('signcond');
+  function signReady(){ return fullName(signName.value) && signConsent.checked && !state.signed; }
+  function updateSign(){
+    var ok = signReady();
+    signBtn.classList.toggle('pending', !ok);
+    signBtn.setAttribute('aria-disabled', String(!ok));
+    signCond.hidden = ok || state.signed;
+  }
+  signName.addEventListener('input', updateSign);
+  signConsent.addEventListener('change', updateSign);
+  signBtn.addEventListener('click', function(){
+    if(!signReady()){
+      signCond.hidden = false;
+      signCond.textContent = signConsent.checked ? 'A full name, typed, then sign.' : 'Your name and the tick, then sign.';
+      return;
+    }
+    state.signed = true;
+    /* the paper she signed changes first, where she is standing */
+    $('hint1').textContent = 'Three pieces ordered ' + state.day + ' August.';
+    $('kicker1').textContent = 'Signed';
+    signBtn.hidden = true; signCond.hidden = true;
+    signName.disabled = true; signConsent.disabled = true;
+    $('stamp1').textContent = 'Signed ' + state.day + ' August · Quist Interiors countersigns';
+    $('stamp1').hidden = false;
+    $('notestate').textContent = 'Answered';
+    var ordered = 'ordered in No. 7';
+    $('rl-sconces').querySelector('.fig').textContent = ordered;
+    $('rl-drapery').querySelector('.fig').textContent = ordered;
+    $('rl-runner').querySelector('.fig').textContent = ordered;
+    /* then the rule, the ledger and the sentence */
+    $('gate1').classList.add('knit-on');
+    $('lg-await').classList.add('struck');
+    renderStanding();
+  });
+
+  /* ---- gate two: the acceptance ---- */
+  var acceptName = $('accept-name'), acceptBtn = $('acceptbtn'), acceptCond = $('acceptcond');
+  function acceptReady(){ return fullName(acceptName.value) && !state.accepted; }
+  function updateAccept(){
+    var ok = acceptReady();
+    acceptBtn.classList.toggle('pending', !ok);
+    acceptBtn.setAttribute('aria-disabled', String(!ok));
+    acceptCond.hidden = ok || state.accepted;
+  }
+  acceptName.addEventListener('input', updateAccept);
+  acceptBtn.addEventListener('click', function(){
+    if(!acceptReady()){ acceptCond.hidden = false; return; }
+    state.accepted = true;
+    $('kicker2').textContent = 'Accepted';
+    acceptBtn.hidden = true; acceptCond.hidden = true;
+    acceptName.disabled = true;
+    $('stamp2').textContent = 'Accepted ' + state.day + ' August · $1,440 released';
+    $('stamp2').hidden = false;
+    var stops = $('tradejourney').children;
+    stops[2].className = 'done';
+    stops[3].className = 'here';
+    $('gate2').classList.add('knit-on');
+    $('lg-held-label').innerHTML = 'released ' + state.day + ' August';
+    renderStanding();
+  });
+
+  /* ---- what changed since the fourth ---- */
+  var diffBtn = $('diffbtn');
+  function setDiff(on){
+    state.diff = on;
+    document.body.classList.toggle('diff', on);
+    label(diffBtn).textContent = on ? 'Read it as it stands' : 'What changed since the fourth';
+  }
+  diffBtn.addEventListener('click', function(){ setDiff(!state.diff); });
+
+  /* ---- reading one room ---- */
+  function readRoom(room){
+    state.room = room;
+    var hidden = 0;
+    each(document.querySelectorAll('.entry[data-rooms]'), function(entry){
+      var show = true;
+      if(room){
+        if(entry.getAttribute('data-house') === '1' || entry.classList.contains('roomentry')){
+          show = true;                                  /* money and the room list always stand */
+        } else {
+          show = (entry.getAttribute('data-rooms') || '').split(/\s+/).indexOf(room) > -1;
+        }
+      }
+      entry.hidden = !show;
+      if(!show){ hidden++; }
+    });
+    each(document.querySelectorAll('.group'), function(group){
+      group.hidden = room ? !group.querySelector('.entry[data-rooms]:not([hidden])') : false;
+    });
+    each(document.querySelectorAll('.roomlink'), function(l){
+      l.setAttribute('aria-pressed', String(!!room && l.getAttribute('data-room') === room));
+    });
+    var note = $('readingnote');
+    if(room){
+      $('readingtext').textContent = 'Reading the ' + ROOMNAME[room] + ' only · ' +
+        hidden + (hidden === 1 ? ' entry hidden' : ' entries hidden');
+      if(note.hidden){ slide(note, true, false); }
+    } else if(!note.hidden){
+      slide(note, false, false);
+    }
+  }
+  each(document.querySelectorAll('.roomlink'), function(link){
+    link.addEventListener('click', function(){
+      var room = link.getAttribute('data-room');
+      readRoom(state.room === room ? null : room);
+      if(state.room){
+        var top = $('premise').getBoundingClientRect().top;
+        if(top < -40 || top > window.innerHeight){
+          window.scrollTo({ top:0, behavior: reduced ? 'auto' : 'smooth' });
+        }
+      }
+    });
+  });
+  $('readall').addEventListener('click', function(){ readRoom(null); });
+
+  /* ---- the specimen control ---- */
+  function clearActs(){
+    state.signed = false; state.accepted = false;
+    $('gate1').classList.remove('knit-on');
+    $('gate2').classList.remove('knit-on');
+    $('stamp1').hidden = true; $('stamp2').hidden = true;
+    $('hint1').textContent = 'Three pieces order the moment you sign.';
+    $('kicker1').textContent = 'In hand';
+    $('kicker2').textContent = 'Held back';
+    $('notestate').textContent = 'Standing';
+    var unsigned = 'unsigned in No. 7';
+    $('rl-sconces').querySelector('.fig').textContent = unsigned;
+    $('rl-drapery').querySelector('.fig').textContent = unsigned;
+    $('rl-runner').querySelector('.fig').textContent = unsigned;
+    var stops = $('tradejourney').children;
+    stops[2].className = 'here';
+    stops[3].className = '';
+    $('lg-await').classList.remove('struck');
+    $('lg-held-label').innerHTML = 'held<span class="lg-tail"> on the paintwork</span>';
+    signBtn.hidden = false; acceptBtn.hidden = false;
+    signName.value = ''; signName.disabled = false;
+    signConsent.checked = false; signConsent.disabled = false;
+    acceptName.value = ''; acceptName.disabled = false;
+    signCond.textContent = 'Your name and the tick, then sign.';
+    updateSign(); updateAccept(); renderStanding();
+  }
+  function setNote(on){
+    state.note = on;
+    $('noteblock').hidden = !on;
+    $('sentline').hidden = on;
+    label($('quiet')).textContent = on ? 'View without a note' : 'View with the note';
+  }
+
+  var asOf = $('asof');
+  asOf.addEventListener('click', function(){
+    clearActs();
+    state.day = (state.day === 5) ? 4 : 5;
+    label(asOf).textContent = (state.day === 5) ? 'View as 4 Aug' : 'View as 5 Aug';
+    applyDay();
+  });
+  $('quiet').addEventListener('click', function(){ setNote(!state.note); });
+  $('resetbtn').addEventListener('click', function(){
+    clearActs();
+    state.day = 5;
+    label(asOf).textContent = 'View as 4 Aug';
+    closeAllFolds();
+    setNote(true);
+    setDiff(false);
+    readRoom(null);
+    applyDay();
+  });
+
+  updateSign(); updateAccept(); renderStanding(); applyDay();
+})();
+</script>
+</body>
+</html>

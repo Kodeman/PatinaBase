@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { FolderPlus, LifeBuoy } from 'lucide-react';
+import { FolderPlus, Keyboard, LifeBuoy, Type } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
@@ -47,6 +47,9 @@ import {
 } from './overlays/active-dialog';
 import { openFeedbackSheet } from './feedback/open-feedback';
 import { openHelp } from '@/lib/help-system/open-help';
+import { openKeys } from './overlays/keys-sheet';
+import { THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
+import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
 import { fillStateForDesk, type FillState } from '@/lib/document/fill-state';
 import {
@@ -531,7 +534,10 @@ export function CommandBar() {
     });
 
     const surfaceRow = (s: StudioSurface): PaletteRow => ({
-      kind: s.kind,
+      // Host surfaces (Desk, Document) exist only to answer the help panel —
+      // they are absent from every list this builds rows from, so the branch
+      // is unreachable; it exists to keep the palette's own kind union closed.
+      kind: s.kind === 'host' ? 'room' : s.kind,
       key: s.key,
       label: s.label,
       sub: s.subLabel ?? (s.kind === 'room' ? 'room ↗' : 'ledger'),
@@ -553,6 +559,30 @@ export function CommandBar() {
         sub: 'guides · every surface',
         run: () => router.push('/help'),
         match: 'browse help center guides support articles every surface',
+      },
+      {
+        // L5 — "The keys": the reference opens as an overlay over whatever is
+        // in hand, not a route, so ⌘K never costs you your place.
+        kind: 'help',
+        key: 'the-keys',
+        icon: Keyboard,
+        label: 'The keys',
+        sub: 'shortcuts, one page',
+        run: () => openKeys('palette'),
+        match: 'keys shortcuts keyboard hotkeys chords the keys',
+      },
+      {
+        // L5 — "The words": the Ideas & vocabulary shelf, the glossary's home.
+        kind: 'help',
+        key: 'the-words',
+        icon: Type,
+        label: 'The words',
+        sub: 'what Patina calls things',
+        run: () => {
+          safeCapture(HELP_EVENTS.GLOSSARY_OPENED, { source: 'palette' });
+          router.push(THE_WORDS_HREF);
+        },
+        match: 'words glossary vocabulary terms language what things are called the words',
       },
       {
         kind: 'action',

@@ -216,10 +216,18 @@ export function AccountStudioPage() {
   // members list the roster below renders. contactsCount/seedSkipped (Call
   // Sheet Wave 2) only read real data behind the flag — flag-off leaves them
   // at the derivation's un-seeded defaults, same as before this wave.
+  // activeMemberCountBeyondSelf / hiresWithFirstDocument (L3, 00559): "Invite
+  // your crew" fills on acceptance, not send, so only status === 'active'
+  // rows count; the new row 6 counts how many of those have opened a
+  // document at all.
   const myJobTitle =
     members?.find((m) => m.user_id === user?.id)?.job_title ?? null;
-  const memberCountBeyondSelf = (members ?? []).filter(
-    (m) => m.user_id !== user?.id,
+  const otherActiveMembers = (members ?? []).filter(
+    (m) => m.user_id !== user?.id && m.status === 'active',
+  );
+  const activeMemberCountBeyondSelf = otherActiveMembers.length;
+  const hiresWithFirstDocument = otherActiveMembers.filter(
+    (m) => m.first_document_opened_at != null,
   ).length;
   const contactsCount = callSheetOn ? (contacts?.length ?? 0) : 0;
   const seedSkipped = callSheetOn ? !!studio?.rolodex_seed_skipped_at : false;
@@ -489,10 +497,11 @@ export function AccountStudioPage() {
       <StudioSetupChecklist
         orgCreatedAt={studio.created_at}
         myJobTitle={myJobTitle}
-        memberCountBeyondSelf={memberCountBeyondSelf}
+        activeMemberCountBeyondSelf={activeMemberCountBeyondSelf}
         projectsCount={projects?.length ?? 0}
         contactsCount={contactsCount}
         seedSkipped={seedSkipped}
+        hiresWithFirstDocument={hiresWithFirstDocument}
         onInvite={() => setInviteOpen(true)}
         onSkipSeed={callSheetOn && canManage ? handleSkipSeed : undefined}
         skipSeedPending={updateOrg.isPending}

@@ -198,6 +198,38 @@ describe('RelatedArticles', () => {
     expect(screen.queryByRole('list')).not.toBeInTheDocument()
   })
 
+  it('calls onEmpty once the query settles with zero results', async () => {
+    mockFetch.mockResolvedValue([])
+    const onEmpty = vi.fn()
+
+    render(
+      <RelatedArticles surfaceKeyPrefix="designer-portal/unknown" onEmpty={onEmpty} />,
+      { wrapper: makeWrapper() },
+    )
+
+    await waitFor(() => expect(onEmpty).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not call onEmpty while loading or once results are found', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
+    const onEmpty = vi.fn()
+
+    render(
+      <RelatedArticles surfaceKeyPrefix="designer-portal/pipeline" onEmpty={onEmpty} />,
+      { wrapper: makeWrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByRole('list')).toBeInTheDocument())
+    expect(onEmpty).not.toHaveBeenCalled()
+  })
+
+  it('does not call onEmpty when there are no query inputs at all', () => {
+    const onEmpty = vi.fn()
+    render(<RelatedArticles onEmpty={onEmpty} />, { wrapper: makeWrapper() })
+    expect(onEmpty).not.toHaveBeenCalled()
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
   // ── Renders nothing when neither articleIds nor surfaceKeyPrefix passed ────
 
   it('renders nothing when neither articleIds nor surfaceKeyPrefix is provided', () => {

@@ -46,7 +46,9 @@ const CHORDED: Map<string, StudioSurface> = new Map(
   ).map((s): [string, StudioSurface] => [s.shortcut[1], s]),
 );
 
-function isEditableTarget(target: EventTarget | null): boolean {
+/** Exported for the `?` doorway (KeysShortcut, task L5), which must wear the
+ *  exact same guard rather than growing a second, drifting definition. */
+export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
@@ -55,7 +57,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 /** No "command bar is open" flag exists yet, so this reads the fallback the
  *  task called for: focus has left `<body>`, or some `[role="dialog"]` is
  *  mounted. */
-function anOverlayIsOpen(): boolean {
+export function anOverlayIsOpen(): boolean {
   const active = document.activeElement;
   const bodyIsh = active === null || active === document.body;
   if (!bodyIsh) return true;

@@ -61,6 +61,10 @@ export interface OrganizationMember {
   job_title: string | null;
   /** Call Sheet: coarse staff-role tier (StaffRole vocab, packages/types/src/studio-config.ts). Admin-writable only. NULL = unset. */
   staff_role: string | null;
+  /** Onboarding checklist row 6 (L3, 00559): stamped once by `mark_first_document_opened`, the first time this member opens a Document. NULL = not yet. */
+  first_document_opened_at: string | null;
+  /** L8 (00560): the owner's optional handoff line, carried on the invite. NULL = none written. */
+  handoff_note: string | null;
 }
 
 export interface OrganizationWithMembership extends Organization {
@@ -76,6 +80,7 @@ export interface OrganizationMemberWithProfile extends OrganizationMember {
   profiles: {
     id: string;
     email: string | null;
+    full_name: string | null;
     display_name: string | null;
     avatar_url: string | null;
   };
@@ -95,6 +100,9 @@ export interface InviteMemberInput {
   jobTitle?: string;
   /** Call Sheet: staff-role tier (StaffRole vocab), written at invite-insert time when provided. */
   staffRole?: string;
+  /** L8: the owner's optional handoff line ("A line for her first day"), carried
+   *  on the invite and rendered once on the invitee's Desk. Trimmed, ≤280 chars. */
+  handoffNote?: string;
 }
 
 /** Row shape returned by `accept_workspace_invitation` (00295). */
@@ -208,7 +216,7 @@ export function useOrganizationMembers(organizationId: string) {
         .from('organization_members')
         .select(`
           *,
-          profiles!organization_members_user_id_fkey (id, email, display_name, avatar_url)
+          profiles!organization_members_user_id_fkey (id, email, full_name, display_name, avatar_url)
         `)
         .eq('organization_id', organizationId)
         .in('status', ['active', 'invited']);
@@ -334,6 +342,9 @@ export function useInviteMember() {
           name: input.name,
           ...(input.jobTitle !== undefined ? { job_title: input.jobTitle } : {}),
           ...(input.staffRole !== undefined ? { staff_role: input.staffRole } : {}),
+          ...(input.handoffNote !== undefined
+            ? { handoff_note: input.handoffNote }
+            : {}),
         },
       });
 
@@ -585,6 +596,33 @@ export function useSetMyMemberTitle() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: ['organization-members', variables.organizationId],
+      });
+    },
+  });
+}
+
+/**
+ * Mark the calling user's own membership row as having opened its first
+ * Document (L3, 00559) via the `mark_first_document_opened` RPC (SECURITY
+ * DEFINER — same own-row chicken-and-egg as `set_my_member_title` above).
+ * The RPC itself is idempotent (guarded by `first_document_opened_at IS
+ * NULL`), so callers can fire this on every doc-page mount without checking
+ * first; it only ever writes once.
+ */
+export function useMarkFirstDocumentOpened() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ organizationId }: { organizationId: string }) => {
+      const supabase = getSupabase();
+      const { error } = await supabase.rpc('mark_first_document_opened');
+
+      if (error) throw error;
+      return { organizationId };
+    },
+    onSuccess: ({ organizationId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['organization-members', organizationId],
       });
     },
   });

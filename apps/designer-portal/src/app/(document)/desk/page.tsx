@@ -33,8 +33,10 @@ import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reac
 import { MarginNote } from '@/components/document/margin-note';
 import { StudioSetupWhisper } from '@/components/document/account/studio-setup-whisper';
 import { deriveSetupSteps } from '@/lib/document/studio-setup';
+import { firstNameOf } from '@/lib/document/account-identity';
 import {
   START_DESK_WALKTHROUGH_EVENT,
+  clearDeskWalkthroughLater,
   useDeskWalkthroughOffer,
   useSuppressDeskFirstTouch,
 } from '@/components/document/help/desk-walkthrough';
@@ -78,6 +80,11 @@ export default function DeskPage() {
   // permanently open here and the whisper's openCount ran one ahead of the
   // checklist the whisper sends you to.
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  // L8 — the owner's handoff-note margin note, behind the teammate-persona
+  // flag (W2). Flag off (or loading) never renders it.
+  const { value: teammatePersonaEnabled } = useFeatureFlag(
+    'onboarding-teammate-persona',
+  );
   const { data: orgs } = useOrganizations();
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
   const { data: studioMembers } = useOrganizationMembers(studio?.id ?? '');
@@ -85,13 +92,35 @@ export default function DeskPage() {
   const { data: studioContacts } = useStudioContacts(
     callSheetOn ? (studio?.id ?? null) : null,
   );
+  // activeMemberCountBeyondSelf / hiresWithFirstDocument (L3, 00559): same
+  // active-only / first-document-opened derivation as account-studio-page.tsx,
+  // so this whisper's openCount never runs ahead or behind the checklist it
+  // sends you to.
+  const otherActiveStudioMembers = (studioMembers ?? []).filter(
+    (m) => m.user_id !== user?.id && m.status === 'active',
+  );
+
+  // L8 — the hire-handoff margin note. Reads the signed-in member's OWN
+  // organization_members row for a note the owner wrote on the invite; the
+  // owner's first name comes from that row's `invited_by`, resolved against
+  // this same studioMembers list (the inviter is a member of the same org).
+  const myMembership = studioMembers?.find((m) => m.user_id === user?.id) ?? null;
+  const handoffOwner = myMembership?.invited_by
+    ? (studioMembers?.find((m) => m.user_id === myMembership.invited_by) ?? null)
+    : null;
+  const handoffOwnerFirstName = firstNameOf(
+    handoffOwner?.profiles.full_name || handoffOwner?.profiles.display_name,
+  );
   const { openCount: studioSetupOpenCount } = deriveSetupSteps({
     orgCreatedAt: studio?.created_at ?? null,
     myJobTitle: studioMembers?.find((m) => m.user_id === user?.id)?.job_title ?? null,
-    memberCountBeyondSelf: (studioMembers ?? []).filter((m) => m.user_id !== user?.id).length,
+    activeMemberCountBeyondSelf: otherActiveStudioMembers.length,
     projectsCount: studioProjects?.length ?? 0,
     contactsCount: callSheetOn ? (studioContacts?.length ?? 0) : 0,
     seedSkipped: callSheetOn ? !!studio?.rolodex_seed_skipped_at : false,
+    hiresWithFirstDocument: otherActiveStudioMembers.filter(
+      (m) => m.first_document_opened_at != null,
+    ).length,
   });
 
   // A9: no mobile primary action is registered here — the header's
@@ -203,7 +232,10 @@ export default function DeskPage() {
         <div>
           {/* The signature move: greeting in Playfair, the first name in
               Playfair italic, Aged Oak. Kept modest so the folios lead. */}
-          <h1 className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]">
+          <h1
+            data-tour-anchor="desk-greeting"
+            className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]"
+          >
             {firstName ? (
               <>
                 {greetingWord},{' '}
@@ -339,6 +371,10 @@ export default function DeskPage() {
             <MarginNote
               noteKey="desk-walkthrough-offer"
               actionEvents={[START_DESK_WALKTHROUGH_EVENT]}
+              // A deferred ("Show me later") record only earns one re-offer
+              // (decisions #2) — clear it as soon as this note is seen,
+              // whether dismissed (×) or acted on (the tour starting).
+              onSeen={clearDeskWalkthroughLater}
               className="mb-10"
             >
               New desk, same studio — your projects are all here as documents
@@ -355,6 +391,15 @@ export default function DeskPage() {
                 The walkthrough is six quick stops
               </button>{' '}
               if you&apos;d like the lay of it.
+            </MarginNote>
+          )}
+
+          {/* L8 — the owner's handoff note, once, on the new hire's first
+              Desk. Behind `onboarding-teammate-persona`; renders only for a
+              member whose own membership row carries a written note. */}
+          {teammatePersonaEnabled && myMembership?.handoff_note && (
+            <MarginNote noteKey="hire-handoff" className="mb-10">
+              From {handoffOwnerFirstName}: {myMembership.handoff_note}
             </MarginNote>
           )}
 

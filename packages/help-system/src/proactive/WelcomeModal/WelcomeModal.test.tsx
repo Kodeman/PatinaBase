@@ -238,6 +238,81 @@ describe('WelcomeModal', () => {
     expect(props.action).toBe('skip')
   })
 
+  // ── Tertiary CTA: onLater + action='later' ─────────────────────────────────
+
+  it('does not render a later CTA when onLater is not supplied', async () => {
+    mockFetch.mockResolvedValue(DESIGNER_CONTENT)
+
+    render(
+      <WelcomeModal
+        surfaceKey="designer-portal/welcome"
+        persona="designer"
+        open={true}
+        onOpenChange={() => {}}
+      />,
+      { wrapper: makeWrapper() },
+    )
+
+    await screen.findByRole('button', { name: 'Take the tour' })
+    expect(screen.queryByTestId('welcome-modal-later')).not.toBeInTheDocument()
+  })
+
+  it('renders a quiet third action, defaulting to "Show me later", between skip and start', async () => {
+    mockFetch.mockResolvedValue(DESIGNER_CONTENT)
+
+    render(
+      <WelcomeModal
+        surfaceKey="designer-portal/welcome"
+        persona="designer"
+        open={true}
+        onOpenChange={() => {}}
+        onLater={() => {}}
+      />,
+      { wrapper: makeWrapper() },
+    )
+
+    expect(await screen.findByRole('button', { name: 'Show me later' })).toBeInTheDocument()
+  })
+
+  it('calls onLater, closes, and fires action="later" when the later CTA is clicked', async () => {
+    mockFetch.mockResolvedValue(DESIGNER_CONTENT)
+    const onLater = vi.fn()
+    const onOpenChange = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <WelcomeModal
+        surfaceKey="designer-portal/welcome"
+        persona="designer"
+        open={true}
+        onOpenChange={onOpenChange}
+        onLater={onLater}
+        laterLabel="Show me later"
+      />,
+      { wrapper: makeWrapper() },
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Show me later' }))
+
+    expect(onLater).toHaveBeenCalledTimes(1)
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    const actionCall = posthogCaptureSpy.mock.calls.find(
+      ([evt]) => evt === 'help.welcome_modal.action',
+    )
+    expect(actionCall).toBeTruthy()
+    const props = actionCall![1] as Record<string, unknown>
+    expect(props.action).toBe('later')
+
+    // The later CTA's own onOpenChange(false) must not ALSO fire 'dismiss' —
+    // same one-action-per-close-cycle contract as start_tour/skip.
+    const dismissCall = posthogCaptureSpy.mock.calls.find(
+      ([evt, payload]) =>
+        evt === 'help.welcome_modal.action' &&
+        (payload as Record<string, unknown>).action === 'dismiss',
+    )
+    expect(dismissCall).toBeUndefined()
+  })
+
   // ── Escape closes + fires action='dismiss' ─────────────────────────────────
 
   it('closes on Escape and fires action="dismiss"', async () => {

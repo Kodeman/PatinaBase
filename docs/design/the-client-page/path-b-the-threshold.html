@@ -1,0 +1,1168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Threshold · The Vale Residence</title>
+<!--
+  PATH B — THE THRESHOLD. A single-page homeowner surface for Patina, drawn as a section cut
+  through the Vale residence taken down the stair. Every ask Harper owes is a door that is shut.
+  Specimen state: 5 August 2026, the Vale residence, Des Moines. Fixture values verbatim;
+  nothing is named, dated or numbered that the fixture does not carry.
+  Self-contained: no external scripts, no images. The house is drawn in inline SVG line work.
+  No shadows anywhere. No red or green. No counts on chips. Actions are scored ink.
+  Reading floor: prose is Inter 15px at 75% ink or better; DM Mono is reserved for figures,
+  labels, datelines and stamps and never falls below 11px.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E7E9E3;
+  --paper-2:#F1F2ED;
+  --leaf:#FAFAF7;
+  --ink:#16202B;                      /* 13.45:1 on paper */
+  --ink-85:rgba(22,32,43,.85);        /*  8.87:1 */
+  --ink-75:rgba(22,32,43,.75);        /*  6.47:1  — body prose */
+  --ink-70:rgba(22,32,43,.70);        /*  5.53:1  — secondary prose */
+  --ink-65:rgba(22,32,43,.65);        /*  4.75:1  — quietest type, and the library beyond the door */
+  --ink-50:rgba(22,32,43,.50);        /*  3.08:1  — a room behind you; a gate not yet armed */
+  --ink-40:rgba(22,32,43,.40);        /*  drawing ink only */
+  --hair:rgba(22,32,43,.30);
+  --rule:rgba(22,32,43,.16);
+  --rule-2:rgba(22,32,43,.30);
+  --brass:#8A5F19;                    /*  4.60:1 — the phase colour, the only accent */
+  --brass-hair:rgba(138,95,25,.38);
+  --grid:rgba(22,32,43,.045);
+  --display:"Playfair Display","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"DM Mono",ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --d-char:var(--ink);
+  --d-clay:var(--brass);
+  --d-mocha:var(--ink-70);
+  --d-quiet:var(--ink-65);
+  --dim:.3;
+}
+*{box-sizing:border-box}
+html{overflow-x:clip;scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:15px;
+  font-weight:400;
+  line-height:1.62;
+  overflow-x:clip;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:28px 28px,28px 28px;
+  -webkit-font-smoothing:antialiased;
+}
+button,input{font:inherit;color:inherit;box-shadow:none}
+button{background:transparent;border:0;padding:0;margin:0;cursor:pointer;text-align:left}
+:focus-visible{outline:2px solid var(--brass);outline-offset:3px}
+[hidden]{display:none !important}
+.gone{display:none !important}
+p{margin:0}
+h1,h2,h3{margin:0;font-family:var(--display);font-weight:500;letter-spacing:-.012em;line-height:1.14}
+
+/* ---------- scored ink (reused, remapped, floored at 11px) ---------- */
+.si{position:relative;display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--d-char);font-weight:500;padding-bottom:10px;line-height:1;white-space:nowrap}
+.si::before{content:"";position:absolute;left:0;right:0;bottom:5px;height:1px;background:var(--d-char)}
+.si::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:1px;background:var(--d-clay)}
+.si.sec{color:var(--ink-70);font-weight:400}
+.si.sec::before{background:var(--ink-70)}
+.si.sec::after{display:none}
+.si.ter{color:var(--ink-65);font-weight:400}
+.si.ter::before{background:var(--ink-65)}
+.si.ter::after{display:none}
+.si[aria-disabled="true"]{color:var(--ink-50);cursor:default}
+.si[aria-disabled="true"]::before{background:var(--ink-50)}
+.si[aria-disabled="true"]::after{display:none}
+.si.lg{font-size:12.5px;padding-bottom:12px}
+.si.lg::before{bottom:6px}
+.si.lg::after{bottom:1.5px}
+.acts{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-top:14px}
+.hint{font-family:var(--mono);font-size:11px;letter-spacing:.02em;color:var(--ink-65)}
+
+/* ---------- registers: Playfair monument · Inter prose · DM Mono figures and labels ---------- */
+.label{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-65)}
+.fig{font-family:var(--mono);font-size:.92em;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.dateline{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-70)}
+.struck{text-decoration:line-through;text-decoration-thickness:1px;color:var(--ink-50)}
+
+/* ---------- sheet grid ---------- */
+.sheet{
+  max-width:1220px;margin:0 auto;
+  padding:clamp(22px,3vw,40px) clamp(16px,3vw,46px) 0;
+  display:grid;grid-template-columns:170px minmax(0,1fr);
+  column-gap:clamp(22px,3.2vw,52px);
+  align-items:start;
+}
+.doorplate{grid-column:1/-1}
+.pole{grid-column:1;position:sticky;top:14px;align-self:start;padding-top:6px}
+.house{grid-column:2;min-width:0}
+
+/* ---------- 1 · the doorplate ---------- */
+.doorplate{padding-bottom:12px;border-bottom:1px solid var(--rule-2)}
+.dp-line{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-70)}
+.doorplate h1{font-size:clamp(2.1rem,4.6vw,3.5rem);margin:.16em 0 .14em}
+.doorplate .dp-sub{font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;color:var(--ink-70)}
+
+/* ---------- the story pole (six graduations, held at the fourth; it does not move) ---------- */
+.pole-head{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-65);margin-bottom:12px}
+.pole-rail{list-style:none;margin:0;padding:0 0 0 16px;border-left:1px solid var(--rule-2);position:relative}
+.pole-rail li{position:relative;padding:0 0 24px;font-family:var(--mono);font-size:11px;line-height:1.4;letter-spacing:.02em;color:var(--ink-65)}
+.pole-rail li::before{content:"";position:absolute;left:-16px;top:7px;width:9px;height:1px;background:var(--rule-2)}
+.pole-rail li b{display:block;font-weight:400;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-70)}
+.pole-rail li.held{color:var(--brass)}
+.pole-rail li.held::before{width:20px;height:2px;top:6px;background:var(--brass)}
+.pole-rail li.held b{color:var(--brass);font-weight:500}
+.pole-rail li.held span{display:block}
+.here-rail{position:relative;margin-top:6px;padding:2px 0 2px 16px;border-left:1px solid var(--rule);min-height:56px}
+.here-caret{position:absolute;left:-5px;top:0;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:7px solid var(--ink);transition:top 320ms ease}
+.here-label{font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--ink-70);max-width:14ch}
+.pole-acts{margin-top:14px}
+.sheets{margin-top:14px;border-top:1px solid var(--rule);padding-top:10px;font-family:var(--body);font-size:14px;line-height:1.55;color:var(--ink-70)}
+.sheets span{display:block}
+.sheets .label{margin-bottom:4px}
+.dots{display:none}
+
+/* ---------- 2 · the doorstep ---------- */
+.doorstep{padding:clamp(14px,2vw,22px) 0 0}
+.standing{font-family:var(--display);font-size:clamp(1.45rem,2.9vw,2.1rem);line-height:1.22;letter-spacing:-.014em;max-width:26ch}
+.previously{margin-top:.5em;font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--ink-70)}
+.since{margin-top:14px;display:flex;gap:22px;align-items:baseline;flex-wrap:wrap}
+.doorstep-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(20px,3vw,44px);margin-top:clamp(16px,2vw,24px);align-items:start}
+.house-ledger{border-top:1px solid var(--rule-2);padding-top:12px}
+.led-top{font-family:var(--display);font-size:clamp(1.05rem,1.6vw,1.3rem);letter-spacing:-.01em;padding-bottom:10px;line-height:1.35}
+.led-top .fig{font-family:var(--display);font-size:1em;letter-spacing:0;font-variant-numeric:tabular-nums}
+.led-line{display:flex;justify-content:space-between;gap:14px;padding:6px 0;border-bottom:1px solid var(--rule);font-size:15px;color:var(--ink-75)}
+.led-line .fig{font-family:var(--mono);font-size:13.5px;color:var(--ink-85)}
+.overage{margin-top:9px;font-size:14.5px;color:var(--ink-70);max-width:44ch}
+.letterbox{border-top:1px solid var(--rule-2);padding-top:12px}
+.lb-draw{display:block;width:100%;max-width:280px;height:auto;margin-bottom:10px}
+.lb-body{font-size:15px;color:var(--ink-75);max-width:46ch}
+.invoice{margin-top:14px;border-top:1px solid var(--rule);padding-top:12px}
+.inv-line{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dotted var(--rule-2);font-size:15px;color:var(--ink-75)}
+.inv-line .fig{font-family:var(--mono);font-size:13.5px;color:var(--ink-85)}
+.pays{margin-top:14px;display:grid;gap:9px}
+.pay{display:flex;gap:11px;align-items:flex-start;font-size:15px;line-height:1.5;color:var(--ink-75);cursor:pointer}
+.pay input{appearance:none;-webkit-appearance:none;width:10px;height:10px;margin:6px 0 0;border:1px solid var(--ink);background:transparent;flex:0 0 auto}
+.pay input:checked{background:var(--brass);border-color:var(--brass)}
+.pay b{font-weight:500;color:var(--ink)}
+
+/* ---------- 3 · the plan key ---------- */
+.key{margin-top:clamp(16px,2vw,24px);border-top:1px solid var(--rule-2);padding-top:12px}
+.key-head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:baseline}
+.key-sentence{font-family:var(--display);font-size:clamp(1.05rem,1.6vw,1.28rem);letter-spacing:-.01em}
+.key-body{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(230px,1fr);gap:clamp(18px,2.6vw,36px);align-items:start;margin-top:10px}
+.key-draw{display:block;width:100%;max-width:560px;height:auto;margin:0}
+.key-list{display:grid;gap:11px;max-width:46ch;padding-top:2px}
+.key-item{font-size:15px;line-height:1.5;color:var(--ink-75)}
+.key-item .state{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:1px}
+.key-item.done .state{color:var(--ink-65)}
+
+/* ---------- room bands ---------- */
+.band{--band-ink:var(--ink);position:relative;margin-top:clamp(30px,4vw,54px);border-top:1px solid var(--rule-2);color:var(--band-ink);transition:color 520ms ease;scroll-margin-top:4px;padding-bottom:clamp(22px,3vw,34px)}
+.band.dim{--band-ink:var(--ink-65)}
+.band.behind{--band-ink:var(--ink-50)}
+.band .dwg{color:var(--band-ink);transition:color 520ms ease,opacity 520ms ease}
+.band.dim .dwg{color:var(--ink-40)}
+.band.behind .dwg{color:var(--hair)}
+.band[data-changed]::before{content:"";position:absolute;left:-15px;top:14px;width:2px;height:30px;background:var(--brass)}
+.lintel{position:sticky;top:0;z-index:4;background:var(--paper);border-bottom:1px solid var(--rule);padding:10px 0 9px;display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;align-items:baseline}
+.room{font-family:var(--display);font-size:clamp(1.18rem,1.9vw,1.55rem);font-weight:500;letter-spacing:-.012em;color:inherit}
+.lintel-led{font-size:14.5px;line-height:1.5;color:inherit;max-width:34ch;text-align:right}
+.stamp-over{margin-top:10px;display:inline-block}
+.band-body{padding-top:6px}
+.dwg{display:block;width:100%;height:auto;margin:16px 0 0;stroke:currentColor;fill:none;stroke-width:1;color:inherit}
+.dwg *{vector-effect:non-scaling-stroke}
+.dwg text{fill:currentColor;stroke:none;font-family:var(--mono);font-size:13px;letter-spacing:.4px}
+.dwg .fillpaper{fill:var(--paper-2);stroke:none}
+.dwg .settled{fill:rgba(22,32,43,.07);stroke:none}
+.dwg .mark{stroke:var(--brass);stroke-width:3}
+.dwg .buildup{display:none}
+.floorline{margin-top:10px;font-size:14.5px;color:inherit;max-width:64ch}
+.sheet-tag{display:none;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass);margin-top:8px}
+.room-acts{margin-top:12px}
+
+/* objects and the lift */
+.objs{margin-top:16px;display:grid;gap:0}
+.obj{border-top:1px solid var(--rule);padding:11px 0 3px;transition:transform 220ms ease}
+.obj:last-child{border-bottom:1px solid var(--rule);padding-bottom:11px}
+.obj-line{display:flex;gap:16px;justify-content:space-between;align-items:baseline;width:100%;flex-wrap:wrap;color:inherit}
+.obj-name{font-family:var(--display);font-size:1.08rem;letter-spacing:-.008em}
+.obj-note{font-size:14.5px;color:inherit}
+.obj.lifted{transform:translateY(-2px)}
+.obj.lifted .obj-line{border-bottom:1px solid currentColor;padding-bottom:9px}
+.dwg .obj-g{cursor:pointer;transition:transform 220ms ease}
+.dwg .obj-g.lifted{transform:translateY(-2px)}
+.dwg .obj-g:focus-visible{outline:2px solid var(--brass);outline-offset:4px}
+.record{padding:13px 0 6px;font-size:15px;line-height:1.62;color:inherit}
+.rec-facts{display:grid;gap:2px;margin-bottom:13px;max-width:60ch}
+.journey{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border-top:1px solid var(--rule);padding-top:10px;max-width:660px}
+.stop{position:relative;padding-top:12px;font-family:var(--mono);font-size:11px;letter-spacing:.02em;line-height:1.35;color:var(--ink-65);text-transform:none}
+.stop::before{content:"";position:absolute;top:-1px;left:0;right:0;height:1px;background:var(--rule-2)}
+.stop::after{content:"";position:absolute;top:-4px;left:0;width:1px;height:7px;background:var(--rule-2)}
+.stop.now{color:var(--brass)}
+.stop.now::after{background:var(--brass);height:12px;top:-6px;width:2px}
+.stop.past{color:var(--ink-70)}
+.journey-note{margin-top:9px;font-size:14.5px;color:inherit}
+
+/* stamps — maker · city on the second line, or no stamp */
+.stamp{display:inline-block;border:1px solid var(--brass);color:var(--brass);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:6px 9px 5px;line-height:1.5;transform:rotate(-1.1deg);max-width:38ch}
+.stamp b{display:block;font-weight:400;letter-spacing:.04em;text-transform:none}
+
+/* the room as captured */
+.plate{position:relative;margin-top:16px;border:1px solid var(--rule-2);min-height:210px;display:flex;align-items:flex-end;padding:14px;
+  background-image:repeating-linear-gradient(45deg,rgba(22,32,43,.13) 0 1px,transparent 1px 9px)}
+.plate span{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-70);background:var(--paper);padding:4px 7px}
+
+/* ---------- 5 · the painted wall: the gate is a square notch cut into the elevation ---------- */
+.wall-gate{margin-top:0;border-bottom:1px dashed var(--rule-2);padding:0 0 18px;max-width:640px;margin-left:clamp(24px,26%,300px)}
+.gate-title{font-family:var(--display);font-size:clamp(1.05rem,1.6vw,1.3rem);letter-spacing:-.01em}
+.gate-body{margin-top:9px;font-size:15px;line-height:1.62;color:inherit;max-width:56ch}
+.field{display:flex;align-items:flex-end;gap:14px;margin-top:16px;flex-wrap:wrap}
+.field label{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-65);display:block;margin-bottom:6px}
+.field input[type=text]{width:min(300px,100%);background:transparent;border:0;border-bottom:1px solid var(--ink);padding:4px 2px;font-family:var(--display);font-size:1.1rem}
+.field input[type=text]::placeholder{color:var(--ink-50);font-style:italic}
+.field input[type=text]:disabled{border-bottom-color:var(--rule-2);color:var(--ink-50)}
+.consent{display:flex;gap:11px;align-items:flex-start;margin-top:15px;font-size:15px;line-height:1.55;cursor:pointer;max-width:52ch}
+.consent input{appearance:none;-webkit-appearance:none;width:12px;height:12px;margin:5px 0 0;border:1px solid var(--ink);background:transparent;flex:0 0 auto}
+.consent input:checked{background:var(--brass);border-color:var(--brass)}
+.paint-hatch{transition:opacity 420ms ease}
+body.accepted .paint-hatch{opacity:0}
+.paint-solid,.wall-whole{opacity:0;transition:opacity 420ms ease}
+body.accepted .paint-solid,body.accepted .wall-whole{opacity:1}
+body.accepted .wall-notched{opacity:0;transition:opacity 420ms ease}
+
+/* ---------- 6 · the library door ---------- */
+.doorway{margin-top:18px;perspective:1800px;perspective-origin:8% 50%;overflow:hidden;transition:max-height 520ms cubic-bezier(.24,.78,.28,1)}
+.leaf{position:relative;border:1px solid currentColor;background:var(--leaf);padding:clamp(18px,2.4vw,30px);transform-origin:left center;transform:rotateY(0deg);transition:transform 520ms cubic-bezier(.24,.78,.28,1);backface-visibility:hidden}
+body.door-open .leaf{transform:rotateY(-68deg)}
+.hinge{position:absolute;left:-1px;width:7px;height:36px;border:1px solid currentColor;background:var(--paper-2)}
+.hinge.a{top:16%}
+.hinge.b{top:66%}
+.handle{position:absolute;right:16px;top:50%;width:10px;height:10px;margin-top:-5px;border:1px solid currentColor;border-radius:50%}
+.leaf-head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:baseline;border-bottom:1px solid var(--rule-2);padding-bottom:10px}
+.pin{position:relative;margin-top:20px;padding:17px 19px 15px;border:1px solid var(--rule-2);background:var(--paper-2);max-width:58ch}
+.pin::before{content:"";position:absolute;top:-5px;left:50%;width:9px;height:9px;margin-left:-4px;border:1px solid var(--ink);border-radius:50%;background:var(--paper)}
+.pin p{font-family:var(--display);font-size:clamp(1.05rem,1.5vw,1.2rem);line-height:1.5;font-style:italic}
+.pin .sig{margin-top:11px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-70);font-style:normal}
+.letters{margin-top:13px;border-top:1px dotted var(--rule-2);padding-top:11px;display:grid;gap:6px;font-size:14.5px;color:var(--ink-70)}
+.fa-lines{margin-top:20px;max-width:52ch}
+.fa-line{display:flex;justify-content:space-between;gap:14px;padding:6px 0;border-bottom:1px dotted var(--rule-2);font-size:15px}
+.fa-line .fig{font-family:var(--mono);font-size:13.5px}
+.fa-line.total{border-bottom:1px solid currentColor}
+.receipt{margin-top:12px;font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--ink-75);opacity:0;transition:opacity 420ms ease}
+body.signed .receipt{opacity:1}
+
+/* ---------- 9 · the road ---------- */
+.road-note{font-size:14.5px;color:inherit;margin-top:10px;max-width:60ch}
+
+/* ---------- 10 · the mat ---------- */
+.mat{margin-top:clamp(34px,4vw,58px);border-top:1px solid var(--rule-2);padding:16px 0 clamp(90px,10vw,140px)}
+.mat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:clamp(18px,2.6vw,38px);margin-top:16px}
+.mat-col h3{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-65);font-weight:400;margin-bottom:10px}
+.mat-col .obj{border-top:1px solid var(--rule);padding:8px 0 4px}
+.mat-col .obj:last-child{border-bottom:1px solid var(--rule)}
+.mat-col p{font-size:15px;color:var(--ink-75)}
+.mat-line{font-size:15px;color:var(--ink-75);display:block;width:100%}
+.ahead{display:grid;gap:9px;margin-top:14px;max-width:44ch}
+.ahead div{display:flex;justify-content:space-between;gap:14px;font-size:15px;color:var(--ink-75);border-top:1px dashed var(--rule-2);padding-top:8px}
+.mat-acts{margin-top:22px;border-top:1px solid var(--rule);padding-top:14px}
+
+/* ---------- since yesterday ---------- */
+.dimunit{transition:opacity 300ms ease}
+body.diff .dimunit{opacity:var(--dim)}
+body.diff .dimunit[data-changed]{opacity:1}
+
+/* ---------- cut deeper ---------- */
+body.cut .matter{display:none}
+body.cut .dwg .buildup{display:block}
+body.cut .sheet-tag{display:block}
+body.cut .plate{display:none}
+
+/* ---------- the specimen control ---------- */
+.specimen{position:fixed;right:0;bottom:0;z-index:20;background:var(--paper);border-top:1px solid var(--rule-2);border-left:1px solid var(--rule-2);padding:8px 12px 9px;font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--ink-70);display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;max-width:100vw}
+.specimen .si{font-size:11px;padding-bottom:9px}
+
+/* ---------- responsive ---------- */
+@media (max-width:960px){
+  .doorstep-grid{grid-template-columns:minmax(0,1fr)}
+  .key-body{grid-template-columns:minmax(0,1fr);gap:16px}
+  .lintel-led{text-align:left}
+  .wall-gate{margin-left:0}
+}
+@media (max-width:860px){
+  .sheet{grid-template-columns:minmax(0,1fr);padding-left:clamp(14px,4vw,26px);padding-right:clamp(14px,4vw,26px)}
+  .doorplate,.pole,.house{grid-column:1}
+  .pole{position:static;padding-top:12px;border-bottom:1px solid var(--rule);padding-bottom:12px}
+  .pole-rail{display:none}
+  .here-rail{border-left:0;padding-left:0;min-height:0;margin-top:8px}
+  .here-caret{display:none}
+  .here-label{max-width:none}
+  .dots{display:flex;gap:10px;align-items:center;margin-bottom:9px}
+  .dot{width:8px;height:8px;border:1px solid var(--rule-2);border-radius:50%}
+  .dot.held{background:var(--brass);border-color:var(--brass)}
+  .dot.walked{border-color:var(--ink)}
+  .band[data-changed]::before{left:-9px}
+  .journey{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:12px}
+  .standing{max-width:none;font-size:clamp(1.32rem,5.6vw,1.7rem)}
+  .band{margin-top:26px}
+  body.diff .dimunit{opacity:1;border-left:1px solid var(--rule);padding-left:12px}
+  body.diff .dimunit[data-changed]{border-left:2px solid var(--ink)}
+}
+@media (max-width:600px){
+  body{font-size:15px}
+  .dwg text{font-size:17px}
+  .band[data-changed]::before{display:none}
+  body.door-open .leaf{transform:translateY(-26px);transition:transform 240ms ease}
+  .leaf{transition:transform 240ms ease}
+  .doorway{transition:max-height 240ms ease}
+  .obj-line{gap:6px}
+  .doorplate h1{font-size:clamp(1.9rem,9vw,2.4rem)}
+  .lintel{position:static}
+}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  .leaf,.doorway,.obj,.dwg .obj-g,.here-caret,.dimunit,.paint-hatch,.paint-solid,.wall-whole,.wall-notched,.band,.band .dwg,.receipt{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<!-- 1 · THE DOORPLATE -->
+<header class="doorplate">
+  <p class="dp-line"><span>Quist Interiors · Des Moines</span><span>prepared for Harper Vale</span></p>
+  <h1>The Vale Residence</h1>
+  <p class="dp-sub">Des Moines · Procurement · August 2026</p>
+</header>
+
+<!-- THE STORY POLE — six graduations, held at the fourth. It does not move. -->
+<aside class="pole" aria-label="The story pole">
+  <p class="pole-head">The story pole</p>
+  <div class="dots" aria-hidden="true">
+    <span class="dot walked"></span><span class="dot walked"></span><span class="dot walked"></span><span class="dot held"></span><span class="dot"></span><span class="dot"></span>
+  </div>
+  <ol class="pole-rail">
+    <li><b>Discovery</b>March</li>
+    <li><b>Design</b>April–May</li>
+    <li><b>Design refinement</b>June</li>
+    <li class="held"><b>Procurement</b>July–September<span>the house stands here</span></li>
+    <li><b>Installation</b>week of 12 October</li>
+    <li><b>Completion</b>late October</li>
+  </ol>
+  <div class="here-rail">
+    <span class="here-caret" id="caret" aria-hidden="true"></span>
+    <p class="here-label" id="poleHere">You stand at the doorstep</p>
+  </div>
+  <div class="pole-acts"><button class="si ter" id="cutBtn">Cut deeper</button></div>
+  <div class="sheets" id="sheets" hidden>
+    <span class="label">The drawing set</span>
+    <span>Site and ground plan</span>
+    <span>Entry &amp; stair hall</span>
+    <span>Library &amp; lounge</span>
+    <span>Primary bedroom</span>
+  </div>
+</aside>
+
+<main class="house">
+
+<!-- 2 · THE DOORSTEP -->
+<section class="doorstep" id="doorstep">
+  <p class="standing" id="standing" aria-live="polite">One door in this house is closed until you sign it.</p>
+  <p class="previously" id="previously">Previously — fourteen selections agreed, 19 June.</p>
+  <div class="since">
+    <button class="si ter" id="diffBtn">What changed since yesterday</button>
+    <span class="dateline" id="readingMark">Read here on the fourth of August.</span>
+  </div>
+
+  <div class="doorstep-grid">
+    <div class="house-ledger">
+      <p class="led-top">The house stands at <span class="fig" id="agreedOld">$61,400</span><span class="fig" id="agreedNew" hidden> $68,290</span> agreed of <span class="fig">$85,000</span> planned.</p>
+      <div class="led-line"><span>Owed on invoice No. 4</span><span class="fig">$9,125 · due 15 August</span></div>
+      <div class="led-line"><span id="heldLabel">Held on the paintwork</span><span class="fig">$1,440</span></div>
+      <div class="led-line" id="awaitRow"><span id="awaitLabel">Awaiting your name</span><span class="fig">$6,890</span></div>
+      <p class="overage">The library stands about eleven hundred past its target; the bedroom absorbs it.</p>
+    </div>
+
+    <div class="letterbox dimunit" id="letterbox">
+      <p class="label">The letterbox</p>
+      <svg class="dwg lb-draw" role="img" aria-label="A letterbox with an invoice standing half out of the slot" viewBox="0 0 300 96">
+        <rect x="10" y="34" width="280" height="52"></rect>
+        <line x1="26" y1="52" x2="274" y2="52"></line>
+        <rect x="74" y="6" width="150" height="44" class="fillpaper"></rect>
+        <rect x="74" y="6" width="150" height="44"></rect>
+        <line x1="86" y1="18" x2="196" y2="18"></line>
+        <line x1="86" y1="28" x2="176" y2="28"></line>
+        <line x1="86" y1="38" x2="150" y2="38"></line>
+      </svg>
+      <p class="lb-body">Invoice No. 4 · <span class="fig">$18,250</span> total · <span class="fig">$9,125</span> paid. Balance <span class="fig">$9,125</span>, due 15 August — <span id="dueIn">in ten days</span>.</p>
+      <div class="acts"><button class="si" id="lbBtn" aria-expanded="false" aria-controls="invoice">Open the letterbox</button></div>
+      <div class="invoice" id="invoice" hidden>
+        <div class="inv-line"><span>Furnishings and services billed to date</span><span class="fig">$18,250</span></div>
+        <div class="inv-line"><span>Received, with thanks</span><span class="fig">$9,125</span></div>
+        <div class="inv-line"><span>Balance, due 15 August</span><span class="fig">$9,125</span></div>
+        <div class="pays">
+          <label class="pay"><input type="radio" name="pay" checked><span><b>Bank transfer</b> — preferred, the lowest fee</span></label>
+          <label class="pay"><input type="radio" name="pay"><span><b>Card</b> — adds 3% processing</span></label>
+          <label class="pay"><input type="radio" name="pay"><span><b>Mail a check</b> — to the remit-to address, memo &ldquo;Vale — Inv 4&rdquo;</span></label>
+        </div>
+        <div class="acts"><button class="si">Settle the balance</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · THE PLAN KEY — a key on a drawing: the marks are leadered and lettered, the rooms are not links -->
+<section class="key dimunit" id="planKey" aria-label="Plan key">
+  <div class="key-head">
+    <p class="key-sentence" id="keySentence">Two marks stand open on this drawing.</p>
+    <p class="label">Key · the whole house</p>
+  </div>
+  <div class="key-body">
+  <svg class="dwg key-draw" role="group" aria-label="Plan key: three rooms, the road, and the two marks that wait on you" viewBox="0 0 460 152">
+    <a href="#wall" aria-label="The painted wall, in the stair hall">
+      <line x1="130" y1="30" x2="130" y2="16"></line>
+      <line x1="130" y1="16" x2="196" y2="16"></line>
+      <text x="200" y="20">The painted wall</text>
+    </a>
+    <rect x="18" y="30" width="112" height="62"></rect>
+    <line x1="30" y1="38" x2="30" y2="84"></line><line x1="40" y1="38" x2="40" y2="84"></line>
+    <line x1="50" y1="38" x2="50" y2="84"></line><line x1="60" y1="38" x2="60" y2="84"></line>
+    <line x1="70" y1="38" x2="70" y2="84"></line>
+    <rect x="92" y="74" width="32" height="9" class="matter"></rect>
+    <rect x="130" y="30" width="152" height="62"></rect>
+    <rect x="282" y="30" width="104" height="62"></rect>
+    <rect x="308" y="46" width="46" height="30" class="matter"></rect>
+    <g id="keyWallHatch">
+      <line x1="126" y1="30" x2="134" y2="38"></line><line x1="126" y1="38" x2="134" y2="46"></line>
+      <line x1="126" y1="76" x2="134" y2="84"></line><line x1="126" y1="84" x2="134" y2="92"></line>
+    </g>
+    <g id="keyDoorShut"><line class="mark" x1="130" y1="46" x2="130" y2="76"></line></g>
+    <g id="keyDoorOpen" hidden>
+      <line class="mark" x1="130" y1="46" x2="160" y2="46"></line>
+      <path d="M160,46 A30,30 0 0 1 130,76" stroke-dasharray="3 3"></path>
+    </g>
+    <a href="#door" aria-label="The library door, shut">
+      <line x1="130" y1="92" x2="130" y2="124"></line>
+      <line x1="130" y1="124" x2="152" y2="124"></line>
+      <text x="156" y="128" id="keyDoorLabel">The library door, shut</text>
+    </a>
+    <a href="#road" aria-label="The road">
+      <line x1="402" y1="61" x2="452" y2="61" stroke-dasharray="6 5"></line>
+      <rect x="412" y="53" width="18" height="8" class="matter"></rect>
+      <rect x="438" y="55" width="12" height="6" class="matter"></rect>
+      <text x="456" y="106" text-anchor="end">The road</text>
+    </a>
+    <text x="22" y="106">Entry</text>
+    <text x="140" y="106">Library</text>
+    <text x="286" y="106">Bedroom</text>
+  </svg>
+  <div class="key-list">
+    <div class="key-item" id="keyItemDoor"><span class="state">Shut</span>The library door — furnishings authorization No. 7, $6,890, your name.</div>
+    <div class="key-item" id="keyItemWall"><span class="state">Hatched</span>The painted wall — Prairie Coat Painting, $1,440 held back until you accept it.</div>
+    <div class="key-item done"><span class="state">Open</span>Everything else in the house stands open: the entry, the bedroom, and the road.</div>
+  </div>
+  </div>
+</section>
+
+<!-- 4 · ENTRY & STAIR HALL -->
+<section class="band dimunit" id="entry" data-section="the entry &amp; stair hall">
+  <div class="lintel">
+    <h2 class="room">Entry &amp; stair hall</h2>
+    <p class="lintel-led" id="entryLed">Paintwork $7,200 · draws 1 through 3 paid · $1,440 held</p>
+  </div>
+  <div class="band-body">
+    <p class="sheet-tag">Section, taken down the stair</p>
+    <svg class="dwg" role="group" aria-label="Section through the entry and stair hall: the stair rising to the upper floor, the doorway to the library cut in the far wall, and the kilim rug on the floor" viewBox="0 0 1000 240" data-vb-phone="120 30 700 210">
+      <line x1="28" y1="16" x2="958" y2="16"></line>
+      <line x1="28" y1="16" x2="28" y2="216"></line>
+      <line x1="42" y1="16" x2="42" y2="216"></line>
+      <line x1="42" y1="216" x2="988" y2="216"></line>
+      <line x1="944" y1="16" x2="944" y2="104"></line>
+      <line x1="958" y1="16" x2="958" y2="104"></line>
+      <line x1="944" y1="104" x2="958" y2="104"></line>
+      <line x1="944" y1="211" x2="944" y2="221"></line>
+      <line x1="958" y1="211" x2="958" y2="221"></line>
+      <polyline points="150,216 150,201 190,201 190,186 230,186 230,171 270,171 270,156 310,156 310,141 350,141 350,126 390,126 390,111 430,111 430,96 470,96"></polyline>
+      <line x1="150" y1="216" x2="470" y2="96" stroke-dasharray="2 3"></line>
+      <line x1="470" y1="96" x2="944" y2="96"></line>
+      <line x1="470" y1="103" x2="944" y2="103"></line>
+      <line x1="176" y1="150" x2="462" y2="43"></line>
+      <line x1="210" y1="181" x2="210" y2="137"></line>
+      <line x1="290" y1="151" x2="290" y2="107"></line>
+      <line x1="370" y1="121" x2="370" y2="77"></line>
+      <g class="buildup">
+        <line x1="28" y1="30" x2="42" y2="44"></line><line x1="28" y1="60" x2="42" y2="74"></line>
+        <line x1="28" y1="90" x2="42" y2="104"></line><line x1="28" y1="120" x2="42" y2="134"></line>
+        <line x1="28" y1="150" x2="42" y2="164"></line><line x1="28" y1="180" x2="42" y2="194"></line>
+        <line x1="944" y1="26" x2="958" y2="40"></line><line x1="944" y1="56" x2="958" y2="70"></line>
+        <line x1="944" y1="86" x2="958" y2="100"></line>
+      </g>
+      <g class="matter paint-hatch" opacity=".55">
+        <line x1="44" y1="46" x2="56" y2="34"></line><line x1="44" y1="76" x2="56" y2="64"></line>
+        <line x1="44" y1="106" x2="56" y2="94"></line><line x1="44" y1="136" x2="56" y2="124"></line>
+        <line x1="44" y1="166" x2="56" y2="154"></line><line x1="44" y1="196" x2="56" y2="184"></line>
+        <line x1="930" y1="46" x2="942" y2="34"></line><line x1="930" y1="76" x2="942" y2="64"></line>
+      </g>
+      <g class="obj-g matter" data-obj="rug" tabindex="0" role="button" aria-expanded="false" aria-label="The kilim rug, delivered 29 July — open its record">
+        <path d="M560,216 L780,216 L768,208 L572,208 Z"></path>
+        <line x1="592" y1="216" x2="600" y2="208"></line><line x1="632" y1="216" x2="640" y2="208"></line>
+        <line x1="672" y1="216" x2="680" y2="208"></line><line x1="712" y1="216" x2="720" y2="208"></line>
+        <line x1="752" y1="216" x2="760" y2="208"></line>
+        <line x1="560" y1="219" x2="560" y2="223"></line><line x1="572" y1="219" x2="572" y2="223"></line>
+        <line x1="768" y1="219" x2="768" y2="223"></line><line x1="780" y1="219" x2="780" y2="223"></line>
+      </g>
+    </svg>
+    <p class="floorline">Settled here — fourteen selections agreed, 19 June; the paintwork engaged, draws 1 through 3 paid.</p>
+    <div class="room-acts"><button class="si ter" data-capture="entry">The room as captured</button></div>
+    <div class="objs">
+      <div class="obj" data-obj="rug">
+        <button class="obj-line" aria-expanded="false">
+          <span class="obj-name">Kilim rug</span>
+          <span class="obj-note">Delivered 29 July · standing in the entry</span>
+        </button>
+        <div class="record" hidden></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 · THE PAINTED WALL — the gate is cut square into the elevation and heals on acceptance -->
+<section class="band dimunit" id="wall" data-section="the painted wall">
+  <div class="lintel">
+    <h2 class="room">The painted wall</h2>
+    <p class="lintel-led">Shared by the library and the stair hall · substantially complete 1 August</p>
+  </div>
+  <div class="band-body">
+    <p class="sheet-tag">Elevation of the wall the stair climbs</p>
+    <svg class="dwg" role="img" aria-label="Elevation of the wall the library and stair hall share: the stair rake ghosted across it, the library doorway cut into it, and a square notch where your acceptance is owed" viewBox="0 0 1000 200">
+      <rect x="40" y="20" width="740" height="95" class="settled paint-solid"></rect>
+      <polygon class="wall-notched" points="40,170 300,170 300,120 660,120 660,170 780,170 780,60 900,60 900,170 960,170 960,20 40,20"></polygon>
+      <polygon class="wall-whole" points="40,170 780,170 780,60 900,60 900,170 960,170 960,20 40,20"></polygon>
+      <line x1="0" y1="170" x2="1000" y2="170"></line>
+      <line x1="40" y1="162" x2="300" y2="162"></line>
+      <line x1="660" y1="162" x2="780" y2="162"></line>
+      <line x1="60" y1="170" x2="520" y2="58" stroke-dasharray="4 4"></line>
+      <line x1="140" y1="150" x2="140" y2="139" stroke-dasharray="2 3"></line>
+      <line x1="260" y1="121" x2="260" y2="110" stroke-dasharray="2 3"></line>
+      <line x1="380" y1="92" x2="380" y2="81" stroke-dasharray="2 3"></line>
+      <g class="matter paint-hatch" opacity=".45">
+        <line x1="60" y1="115" x2="155" y2="20"></line><line x1="120" y1="115" x2="215" y2="20"></line>
+        <line x1="180" y1="115" x2="275" y2="20"></line><line x1="240" y1="115" x2="335" y2="20"></line>
+        <line x1="300" y1="115" x2="395" y2="20"></line><line x1="360" y1="115" x2="455" y2="20"></line>
+        <line x1="420" y1="115" x2="515" y2="20"></line><line x1="480" y1="115" x2="575" y2="20"></line>
+        <line x1="540" y1="115" x2="635" y2="20"></line><line x1="600" y1="115" x2="695" y2="20"></line>
+        <line x1="660" y1="115" x2="755" y2="20"></line>
+      </g>
+      <g class="buildup">
+        <line x1="960" y1="30" x2="972" y2="42"></line><line x1="960" y1="60" x2="972" y2="72"></line>
+        <line x1="960" y1="90" x2="972" y2="102"></line><line x1="960" y1="120" x2="972" y2="132"></line>
+      </g>
+    </svg>
+    <div class="wall-gate">
+      <p class="gate-title">Accept the paintwork</p>
+      <p class="gate-body">Prairie Coat Painting · library &amp; stair hall · <span class="fig">$7,200</span> · substantially complete 1 August. Draws 1 through 3 are paid. The final draw of <span class="fig">$1,440</span> releases on your acceptance.</p>
+      <div class="field" id="acceptForm">
+        <div>
+          <label for="acceptName">Your full name</label>
+          <input type="text" id="acceptName" autocomplete="off" spellcheck="false" placeholder="Harper Vale">
+        </div>
+        <button class="si lg" id="acceptBtn" aria-disabled="true" aria-describedby="acceptHint">Accept</button>
+      </div>
+      <p class="hint" id="acceptHint">Type your full name to accept.</p>
+      <p class="stamp-over" id="acceptStamp" hidden><span class="stamp">Accepted 5 August · $1,440 released<b>Prairie Coat Painting · library &amp; stair hall</b></span></p>
+    </div>
+    <p class="floorline">Settled here — the colour agreed 19 June; draws 1 through 3 paid.</p>
+  </div>
+</section>
+
+<!-- 6 · THE LIBRARY DOOR -->
+<section class="band dimunit" id="door" data-section="the library door">
+  <div class="lintel">
+    <h2 class="room">The library door</h2>
+    <p class="lintel-led" id="doorLed">Shut since 4 August · it opens on your name</p>
+  </div>
+  <div class="band-body">
+    <p class="sheet-tag">The door leaf, and what is printed on it</p>
+    <p class="receipt" id="doorReceipt" hidden>Furnishings authorization No. 7 · signed 5 August · Quist Interiors countersigns</p>
+    <div class="doorway" id="doorway">
+      <div class="leaf" id="leaf">
+        <span class="hinge a" aria-hidden="true"></span>
+        <span class="hinge b" aria-hidden="true"></span>
+        <span class="handle" aria-hidden="true"></span>
+        <div class="leaf-head">
+          <p class="gate-title">Furnishings authorization No. 7</p>
+          <p class="dateline">Library &amp; lounge: lighting &amp; textiles · sent 4 August</p>
+        </div>
+        <div class="pin" id="notePin">
+          <p>&ldquo;Three last pieces for the library — the sconces you loved, the drapery, the runner. Sign and I&rsquo;ll have them ordered by Friday.&rdquo;</p>
+          <p class="sig">— N. · Nora Quist · <span id="noteDate">4 August, yesterday</span></p>
+          <div class="acts"><button class="si ter" id="lettersBtn" aria-expanded="false" aria-controls="letters">Earlier letters</button></div>
+          <div class="letters" id="letters" hidden>
+            <span>19 June — design refinement closed, fourteen selections agreed.</span>
+            <span>30 May — the design set signed, three rooms concepted.</span>
+            <span>12 March — the design services agreement countersigned.</span>
+          </div>
+        </div>
+        <div class="fa-lines">
+          <div class="fa-line"><span>Brass library sconces</span><span class="fig">$2,340</span></div>
+          <div class="fa-line"><span>Wool drapery</span><span class="fig">$2,890</span></div>
+          <div class="fa-line"><span>Kilim runner</span><span class="fig">$1,660</span></div>
+          <div class="fa-line total"><span>Three pieces order the moment you sign</span><span class="fig">$6,890</span></div>
+        </div>
+        <label class="consent"><input type="checkbox" id="consent"><span>I authorize these three pieces. Quist Interiors countersigns.</span></label>
+        <div class="field">
+          <div>
+            <label for="signName">Your full name</label>
+            <input type="text" id="signName" autocomplete="off" spellcheck="false" placeholder="Harper Vale">
+          </div>
+          <button class="si lg" id="signBtn" aria-disabled="true" aria-describedby="signHint">Sign</button>
+        </div>
+        <p class="hint" id="signHint">Type your full name and tick the line to sign.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 · LIBRARY & LOUNGE -->
+<section class="band dimunit dim" id="library" data-section="the library &amp; lounge">
+  <p class="stamp-over" id="signStamp" hidden><span class="stamp">Signed 5 August<b>Quist Interiors countersigns · authorization No. 7</b></span></p>
+  <div class="lintel">
+    <h2 class="room">Library &amp; lounge</h2>
+    <p class="lintel-led">$24,900 agreed against $23,800 planned — about eleven hundred past its target, absorbed by the bedroom&rsquo;s headroom</p>
+  </div>
+  <div class="band-body">
+    <p class="sheet-tag">Section, looking east</p>
+    <svg class="dwg" role="group" aria-label="Section through the library and lounge, with three dashed footprints waiting on the floor" viewBox="0 0 1000 232" data-vb-phone="60 10 830 222">
+      <line x1="42" y1="16" x2="944" y2="16"></line>
+      <line x1="28" y1="16" x2="28" y2="206"></line>
+      <line x1="42" y1="16" x2="42" y2="206"></line>
+      <line x1="42" y1="206" x2="944" y2="206"></line>
+      <line x1="944" y1="16" x2="944" y2="206"></line>
+      <line x1="958" y1="16" x2="958" y2="206"></line>
+      <line x1="0" y1="206" x2="42" y2="206" stroke-dasharray="2 4"></line>
+      <g class="buildup">
+        <line x1="28" y1="30" x2="42" y2="44"></line><line x1="28" y1="60" x2="42" y2="74"></line>
+        <line x1="28" y1="90" x2="42" y2="104"></line><line x1="28" y1="120" x2="42" y2="134"></line>
+        <line x1="944" y1="30" x2="958" y2="44"></line><line x1="944" y1="60" x2="958" y2="74"></line>
+        <line x1="944" y1="90" x2="958" y2="104"></line><line x1="944" y1="120" x2="958" y2="134"></line>
+      </g>
+      <g class="matter ftp obj-g" data-obj="sconces" tabindex="0" role="button" aria-expanded="false" aria-label="The brass library sconces — open their record">
+        <rect class="ftp-dash" x="120" y="192" width="120" height="14" stroke-dasharray="4 4"></rect>
+        <g class="ftp-drawn">
+          <path d="M60,96 L86,96 L86,84 L98,84"></path><path d="M86,96 L74,110 L98,110 L86,96"></path>
+          <path d="M60,140 L86,140 L86,128 L98,128"></path><path d="M86,140 L74,154 L98,154 L86,140"></path>
+        </g>
+      </g>
+      <g class="matter ftp obj-g" data-obj="drapery" tabindex="0" role="button" aria-expanded="false" aria-label="The wool drapery — open its record">
+        <rect class="ftp-dash" x="400" y="192" width="160" height="14" stroke-dasharray="4 4"></rect>
+        <g class="ftp-drawn">
+          <line x1="396" y1="30" x2="566" y2="30"></line>
+          <path d="M404,30 C400,90 412,150 404,206"></path>
+          <path d="M444,30 C440,90 452,150 444,206"></path>
+          <path d="M484,30 C480,90 492,150 484,206"></path>
+          <path d="M524,30 C520,90 532,150 524,206"></path>
+          <path d="M560,30 C556,90 566,150 560,206"></path>
+        </g>
+      </g>
+      <g class="matter ftp obj-g" data-obj="runner" tabindex="0" role="button" aria-expanded="false" aria-label="The kilim runner — open its record">
+        <rect class="ftp-dash" x="680" y="192" width="180" height="14" stroke-dasharray="4 4"></rect>
+        <g class="ftp-drawn">
+          <path d="M680,206 L860,206 L850,199 L690,199 Z"></path>
+          <line x1="712" y1="206" x2="720" y2="199"></line><line x1="752" y1="206" x2="760" y2="199"></line>
+          <line x1="792" y1="206" x2="800" y2="199"></line><line x1="832" y1="206" x2="840" y2="199"></line>
+        </g>
+      </g>
+    </svg>
+    <p class="floorline">Settled here — the design set signed 30 May; fourteen selections agreed 19 June.</p>
+    <div class="room-acts"><button class="si ter" data-capture="library">The room as captured</button></div>
+    <div class="objs">
+      <div class="obj" data-obj="sconces">
+        <button class="obj-line" aria-expanded="false"><span class="obj-name">Brass library sconces</span><span class="obj-note"><span class="fig">$2,340</span> · in authorization No. 7</span></button>
+        <div class="record" hidden></div>
+      </div>
+      <div class="obj" data-obj="drapery">
+        <button class="obj-line" aria-expanded="false"><span class="obj-name">Wool drapery</span><span class="obj-note"><span class="fig">$2,890</span> · in authorization No. 7</span></button>
+        <div class="record" hidden></div>
+      </div>
+      <div class="obj" data-obj="runner">
+        <button class="obj-line" aria-expanded="false"><span class="obj-name">Kilim runner</span><span class="obj-note"><span class="fig">$1,660</span> · in authorization No. 7</span></button>
+        <div class="record" hidden></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8 · PRIMARY BEDROOM -->
+<section class="band dimunit" id="bedroom" data-section="the primary bedroom">
+  <div class="lintel">
+    <h2 class="room">Primary bedroom</h2>
+    <p class="lintel-led">Its headroom absorbs the library&rsquo;s overage · nothing here waits on your hand</p>
+  </div>
+  <div class="band-body">
+    <p class="sheet-tag">Section, looking east</p>
+    <svg class="dwg" role="img" aria-label="Section through the primary bedroom, quiet, with the bed drawn in place" viewBox="0 0 1000 210" data-vb-phone="240 10 640 200">
+      <line x1="42" y1="16" x2="944" y2="16"></line>
+      <line x1="28" y1="16" x2="28" y2="184"></line>
+      <line x1="42" y1="16" x2="42" y2="184"></line>
+      <line x1="42" y1="184" x2="944" y2="184"></line>
+      <line x1="944" y1="16" x2="944" y2="184"></line>
+      <line x1="958" y1="16" x2="958" y2="184"></line>
+      <g class="buildup">
+        <line x1="28" y1="30" x2="42" y2="44"></line><line x1="28" y1="60" x2="42" y2="74"></line>
+        <line x1="944" y1="30" x2="958" y2="44"></line><line x1="944" y1="60" x2="958" y2="74"></line>
+      </g>
+      <g class="matter">
+        <rect x="300" y="146" width="330" height="38"></rect>
+        <line x1="300" y1="146" x2="300" y2="86"></line>
+        <line x1="300" y1="86" x2="326" y2="86"></line>
+        <line x1="326" y1="86" x2="326" y2="146"></line>
+        <line x1="330" y1="152" x2="430" y2="152"></line>
+        <rect x="700" y="60" width="120" height="76"></rect>
+        <line x1="760" y1="60" x2="760" y2="136"></line>
+      </g>
+    </svg>
+    <p class="floorline">Settled here — the design set signed 30 May. Still, and quiet.</p>
+    <div class="room-acts"><button class="si ter" data-capture="bedroom">The room as captured</button></div>
+  </div>
+</section>
+
+<!-- 9 · THE ROAD — ruled in the six stops, the house at the right-hand edge -->
+<section class="band dimunit" id="road" data-section="the road">
+  <div class="lintel">
+    <h2 class="room">The road</h2>
+    <p class="lintel-led">What is not home yet · two pieces in motion</p>
+  </div>
+  <div class="band-body">
+    <p class="sheet-tag">The approach</p>
+    <svg class="dwg" role="group" aria-label="The road ruled in six stops: the credenza standing at production, the reading chairs at shipped, the house at the right-hand edge" viewBox="0 0 1000 170">
+      <line x1="40" y1="130" x2="900" y2="130"></line>
+      <line x1="40" y1="124" x2="40" y2="136"></line>
+      <line x1="212" y1="124" x2="212" y2="136"></line>
+      <line x1="384" y1="124" x2="384" y2="136"></line>
+      <line x1="556" y1="124" x2="556" y2="136"></line>
+      <line x1="728" y1="124" x2="728" y2="136"></line>
+      <line x1="900" y1="124" x2="900" y2="136"></line>
+      <g class="obj-g matter" data-obj="credenza" tabindex="0" role="button" aria-expanded="false" aria-label="The walnut credenza, in production at Harmon Bench Works — open its record">
+        <rect x="310" y="78" width="150" height="44"></rect>
+        <line x1="385" y1="78" x2="385" y2="122"></line>
+        <line x1="310" y1="90" x2="460" y2="90"></line>
+        <line x1="322" y1="122" x2="322" y2="130"></line><line x1="448" y1="122" x2="448" y2="130"></line>
+      </g>
+      <g class="obj-g matter" data-obj="chairs" tabindex="0" role="button" aria-expanded="false" aria-label="The pair of reading chairs, shipped — open their record">
+        <path d="M506,130 L506,106 L552,106 L552,130"></path>
+        <path d="M506,106 L498,70 L510,70 L506,106"></path>
+        <path d="M568,130 L568,106 L614,106 L614,130"></path>
+        <path d="M568,106 L560,70 L572,70 L568,106"></path>
+      </g>
+      <g class="matter">
+        <line x1="900" y1="130" x2="900" y2="40"></line>
+        <line x1="900" y1="40" x2="980" y2="40"></line>
+        <line x1="980" y1="40" x2="980" y2="130"></line>
+        <line x1="880" y1="130" x2="980" y2="130"></line>
+      </g>
+    </svg>
+    <p class="floorline">The road is ruled in the six stops a piece passes through; the house stands at its right-hand edge. The credenza is at production, the chairs at shipped.</p>
+    <div class="objs">
+      <div class="obj" data-obj="credenza">
+        <button class="obj-line" aria-expanded="false"><span class="obj-name">Walnut credenza</span><span class="obj-note"><span class="fig">$8,400</span> · Harmon Bench Works, Dayton, Ohio</span></button>
+        <div class="record" hidden></div>
+      </div>
+      <div class="obj" data-obj="chairs">
+        <button class="obj-line" aria-expanded="false"><span class="obj-name">Pair of reading chairs</span><span class="obj-note">Shipped · arriving 12 August</span></button>
+        <div class="record" hidden></div>
+      </div>
+    </div>
+    <p class="stamp-over"><span class="stamp">In production · est. ready 28 August<b>Harmon Bench Works · Dayton, Ohio</b></span></p>
+    <p class="road-note">Still on the bench in Dayton. A bench in Dayton does not change daily.</p>
+  </div>
+</section>
+
+<!-- 10 · THE MAT -->
+<section class="mat dimunit" id="mat" data-section="the mat">
+  <p class="label">The mat</p>
+  <div class="ahead">
+    <div><span>Installation</span><span>week of 12 October</span></div>
+    <div><span>Completion</span><span>late October</span></div>
+  </div>
+  <div class="mat-grid">
+    <div class="mat-col">
+      <h3>The people, where they work</h3>
+      <div class="obj" data-obj="nora"><button class="obj-line mat-line" aria-expanded="false">Nora Quist · on the letterhead</button><div class="record" hidden></div></div>
+      <div class="obj" data-obj="dan"><button class="obj-line mat-line" aria-expanded="false">Dan Okafor · on the site line</button><div class="record" hidden></div></div>
+      <div class="obj" data-obj="prairie"><button class="obj-line mat-line" aria-expanded="false">Prairie Coat Painting · on the stair-hall wall</button><div class="record" hidden></div></div>
+      <div class="obj" data-obj="harmon"><button class="obj-line mat-line" aria-expanded="false">Harmon Bench Works · on the road</button><div class="record" hidden></div></div>
+    </div>
+    <div class="mat-col">
+      <h3>The papers</h3>
+      <div class="obj" data-obj="drawings"><button class="obj-line mat-line" aria-expanded="false">The drawing set</button><div class="record" hidden></div></div>
+      <div class="obj" data-obj="fa07"><button class="obj-line mat-line" aria-expanded="false">Furnishings authorization No. 7</button><div class="record" hidden></div></div>
+      <div class="obj" data-obj="inv4"><button class="obj-line mat-line" aria-expanded="false">Invoice No. 4</button><div class="record" hidden></div></div>
+      <div class="obj" data-obj="designSet"><button class="obj-line mat-line" aria-expanded="false">The design set</button><div class="record" hidden></div></div>
+      <div class="obj" data-obj="agreement"><button class="obj-line mat-line" aria-expanded="false">The design services agreement</button><div class="record" hidden></div></div>
+    </div>
+    <div class="mat-col">
+      <h3>Your details</h3>
+      <p>Harper Vale</p>
+      <p>The Vale residence, Des Moines</p>
+      <p>Kept for you by Quist Interiors.</p>
+      <div class="mat-acts"><button class="si sec">Leave the house</button></div>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<div class="specimen" aria-label="Specimen control">
+  <span id="specimenLabel">Specimen · 5 Aug 2026</span>
+  <button class="si ter" id="dayBtn">View as 4 Aug</button>
+  <button class="si ter" id="resetBtn">Reset</button>
+</div>
+
+<script>
+(function(){
+  var body=document.body;
+  var $=function(id){return document.getElementById(id)};
+  var RM=window.matchMedia('(prefers-reduced-motion: reduce)');
+  var PHONE=window.matchMedia('(max-width: 600px)');
+  var S={day:5,signed:false,accepted:false};
+  var lifted={},first=true;
+
+  /* ---------- the record behind every object · journey vocabulary verbatim from the fixture ---------- */
+  var STOPS=['Agreed','Ordered','In production','Shipped','Delivered','Installed'];
+  var REC={
+    rug:{facts:['Kilim rug · delivered 29 July','Laid in the entry &amp; stair hall'],
+         stop:function(){return 'Delivered'},
+         tail:'A different object from the library&rsquo;s kilim runner, which is still unsigned inside authorization No. 7.'},
+    sconces:{facts:['Brass library sconces · $2,340','In furnishings authorization No. 7, sent 4 August'],
+         stop:function(){return S.signed?'Ordered':null},
+         tail:function(){return S.signed?'Ordered on your name, 5 August.':'Not yet agreed — the authorization is unsigned.'}},
+    drapery:{facts:['Wool drapery · $2,890','In furnishings authorization No. 7, sent 4 August'],
+         stop:function(){return S.signed?'Ordered':null},
+         tail:function(){return S.signed?'Ordered on your name, 5 August.':'Not yet agreed — the authorization is unsigned.'}},
+    runner:{facts:['Kilim runner · $1,660','In furnishings authorization No. 7, sent 4 August'],
+         stop:function(){return S.signed?'Ordered':null},
+         tail:function(){return S.signed?'Ordered on your name, 5 August.':'Not yet agreed — the authorization is unsigned.'}},
+    credenza:{facts:['Walnut credenza · $8,400','Harmon Bench Works · Dayton, Ohio'],
+         stamp:'In production · est. ready 28 August<b>Harmon Bench Works · Dayton, Ohio</b>',
+         stop:function(){return 'In production'},
+         tail:'Still on the bench in Dayton.'},
+    chairs:{facts:['Pair of reading chairs','Shipped, arriving 12 August'],
+         stop:function(){return 'Shipped'},
+         tail:'No room is named on the record, so the pair stands on the road.'},
+    nora:{facts:['Nora Quist · principal, Quist Interiors, Des Moines'],
+         tail:'Writes the notes pinned in this house, and countersigns authorization No. 7.'},
+    dan:{facts:['Dan Okafor · general contractor'],
+         tail:'Holds the site line at the Vale residence.'},
+    prairie:{facts:['Prairie Coat Painting · trade'],
+         tail:'Interior painting, library &amp; stair hall · $7,200 · draws 1 through 3 paid, $1,440 held.'},
+    harmon:{facts:['Harmon Bench Works · Dayton, Ohio · maker'],
+         stamp:'In production · est. ready 28 August<b>Harmon Bench Works · Dayton, Ohio</b>',
+         tail:'The walnut credenza is on their bench.'},
+    drawings:{facts:['The drawing set','Site and ground plan · entry &amp; stair hall · library &amp; lounge · primary bedroom'],
+         tail:'Drawn for the three rooms in play. Cut deeper on the story pole to read the section as line work.'},
+    fa07:{facts:['Furnishings authorization No. 7 · sent 4 August','Sconces $2,340 · drapery $2,890 · runner $1,660 · $6,890'],
+         tail:function(){return S.signed?'Signed 5 August; Quist Interiors countersigns.':'Awaiting your name on the library door.'}},
+    inv4:{facts:['Invoice No. 4 · $18,250 total · $9,125 paid','Balance $9,125, due 15 August'],
+         tail:'Settle it at the letterbox on the doorstep.'},
+    designSet:{facts:['The design set · signed 30 May'],tail:'Three rooms concepted; the design phase closed.'},
+    agreement:{facts:['The design services agreement · countersigned 12 March'],tail:'The brief agreed; discovery closed.'}
+  };
+
+  function journeyHTML(cur){
+    var i=STOPS.indexOf(cur),h='<div class="journey">';
+    for(var n=0;n<STOPS.length;n++){
+      var c=(i>-1&&n<i)?'stop past':((i>-1&&n===i)?'stop now':'stop');
+      h+='<span class="'+c+'">'+STOPS[n]+'</span>';
+    }
+    return h+'</div>';
+  }
+  function recordHTML(k){
+    var r=REC[k];if(!r)return'';
+    var h='<div class="rec-facts">';
+    for(var n=0;n<r.facts.length;n++)h+='<span>'+r.facts[n]+'</span>';
+    if(r.tail)h+='<span>'+(typeof r.tail==='function'?r.tail():r.tail)+'</span>';
+    h+='</div>';
+    if(r.stamp)h+='<p class="stamp-over"><span class="stamp">'+r.stamp+'</span></p>';
+    if(r.stop){
+      var cur=r.stop();
+      h+=journeyHTML(cur);
+      if(!cur)h+='<p class="journey-note">The six stops stand ahead of these three; none is reached until the door opens.</p>';
+    }
+    return h;
+  }
+
+  /* ---------- the lift ---------- */
+  var recIds={};
+  (function(){
+    var recs=document.querySelectorAll('.obj .record'),n;
+    for(n=0;n<recs.length;n++){
+      var host=recs[n].closest('.obj'),k=host.getAttribute('data-obj');
+      recs[n].id='record-'+k;recIds[k]='record-'+k;
+      var btn=host.querySelector('.obj-line');
+      if(btn)btn.setAttribute('aria-controls',recs[n].id);
+    }
+    var groups=document.querySelectorAll('.obj-g[data-obj]');
+    for(n=0;n<groups.length;n++){
+      var kk=groups[n].getAttribute('data-obj');
+      if(recIds[kk])groups[n].setAttribute('aria-controls',recIds[kk]);
+    }
+  })();
+  function lift(k){
+    var on=!lifted[k];lifted[k]=on;
+    var nodes=document.querySelectorAll('[data-obj="'+k+'"]'),n;
+    for(n=0;n<nodes.length;n++){
+      var el=nodes[n];
+      if(on)el.classList.add('lifted');else el.classList.remove('lifted');
+      var rec=el.querySelector?el.querySelector('.record'):null;
+      if(rec){if(on){rec.innerHTML=recordHTML(k);rec.hidden=false;}else{rec.hidden=true;}}
+      var btn=el.querySelector?el.querySelector('.obj-line'):null;
+      if(btn)btn.setAttribute('aria-expanded',on?'true':'false');
+      if(el.classList.contains('obj-g'))el.setAttribute('aria-expanded',on?'true':'false');
+    }
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target;
+    if(!t.closest)return;
+    if(t.closest('.record'))return;
+    var host=t.closest('[data-obj]');
+    if(host)lift(host.getAttribute('data-obj'));
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Enter'&&e.key!==' ')return;
+    var host=e.target.closest?e.target.closest('.obj-g[data-obj]'):null;
+    if(host){e.preventDefault();lift(host.getAttribute('data-obj'));}
+  });
+
+  /* ---------- the walk · the pole holds at Procurement; only the reading caret moves ---------- */
+  var order=['doorstep','planKey','entry','wall','door','library','bedroom','road','mat'];
+  var names={doorstep:'You stand at the doorstep',planKey:'You are reading the key',
+    entry:'You stand in the entry &amp; stair hall',wall:'You stand at the painted wall',
+    door:'You stand at the library door',library:'You stand in the library &amp; lounge',
+    bedroom:'You stand in the primary bedroom',road:'You are out on the road',mat:'You stand on the mat'};
+  var els=order.map(function(id){return $(id)});
+  function paint(idx){
+    for(var n=0;n<els.length;n++){
+      var el=els[n];if(!el||!el.classList.contains('band'))continue;
+      if(n<idx)el.classList.add('behind');else el.classList.remove('behind');
+    }
+    $('poleHere').innerHTML=names[order[idx]]||'';
+    var rail=$('caret').parentNode,caret=$('caret');
+    var h=rail.clientHeight-10;
+    if(h>0)caret.style.top=Math.round((idx/(els.length-1))*h)+'px';
+  }
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(entries){
+      for(var n=0;n<entries.length;n++){
+        if(entries[n].isIntersecting){
+          var idx=els.indexOf(entries[n].target);
+          if(idx>-1)paint(idx);
+        }
+      }
+    },{rootMargin:'-45% 0px -45% 0px',threshold:0});
+    els.forEach(function(el){if(el)io.observe(el)});
+  }
+
+  /* ---------- the two gates ---------- */
+  function twoNames(v){
+    var parts=v.trim().split(/\s+/);
+    return parts.length>=2&&parts[0].length>=2&&parts[parts.length-1].length>=2;
+  }
+  function arm(nameId,boxId,btnId,hintId,hintText){
+    var name=$(nameId),box=boxId?$(boxId):null,btn=$(btnId),hint=$(hintId);
+    function upd(){
+      var ok=twoNames(name.value)&&(!box||box.checked);
+      btn.setAttribute('aria-disabled',ok?'false':'true');
+      hint.textContent=ok?'Ready when you are.':hintText;
+      return ok;
+    }
+    name.addEventListener('input',upd);
+    if(box)box.addEventListener('change',upd);
+    upd();
+    return function(){return btn.getAttribute('aria-disabled')==='false'};
+  }
+  var signReady=arm('signName','consent','signBtn','signHint','Type your full name and tick the line to sign.');
+  var acceptReady=arm('acceptName',null,'acceptBtn','acceptHint','Type your full name to accept.');
+
+  function openDoor(animate){
+    var dw=$('doorway');
+    body.classList.add('door-open');
+    if(!animate){dw.style.maxHeight='0px';return;}
+    dw.style.maxHeight=dw.scrollHeight+'px';
+    void dw.offsetHeight;
+    requestAnimationFrame(function(){dw.style.maxHeight='0px'});
+  }
+  $('signBtn').addEventListener('click',function(){
+    if(!signReady())return;
+    S.signed=true;
+    $('signName').disabled=true;$('consent').disabled=true;
+    $('signHint').textContent='Signed 5 August by '+$('signName').value.trim()+'.';
+    $('doorReceipt').hidden=false;
+    render();
+    openDoor(!RM.matches);
+  });
+  $('acceptBtn').addEventListener('click',function(){
+    if(!acceptReady())return;
+    S.accepted=true;
+    $('acceptName').disabled=true;
+    $('acceptHint').textContent='Accepted 5 August by '+$('acceptName').value.trim()+'.';
+    render();
+  });
+
+  /* ---------- the letterbox, the letters, the cut, the diff ---------- */
+  function fold(btnId,panelId,openText,shutText){
+    var btn=$(btnId),panel=$(panelId);
+    btn.addEventListener('click',function(){
+      var open=panel.hidden;
+      panel.hidden=!open;
+      btn.setAttribute('aria-expanded',open?'true':'false');
+      btn.textContent=open?shutText:openText;
+    });
+  }
+  fold('lbBtn','invoice','Open the letterbox','Close the letterbox');
+  fold('lettersBtn','letters','Earlier letters','Roll the letters up');
+
+  $('cutBtn').addEventListener('click',function(){
+    var on=!body.classList.contains('cut');
+    body.classList.toggle('cut',on);
+    $('sheets').hidden=!on;
+    this.textContent=on?'Draw the house back':'Cut deeper';
+  });
+  $('diffBtn').addEventListener('click',function(){
+    var on=!body.classList.contains('diff');
+    body.classList.toggle('diff',on);
+    this.textContent=on?'Show the whole house':'What changed since yesterday';
+  });
+
+  /* ---------- the room as captured ---------- */
+  var capBtns=document.querySelectorAll('[data-capture]');
+  for(var c=0;c<capBtns.length;c++){(function(btn){
+    var band=btn.closest('.band'),svg=band.querySelector('.dwg'),plate=null;
+    btn.addEventListener('click',function(){
+      if(!plate){
+        plate=document.createElement('div');
+        plate.className='plate';
+        plate.hidden=true;
+        plate.innerHTML='<span>Captured room · '+band.querySelector('.room').textContent.trim()+'</span>';
+        svg.parentNode.insertBefore(plate,svg.nextSibling);
+      }
+      var on=plate.hidden;
+      plate.hidden=!on;
+      svg.classList.toggle('gone',on);
+      btn.textContent=on?'The room as drawn':'The room as captured';
+    });
+  })(capBtns[c])}
+
+  /* ---------- the drawings crop on a phone ---------- */
+  function cropDrawings(){
+    var d=document.querySelectorAll('.dwg[data-vb-phone]');
+    for(var n=0;n<d.length;n++){
+      if(!d[n].dataset.vbWide)d[n].dataset.vbWide=d[n].getAttribute('viewBox');
+      d[n].setAttribute('viewBox',PHONE.matches?d[n].dataset.vbPhone:d[n].dataset.vbWide);
+    }
+  }
+  cropDrawings();
+  if(PHONE.addEventListener)PHONE.addEventListener('change',cropDrawings);
+
+  /* ---------- the specimen control ---------- */
+  $('dayBtn').addEventListener('click',function(){S.day=S.day===4?5:4;render()});
+  $('resetBtn').addEventListener('click',function(){
+    S={day:5,signed:false,accepted:false};
+    ['signName','acceptName'].forEach(function(id){$(id).value='';$(id).disabled=false});
+    $('consent').checked=false;$('consent').disabled=false;
+    $('signHint').textContent='Type your full name and tick the line to sign.';
+    $('acceptHint').textContent='Type your full name to accept.';
+    $('signBtn').setAttribute('aria-disabled','true');$('acceptBtn').setAttribute('aria-disabled','true');
+    body.classList.remove('diff','cut','door-open');
+    $('doorway').style.maxHeight='';
+    $('doorReceipt').hidden=true;
+    $('sheets').hidden=true;$('cutBtn').textContent='Cut deeper';
+    $('diffBtn').textContent='What changed since yesterday';
+    $('invoice').hidden=true;$('lbBtn').textContent='Open the letterbox';$('lbBtn').setAttribute('aria-expanded','false');
+    $('letters').hidden=true;$('lettersBtn').textContent='Earlier letters';$('lettersBtn').setAttribute('aria-expanded','false');
+    var keys=[];for(var k in lifted){if(lifted[k])keys.push(k)}
+    keys.forEach(lift);
+    var plates=document.querySelectorAll('.plate');
+    for(var p=0;p<plates.length;p++)plates[p].hidden=true;
+    var dwgs=document.querySelectorAll('.dwg');
+    for(var d=0;d<dwgs.length;d++)dwgs[d].classList.remove('gone');
+    var caps=document.querySelectorAll('[data-capture]');
+    for(var q=0;q<caps.length;q++)caps[q].textContent='The room as captured';
+    render();
+    paint(0);
+    window.scrollTo(0,0);
+  });
+
+  /* ---------- the page rewrites itself ---------- */
+  function setChanged(el,on){if(on)el.setAttribute('data-changed','');else el.removeAttribute('data-changed')}
+  function render(){
+    body.classList.toggle('signed',S.signed);
+    body.classList.toggle('accepted',S.accepted);
+    body.classList.toggle('day4',S.day===4);
+
+    var s;
+    if(S.signed&&S.accepted)s='Nothing waits for your name. A balance of $9,125 stands due 15 August, and your walnut credenza is on the bench in Dayton.';
+    else if(S.signed)s='No door in this house is closed. Finished paintwork waits for your acceptance in the stair hall.';
+    else if(S.accepted)s='One door in this house is closed until you sign it; the paintwork behind it is accepted.';
+    else s='One door in this house is closed until you sign it.';
+    if(!first)$('standing').textContent=s;
+
+    $('previously').textContent=S.signed?'Previously — one door stood closed until the fifth of August.':'Previously — fourteen selections agreed, 19 June.';
+    $('readingMark').hidden=(S.day===4);
+    $('noteDate').textContent=S.day===4?'today':'4 August, yesterday';
+    $('dueIn').textContent=S.day===4?'in eleven days':'in ten days';
+    $('specimenLabel').textContent=S.day===4?'Specimen · 4 Aug 2026':'Specimen · 5 Aug 2026';
+    $('dayBtn').textContent=S.day===4?'View as 5 Aug':'View as 4 Aug';
+
+    $('agreedOld').classList.toggle('struck',S.signed);
+    $('agreedNew').hidden=!S.signed;
+    $('awaitLabel').textContent=S.signed?'Signed 5 August':'Awaiting your name';
+    $('heldLabel').textContent=S.accepted?'Released on the paintwork':'Held on the paintwork';
+    $('entryLed').textContent=S.accepted
+      ?'Paintwork $7,200 · draws 1 through 3 paid · $1,440 released 5 August'
+      :'Paintwork $7,200 · draws 1 through 3 paid · $1,440 held';
+
+    $('library').classList.toggle('dim',!S.signed);
+    $('signStamp').hidden=!S.signed;
+    $('acceptStamp').hidden=!S.accepted;
+    $('doorLed').textContent=S.signed?'Opened 5 August on your name':'Shut since 4 August · it opens on your name';
+
+    $('keyDoorShut').hidden=S.signed;
+    $('keyDoorOpen').hidden=!S.signed;
+    $('keyWallHatch').hidden=S.accepted;
+    $('keyDoorLabel').textContent=S.signed?'The library door, open':'The library door, shut';
+    var marks=(S.signed?0:1)+(S.accepted?0:1);
+    $('keySentence').textContent=marks===2?'Two marks stand open on this drawing.'
+      :(marks===1?'One mark stands open on this drawing.':'Nothing on this drawing waits on your hand.');
+    $('keyItemDoor').innerHTML=S.signed
+      ?'<span class="state">Open</span>The library door — signed 5 August, $6,890, three pieces on order.'
+      :'<span class="state">Shut</span>The library door — furnishings authorization No. 7, $6,890, your name.';
+    $('keyItemDoor').classList.toggle('done',S.signed);
+    $('keyItemWall').innerHTML=S.accepted
+      ?'<span class="state">Solid</span>The painted wall — accepted 5 August, $1,440 released to Prairie Coat Painting.'
+      :'<span class="state">Hatched</span>The painted wall — Prairie Coat Painting, $1,440 held back until you accept it.';
+    $('keyItemWall').classList.toggle('done',S.accepted);
+
+    /* what moved since yesterday */
+    setChanged($('door'),true);
+    setChanged($('letterbox'),true);
+    setChanged($('library'),S.signed);
+    setChanged($('wall'),S.accepted);
+
+    /* records already open re-set themselves */
+    for(var k in lifted){if(lifted[k]){var r=$(recIds[k]);if(r&&!r.hidden)r.innerHTML=recordHTML(k)}}
+    first=false;
+  }
+  render();
+  paint(0);
+})();
+</script>
+</body>
+</html>

@@ -40,7 +40,7 @@ import {
   Ruler,
 } from 'lucide-react';
 
-export type StudioSurfaceKind = 'room' | 'ledger' | 'verb';
+export type StudioSurfaceKind = 'room' | 'ledger' | 'verb' | 'host';
 
 export interface StudioSurface {
   key: string;
@@ -416,6 +416,44 @@ export const BOARDS_SURFACE: StudioSurface = {
   },
 };
 
+/**
+ * The two host surfaces — the Desk and a document itself. Neither is a
+ * doorway: you are already standing in them when you ask "what is this?", so
+ * they carry a `help` blurb and nothing else. Host surfaces exist only to
+ * answer the panel — they are not doorways, which is why they stay out of
+ * `ALL_STUDIO_SURFACES` (the Studio Drawer / ⌘K / Desk Contents lists) and out
+ * of `DOCUMENT_SCOPED_SURFACES`. Before them, `designer-portal/document/desk`
+ * had only verb owners (excluded from the intro by design) and
+ * `designer-portal/document/doc` only the spec book and the boards, which
+ * borrow it as an ancestor scope rather than owning it.
+ */
+export const HOST_SURFACES: StudioSurface[] = [
+  {
+    key: 'desk-host',
+    kind: 'host',
+    label: 'The Desk',
+    aliases: [],
+    icon: ClipboardList,
+    scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/desk',
+      blurb: 'Every live job, one line each — the quiet ones are in motion.',
+    },
+  },
+  {
+    key: 'doc-host',
+    kind: 'host',
+    label: 'The document',
+    aliases: [],
+    icon: FileText,
+    scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/doc',
+      blurb: 'One client, one paper — Brief through Care. The rail says where it stands.',
+    },
+  },
+];
+
 /** The boards' own page — the destination the `Boards` row opens below 1440,
  *  where the shelf leaf cannot stand. Built here rather than in each consumer
  *  so the ticket, the mobile bar and ⌘K name one address. */
@@ -452,4 +490,70 @@ export function matchSurfaces(query: string): StudioSurface[] {
     if (matched) seen.add(surface.key);
     return matched;
   });
+}
+
+/** True when `key` is `owner` itself or a descendant of it. */
+function ownsKey(owner: string, key: string): boolean {
+  return key === owner || key.startsWith(`${owner}/`);
+}
+
+/**
+ * The contextual help panel's framing line for whatever surface is in hand —
+ * an ancestor-or-equal match over every surface that owns a help key, longest
+ * key winning, so a sub-page ('…/orders/receiving') still frames itself with
+ * the Orders blurb.
+ *
+ * Verbs are excluded: they share the Desk's key as a doorway scope, not as
+ * identity, so their blurbs describe the verb rather than the surface being
+ * looked at. On an exact tie a host surface wins — the spec book and the
+ * boards declare `…/document/doc` as the ancestor they hang under, while
+ * `doc-host` is the surface that key actually names.
+ */
+export function resolveIntroBlurb(surfaceKey: string): string | null {
+  const candidates = [
+    ...ALL_STUDIO_SURFACES.filter((s) => s.kind !== 'verb'),
+    ...DOCUMENT_SCOPED_SURFACES,
+    ...HOST_SURFACES,
+  ].filter((s) => s.help && ownsKey(s.help.surfaceKey, surfaceKey));
+
+  candidates.sort((a, b) => {
+    const byLength = (b.help?.surfaceKey.length ?? 0) - (a.help?.surfaceKey.length ?? 0);
+    if (byLength !== 0) return byLength;
+    return Number(b.kind === 'host') - Number(a.kind === 'host');
+  });
+
+  return candidates[0]?.help?.blurb ?? null;
+}
+
+/** One printed shortcut row in the help panel's KEYS block. */
+export interface SurfaceShortcut {
+  label: string;
+  keys: string[];
+}
+
+/**
+ * The shortcut rows for the surface in hand, printed from the registry's own
+ * `shortcut` field so a re-chord can never leave the panel (or "The keys")
+ * lying. ⌘K leads every list — it is the one key that works everywhere.
+ */
+export function shortcutsForSurface(surfaceKey: string): SurfaceShortcut[] {
+  const rows: SurfaceShortcut[] = [{ label: 'Find anything', keys: ['⌘', 'K'] }];
+  const seen = new Set<string>();
+
+  for (const surface of [
+    ...ALL_STUDIO_SURFACES,
+    ...DOCUMENT_SCOPED_SURFACES,
+    ...HOST_SURFACES,
+  ]) {
+    if (seen.has(surface.key)) continue;
+    if (!surface.help || surface.shortcut?.length !== 2) continue;
+    if (!ownsKey(surface.help.surfaceKey, surfaceKey)) continue;
+    seen.add(surface.key);
+    // Registry chords are stored `['g', <letter>]` — the leading 'g' is the
+    // chord prefix every wayfinding shortcut shares, so only the second key
+    // varies per surface.
+    rows.push({ label: surface.label, keys: ['G', surface.shortcut[1].toUpperCase()] });
+  }
+
+  return rows;
 }

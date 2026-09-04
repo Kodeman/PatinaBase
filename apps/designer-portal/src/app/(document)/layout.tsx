@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { StudioDrawer } from '@/components/document/studio-drawer';
 import { RegistryShortcuts } from '@/components/document/registry-shortcuts';
+import { KeysShortcut } from '@/components/document/keys-shortcut';
+import { KeysSheet } from '@/components/document/overlays/keys-sheet';
 import { LogStrip } from '@/components/document/log-strip';
 import { CommandBar } from '@/components/document/command-bar';
 import { InterruptionSettings } from '@/components/document/interruption-settings';
@@ -75,6 +77,11 @@ export default function DocumentLayout({
                   {/* Global "g then l/p/o/a/h/t" doorway shortcuts (R93) — reads
                       the same registry the Studio Drawer does; renders nothing. */}
                   <RegistryShortcuts />
+                  {/* "The keys" (L5 · decision 8) — the `?` doorway and the
+                      sheet it opens, mounted once so ⌘K, the help panel's KEYS
+                      block, and the key itself all reach the same overlay. */}
+                  <KeysShortcut />
+                  <KeysSheet />
                   {/* ⌘K from anywhere in the document model (spec §3). */}
                   <CommandBar />
                   {/* D2 break-through rules — opened from ⌘K, ships all-off. */}

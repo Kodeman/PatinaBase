@@ -8,9 +8,10 @@
  *      via `/desk?tour=desk-walkthrough`.
  *   2. FEATURED — the curated FEATURED_SURFACE_KEYS list via RelatedArticles'
  *      exact-keys mode. Articles are Sanity drafts until publish, so the list
- *      can be empty — the whole section (eyebrow included) stays hidden until
- *      it has something to show (`:has()` gate; RelatedArticles renders
- *      nothing when empty).
+ *      can settle empty; `RelatedArticles`' `onEmpty` callback swaps in one
+ *      fallback line ("Featured guides arrive as they're written…") once the
+ *      query resolves with nothing, rather than a `:has()` CSS gate watching
+ *      the DOM for a testid that may never render.
  *   3. By topic — the 8 human HELP_TOPICS shelves (label + one-line
  *      description), each tile linking to the topic's FIRST prefix; the topic
  *      page fans out to the rest.
@@ -19,21 +20,23 @@
  * zero shadows (D4).
  */
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { HelpSearch, RelatedArticles } from '@patina/help-system';
 import { FEATURED_SURFACE_KEYS, HELP_TOPICS } from '@/lib/help-system/help-topics';
+import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
 
 export default function HelpCenterPage() {
+  // FEATURED is drafts-only today, so it can settle empty. `onEmpty` (fired
+  // once the query resolves with nothing) drives the fallback copy below —
+  // replaces the old `:has()` CSS gate, which watched the DOM instead of
+  // asking the data.
+  const [featuredEmpty, setFeaturedEmpty] = useState(false);
+  const handleFeaturedEmpty = useCallback(() => setFeaturedEmpty(true), []);
+
   // Fire `help.help_center.viewed` once per mount (snake_case per spec R11).
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const posthog = (
-      window as unknown as {
-        posthog?: { capture: (event: string, props?: Record<string, unknown>) => void };
-      }
-    ).posthog;
-    posthog?.capture('help.help_center.viewed', { source: 'page_view' });
+    safeCapture(HELP_EVENTS.HELP_CENTER_VIEWED, { source: 'page_view' });
   }, []);
 
   return (
@@ -64,12 +67,10 @@ export default function HelpCenterPage() {
         </Link>
       </section>
 
-      {/* FEATURED — curated exact-keys list. Hidden entirely (eyebrow too)
-          while RelatedArticles has nothing to render: drafts-only today. */}
-      <section
-        aria-labelledby="featured-heading"
-        className="space-y-3 [&:not(:has([data-testid=related-articles]))]:hidden"
-      >
+      {/* FEATURED — curated exact-keys list. Drafts-only today, so it can
+          settle empty; `onEmpty` (fired once the query resolves) swaps in one
+          line rather than hiding the section via a `:has()` DOM watch. */}
+      <section aria-labelledby="featured-heading" className="space-y-3">
         <p
           id="featured-heading"
           className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
@@ -77,12 +78,19 @@ export default function HelpCenterPage() {
           Featured
           <span className="h-px flex-1 bg-[var(--color-pearl)]" />
         </p>
-        <RelatedArticles
-          surfaceKeys={FEATURED_SURFACE_KEYS}
-          fromSurfaceKey="help-center"
-          max={FEATURED_SURFACE_KEYS.length}
-          heading=""
-        />
+        {featuredEmpty ? (
+          <p className="text-[13px] italic text-[var(--text-muted)]">
+            Featured guides arrive as they&apos;re written — browse by topic below.
+          </p>
+        ) : (
+          <RelatedArticles
+            surfaceKeys={FEATURED_SURFACE_KEYS}
+            fromSurfaceKey="help-center"
+            max={FEATURED_SURFACE_KEYS.length}
+            heading=""
+            onEmpty={handleFeaturedEmpty}
+          />
+        )}
       </section>
 
       <section aria-labelledby="categories-heading" className="space-y-3">

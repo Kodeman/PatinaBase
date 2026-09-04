@@ -7,6 +7,7 @@ import {
   shouldAutoOpenDeskWalkthrough,
   shouldOfferDeskWalkthrough,
   hasDeskWalkthroughReplayParam,
+  resolveDeskWalkthroughPersona,
   DESK_WALKTHROUGH_SHIP_DATE,
   type DeskWalkthroughGateInput,
 } from './desk-walkthrough-gate';
@@ -100,6 +101,12 @@ describe('shouldAutoOpenDeskWalkthrough', () => {
   it('does not open below 980px (no modal on mobile)', () => {
     expect(shouldAutoOpenDeskWalkthrough(freshInput({ isDesktop: false }))).toBe(false);
   });
+
+  it('a "later" tour never auto-modals again, even for a fresh signup', () => {
+    expect(
+      shouldAutoOpenDeskWalkthrough(freshInput({ tourState: { later: true, atStep: 0 } })),
+    ).toBe(false);
+  });
 });
 
 describe('shouldOfferDeskWalkthrough', () => {
@@ -141,6 +148,18 @@ describe('shouldOfferDeskWalkthrough', () => {
   it('does not offer without a resolved profile', () => {
     expect(shouldOfferDeskWalkthrough(existingInput({ profileCreatedAt: null }))).toBe(false);
   });
+
+  it('a "later" tour is not resolved and offers once, even for a fresh signup', () => {
+    const laterInput = freshInput({ tourState: { later: true, atStep: 0 } });
+    expect(shouldAutoOpenDeskWalkthrough(laterInput)).toBe(false);
+    expect(shouldOfferDeskWalkthrough(laterInput)).toBe(true);
+  });
+
+  it('a "later" existing-designer tour still offers (the ship-date bypass is additive)', () => {
+    expect(
+      shouldOfferDeskWalkthrough(existingInput({ tourState: { later: true, atStep: 0 } })),
+    ).toBe(true);
+  });
 });
 
 describe('mutual exclusivity of the two paths', () => {
@@ -173,5 +192,43 @@ describe('hasDeskWalkthroughReplayParam', () => {
   it('does not match an empty or unrelated search', () => {
     expect(hasDeskWalkthroughReplayParam('')).toBe(false);
     expect(hasDeskWalkthroughReplayParam('?person=abc')).toBe(false);
+  });
+});
+
+describe('resolveDeskWalkthroughPersona (flag onboarding-teammate-persona, L7)', () => {
+  it('resolves designer for an owner, flag on', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: 'owner' }),
+    ).toBe('designer');
+  });
+
+  it('resolves teammate for a non-owner active member, flag on', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: 'member' }),
+    ).toBe('teammate');
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: 'admin' }),
+    ).toBe('teammate');
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: 'guest' }),
+    ).toBe('teammate');
+  });
+
+  it('resolves designer when there is no membership, flag on', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: null }),
+    ).toBe('designer');
+  });
+
+  it('resolves designer when the flag is off, even for a non-owner member', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: false, flagLoading: false, membershipRole: 'member' }),
+    ).toBe('designer');
+  });
+
+  it('resolves designer while the flag is loading, even for a non-owner member', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: true, membershipRole: 'member' }),
+    ).toBe('designer');
   });
 });

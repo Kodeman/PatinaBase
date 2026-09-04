@@ -32,6 +32,9 @@ import {
   useBoards,
   usePurchaseOrders,
   useResolvedSchedule,
+  useOrganizations,
+  useOrganizationMembers,
+  useMarkFirstDocumentOpened,
 } from '@patina/supabase';
 import {
   rollupVerdicts,
@@ -53,6 +56,7 @@ import {
   readRecentDocumentsInHand,
 } from '@/lib/analytics/document-events';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
+import { useAuth } from '@/hooks/use-auth';
 import { useProposal } from '@/hooks/use-proposals';
 import {
   deriveSections,
@@ -79,6 +83,7 @@ import {
   deriveSendWallLine,
 } from '@/lib/document/proposal-watch-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
+import { shouldFireZoneFlight } from '@/lib/document/zone-flight';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
 import { documentResolutionState } from '@/lib/document/document-resolution-state';
 import { DocSpine } from '@/components/document/doc-spine';
@@ -103,6 +108,7 @@ import { DiscoverySection } from '@/components/document/discovery/discovery-sect
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import {
+  DOCUMENT_WRITE_EVENT,
   MarginRail,
   openMarginRail,
   ResponsiveMarginRail,
@@ -871,6 +877,30 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // always printed, and every fixed part of the paper is identical either way.
   const worktableOn = useFeatureFlag('worktable').value;
 
+  // L3 (00559) — the checklist's sixth row fires here, not on the Desk: the
+  // moment it marks is a non-owner member opening a real Document. Reads the
+  // member's own row off the same studio-membership list the Desk/Studio
+  // pages already fetch; the mutation itself is a once-only server-side
+  // no-op after the first success (mark_first_document_opened's own guard),
+  // so gating on the cached flag here is a client-side courtesy, not the
+  // correctness boundary.
+  const { user } = useAuth();
+  const { data: myOrgs } = useOrganizations();
+  const myStudio = myOrgs?.find((o) => o.type === 'design_studio') ?? myOrgs?.[0] ?? null;
+  const { data: myStudioMembers } = useOrganizationMembers(myStudio?.id ?? '');
+  const myMembership = myStudioMembers?.find((m) => m.user_id === user?.id);
+  const markFirstDocumentOpened = useMarkFirstDocumentOpened();
+  useEffect(() => {
+    if (!myStudio || !myMembership) return;
+    if (myMembership.role === 'owner') return;
+    if (myMembership.first_document_opened_at != null) return;
+    markFirstDocumentOpened.mutate({ organizationId: myStudio.id });
+    // Fire-and-forget, once per arrival at this effect's inputs settling —
+    // the mutation's own onSuccess invalidation flips first_document_opened_at
+    // to non-null, which is what actually stops a repeat call on re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myStudio?.id, myMembership?.role, myMembership?.first_document_opened_at]);
+
   const {
     data: resolution,
     isLoading,
@@ -1198,6 +1228,79 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     target.focus({ preventScroll: true });
   }, []);
 
+  // Onboarding Wave 1 (L6) — zone flight: a document put down (or navigated
+  // away from) within 10 seconds of pick-up with no write in between is the
+  // "pick-up/put-down thrash" stuck signal (synthesis §10, R-b). `pickedUpAt`
+  // resets on arrival at a distinct engagement id; `wrote` latches on any
+  // margin-rail note/decision write (DOCUMENT_WRITE_EVENT); the guard fires
+  // at most once per pick-up. The pick-up/latch bookkeeping stays here (it
+  // needs live refs); the actual fire/no-fire decision is the pure
+  // `shouldFireZoneFlight` helper (lib/document/zone-flight.ts) so it's unit
+  // testable without rendering the page (ZF-2).
+  const zoneFlightRef = useRef<{
+    docId: string;
+    pickedUpAt: number;
+    wrote: boolean;
+    fired: boolean;
+  }>({ docId: '', pickedUpAt: 0, wrote: false, fired: false });
+  useEffect(() => {
+    if (!row?.engagement_id || zoneFlightRef.current.docId === row.engagement_id) return;
+    zoneFlightRef.current = {
+      docId: row.engagement_id,
+      pickedUpAt: Date.now(),
+      wrote: false,
+      fired: false,
+    };
+  }, [row?.engagement_id]);
+  useEffect(() => {
+    const onWrite = () => {
+      zoneFlightRef.current.wrote = true;
+    };
+    window.addEventListener(DOCUMENT_WRITE_EVENT, onWrite);
+    return () => window.removeEventListener(DOCUMENT_WRITE_EVENT, onWrite);
+  }, []);
+  // ZF-1 fix — `nextPath: null` means an explicit put-down (Esc / a "Put
+  // down" action): those are genuine exits regardless of destination. A
+  // route-away instead passes the actual destination path so a same-document
+  // sub-route (Plans/Spec Book/Boards) can be told apart from leaving the
+  // document.
+  const fireZoneFlightIfDue = useCallback((nextPath: string | null) => {
+    const z = zoneFlightRef.current;
+    const heldMs = Date.now() - z.pickedUpAt;
+    if (
+      !shouldFireZoneFlight({
+        heldMs,
+        wrote: z.wrote,
+        alreadyFired: z.fired,
+        // The URL id, not `row.engagement_id`: `id` accepts ANY of the
+        // engagement's keys (engagement_id/project_id/proposal_id/lead_id —
+        // see useDocumentEngagement's docstring) and Plans/Spec Book/Boards
+        // are literally `/doc/${id}/...`, so `id` is what a same-document
+        // sub-route actually shares.
+        docId: id,
+        nextPath,
+      })
+    ) {
+      return;
+    }
+    z.fired = true;
+    documentEvents.zoneFlight({ doc_id: z.docId, held_ms: heldMs });
+  }, [id]);
+  // Navigating away unmounts this page — but that also happens for a
+  // same-document sub-route (Plans/Spec Book/Boards are separate route
+  // components sharing no layout with this one), which is NOT a put-down.
+  // `usePathname()`'s value captured in this effect's closure would be
+  // stale by the time the cleanup runs (it's the pathname from the render
+  // that registered the effect, not the destination); reading
+  // `window.location.pathname` live, at unmount time, gives the real
+  // destination instead — Next's client router updates the URL before it
+  // swaps the page component, so by the time this cleanup runs the browser
+  // is already on the new path.
+  useEffect(
+    () => () => fireZoneFlightIfDue(window.location.pathname),
+    [fireZoneFlightIfDue],
+  );
+
   // Esc puts down (D1) — unless something above it owns the key. A sheet is
   // first (it is the topmost thing on the screen and closes itself), then an
   // open shelf leaf (ShelfPanel closes it); only a bare document is put down.
@@ -1212,11 +1315,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       if (isEditableTarget(e.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (openShelf) return;
+      // Explicit put-down — always a genuine exit, never gated on a
+      // destination path (nextPath: null).
+      fireZoneFlightIfDue(null);
       router.push('/desk');
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [router, openShelf]);
+  }, [router, openShelf, fireZoneFlightIfDue]);
 
   // The shelf rows. A leaf toggles; the call sheet dispatches at the roster
   // sheet that already exists rather than printing a second, thinner copy.
@@ -3066,6 +3172,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           <MarginRail
             projectId={row.project_id}
             proposalId={row.proposal_id}
+            docId={row.engagement_id}
             clientName={row.client_name}
             clientUserId={row.client_profile_id}
             now={gateNow}
