@@ -31773,6 +31773,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_client_project_threshold: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       get_client_proposal_bundle: {
         Args: { p_proposal_id: string }
         Returns: Json

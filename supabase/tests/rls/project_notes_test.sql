@@ -40,8 +40,9 @@
 --   5. reading marks are owner-only: read, insert and update
 --   6. mark_project_read returns NULL on the first call and the PREVIOUS
 --      read_at on the second, and advances the row both times
---   7. the repaired get_client_project_selections emits the client-facing keys
---      for the seeded project and never a trade cost / vendor / markup key
+--   7. the NEW get_client_project_threshold emits the client-facing keys for the
+--      seeded project and never a trade cost / vendor / markup key
+--      (get_client_project_selections is untouched by 00565 — iOS reads it)
 --   8. the grants: authenticated only, anon nowhere
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -478,6 +479,7 @@ DECLARE
   v_first timestamptz;
   v_second timestamptz;
   v_third timestamptz;
+  v_before timestamptz;
   v_now timestamptz;
   v_sqlstate text;
 BEGIN
@@ -497,15 +499,24 @@ BEGIN
     'the second mark must report the first one''s stamp, got ' || v_second::text;
   PERFORM pg_temp.reset_role();
 
-  -- The client's seeded mark is yesterday's, and that is what she gets back.
+  -- A client who already carries a mark is handed exactly the stamp that was
+  -- standing, whatever it was. Asserting a literal age here would make this file
+  -- order-dependent: any earlier committed visit would move the seeded value and
+  -- fail a run that proves nothing about the contract.
+  SELECT read_at INTO v_before FROM public.project_reading_marks
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1'::uuid
+     AND user_id = 'a0000000-0000-0000-0000-000000000005'::uuid;
+  ASSERT v_before IS NOT NULL, 'FIXTURE: the client must carry a seeded mark';
+
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000005'::uuid);
   v_third := public.mark_project_read('b0000000-0000-0000-0000-0000000000d1'::uuid);
-  ASSERT v_third < now() - interval '12 hours',
-    'the client must be handed yesterday''s mark, got ' || v_third::text;
+  ASSERT v_third = v_before,
+    'the client must be handed the stamp that was standing (' || v_before::text
+      || '), got ' || COALESCE(v_third::text, '<null>');
   SELECT read_at INTO v_now FROM public.project_reading_marks
    WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1'::uuid
      AND user_id = 'a0000000-0000-0000-0000-000000000005'::uuid;
-  ASSERT v_now > v_third, 'the client''s mark did not advance';
+  ASSERT v_now >= v_third, 'the client''s mark did not advance';
   PERFORM pg_temp.reset_role();
 
   -- A stranger is refused rather than silently stamped.
@@ -522,7 +533,7 @@ BEGIN
 END $$;
 ROLLBACK TO SAVEPOINT s6;
 
--- ─── 7. the restored client payload ───────────────────────────────────────
+-- ─── 7. the client payload the new reader carries ─────────────────────────
 
 SAVEPOINT s7;
 DO $$
@@ -539,7 +550,7 @@ DECLARE
   v_leak text;
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000005'::uuid);
-  v_payload := public.get_client_project_selections(
+  v_payload := public.get_client_project_threshold(
     'b0000000-0000-0000-0000-0000000000d1'::uuid
   );
   PERFORM pg_temp.reset_role();
@@ -627,7 +638,7 @@ DECLARE
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000006'::uuid);
   BEGIN
-    PERFORM public.get_client_project_selections(
+    PERFORM public.get_client_project_threshold(
       'b0000000-0000-0000-0000-0000000000d1'::uuid
     );
     ASSERT false, 'a stranger read another household''s selections';
@@ -648,9 +659,9 @@ BEGIN
     'authenticated must be able to call mark_project_read';
   ASSERT NOT has_function_privilege('anon', 'public.mark_project_read(uuid)', 'EXECUTE'),
     'anon must never call mark_project_read';
-  ASSERT has_function_privilege('authenticated', 'public.get_client_project_selections(uuid)', 'EXECUTE'),
+  ASSERT has_function_privilege('authenticated', 'public.get_client_project_threshold(uuid)', 'EXECUTE'),
     'authenticated must be able to call get_client_project_selections';
-  ASSERT NOT has_function_privilege('anon', 'public.get_client_project_selections(uuid)', 'EXECUTE'),
+  ASSERT NOT has_function_privilege('anon', 'public.get_client_project_threshold(uuid)', 'EXECUTE'),
     'anon must never call get_client_project_selections';
 
   ASSERT has_table_privilege('authenticated', 'public.project_notes', 'SELECT, INSERT'),

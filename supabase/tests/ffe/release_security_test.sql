@@ -42,12 +42,17 @@ INSERT INTO public.project_review_media_assets(id,project_id,source_asset_id,sto
 ('fa500000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa400000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001/review/chair.webp','display',repeat('d',64),2000,'image/webp','fa000000-0000-4000-8000-000000000001');
 
 DO $$
-DECLARE v_selected jsonb; v_candidate jsonb; v_allowance jsonb; v_review jsonb; v_edition uuid; v_review_item uuid; v_projection jsonb; v_manifest jsonb; v_board jsonb;
+DECLARE v_selected jsonb; v_candidate jsonb; v_allowance jsonb; v_threshold jsonb; v_review jsonb; v_edition uuid; v_review_item uuid; v_projection jsonb; v_manifest jsonb; v_board jsonb;
 BEGIN
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000001');
   v_selected:=public.place_product_in_project_v2('{"projectId":"fa100000-0000-4000-8000-000000000001","productId":"fa300000-0000-4000-8000-000000000001","assignmentScope":"throughout","disposition":"selected","duplicateMode":"create","idempotencyKey":"release-selected"}'::jsonb);
   v_candidate:=public.place_product_in_project_v2('{"projectId":"fa100000-0000-4000-8000-000000000001","productId":"fa300000-0000-4000-8000-000000000001","assignmentScope":"unassigned","disposition":"candidate","duplicateMode":"create","idempotencyKey":"release-candidate"}'::jsonb);
-  v_allowance:=public.place_product_in_project_v2('{"projectId":"fa100000-0000-4000-8000-000000000001","productId":"fa300000-0000-4000-8000-000000000001","assignmentScope":"throughout","disposition":"selected","duplicateMode":"create","idempotencyKey":"release-allowance"}'::jsonb);
+  -- 'candidate', not 'selected', on purpose: the SHIPPED reader filters on
+  -- design_disposition = 'selected', so this line is invisible to it and its
+  -- assertion below stays exactly the count it has always been. The NEW reader
+  -- excludes only 'not_selected' and 'superseded' (00435's live set), so it sees
+  -- this line — which is the whole point of signing it.
+  v_allowance:=public.place_product_in_project_v2('{"projectId":"fa100000-0000-4000-8000-000000000001","productId":"fa300000-0000-4000-8000-000000000001","assignmentScope":"throughout","disposition":"candidate","duplicateMode":"create","idempotencyKey":"release-allowance"}'::jsonb);
   v_board:=public.create_project_board('{"projectId":"fa100000-0000-4000-8000-000000000001","name":"Review composition"}'::jsonb);
   PERFORM public.apply_board_room_state((v_board->>'boardId')::uuid,'project','fa100000-0000-4000-8000-000000000001',jsonb_build_object(
     'name','Review composition','canvasWidth',1200,'canvasHeight',800,'backgroundColor','#FAF8F5','sections','[]'::jsonb,'items','[]'::jsonb,
@@ -127,16 +132,18 @@ BEGIN
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000002');
   ASSERT position('/review/chair.webp' in public.get_client_project_review_bundle(v_edition)::text)=0,
     'client bundle must not expose private derivative paths';
-  -- 00565 re-contracts the curated reader. Until 00423 it emitted the client's
-  -- own signed figures; 00433 replaced that with the studio's LIVE working-row
-  -- prices mislabelled as the client's, and 00439 withdrew those. 00565 restores
-  -- the signed snapshot and leaves the live working row withdrawn. So the
-  -- contract asserted here is no longer "no price" but "only the signed price,
-  -- and only for lines standing under an executed instrument".
+  -- 00565 does NOT touch get_client_project_selections — the iOS Patina app
+  -- reads it — so its contract below is unchanged, price-free and word for word
+  -- what it was before this branch. What 00565 adds is a SECOND reader,
+  -- get_client_project_threshold, carrying the payload the client's own page
+  -- needs: the client's signed figures, and only for lines standing under an
+  -- executed instrument.
   --
-  -- The fixture's two placements carry no instrument, so one of them is signed
-  -- here, at a client figure deliberately different from the live working-row
-  -- price. That difference is what makes the price assertion below load-bearing.
+  -- The fixture's placements carry no instrument, so three of them are signed
+  -- here — a fixed line at a client figure deliberately different from the live
+  -- working-row price, an ALLOWANCE whose ceiling, signed resolution and live row
+  -- are three different numbers, and a line that is signed and then superseded.
+  -- Those differences are what make the assertions below load-bearing.
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000001');
   -- Authorization No. 1 signs three of the project's lines: a fixed chair, an
   -- ALLOWANCE, and a line that is later superseded.
@@ -190,9 +197,17 @@ BEGIN
    WHERE id=(v_candidate->>'selectionId')::uuid;
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000002');
 
+  -- ── the SHIPPED reader: unchanged by 00565, and still price-free ────────
   v_projection:=public.get_client_project_selections('fa100000-0000-4000-8000-000000000001');
+  ASSERT jsonb_array_length(v_projection->'selections')=1,'curated projection must expose selected lines only';
+  ASSERT position('price' in lower(v_projection::text))=0
+    AND v_projection->'selections'->0 ? 'logisticsStatus',
+    'curated selection projection must omit price and retain allowlisted logistics state';
+
+  -- ── the NEW reader: the client's own signed figures ─────────────────────
+  v_projection:=public.get_client_project_threshold('fa100000-0000-4000-8000-000000000001');
   ASSERT jsonb_array_length(v_projection->'selections')=2,
-    'curated projection must expose only live lines standing under an executed instrument';
+    'the threshold reader must expose only live lines standing under an executed instrument';
   ASSERT NOT EXISTS(
     SELECT 1 FROM jsonb_array_elements(v_projection->'selections') AS line
     WHERE line->>'id'=(v_candidate->>'selectionId')
