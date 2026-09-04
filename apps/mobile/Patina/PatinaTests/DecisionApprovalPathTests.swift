@@ -180,9 +180,10 @@ struct DecisionApprovalPathTests {
     func aSignoffThatLandsResolves() async throws {
         let viewModel = DecisionDetailViewModel()
         viewModel.decision = try decision()
-        var sent: (String, DecisionsAPIClient.ConsentMethod, String?)?
+        struct Sent { let id: String; let consent: DecisionsAPIClient.ConsentMethod; let signature: String? }
+        var sent: Sent?
         viewModel.approveSignoff = { id, consent, signature in
-            sent = (id, consent, signature)
+            sent = Sent(id: id, consent: consent, signature: signature)
         }
 
         viewModel.beginSignoff()
@@ -193,9 +194,9 @@ struct DecisionApprovalPathTests {
         )
 
         let call = try #require(sent, "the act never reached the RPC")
-        #expect(call.0 == "b0000000-0000-0000-0000-00000005c301")
-        #expect(call.1 == .electronicSignature)
-        #expect(call.2 == "Client User")
+        #expect(call.id == "b0000000-0000-0000-0000-00000005c301")
+        #expect(call.consent == .electronicSignature)
+        #expect(call.signature == "Client User")
         #expect(viewModel.isResolved)
         #expect(viewModel.isApprovingSignoff == false)
         #expect(viewModel.isSubmitting == false)

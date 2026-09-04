@@ -147,7 +147,7 @@ public enum APIConfiguration {
     ///
     /// `nonisolated`: `PatinaURLSession` is off the main actor (a request must
     /// not enter or resume there), and this is the budget it is built from.
-    public nonisolated static let requestTimeout: TimeInterval = 30.0
+    nonisolated public static let requestTimeout: TimeInterval = 30.0
 
     /// Ceiling on a whole transfer, retries and redirects included.
     ///
@@ -161,7 +161,7 @@ public enum APIConfiguration {
     /// exceeds two minutes. `requestTimeout` above is what actually closes the
     /// finding: a backend that answers nothing produces no bytes and fails at
     /// 30 s. This one only bounds a pathological trickle.
-    public nonisolated static let resourceTimeout: TimeInterval = 300.0
+    nonisolated public static let resourceTimeout: TimeInterval = 300.0
 
     /// C1-04 — the style-quiz RPC has a local fallback already computed
     /// (`StyleQuizViewModel.computeLocalResult`), so a slow server must not
