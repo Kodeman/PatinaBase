@@ -17,11 +17,20 @@
 //
 
 import SwiftUI
+import UIKit
 
 public extension View {
 
-    /// A "Done" bar above the keyboard. Put it on every field whose keyboard
-    /// has no Return key — every `.numberPad` and `.decimalPad`.
+    /// A "Done" bar above the keyboard, for screens whose keyboards have no
+    /// Return key — `.numberPad` and `.decimalPad`.
+    ///
+    /// **One per SCREEN, never one per field** (`W1-B-01`). SwiftUI merges
+    /// every `ToolbarItemGroup(placement: .keyboard)` in the hierarchy into one
+    /// accessory bar, so `ManualRoomEntryView`'s three pad fields — each
+    /// carrying this modifier — drew *three* "Done" buttons side by side. The
+    /// button resigns whatever is first responder rather than clearing a
+    /// `@FocusState` of its own, which is what lets it live at the screen root
+    /// instead of on the field.
     func keyboardDoneToolbar() -> some View {
         modifier(KeyboardDoneToolbar())
     }
@@ -34,19 +43,26 @@ public extension View {
 }
 
 private struct KeyboardDoneToolbar: ViewModifier {
-    @FocusState private var isFocused: Bool
 
     func body(content: Content) -> some View {
         content
-            .focused($isFocused)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Done") { isFocused = false }
+                    Button("Done") { Self.resignFirstResponder() }
                         .font(PatinaTypography.bodyMedium)
                         .foregroundStyle(PatinaColors.Text.interactive)
                         .accessibilityIdentifier("keyboard.doneButton")
                 }
             }
+    }
+
+    /// Put the keyboard away without owning the focus. The previous version
+    /// carried its own `@FocusState` and had to be attached to the field,
+    /// which is what forced one toolbar per field (`W1-B-01`).
+    private static func resignFirstResponder() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
     }
 }

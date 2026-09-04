@@ -47,7 +47,7 @@ struct KeyboardDismissalTests {
         #expect(block.contains(".keyboardDoneToolbar()"))
     }
 
-    @Test("the auth form's scroll view dismisses the keyboard")
+    @Test("the auth form’s scroll view dismisses the keyboard")
     func authFormDismissesOnScroll() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
         #expect(source.contains(".dismissKeyboardOnScroll()"))
@@ -58,7 +58,7 @@ struct KeyboardDismissalTests {
     /// globs. This test is the record of the debt, not a claim that it is
     /// paid: it fails if a new pad-keyboard field appears in a file THIS lane
     /// owns without the Done bar.
-    @Test("no numeric field in this lane's files is left without an exit")
+    @Test("no numeric field in this lane’s files is left without an exit")
     func noBareNumericFieldInThisLanesFiles() throws {
         let owned = SourcePin.swiftFiles(under: "Patina/Features/Authentication")
             + SourcePin.swiftFiles(under: "Patina/Features/Onboarding")
@@ -112,5 +112,59 @@ struct KeyboardDismissalTests {
             bare == knownOpen,
             "C9-08's open set moved — expected \(knownOpen.sorted()), found \(bare.sorted())"
         )
+    }
+
+    // MARK: - W1-B-01 · one bar per screen, never one per field
+
+    /// Focusing Length on Manual Room Entry drew **three** "Done" buttons side
+    /// by side in one accessory bar. `B-L1A-2` put `.keyboardDoneToolbar()` on
+    /// each of the screen's pad fields, and SwiftUI merges every
+    /// `ToolbarItemGroup(placement: .keyboard)` in the hierarchy into one bar —
+    /// so three fields meant three buttons.
+    ///
+    /// This is the count half: no file in the app target may declare the
+    /// modifier more than once. It reds on the pre-fix tree
+    /// (`ManualRoomEntryView` had two) and stays red if a future form goes back
+    /// to per-field application.
+    @Test("no screen declares more than one keyboard Done bar (W1-B-01)")
+    func noScreenDeclaresTwoDoneBars() {
+        var offenders: [String: Int] = [:]
+        for path in SourcePin.swiftFiles(under: "Patina") {
+            guard !path.hasSuffix("KeyboardDismissal.swift") else { continue }
+            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let count = source.components(separatedBy: ".keyboardDoneToolbar()").count - 1
+            if count > 1 { offenders[(path as NSString).lastPathComponent] = count }
+        }
+        #expect(
+            offenders.isEmpty,
+            "one keyboard toolbar per screen — these declare more: \(offenders.sorted(by: { $0.key < $1.key }))"
+        )
+    }
+
+    /// The placement half, and the one the count above cannot see: a helper
+    /// that carries the modifier and is *called* twice is one source site and
+    /// two toolbars. `ManualRoomEntryView.dimensionField` was exactly that.
+    /// On any screen with more than one pad field the bar must be attached to
+    /// the screen, so it may not be chained onto a `.keyboardType(` line.
+    @Test("a multi-field form attaches its Done bar to the screen, not a field (W1-B-01)")
+    func multiFieldFormsAttachTheBarToTheScreen() {
+        for path in SourcePin.swiftFiles(under: "Patina") {
+            guard !path.hasSuffix("KeyboardDismissal.swift") else { continue }
+            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let lines = source.components(separatedBy: .newlines)
+            let padLines = lines.indices.filter {
+                lines[$0].contains(".keyboardType(.numberPad)")
+                    || lines[$0].contains(".keyboardType(.decimalPad)")
+            }
+            guard padLines.count > 1 else { continue }
+            let name = (path as NSString).lastPathComponent
+            for index in padLines {
+                let following = lines[(index + 1)...].prefix(6)
+                #expect(
+                    !following.contains(where: { $0.contains(".keyboardDoneToolbar()") }),
+                    "\(name) chains the Done bar onto a field; a form with \(padLines.count) pad fields must carry it once, at the screen"
+                )
+            }
+        }
     }
 }
