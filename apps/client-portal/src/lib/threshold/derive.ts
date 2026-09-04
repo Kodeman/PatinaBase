@@ -28,6 +28,7 @@ import { journeyStageIndexForStatus } from '@/components/commercial/journey-step
 import type { ClientProjectSelections, ClientSelection } from '@/lib/commercial-documents';
 
 import { byPlanOrder, type KeyMark, type KeyRoom, type MarkKind } from './plan-key';
+import { roomVarianceLine } from './standing';
 
 /** A piece is still on the road until it has reached the house. */
 const DELIVERED_STOP = journeyStageIndexForStatus('delivered');
@@ -69,6 +70,8 @@ export interface ThresholdNote {
   body: string;
   state: ThresholdNoteState;
   sentAt: string | null;
+  /** When the client answered it. Optional: older callers do not send it. */
+  answeredAt?: string | null;
   retiredAt: string | null;
   enclosures: ThresholdNoteEnclosure[];
 }
@@ -119,6 +122,12 @@ export interface RoomBandModel {
   name: string;
   anchor: string;
   totalCents: number;
+  /** What the working budget planned for this room, or null when it has no target. */
+  targetCents: number | null;
+  /** Σ clientLineTotalCents of the band's pieces — the same figure as `totalCents`. */
+  agreedCents: number;
+  /** "about eleven hundred past its target", or null when there is nothing to say. */
+  varianceLine: string | null;
   pieces: ClientSelection[];
   marks: ThresholdMark[];
 }
@@ -165,11 +174,15 @@ export interface NoteModel {
   enclosures: ThresholdNoteEnclosure[];
 }
 
+/** What became of the thing, in the word the line beneath it prints. */
+export type PreviouslyState = 'answered' | 'standing' | 'sent' | 'signed';
+
 export interface PreviouslyEntry {
   id: string;
   kind: 'note' | 'instrument';
   label: string;
   date: Date | null;
+  state: PreviouslyState;
 }
 
 export interface ThresholdModel {
@@ -224,6 +237,17 @@ function byDueDate(a: Invoice, b: Invoice): number {
   const left = parseMoment(a.due_date) ?? Number.POSITIVE_INFINITY;
   const right = parseMoment(b.due_date) ?? Number.POSITIVE_INFINITY;
   return left - right;
+}
+
+/**
+ * Total over every note state, though only 'retired' notes reach Previously
+ * today: a note that was answered says so, one that was simply taken down
+ * reads as sent, and nothing falls through to a blank.
+ */
+function noteState(note: ThresholdNote): PreviouslyState {
+  if (note.state === 'standing') return 'standing';
+  if (note.state === 'answered' || note.answeredAt) return 'answered';
+  return 'sent';
 }
 
 function toInvoiceModel(invoice: Invoice): InvoiceModel {
@@ -356,11 +380,22 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
 
   const bands: RoomBandModel[] = rooms.map((room) => {
     const pieces = piecesByRoom.get(room.id) ?? [];
+    const agreedCents = pieces.reduce(
+      (sum, piece) => sum + (piece.clientLineTotalCents || 0),
+      0,
+    );
+    const targetCents =
+      typeof room.targetCents === 'number' && Number.isFinite(room.targetCents)
+        ? room.targetCents
+        : null;
     return {
       roomId: room.id,
       name: room.name,
       anchor: `room-${room.id}`,
-      totalCents: pieces.reduce((sum, piece) => sum + (piece.clientLineTotalCents || 0), 0),
+      totalCents: agreedCents,
+      targetCents,
+      agreedCents,
+      varianceLine: roomVarianceLine(targetCents, agreedCents),
       pieces,
       marks: marks.filter((mark) => mark.roomId === room.id),
     };
@@ -447,6 +482,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
           kind: 'note' as const,
           label: candidate.body,
           date: moment === null ? null : new Date(moment),
+          state: noteState(candidate),
         };
       }),
     ...input.proposals.instrumentReceipts.map((receipt) => {
@@ -456,6 +492,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
         kind: 'instrument' as const,
         label: receipt.label,
         date: moment === null ? null : new Date(moment),
+        state: 'signed' as const,
       };
     }),
   ].sort((a, b) => {
