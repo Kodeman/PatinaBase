@@ -106,6 +106,11 @@ export function useDirectOrders() {
       if (error) throw error;
       return (data ?? []) as unknown as DirectOrder[];
     },
+    // The Threshold holds its road until this settles, so an unfiltered,
+    // client-wide round trip on every navigation would make the house grow a
+    // road after it looked finished. Fresh for half a minute; a settle attempt
+    // refetches it explicitly.
+    staleTime: 30_000,
   });
 }
 

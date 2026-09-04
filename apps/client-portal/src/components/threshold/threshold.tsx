@@ -59,7 +59,7 @@ import {
 } from '@/lib/threshold/standing';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
-import { ApprovalAsk, ApprovalReceipt, useDoorstepApprovals } from './approval-ask';
+import { ApprovalAsk, ApprovalRecords, useDoorstepApprovals } from './approval-ask';
 import { KIND_LABEL } from './consent-copy';
 import { Letters, MuteLetters, WriteBack } from './correspondence';
 import { DetailsSheet } from './details-sheet';
@@ -74,7 +74,12 @@ import type { OtherHouse } from './other-houses';
 import { PapersSheet } from './papers-sheet';
 import { PlanKey } from './plan-key';
 import { Previously } from './previously';
-import { SelectionEditionAsk, StudioReviewAsk, SubmittedReviewsPrevious } from './review-ask';
+import {
+  SelectionEditionAsk,
+  StudioReviewAsk,
+  SubmittedReviewsPrevious,
+  useSelectionEditionPending,
+} from './review-ask';
 import { RoomBand } from './room-band';
 import { RoomCapture, StrayCaptures } from './room-capture';
 import {
@@ -242,7 +247,23 @@ export function Threshold({
   const partiesQuery = useProjectParties(projectId);
   const ordersQuery = useDirectOrders();
   useProjectNotesRealtime(projectId);
-  const correspondence = useProjectCorrespondence(projectId);
+  // Every id this house holds, for the notices that name no project of their
+  // own. Keyed by value rather than by array identity, so the mapping below is
+  // not rebuilt on every render.
+  const houseIdKey = [
+    ...(proposalsQuery.data ?? [])
+      .filter((proposal) => commercialSummaryFromProposal(proposal).projectId === projectId)
+      .map((proposal) => proposal.id),
+    ...(invoicesQuery.data ?? []).map((invoice) => invoice.id),
+    ...projectApprovals.map((approval) => approval.decisionId),
+  ]
+    .sort()
+    .join(',');
+  const houseIds = useMemo(
+    () => new Set(houseIdKey.split(',').filter(Boolean)),
+    [houseIdKey],
+  );
+  const correspondence = useProjectCorrespondence(projectId, houseIds);
   const markNoticesRead = useMarkNoticesRead();
   const markLettersRead = useMarkLettersRead();
   // L6 — review-ask.tsx / scope-change-ask.tsx each call these hooks again
@@ -254,6 +275,8 @@ export function Threshold({
   const pendingReviewQuery = useMyPendingReviewRequests(user?.id);
   const submittedReviewQuery = useMySubmittedReviews(user?.id);
   const scopeChangesQuery = useScopeChangeRequests(projectId);
+  // The ask that arrives from a studio `?review=` link, held the same way.
+  const editionAskPending = useSelectionEditionPending(projectId);
   // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
   // effect depending on the object would re-run every render for the ref-guard
   // below to swallow.
@@ -376,11 +399,11 @@ export function Threshold({
   // ── the asks that carry no room ────────────────────────────────────────────
   const doorstepApprovals = projectApprovals.filter(isClientActionableProjectApproval);
   // The model counts only what is still owed; the doorstep also keeps the gate
-  // waiting on the studio and the gates already answered, so a recorded outcome
-  // has a place to stand after the visit that recorded it.
+  // waiting on the studio, and every closed gate — answered, withdrawn or
+  // superseded — stands in Previously as a record rather than nowhere at all.
   const {
     asks: doorstepAsks,
-    receipts: doorstepReceipts,
+    records: doorstepRecords,
     anchoredDecisionIds,
     onAnswered: onApprovalAnswered,
   } = useDoorstepApprovals(projectApprovals);
@@ -471,19 +494,31 @@ export function Threshold({
   // page that renders before them prints "about eleven hundred past its
   // target" and then rewrites it, which is the one thing this surface may
   // never do.
+  // A DISABLED TanStack v5 query reports `status: 'pending'` for as long as it
+  // is mounted — it never runs, so it never resolves. Reading `isPending`
+  // straight off one puts the whole house behind a query that will not answer,
+  // which is a hold with no end rather than a hold that settles. So every
+  // query in this gate declares the condition it is ENABLED under and
+  // contributes nothing while that is false.
+  const holds = (enabled: boolean, isPending: boolean) => enabled && isPending;
+  const hasProject = !!projectId;
+  const hasUser = !!user?.id;
   const loading =
     projectApprovalsLoading ||
     proposalsQuery.isPending ||
-    selectionsQuery.isPending ||
-    invoicesQuery.isPending ||
-    notesQuery.isPending ||
-    roomsQuery.isPending ||
-    planQuery.isPending ||
+    holds(hasProject, selectionsQuery.isPending) ||
+    holds(hasProject, invoicesQuery.isPending) ||
+    holds(hasProject, notesQuery.isPending) ||
+    holds(hasProject, roomsQuery.isPending) ||
+    holds(hasProject, planQuery.isPending) ||
     correspondence.isPending ||
-    pendingReviewQuery.isPending ||
-    submittedReviewQuery.isPending ||
-    scopeChangesQuery.isPending ||
-    heldBundles.some((bundle) => bundle.isPending);
+    holds(hasUser, pendingReviewQuery.isPending) ||
+    holds(hasUser, submittedReviewQuery.isPending) ||
+    holds(hasProject, scopeChangesQuery.isPending) ||
+    editionAskPending ||
+    heldBundles.some((bundle, index) =>
+      holds(!!tradeInstrumentIds[index], bundle.isPending),
+    );
 
   // ── the doorstep's sentence ────────────────────────────────────────────────
   const standing =
@@ -521,7 +556,11 @@ export function Threshold({
   // is not drawn is simply lost.
   const firstDoorId =
     doorMarks.find((mark) => paperById.has(mark.proposalId ?? ''))?.id ?? null;
-  const firstWallId = wallMarks[0]?.id ?? null;
+  // The same guard the doors take: `renderWall` answers null for a mark whose
+  // selection is missing, and a `#wall` anchor on a gate that never renders is
+  // a dead link in the note's enclosures.
+  const firstWallId =
+    wallMarks.find((mark) => selectionById.has(mark.id.replace(/^wall:/, '')))?.id ?? null;
 
   /** The gate's own element id, which is `door`/`wall` only for the first one. */
   const gateAnchor = (mark: ThresholdMark): string => {
@@ -749,15 +788,33 @@ export function Threshold({
       reply={replyHeadsTheRecord ? undefined : writeBack}
     />
   );
+  // A review request filed against no house at all belongs to the relationship
+  // rather than to a project, and must stand in exactly ONE of the client's
+  // houses — the same one on every visit, or she answers the same ask twice.
+  const standsUnfiledAsks =
+    [projectId, ...otherHouses.map((house) => house.id)].sort()[0] === projectId;
+
   // Gated HERE, not inside Previously: a React element is truthy even when the
   // component renders nothing, so a slot handed down unconditionally would
   // print an empty "Previously" over a house that has none.
   const previouslySection = (
     <>
+      {/* A thread with no back matter at all: "Previously" over an empty list
+          is the same fault as an empty Previously one state along, so the
+          reply stands on its own line instead of heading a record that has
+          nothing in it. */}
+      {replyHeadsTheRecord && !hasRecord && (
+        <div
+          data-testid="standing-reply"
+          className="mt-8 border-t border-[var(--border-default)] pt-3"
+        >
+          {writeBack}
+        </div>
+      )}
       <Previously
         entries={model.previously}
         correspondence={
-          hasRecord || replyHeadsTheRecord ? (
+          hasRecord ? (
             <Letters
               letters={correspondence.letters}
               notices={correspondence.notices}
@@ -769,7 +826,8 @@ export function Threshold({
           ) : undefined
         }
       />
-      <SubmittedReviewsPrevious projectId={projectId} />
+      <ApprovalRecords approvals={doorstepRecords} />
+      <SubmittedReviewsPrevious projectId={projectId} standsUnfiled={standsUnfiledAsks} />
       <ResolvedScopeChangesPrevious projectId={projectId} />
     </>
   );
@@ -826,10 +884,7 @@ export function Threshold({
           anchoredDecisionIds={anchoredDecisionIds}
         />
       ))}
-      {doorstepReceipts.map((approval) => (
-        <ApprovalReceipt key={approval.decisionId} approval={approval} />
-      ))}
-      <StudioReviewAsk projectId={projectId} />
+      <StudioReviewAsk projectId={projectId} standsUnfiled={standsUnfiledAsks} />
       <SelectionEditionAsk projectId={projectId} />
       <PendingScopeChangeAsk projectId={projectId} />
       <MyScopeChangeRequestsAsk projectId={projectId} />

@@ -115,7 +115,25 @@ describe('the front door', () => {
     expect(mockProjectView).not.toHaveBeenCalled();
   });
 
-  it('answers with the empty state, never a 404, when the chosen house will not open', async () => {
+  it('opens the next house rather than stranding a client who has houses', async () => {
+    // The chrome drops the header on `/` because the LIST says she has a
+    // house. An empty state here would leave her with no navigation and tell
+    // her she has no projects — the stranding trap, through another door.
+    mockProjects.mockResolvedValue([
+      listItem('p1', 'The Vale Residence'),
+      listItem('p2', 'The Linden house'),
+    ]);
+    mockActiveHouse.mockResolvedValue('p1');
+    mockProjectView.mockImplementation(async (id: string) => (id === 'p2' ? view('p2') : null));
+
+    render(await HomePage());
+
+    expect(mockProjectView).toHaveBeenCalledWith('p1');
+    expect(mockProjectView).toHaveBeenCalledWith('p2');
+    expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p2');
+  });
+
+  it('answers with the empty state, never a 404, when no house will open', async () => {
     // The list named it and the detail read cannot open it — a deletion
     // mid-request, or RLS skew between the two selects. A 404 belongs at
     // `/projects/<id>`; the front door has something else to say.

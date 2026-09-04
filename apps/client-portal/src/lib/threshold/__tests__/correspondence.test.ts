@@ -236,6 +236,63 @@ describe('noticeAnchor', () => {
   });
 });
 
+describe('toNotices — a notice that names no project of its own', () => {
+  // `proposal-nudge` and `decision-notify` stamp neither `project_id` nor a
+  // `/projects/<id>` link. Dropped, they stood on no surface at all AND could
+  // never be marked read, because the ids this page marks are the ids it
+  // shows. So the ids this house holds are asked whether the row is hers.
+  it('is claimed by the paper it is about', () => {
+    const notices = toNotices(
+      [
+        notification({
+          id: 'n-1',
+          type: 'proposal_nudge',
+          metadata: { proposal_id: 'prop-7', deep_link: '/proposals/prop-7' },
+        }),
+      ],
+      PROJECT,
+      new Set(['prop-7']),
+    );
+    expect(notices.map((notice) => notice.id)).toEqual(['n-1']);
+  });
+
+  it('is claimed by the gate it is about, camelCase key and all', () => {
+    const notices = toNotices(
+      [notification({ id: 'n-2', type: 'decision_ready', metadata: { decisionId: 'dec-1' } })],
+      PROJECT,
+      new Set(['dec-1']),
+    );
+    expect(notices.map((notice) => notice.id)).toEqual(['n-2']);
+  });
+
+  it('is dropped when this house holds nothing it names', () => {
+    expect(
+      toNotices(
+        [notification({ id: 'n-3', metadata: { proposal_id: 'prop-other' } })],
+        PROJECT,
+        new Set(['prop-7']),
+      ),
+    ).toEqual([]);
+  });
+
+  it('never lets another house’s notice in on an id this one holds', () => {
+    expect(
+      toNotices(
+        [notification({ id: 'n-4', metadata: { project_id: 'project-2', decisionId: 'dec-1' } })],
+        PROJECT,
+        new Set(['dec-1']),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('noticeAnchor — the emitter’s path is data, not a lookup key', () => {
+  it('answers nothing for a segment that names an Object.prototype member', () => {
+    expect(noticeAnchor('/constructor/9')).toBeNull();
+    expect(noticeAnchor('/hasOwnProperty')).toBeNull();
+  });
+});
+
 describe('toNotices', () => {
   it('titles a notice the way /inbox did, newest first', () => {
     const notices = toNotices(

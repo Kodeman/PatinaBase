@@ -94,6 +94,12 @@ export interface EarlierInvoicesProps {
   exceptId?: string | null;
   /** Who a check would be coming to, when a line here is settled. */
   designerName?: string | null;
+  /**
+   * A letter whose own return from the till is still unconfirmed. Its settle
+   * act is withheld, the same rule the letterbox keeps for the letter in the
+   * slot — a second attempt on an unconfirmed payment is refused anyway.
+   */
+  heldInvoiceId?: string | null;
   /** Re-read the invoices after an attempt that ended in a fact, not a session. */
   onRefetch?: () => void | Promise<unknown>;
   today?: Date;
@@ -103,6 +109,7 @@ export function EarlierInvoices({
   invoices,
   exceptId,
   designerName,
+  heldInvoiceId = null,
   onRefetch,
   today,
 }: EarlierInvoicesProps) {
@@ -193,6 +200,7 @@ export function EarlierInvoices({
                           <Settlement
                             invoice={toModel(invoice)}
                             currency={invoice.currency || 'USD'}
+                            hold={heldInvoiceId === invoice.id}
                             designerName={
                               invoice.designer?.full_name?.trim() ||
                               invoice.designer?.business_name?.trim() ||

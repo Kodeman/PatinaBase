@@ -66,8 +66,12 @@ function designerNameOf(request: ClientPendingReview): string {
 function belongsToThisProject(
   request: ClientPendingReview,
   projectId: string,
+  /** True when this house is the one that stands the client's unfiled asks. */
+  standsUnfiled: boolean,
 ): boolean {
-  return request.project === null || request.project.id === projectId;
+  return request.project === null
+    ? standsUnfiled
+    : request.project.id === projectId;
 }
 
 /**
@@ -274,12 +278,26 @@ function useReviewInvalidation() {
   };
 }
 
-export function StudioReviewAsk({ projectId }: { projectId: string }) {
+export function StudioReviewAsk({
+  projectId,
+  /**
+   * Whether this house stands the requests that name no project. A client with
+   * two houses saw one such request twice, each copy with its own draft and
+   * its own confirmation; exactly one house stands it, chosen the same way on
+   * every visit.
+   */
+  standsUnfiled = true,
+}: {
+  projectId: string;
+  standsUnfiled?: boolean;
+}) {
   const { user } = useAuth();
   const pendingQuery = useMyPendingReviewRequests(user?.id);
 
   const requests = (pendingQuery.data ?? []).filter(
-    (req) => req.request_status === "sent" && belongsToThisProject(req, projectId),
+    (req) =>
+      req.request_status === "sent" &&
+      belongsToThisProject(req, projectId, standsUnfiled),
   );
 
   return (
@@ -301,11 +319,18 @@ export function StudioReviewAsk({ projectId }: { projectId: string }) {
  * proposals, invoices, rooms or notes, so it has nothing to say to the one
  * join that reconciles those five.
  */
-export function SubmittedReviewsPrevious({ projectId }: { projectId: string }) {
+export function SubmittedReviewsPrevious({
+  projectId,
+  /** As on the ask: a review filed against no house is read in exactly one. */
+  standsUnfiled = true,
+}: {
+  projectId: string;
+  standsUnfiled?: boolean;
+}) {
   const { user } = useAuth();
   const submittedQuery = useMySubmittedReviews(user?.id);
   const rows = (submittedQuery.data ?? []).filter((review) =>
-    belongsToThisProject(review, projectId),
+    belongsToThisProject(review, projectId, standsUnfiled),
   );
 
   if (rows.length === 0) return null;
@@ -380,24 +405,47 @@ function editionIdFromUrl(): string | null {
   return value && value.trim().length > 0 ? value.trim() : null;
 }
 
-export function SelectionEditionAsk({ projectId }: { projectId: string }) {
+/** The `?review=` deep link, read once per mount and never during SSR. */
+export function useReviewEditionId(): string | null {
   const [editionId] = useState<string | null>(editionIdFromUrl);
+  return editionId;
+}
+
+/**
+ * The edition bundle's hold on the house's settle gate.
+ *
+ * The ask that arrives from a studio link is the one most likely to actually
+ * be present, so the house may not print "nothing stands open" and then grow
+ * it a beat later. A DISABLED TanStack v5 query is `isPending` forever, so
+ * with no link in the address this contributes nothing at all.
+ */
+export function useSelectionEditionPending(projectId: string): boolean {
+  const editionId = useReviewEditionId();
+  const bundleQuery = useClientProjectReviewBundle(editionId ?? "", projectId);
+  return editionId ? bundleQuery.isPending : false;
+}
+
+export function SelectionEditionAsk({ projectId }: { projectId: string }) {
+  const editionId = useReviewEditionId();
   const [comments, setComments] = useState<Record<string, string>>({});
 
   const bundleQuery = useClientProjectReviewBundle(editionId ?? "", projectId);
   const feedback = useRecordProjectReviewFeedback(editionId ?? "");
 
-  // The link the studio sent is spent the moment its bundle has mounted —
+  // The link the studio sent is spent once its bundle has actually ARRIVED —
+  // stripping it on mount loses the id for a client who reloads mid-flight or
+  // after a failed read, leaving the studio's email her only way back.
   // `?review=` re-reading on every reload, and travelling in any
   // shared/bookmarked copy of this URL, is not what a one-time deep link
   // should do (L2's letterbox cleans `?checkout=` the same way).
+  const bundleArrived = !bundleQuery.isLoading && !bundleQuery.isError && !!bundleQuery.data;
   useEffect(() => {
-    if (!editionId || typeof window === "undefined") return;
+    if (!editionId || !bundleArrived || typeof window === "undefined") return;
     const url = new URL(window.location.href);
     if (!url.searchParams.has("review")) return;
     url.searchParams.delete("review");
     window.history.replaceState({}, "", url.toString());
-  }, [editionId]);
+  }, [editionId, bundleArrived]);
 
   if (!editionId) return null;
 

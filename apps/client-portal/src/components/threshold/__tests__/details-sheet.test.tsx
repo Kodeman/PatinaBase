@@ -192,6 +192,29 @@ describe("DetailsSheet — open, the frame", () => {
     document.body.removeChild(outsider);
   });
 
+  it("still closes on Escape once focus has fallen to the body", () => {
+    // Clicking non-focusable prose, or a Save act that disables itself
+    // mid-write, leaves `document.activeElement` on <body>. The container does
+    // not contain <body>, so an unqualified guard killed Escape and the Tab
+    // trap exactly then — with the scrim still covering the page.
+    const onClose = jest.fn();
+    render(<DetailsSheet open onClose={onClose} />);
+    (document.activeElement as HTMLElement | null)?.blur?.();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes Tab back into the sheet from the body rather than the page behind", () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+    (document.activeElement as HTMLElement | null)?.blur?.();
+
+    fireEvent.keyDown(document.body, { key: "Tab" });
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
   it("closes on the scrim", async () => {
     const onClose = jest.fn();
     render(<DetailsSheet open onClose={onClose} />);

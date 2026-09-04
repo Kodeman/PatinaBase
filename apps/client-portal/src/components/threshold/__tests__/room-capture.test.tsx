@@ -233,6 +233,17 @@ describe('RoomCapture — the room as captured', () => {
     expect(screen.queryByTestId('room-capture-model')).not.toBeInTheDocument();
   });
 
+  it('does not promise a failed capture is still processing', async () => {
+    setSources({ scans: [scan({ status: 'failed', thumbnail_url: null })] });
+    render(band());
+    await openThePlate();
+
+    expect(screen.getByTestId('room-capture-failed')).toHaveTextContent(
+      'This capture did not finish. Ask your studio to walk the room again.',
+    );
+    expect(screen.queryByTestId('room-capture-pending')).not.toBeInTheDocument();
+  });
+
   it('says as much for a capture still processing, with no still to show', async () => {
     setSources({ scans: [scan({ status: 'processing', thumbnail_url: null })] });
     render(band());
@@ -358,5 +369,27 @@ describe('StrayCaptures — the captures no band claimed', () => {
     ]);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('stands the walk a band claimed but never drew', () => {
+    // A re-scan of the same room: the band shows the newest, and the older one
+    // had no surface anywhere while "claimed" was taken for "has a home".
+    stray([
+      scan({ id: 'newest', created_at: '2026-07-01', scanned_at: '2026-07-01' }),
+      scan({ id: 'older', created_at: '2026-06-19', scanned_at: '2026-06-19' }),
+    ]);
+
+    expect(screen.getAllByTestId('room-capture')).toHaveLength(1);
+    expect(screen.getByTestId('stray-captures')).toBeInTheDocument();
+    expect(document.querySelector('[data-room-capture="older"]')).toBeInTheDocument();
+  });
+
+  it('says a read failed rather than showing a client with no rooms', () => {
+    scansMock.mockReturnValue({ data: undefined, isError: true });
+    render(<StrayCaptures projectId="project-1" userId="client-1" rooms={rooms} />);
+
+    expect(screen.getByTestId('captures-error')).toHaveTextContent(
+      'Couldn’t load your rooms. Please refresh.',
+    );
   });
 });

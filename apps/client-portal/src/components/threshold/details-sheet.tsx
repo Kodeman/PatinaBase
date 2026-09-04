@@ -19,6 +19,8 @@ import type { NotificationPreferences } from "@patina/shared/types";
 import { ScoredAction } from "@/components/making/scored-action";
 import { AvatarUploadField } from "@/components/account/AvatarUploadField";
 
+import { useScrollLock } from "./use-scroll-lock";
+
 /* ── Your details ──────────────────────────────────────────────────────────
    The one place on the Threshold that is about her, not the house: the
    name and number the studio has on file, what she hears from Patina and
@@ -179,7 +181,14 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) return;
+      // Focus falls to <body> whenever a click lands on non-focusable prose or
+      // the focused act disables itself mid-write. `<body>` is not inside the
+      // dialog, so an unqualified `contains` guard would kill Escape and the
+      // Tab trap exactly then — with the scrim still covering the page.
+      const target = event.target as Node | null;
+      const loose =
+        !target || target === document.body || target === document.documentElement;
+      if (!loose && !containerRef.current?.contains(target)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
@@ -192,6 +201,11 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
       const list = Array.from(focusable);
       const first = list[0];
       const last = list[list.length - 1];
+      if (loose) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
@@ -205,14 +219,7 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
   }, [open, onClose]);
 
   // ── Lock the page behind the sheet from scrolling under the scrim ───────
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
+  useScrollLock(open);
 
   if (!open) return null;
 
@@ -367,7 +374,12 @@ function ProfileSection() {
               Save
             </ScoredAction>
             {!updateProfile.isPending && savedAt && (
-              <p role="status" className="text-[13px] text-[var(--text-muted)]">
+              <p
+                role="status"
+                data-testid="details-profile-saved"
+                aria-label="Profile saved"
+                className="text-[13px] text-[var(--text-muted)]"
+              >
                 Saved{" "}
                 {savedAt.toLocaleTimeString([], {
                   hour: "numeric",
@@ -420,7 +432,12 @@ function NotificationsSection() {
       <div className="flex items-baseline justify-between gap-4">
         <p className={SECTION_HEAD_CLASS}>What reaches you</p>
         {updatePrefs.isPending && (
-          <p role="status" className="text-[13px] text-[var(--text-muted)]">
+          <p
+            role="status"
+            data-testid="details-prefs-saving"
+            aria-label="Saving what reaches you"
+            className="text-[13px] text-[var(--text-muted)]"
+          >
             Saving…
           </p>
         )}

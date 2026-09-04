@@ -236,12 +236,15 @@ export function readingMarkLine(at: Date | null | undefined): string | null {
 }
 
 /**
- * What the owed row adds to its figure. One dated invoice owes on one day;
- * several owe on several, and the row names the first of them as the first —
- * a bare "due 15 August" against a sum of three invoices would say the whole
- * balance falls due that day, which is not true. `datedCount` is how many open
- * invoices actually carry a due date, not how many are open: three invoices of
- * which one is dated has exactly one day to name.
+ * What the owed row adds to its figure. One dated invoice, and nothing else
+ * open, owes on one day and the row says "due 15 August". Anything else — two
+ * dated invoices, or three of which one is dated — has a day that belongs to
+ * the soonest of them and to no other, so the row says "soonest due 15
+ * August": a bare "due" would put the whole balance on that day, and "first
+ * due" would promise the rest have days of their own.
+ *
+ * `datedCount` is how many open invoices actually carry a due date;
+ * `totalCount` is how many are open at all.
  *
  * The year is spelled out the moment it is not this year — the rule
  * `SpineToll` and the letterbox already keep. `today` is omitted during SSR
@@ -251,13 +254,21 @@ export function owedDueLine(
   due: Date | null | undefined,
   datedCount: number,
   today?: Date,
+  /** How many invoices are open in all, dated or not. Defaults to the dated. */
+  totalCount: number = datedCount,
 ): string | null {
   if (!due || Number.isNaN(due.getTime())) return null;
   const day =
     today && today.getFullYear() !== due.getFullYear()
       ? `${dayAndMonth(due)} ${due.getFullYear()}`
       : dayAndMonth(due);
-  return `${tally(datedCount) > 1 ? 'first due' : 'due'} ${day}`;
+  // Neither "due" nor "first due" is true of a partly-dated set: a bare "due"
+  // against a sum of three says the whole balance falls that day, and "first
+  // due" says the other two have days of their own. `soonest due` names what
+  // the day actually belongs to. Plain "due" is kept for the one case it is
+  // exactly true of: a single dated invoice, and nothing else open.
+  if (datedCount === totalCount && totalCount <= 1) return `due ${day}`;
+  return `soonest due ${day}`;
 }
 
 /**
@@ -274,6 +285,10 @@ export function noteInBrief(body: string, budget = 140): string {
   // The raw cut is the fallback only for text with no space at all inside the
   // budget — one unbroken run of characters. Anything else cuts on its last
   // word, so no quote is left broken mid-word.
-  const kept = (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:—.!?-]+$/, '');
+  // The word cut is kept unless it would throw away most of the budget — a
+  // first word followed by one long unbroken run must not quote the first word
+  // alone.
+  const onWord = lastSpace > budget / 4;
+  const kept = (onWord ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:—.!?-]+$/, '');
   return `${kept}…`;
 }

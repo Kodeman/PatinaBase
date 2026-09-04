@@ -106,7 +106,7 @@ export function RoadOrders({ orders, closed = [], onRefetch, today }: RoadOrders
           {settlement.outcome !== 'settled'
             ? 'Nothing changed.'
             : confirm === 'confirmed'
-              ? `Paid ${LONG_MONTH_DAY.format(today ?? new Date())}. Receipt in your email.`
+              ? `${returnedOrder?.name ?? 'This piece'} · Payment received — thank you! A receipt is on its way to your inbox.`
               : confirm === 'unconfirmed'
                 ? 'Your bank transfer has been started. Bank transfers take 3–5 business days to clear — we’ll email your receipt as soon as it lands.'
                 : 'Confirming payment… This usually takes a few seconds.'}
@@ -164,7 +164,9 @@ export function RoadOrders({ orders, closed = [], onRefetch, today }: RoadOrders
                   data-closed-order={order.id}
                   className="border-t border-[var(--border-subtle)] py-2 text-[15px] leading-[1.62] text-[var(--text-body)]"
                 >
-                  {`${order.name} · ${order.word}${raised ? ` · bought ${raised}` : ''} · ${moneyInWords(
+                  {`${order.name} · ${order.word}${
+                    order.houseless ? ' · bought direct, not tied to this house' : ''
+                  }${raised ? ` · bought ${raised}` : ''} · ${moneyInWords(
                     order.amountCents,
                     order.currency,
                   )}`}

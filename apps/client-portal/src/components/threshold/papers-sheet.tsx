@@ -27,6 +27,8 @@ import {
   PAPERS_TAB_LABEL,
 } from '@/lib/threshold/papers';
 
+import { useScrollLock } from './use-scroll-lock';
+
 /* ── THE PAPERS ──────────────────────────────────────────────────────────────
    Everything the studio has filed for this house, laid on the page as a sheet
    over a sheet — paper on paper, one hairline between them, no shadow and no
@@ -121,14 +123,14 @@ function PapersSheetBody({
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     containerRef.current?.focus();
-    const body = document.body;
-    const overflow = body.style.overflow;
-    body.style.overflow = 'hidden';
     return () => {
-      body.style.overflow = overflow;
       opener?.focus?.();
     };
   }, []);
+  // The details sheet mounts in the same wrapper and holds the same lock; two
+  // independent capture/restore pairs strand the page scrolled-locked when
+  // they close in the other order.
+  useScrollLock(true);
 
   // Escape is bound on the document, not the dialog: once the reading is
   // inside a cross-origin frame no keydown reaches a React handler.
@@ -163,7 +165,16 @@ function PapersSheetBody({
   // "Nothing has been filed here yet." over files that are simply unreadable.
   const answered = (query: { isLoading: boolean; isError: boolean }) =>
     !query.isLoading && !query.isError;
-  const settled = answered(planSet) && answered(filed) && answered(instruments);
+  // Each register stands on its own read. A failed drawings leg may not blank
+  // the contracts and the signed PDFs that came back perfectly well — the
+  // surface being absorbed says so in as many words
+  // (app/documents/page.tsx:53-58) — so the conjunction below decides only
+  // whether "Nothing has been filed here yet." may be asserted at all.
+  const planSettled = answered(planSet);
+  const filedSettled = answered(filed);
+  const instrumentsSettled = answered(instruments);
+  const settled = planSettled && filedSettled && instrumentsSettled;
+  const nothingAnswered = planSet.isLoading && filed.isLoading && instruments.isLoading;
 
   const sheets = planSet.data ?? [];
   const groups = groupClientPlanSet(sheets);
@@ -214,7 +225,7 @@ function PapersSheetBody({
           </ScoredAction>
         </div>
 
-        {!settled && (
+        {nothingAnswered && (
           <div
             aria-hidden="true"
             data-testid="papers-sheet-hold"
@@ -222,7 +233,7 @@ function PapersSheetBody({
           />
         )}
 
-        {settled && viewing && (
+        {viewing && (
           <div data-testid="papers-sheet-viewer" className="mt-6">
             <p className={META_CLASS}>
               {[
@@ -268,9 +279,39 @@ function PapersSheetBody({
           </div>
         )}
 
-        {settled && !viewing && (
+        {!viewing && (
           <>
-            {groups.length > 0 && (
+            {/* Absence is silence about CONTENT; it does not license silence
+                about a failure the client can act on by refreshing. Both
+                sentences are the retired page's own. */}
+            {planSet.isError && (
+              <section className="mt-6" data-testid="plan-set-error">
+                <h3 className={HEAD_CLASS}>Your drawings</h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-[var(--text-body)]">
+                  We couldn&rsquo;t load your drawings right now. Try refreshing the page.
+                </p>
+              </section>
+            )}
+
+            {filed.isError && (
+              <p
+                data-testid="papers-sheet-error"
+                className="mt-6 text-[15px] leading-relaxed text-[var(--text-body)]"
+              >
+                We couldn&rsquo;t load your documents right now. Try refreshing the page.
+              </p>
+            )}
+
+            {instruments.isError && (
+              <p
+                data-testid="instruments-error"
+                className="mt-6 text-[15px] leading-relaxed text-[var(--text-body)]"
+              >
+                We couldn&rsquo;t load your signed papers right now. Try refreshing the page.
+              </p>
+            )}
+
+            {planSettled && groups.length > 0 && (
               <section data-testid="papers-sheet-drawings">
                 <h3 className={HEAD_CLASS}>Your drawings</h3>
                 {groups.map((group) => (
@@ -290,7 +331,7 @@ function PapersSheetBody({
               </section>
             )}
 
-            {papers.length > 0 && (
+            {filedSettled && papers.length > 0 && (
               <section data-testid="papers-sheet-other">
                 <h3 className={HEAD_CLASS}>Other papers</h3>
                 <ul className="mt-1 list-none">
@@ -301,7 +342,7 @@ function PapersSheetBody({
               </section>
             )}
 
-            {earlier.length > 0 && (
+            {filedSettled && earlier.length > 0 && (
               <section data-testid="papers-sheet-earlier">
                 <h3 className={HEAD_CLASS}>Earlier papers</h3>
                 <ul className="mt-1 list-none">
@@ -312,7 +353,7 @@ function PapersSheetBody({
               </section>
             )}
 
-            {executed.length > 0 && (
+            {instrumentsSettled && executed.length > 0 && (
               <section data-testid="papers-sheet-instruments">
                 <h3 className={HEAD_CLASS}>What you have signed</h3>
                 <ul className="mt-1 list-none">

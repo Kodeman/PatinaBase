@@ -122,8 +122,10 @@ describe('RoadOrders — the pieces she bought herself', () => {
     standAt('?order=ord-2&checkout=success');
     render(<RoadOrders orders={[RUG]} today={new Date(2026, 8, 4)} />);
 
+    // The retired /orders page's own confirmed sentence, and the piece it is
+    // about — no date, because a return carries none the row can vouch for.
     expect(screen.getByTestId('road-orders-receipt')).toHaveTextContent(
-      'Paid September 4. Receipt in your email.',
+      'Flatweave rug · Payment received — thank you! A receipt is on its way to your inbox.',
     );
   });
 

@@ -25,6 +25,9 @@ import {
   type NoticeReceipt,
 } from '@/lib/threshold/correspondence';
 
+/** No ids yet: a caller that has not gathered the house's own ids. */
+const EMPTY_IDS: ReadonlySet<string> = new Set();
+
 /* ── THE HOUSE'S POST ───────────────────────────────────────────────────────
    What `/messages` and `/inbox` read, gathered behind one hook so the page
    asks for the correspondence once and prints it in three places: the reply
@@ -55,8 +58,16 @@ export interface ProjectCorrespondence {
   isPending: boolean;
 }
 
-export function useProjectCorrespondence(projectId: string): ProjectCorrespondence {
-  const { user } = useAuth();
+export function useProjectCorrespondence(
+  projectId: string,
+  /**
+   * Papers, letters and gates this house holds, by id. A notice that names no
+   * project is claimed by the thing it is about; without them such a notice
+   * would stand on no surface and could never be marked read.
+   */
+  houseIds: ReadonlySet<string> = EMPTY_IDS,
+): ProjectCorrespondence {
+  const { user, isLoading: sessionLoading } = useAuth();
   const readerId = user?.id ?? null;
 
   const threadsQuery = useThreads({ projectId });
@@ -78,8 +89,8 @@ export function useProjectCorrespondence(projectId: string): ProjectCorresponden
 
   const letters = useMemo(() => toLetters(messages, readerId), [messages, readerId]);
   const notices = useMemo(
-    () => toNotices(noticesQuery.data, projectId),
-    [noticesQuery.data, projectId],
+    () => toNotices(noticesQuery.data, projectId, houseIds),
+    [noticesQuery.data, projectId, houseIds],
   );
   const sentAts = useMemo(() => letterMoments(messages, readerId), [messages, readerId]);
   const unreadNoticeIds = useMemo(
@@ -103,6 +114,11 @@ export function useProjectCorrespondence(projectId: string): ProjectCorresponden
     unreadNoticeIds,
     sentAts,
     isPending:
+      // The reader's own id decides which hand every letter is filed under and
+      // which of them count as changes, so a mapping made before the session
+      // resolves is the wrong one. It settles to a value either way — it is
+      // never a disabled query — so this cannot hold the page open.
+      sessionLoading ||
       threadsQuery.isPending ||
       (threadId !== null && messagesQuery.isPending) ||
       noticesQuery.isPending,

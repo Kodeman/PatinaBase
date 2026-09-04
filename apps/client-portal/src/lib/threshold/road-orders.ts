@@ -51,6 +51,8 @@ export interface ClosedOrderModel {
   /** `Refunded` / `Canceled` — `/orders`' own words. */
   word: string;
   raisedAt: string | null;
+  /** Bought direct against no project at all — the same clause the road gives. */
+  houseless: boolean;
 }
 
 const AGREED = journeyStageIndexForStatus('approved');
@@ -106,6 +108,7 @@ export function toClosedOrders(
       currency: order.currency || 'USD',
       word: CLOSED_WORD[order.status] ?? 'Closed',
       raisedAt: order.created_at ?? null,
+      houseless: !order.project_id,
     }))
     .sort((a, b) => (b.raisedAt ?? '').localeCompare(a.raisedAt ?? ''));
 }

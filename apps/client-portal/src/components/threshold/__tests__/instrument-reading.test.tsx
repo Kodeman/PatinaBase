@@ -109,14 +109,17 @@ describe('InstrumentReading', () => {
     expect(screen.queryByTestId('commercial-document-shell')).not.toBeInTheDocument();
   });
 
-  it('refuses out loud when the read came back with nothing', () => {
+  it('says so quietly when the read came back with nothing', () => {
     bundleMock.mockReturnValue({ isLoading: false, isError: false, data: null });
 
     render(<InstrumentReading proposalId="prop-7" />);
 
-    // An unfold that opens on an empty region is an offer that leads nowhere.
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'This paper could not be drawn just now. Reload to try again.',
+    // An unfold that opens on an empty region is an offer that leads nowhere —
+    // but a resolved-empty read is not an error, and a reload does not change
+    // it, so it does not take error ink or promise that one would.
+    expect(screen.getByTestId('instrument-reading-absent')).toHaveTextContent(
+      'This paper is not on file for you. Ask your studio for a copy of it.',
     );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

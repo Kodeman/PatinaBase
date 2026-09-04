@@ -159,4 +159,34 @@ describe('TheRoad', () => {
     expect(screen.queryByTestId('road-pieces')).not.toBeInTheDocument();
     expect(screen.getByTestId('road-orders')).toBeInTheDocument();
   });
+
+  it('never says nothing is on the road above a piece that is not coming', () => {
+    (useStartDirectOrderCheckout as jest.Mock).mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+
+    render(
+      <TheRoad
+        pieces={[]}
+        orders={[]}
+        closedOrders={[
+          {
+            id: 'ord-9',
+            name: 'Flatweave rug',
+            amountCents: 180_000,
+            currency: 'USD',
+            word: 'Refunded',
+            raisedAt: '2026-08-01T10:00:00Z',
+            houseless: false,
+          },
+        ]}
+      />,
+    );
+
+    // The empty-state sentence and the list under it contradicted each other:
+    // silence never has to take anything back.
+    expect(screen.queryByText('Nothing on the road.')).not.toBeInTheDocument();
+    expect(screen.getByTestId('road-orders-closed')).toHaveTextContent('Flatweave rug');
+  });
 });

@@ -56,8 +56,10 @@ const DRAW_H = 140;
 /** A room with nothing on its floor: the outline, and its own name inside. */
 const EMPTY_H = 80;
 const WALL_L = 42;
-/** The wall's outer face. Its thickness is the section's own, as the mock rules it. */
-const WALL_L_OUTER = 30;
+/** The wall's outer face, at the mock's own thickness (28→42). The opening cut
+ *  through it is this surface's departure from the section: the mock rules the
+ *  wall full height and cuts nothing through it. */
+const WALL_L_OUTER = 28;
 const WALL_R = 944;
 const WALL_TOP = 14;
 const FLOOR_Y = 104;

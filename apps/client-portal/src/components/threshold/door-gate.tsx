@@ -18,6 +18,7 @@ import {
   type ThresholdMark,
   type ThresholdProposal,
 } from '@/lib/threshold/derive';
+import { hasPassed } from '@/lib/threshold/expiry';
 import { noteInBrief } from '@/lib/threshold/standing';
 
 import {
@@ -171,10 +172,15 @@ export function DoorGate({
 
   // The paper has to be on the leaf before the act is offered.
   const drawn = !bundle.isLoading && !bundle.isError;
+  // The old page held every act back under one `isActionable`, expiry
+  // included. The acts row withdraws Ask / Request a change / Decline past
+  // `valid_until`; the block that asks for her name disarms on the same date,
+  // or the door offers a signature `/api/proposals/[id]/sign` will refuse.
+  const expired = hasPassed(proposal.validUntil ?? null);
   // The same validation the shipped sign page runs. A declined paper is not
   // signable, so the block that asks for her name disarms with it — a page
   // may not go on offering an answer she has already given.
-  const ready = drawn && !declined && agreed && name.trim().length >= 2;
+  const ready = drawn && !declined && !expired && agreed && name.trim().length >= 2;
 
   async function onSign() {
     if (!ready || inFlight.current) return;
@@ -337,6 +343,7 @@ export function DoorGate({
           <ScoredAction
             actionKey="door_notice_replay"
             regionKey="door"
+            surfaceKey="the_threshold"
             variant="secondary"
             onClick={onReplay}
           >
@@ -480,7 +487,7 @@ export function DoorGate({
                       id={consentId}
                       type="checkbox"
                       checked={agreed}
-                      disabled={submitting || !!signedAt || declined}
+                      disabled={submitting || !!signedAt || declined || expired}
                       onChange={(event) => setAgreed(event.target.checked)}
                       className="mt-1 h-4 w-4 shrink-0 border border-current"
                     />
@@ -499,7 +506,7 @@ export function DoorGate({
                       type="text"
                       value={name}
                       autoComplete="name"
-                      disabled={submitting || !!signedAt || declined}
+                      disabled={submitting || !!signedAt || declined || expired}
                       onChange={(event) => setName(event.target.value)}
                       data-testid="door-sign-name"
                       className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
@@ -507,6 +514,7 @@ export function DoorGate({
                     <ScoredAction
                       actionKey="gate_sign"
                       regionKey="gate"
+                      surfaceKey="the_threshold"
                       variant="primary"
                       disabled={!ready}
                       loading={submitting}
@@ -524,7 +532,9 @@ export function DoorGate({
                   >
                     {declined
                       ? 'You declined this paper. Your studio has been told.'
-                      : !drawn
+                      : expired
+                        ? 'This paper is past its date. Ask your studio to reissue it.'
+                        : !drawn
                         ? bundle.isError
                           ? 'This paper could not be drawn just now. Reload to try again.'
                           : 'Drawing this paper.'

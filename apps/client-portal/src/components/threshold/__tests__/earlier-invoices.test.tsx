@@ -185,6 +185,31 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
     expect(screen.getByTestId('threshold-payment-methods')).toBeInTheDocument();
   });
 
+  it('withholds the act on the line whose own return is not confirmed', () => {
+    // The letter taken to the till may be one of THESE, not the one in the
+    // slot; the same refusal has to reach the line that carries its act.
+    render(
+      <EarlierInvoices
+        invoices={[
+          invoice({
+            id: 'inv-5',
+            invoice_number: 'Invoice No. 5',
+            status: 'sent',
+            amount_paid_cents: 0,
+            paid_at: null,
+          }),
+        ]}
+        heldInvoiceId="inv-5"
+        today={TODAY}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Settle this balance' }));
+
+    expect(screen.getByRole('button', { name: 'Settle the balance' })).toBeDisabled();
+  });
+
   it('offers a settled line its record and nothing to pay', () => {
     render(<EarlierInvoices invoices={[invoice()]} today={TODAY} />);
     fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));

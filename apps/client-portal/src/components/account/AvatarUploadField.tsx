@@ -125,9 +125,9 @@ export function AvatarUploadField({
             </Button>
           )}
         </div>
-        <p className="text-xs text-[#7A736C]">PNG, JPEG, or WebP — up to 2MB.</p>
+        <p className="text-xs text-[var(--text-muted,#7A736C)]">PNG, JPEG, or WebP — up to 2MB.</p>
         {error && (
-          <p className="text-xs text-[#C45B4A]" role="alert">
+          <p className="text-xs text-[var(--color-error,#C45B4A)]" role="alert">
             {error}
           </p>
         )}

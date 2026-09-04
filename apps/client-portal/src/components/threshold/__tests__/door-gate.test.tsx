@@ -343,6 +343,20 @@ describe('DoorGate', () => {
     );
   });
 
+  it('disarms the signature block on the date the acts withdrew', () => {
+    // The old page held every act back under ONE `isActionable`. A block that
+    // still says "Ready when you are." past `valid_until` offers a signature
+    // /api/proposals/[id]/sign refuses on the same date.
+    renderGate({ proposal: { ...PROPOSAL, validUntil: '2020-01-01T00:00:00Z' } });
+
+    expect(screen.getByLabelText('Type your full name')).toBeDisabled();
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(signAction()).toBeDisabled();
+    expect(screen.getByTestId('door-hint')).toHaveTextContent(
+      'This paper is past its date. Ask your studio to reissue it.',
+    );
+  });
+
   it('stops asking for her name once she has declined the paper', () => {
     renderGate();
     fireEvent.click(screen.getByRole('button', { name: 'stub decline' }));

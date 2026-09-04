@@ -107,3 +107,21 @@ describe('toClosedOrders', () => {
     expect(toClosedOrders(undefined, 'project-1')).toEqual([]);
   });
 });
+
+describe('toClosedOrders — a piece bought against no house', () => {
+  it('says so on a closed piece too, or one refunded lamp reads as one per house', () => {
+    const closed = toClosedOrders(
+      [order({ id: 'loose', status: 'refunded', project_id: null })],
+      'project-1',
+    );
+    expect(closed[0].houseless).toBe(true);
+  });
+
+  it('does not say it of a piece filed against this house', () => {
+    const closed = toClosedOrders(
+      [order({ id: 'filed', status: 'refunded', project_id: 'project-1' })],
+      'project-1',
+    );
+    expect(closed[0].houseless).toBe(false);
+  });
+});

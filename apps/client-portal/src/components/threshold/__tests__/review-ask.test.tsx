@@ -183,6 +183,42 @@ describe("StudioReviewAsk — the studio review, absorbed from /reviews", () => 
 
     await userEvent.click(screen.getByTestId("review-star-4"));
     expect(screen.getByTestId("review-body")).toHaveAttribute("minlength", "30");
+
+    // The attribute is the browser's rule; this is the component's own, and it
+    // is the branch the finding actually named.
+    const body = screen.getByTestId("review-body") as HTMLTextAreaElement;
+    body.removeAttribute("minlength");
+    await userEvent.type(body, "Too short");
+    await userEvent.click(screen.getByTestId("review-submit"));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Share at least 30 characters.");
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  // Finding N6 — one request filed against no house was standing in every one
+  // of the client's houses, each copy with its own draft and confirmation.
+  it("stands a request filed against no house in exactly one of them", () => {
+    pendingMock.mockReturnValue({
+      data: [
+        {
+          id: "r-unfiled",
+          request_status: "sent",
+          project: null,
+          designer: null,
+          custom_message: null,
+        },
+      ],
+      isLoading: false,
+    });
+
+    const here = wrap(<StudioReviewAsk projectId={PROJECT_ID} standsUnfiled />);
+    expect(here.container).not.toBeEmptyDOMElement();
+    here.unmount();
+
+    const elsewhere = wrap(
+      <StudioReviewAsk projectId={PROJECT_ID} standsUnfiled={false} />,
+    );
+    expect(elsewhere.container).toBeEmptyDOMElement();
   });
 
   // Finding #20 — the fields sit inside a real `<form>` now, not a bare

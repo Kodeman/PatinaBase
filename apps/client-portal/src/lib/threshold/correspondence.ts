@@ -173,6 +173,10 @@ export function noticeAnchor(link: string | null | undefined): string | null {
   if (!link || /^https?:/i.test(link)) return null;
   const segments = link.split(/[?#]/)[0].split('/').filter(Boolean);
   for (const segment of segments) {
+    // The path is the emitter's, so the lookup is guarded: `constructor` or
+    // `toString` would otherwise return an inherited member and be rendered
+    // into an href.
+    if (!Object.prototype.hasOwnProperty.call(ANCHOR_BY_SEGMENT, segment)) continue;
     const anchor = ANCHOR_BY_SEGMENT[segment];
     if (anchor) return anchor;
   }
@@ -180,11 +184,10 @@ export function noticeAnchor(link: string | null | undefined): string | null {
 }
 
 /**
- * The house this notice belongs to.
+ * The house this notice names, when it names one.
  *
  * `notification_log` is filed by reader, not by project, so a client with two
  * houses would otherwise read the second house's notices under the first.
- * A row that names no project cannot be claimed by one.
  */
 function noticeProjectId(notification: InboxNotification): string | null {
   const filed = (notification.metadata ?? {}).project_id;
@@ -193,12 +196,61 @@ function noticeProjectId(notification: InboxNotification): string | null {
   return match ? match[1] : null;
 }
 
+/** Every id a notice might name a thing of this house by. */
+const CLAIM_KEYS = [
+  'proposal_id',
+  'proposalId',
+  'invoice_id',
+  'invoiceId',
+  'decision_id',
+  'decisionId',
+  'order_id',
+  'orderId',
+  'entity_id',
+  'entityId',
+] as const;
+
+/**
+ * A notice that names no project at all, claimed by the thing it IS about.
+ *
+ * Two live emitters stamp no `project_id` and no `/projects/<id>` link —
+ * `proposal-nudge` (metadata `{proposal_id, deep_link:'/proposals/<id>'}`) and
+ * `decision-notify` (metadata `{decisionId, kind}`). Dropping them would put
+ * them on no surface at all AND leave them permanently unread, since the ids
+ * this page marks read are drawn from what it shows. So the ids this house
+ * already holds are asked whether the row belongs to it.
+ */
+function claimedByThisHouse(
+  notification: InboxNotification,
+  houseIds: ReadonlySet<string>,
+): boolean {
+  if (houseIds.size === 0) return false;
+  const metadata = notification.metadata ?? {};
+  for (const key of CLAIM_KEYS) {
+    const value = metadata[key];
+    if (typeof value === 'string' && houseIds.has(value)) return true;
+  }
+  const link = deepLinkOf(notification);
+  if (!link || /^https?:/i.test(link)) return false;
+  return link
+    .split(/[?#]/)[0]
+    .split('/')
+    .filter(Boolean)
+    .some((segment) => houseIds.has(segment));
+}
+
 export function toNotices(
   notifications: InboxNotification[] | undefined | null,
   projectId: string,
+  /** Papers, letters, invoices and gates this house holds, by id. */
+  houseIds: ReadonlySet<string> = new Set(),
 ): NoticeReceipt[] {
   return (notifications ?? [])
-    .filter((notification) => noticeProjectId(notification) === projectId)
+    .filter((notification) => {
+      const named = noticeProjectId(notification);
+      if (named !== null) return named === projectId;
+      return claimedByThisHouse(notification, houseIds);
+    })
     .map((notification) => ({
       id: notification.id,
       label: noticeLabel(notification),

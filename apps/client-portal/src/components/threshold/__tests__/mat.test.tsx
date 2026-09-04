@@ -155,13 +155,14 @@ describe("Mat — the people, the papers, and the way out", () => {
 
     const act = screen.getByRole('button', { name: /the papers, in full/i });
     expect(act).toHaveAttribute('aria-expanded', 'false');
-    expect(act).toHaveAttribute('aria-controls', 'papers-sheet');
+    // The sheet exists only while it is open, so a closed act points at
+    // nothing rather than at an id no element carries.
+    expect(act).not.toHaveAttribute('aria-controls');
 
     rerender(<Mat {...mat({ onOpenPapers, papersOpen: true })} />);
-    expect(screen.getByRole('button', { name: /the papers, in full/i })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    const open = screen.getByRole('button', { name: /the papers, in full/i });
+    expect(open).toHaveAttribute('aria-expanded', 'true');
+    expect(open).toHaveAttribute('aria-controls', 'papers-sheet');
   });
 
   it('keeps a way to her own details, named once, opened in place', async () => {

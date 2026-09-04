@@ -160,7 +160,8 @@ describe('RoomBand', () => {
     expect(screen.getByTestId('room-band-wall')).toHaveAttribute('y2', '52');
     expect(screen.getByTestId('room-band-wall-outer')).toHaveAttribute('y2', '52');
     const head = screen.getByTestId('room-band-door-head');
-    expect(head).toHaveAttribute('x1', '30');
+    // The mock's own wall thickness: faces at x=28 and x=42.
+    expect(head).toHaveAttribute('x1', '28');
     expect(head).toHaveAttribute('x2', '42');
     expect(head).toHaveAttribute('y1', '52');
     expect(screen.getByTestId('room-band-threshold')).toHaveAttribute('stroke-dasharray', '2 4');

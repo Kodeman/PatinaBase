@@ -129,7 +129,9 @@ export function Mat({
               surfaceKey="the_threshold"
               variant="tertiary"
               aria-expanded={papersOpen}
-              aria-controls="papers-sheet"
+              // The sheet exists only while it is open; a dangling IDREF is
+              // what a closed one would leave.
+              aria-controls={papersOpen ? 'papers-sheet' : undefined}
               onClick={onOpenPapers}
             >
               {PAPERS_TAB_LABEL}

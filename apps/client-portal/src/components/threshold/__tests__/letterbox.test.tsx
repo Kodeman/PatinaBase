@@ -236,8 +236,10 @@ describe('Letterbox — one letter, half out of the slot', () => {
       />,
     );
 
+    // The retired invoice detail page's own confirmed sentence, and the letter
+    // it is about — the receipt used to stand unlabelled over a different one.
     expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
-      'Paid September 4. Receipt in your email.',
+      'Invoice No. 3 · Payment confirmed — thank you. Your invoice has been updated.',
     );
     expect(clientEvents.paymentCompleted).toHaveBeenCalledTimes(1);
     expect(clientEvents.paymentCompleted).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
@@ -264,7 +266,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
 
     const receipt = screen.getByTestId('letterbox-receipt');
     expect(receipt).toHaveTextContent('Confirming payment… This usually takes a few seconds.');
-    expect(receipt).not.toHaveTextContent('Paid September 4');
+    expect(receipt).not.toHaveTextContent('Payment confirmed');
     expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
   });
 

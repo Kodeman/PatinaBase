@@ -12,6 +12,7 @@ import {
 
 import { ScoredAction } from '@/components/making/scored-action';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
+import { hasPassed } from '@/lib/threshold/expiry';
 
 import { InstrumentReading } from './instrument-reading';
 
@@ -54,14 +55,6 @@ const FEEDBACK_MAX = 1000;
 const QUESTION_MAX = 1000;
 
 type ActKey = 'read' | 'question' | 'change' | 'decline';
-
-/** The old page's expiry gate, verbatim: a passed date is expired even when
- *  the status column still says "sent" because the cron has not run. */
-function hasPassed(validUntil: string | null | undefined): boolean {
-  if (!validUntil) return false;
-  const at = new Date(validUntil).getTime();
-  return !Number.isNaN(at) && at < Date.now();
-}
 
 export interface DoorActsProps {
   proposalId: string;
@@ -108,6 +101,10 @@ export function DoorActs({
   // "Never mind" or a successful send unmounts the focused control and drops
   // the keyboard on <body>.
   const openerRef = useRef<HTMLElement | null>(null);
+  // A successful decline takes the Decline act out of `acts`, so restoring to
+  // the opener focuses a detached node and the keyboard lands on <body>. The
+  // acts row itself survives the act, so the decline path restores there.
+  const rowRef = useRef<HTMLDivElement | null>(null);
   // State is render-time, so two clicks in one tick both read `isPending`
   // false. A latch per act closes that, as the gate's own does.
   const askLatch = useRef(false);
@@ -150,7 +147,7 @@ export function DoorActs({
       });
       setQuestion('');
       setOpen(null);
-      setReceipt('Your question was sent.');
+      setReceipt('Your question was sent');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send your question');
     } finally {
@@ -223,14 +220,16 @@ export function DoorActs({
 
   if (acts.length === 0 && !declinedAt && !receipt) return null;
 
-  const panelIdFor = (key: ActKey) => `${panelId}-${key}`;
+  // `-panel-` and not `-${key}`: the ask's field id is `${panelId}-question`,
+  // and a region sharing an id with the textarea inside it steals the label.
+  const panelIdFor = (key: ActKey) => `${panelId}-panel-${key}`;
 
   return (
     <div
       data-testid="door-acts"
       className="mt-6 border-t border-[var(--border-subtle)] pt-3"
     >
-      <div className="flex flex-wrap items-center gap-3">
+      <div ref={rowRef} tabIndex={-1} className="flex flex-wrap items-center gap-3">
         {acts.map((act) => (
           <ScoredAction
             key={act.key}
@@ -335,6 +334,7 @@ export function DoorActs({
             confirmVariant="danger"
             pending={declining}
             restoreFocusRef={openerRef}
+            confirmRestoreFocusRef={rowRef}
             onConfirm={onDecline}
             onDismiss={() => setOpen(null)}
           />
@@ -361,6 +361,8 @@ interface PanelProps {
   confirmVariant?: 'secondary' | 'danger';
   pending: boolean;
   restoreFocusRef: RefObject<HTMLElement | null>;
+  /** Where the CONFIRM act returns focus, when its opener may not survive it. */
+  confirmRestoreFocusRef?: RefObject<HTMLElement | null>;
   onConfirm: () => void;
   onDismiss: () => void;
 }
@@ -382,6 +384,7 @@ function Panel({
   confirmVariant = 'secondary',
   pending,
   restoreFocusRef,
+  confirmRestoreFocusRef,
   onConfirm,
   onDismiss,
 }: PanelProps) {
@@ -428,7 +431,7 @@ function Panel({
           variant={confirmVariant}
           loading={pending}
           loadingLabel={confirmLoadingLabel}
-          restoreFocusRef={restoreFocusRef}
+          restoreFocusRef={confirmRestoreFocusRef ?? restoreFocusRef}
           onClick={onConfirm}
         >
           {confirmLabel}

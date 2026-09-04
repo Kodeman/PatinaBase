@@ -36,10 +36,9 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
     );
   }
 
-  // The one sentence the door already says when the read fails; a refusal the
-  // client can act on, not a thrown error string printed as content. A read
-  // that resolves to nothing is the same refusal in a quieter form.
-  if (bundle.isError || !bundle.data) {
+  // The one sentence the door already says when the read FAILED; a refusal the
+  // client can act on, not a thrown error string printed as content.
+  if (bundle.isError) {
     return (
       <p
         role="alert"
@@ -47,6 +46,20 @@ export function InstrumentReading({ proposalId }: InstrumentReadingProps) {
         className="mt-3 text-[15px] leading-normal text-[var(--color-error)]"
       >
         This paper could not be drawn just now. Reload to try again.
+      </p>
+    );
+  }
+
+  // A read that RESOLVED to nothing is not an error, and a reload does not
+  // change it — so it says so quietly rather than in error ink under a promise
+  // it cannot keep. It still says something: an unfold never opens on nothing.
+  if (!bundle.data) {
+    return (
+      <p
+        data-testid="instrument-reading-absent"
+        className="mt-3 text-[15px] leading-normal text-[var(--text-muted)]"
+      >
+        This paper is not on file for you. Ask your studio for a copy of it.
       </p>
     );
   }

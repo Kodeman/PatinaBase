@@ -121,18 +121,20 @@ describe('the owed row’s due date', () => {
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125 · due 15 August');
   });
 
-  it('names the FIRST day when the figure spans several DATED invoices', () => {
+  it('names the day as the SOONEST when the figure spans several invoices', () => {
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedDatedCount: 3 })} />);
 
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      '$9,125 · first due 15 August',
+      '$9,125 · soonest due 15 August',
     );
   });
 
-  it('names one day as THE day when only one of several invoices is dated', () => {
+  it('does not put the whole sum on one day when only one invoice is dated', () => {
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedDatedCount: 1 })} />);
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125 · due 15 August');
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
+      '$9,125 · soonest due 15 August',
+    );
   });
 
   it('spells the year out once the day is not in this one', () => {

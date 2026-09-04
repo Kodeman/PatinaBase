@@ -18,11 +18,26 @@ export default async function HomePage() {
   const projects = await fetchClientProjects();
   const activeProjectId = await resolveActiveHouse(projects.map((project) => project.id));
 
-  const projectView = activeProjectId ? await fetchClientProjectView(activeProjectId) : null;
+  // The house that moved last, then the rest in the list's own order. A client
+  // who HAS houses must land in one of them: the chrome drops the header on
+  // `/` because the list says she has a house, so an empty state here would
+  // strand her with no navigation and tell her she has no projects.
+  const candidates = activeProjectId
+    ? [
+        activeProjectId,
+        ...projects.map((project) => project.id).filter((id) => id !== activeProjectId),
+      ]
+    : projects.map((project) => project.id);
 
-  // No house, or a house the list named and the detail read cannot open (a
-  // deletion mid-request, an RLS skew between the two selects): the front
-  // door is not the place for a 404. `/projects/<id>` still answers one.
+  let projectView: Awaited<ReturnType<typeof fetchClientProjectView>> = null;
+  for (const candidateId of candidates) {
+    projectView = await fetchClientProjectView(candidateId);
+    if (projectView) break;
+  }
+
+  // No house at all, or not one of them opens (a deletion mid-request, an RLS
+  // skew between the two selects): the front door is not the place for a 404.
+  // `/projects/<id>` still answers one.
   if (!projectView) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)]">

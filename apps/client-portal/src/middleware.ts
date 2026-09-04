@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
 import { safeAuthReturnPath } from '@patina/supabase/auth';
-import { CLIENT_AUTH_DESTINATION } from '@/lib/auth-redirect';
+import { CLIENT_AUTH_DESTINATION } from '@/lib/client-auth-destination';
 import {
   resolvePortalDecision,
   type RoleDomain,

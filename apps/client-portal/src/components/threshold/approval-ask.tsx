@@ -20,6 +20,7 @@ import { useAuth } from '@/hooks/use-auth';
 import {
   isClientActionableProjectApproval,
   isProjectApprovalAwaitingStudioIssue,
+  projectApprovalAttentionLabel,
 } from '@/lib/client-attention';
 import { parseSourceDate } from '@/lib/threshold/derive';
 
@@ -57,28 +58,38 @@ const RESPOND_REFUSED = 'This approval changed while it was open. Refresh before
  */
 const OUTCOME_ACTS: Array<{
   outcome: ProjectApprovalOutcome;
-  actionKey: string;
+  /**
+   * The act that WRITES the outcome. Choosing one records nothing, so the
+   * outcome's own event belongs on the submit — a client who considers Decline
+   * and then approves must not have emitted `decline_project_approval`.
+   */
+  writeKey: string;
+  /** Choosing an outcome to read its consequence: a selection, not a record. */
+  selectKey: string;
   label: string;
   consequence: string;
   variant: 'primary' | 'secondary' | 'tertiary';
 }> = [
   {
     outcome: 'approved',
-    actionKey: 'approve_project_approval',
+    writeKey: 'approve_project_approval',
+    selectKey: 'consider_approve_project_approval',
     label: 'Approve',
     consequence: 'Accept this exact artifact and its stated impacts.',
     variant: 'primary',
   },
   {
     outcome: 'needs_discussion',
-    actionKey: 'question_project_approval',
+    writeKey: 'question_project_approval',
+    selectKey: 'consider_question_project_approval',
     label: 'Ask a question',
     consequence: 'Hold the gate while you and your designer talk it through.',
     variant: 'secondary',
   },
   {
     outcome: 'changes_requested',
-    actionKey: 'decline_project_approval',
+    writeKey: 'decline_project_approval',
+    selectKey: 'consider_decline_project_approval',
     label: 'Decline',
     consequence: 'Return this edition for revision and a new approval request.',
     variant: 'tertiary',
@@ -100,6 +111,16 @@ const SECTION_CLASS =
 
 function moneyDelta(cents: number): string {
   return `${cents > 0 ? '+' : '−'}${moneyInWords(Math.abs(cents))}`;
+}
+
+/**
+ * The artifact's own figures, to the cent — `formatMoney` from the retired
+ * `/decisions/[id]` page, verbatim. The house's prose rounds to whole dollars
+ * and is right to; the table of the document the client is being bound to may
+ * not, or a target of $48,200.60 reads $48,201 on the edition she approves.
+ */
+function moneyExact(cents: number, currency: string): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
 }
 
 function dayDelta(days: number): string {
@@ -127,12 +148,21 @@ function refusalSentence(cause: unknown, sentence: string): string {
  * ask off the doorstep at the same instant its own act landed. Two states
  * outlive it and are read from the row, not from this visit: a gate whose
  * review is complete and is waiting on the studio to issue it, and a gate that
- * carries a recorded outcome — that one stands as a receipt, so a client who
- * answered last week still finds the record on the page they answered it on.
+ * carries a recorded outcome — that one stands as a record in Previously, so a
+ * client who answered last week still finds it on the page she answered it on.
+ *
+ * A gate that is neither open nor answered — withdrawn, or superseded by a
+ * later edition — is history too, and stood on no surface at all until it was
+ * filed here. It reads as its own word (Withdrawn / Superseded, ahead of any
+ * outcome, the order `projectApprovalAttentionLabel` keeps) and carries no act
+ * and no revision link: a closed edition is read, not navigated from.
+ *
+ * `asks` wins over `records` — an id may anchor exactly one element on the
+ * page, and the `#approval-<id>` links depend on it.
  */
 export function useDoorstepApprovals(approvals: ProjectApprovalReview[]): {
   asks: ProjectApprovalReview[];
-  receipts: ProjectApprovalReview[];
+  records: ProjectApprovalReview[];
   anchoredDecisionIds: string[];
   onAnswered: (decisionId: string) => void;
 } {
@@ -147,16 +177,26 @@ export function useDoorstepApprovals(approvals: ProjectApprovalReview[]): {
       isProjectApprovalAwaitingStudioIssue(approval) ||
       answeredHere.includes(approval.decisionId),
   );
-  const receipts = approvals.filter(
-    (approval) => approval.outcome !== null && !answeredHere.includes(approval.decisionId),
-  );
+  const asked = new Set(asks.map((approval) => approval.decisionId));
+  const records = approvals
+    .filter(
+      (approval) =>
+        !asked.has(approval.decisionId) &&
+        (approval.outcome !== null || approval.disposition !== 'active'),
+    )
+    .sort((a, b) => recordedAtOf(b).localeCompare(recordedAtOf(a)));
 
   return {
     asks,
-    receipts,
-    anchoredDecisionIds: [...asks, ...receipts].map((approval) => approval.decisionId),
+    records,
+    anchoredDecisionIds: [...asks, ...records].map((approval) => approval.decisionId),
     onAnswered,
   };
+}
+
+/** When a gate closed, for ordering the record newest first. */
+function recordedAtOf(approval: ProjectApprovalReview): string {
+  return approval.respondedAt ?? approval.updatedAt ?? approval.createdAt ?? '';
 }
 
 function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
@@ -200,7 +240,7 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
               <div key={label}>
                 <dt className={EYEBROW_CLASS}>{label}</dt>
                 <dd className="mt-0.5 text-[15px] leading-normal">
-                  {moneyInWords(cents, budget.currency)}
+                  {moneyExact(cents, budget.currency)}
                 </dd>
               </div>
             ))}
@@ -213,10 +253,10 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
                     {`${line.roomName} · ${line.category}`}
                   </p>
                   <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                    {`Low ${moneyInWords(line.lowCents, budget.currency)} · Target ${moneyInWords(
+                    {`Low ${moneyExact(line.lowCents, budget.currency)} · Target ${moneyExact(
                       line.targetCents,
                       budget.currency,
-                    )} · High ${moneyInWords(line.highCents, budget.currency)}`}
+                    )} · High ${moneyExact(line.highCents, budget.currency)}`}
                   </p>
                 </li>
               ))}
@@ -228,7 +268,12 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
   );
 }
 
-function Discussion({ decisionId }: { decisionId: string }) {
+/**
+ * @param readOnly a closed gate's thread. The conversation that explains the
+ *   outcome is half the record, so it stays readable — but nothing may be added
+ *   to a discussion whose gate has already been answered.
+ */
+function Discussion({ decisionId, readOnly = false }: { decisionId: string; readOnly?: boolean }) {
   const { user } = useAuth();
   const comments = useDecisionComments(decisionId);
   const createComment = useCreateDecisionComment();
@@ -308,7 +353,7 @@ function Discussion({ decisionId }: { decisionId: string }) {
         </ul>
       )}
 
-      {user && !comments.isLoading && !comments.isError && (
+      {!readOnly && user && !comments.isLoading && !comments.isError && (
         <div className="mt-4 max-w-[58ch]">
           <label
             className="block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
@@ -350,33 +395,113 @@ function Discussion({ decisionId }: { decisionId: string }) {
 }
 
 /**
- * The record of a gate answered on an earlier visit. It is not an ask — there
- * is nothing left to do on it — so it stands as its stamp and nothing more.
+ * The record of a gate that is closed: answered on an earlier visit, withdrawn
+ * by the studio, or superseded by a later edition. It is not an ask — nothing
+ * on it can be changed — so it carries its stamp, and the discussion that
+ * explains it, and no link out of itself.
+ *
+ * The stamp takes the house's own precedence: `Withdrawn` / `Superseded` stand
+ * AHEAD of an outcome (`projectApprovalAttentionLabel`), so a superseded
+ * edition never reads plainly "Declined" beside the live edition that replaced
+ * it.
  */
 export function ApprovalReceipt({ approval }: { approval: ProjectApprovalReview }) {
-  const outcome = approval.outcome;
-  if (!outcome) return null;
+  const [reading, setReading] = useState(false);
+  const closed = approval.outcome !== null || approval.disposition !== 'active';
   const stampedAt = parseSourceDate(approval.respondedAt);
+  const headingId = `approval-record-${approval.decisionId}`;
+  const threadId = `approval-record-thread-${approval.decisionId}`;
+  if (!closed) return null;
 
   return (
     <section
       id={`approval-${approval.decisionId}`}
       data-threshold-unit="doorstep-approval-receipt"
       data-testid="doorstep-approval-receipt"
+      aria-labelledby={headingId}
       className={SECTION_CLASS}
     >
-      <p className={`pt-2.5 ${EYEBROW_CLASS}`}>A gate · answered</p>
-      <p className="mt-1.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]">
-        {approval.question}
+      <p className={`pt-2.5 ${EYEBROW_CLASS}`}>
+        {approval.disposition === 'active' ? 'A gate · answered' : 'A gate · closed'}
       </p>
+      {/* A heading, so a screen-reader user browsing by heading finds the
+          records as well as the asks. */}
+      <h3
+        id={headingId}
+        className="font-heading mt-1.5 max-w-[52ch] text-[1.05rem] font-normal leading-[1.45] text-[var(--text-body)]"
+      >
+        {approval.question}
+      </h3>
       <p className="mt-3">
         <span data-testid="approval-receipt-stamp" className={STAMP_CLASS}>
-          {`${STAMP_WORD[outcome]}${stampedAt ? ` ${DAY_MONTH.format(stampedAt)}` : ''}`}
+          {`${projectApprovalAttentionLabel(approval)}${
+            stampedAt ? ` ${DAY_MONTH.format(stampedAt)}` : ''
+          }`}
           <span className="block font-normal normal-case tracking-[0.04em]">
             {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
           </span>
         </span>
       </p>
+      <div className="mt-3">
+        <ScoredAction
+          actionKey="read_approval_discussion"
+          regionKey="previously"
+          surfaceKey="the_threshold"
+          variant="tertiary"
+          aria-expanded={reading}
+          aria-controls={reading ? threadId : undefined}
+          onClick={() => setReading((was) => !was)}
+        >
+          {reading ? 'Close the discussion' : 'Read the discussion'}
+        </ScoredAction>
+      </div>
+      {reading && (
+        <div id={threadId}>
+          <Discussion decisionId={approval.decisionId} readOnly />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** How many closed gates stand open before the rest are folded away. */
+const RECORDS_SHOWN = 3;
+
+/**
+ * The closed gates, under one heading with their count, newest first — the
+ * `History (N)` pile `/decisions` kept, rather than a year of full-width stamps
+ * stacked between the ask and the plan key.
+ */
+export function ApprovalRecords({ approvals }: { approvals: ProjectApprovalReview[] }) {
+  const [all, setAll] = useState(false);
+  if (approvals.length === 0) return null;
+  const shown = all ? approvals : approvals.slice(0, RECORDS_SHOWN);
+
+  return (
+    <section
+      data-testid="approval-records"
+      aria-labelledby="approval-records-heading"
+      className="mt-8 border-t border-[var(--border-default)] pt-3"
+    >
+      <h2 id="approval-records-heading" className={EYEBROW_CLASS}>
+        {`Gates closed · ${approvals.length}`}
+      </h2>
+      {shown.map((approval) => (
+        <ApprovalReceipt key={approval.decisionId} approval={approval} />
+      ))}
+      {!all && approvals.length > RECORDS_SHOWN && (
+        <div className="mt-3">
+          <ScoredAction
+            actionKey="read_earlier_approval_records"
+            regionKey="previously"
+            surfaceKey="the_threshold"
+            variant="tertiary"
+            onClick={() => setAll(true)}
+          >
+            {`Read the earlier gates · ${approvals.length - RECORDS_SHOWN}`}
+          </ScoredAction>
+        </div>
+      )}
     </section>
   );
 }
@@ -501,11 +626,14 @@ export function ApprovalAsk({
   if (approval.leadTimeDaysDelta)
     impact.push({ label: 'Lead time', value: dayDelta(approval.leadTimeDaysDelta) });
 
+  // `data-never-dim` is spared the Since-Yesterday dim only while something is
+  // actually owed on it: a gate she has reviewed and that now waits on the
+  // studio owes her nothing, and reads like the other two gates do.
   return (
     <section
       id={`approval-${approval.decisionId}`}
       data-threshold-unit="doorstep-approval"
-      {...(recordedOutcome ? {} : { 'data-never-dim': '' })}
+      {...(recordedOutcome || awaitingStudioIssue ? {} : { 'data-never-dim': '' })}
       data-testid="doorstep-approval"
       aria-labelledby={`approval-gate-${approval.decisionId}`}
       className={SECTION_CLASS}
@@ -637,7 +765,7 @@ export function ApprovalAsk({
               {OUTCOME_ACTS.map((act) => (
                 <ScoredAction
                   key={act.outcome}
-                  actionKey={act.actionKey}
+                  actionKey={act.selectKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
                   variant={act.variant}
@@ -657,7 +785,7 @@ export function ApprovalAsk({
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-x-6">
                 <ScoredAction
-                  actionKey="submit_project_approval_response"
+                  actionKey={chosenAct.writeKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
                   variant="primary"

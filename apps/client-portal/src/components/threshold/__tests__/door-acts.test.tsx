@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act as act_, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 // ── Boundaries ──────────────────────────────────────────────────────────────
 // The acts row is four mutations and one unfold. Mock the modules the file
@@ -139,7 +139,7 @@ describe('DoorActs', () => {
       body: 'About Furnishings authorization No. 7\n\nCan the sconces come in an aged brass?',
     });
     expect(await screen.findByTestId('door-acts-receipt')).toHaveTextContent(
-      'Your question was sent.',
+      'Your question was sent',
     );
   });
 
@@ -355,5 +355,35 @@ describe('DoorActs', () => {
     );
     expect(act('Read it in full')).not.toHaveAttribute('aria-controls');
     expect(act('Decline document')).toHaveAttribute('data-action-variant', 'danger');
+  });
+
+  it('does not give the ask panel the same id as the field inside it', () => {
+    // Two elements sharing one id: the label and every id lookup resolve to
+    // the wrapper (first in tree order), so "Your question" stops naming the
+    // textarea in the accessibility tree.
+    renderActs();
+    fireEvent.click(act('Ask a question'));
+
+    const panelId = act('Ask a question').getAttribute('aria-controls')!;
+    const field = screen.getByTestId('door-ask-question');
+    expect(field.id).not.toBe(panelId);
+    expect(document.querySelectorAll(`[id="${panelId}"]`)).toHaveLength(1);
+    expect(screen.getByLabelText('Your question')).toBe(field);
+  });
+
+  it('leaves the keyboard inside the acts when the decline act removes itself', async () => {
+    renderActs();
+    fireEvent.click(act('Decline'));
+
+    await act_(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Decline document' }));
+    });
+
+    // The opener is gone with the act; focus on a detached node is a no-op and
+    // the keyboard lands on <body>.
+    await waitFor(() =>
+      expect(screen.getByTestId('door-acts').contains(document.activeElement)).toBe(true),
+    );
+    expect(document.activeElement).not.toBe(document.body);
   });
 });

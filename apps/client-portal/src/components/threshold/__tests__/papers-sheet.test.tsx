@@ -162,15 +162,25 @@ describe('PapersSheet — the papers, laid over the house', () => {
     render(<PapersSheet projectId="project-1" open onDismiss={jest.fn()} />);
 
     expect(screen.queryByTestId('papers-sheet-empty')).not.toBeInTheDocument();
-    expect(screen.getByTestId('papers-sheet-hold')).toBeInTheDocument();
+    // The drawings came back and stand; the failed register says so in the
+    // retired page's own words rather than blanking the sheet.
+    expect(screen.getByTestId('papers-sheet-drawings')).toBeInTheDocument();
+    expect(screen.getByTestId('papers-sheet-error')).toHaveTextContent(
+      'We couldn’t load your documents right now. Try refreshing the page.',
+    );
   });
 
-  it('holds rather than showing a file it cannot vouch is the whole file', () => {
+  it('keeps the papers that answered when the drawings leg fails', () => {
     setSources({ planSetError: true, documents: [filed()] });
     render(<PapersSheet projectId="project-1" open onDismiss={jest.fn()} />);
 
-    expect(screen.queryByTestId('papers-sheet-other')).not.toBeInTheDocument();
-    expect(screen.getByTestId('papers-sheet-hold')).toBeInTheDocument();
+    // app/documents/page.tsx:53-58 — a drawings-leg failure must not blank the
+    // page; the register carries its own notice instead.
+    expect(screen.getByTestId('papers-sheet-other')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-set-error')).toHaveTextContent(
+      'We couldn’t load your drawings right now. Try refreshing the page.',
+    );
+    expect(screen.queryByTestId('papers-sheet-empty')).not.toBeInTheDocument();
   });
 
   it('groups the drawing set by discipline and dates each sheet', () => {

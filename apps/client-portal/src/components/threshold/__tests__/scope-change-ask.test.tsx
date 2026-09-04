@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 
@@ -159,7 +159,9 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
     title: "Add a runner to the stair hall",
     description: "The stair hall would benefit from a runner underfoot.",
     status: "sent",
-    request_origin: "studio",
+    // 00395's CHECK permits only client_request / designer_amendment; a
+    // "studio" row is a shape production cannot hold.
+    request_origin: "designer_amendment",
     additional_ffe_budget_cents: 180000,
     additional_design_fee_cents: 0,
     timeline_impact_weeks: 1,
@@ -210,6 +212,25 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
       { requestId: "sc-1", projectId: PROJECT_ID, approvedByName: "Whit Vale" },
       expect.any(Object),
     );
+  });
+
+  it("sends one approval however fast the two clicks land", () => {
+    // Approve binds a signature and a budget change. `ScoredAction`'s own
+    // `unavailable` only takes effect on the NEXT render, so two clicks in one
+    // tick both read it false.
+    const mutate = jest.fn();
+    approveMock.mockReturnValue({ mutate, isPending: false });
+    scopeMock.mockReturnValue({ data: [STUDIO_CHANGE], isLoading: false });
+    wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
+
+    fireEvent.change(screen.getByTestId("scope-change-sign-name"), {
+      target: { value: "Whit Vale" },
+    });
+    const approve = screen.getByTestId("scope-change-approve");
+    fireEvent.click(approve);
+    fireEvent.click(approve);
+
+    expect(mutate).toHaveBeenCalledTimes(1);
   });
 
   it("stamps Approved <date> in place once the mutation resolves", async () => {
@@ -458,6 +479,24 @@ describe("MyScopeChangeRequestsAsk — withdraw the client's own request (findin
     expect(screen.getByTestId("my-scope-change-withdrawn")).toBeInTheDocument();
   });
 
+  it("greys out only the request being withdrawn", () => {
+    // Withdrawing one used to grey out and say "Withdrawing" on every other
+    // request the client had standing.
+    cancelMock.mockReturnValue({
+      mutate: jest.fn(),
+      isPending: true,
+      variables: { requestId: "sc-mine", projectId: PROJECT_ID },
+    });
+    scopeMock.mockReturnValue({
+      data: [MY_REQUEST, { ...MY_REQUEST, id: "sc-other", title: "A second ask" }],
+      isLoading: false,
+    });
+    wrap(<MyScopeChangeRequestsAsk projectId={PROJECT_ID} />);
+
+    expect(screen.getByTestId("scope-change-withdraw-sc-mine")).toBeDisabled();
+    expect(screen.getByTestId("scope-change-withdraw-sc-other")).toBeEnabled();
+  });
+
   it("does not stand a different client's request", () => {
     scopeMock.mockReturnValue({
       data: [{ ...MY_REQUEST, requested_by: "someone-else" }],
@@ -485,6 +524,7 @@ describe("ResolvedScopeChangesPrevious — what closed, read from the row itself
           id: "sc-1",
           title: "Add a runner to the stair hall",
           status: "approved",
+          sent_at: "2026-08-01T12:00:00Z",
           approved_at: "2026-08-04T12:00:00Z",
         },
       ],
@@ -495,5 +535,43 @@ describe("ResolvedScopeChangesPrevious — what closed, read from the row itself
     const line = screen.getByTestId("resolved-scope-change-line");
     expect(line).toHaveTextContent("Add a runner to the stair hall");
     expect(line).toHaveTextContent("Approved");
+  });
+
+  it("keeps studio churn out of the client's record", () => {
+    // A designer amendment drafted and cancelled before it was ever sent was
+    // never shown to her; it does not enter her Previously.
+    scopeMock.mockReturnValue({
+      data: [
+        {
+          id: "sc-2",
+          title: "An amendment nobody sent",
+          status: "cancelled",
+          sent_at: null,
+          request_origin: "designer_amendment",
+        },
+      ],
+      isLoading: false,
+    });
+    const { container } = wrap(<ResolvedScopeChangesPrevious projectId={PROJECT_ID} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("keeps the client's own withdrawn request, sent or not", () => {
+    scopeMock.mockReturnValue({
+      data: [
+        {
+          id: "sc-3",
+          title: "A request I withdrew",
+          status: "cancelled",
+          sent_at: null,
+          request_origin: "client_request",
+        },
+      ],
+      isLoading: false,
+    });
+    wrap(<ResolvedScopeChangesPrevious projectId={PROJECT_ID} />);
+    expect(screen.getByTestId("resolved-scope-change-line")).toHaveTextContent(
+      "A request I withdrew",
+    );
   });
 });

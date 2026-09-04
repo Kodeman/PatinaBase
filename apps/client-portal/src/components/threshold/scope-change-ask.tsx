@@ -69,11 +69,16 @@ function isMyPendingRequest(row: ScopeChangeRow, userId: string | undefined): bo
 }
 
 function isResolved(row: ScopeChangeRow): boolean {
-  return (
+  const closed =
     !!row.approved_at ||
     !!row.declined_at ||
     !!row.applied_at ||
-    row.status === "cancelled"
+    row.status === "cancelled";
+  // A designer amendment drafted and cancelled before it was ever sent is
+  // studio-internal churn — the client was never shown it, so it does not
+  // enter her record. Her OWN requests are hers whether or not they were sent.
+  return (
+    closed && (row.request_origin === "client_request" || !!row.sent_at)
   );
 }
 
@@ -443,6 +448,10 @@ function ScopeChangeDecideCard({
 }) {
   const approve = useApproveScopeChange();
   const decline = useDeclineScopeChange();
+  // Approve binds a signature and a budget change; `ScoredAction`'s own
+  // `unavailable` only lands on the next render, so a ref closes the
+  // same-tick double-click window on both acts.
+  const actInFlight = useRef(false);
   const [signName, setSignName] = useState("");
   const [showDecline, setShowDecline] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
@@ -472,11 +481,13 @@ function ScopeChangeDecideCard({
   }
 
   function handleApprove() {
+    if (actInFlight.current) return;
     setError(null);
     if (!signName.trim()) {
       setError("Type your full name to approve.");
       return;
     }
+    actInFlight.current = true;
     approve.mutate(
       { requestId: request.id, projectId, approvedByName: signName.trim() },
       {
@@ -488,12 +499,17 @@ function ScopeChangeDecideCard({
               : "Could not send just now. Try again.",
           );
         },
+        onSettled: () => {
+          actInFlight.current = false;
+        },
       },
     );
   }
 
   function handleDecline() {
+    if (actInFlight.current) return;
     setError(null);
+    actInFlight.current = true;
     decline.mutate(
       {
         requestId: request.id,
@@ -508,6 +524,9 @@ function ScopeChangeDecideCard({
               ? err.message
               : "Could not send just now. Try again.",
           );
+        },
+        onSettled: () => {
+          actInFlight.current = false;
         },
       },
     );
@@ -671,6 +690,9 @@ export function MyScopeChangeRequestsAsk({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const scopeQuery = useScopeChangeRequests(projectId);
   const cancel = useCancelClientScopeChangeRequest();
+  // `ScoredAction`'s own `unavailable` only takes effect on the NEXT render,
+  // so two clicks in one tick both read it false. A ref closes that window.
+  const withdrawInFlight = useRef(false);
   const [withdrawnId, setWithdrawnId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -680,7 +702,9 @@ export function MyScopeChangeRequestsAsk({ projectId }: { projectId: string }) {
   if (mine.length === 0) return null;
 
   function handleWithdraw(requestId: string) {
+    if (withdrawInFlight.current) return;
     setError(null);
+    withdrawInFlight.current = true;
     cancel.mutate(
       { requestId, projectId },
       {
@@ -691,6 +715,9 @@ export function MyScopeChangeRequestsAsk({ projectId }: { projectId: string }) {
               ? err.message
               : "Could not withdraw just now. Try again.",
           );
+        },
+        onSettled: () => {
+          withdrawInFlight.current = false;
         },
       },
     );
@@ -738,7 +765,7 @@ export function MyScopeChangeRequestsAsk({ projectId }: { projectId: string }) {
                 regionKey="doorstep"
                 surfaceKey="the_threshold"
                 variant="tertiary"
-                loading={cancel.isPending}
+                loading={cancel.isPending && cancel.variables?.requestId === request.id}
                 loadingLabel="Withdrawing"
                 onClick={() => handleWithdraw(request.id)}
                 data-testid={`scope-change-withdraw-${request.id}`}

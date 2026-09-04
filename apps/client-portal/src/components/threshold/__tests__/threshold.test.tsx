@@ -1539,3 +1539,77 @@ describe('Threshold — L6, the review and scope-change asks mounted in place', 
     window.history.pushState({}, '', `/projects/${PROJECT_ID}`);
   });
 });
+
+describe('the settle gate — a query that cannot answer may not hold the house', () => {
+  // A DISABLED TanStack v5 query reports `status: 'pending'` for as long as it
+  // is mounted: it never runs, so it never resolves. Reading `isPending`
+  // straight off one puts the whole page behind a query that will not answer.
+  it('opens the house while a disabled query reports pending forever', () => {
+    authMock.mockReturnValue({ user: undefined, signOut: jest.fn() });
+    // `useMyPendingReviewRequests` / `useMySubmittedReviews` are
+    // `enabled: !!clientUserId` — with no user they are disabled, and this is
+    // exactly what they report.
+    pendingReviewMock.mockReturnValue({ data: undefined, isLoading: true, isPending: true });
+    submittedReviewMock.mockReturnValue({ data: undefined, isLoading: true, isPending: true });
+
+    renderThreshold();
+
+    expect(screen.queryByTestId('threshold-hold')).not.toBeInTheDocument();
+    expect(document.querySelector('#doorstep')).toBeInTheDocument();
+  });
+
+  it('does not hold on the edition bundle when no ?review= link came', () => {
+    reviewBundleMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isPending: true,
+      isError: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.queryByTestId('threshold-hold')).not.toBeInTheDocument();
+  });
+
+  it('still holds while a query that CAN answer has not', () => {
+    // The control: an enabled query that is genuinely in flight holds, or the
+    // gate would prove nothing.
+    invoicesMock.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isLoading: true,
+      isError: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+  });
+});
+
+describe('the reply, when the record is empty', () => {
+  it('stands the reply on its own line rather than heading an empty Previously', () => {
+    correspondenceMock.mockReturnValue({
+      threadId: 'thread-1',
+      muted: false,
+      letters: [],
+      notices: [],
+      hasEarlierLetters: false,
+      readEarlierLetters: jest.fn(),
+      isReadingEarlierLetters: false,
+      unreadNoticeIds: [],
+      sentAts: [],
+      isPending: false,
+    });
+    notesMock.mockReturnValue(settled([]));
+
+    renderThreshold();
+
+    const reply = screen.getByTestId('standing-reply');
+    expect(reply).toBeInTheDocument();
+    // Not inside Previously: a record with nothing previous in it may not be
+    // opened just to carry the reply.
+    expect(document.querySelector('#previously')?.contains(reply) ?? false).toBe(false);
+    expect(document.querySelector('#previously')).not.toHaveTextContent('Write back');
+  });
+});

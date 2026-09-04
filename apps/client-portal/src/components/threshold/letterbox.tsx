@@ -195,7 +195,7 @@ export function Letterbox({
           {settlement.outcome !== 'settled'
             ? 'Nothing changed.'
             : confirm === 'confirmed'
-              ? `Paid ${LONG_MONTH_DAY.format(today ?? new Date())}. Receipt in your email.`
+              ? `${returnedRow?.invoice_number ?? 'Your invoice'} · Payment confirmed — thank you. Your invoice has been updated.`
               : confirm === 'unconfirmed'
                 ? 'Checkout returned, but Patina has not confirmed a payment yet. Do not submit another payment until the status is known.'
                 : 'Confirming payment… This usually takes a few seconds.'}
@@ -281,10 +281,18 @@ export function Letterbox({
         </p>
       )}
 
+      {/* The letter taken to the till may be one of these, not the one in the
+          slot: the same refusal has to reach the line that carries its act, or
+          the client is invited to press an act the edge function will refuse. */}
       <EarlierInvoices
         invoices={invoices}
         exceptId={invoice?.id ?? null}
         designerName={studio}
+        heldInvoiceId={
+          confirm === 'confirming' || confirm === 'unconfirmed'
+            ? (settlement?.invoiceId ?? null)
+            : null
+        }
         onRefetch={onRefetch}
         today={today}
       />

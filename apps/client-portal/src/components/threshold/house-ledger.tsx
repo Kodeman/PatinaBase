@@ -73,7 +73,12 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
       key: 'owed' as const,
       words: owedWords(ledger.owedInvoiceCount),
       cents: ledger.owedCents,
-      due: owedDueLine(parseSourceDate(ledger.owedDueDate), ledger.owedDatedCount, today),
+      due: owedDueLine(
+        parseSourceDate(ledger.owedDueDate),
+        ledger.owedDatedCount,
+        today,
+        ledger.owedInvoiceCount,
+      ),
     },
     { key: 'held' as const, words: 'Held on finished work', cents: ledger.heldCents },
     { key: 'awaiting' as const, words: 'Awaiting your name', cents: ledger.awaitingCents },

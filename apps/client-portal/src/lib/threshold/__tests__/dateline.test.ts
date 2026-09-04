@@ -38,8 +38,15 @@ describe('owedDueLine — what the owed row adds to its figure', () => {
     expect(owedDueLine(new Date(2026, 7, 15), 1)).toBe('due 15 August');
   });
 
-  it('names the FIRST day when the figure spans several DATED invoices', () => {
-    expect(owedDueLine(new Date(2026, 7, 15), 3)).toBe('first due 15 August');
+  it('names the day as the SOONEST when the figure spans several invoices', () => {
+    // Neither "due" (the whole balance falls that day) nor "first due" (the
+    // rest have days of their own) is true of a set; "soonest" is.
+    expect(owedDueLine(new Date(2026, 7, 15), 3, undefined, 3)).toBe('soonest due 15 August');
+    expect(owedDueLine(new Date(2026, 7, 15), 1, undefined, 3)).toBe('soonest due 15 August');
+  });
+
+  it('says plain "due" only for one dated invoice with nothing else open', () => {
+    expect(owedDueLine(new Date(2026, 7, 15), 1, undefined, 1)).toBe('due 15 August');
   });
 
   it('says nothing when no invoice carries a due date', () => {
@@ -47,16 +54,16 @@ describe('owedDueLine — what the owed row adds to its figure', () => {
   });
 
   it('spells the year out once the day is not in this one', () => {
-    expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2027, 0, 4))).toBe(
+    expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2027, 0, 4), 1)).toBe(
       'due 15 August 2026',
     );
-    expect(owedDueLine(new Date(2026, 7, 15), 3, new Date(2027, 0, 4))).toBe(
-      'first due 15 August 2026',
+    expect(owedDueLine(new Date(2026, 7, 15), 3, new Date(2027, 0, 4), 3)).toBe(
+      'soonest due 15 August 2026',
     );
   });
 
   it('leaves the year off in the year the day falls in', () => {
-    expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2026, 0, 4))).toBe('due 15 August');
+    expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2026, 0, 4), 1)).toBe('due 15 August');
   });
 });
 
@@ -94,8 +101,10 @@ describe('noteInBrief — the note’s opening, not its body', () => {
     expect(noteInBrief('Is it ready? Then the runner.', 13)).toBe('Is it ready…');
   });
 
-  it('falls to the raw cut only for text with no space in it at all', () => {
-    expect(noteInBrief('a bbbbbbbbbbbbbbbbbbbb', 12)).toBe('a…');
+  it('falls to the raw cut when the word cut would keep almost nothing', () => {
+    // One short word followed by a long unbroken run: quoting the word alone
+    // is not an opening, so the raw cut stands instead.
+    expect(noteInBrief('a bbbbbbbbbbbbbbbbbbbb', 12)).toBe('a bbbbbbbbbb…');
     expect(noteInBrief('aaaaaaaaaaaaaaaaaaaaaa', 12)).toBe('aaaaaaaaaaaa…');
   });
 });

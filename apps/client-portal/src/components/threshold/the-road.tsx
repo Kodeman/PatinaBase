@@ -139,10 +139,16 @@ export function TheRoad({
         </g>
       </svg>
 
+      {/* "Nothing on the road." is an assertion, and a refunded piece standing
+          under it in the next element takes it straight back. Where the road
+          holds only pieces that are no longer coming, the list speaks for
+          itself and the sentence is not said. */}
       {inMotion === 0 ? (
-        <p className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]">
-          Nothing on the road.
-        </p>
+        closedOrders.length > 0 ? null : (
+          <p className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]">
+            Nothing on the road.
+          </p>
+        )
       ) : pieces.length === 0 ? null : (
         <ul data-testid="road-pieces" className="mt-4 list-none">
           {pieces.map((piece) => {

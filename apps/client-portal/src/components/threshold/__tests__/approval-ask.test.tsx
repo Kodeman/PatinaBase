@@ -46,7 +46,12 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
 
-import { ApprovalAsk, ApprovalReceipt, useDoorstepApprovals } from '../approval-ask';
+import {
+  ApprovalAsk,
+  ApprovalReceipt,
+  ApprovalRecords,
+  useDoorstepApprovals,
+} from '../approval-ask';
 
 const confirmHook = useConfirmProjectApprovalReview as jest.Mock;
 const respondHook = useRespondProjectApproval as jest.Mock;
@@ -634,12 +639,88 @@ describe('ApprovalReceipt', () => {
     expect(receipt).toHaveAttribute('id', 'approval-dec-1');
     expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Approved 14 August');
     expect(receipt).toHaveTextContent('Library elevations · Edition 3');
-    // Nothing is left to do on it.
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    // The only act on a closed gate reads its discussion; nothing on it can be
+    // changed, and it links nowhere.
+    const acts = screen.getAllByRole('button');
+    expect(acts).toHaveLength(1);
+    expect(acts[0]).toHaveTextContent('Read the discussion');
+    expect(receipt.querySelector('a')).toBeNull();
   });
 
-  it('says nothing about a gate with no recorded outcome', () => {
+  it('says the disposition ahead of the outcome on a superseded edition', () => {
+    render(
+      <ApprovalReceipt
+        approval={{
+          ...APPROVAL,
+          outcome: 'changes_requested',
+          disposition: 'superseded',
+          lifecycleStatus: 'responded',
+          respondedAt: '2026-08-14T12:00:00Z',
+        }}
+      />,
+    );
+
+    // Reading plainly "Declined" beside the edition that replaced it is what
+    // this precedence exists to prevent.
+    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Superseded 14 August');
+    expect(screen.getByTestId('approval-receipt-stamp')).not.toHaveTextContent('Declined');
+  });
+
+  it('keeps the discussion readable, and unwritable, after the gate closed', () => {
+    render(
+      <ApprovalReceipt
+        approval={{
+          ...APPROVAL,
+          outcome: 'approved',
+          lifecycleStatus: 'responded',
+          respondedAt: '2026-08-14T12:00:00Z',
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /read the discussion/i }));
+
+    expect(screen.getByTestId('approval-discussion')).toBeInTheDocument();
+    expect(screen.queryByTestId('approval-comment-field')).not.toBeInTheDocument();
+  });
+
+  it('says nothing about a gate that is still open', () => {
     const { container } = render(<ApprovalReceipt approval={APPROVAL} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('ApprovalRecords', () => {
+  const closed = (id: string, at: string): ProjectApprovalReview => ({
+    ...APPROVAL,
+    decisionId: id,
+    outcome: 'approved',
+    lifecycleStatus: 'responded',
+    respondedAt: at,
+  });
+
+  it('stands the closed gates under one heading with their count', () => {
+    render(<ApprovalRecords approvals={[closed('a', '2026-08-14T12:00:00Z')]} />);
+
+    expect(screen.getByTestId('approval-records')).toHaveTextContent('Gates closed · 1');
+  });
+
+  it('folds the tail rather than stacking a year of stamps on the page', () => {
+    const many = [
+      closed('a', '2026-08-14T12:00:00Z'),
+      closed('b', '2026-08-13T12:00:00Z'),
+      closed('c', '2026-08-12T12:00:00Z'),
+      closed('d', '2026-08-11T12:00:00Z'),
+    ];
+    render(<ApprovalRecords approvals={many} />);
+
+    expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: /read the earlier gates/i }));
+    expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(4);
+  });
+
+  it('says nothing when no gate has closed', () => {
+    const { container } = render(<ApprovalRecords approvals={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });
@@ -659,7 +740,7 @@ describe('useDoorstepApprovals', () => {
     });
     expect(result.current.asks).toHaveLength(1);
     expect(result.current.asks[0].outcome).toBe('approved');
-    expect(result.current.receipts).toHaveLength(0);
+    expect(result.current.records).toHaveLength(0);
   });
 
   it('keeps the record of an approval answered before the client arrived', () => {
@@ -669,7 +750,7 @@ describe('useDoorstepApprovals', () => {
       ]),
     );
     expect(result.current.asks).toHaveLength(0);
-    expect(result.current.receipts).toHaveLength(1);
+    expect(result.current.records).toHaveLength(1);
     expect(result.current.anchoredDecisionIds).toEqual(['dec-1']);
   });
 
@@ -680,6 +761,6 @@ describe('useDoorstepApprovals', () => {
       ]),
     );
     expect(result.current.asks).toHaveLength(1);
-    expect(result.current.receipts).toHaveLength(0);
+    expect(result.current.records).toHaveLength(0);
   });
 });

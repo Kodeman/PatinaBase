@@ -206,8 +206,9 @@ function Notice({ notice }: { notice: NoticeReceipt }) {
       ) : (
         <p className="flex min-h-[44px] w-full items-baseline gap-3 py-3">{line}</p>
       )}
-      <div id={bodyId}>
-        {foldable && open && (
+      {foldable && (
+        <div id={bodyId}>
+          {open && (
           <div data-testid="notice-body" className="max-w-[56ch] pb-4">
             {isTruncated(notice.label) && (
               <p className="text-[15px] leading-relaxed text-[var(--text-body)]">
@@ -232,8 +233,9 @@ function Notice({ notice }: { notice: NoticeReceipt }) {
               </a>
             )}
           </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }

@@ -78,27 +78,34 @@ function sameRoom(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
-/** The band this capture belongs to: its scope room where it has one, else its name. */
-function claims(scan: Capture, roomId: string, roomName: string): boolean {
-  return scan.project_room_id
-    ? scan.project_room_id === roomId
-    : sameRoom(scan.name, roomName);
-}
-
 export interface RoomCaptureProps {
   projectId: string;
   roomId: string;
   roomName: string;
 }
 
+/**
+ * The one capture a band actually SHOWS: its scope room's, else the newest
+ * whose name answers to the band. A second walk of the same room is claimed by
+ * the band too but never drawn by it, so `StrayCaptures` stands the shadowed
+ * one rather than treating "claimed" as "has a home".
+ */
+function shownCapture(
+  captures: Capture[],
+  roomId: string,
+  roomName: string,
+): Capture | null {
+  return (
+    captures.find((row) => row.project_room_id === roomId) ??
+    captures.find((row) => !row.project_room_id && sameRoom(row.name, roomName)) ??
+    null
+  );
+}
+
 export function RoomCapture({ projectId, roomId, roomName }: RoomCaptureProps) {
   const { data: scans } = useRoomScans({ projectId });
 
-  const captures = (scans ?? []) as Capture[];
-  const scan =
-    captures.find((row) => row.project_room_id === roomId) ??
-    captures.find((row) => !row.project_room_id && sameRoom(row.name, roomName)) ??
-    null;
+  const scan = shownCapture((scans ?? []) as Capture[], roomId, roomName);
   if (!scan) return null;
 
   return <CaptureToggle scan={scan} />;
@@ -118,14 +125,36 @@ export interface StrayCapturesProps {
  * they would have no surface anywhere once it is retired.
  */
 export function StrayCaptures({ projectId, userId, rooms }: StrayCapturesProps) {
-  const { data: scans } = useRoomScans({ userId });
+  const { data: scans, isError } = useRoomScans({ userId });
+  // The same list the bands read (one fetch — React Query dedupes on the key),
+  // so "already drawn above" is decided by what a band SHOWS, not by what it
+  // could claim.
+  const { data: houseScans, isError: houseError } = useRoomScans({ projectId });
 
+  const drawn = new Set(
+    rooms
+      .map((room) => shownCapture((houseScans ?? []) as Capture[], room.roomId, room.name)?.id)
+      .filter((id): id is string => !!id),
+  );
   const stray = ((scans ?? []) as Capture[]).filter(
     (scan) =>
       // A capture filed against ANOTHER house belongs to that house's page.
-      (!scan.project_id || scan.project_id === projectId) &&
-      !rooms.some((room) => claims(scan, room.roomId, room.name)),
+      (!scan.project_id || scan.project_id === projectId) && !drawn.has(scan.id),
   );
+
+  // /scans said so rather than showing an empty register; a read that failed
+  // is not a client with no rooms.
+  if (isError || houseError) {
+    return (
+      <p
+        data-testid="captures-error"
+        className="mt-8 border-t border-[var(--border-subtle)] pt-4 text-[15px] leading-relaxed text-[var(--text-body)]"
+      >
+        Couldn&rsquo;t load your rooms. Please refresh.
+      </p>
+    );
+  }
+
   if (stray.length === 0) return null;
 
   return (
@@ -223,12 +252,22 @@ function CapturedRoom({ scan }: { scan: Capture }) {
                 className="relative mb-3 max-h-[320px] w-full object-contain"
               />
             )}
-            <p className={PLATE_LINE_CLASS} data-testid="room-capture-pending">
-              3D model not yet available.
-            </p>
-            <p className={PLATE_LINE_CLASS}>
-              Your scan may still be processing. Check back shortly.
-            </p>
+            {scan.status === 'failed' ? (
+              // A failed capture is not a capture still processing, and
+              // "check back shortly" is not true of one.
+              <p className={PLATE_LINE_CLASS} data-testid="room-capture-failed">
+                This capture did not finish. Ask your studio to walk the room again.
+              </p>
+            ) : (
+              <>
+                <p className={PLATE_LINE_CLASS} data-testid="room-capture-pending">
+                  3D model not yet available.
+                </p>
+                <p className={PLATE_LINE_CLASS}>
+                  Your scan may still be processing. Check back shortly.
+                </p>
+              </>
+            )}
           </>
         )}
         <div className="relative flex flex-wrap items-baseline justify-between gap-x-4">
