@@ -747,6 +747,13 @@ export interface ClientSelection {
   productId: string | null;
   imageUrl: string | null;
   docCode: string | null;
+  /**
+   * When this line last moved, as an ISO timestamp. Optional because the RPC
+   * has not always emitted it and every existing fixture predates it; null
+   * where the payload is silent. The Threshold's "since yesterday" reading is
+   * the only consumer — a selection with no timestamp simply never ticks.
+   */
+  updatedAt?: string | null;
 }
 
 export interface ClientProjectSelections {
@@ -784,7 +791,7 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
 
   const selections: ClientSelection[] = Array.isArray(rows)
     ? rows
-      .map((item) => {
+      .map((item): ClientSelection | null => {
         const row = record(item);
         const id = text(row.id);
         if (!id) return null;
@@ -808,6 +815,7 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
           productId: nullableText(first(row, 'productId', 'product_id')),
           imageUrl: nullableText(first(row, 'imageUrl', 'image_url')),
           docCode: nullableText(first(row, 'docCode', 'doc_code')),
+          updatedAt: nullableText(first(row, 'updatedAt', 'updated_at')),
         };
       })
       .filter((item): item is ClientSelection => item !== null)

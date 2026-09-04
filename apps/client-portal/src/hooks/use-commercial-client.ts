@@ -28,18 +28,33 @@ export const clientReviewKey = (editionId: string) => ['client-project-review', 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
 
-export function useClientCommercialDocument(proposalId: string) {
-  return useQuery<CommercialDocumentBundle | null>({
+/**
+ * The bundle's key and fetcher, apart from the hook.
+ *
+ * The Threshold reads several bundles at once (one per trade instrument, to
+ * total what is held behind them) and cannot call a hook in a loop, so it
+ * hands these options to `useQueries`. Both paths therefore share ONE cache
+ * entry per proposal: the gate that renders the paper and the ledger that
+ * sums it can never disagree, and neither pays for the other's fetch.
+ */
+export function clientCommercialDocumentQueryOptions(proposalId: string) {
+  return {
     queryKey: commercialKeys.clientBundle(proposalId),
     enabled: !!proposalId,
-    queryFn: async () => {
+    queryFn: async (): Promise<CommercialDocumentBundle | null> => {
       const { data, error } = await getSupabase().rpc('get_client_commercial_document_bundle', {
         p_proposal_id: proposalId,
       });
       if (error) throw error;
       return adaptCommercialDocumentBundle(data);
     },
-  });
+  };
+}
+
+export function useClientCommercialDocument(proposalId: string) {
+  return useQuery<CommercialDocumentBundle | null>(
+    clientCommercialDocumentQueryOptions(proposalId),
+  );
 }
 
 export function useProjectCommercialSummary(projectId: string) {

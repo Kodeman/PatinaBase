@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
+import { useQueries } from '@tanstack/react-query';
 
 import {
   useMarkProjectRead,
@@ -21,7 +22,11 @@ import { openChapterOf, splitSpinePhases } from '@/components/making/making-spin
 import { ScoredAction } from '@/components/making/scored-action';
 import { monthAndYear } from '@/components/making/standing-sentence';
 import { useAuth } from '@/hooks/use-auth';
-import { useClientPlan, useClientSelections } from '@/hooks/use-commercial-client';
+import {
+  clientCommercialDocumentQueryOptions,
+  useClientPlan,
+  useClientSelections,
+} from '@/hooks/use-commercial-client';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
@@ -107,6 +112,26 @@ function words(value: string | null | undefined): string | null {
   return text ? text : null;
 }
 
+/**
+ * A room's target: the published plan's own figure where it has one, and the
+ * room's `budget_cents` where it does not.
+ *
+ * The plan wins because it is what the client was shown and what /budget
+ * reads. The column is the fallback rather than the source: a project with no
+ * published budget version still has rooms carrying figures, and a house that
+ * said nothing about what was planned there would be quieter than the truth.
+ */
+function roomTargetCents(
+  row: Record<string, unknown>,
+  name: string,
+  planTargets: Map<string, number>,
+): number | null {
+  const planned = planTargets.get(name.trim().toLowerCase());
+  if (typeof planned === 'number') return planned;
+  const budget = row.budget_cents;
+  return typeof budget === 'number' && Number.isFinite(budget) && budget > 0 ? budget : null;
+}
+
 function toThresholdRoom(row: unknown, targets: Map<string, number>): ThresholdRoom | null {
   const record = row as Record<string, unknown> | null;
   if (!record || typeof record.id !== 'string' || typeof record.name !== 'string') return null;
@@ -117,7 +142,7 @@ function toThresholdRoom(row: unknown, targets: Map<string, number>): ThresholdR
     name,
     sortOrder: typeof record.sort_order === 'number' ? record.sort_order : 0,
     floorAreaSqft: typeof area === 'number' ? area : null,
-    targetCents: targets.get(name.trim().toLowerCase()) ?? null,
+    targetCents: roomTargetCents(record, name, targets),
   };
 }
 
@@ -306,6 +331,47 @@ export function Threshold({
     phaseId: approval.phaseId,
   }));
 
+  const selections =
+    selectionsQuery.data?.origin === 'commercial' ? selectionsQuery.data.selections : [];
+  const selectionById = new Map(selections.map((selection) => [selection.id, selection]));
+
+  // ── what is held behind the finished work ──────────────────────────────────
+  // The detection is `deriveThreshold`'s wall-mark predicate, run here because
+  // the ledger figure is an INPUT to the model: the draw a client's acceptance
+  // would release lives one RPC deeper than the selection row. One read per
+  // INSTRUMENT (two trade lines under one scope share a bundle), through the
+  // same query options `useClientCommercialDocument` uses — so the wall gate
+  // and the ledger read one cache entry and cannot disagree.
+  const tradeInstrumentIds = Array.from(
+    new Set(
+      selections.flatMap((selection) =>
+        selection.kind === 'trade' &&
+        selection.tradeJourney === 'substantially_complete' &&
+        selection.instrument?.proposalId
+          ? [selection.instrument.proposalId]
+          : [],
+      ),
+    ),
+  ).sort();
+
+  const heldBundles = useQueries({
+    queries: tradeInstrumentIds.map((proposalId) =>
+      clientCommercialDocumentQueryOptions(proposalId),
+    ),
+  });
+
+  const heldDrawCentsByProposalId: Record<string, number> = {};
+  tradeInstrumentIds.forEach((proposalId, index) => {
+    const draws = heldBundles[index]?.data?.tradeScope?.draws ?? [];
+    const gated = draws.find((draw) => draw.gatesOnAcceptance) ?? null;
+    if (gated && gated.amountCents > 0) heldDrawCentsByProposalId[proposalId] = gated.amountCents;
+  });
+
+  const selectionUpdatedAt: Record<string, string> = {};
+  for (const selection of selections) {
+    if (selection.updatedAt) selectionUpdatedAt[selection.id] = selection.updatedAt;
+  }
+
   // ── the model ──────────────────────────────────────────────────────────────
   const model = deriveThreshold({
     rooms,
@@ -317,11 +383,9 @@ export function Threshold({
     previousReadAt,
     today: today ?? EPOCH,
     liveAuthorizedTotalCents: planQuery.data?.liveAuthorizedTotalCents ?? null,
+    heldDrawCentsByProposalId,
+    selectionUpdatedAt,
   });
-
-  const selections =
-    selectionsQuery.data?.origin === 'commercial' ? selectionsQuery.data.selections : [];
-  const selectionById = new Map(selections.map((selection) => [selection.id, selection]));
 
   const phases = useMemo(() => splitSpinePhases(milestones), [milestones]);
   const openChapter = openChapterOf(phases, project.currentPhase);

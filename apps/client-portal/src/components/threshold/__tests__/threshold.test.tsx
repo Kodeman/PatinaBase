@@ -49,6 +49,7 @@ jest.mock('@/hooks/use-commercial-client', () => ({
   useClientSelections: jest.fn(),
   useClientPlan: jest.fn(),
   useClientCommercialDocument: jest.fn(),
+  clientCommercialDocumentQueryOptions: jest.fn(),
   useAcceptTradeScope: jest.fn(),
   invalidateSignedCommercialDocument: jest.fn().mockResolvedValue(undefined),
 }));
@@ -84,6 +85,7 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import {
+  clientCommercialDocumentQueryOptions,
   useAcceptTradeScope,
   useClientCommercialDocument,
   useClientPlan,
@@ -104,6 +106,7 @@ const previousMarkMock = usePreviousReadingMark as jest.Mock;
 const selectionsMock = useClientSelections as jest.Mock;
 const planMock = useClientPlan as jest.Mock;
 const bundleMock = useClientCommercialDocument as jest.Mock;
+const queryOptionsMock = clientCommercialDocumentQueryOptions as jest.Mock;
 const acceptMock = useAcceptTradeScope as jest.Mock;
 const authMock = useAuth as jest.Mock;
 
@@ -291,6 +294,13 @@ function settled<T>(data: T) {
   return { data, isPending: false, isLoading: false, isError: false };
 }
 
+/**
+ * The bundles the RPC would return, keyed by proposal. Both the gates' hook
+ * and the ledger's `useQueries` read this one map, so a test changes what the
+ * house knows in one place. An id absent from it is a bundle still in flight.
+ */
+let bundles: Record<string, unknown> = {};
+
 function renderThreshold() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -347,9 +357,27 @@ beforeEach(() => {
   );
   markReadMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
   previousMarkMock.mockReturnValue({ data: undefined, isPending: false, isError: false });
+  bundles = {
+    'prop-7': AUTHORIZATION_BUNDLE,
+    'prop-paint': TRADE_BUNDLE,
+    'prop-tile': TILE_BUNDLE,
+  };
   bundleMock.mockImplementation((proposalId: string) =>
-    settled(proposalId === 'prop-7' ? AUTHORIZATION_BUNDLE : TRADE_BUNDLE),
+    proposalId in bundles
+      ? settled(bundles[proposalId])
+      : { data: undefined, isPending: true, isLoading: true, isError: false },
   );
+  queryOptionsMock.mockImplementation((proposalId: string) => ({
+    queryKey: ['client-bundle', proposalId],
+    // An id with no fixture never settles — that is what "still in flight"
+    // means here, and it keeps the pending assertion honest.
+    queryFn: () =>
+      proposalId in bundles
+        ? Promise.resolve(bundles[proposalId])
+        : new Promise(() => {}),
+    initialData: bundles[proposalId],
+    staleTime: Infinity,
+  }));
   acceptMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
 });
 
@@ -607,5 +635,154 @@ describe('Threshold — the acts the house owes', () => {
     renderThreshold();
 
     expect(screen.getByTestId('note-enclosures')).toHaveTextContent('Invoice No. 4');
+  });
+});
+
+/* ── What the house holds, and what moved ───────────────────────────────────
+   Three figures the model cannot read off a selection row: the draw held
+   behind each trade instrument (one RPC deeper), the room's target where the
+   published plan is silent, and when a line last moved. ─────────────────── */
+
+const SECOND_TRADE: ClientSelection = {
+  ...PAINTWORK,
+  id: 'sel-tile',
+  name: 'The tilework',
+  roomId: LIBRARY,
+  roomName: 'Library & lounge',
+  clientLineTotalCents: 410000,
+  instrument: {
+    documentId: 'doc-tile',
+    proposalId: 'prop-tile',
+    name: 'Tilework scope',
+    executedAt: '2026-06-10',
+  },
+};
+
+const TILE_BUNDLE = {
+  document: { kind: 'trade_scope' },
+  tradeScope: {
+    party: { displayName: 'Ridge Tile Co.' },
+    progress: { state: 'substantially_complete' },
+    draws: [{ amountCents: 96000, gatesOnAcceptance: true, invoicePaidCents: 0 }],
+  },
+};
+
+describe('Threshold — the held draws', () => {
+  it('totals what two instruments hold, one bundle read each', () => {
+    selectionsMock.mockReturnValue(
+      settled({ origin: 'commercial', selections: [CREDENZA, PAINTWORK, SECOND_TRADE] }),
+    );
+    renderThreshold();
+
+    // $1,440 on the paintwork + $960 on the tilework.
+    expect(screen.getByTestId('house-ledger-held')).toHaveTextContent(
+      'Held on finished work',
+    );
+    expect(screen.getByTestId('house-ledger-held')).toHaveTextContent('$2,400');
+  });
+
+  it('counts one instrument once, however many of its lines are waiting', () => {
+    // Two trade lines under the SAME scope: the draw is held once, not twice.
+    const sameScope: ClientSelection = {
+      ...PAINTWORK,
+      id: 'sel-paint-2',
+      name: 'The stair paintwork',
+      roomId: LIBRARY,
+      roomName: 'Library & lounge',
+    };
+    selectionsMock.mockReturnValue(
+      settled({ origin: 'commercial', selections: [PAINTWORK, sameScope] }),
+    );
+
+    renderThreshold();
+
+    expect(screen.getByTestId('house-ledger-held')).toHaveTextContent('$1,440');
+  });
+
+  it('says nothing about held money while the bundles are unread', () => {
+    bundles = {};
+
+    renderThreshold();
+
+    expect(screen.queryByTestId('house-ledger-held')).not.toBeInTheDocument();
+  });
+});
+
+describe('Threshold — a room’s target', () => {
+  it('prefers the published plan’s figure for a room it names', () => {
+    renderThreshold();
+
+    // $24,900 agreed against the plan's $23,800 → about eleven hundred past.
+    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
+      'The house stands at $61,400 agreed of',
+    );
+    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent('$23,800 planned');
+  });
+
+  it('falls back to the room’s own budget where the plan says nothing', () => {
+    planMock.mockReturnValue(
+      settled({ publishedAt: null, rooms: [], lines: [], liveAuthorizedTotalCents: 6140000 }),
+    );
+    roomsMock.mockReturnValue(
+      settled([
+        { ...ROOMS[0], budget_cents: 2380000 },
+        { ...ROOMS[1], budget_cents: 720000 },
+      ]),
+    );
+
+    renderThreshold();
+
+    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent('$31,000 planned');
+  });
+
+  it('plans nothing when neither the plan nor the room carries a figure', () => {
+    planMock.mockReturnValue(
+      settled({ publishedAt: null, rooms: [], lines: [], liveAuthorizedTotalCents: 6140000 }),
+    );
+    roomsMock.mockReturnValue(settled([{ ...ROOMS[0], budget_cents: 0 }]));
+
+    renderThreshold();
+
+    expect(screen.queryByTestId('house-ledger-top')).not.toBeInTheDocument();
+  });
+});
+
+describe('Threshold — what moved since', () => {
+  it('ticks the band a moved piece belongs to', () => {
+    previousMarkMock.mockReturnValue({
+      data: '2026-08-03T00:00:00Z',
+      isPending: false,
+      isError: false,
+    });
+    selectionsMock.mockReturnValue(
+      settled({
+        origin: 'commercial',
+        selections: [
+          { ...CREDENZA, updatedAt: '2026-08-04T12:00:00Z' },
+          { ...PAINTWORK, updatedAt: '2026-07-01T12:00:00Z' },
+        ],
+      }),
+    );
+
+    const { container } = renderThreshold();
+
+    fireEvent.click(screen.getByRole('button', { name: /what changed since yesterday/i }));
+
+    expect(container.querySelector(`#room-${LIBRARY}`)).toHaveAttribute('data-changed', 'true');
+    expect(container.querySelector(`#room-${ENTRY}`)).not.toHaveAttribute('data-changed');
+  });
+
+  it('ticks nothing when no line carries a timestamp', () => {
+    previousMarkMock.mockReturnValue({
+      data: '2026-08-03T00:00:00Z',
+      isPending: false,
+      isError: false,
+    });
+
+    const { container } = renderThreshold();
+
+    fireEvent.click(screen.getByRole('button', { name: /what changed since yesterday/i }));
+
+    expect(container.querySelector(`#room-${LIBRARY}`)).not.toHaveAttribute('data-changed');
   });
 });
