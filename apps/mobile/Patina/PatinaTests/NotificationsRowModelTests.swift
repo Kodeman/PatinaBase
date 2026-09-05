@@ -139,6 +139,41 @@ struct NotificationsRowModelTests {
         #expect(row.state == .undecided)
     }
 
+    /// The window before the read lands. The stored preference defaults ON,
+    /// so anything that falls through to it draws a switch that claims
+    /// notifications arrive over an install iOS has never been asked about.
+    @Test("before the read lands the row draws off, and a tap still asks iOS")
+    func theUnreadStateNeverClaimsAnything() async throws {
+        let asked = Box(0)
+        let row = model(status: .notDetermined, asked: asked)
+        #expect(row.state == nil)
+
+        // What the row draws, as `SettingsView` computes it.
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
+        )
+        #expect(code.contains("notificationsAuthorization.state == .authorized"),
+                "the toggle reads the preference only over a status read as authorized")
+
+        // And a tap in that window asks iOS rather than writing the
+        // preference behind its back.
+        await row.setEnabled(true, settings: SettingsService.shared)
+        #expect(asked.value == 1)
+        #expect(row.state == .authorized)
+    }
+
+    /// The read is local and `settings.load()` is two network round-trips —
+    /// running them the other way round is the whole pre-read window.
+    @Test("the status read runs before the settings load")
+    func theStatusIsReadFirst() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
+        )
+        let refresh = try #require(code.range(of: "notificationsAuthorization.refresh()"))
+        let load = try #require(code.range(of: "settings.load()"))
+        #expect(refresh.lowerBound < load.lowerBound)
+    }
+
     // MARK: - The row on screen
 
     /// The denied row is a door, and it says where it goes.

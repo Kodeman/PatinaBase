@@ -207,10 +207,13 @@ struct SettingsView: View {
         .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
         .task {
-            await settings.load()
             // C2-09's rule — read the status, do not assume it — applied to
-            // the row that asserts it (`W1-C-08`).
+            // the row that asserts it (`W1-C-08`). It runs FIRST: it is a
+            // local read, `settings.load()` is two network round-trips, and
+            // in between them the row would have to draw from the stored
+            // preference alone, which defaults on.
             await notificationsAuthorization.refresh()
+            await settings.load()
         }
         .alert("Forget recent context?", isPresented: $showingForgetContextConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -457,11 +460,15 @@ struct SettingsView: View {
                 label: "Notifications",
                 isOn: Binding(
                     get: {
-                        // Undecided means iOS has never been asked, so nothing
-                        // arrives whatever the stored preference says.
-                        notificationsAuthorization.state == .undecided
-                            ? false
-                            : settings.notificationsEnabled
+                        // Only an authorization the app has actually read can
+                        // carry the preference. Undecided means iOS has never
+                        // been asked; nil means the read has not landed yet —
+                        // and the stored preference defaults ON, so falling
+                        // through to it would draw the same lie for the whole
+                        // pre-read window.
+                        notificationsAuthorization.state == .authorized
+                            ? settings.notificationsEnabled
+                            : false
                     },
                     set: { enabled in
                         Task {

@@ -84,12 +84,14 @@ final class NotificationsRowModel {
 
     /// The toggle moved.
     ///
-    /// Turning it ON from `.undecided` asks iOS first and writes the
-    /// preference only if something was granted — otherwise the switch would
-    /// settle ON over a refusal, which is the defect. Every other move is the
-    /// preference write it always was.
+    /// Turning it ON asks iOS first and writes the preference only if
+    /// something was granted — otherwise the switch would settle ON over a
+    /// refusal, which is the defect. Only a status already read as
+    /// `.authorized` skips the ask: `nil` is "not read yet", and treating an
+    /// unread status as granted is how the preference got written without
+    /// anyone being asked. Turning it OFF is always the preference write.
     func setEnabled(_ enabled: Bool, settings: SettingsService) async {
-        guard enabled, state == .undecided else {
+        guard enabled, state != .authorized else {
             settings.setNotificationsEnabled(enabled)
             return
         }
