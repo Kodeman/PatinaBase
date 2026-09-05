@@ -18,7 +18,6 @@ import { Stamp, stampStateForApproval } from '@/components/threshold/instruments
 import {
   approvalWeighing,
   countInWords,
-  moneyInWords,
 } from '@/components/threshold/instruments/standing-sentence';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
 import { useAuth } from '@/hooks/use-auth';
