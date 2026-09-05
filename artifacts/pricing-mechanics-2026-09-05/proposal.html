@@ -1,0 +1,1748 @@
+<title>The Number That Holds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+:root{
+  --ground:#FAF7F2;
+  --paper:#FCFAF6;
+  --paper-inset:#F5F1EA;
+  --rule:#E5E2DD;
+  --rule-2:#CFC9C0;
+  --ink:#2C2926;
+  --body:#4A453F;
+  --mocha:#5C4A3C;
+  --clay:#C4A57B;
+  --clay-ink:#7C5E30;
+  --golden-hour-ink:#79651E;
+  --terracotta-ink:#9C5340;
+  --sage-ink:#5F6B57;
+  --muted:#635C53;
+  --faint:#726A5F;
+  --accent:#7C5E30;
+  --focus:#7C5E30;
+  --stamp-border:#5C4A3C;
+  --stamp-ink:#5C4A3C;
+  --font-display:"Playfair Display","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --font-body:"Newsreader","Iowan Old Style",Georgia,"Times New Roman",serif;
+  --font-mono:"DM Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#1F1C19;
+    --paper:#2A2622;
+    --paper-inset:#231F1C;
+    --rule:#3B3631;
+    --rule-2:#4C463F;
+    --ink:#EDE7DF;
+    --body:#C9C1B6;
+    --mocha:#C7AB92;
+    --clay:#D6B98F;
+    --clay-ink:#D6B98F;
+    --golden-hour-ink:#C9AE55;
+    --terracotta-ink:#D08A72;
+    --sage-ink:#9DAE93;
+    --muted:#ABA294;
+    --faint:#998F80;
+    --accent:#D6B98F;
+    --focus:#D6B98F;
+    --stamp-border:#C7AB92;
+    --stamp-ink:#C7AB92;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#1F1C19;
+  --paper:#2A2622;
+  --paper-inset:#231F1C;
+  --rule:#3B3631;
+  --rule-2:#4C463F;
+  --ink:#EDE7DF;
+  --body:#C9C1B6;
+  --mocha:#C7AB92;
+  --clay:#D6B98F;
+  --clay-ink:#D6B98F;
+  --golden-hour-ink:#C9AE55;
+  --terracotta-ink:#D08A72;
+  --sage-ink:#9DAE93;
+  --muted:#ABA294;
+  --faint:#998F80;
+  --accent:#D6B98F;
+  --focus:#D6B98F;
+  --stamp-border:#C7AB92;
+  --stamp-ink:#C7AB92;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--ground);
+  color:var(--body);
+  font-family:var(--font-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+.shell{
+  max-width:1360px;
+  margin:0 auto;
+  padding:0 20px 8rem;
+}
+main{max-width:none;}
+p,li{max-width:66ch;}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--rule-2);}
+a:hover{border-bottom-color:var(--accent);}
+a:focus-visible{outline:2px solid var(--focus);outline-offset:3px;}
+
+/* ---------- running index ---------- */
+.index{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.06em;
+  line-height:1.5;
+  padding:2rem 0 1rem;
+  border-bottom:1px solid var(--rule);
+  margin-bottom:2.5rem;
+}
+.index .idxhead{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0 0 .9rem;
+  font-weight:500;
+}
+.index ol{list-style:none;margin:0;padding:0;display:grid;gap:.5rem;}
+.index li{max-width:none;}
+.index a{
+  color:var(--muted);
+  border-bottom:none;
+  display:grid;
+  grid-template-columns:1.9rem 1fr;
+  gap:.3rem;
+}
+.index a:hover{color:var(--ink);}
+.index .n{color:var(--faint);font-variant-numeric:tabular-nums;}
+
+/* ---------- masthead ---------- */
+.masthead{padding:3.5rem 0 2.5rem;border-bottom:1.5px solid var(--ink);}
+.masthead .eyebrow{margin-bottom:1.4rem;}
+.masthead h1{
+  font-family:var(--font-display);
+  font-size:clamp(2.6rem,6vw,4.4rem);
+  line-height:1.02;
+  font-weight:500;
+  color:var(--ink);
+  margin:0 0 1.4rem;
+  text-wrap:balance;
+  letter-spacing:-.01em;
+}
+.standing{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:clamp(1.15rem,2.4vw,1.5rem);
+  line-height:1.45;
+  color:var(--mocha);
+  max-width:46ch;
+  margin:0 0 2.2rem;
+}
+.masthead-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:2rem 3rem;
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.masthead-meta div{max-width:26ch;}
+.masthead-meta b{display:block;color:var(--faint);font-weight:400;margin-bottom:.45rem;}
+.masthead-meta span{display:block;text-transform:none;letter-spacing:.02em;font-size:12px;color:var(--body);}
+
+/* ---------- section openers ---------- */
+.eyebrow{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0;
+}
+section{padding-top:4.5rem;scroll-margin-top:1.5rem;}
+.opener{border-top:1px solid var(--rule);padding-top:1.1rem;margin-bottom:2rem;}
+section > h2{
+  font-family:var(--font-display);
+  font-size:clamp(1.8rem,3.6vw,2.7rem);
+  line-height:1.12;
+  font-weight:500;
+  color:var(--ink);
+  margin:.7rem 0 0;
+  text-wrap:balance;
+  max-width:24ch;
+}
+h3{
+  font-family:var(--font-display);
+  font-size:1.35rem;
+  line-height:1.25;
+  font-weight:500;
+  color:var(--ink);
+  margin:2.8rem 0 .8rem;
+  text-wrap:balance;
+}
+h4{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  font-weight:500;
+  margin:2rem 0 .7rem;
+}
+.lede{font-size:1.12rem;color:var(--body);}
+
+/* ---------- utilities ---------- */
+/* Mono floor: every mono run in this document computes to at least 12px, including
+   inline citations inside 13.5px table cells. The product's own stamp convention is
+   11px (stamp.tsx:52) and its metadata token floor is 12px; mockup meta lines that
+   depict the 11px product stamp are still drawn at 12px here. */
+.mono{font-family:var(--font-mono);font-size:max(12px,.82em);letter-spacing:.02em;color:var(--muted);overflow-wrap:anywhere;}
+.ref{font-family:var(--font-mono);font-size:max(12px,.74em);letter-spacing:.02em;color:var(--faint);white-space:nowrap;}
+td .ref,th .ref,li .ref,p .ref{white-space:normal;overflow-wrap:anywhere;}
+.quote{font-style:italic;color:var(--mocha);}
+.sim{font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;color:var(--faint);white-space:nowrap;}
+.ftest{border-left:2px solid var(--rule-2);padding-left:1.1rem;margin:1.4rem 0 2.4rem;}
+.ftest p{font-family:var(--font-mono);font-size:12px;letter-spacing:.01em;line-height:1.75;color:var(--muted);margin:0 0 .55rem;max-width:74ch;}
+.ftest b{color:var(--ink);font-weight:500;}
+blockquote{
+  margin:1.4rem 0;
+  padding-left:1.1rem;
+  border-left:2px solid var(--clay);
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:1.1rem;
+  color:var(--mocha);
+}
+blockquote p{max-width:52ch;}
+.cols{display:grid;gap:2.2rem;grid-template-columns:minmax(0,1fr);}
+@media (min-width:760px){ .cols-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} }
+hr{border:none;border-top:1px solid var(--rule);margin:2.6rem 0;}
+.note{border-left:2px solid var(--rule-2);padding-left:1.1rem;color:var(--muted);font-size:.96rem;margin:1.4rem 0;}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:1.4rem 0;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--rule-2);}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45;}
+th,td{
+  text-align:left;
+  vertical-align:top;
+  padding:.72rem .9rem .72rem 0;
+  border-bottom:1px solid var(--rule);
+}
+th{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--faint);
+  font-weight:500;
+  white-space:nowrap;
+}
+td{color:var(--body);}
+td strong{color:var(--ink);font-weight:600;}
+tbody tr:last-child td{border-bottom:none;}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap;}
+.tight td,.tight th{font-size:13.5px;}
+.w-name{min-width:15rem;}
+.w-what{min-width:20rem;}
+.w-why{min-width:18rem;}
+.w-dep{min-width:20rem;}
+
+/* master proposal table: dependencies drop to a second line per row,
+   so effort, wave and depends-on stay on screen at 1440 */
+.master .w-name{min-width:10rem;}
+.master .w-what{min-width:16rem;}
+.master .w-why{min-width:12rem;}
+.master .w-eff{min-width:3.4rem;}
+.master .w-wave{min-width:3rem;}
+.master td{padding-right:.8rem;}
+.master tbody tr.head td{border-bottom:none;padding-bottom:.25rem;}
+.master tbody tr.deps td{border-bottom:1px solid var(--rule);padding-top:0;padding-bottom:.9rem;}
+.master tbody tr.deps .deplabel{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);display:block;margin-bottom:.15rem;
+}
+.master tbody tr:last-child td{border-bottom:none;}
+
+/* ---------- mock panels ---------- */
+.panel{
+  background:var(--paper);
+  border:1px solid var(--rule);
+  border-radius:2px;
+  padding:1.6rem 1.5rem;
+  margin:1.4rem 0;
+}
+.panel-cap{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0 0 1rem;
+}
+.panelrow{display:grid;gap:1.4rem;align-items:start;grid-template-columns:minmax(0,1fr);}
+@media (min-width:900px){ .panelrow-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} }
+.letterhead{
+  font-family:var(--font-display);
+  font-size:1.3rem;
+  color:var(--ink);
+  letter-spacing:.01em;
+  margin:0 0 .7rem;
+}
+.hair{border-top:1px solid var(--rule-2);margin:.7rem 0 1rem;}
+
+/* ---------- mockup instruments ---------- */
+.mockscroll{overflow-x:auto;}
+.mocktable{border-collapse:collapse;width:100%;font-size:14px;line-height:1.4;}
+.mocktable.wide6{min-width:660px;}
+.mocktable.wide5{min-width:560px;}
+.mocktable.wide4{min-width:420px;}
+.mocktable th{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);font-weight:400;padding:0 .9rem .5rem 0;
+  border-bottom:1px solid var(--rule-2);white-space:nowrap;vertical-align:bottom;
+}
+.mocktable td{
+  padding:.6rem .9rem .6rem 0;border-bottom:1px solid var(--rule);
+  vertical-align:top;color:var(--body);font-size:14px;
+}
+.mocktable tr:last-child td{border-bottom:none;}
+.mocktable .money,.mocktable th.money{text-align:right;padding-right:0;}
+.mocktable td.money{
+  font-family:var(--font-display);font-size:15px;color:var(--ink);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.mocktable td.code{font-family:var(--font-mono);font-size:12px;color:var(--muted);white-space:nowrap;}
+.mocktable td.item{color:var(--ink);min-width:11rem;}
+.mocktable td.pct{
+  font-family:var(--font-mono);font-size:13px;color:var(--muted);
+  font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;
+}
+.mocktable th.pct{text-align:right;}
+.mocktable tr.tot td{border-top:1.5px solid var(--ink);border-bottom:none;padding-top:.7rem;}
+.maker{display:block;font-family:var(--font-mono);font-size:12px;color:var(--faint);margin-top:.15rem;}
+.metaline{display:block;font-family:var(--font-mono);font-size:12px;letter-spacing:.01em;margin-top:.3rem;}
+.age-fresh{color:var(--faint);}
+.age-aging{color:var(--golden-hour-ink);}
+.age-stale{color:var(--terracotta-ink);}
+.age-unverified{color:var(--faint);}
+.age-unverified::before{content:"\25CB";margin-right:.35rem;}
+.age-unverified .u{text-decoration:underline dotted;text-underline-offset:2px;}
+.floorwarn{display:block;font-family:var(--font-mono);font-size:12px;color:var(--terracotta-ink);margin-top:.3rem;}
+.delta{font-family:var(--font-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;}
+th.delta{text-align:right;}
+
+.field{
+  display:inline-block;border:1px solid var(--rule-2);background:var(--paper-inset);
+  border-radius:2px;padding:.26rem .5rem;font-family:var(--font-mono);font-size:13px;
+  color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.3;
+}
+.field.live{border-color:var(--mocha);}
+.field.blank{color:var(--faint);}
+.btnmock{
+  display:inline-block;border:1px solid var(--ink);border-radius:2px;padding:.3rem .75rem;
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink);line-height:1.3;
+}
+.btnmock.quiet{border-color:var(--rule-2);color:var(--muted);}
+.controlrow{display:flex;flex-wrap:wrap;gap:.6rem .9rem;align-items:center;margin:.9rem 0 0;}
+.controlrow .lab{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
+.tickbox{display:inline-block;width:14px;height:14px;border:1.5px solid var(--rule-2);vertical-align:-2px;}
+.summaryline{
+  font-family:var(--font-mono);font-size:13px;color:var(--muted);
+  font-variant-numeric:tabular-nums;margin:1rem 0 0;border-top:1px solid var(--rule);padding-top:.7rem;
+}
+.summaryline b{color:var(--ink);font-weight:500;}
+
+.band{
+  display:flex;flex-wrap:wrap;gap:.35rem 1.7rem;
+  border-top:1.5px solid var(--ink);border-bottom:1px solid var(--rule-2);
+  padding:.7rem 0;margin:0 0 1rem;
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;
+  color:var(--muted);font-variant-numeric:tabular-nums;
+}
+.band b{color:var(--ink);font-weight:500;}
+.switch{display:inline-flex;border:1px solid var(--rule-2);border-radius:2px;font-family:var(--font-mono);font-size:12px;}
+.switch span{padding:.3rem .75rem;color:var(--muted);}
+.switch span.on{background:var(--paper-inset);color:var(--ink);}
+.switch span+span{border-left:1px solid var(--rule-2);}
+.switch span.future{opacity:.5;font-style:italic;}
+.lock{display:inline-block;width:10px;height:12px;position:relative;vertical-align:-1px;}
+.lock::before{
+  content:"";position:absolute;left:2px;top:0;width:6px;height:5px;
+  border:1.5px solid var(--mocha);border-bottom:none;border-radius:3px 3px 0 0;
+}
+.lock::after{
+  content:"";position:absolute;left:0;bottom:0;width:10px;height:8px;
+  border:1.5px solid var(--mocha);border-radius:1px;
+}
+.openslot{display:inline-block;width:10px;border-top:1px solid var(--rule-2);vertical-align:4px;}
+.sheetfoot{
+  border-top:1.5px solid var(--ink);padding-top:.75rem;margin-top:.2rem;
+  font-family:var(--font-mono);font-size:13px;letter-spacing:.04em;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.trace{
+  font-family:var(--font-mono);font-size:12px;line-height:1.6;color:var(--muted);
+  border-left:2px solid var(--clay);padding-left:.9rem;margin:1.2rem 0 0;overflow-wrap:anywhere;
+}
+.pop{
+  border:1px solid var(--rule-2);background:var(--paper-inset);border-radius:2px;
+  padding:.9rem 1rem;max-width:23rem;
+}
+.pop .poptitle{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 .6rem;}
+.pop .prow{
+  display:flex;justify-content:space-between;gap:1rem;padding:.35rem 0;
+  border-bottom:1px solid var(--rule);font-family:var(--font-mono);font-size:12px;color:var(--faint);
+}
+.pop .prow b{color:var(--ink);font-weight:400;text-align:right;}
+.pop .prow:last-of-type{border-bottom:none;}
+.strip{
+  border:1px solid var(--rule-2);border-left:2px solid var(--golden-hour-ink);border-radius:2px;
+  background:var(--paper-inset);padding:.75rem .95rem;
+  display:flex;flex-wrap:wrap;gap:.55rem 1.1rem;align-items:center;
+  font-family:var(--font-mono);font-size:13px;color:var(--muted);
+}
+.setrow{display:grid;grid-template-columns:minmax(0,1fr);gap:.15rem;padding:.75rem 0;border-bottom:1px solid var(--rule);}
+.setrow:last-of-type{border-bottom:none;}
+@media (min-width:640px){ .setrow{grid-template-columns:13rem minmax(0,1fr);gap:0 1.5rem;align-items:baseline;} }
+.setrow .k{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
+.setrow .v{color:var(--ink);font-size:15px;}
+.setrow .v em{font-style:normal;color:var(--muted);font-size:14px;}
+.invest{border-top:1.5px solid var(--ink);padding-top:.9rem;margin-top:1rem;}
+.invest .figrow{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;}
+.invest .figlab{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+.invest .fig{font-family:var(--font-display);font-size:2rem;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;}
+.goodthrough{font-family:var(--font-mono);font-size:12px;color:var(--faint);margin:.7rem 0 0;}
+.agemark{display:inline-block;width:6px;height:6px;vertical-align:1px;margin-right:.35rem;background:currentColor;}
+
+/* ---------- rulings ---------- */
+.ruling{border-top:1px solid var(--rule);padding:1.3rem 0;}
+.ruling:last-of-type{border-bottom:1px solid var(--rule);}
+.ruling h4{margin:0 0 .5rem;color:var(--muted);}
+.ruling .q{font-family:var(--font-display);font-size:1.15rem;color:var(--ink);margin:0 0 .5rem;line-height:1.3;max-width:52ch;}
+.ruling .rec{margin:.5rem 0 0;}
+.ruling .rec b{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--clay-ink);display:block;margin-bottom:.15rem;font-weight:500;}
+.who{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:.5rem;}
+
+/* ---------- questions ---------- */
+.qgroup{border-top:1px solid var(--rule);padding:1.2rem 0 .4rem;}
+.qgroup h4{margin:0 0 .8rem;}
+.qgroup ol{margin:0;padding-left:1.4rem;}
+.qgroup li{margin-bottom:.6rem;color:var(--ink);}
+
+/* ---------- sources ---------- */
+.srclist{list-style:none;margin:1rem 0 0;padding:0;display:grid;gap:.55rem;}
+.srclist li{max-width:74ch;font-size:14.5px;line-height:1.5;color:var(--muted);}
+.srclist .acc{font-family:var(--font-mono);font-size:12px;color:var(--faint);letter-spacing:.02em;white-space:nowrap;}
+
+@media (max-width:600px){
+  .w-name{min-width:9rem;}
+  .w-what,.w-why,.w-dep{min-width:0;}
+  .panel{padding:1.15rem 1rem;}
+  .shell{padding:0 14px 6rem;}
+}
+@media (min-width:1100px){
+  .shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:0 4.5rem;}
+  .index{
+    grid-column:1;grid-row:1 / span 2;
+    position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;
+    border-bottom:none;border-right:1px solid var(--rule);
+    padding:3.9rem 1.5rem 3rem 0;margin-bottom:0;
+  }
+  .masthead{grid-column:2;grid-row:1;}
+  main{grid-column:2;grid-row:2;}
+}
+/* Below the sidebar breakpoint the masthead comes first and the contents block sits
+   under it, so a phone reader meets the title before twelve section links. */
+@media (max-width:1099px){
+  .index{border-top:1px solid var(--rule);padding-top:1.6rem;margin:2.4rem 0 2.5rem;}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important;transition:none !important;}
+}
+</style>
+
+<div class="shell">
+
+<header class="masthead">
+  <p class="eyebrow">Pricing mechanics &middot; Middle West Studio &middot; 5 September 2026</p>
+  <h1>The Number<br>That Holds</h1>
+  <p class="standing">The client's total holds while the studio shapes each line, and every cost says when it was last true.</p>
+  <div class="masthead-meta">
+    <div><b>Prepared for</b><span>Kody &middot; build, infrastructure, operations</span><span>Leah's studio &middot; design and practice</span></div>
+    <div><b>Lanes</b><span>Practice (R1)</span><span>Blending and software (R2)</span><span>Price validity (R3)</span><span>Code (R4)</span><span>Panel, simulated (R5)</span></div>
+    <div><b>Standing</b><span>Nothing here is built</span><span>The document exists to earn reactions and a set of rulings</span></div>
+  </div>
+</header>
+
+<nav class="index" aria-label="Contents">
+  <p class="idxhead">Contents</p>
+  <ol>
+    <li><a href="#short"><span class="n">01</span><span>The short version</span></a></li>
+    <li><a href="#asked"><span class="n">02</span><span>What was asked for</span></a></li>
+    <li><a href="#today"><span class="n">03</span><span>What exists today</span></a></li>
+    <li><a href="#trade"><span class="n">04</span><span>What the trade does</span></a></li>
+    <li><a href="#principles"><span class="n">05</span><span>Principles</span></a></li>
+    <li><a href="#fixture"><span class="n">06</span><span>The fixture</span></a></li>
+    <li><a href="#proposals"><span class="n">07</span><span>The proposals</span></a></li>
+    <li><a href="#master"><span class="n">08</span><span>The proposal list</span></a></li>
+    <li><a href="#waves"><span class="n">09</span><span>Three waves</span></a></li>
+    <li><a href="#rulings"><span class="n">10</span><span>Open rulings</span></a></li>
+    <li><a href="#questions"><span class="n">11</span><span>Questions for the studio</span></a></li>
+    <li><a href="#appendix"><span class="n">12</span><span>Appendix</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============================================================ 01 -->
+<section id="short">
+  <div class="opener"><p class="eyebrow">One</p><h2>The short version</h2></div>
+
+  <p class="lede">Leah's team asked for two things. The first is to adjust the client price piece by piece — taking the edge off a hero piece and spreading that margin across the room. The second is to see a verified-pricing date beside every cost. Today Patina can do neither.</p>
+
+  <p>A designer types one field called <span class="quote">Unit Price</span>, and it lands in the <em>trade</em> column. The client price exists only after a bulk <span class="quote">Apply markup %</span> is run over a batch of selected lines. Every new line, however it is born, starts at zero margin with the same number in both columns. The only place trade, markup, client and line margin appear together is a lens titled <span class="quote">Financial lens &middot; studio only</span>, gated to the studio owner, set in type below the product's own floor. And no price anywhere carries a date, a source, or an expiry: the database has no column for it anywhere.</p>
+
+  <p>The trade says both asks are ordinary practice. Studios plan to a project-level blended margin and deliberately run lower markup on the big pieces and higher on the accessories (R2). Vendor quotes are good for about thirty days, and the 2025–26 run of tariff and materials surcharges made an undated price a liability rather than a nuisance (R3). Of the eight design-business tools checked, none of the eight documents a first-class blend and none documents a <span class="quote">priced on</span> stamp — an absence in reachable public documentation, not a demonstrated absence in the products. This is Patina's to do first, on the evidence we could reach.</p>
+
+  <p>Eleven proposals in three waves. <strong>Wave one fixes the floor</strong> — five defects that make every margin figure in the product wrong today, and which no new feature can be built on top of. <strong>Wave two prices with intent</strong> — the Blend, the priced-on stamp, an honest release sheet. <strong>Wave three keeps it honest</strong> — price history, post-sale edits, library intake. Eleven rulings follow, each naming who rules.</p>
+
+  <p>Nothing in this document resolves vision ruling V1, Patina's own margin pocket. Every dollar discussed here is the studio's own money, on the studio's own rail.</p>
+</section>
+
+<!-- ============================================================ 02 -->
+<section id="asked">
+  <div class="opener"><p class="eyebrow">Two</p><h2>What Leah's team asked for</h2></div>
+
+  <p>The feedback, as it reached us — the gist, not a verbatim transcript:</p>
+
+  <blockquote>
+    <p>When we build a job, a proposal, or a purchase approval, we like to adjust the client cost per piece. Sometimes that means taking the edge off a more expensive piece and spreading some of that margin across other items. We'd also like to see verified pricing dates next to our cost.</p>
+  </blockquote>
+
+  <p>There are three needs inside that, and they want different things from the product.</p>
+
+  <div class="cols cols-2">
+    <div>
+      <h4>Control</h4>
+      <p>Shape the client price on a single line, in the client's own number, without selecting a batch and running a percentage over it. The principal in the simulated panel put the same thing in the negative. The client price is decided first, in her head or in a spreadsheet. The tool's job is to record that decision, not to derive it.</p>
+
+      <h4>A held total</h4>
+      <p>The room's number does not move when a line does. Taking $740 off the sofa is not a discount; it is a redistribution, and the studio expects to see it land somewhere.</p>
+    </div>
+    <div>
+      <h4>Trust in the cost</h4>
+      <p>When was this true, who said so, and until when. Not because a designer forgets, but because six weeks later a client asks why something went up, and a quote number reads better than a memory.</p>
+
+      <h4>What was not asked</h4>
+      <p>Nothing about the client seeing margin. Nothing about Patina's own take. Both stay exactly where they are: the client's documents keep their four columns, and the platform's commission rail is not touched by anything in this document.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 03 -->
+<section id="today">
+  <div class="opener"><p class="eyebrow">Three</p><h2>What exists today</h2></div>
+
+  <p class="lede">Every claim in this section was re-checked against the checkout on 5 September 2026 and carries its file and line. Where an earlier relayed summary disagreed with the code, the code won; those corrections — including three citations an earlier draft carried over rather than re-opened — are listed in the appendix.</p>
+
+  <h3>Two rails, and only one of them is here</h3>
+  <p>Patina carries two money systems that share a vocabulary and nothing else. <strong>Rail A</strong> is the studio's own markup — the designer buys at trade, sells to the client at a marked-up price, and Patina is the ledger for that spread. It is three tables deep: <code class="mono">proposal_items</code> pre-sale <span class="ref">00014:237</span>, <code class="mono">project_ffe_items</code> after activation <span class="ref">00185:51-60</span>, and <code class="mono">furnishing_authorization_items</code> when the client is asked to authorize a purchase <span class="ref">00412:243</span>. <strong>Rail B</strong> is Patina's own commission on fulfillment, and it lives in an entirely separate set of tables and helpers. No column on any of the three Rail A tables references a commission rate or a platform fee. Everything below is Rail A.</p>
+
+  <h3>How a price is made</h3>
+  <p>A proposal line can be born four ways, and all four write a <em>retail</em> figure into the column whose own comment says trade. Manual add goes through the edit form, whose only money field is labelled <span class="quote">Unit Price</span> <span class="ref">ffe-schedule-builder.tsx:264</span> and writes it straight to <code class="mono">unit_price</code> <span class="ref">:200</span>. A library pick takes <code class="mono">selection?.retailPriceCents ?? pick.priceCents ?? 0</code> <span class="ref">build-proposal-item-from-pick.ts:119</span>, where <code class="mono">priceCents</code> is documented as <code class="mono">products.price_retail</code> <span class="ref">product-picker-modal.tsx:80,233</span>. Capture-consume is the same defect written in SQL: <code class="mono">v_unit_price := COALESCE(v_product.price_retail, 0)</code> <span class="ref">00142:61</span>, inserted into <code class="mono">unit_price</code> at <span class="ref">00142:89</span>. Send-to-schedule from a board pin builds <code class="mono">unitPrice: snap.priceCents ?? 0</code> <span class="ref">board-schedule.ts:74</span>, and the docblock above it is candid about the consequence <span class="ref">:56-60</span>.</p>
+
+  <p>All four funnel into one hook, where the whole markup model collapses in a single line — <code class="mono">const sellPrice = unitPrice;</code> <span class="ref">use-proposals.ts:773</span> — and the insert writes the same number into both columns <span class="ref">:794-795</span>. Combined with <code class="mono">markup_percent DECIMAL(5,2) DEFAULT 0</code> <span class="ref">00014:256</span>, every line is born at exactly zero margin with a retail figure sitting in the trade column.</p>
+
+  <p>The arithmetic itself is clean and lives in one file. <code class="mono">computeMarkupUpdate</code> implements <code class="mono">client = round(trade &times; (1 + markup/100))</code> and <code class="mono">line = qty &times; client</code> <span class="ref">markup.ts:35-48</span>, returns <code class="mono">null</code> for anything that is not a fixed line <span class="ref">:39</span>, and <code class="mono">lineMarginCents</code> deliberately returns <code class="mono">null</code> rather than zero when the trade price is unknown <span class="ref">:63-67</span>. The only interface that ever sets a markup is the bulk bar: an input with no visible label — only a placeholder, with the accessible name set at <span class="ref">ffe-schedule-builder.tsx:1731</span> and a button reading <span class="quote">Apply markup</span> <span class="ref">:1747</span>, which writes <code class="mono">markup_percent</code> and <code class="mono">unit_sell_price</code> and never <code class="mono">unit_price</code> <span class="ref">:990-991</span>.</p>
+
+  <h3>The five floor defects</h3>
+  <p>These are not gaps in the feature set. They are the reason the numbers on screen today do not agree with each other or with the database, and nothing proposed later in this document can be built on top of them.</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead>
+        <tr><th>#</th><th class="w-name">Defect</th><th class="w-what">Where it lives</th><th class="w-why">What it costs the studio</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="num">F1</td>
+          <td><strong>Retail masquerades as trade</strong></td>
+          <td>Library picks take retail while the trade price sits unread on the same object — <code class="mono">priceTradeCents</code> is declared and populated <span class="ref">product-picker-modal.tsx:87,234</span> and read <strong>zero times</strong> on the proposal-item path (the Piece configuration path does read it <span class="ref">piece-configuration-model.ts:577</span>). A fifth site is in SQL, inside <code class="mono">consume_capture</code> <span class="ref">00142:61,89</span>, so a fix confined to TypeScript leaves it standing.</td>
+          <td>Every picked line reads 0% margin. Any markup later applied compounds on a retail figure, so the client price is wrong in the studio's favour and the margin figure is wrong in the studio's face.</td>
+        </tr>
+        <tr>
+          <td class="num">F2</td>
+          <td><strong>The designer's own totals sum trade</strong></td>
+          <td>The row figure is <code class="mono">item.unit_price * item.quantity</code> <span class="ref">ffe-schedule-builder.tsx:463</span>; the document figure, labelled <span class="quote">Estimated Total</span> <span class="ref">:1621</span>, sums the same column <span class="ref">:1164-1177</span>. What is persisted to <code class="mono">proposals.total_amount</code> is built from <code class="mono">line_total_cents</code> — the client column <span class="ref">proposal-total.ts:22-31</span>.</td>
+          <td>Screen and database disagree by exactly the markup, on the number a designer reads out loud in a meeting. On the fixture that is $16,880 on screen against $22,790 in the record.</td>
+        </tr>
+        <tr>
+          <td class="num">F3</td>
+          <td><strong>A trade edit overwrites the client price</strong></td>
+          <td><code class="mono">if (updates.unit_price !== undefined) { payload.unit_sell_price = updates.unit_price; }</code> <span class="ref">use-proposals.ts:911-912</span>, recorded in the comment above as deliberate parity with the add path <span class="ref">:909-910</span>.</td>
+          <td>Correct a vendor cost by a dollar and the markup is destroyed silently. This is precisely the motion P4 asks designers to perform more often, so it must be fixed before the priced-on stamp ships.</td>
+        </tr>
+        <tr>
+          <td class="num">F4</td>
+          <td><strong>Every insert path ships at 0%</strong></td>
+          <td>Add, pick, capture-consume, and send-to-schedule all land on <code class="mono">use-proposals.ts:773</code>. <code class="mono">user_settings.default_markup DECIMAL(5,2) DEFAULT 30.00</code> has existed since <span class="ref">00014:475</span> and a repo-wide grep finds no hook, component, RPC or edge function that reads it.</td>
+          <td>A junior designer builds a room at zero and cannot tell an unfinished line from a finished one. The first hire in the simulated panel named this exactly: she does not know whether a zero is a bug or an unfinished job. <span class="sim">[simulated]</span></td>
+        </tr>
+        <tr>
+          <td class="num">F5</td>
+          <td><strong>Activation clamps</strong></td>
+          <td><code class="mono">GREATEST(COALESCE(v_item.unit_price, 0), 0)</code> into <code class="mono">trade_price_cents</code> and the same over <code class="mono">markup_percent</code> <span class="ref">00279:199-200,237-238</span>, to satisfy the <code class="mono">&gt;= 0</code> checks <span class="ref">:184-186</span>. Separately, the two post-sale locks name <code class="mono">quantity</code>, <code class="mono">unit_price_cents</code> and <code class="mono">line_total_cents</code> and neither mentions <code class="mono">trade_price_cents</code> or <code class="mono">markup_percent</code> <span class="ref">00422:1431-1436,1476-1479</span>.</td>
+          <td>An unknown trade cost becomes a confident zero the moment a proposal activates, and the line reports 100% margin forever after — the exact case <span class="ref">00185:57-60</span> told the interface to tolerate as NULL. And after signature the studio's own cost stays editable while the client's number is frozen.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Two more things worth naming</h3>
+  <p><strong>Four unshared margin computations, and no two agree.</strong> <code class="mono">lensTotals</code> reports absolute cents over every pre-sale line with no status filter <span class="ref">markup.ts:78-89</span>. The account page reports a percentage over committed statuses only, computing client value as <code class="mono">unit_price_cents &times; quantity</code> rather than from the stored line total <span class="ref">use-account-page.ts:110-123</span>. <code class="mono">useProjectFinancials</code> in the package reports cents per category with no status filter <span class="ref">use-project-v2.ts:618-697</span>. And a near-duplicate of that hook lives in the portal <span class="ref">use-projects.ts:372</span> whose query filters <code class="mono">.is('removed_at', null)</code> <span class="ref">:395</span> where the package copy does not <span class="ref">use-project-v2.ts:627</span>. The product answers <span class="quote">what is my margin</span> in cents twice and in percent once, over three row populations, with two definitions of client value and two treatments of removed lines. One definition is owed before any of this is worth showing to a second person in the studio.</p>
+
+  <p><strong>Setting is ungated; reading is not.</strong> The Financial lens sits behind <code class="mono">useIsStudioOwner</code> <span class="ref">use-permissions.ts:446-454</span>, consumed once to gate both the toggle and the lens <span class="ref">ffe-schedule-builder.tsx:911,1367,1412</span>. The bulk markup bar sits outside that gate <span class="ref">:1727-1748</span>. Any studio member may apply a markup; only an owner may see what it did.</p>
+
+  <h3>What the client sees, and why that part stays</h3>
+  <p>The visibility law is one pure module shared by the client portal and the designer's live mirror, <span class="quote">so preview IS truth</span> <span class="ref">proposal-visibility.ts:5-13</span>. Three tiers are presets over eight fields <span class="ref">:114-149</span>; an unknown tier falls back to the narrower one <span class="ref">:163-165</span> and an untrusted blob is coerced with <code class="mono">out[key] = src[key] === true</code> <span class="ref">:179</span>, so a malformed share can only reveal less. Server-side, <code class="mono">get_client_proposal_bundle</code> exists because <span class="quote">RLS filters rows, not columns</span> <span class="ref">00390:1490-1493</span>; it gates <code class="mono">unit_sell_price</code> and <code class="mono">line_total_cents</code> behind the full tier <span class="ref">:1634-1643</span> and does not project <code class="mono">unit_price</code> or <code class="mono">markup_percent</code> at all — no tier could carry them. The mirror is pinned by a contract test that forbids the trade and markup identifiers by name <span class="ref">proposal-mirror-contract.test.ts:29-38</span>. The authorization sheet's rule is written into its own docblock — <span class="quote">Four columns and no fifth: item, room, signed quantity, client price</span> <span class="ref">review-release-sheet.tsx:10-11</span> — and the database says the same of the executed instrument <span class="ref">00422:2157-2159</span>.</p>
+
+  <p class="note">This law is not a constraint this document works around. It is the part of the product that is already right, and every proposal below is written to leave it untouched.</p>
+
+  <h3>Post-sale</h3>
+  <p>After activation the model repeats under different names, and the comments fix the meanings: <code class="mono">unit_price_cents</code> is the client price and the <span class="quote">source of truth for client-facing money</span>; <code class="mono">trade_price_cents</code> is the vendor cost, explicitly nullable, <span class="quote">NULL = unknown&hellip; UI must tolerate NULL</span>; <code class="mono">markup_percent</code> is <span class="quote">advisory&hellip; this records intent</span> <span class="ref">00185:51-65</span>. Writes are RPC-only: a direct update is permitted only when every money column is unchanged <span class="ref">00435:935-955</span>, and the client library throws before touching data with <span class="quote">FF&amp;E pricing changes are RPC-only</span> <span class="ref">use-project-v2.ts:333-335</span>. There is no working post-sale price editor in the portal. The soft lock blocks an edit while a line sits on a sent authorization — <span class="quote">void the authorization to edit</span> <span class="ref">00422:1491</span> — and the executed freeze requires an exact match to the signed snapshot <span class="ref">:1431-1436</span>. Drift, where it exists, is stated rather than hidden: <code class="mono">authorized &hellip; &middot; now &hellip;</code> renders in terracotta under the comment <span class="quote">The signed price stands; the drift is stated, never silent</span> <span class="ref">line-unfold.tsx:364-369,446-451</span>.</p>
+
+  <h3>Price freshness</h3>
+  <p>The absence is total. A grep across all 520 applied migrations (521 counting the one under <code class="mono">_pending/</code>) for <code class="mono">price_verified_at|price_checked_at|price_valid_until|price_source|quote_expires|price_as_of|price_history</code> returns <strong>zero hits</strong>. <code class="mono">valid_until</code> exists, but it is document expiry set at send <span class="ref">00414:280</span> and swept by a cron <span class="ref">00098:14-24</span> — not price age. <code class="mono">vendor_quote_requests</code>, the table whose name promises otherwise, carries scope, timeline, message and status and no money column at all <span class="ref">00162:31-49</span>. A studio can request a quote in Patina and has nowhere to put the answer.</p>
+
+  <p>Every ingredient, though, exists as a partial precedent, and P4 is mostly assembly rather than invention:</p>
+  <ul>
+    <li>A verification timestamp with the right refusal built in — <code class="mono">products.photo_verified_at</code>, whose comment reads like a specification for this case: <span class="quote">NULL means nobody has — the app says nothing rather than implying verification (C5)</span> <span class="ref">00533:51-55</span>.</li>
+    <li>A stored historical price — <code class="mono">saved_items.price_cents_at_save</code>, whose comment names the exact capability: <span class="quote">the pair is what lets the app say a price moved without inventing a figure</span> <span class="ref">00535:21-29</span>.</li>
+    <li>A validity window — <code class="mono">validUntil</code>, typed inside the custom commission quote blob <span class="ref">packages/types/src/product-configuration.ts</span>, for exactly one custom-commission path, unindexed and unqueryable.</li>
+    <li>A staleness rule already shipping — <code class="mono">runSpecBookPreflight</code> emits <span class="quote">pricing or lead time may be aged</span> past ninety days <span class="ref">spec-books/model.ts:442-450</span>, inferred from the row's last write rather than from any price-specific fact.</li>
+    <li>A finished interface grammar — <code class="mono">FieldProvenance</code> renders a value with a mono line beneath it reading <code class="mono">source &middot; verified &lt;date&gt;</code> at 11px <span class="ref">spec-book-workspace.tsx:127-153</span>. The threshold helper that would drive it, <code class="mono">daysSince</code>, is declared without <code class="mono">export</code> <span class="ref">model.ts:326-331</span>, so any other surface must export it or reimplement it.</li>
+  </ul>
+
+  <h3>Studio settings</h3>
+  <p>There is one modern per-studio settings table and one dead field. <code class="mono">studio_billing_settings</code> is the shape to copy: the organization <em>is</em> the primary key <span class="ref">00428:43-44</span>, absence means the platform default <span class="ref">:90</span>, and its RLS pattern uses a security-definer helper as the policy predicate because <span class="quote">a policy that reaches organization_members directly re-enters that table's own RLS and 42501s</span> <span class="ref">:61-63</span>. The counter-example is <code class="mono">user_settings.default_markup</code> — shipped since <span class="ref">00014:475</span>, typed by hand, generated into the database types, and read by nothing. It is also on the wrong grain: a markup policy belongs to the studio, not to a user. There is no <code class="mono">studios</code> table; the entity is <code class="mono">organizations</code> <span class="ref">00021:102-122</span> and the designer-facing name is a view <span class="ref">00084:363-372</span>.</p>
+
+  <h3>Contracts any change must respect</h3>
+  <ul>
+    <li><strong>Draft-only child writes.</strong> <code class="mono">guard_proposal_child_draft_only</code> raises <span class="quote">proposal % is %, so its authored copy is immutable</span> once the parent leaves draft <span class="ref">00390:370-494</span>. Every pre-sale pricing change is a draft-only operation.</li>
+    <li><strong>The send fingerprint.</strong> <code class="mono">_proposal_review_fingerprint</code> hashes an explicit per-item column list including <code class="mono">unit_price</code>, <code class="mono">line_total_cents</code>, <code class="mono">unit_sell_price</code> and <code class="mono">markup_percent</code> <span class="ref">00390:218-227</span>. A new pricing column not added here will not invalidate a stale send.</li>
+    <li><strong>The explicit column lists.</strong> New columns are silently dropped by the clone, the two activation inserts <span class="ref">00279:187-192,225-230</span>, the authorization builder <span class="ref">00422:607-612</span>, the two authorization snapshot builders <span class="ref">00412:1958-1970,1985-1995</span>, and the placement RPCs. The client bundle is the inverse case: a new column is safely invisible there until deliberately projected.</li>
+    <li><strong>Catalog writes are super-admin only</strong> <span class="ref">00152:393-397</span>. Any <span class="quote">verify this price</span> affordance on a catalog row needs an RPC, not an update.</li>
+    <li><strong>The type floors.</strong> <code class="mono">--type-metadata-min: 12px</code> and <code class="mono">--type-body-min: 14px</code> <span class="ref">globals.css:87-89</span>, with the 11px mono convention stated at <span class="ref">stamp.tsx:52</span>. The lens obeys neither: its column headers are set inline at <code class="mono">0.55rem</code> and its room labels at <code class="mono">0.58rem</code> <span class="ref">financial-lens.tsx:202,178</span>, which at this app's 18px root <span class="ref">globals.css:1283-1285</span> is 9.9px and 10.4px. The one test that guards the floors only asserts the tokens are declared, never that a component uses them <span class="ref">quiet-type-foundation.test.ts:29-31</span>.</li>
+    <li><strong>Six currency formatters, none shared</strong>, disagreeing on fraction digits <span class="ref">currency-ui.ts:7 &middot; format.ts:62 &middot; utils.ts:14 &middot; project-commerce.ts:458 &middot; piece-configuration-model.ts:623 &middot; order-assistant/types.ts:207</span>. Every mockup below states which surface it is drawing, because the answer changes the digits.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 04 -->
+<section id="trade">
+  <div class="opener"><p class="eyebrow">Four</p><h2>What the trade does</h2></div>
+
+  <p class="lede">Everything in this section comes from research lanes R1, R2 and R3, and every figure carries the source that produced it. All external pages were accessed 5 September 2026. Where a range was asserted by practitioner-adjacent business writing rather than a survey, it is named as such rather than dressed up.</p>
+
+  <h3>Models</h3>
+  <p>No single pricing model dominates. Hybrids are widely asserted across practitioner-adjacent writing rather than survey-verified: a flat or hourly design fee for the creative and project-management work, layered with cost-plus markup on the furnishings. Cost-plus and retail-minus are the two dominant procurement mechanics — the first charges net cost plus a stated percentage, the second charges retail and keeps the spread. A worked example of the first, from <a href="https://www.capellakincheloe.com/blog/pricing-interior-design-services">Capella Kincheloe</a>: <span class="quote">$8999 (retail) minus designer discount of 40% = $5399.40 (designer's net) x 35% markup = $7289.19</span>. The second, from the same page: <span class="quote">The designer pays the designer net price, and the client will always pay retail and the designer's fee is the difference.</span></p>
+
+  <p>Markup on cost and margin on price are different numbers and are routinely conflated by designers themselves. <a href="https://interiordesigncommunity.com/interior-design-profit-margin/">Interior Design Community</a> works it plainly: <span class="quote">A piece that costs you $1,000 and sells for $1,600 carries a 60 percent markup. But the profit on that sale, $600, is only 37.5 percent of the $1,600 you actually collected.</span> 35% on cost is 25.9% on price — 0.35 ÷ 1.35, derived here rather than cited. This is the distinction a tool must keep straight, and it is the reason every figure in this document carries the words <span class="quote">on cost</span> or <span class="quote">on price</span>.</p>
+
+  <p>Category ranges, cited by practitioners rather than measured: general FF&amp;E around 30–40% markup on cost; custom upholstery higher; case goods 40–60% and described as the most price-checkable category. <a href="https://blog.designfiles.co/how-should-i-markup-products/">DesignFiles</a> puts the industry average at 35% with most designers between 30 and 35. <strong>No survey was found that breaks down what share of studios use which model, and none of the category ranges traces to a named methodology.</strong> They are what the trade says out loud, and this document treats them as directional.</p>
+
+  <h3>Disclosure</h3>
+  <p>Disclosure is a live legal question, not a courtesy. The <a href="https://casd.asid.org/code-of-ethics">ASID Code of Ethics</a> requires members to <span class="quote">fully disclose to a client all compensation that the member shall receive in connection with the project</span>. <a href="https://www.designinkco.com/blog/interior-design-markup-disclosure">Design Ink Co</a> is explicit that generic contract language fails the test — <span class="quote">'Industry-standard markup' is not considered sufficient disclosure</span> — and reports Virginia litigation in which undisclosed markups were found to be a breach of agreement and, separately, a consumer-protection violation. The safer contract pattern names the number: <span class="quote">Client will be charged the net cost plus a procurement fee of X% on approved furnishings. Trade discounts, if any, are retained by the designer as part of studio compensation.</span></p>
+
+  <p>The implication for Patina is narrow and worth stating. The client documents already never show trade, and nothing here changes that. What the studio must be able to do is state its own practice precisely — which requires the studio's own number to be legible to the studio, on one definition, at the moment of the decision. A tool that leaves four disagreeing margin figures in the product is not helping a designer honor a cost-plus clause.</p>
+
+  <h3>Blending</h3>
+  <p>Blending is a named practice, not an improvisation. The clearest statement found, from <a href="https://interiordesigncommunity.com/interior-design-profit-margin/">Interior Design Community</a>: <span class="quote">you need about a 40% margin on the overall project to be profitable, but&hellip;that 40% is on the project as a whole, so if you can't do it in some places you can make it up in others.</span> The same piece reports designers running 30–40% on smaller projects and 20–30% on larger ones, reasoning about overhead recovery per project rather than per item, and describes the tracking mechanism as <span class="quote">a basic spreadsheet that totals cost against sale price as you build out a proposal</span> — running beside whatever software the studio pays for.</p>
+
+  <p>The shape of the blend — cap the markup on the hero piece a client can price-check, lift it on the lighting and accessories nobody will — is consistent across every source touched but is stated cleanly by none of them; R2 marks it inferred synthesis. Two hard edges are external rather than editorial. MAP is a vendor-enforced <em>floor</em> on advertised price: going below it can cost a studio its trade account. The ceiling is the maker's own published retail — a client price above it is not a thing a studio will do — and the practical top is around 2.2–2.5&times; wholesale (<a href="https://procurist.io/blog/trade-discount-programs-designers">Procurist</a>, figures paraphrased). And rounding is barely engineered anywhere — none of the eight products documents an automatic rule, and while professional-services pricing plainly favours $0 and $5 endings over $.99, <strong>no source names a specific increment as a convention</strong>. R4's recommendation of $5 is a studio setting with a default, not an appeal to practice.</p>
+
+  <p>Freight, receiving and install are handled inconsistently, with no dominant convention — sometimes a separately disclosed line, sometimes a figure folded into the goods markup — with survey answers ranging from a 10% processing fee to a 25% flat rate to no markup at all. No product forces either convention; each simply provides fields.</p>
+
+  <h3>Price validity</h3>
+  <p>Thirty days is the modal quote window. Generic B2B practice, per <a href="https://lawinsider.com/clause/quotation-validity">LawInsider</a>'s aggregated clause samples: <span class="quote">Quotations are valid for 30 days unless otherwise stated.</span> A custom upholstery workroom's published terms say the same and give the reason: <span class="quote">All quotes provided are valid for 30 days from the date of issue. After this period, prices may be subject to change based on fluctuations in material costs or availability</span> (<a href="https://www.creaturecomfortsupholstery.co.uk/terms-conditions/">Creature Comforts Upholstery</a>). A manufacturer's terms add the second date the vendors themselves draft: acceptance within 30 days, but prices <span class="quote">guaranteed only for materials that can be scheduled and shipped within 150 days</span> (<a href="https://www.murdockmfg.com/uploads/docs/MM_Terms.pdf">Murdock Manufacturing</a>). <span class="quote">Subject to change without notice</span> is boilerplate on nearly every terms page found.</p>
+
+  <p>What made an undated price a liability rather than a nuisance was the 2025–26 repricing. A 25% Section 232 tariff on imported upholstered wooden furniture, cabinets and vanities took effect 14 October 2025, and a scheduled increase was delayed to 1 January 2027 (<a href="https://www.ghy.com/trade-compliance/us-tariffs-lumber-upholstered-furniture-cabinets-vanities/">GHY</a>). Surcharges arrived mid-cycle and separately from list price — tariff surcharges of 3.5% to 8% across the named cases, reported as aggregated trade coverage and not re-verifiable at a single URL, plus a 5% fuel surcharge and reports of MDF and solid wood up 15–17%, both of those attributed to <a href="https://www.homeaccentstoday.com/supply-chain/price-increases-imminent-rising-energy-and-materials-costs-could-further-challenge-recovery/">Home Accents Today</a>. Living, kitchen and dining furniture inflation moved from about 1% year over year in early 2025 to a 9.5% peak that August before cooling, on the furniture-and-bedding series (<a href="https://www.statista.com/statistics/1304173/consumer-price-index-monthly-furniture-and-bedding-united-states/">Statista</a>).</p>
+
+  <p>Designers changed behavior in response, on the record. <a href="https://businessofhome.com/articles/how-a-year-of-tariffs-changed-the-design-industry">Business of Home</a> quotes Kevin Twitty — <span class="quote">it's somewhere around 30 percent more expensive this year to do a remodel than it was last year</span> — with clients still spending the same, so <span class="quote">what that does is it shrinks our projects or updates our scope.</span> Lindsay Olson describes disclosing exposure at presentation rather than after, and estimates spending <span class="quote">20 to 25 percent more time</span> re-sourcing to avoid tariffs. Winn Galloway names the real pressure: <span class="quote">It's not necessarily that the higher costs have been the problem; it really is cash flow.</span> The sharpest practitioner-facing checklist found is a quote-review one: look at <span class="quote">the expiration date, tariff language, escalation provisions, and what happens if the purchase order is issued after the quote expires</span> (<a href="https://www.furngully.com/trends-insights/why-there-is-a-tariff-line-on-your-furniture-quote-and-why-your-dealer-usually-cannot-remove-it">Furngully</a>).</p>
+
+  <p>No design-business tool checked documents a first-class <span class="quote">price verified on</span> or <span class="quote">quote expires</span> field. The precedents are all adjacent. <a href="https://help.aisleplanner.com/en/articles/3130688-adding-expiration-dates-to-quotes-proposals-and-contracts">Aisle Planner</a>, in event planning, has a literal Expiration Date field on quotes and proposals, and an expired document shows the client a message prompting them to ask for an updated version — the clearest named precedent for exactly this interface, from the wrong vertical. <a href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/chapter_1536354469.html">NetSuite's Effective Date Pricing</a> is the mature data-model precedent: a price carries a start date and an optional end date per pricing level. And <a href="https://camelcamelcamel.com/support/no_recent_prices">camelcamelcamel</a> discloses its own lag rather than hiding it, which is the honesty posture worth copying. One caution from the freshness-badge literature is worth carrying into the build: <span class="quote">A badge showing the wrong number is worse than no badge at all</span> (<a href="https://www.windmill.dev/changelog/asset-freshness">Windmill</a>). A verified stamp must be reliably computed or it damages the thing it is meant to build.</p>
+
+  <p>Synthesizing across all of it, a trustworthy stamp carries five things: <strong>date</strong> (when the price was confirmed, distinct from when the row was last written), <strong>who</strong>, <strong>source</strong> (quote number, price-list revision, website, phone, catalog), <strong>validity</strong>, and <strong>what changed</strong> since. P4 and P5 below are that list, split at the line where a database change stops being small.</p>
+
+  <h3>The eight tools, condensed</h3>
+  <p>From the R2 and R3 matrices. <span class="quote">Not confirmed</span> means no evidence was found in reachable public documentation — several help centers returned certificate errors or 404s in the research pass — and is not a claim the feature is absent.</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead>
+        <tr><th class="w-name">Product</th><th>Studio-level default markup</th><th>Per-item override</th><th>Client price editable directly</th><th>Automatic rounding rule</th><th>Price date / priced on</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Studio Designer</strong></td><td>yes</td><td>yes</td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td></tr>
+        <tr><td><strong>Design Manager</strong></td><td>yes</td><td>partial</td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td></tr>
+        <tr><td><strong>Houzz Pro (Ivy)</strong></td><td>not confirmed</td><td>yes</td><td>yes</td><td>not confirmed</td><td>not confirmed</td></tr>
+        <tr><td><strong>Mydoma</strong></td><td>not confirmed</td><td>partial</td><td>partial</td><td>not confirmed</td><td>not confirmed</td></tr>
+        <tr><td><strong>DesignFiles</strong></td><td>not confirmed</td><td>yes</td><td>yes</td><td>not confirmed</td><td>not confirmed</td></tr>
+        <tr><td><strong>Programa</strong></td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td></tr>
+        <tr><td><strong>Gather</strong></td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td></tr>
+        <tr><td><strong>Materio</strong></td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td><td>not confirmed</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="summaryline"><b>Blend or spread across a project &middot; not confirmed in any of the eight.</b></p>
+
+  <p>Two products come closest to something in this document without arriving. <a href="https://intercom.help/materio/en/articles/8261262-level-of-pricing-detail-a-client-sees">Materio</a> has a four-tier client-visibility ladder ending in lump-sum with an optional <span class="quote">See Selection Allowances</span> toggle — the clearest named allowance feature found — but visibility control is not blend tooling. The same help centre also describes project fees, <span class="quote">like markup and profit</span>, as <span class="quote">calculated for you and&hellip;easily adjustable</span>, which is closer to project-level blending logic than anything else found in the set; the mechanism behind it is not confirmed. <a href="https://join.designfiles.co/features/interior-design-quote/">DesignFiles</a> markets a vendor-response log that <span class="quote">keeps a running history for reorders</span>, the nearest thing to price history in the set. The pattern worth borrowing outright comes from outside the industry: Phocas's budgeting <span class="quote">Spread</span> feature, which distributes a total across items automatically, and JobTread's contractor-side fields where <span class="quote">Unit Price, Ext Price, Markup and Margin update on the fly</span> — margin as a first-class editable field, which none of the eight furniture tools documents.</p>
+</section>
+
+<!-- ============================================================ 05 -->
+<section id="principles">
+  <div class="opener"><p class="eyebrow">Five</p><h2>Principles</h2></div>
+  <p class="lede">Eight, in the order they get argued about. Each is a rule the proposals below are checked against, not a sentiment.</p>
+
+  <div class="ftest">
+    <p><b>Surface</b> &middot; The Document — the Drafting Room's FF&amp;E facet, the project FF&amp;E schedule, and the release sheet.</p>
+    <p><b>Studio moment</b> &middot; the studio adding its first hands while its workload doubles.</p>
+    <p><b>Stream</b> &middot; the upside stream — margin on furniture sold through designer-led projects — which this document leaves entirely to the studio. Patina is paid here on the subscription floor.</p>
+    <p><b>Promise</b> &middot; the studio won't notice Patina: fewer spreadsheet detours, and nothing in here optimized for engagement.</p>
+  </div>
+
+  <div class="cols cols-2">
+    <div>
+      <h4>One &middot; the client price is the number</h4>
+      <p>Markup is a note about it. The product already says this after the sale — <code class="mono">markup_percent</code> is <span class="quote">advisory&hellip; Client price is the source of truth</span> <span class="ref">00185:62-65</span>. Pre-sale disagrees today. Make pre-sale agree.</p>
+
+      <h4>Two &middot; the total holds</h4>
+      <p>A move on one line is paid for by the others, visibly, in the same act. If a designer wants the room to come down, that is a different act with a different name, and she should have to perform it.</p>
+
+      <h4>Three &middot; say the date or say nothing</h4>
+      <p>A price with no verified date reads <span class="quote">unverified</span>. It never implies freshness it does not have. This is the C5 convention already written into <code class="mono">photo_verified_at</code> <span class="ref">00533:54-55</span>, applied to money.</p>
+
+      <h4>Four &middot; trade never travels</h4>
+      <p>Every client surface keeps the columns it has. Nothing in this document widens what a homeowner sees about money, and the four-columns-and-no-fifth rule holds on both the proposal and the authorization.</p>
+    </div>
+    <div>
+      <h4>Five &middot; quiet when fresh</h4>
+      <p>Aging is a change of ink, not a banner. No red anywhere; terracotta is the strongest word the page has. The simulated principal's caution is the reason: a warning-styled treatment changes how designers enter prices, which defeats the point.</p>
+
+      <h4>Six &middot; every move leaves a trace</h4>
+      <p>A blend, a verify, a price change — each is a line in the record, in plain words a bookkeeper can read three months later without phoning the designer.</p>
+
+      <h4>Seven &middot; the studio decides who sees margin</h4>
+      <p>Not the tool's default. A silent permission wall reads as a locked door to a junior designer; a stated rule reads as ordinary. The wording is ruled on in R1.</p>
+
+      <h4>Eight &middot; none of this is Patina's money</h4>
+      <p>Rail A only. Vision ruling V1 — whether Patina ever takes a margin pocket of its own — stays open and is not touched, argued, or quietly presumed anywhere in this document.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 06 -->
+<section id="fixture">
+  <div class="opener"><p class="eyebrow">Six</p><h2>The fixture</h2></div>
+
+  <p class="lede">Every mockup in this document draws the same room: the Lindqvist residence in Minnetonka, living room, six lines. The makers are invented; the arithmetic is not. It is reproduced from the rule in the code — <code class="mono">client = round(trade &times; (1 + markup/100))</code> at <span class="ref">markup.ts:42</span>, line total <code class="mono">qty &times; client</code> at <span class="ref">:46</span> — and re-checked by a script that lives beside this file.</p>
+
+  <p>Studio settings in force for the fixture: rounding <strong>to the nearest $5</strong>, margin floor <strong>25% on price</strong>, default markup <strong>35% on cost</strong>. Category defaults exist in the settings mockup — upholstery 35, case goods 40, lighting 45, rugs 35, accessories 50 — but the fixture applies the flat 35 first, so the Blend's effect is legible against a single starting point.</p>
+
+  <h3>Six lines, at trade</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead>
+        <tr><th>Code</th><th class="w-name">Line</th><th class="w-why">Maker</th><th class="num">Qty</th><th class="num">Trade each</th><th class="num">Trade line</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">SO-01</td><td><strong>Sofa, 96", bench seat, Maharam wool</strong></td><td>Halvorsen Upholstery, Duluth</td><td class="num">1</td><td class="num">$6,400</td><td class="num">$6,400</td></tr>
+        <tr><td class="num">CH-01</td><td><strong>Lounge chair, pair</strong></td><td>Halvorsen Upholstery, Duluth</td><td class="num">2</td><td class="num">$1,850</td><td class="num">$3,700</td></tr>
+        <tr><td class="num">CT-01</td><td><strong>Coffee table, black walnut</strong></td><td>Red Wing Joinery</td><td class="num">1</td><td class="num">$2,200</td><td class="num">$2,200</td></tr>
+        <tr><td class="num">LT-01</td><td><strong>Floor lamp, blackened steel</strong></td><td>Iron &amp; Ash, Milwaukee</td><td class="num">1</td><td class="num">$640</td><td class="num">$640</td></tr>
+        <tr><td class="num">RG-01</td><td><strong>Rug 9&times;12, hand-loomed wool</strong></td><td>Prairie Loom, Lawrence</td><td class="num">1</td><td class="num">$2,900</td><td class="num">$2,900</td></tr>
+        <tr><td class="num">ST-01</td><td><strong>Side table, pair, ash</strong></td><td>Red Wing Joinery</td><td class="num">2</td><td class="num">$520</td><td class="num">$1,040</td></tr>
+        <tr><td></td><td colspan="4"><strong>Trade total</strong></td><td class="num"><strong>$16,880</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Uniform 35%, rounded to $5</h3>
+  <p>This is the room as it stands before anyone touches it — what P3's default produces on its own.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead>
+        <tr><th>Code</th><th class="num">Trade line</th><th class="num">Client each</th><th class="num">Client line</th><th class="num">Markup on cost</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">SO-01</td><td class="num">$6,400</td><td class="num">$8,640</td><td class="num">$8,640</td><td class="num">35.0%</td></tr>
+        <tr><td class="num">CH-01</td><td class="num">$3,700</td><td class="num">$2,500</td><td class="num">$5,000</td><td class="num">35.1%</td></tr>
+        <tr><td class="num">CT-01</td><td class="num">$2,200</td><td class="num">$2,970</td><td class="num">$2,970</td><td class="num">35.0%</td></tr>
+        <tr><td class="num">LT-01</td><td class="num">$640</td><td class="num">$865</td><td class="num">$865</td><td class="num">35.2%</td></tr>
+        <tr><td class="num">RG-01</td><td class="num">$2,900</td><td class="num">$3,915</td><td class="num">$3,915</td><td class="num">35.0%</td></tr>
+        <tr><td class="num">ST-01</td><td class="num">$1,040</td><td class="num">$700</td><td class="num">$1,400</td><td class="num">34.6%</td></tr>
+        <tr><td><strong>Room</strong></td><td class="num"><strong>$16,880</strong></td><td></td><td class="num"><strong>$22,790</strong></td><td class="num"><strong>35.0%</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="summaryline"><b>Client total $22,790 &middot; margin $5,910 &middot; 35.0% on cost &middot; 25.9% on price.</b></p>
+  <p class="note">The per-line percentages already drift from 35.0 because the $5 rounding lands where it lands. This is why the room's blended figure, not the line's, is the number a studio plans to — and why both frames carry their words wherever they are shown.</p>
+
+  <h3>The Blend</h3>
+  <p>Leah takes the sofa to <strong>$7,900</strong> — markup 23.4% on cost — because she has already spent the client's patience on the rug. The difference of <strong>$740</strong> spreads across the unlocked lines in proportion to trade. RG-01 is <strong>locked</strong> at $3,915, its published retail, because a client price above retail is not a thing the studio will do. Prairie Loom is drawn as a small workshop that publishes one price and gives the trade a flat 26% off it, so its retail sits at 1.35&times; trade rather than the 2.2–2.5&times; a larger maker would carry — which is why the ceiling bites on this line and on no other. Unlocked trade is $7,580. Prices round to $5 and the remainder lands on the lamp, the smallest unlocked line, so the room reconciles exactly.</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead>
+        <tr><th>Code</th><th class="num">Client line, before</th><th class="num">Client line, after</th><th class="num">Delta</th><th class="num">Markup on cost</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">SO-01</td><td class="num">$8,640</td><td class="num">$7,900</td><td class="num">&minus;$740</td><td class="num">23.4%</td></tr>
+        <tr><td class="num">CH-01</td><td class="num">$5,000</td><td class="num">$5,360</td><td class="num">+$360</td><td class="num">44.9%</td></tr>
+        <tr><td class="num">CT-01</td><td class="num">$2,970</td><td class="num">$3,185</td><td class="num">+$215</td><td class="num">44.8%</td></tr>
+        <tr><td class="num">LT-01</td><td class="num">$865</td><td class="num">$930</td><td class="num">+$65</td><td class="num">45.3%</td></tr>
+        <tr><td class="num">RG-01</td><td class="num">$3,915</td><td class="num">$3,915</td><td class="num">locked</td><td class="num">35.0%</td></tr>
+        <tr><td class="num">ST-01</td><td class="num">$1,400</td><td class="num">$1,500</td><td class="num">+$100</td><td class="num">44.2%</td></tr>
+        <tr><td><strong>Room</strong></td><td class="num"><strong>$22,790</strong></td><td class="num"><strong>$22,790</strong></td><td class="num"><strong>$0</strong></td><td class="num"><strong>35.0%</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="summaryline"><b>Client total $22,790 &middot; unchanged &middot; margin $5,910 &middot; deltas sum to zero.</b></p>
+
+  <p><strong>The floor check.</strong> The sofa now carries $1,500 of margin on a $7,900 client price, which is 19.0% on price — below the studio's own 25% floor. The tool says so, once, quietly, on that row, and does not stop her. That is deliberate: the floor is advisory (R9), and a designer who has decided to take the edge off a hero piece has usually decided it on purpose.</p>
+
+  <h3>Priced-on states</h3>
+  <p>Today is 5 September 2026. Fresh is sixty days or fewer, aging is 61 to 90, stale is past 90 or past a stated validity date — whichever comes first. The default thresholds are a studio setting (R6).</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th>Code</th><th class="w-name">What the meta line says</th><th>Age</th><th>State</th></tr></thead>
+      <tbody>
+        <tr><td class="num">SO-01</td><td><code class="mono">verified Aug 12 &middot; quote #4471 &middot; good through Oct 11</code></td><td class="num">24 days</td><td>fresh</td></tr>
+        <tr><td class="num">CH-01</td><td><code class="mono">verified Jul 1 &middot; price list 2026-B</code></td><td class="num">66 days</td><td>aging</td></tr>
+        <tr><td class="num">CT-01</td><td><code class="mono">verified May 20 &middot; phone &middot; Red Wing</code></td><td class="num">108 days</td><td>stale</td></tr>
+        <tr><td class="num">LT-01</td><td><code class="mono">&#9675; unverified &middot; catalog price</code></td><td class="num">&mdash;</td><td>unverified</td></tr>
+        <tr><td class="num">RG-01</td><td><code class="mono">verified Aug 28 &middot; website</code></td><td class="num">8 days</td><td>fresh</td></tr>
+        <tr><td class="num">ST-01</td><td><code class="mono">verified Sep 2 &middot; phone &middot; Red Wing</code></td><td class="num">3 days</td><td>fresh</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Two lines carry something before a send: CT-01 is stale and LT-01 was never verified. The preflight strip names both. SO-01 is drawn with a sixty-day window rather than the trade's modal thirty because Halvorsen holds its own quotes that long; a stated validity date always wins over the default thresholds (R6).</p>
+
+  <h3>Price history and the authorization</h3>
+  <p><strong>P5's case.</strong> CT-01 is re-verified on 4 September against Red Wing's 2026-C list: trade moves from $2,200 to <strong>$2,310</strong>, a 5% rise. The client price does not move — it is $3,185 and Leah already agreed it with herself. What moves is the markup, from 44.8% down to <strong>37.9%</strong>, and the lens is where that squeeze becomes visible. Every other mockup in this document keeps CT-01 at $2,200.</p>
+
+  <p><strong>P6's case.</strong> Leah releases four lines for the client's approval — SO-01, CH-01, CT-01, RG-01 — at their blended prices. Client subtotal <strong>$20,360</strong>, deposit at 50% <strong>$10,180</strong>, balance on delivery $10,180. On the studio's side of the same sheet: trade $15,200, margin <strong>$5,160</strong>, 25.3% on price, priced as of Sep 5. On the client's side: item, room, signed quantity, client price, the total and the deposit. Four columns and no fifth. No good-through line yet — the authorization carries no validity date of its own, which is the Wave-two addition named under P10.</p>
+</section>
+
+<!-- ============================================================ 07 -->
+<section id="proposals">
+  <div class="opener"><p class="eyebrow">Seven</p><h2>The proposals</h2></div>
+  <p class="lede">Eleven, numbered P0 through P10. Each states what changes, why the studio cares, what the client sees, and what it costs. Full dependencies — files, database changes, column lists — sit on the line beneath each row in the master table that follows. Every mockup draws the Lindqvist living room at the numbers set out above.</p>
+  <p class="note">Which of the eleven answer the ask, and which do not. <strong>P1, P2 and P3</strong> answer <em>control</em> and <em>a held total</em>; <strong>P4, P5, P6 and P10</strong> answer <em>trust in the cost</em>; <strong>P0</strong> is the floor all of them stand on. <strong>P7, P8 and P9</strong> — a lock boundary, a typography and copy fix, and an importer — answer neither ask. They are adjacent repairs this team would sponsor anyway, and they are named as such rather than folded in.</p>
+
+  <h3>P0 &middot; Fix the floor</h3>
+  <p class="who">FF&amp;E schedule, hooks, one SQL function &middot; Effort S &middot; Needs a database change &mdash; one function re-issue &middot; Wave one</p>
+  <p><strong>What changes.</strong> F1, F2 and F3, plus one shared definition of margin. The library-pick builder reads <code class="mono">priceTradeCents</code>, which is already on the object. <code class="mono">consume_capture</code> is re-issued to prefer <code class="mono">price_trade</code>, falling back to retail only when there is no trade figure on file. The row and document totals read the client column the database already sums, and the trade-edit clobber at <span class="ref">use-proposals.ts:911-912</span> comes out. One margin function, exported, with a stated status filter and a stated treatment of removed lines, replaces the four.</p>
+  <p><strong>Why the studio cares.</strong> Until this lands, every figure in this document is decoration. A designer reading <span class="quote">Estimated Total</span> today is reading what the room costs the studio, under a label that says what it costs the client. Say the second part plainly: the one shared margin definition is the largest thing in P0, and it <em>changes reported figures</em>. The account page and the project financials will read differently afterwards, because today they disagree on unit, row population, client-value derivation and removed lines. That is a behaviour change, not a refactor.</p>
+  <p><strong>What the client sees.</strong> Nothing new. The client bundle does not project either column that changes here.</p>
+
+  <div class="panel">
+    <p class="panel-cap">M1 &middot; Today &middot; FF&amp;E schedule, designer portal &middot; 1180px</p>
+    <div class="mockscroll">
+      <table class="mocktable wide5">
+        <thead>
+          <tr><th>&nbsp;</th><th>Code</th><th>Item</th><th class="pct">Qty</th><th class="money">Unit Price</th><th class="money">Line</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="tickbox"></span></td><td class="code">SO-01</td><td class="item">Sofa, 96", bench seat<span class="maker">Halvorsen Upholstery, Duluth</span></td><td class="pct">1</td><td class="money">$6,400</td><td class="money">$6,400</td></tr>
+          <tr><td><span class="tickbox"></span></td><td class="code">CH-01</td><td class="item">Lounge chair, pair<span class="maker">Halvorsen Upholstery, Duluth</span></td><td class="pct">2</td><td class="money">$1,850</td><td class="money">$3,700</td></tr>
+          <tr><td><span class="tickbox"></span></td><td class="code">CT-01</td><td class="item">Coffee table, black walnut<span class="maker">Red Wing Joinery</span></td><td class="pct">1</td><td class="money">$2,200</td><td class="money">$2,200</td></tr>
+          <tr><td><span class="tickbox"></span></td><td class="code">LT-01</td><td class="item">Floor lamp, blackened steel<span class="maker">Iron &amp; Ash, Milwaukee</span></td><td class="pct">1</td><td class="money">$640</td><td class="money">$640</td></tr>
+          <tr><td><span class="tickbox"></span></td><td class="code">RG-01</td><td class="item">Rug 9&times;12, hand-loomed wool<span class="maker">Prairie Loom, Lawrence</span></td><td class="pct">1</td><td class="money">$2,900</td><td class="money">$2,900</td></tr>
+          <tr><td><span class="tickbox"></span></td><td class="code">ST-01</td><td class="item">Side table, pair, ash<span class="maker">Red Wing Joinery</span></td><td class="pct">2</td><td class="money">$520</td><td class="money">$1,040</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="controlrow">
+      <span class="lab">Markup</span><span class="field blank">&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="lab">%</span>
+      <span class="btnmock">Apply markup</span>
+      <span class="lab">Allowance and TBD lines are skipped</span>
+    </div>
+    <p class="summaryline">6 items &middot; <b>Est. total: $16,880</b></p>
+    <p class="trace">One money field per row, and it writes the trade column. The client price does not exist on this screen until a batch is selected and a percentage is run over it. The total is the studio's cost under a label that says otherwise <span class="ref">ffe-schedule-builder.tsx:1164-1177,1621</span>.</p>
+  </div>
+
+  <div class="panel">
+    <p class="panel-cap">M1 &middot; Proposed &middot; the same footer line &middot; 1180px</p>
+    <p class="summaryline">After P0 &middot; 6 items &middot; <b>$16,880 to the client</b> &middot; $16,880 trade &middot; 0% blended on cost</p>
+    <p class="summaryline">After P3 &middot; 6 items &middot; <b>$22,790 to the client</b> &middot; $16,880 trade &middot; 35.0% blended on cost</p>
+    <p class="trace">P0 corrects the label and the column the total reads; it does not apply a markup, so with every line still at zero the corrected footer reads 0% — the second line is what P3's default produces. The trade and blended figures are owner-visible or studio-visible per R1; the client figure is not gated, because it is the number the designer is about to send. When any line has no trade price on file the studio portion reads <code class="mono">&ge;</code>, the refusal the lens already makes <span class="ref">financial-lens.tsx:153</span>.</p>
+  </div>
+
+  <h3>P1 &middot; The client price is a first-class field</h3>
+  <p class="who">FF&amp;E schedule row and edit form &middot; Effort S &middot; No database change &middot; Wave one</p>
+  <p><strong>What changes.</strong> The row carries Trade, Markup and Client as three fields over one number. Edit any of the three and the other two follow. Line margin reads out beside them. This is the reciprocal-calculator shape Houzz Pro and DesignFiles both ship; the difference is which field is the primitive, and here it is the client price.</p>
+  <p><strong>Why the studio cares.</strong> The principal in the simulated panel described her actual workflow as translation: she decides the client number, then hand-keys markup percentages backwards until the tool agrees. This deletes that step.</p>
+  <p><strong>What the client sees.</strong> Nothing new.</p>
+
+  <div class="panel">
+    <p class="panel-cap">M2 &middot; Proposed &middot; FF&amp;E row, edit state &middot; 1180px</p>
+    <p class="letterhead">SO-01 &middot; Sofa, 96", bench seat, Maharam wool</p>
+    <div class="hair"></div>
+    <p class="panel-cap" style="margin:0 0 .5rem">At the studio default</p>
+    <div class="controlrow">
+      <span class="lab">Trade</span><span class="field">$6,400</span>
+      <span class="lab">Markup</span><span class="field">35.0%</span>
+      <span class="lab">Client</span><span class="field">$8,640</span>
+      <span class="lab">Line margin</span><span class="field">$2,240</span>
+    </div>
+    <p class="panel-cap" style="margin:1.4rem 0 .5rem">She types 7,900 into Client</p>
+    <div class="controlrow">
+      <span class="lab">Trade</span><span class="field">$6,400</span>
+      <span class="lab">Markup</span><span class="field">23.4%</span>
+      <span class="lab">Client</span><span class="field live">7,900</span>
+      <span class="lab">Line margin</span><span class="field">$1,500</span>
+    </div>
+    <p class="panel-cap" style="margin:1.4rem 0 .5rem">Or she types 40 into Markup</p>
+    <div class="controlrow">
+      <span class="lab">Trade</span><span class="field">$6,400</span>
+      <span class="lab">Markup</span><span class="field live">40</span>
+      <span class="lab">Client</span><span class="field">$8,960</span>
+      <span class="lab">Line margin</span><span class="field">$2,560</span>
+    </div>
+    <div class="hair"></div>
+    <p class="panel-cap" style="margin:1.2rem 0 .5rem">An allowance line, unchanged</p>
+    <div class="controlrow">
+      <span class="lab">Trade</span><span class="field blank">&mdash;</span>
+      <span class="lab">Markup</span><span class="field blank">&mdash;</span>
+      <span class="lab">Client</span><span class="field blank">&mdash;</span>
+    </div>
+    <p class="summaryline">Window treatments, primary suite &middot; <b>Allowance $2,000&ndash;$4,000</b> &middot; folds into the total at its midpoint</p>
+    <p class="trace">Allowances and TBD lines carry no markup and no margin today, by design <span class="ref">markup.ts:39,64</span>. They keep the sub-line they already have and show an em dash where the arithmetic does not apply, rather than a zero. A client price below trade is a real case and is ruled on in R5.</p>
+  </div>
+
+  <h3>P2 &middot; The Blend</h3>
+  <p class="who">A sheet over the room, draft proposals only &middot; Effort M &middot; No database change required; one atomic write is optional &middot; Wave two</p>
+  <p><strong>What changes.</strong> A sheet opens over a room. The header states where the room stands. Lines can be locked. Move one client price and the difference spreads across the unlocked lines in proportion to trade, rounded to the studio's increment. The remainder lands on the smallest unlocked line, so the room reconciles to the cent. Every line shows its own delta. Nothing is written until she closes the sheet.</p>
+  <p><strong>Why the studio cares.</strong> This is the motion the feedback described and the only one in the document that none of the eight products documents. It is also the one with the clearest failure mode: the simulated bookkeeper persona's caution <span class="sim">[simulated]</span> is that an invisible redistribution across six lines becomes a two-hour phone call in month four. Hence the delta column and the trace line, which are not optional parts of this proposal.</p>
+  <p><strong>What the client sees.</strong> Nothing new. The client's total is the same number it would have been.</p>
+
+  <div class="panel">
+    <p class="panel-cap">M3 &middot; Proposed &middot; Blend sheet over a room &middot; 980px</p>
+    <p class="letterhead">Blend &middot; Living room</p>
+    <div class="band">
+      <span>Trade <b>$16,880</b></span>
+      <span>Client <b>$22,790</b></span>
+      <span><b>35.0%</b> blended on cost</span>
+      <span>Margin <b>$5,910</b></span>
+    </div>
+    <div class="controlrow" style="margin:0 0 1rem">
+      <span class="switch"><span class="on">Hold the total</span><span class="future">Hold the blend % &middot; later</span></span>
+      <span class="lab">Rounding $5 &middot; floor 25% on price</span>
+      <span class="lab">Unmarked lines are unlocked</span>
+    </div>
+    <div class="mockscroll">
+      <table class="mocktable wide6">
+        <thead>
+          <tr><th>&nbsp;</th><th>Code</th><th>Item</th><th class="money">Trade</th><th class="money">Client</th><th class="pct">Markup</th><th class="delta">&Delta;</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="openslot"></span></td><td class="code">SO-01</td>
+            <td class="item">Sofa, 96"<span class="floorwarn">below the studio floor &middot; 19% margin</span></td>
+            <td class="money">$6,400</td><td class="money"><span class="field live">7,900</span></td><td class="pct">23.4%</td><td class="delta">&minus;$740</td>
+          </tr>
+          <tr>
+            <td><span class="openslot"></span></td><td class="code">CH-01</td><td class="item">Lounge chair, pair</td>
+            <td class="money">$3,700</td><td class="money">$5,360</td><td class="pct">44.9%</td><td class="delta">+$360</td>
+          </tr>
+          <tr>
+            <td><span class="openslot"></span></td><td class="code">CT-01</td><td class="item">Coffee table</td>
+            <td class="money">$2,200</td><td class="money">$3,185</td><td class="pct">44.8%</td><td class="delta">+$215</td>
+          </tr>
+          <tr>
+            <td><span class="openslot"></span></td><td class="code">LT-01</td><td class="item">Floor lamp</td>
+            <td class="money">$640</td><td class="money">$930</td><td class="pct">45.3%</td><td class="delta">+$65</td>
+          </tr>
+          <tr>
+            <td><span class="lock" aria-hidden="true"></span></td><td class="code">RG-01</td>
+            <td class="item">Rug 9&times;12<span class="maker">locked &middot; retail ceiling</span></td>
+            <td class="money">$2,900</td><td class="money">$3,915</td><td class="pct">35.0%</td><td class="delta">locked</td>
+          </tr>
+          <tr>
+            <td><span class="openslot"></span></td><td class="code">ST-01</td><td class="item">Side table, pair</td>
+            <td class="money">$1,040</td><td class="money">$1,500</td><td class="pct">44.2%</td><td class="delta">+$100</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sheetfoot">Total holds at $22,790 &middot; $740 spread over 4 lines &middot; rounded to $5</p>
+    <p class="trace">Blend &middot; Living room &middot; Sep 5 &middot; Leah &middot; SO-01 &minus;$740 spread over CH-01 CT-01 LT-01 ST-01 &middot; total unchanged</p>
+  </div>
+
+  <p class="note">The second mode is drawn greyed, as a future affordance rather than a shipping hedge: R3 recommends holding the total, and the sheet is drawn to that recommendation.</p>
+
+  <p class="note">Two constraints the sheet must respect. Pre-sale writes are draft-only <span class="ref">00390:370-494</span>. On a proposal that has already been sent, the sheet's only act is <strong>Revise</strong>, which clones a new draft edition through the path that already exists <span class="ref">clone_proposal, 00399</span>. And a blend touches <code class="mono">unit_sell_price</code>, <code class="mono">markup_percent</code> and <code class="mono">line_total_cents</code> on several rows at once. All three are hashed by the send fingerprint <span class="ref">00390:218-227</span>, which is what makes a stale send fail rather than ship.</p>
+
+  <h3>P3 &middot; Studio pricing defaults</h3>
+  <p class="who">Account &rsaquo; Studio &middot; Effort S&ndash;M &middot; Needs a database change: a new <code class="mono">studio_pricing_settings</code> table &middot; Wave one</p>
+  <p><strong>What changes.</strong> One table shaped exactly like <code class="mono">studio_billing_settings</code> — the organization is the primary key, absence means the platform default, RLS through the security-definer helpers, no delete policy. It holds the default markup, the category defaults, the rounding increment, the margin floor, the price-age thresholds, and the margin-visibility rule. The margin floor has a precedent on the other rail, named in R9. The dead <code class="mono">user_settings.default_markup</code> is left alone and marked in the types as superseded.</p>
+  <p><strong>Why the studio cares.</strong> The first hire in the simulated panel asked for this without knowing it had a name <span class="sim">[simulated]</span>. A new line that starts at a real number tells her what normal looks like here, without anyone having to say it out loud. The simulated principal's condition is the design constraint <span class="sim">[simulated]</span> — a default applies when a line is added and never touches a line a person has already priced.</p>
+  <p><strong>What the client sees.</strong> Nothing.</p>
+
+  <div class="panel">
+    <p class="panel-cap">M6 &middot; Proposed &middot; Account &rsaquo; Studio &rsaquo; Pricing, below Billing &middot; 760px</p>
+    <p class="letterhead">Pricing</p>
+    <div class="hair"></div>
+    <div class="setrow"><span class="k">Default markup</span><span class="v">35% on cost <em>&middot; applied when a line is added</em></span></div>
+    <div class="setrow"><span class="k">By category</span><span class="v">Upholstery 35 &middot; Case goods 40 &middot; Lighting 45 &middot; Rugs 35 &middot; Accessories 50</span></div>
+    <div class="setrow"><span class="k">Rounding</span><span class="v">Round client prices to $5</span></div>
+    <div class="setrow"><span class="k">Margin floor</span><span class="v">25% on price <em>&middot; warn, never block</em></span></div>
+    <div class="setrow"><span class="k">Price age</span><span class="v">Aging after 60 days &middot; stale after 90 <em>&middot; a stated validity date always wins</em></span></div>
+    <div class="setrow"><span class="k">Who sees margin</span><span class="v">Everyone in the studio &nbsp;|&nbsp; <em>Owners only</em></span></div>
+    <p class="summaryline">Applied when a line is added. Change a line any time.</p>
+    <p class="trace">The last control depends on R1. Until that lands, this row reads as it does today &mdash; owners only &mdash; and says so in words rather than by hiding the table.</p>
+  </div>
+
+  <h3>P4 &middot; Priced on</h3>
+  <p class="who">FF&amp;E schedule, send sheet &middot; Effort M &middot; Needs a database change: price-verification columns on <code class="mono">proposal_items</code> and <code class="mono">project_ffe_items</code> &middot; Wave two</p>
+  <p><strong>What changes.</strong> A trade price gains four facts: when it was verified, by whom, from what source, and how long it is good for. They render as one mono line under the trade figure, in the grammar <code class="mono">FieldProvenance</code> already ships <span class="ref">spec-book-workspace.tsx:127-153</span>. A price with no verification says <span class="quote">unverified</span> and never implies otherwise. The <strong>Verify</strong> act is a small popover, not a page.</p>
+  <p><strong>Why the studio cares.</strong> This was the one need every simulated persona raised <span class="sim">[simulated]</span>. It is also the only proposal here that is a genuine differentiator rather than a repair: none of the eight tools documents a dated price.</p>
+  <p><strong>What the client sees.</strong> Nothing new. Per-line dates never reach a client document; the client's date is the single good-through line in P10, ruled in R7.</p>
+
+  <div class="panel">
+    <p class="panel-cap">M4 &middot; Proposed &middot; FF&amp;E schedule, price age &middot; 1180px &middot; today is Sep 5, 2026</p>
+    <div class="mockscroll">
+      <table class="mocktable wide6">
+        <thead>
+          <tr><th>Code</th><th>Item</th><th class="pct">Qty</th><th class="money">Trade each</th><th class="money">Client each</th><th class="pct">Markup</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code">SO-01</td><td class="item">Sofa, 96"</td><td class="pct">1</td>
+            <td class="money">$6,400<span class="metaline age-fresh">verified Aug 12 &middot; quote #4471 &middot; good through Oct 11</span></td>
+            <td class="money">$7,900</td><td class="pct">23.4%</td>
+          </tr>
+          <tr>
+            <td class="code">CH-01</td><td class="item">Lounge chair, pair</td><td class="pct">2</td>
+            <td class="money">$1,850<span class="metaline age-aging">verified Jul 1 &middot; price list 2026-B &middot; aging</span></td>
+            <td class="money">$2,680</td><td class="pct">44.9%</td>
+          </tr>
+          <tr>
+            <td class="code">CT-01</td><td class="item">Coffee table</td><td class="pct">1</td>
+            <td class="money">$2,200<span class="metaline age-stale">verified May 20 &middot; phone &middot; Red Wing &middot; stale</span></td>
+            <td class="money">$3,185</td><td class="pct">44.8%</td>
+          </tr>
+          <tr>
+            <td class="code">LT-01</td><td class="item">Floor lamp</td><td class="pct">1</td>
+            <td class="money">$640<span class="metaline age-unverified"><span class="u">unverified</span> &middot; catalog price</span></td>
+            <td class="money">$930</td><td class="pct">45.3%</td>
+          </tr>
+          <tr>
+            <td class="code">RG-01</td><td class="item">Rug 9&times;12</td><td class="pct">1</td>
+            <td class="money">$2,900<span class="metaline age-fresh">verified Aug 28 &middot; website</span></td>
+            <td class="money">$3,915</td><td class="pct">35.0%</td>
+          </tr>
+          <tr>
+            <td class="code">ST-01</td><td class="item">Side table, pair</td><td class="pct">2</td>
+            <td class="money">$520<span class="metaline age-fresh">verified Sep 2 &middot; phone &middot; Red Wing</span></td>
+            <td class="money">$750</td><td class="pct">44.2%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="trace">Fresh is the page's ordinary ink and says nothing extra. Aging and stale change the ink <em>and</em> add the word, because a colour alone is not a statement. Unverified keeps the same quiet ink. A hollow circle before the word and a dotted underline beneath it mark it out, and it is never dressed as a warning &mdash; nobody has checked, and the page says so.</p>
+  </div>
+
+  <div class="panel">
+    <p class="panel-cap">M4 &middot; Proposed &middot; the Verify popover &middot; 340px</p>
+    <div class="pop">
+      <p class="poptitle">Verify &middot; CT-01 coffee table</p>
+      <p class="prow"><span>Source</span><b>vendor quote &middot; price list &middot; website &middot; phone &middot; catalog</b></p>
+      <p class="prow"><span>Reference</span><b>quote #, list revision, who you spoke to</b></p>
+      <p class="prow"><span>Good through</span><b>optional</b></p>
+      <p class="prow"><span>Trade each</span><b>$2,200</b></p>
+      <div class="controlrow"><span class="btnmock">Verify</span><span class="lab">records the date and you</span></div>
+    </div>
+    <p class="trace">Trade each is pre-filled and editable, because the moment a designer re-checks a price is the moment it most often moves. That edit must not carry the client price with it, which is F3, which is why P0 ships first.</p>
+  </div>
+
+  <div class="panel">
+    <p class="panel-cap">M5 &middot; Proposed &middot; the send sheet, before send &middot; 720px</p>
+    <div class="strip">
+      <span>1 line priced more than 90 days ago</span>
+      <span>&middot;</span>
+      <span class="age-unverified">1 <span class="u">unverified</span></span>
+      <span class="btnmock quiet">Verify</span>
+      <span class="btnmock">Send anyway</span>
+    </div>
+    <p class="trace">The gate grammar the send sheet already uses: state the condition, offer the fix, and let her through. A studio that knows its lamp price is a catalog figure does not need to be stopped, and the first hire in the simulated panel asked only that nothing ship silently <span class="sim">[simulated]</span>.</p>
+  </div>
+
+  <h3>P5 &middot; Price history</h3>
+  <p class="who">Line unfold, Financial lens &middot; Effort S&ndash;M &middot; Needs a database change: a small price-change table &middot; Wave three</p>
+  <p><strong>What changes.</strong> When a verify moves the trade price, the old figure and its date are kept. The line unfold states the move in words. The precedent already sits in the database: <code class="mono">saved_items.price_cents_at_save</code> exists precisely so the app can <span class="quote">say a price moved without inventing a figure</span> <span class="ref">00535:28-29</span>.</p>
+  <p><strong>Why the studio cares.</strong> This is the simulated bookkeeper persona's whole ask <span class="sim">[simulated]</span>. She needs to tell three situations apart on the page: the maker requoted, the designer moved margin on purpose, or someone edited a line she missed. Today all three look identical.</p>
+  <p><strong>What the client sees.</strong> Nothing. A client-safe version of a price move is a separate question and is not proposed here.</p>
+
+  <div class="panel">
+    <p class="panel-cap">M9 &middot; Proposed &middot; line unfold, CT-01 &middot; 640px</p>
+    <p class="letterhead">CT-01 &middot; Coffee table, black walnut</p>
+    <div class="hair"></div>
+    <p class="summaryline" style="border-top:none;padding-top:0"><b>was $2,200 on May 20 &middot; now $2,310 &middot; verified Sep 4 &middot; price list 2026-C</b></p>
+    <div class="controlrow">
+      <span class="lab">Client</span><span class="field">$3,185</span>
+      <span class="lab">unchanged</span>
+    </div>
+    <p class="trace">Words carry the change, not colour. The client price did not move, so the sentence does not pretend it did.</p>
+  </div>
+
+  <div class="panel">
+    <p class="panel-cap">M9 &middot; Proposed &middot; the same line in the lens &middot; 980px</p>
+    <div class="mockscroll">
+      <table class="mocktable wide5">
+        <thead><tr><th>Code</th><th>Item</th><th class="money">Trade</th><th class="pct">Markup</th><th class="money">Client</th><th class="money">Line margin</th></tr></thead>
+        <tbody>
+          <tr><td class="code">CT-01</td><td class="item">Coffee table<span class="maker">was 44.8% on cost before Sep 4</span></td><td class="money">$2,310</td><td class="pct">37.9%</td><td class="money">$3,185</td><td class="money">$875</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="trace">The squeeze is the point. A 5% rise in trade with the client price held takes 6.9 points off the line's markup, and the lens is the only place in the product where a studio would ever see that happen.</p>
+  </div>
+
+  <h3>P6 &middot; Purchase approval, priced honestly</h3>
+  <p class="who">Review &amp; release sheet, client document &middot; Effort M &middot; Needs a small database change &middot; Wave two</p>
+  <p><strong>What changes.</strong> The studio's side of the release sheet gains an owner-gated <strong>Trade &middot; Margin</strong> column group and a price-age mark per line. A figure band states the authorization, the deposit, the balance and the margin in one place, with the frames named. The client's side gains one line and nothing else.</p>
+  <p><strong>Why the studio cares.</strong> This is the last screen before a number becomes a signed instrument, and today it is the one screen where a designer cannot see what she is about to lock in. The trade cost is already carried into the authorization row <span class="ref">00412:256-257</span>; it simply has nowhere to be read.</p>
+  <p><strong>What the client sees.</strong> The four columns it has today. The good-through line from P10 follows once the authorization carries a validity date of its own — a small Wave-two addition, named under P10.</p>
+
+  <div class="panelrow panelrow-2">
+    <div class="panel">
+      <p class="panel-cap">M7 &middot; Proposed &middot; the studio's Review &amp; release &middot; 620px</p>
+      <div class="mockscroll">
+        <table class="mocktable wide4">
+          <thead><tr><th>Item</th><th class="pct">Qty</th><th class="money">Client</th><th class="money">Trade</th><th class="money">Margin</th></tr></thead>
+          <tbody>
+            <tr><td class="item">Sofa, 96"<span class="metaline age-fresh"><span class="agemark"></span>verified Aug 12</span></td><td class="pct">1</td><td class="money">$7,900</td><td class="money">$6,400</td><td class="money">$1,500</td></tr>
+            <tr><td class="item">Lounge chair, pair<span class="metaline age-aging"><span class="agemark"></span>verified Jul 1 &middot; aging</span></td><td class="pct">2</td><td class="money">$5,360</td><td class="money">$3,700</td><td class="money">$1,660</td></tr>
+            <tr><td class="item">Coffee table<span class="metaline age-stale"><span class="agemark"></span>verified May 20 &middot; stale &middot; re-verify?</span></td><td class="pct">1</td><td class="money">$3,185</td><td class="money">$2,200</td><td class="money">$985</td></tr>
+            <tr><td class="item">Rug 9&times;12<span class="metaline age-fresh"><span class="agemark"></span>verified Aug 28</span></td><td class="pct">1</td><td class="money">$3,915</td><td class="money">$2,900</td><td class="money">$1,015</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="band" style="margin-top:1rem">
+        <span>Authorization <b>$20,360</b></span>
+        <span>Deposit <b>$10,180</b> at 50%</span>
+        <span>Balance <b>$10,180</b></span>
+        <span>Margin <b>$5,160</b> &middot; 25.3% on price</span>
+        <span>priced as of Sep 5</span>
+      </div>
+      <p class="trace">The Trade and Margin group is one gated block, not two loose columns, so there is exactly one thing to hide. <code class="mono">re-verify?</code> is a question in the same quiet ink as the date, not an instruction.</p>
+    </div>
+
+    <div class="panel">
+      <p class="panel-cap">M7 &middot; Proposed &middot; the client's document &middot; 620px &middot; a good-through line follows once the authorization carries a date (P10, Wave two)</p>
+      <p class="letterhead">Furnishings for your approval</p>
+      <div class="hair"></div>
+      <div class="mockscroll">
+        <table class="mocktable wide4">
+          <thead><tr><th>Item</th><th>Room</th><th class="pct">Qty</th><th class="money">Price</th></tr></thead>
+          <tbody>
+            <tr><td class="item">Sofa, 96", bench seat</td><td>Living room</td><td class="pct">1</td><td class="money">$7,900</td></tr>
+            <tr><td class="item">Lounge chair, pair</td><td>Living room</td><td class="pct">2</td><td class="money">$5,360</td></tr>
+            <tr><td class="item">Coffee table, black walnut</td><td>Living room</td><td class="pct">1</td><td class="money">$3,185</td></tr>
+            <tr><td class="item">Rug 9&times;12, hand-loomed wool</td><td>Living room</td><td class="pct">1</td><td class="money">$3,915</td></tr>
+            <tr class="tot"><td class="item"><strong>Total</strong></td><td></td><td></td><td class="money">$20,360</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="invest">
+        <div class="figrow"><span class="figlab">Due to begin</span><span class="fig">$10,180</span></div>
+        <p class="goodthrough">Half now, half on delivery</p>
+      </div>
+      <p class="trace">The 50% deposit and its wording are a fixture assumption: no deposit rule is cited in the code and no trade source in this document names one. Four columns and no fifth &mdash; on the client's copy. The rule is already written into the sheet's own docblock <span class="ref">review-release-sheet.tsx:10-11</span> and enforced by the bundle <span class="ref">00422:2110-2111</span>. Nothing in this document widens it.</p>
+    </div>
+  </div>
+
+  <h3>P7 &middot; Post-sale money edits</h3>
+  <p class="who">FF&amp;E item drawer &middot; Effort M &middot; Needs a database change: one guarded write path &middot; Ruling-gated (R8) &middot; Wave three</p>
+  <p><strong>What changes.</strong> One guarded write path and one stated boundary, replacing a hook that throws. The state table is short enough to be the whole design:</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name">Where the line sits</th><th class="w-what">What a price edit does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Unpriced or placed</strong></td><td>Editable. Client price, trade price and markup all move through that write path, and the change is recorded.</td></tr>
+        <tr><td><strong>On a sent authorization</strong></td><td>Locked, with the reason in the message the database already writes: <span class="quote">void the authorization to edit</span> <span class="ref">00422:1491</span>.</td></tr>
+        <tr><td><strong>Signed &middot; client price</strong></td><td>Change order. The signed price stands; a new instrument carries the difference.</td></tr>
+        <tr><td><strong>Signed &middot; trade price and markup</strong></td><td>Editable, through that write path and into the record. The studio's own cost is its own business; what it may not do is move without leaving a line a bookkeeper can read.</td></tr>
+        <tr><td><strong>Configured</strong></td><td>Revise the configuration. That guard already covers trade price, unlike the schedule guards <span class="ref">00403:827-836</span>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>Why the studio cares.</strong> Today's boundary is defensible as a rule: the signed price is the promise to the client and it should freeze, while the studio's own cost is the studio's own business and stays editable. What is missing is the record. A trade price or a markup can move on a signed line with nothing written down, so a bookkeeper reading the job in month four cannot tell a maker's requote from someone's edit. The gap is the trace, not the boundary.</p>
+  <p><strong>What the client sees.</strong> Nothing new; the drift line already states a difference where one exists <span class="ref">line-unfold.tsx:446-451</span>.</p>
+
+  <h3>P8 &middot; The lens, for the whole studio</h3>
+  <p class="who">Financial lens &middot; Effort S &middot; No database change &middot; Wave one</p>
+  <p><strong>What changes.</strong> Three things. The lens's type comes up to the floors it already publishes — 11px mono, 12px metadata, through the tokens rather than inline <span class="ref">globals.css:87-89</span>. Both frames are stated with their words. And the header stops saying <span class="quote">studio only</span>.</p>
+  <p><strong>Why the studio cares.</strong> A silent permission wall reads as a locked door. A simulated first-hire persona <span class="sim">[simulated]</span> was written to say she found the tab, does not know whether she is cleared, and has been leaving it alone because it feels like looking at someone's paycheck. Whether she may see it is R1; that the page should say so either way is not in question.</p>
+  <p><strong>What the client sees.</strong> Nothing. The lens has never left the app, and its own header comment says why <span class="ref">financial-lens.tsx:8-11</span>.</p>
+
+  <div class="panel">
+    <p class="panel-cap">M8 &middot; Proposed &middot; Financial lens, room roll-up &middot; 980px</p>
+    <div class="controlrow" style="margin:0 0 1rem">
+      <span class="lab">Header, two candidates</span>
+      <span class="field">Your book</span>
+      <span class="field">Studio view</span>
+      <span class="lab">never &ldquo;studio only&rdquo; or &ldquo;eyes only&rdquo;</span>
+    </div>
+    <div class="mockscroll">
+      <table class="mocktable wide6">
+        <thead><tr><th>Room</th><th class="money">Trade</th><th class="money">Client</th><th class="money">Margin</th><th class="pct">On cost</th><th class="pct">On price</th></tr></thead>
+        <tbody>
+          <tr><td class="item">Living room</td><td class="money">$16,880</td><td class="money">$22,790</td><td class="money">$5,910</td><td class="pct">35.0%</td><td class="pct">25.9%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="summaryline">Markup is <b>on cost</b> &middot; margin is <b>on price</b> &middot; a room with any line missing a trade price reads <b>&ge;</b></p>
+    <p class="trace">The two frames sit in the same row with their words attached, which is the one thing the trade literature says designers get wrong most often. The <code class="mono">&ge;</code> refusal is not new; the lens already declines to state a margin it cannot fully compute <span class="ref">financial-lens.tsx:152-153,190</span>.</p>
+  </div>
+
+  <h3>P9 &middot; Library intake</h3>
+  <p class="who">CSV import, product picker &middot; Effort S, plus M with P4 &middot; Wave three</p>
+  <p><strong>What changes.</strong> The importer takes a trade price as its own column instead of mapping every price-ish header to retail, and takes the price date and source alongside it. A header row a studio can actually produce:</p>
+  <p class="summaryline"><code class="mono">Name, Maker, Category, Trade, Retail, Priced on, Source</code></p>
+  <p><strong>Why the studio cares.</strong> A studio's own library is where a trade price ought to arrive already correct. Today the parser has one price field and maps a column headed <span class="quote">cost</span> to retail, which is F1 arriving through a different door.</p>
+  <p><strong>What the client sees.</strong> Nothing.</p>
+
+  <h3>P10 &middot; Good through</h3>
+  <p class="who">Proposal Investment block &middot; Effort S &middot; No database change &middot; Wave two</p>
+  <p><strong>What changes.</strong> One line of client-facing copy, derived from the <code class="mono">valid_until</code> the send sheet already sets <span class="ref">00414:280</span>. Not a per-line date, not a countdown, and no expired-document behaviour beyond what the sign path already does <span class="ref">00390:967</span>. The same line on a furnishings authorization needs a validity date the authorization does not yet carry. <code class="mono">project_commercial_documents</code> has no <code class="mono">valid_until</code>, and a schedule-born authorization has no parent proposal to inherit one from. That half is a small Wave-two addition rather than part of this S.</p>
+  <p><strong>Why the studio cares.</strong> It is the studio's own protection, written in the client's language. The trade's own norm is thirty days: the two vendor terms pages fetched say so, and a third adds a 150-day materials window on top of it.</p>
+  <p><strong>What the client sees.</strong> One sentence, in the place she is already reading the number.</p>
+
+  <div class="panel">
+    <p class="panel-cap">M10 &middot; Proposed &middot; the client's Investment block &middot; 620px</p>
+    <p class="letterhead">Your investment</p>
+    <div class="hair"></div>
+    <div class="mockscroll">
+      <table class="mocktable wide4">
+        <thead><tr><th>&nbsp;</th><th class="money">&nbsp;</th></tr></thead>
+        <tbody>
+          <tr><td class="item">Sofa, 96", bench seat, Maharam wool</td><td class="money">$7,900</td></tr>
+          <tr><td class="item">Lounge chair, pair</td><td class="money">$5,360</td></tr>
+          <tr><td class="item">Coffee table, black walnut</td><td class="money">$3,185</td></tr>
+          <tr><td class="item">Floor lamp, blackened steel</td><td class="money">$930</td></tr>
+          <tr><td class="item">Rug 9&times;12, hand-loomed wool</td><td class="money">$3,915</td></tr>
+          <tr><td class="item">Side table, pair, ash</td><td class="money">$1,500</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="invest">
+      <div class="figrow"><span class="figlab">Living room, furnishings</span><span class="fig">$22,790</span></div>
+      <p class="goodthrough">Prices good through Oct 5, 2026</p>
+    </div>
+    <p class="trace">Every row carries its line total rather than a unit price, which is why an allowance never renders as $0 <span class="ref">LineItemsBlock.tsx:38-39,90</span>. A full proposal total also carries phase fees <span class="ref">proposal-total.ts:17-33</span>; this block draws the furnishings side of one room and says so.</p>
+  </div>
+</section>
+
+<!-- ============================================================ 08 -->
+<section id="master">
+  <div class="opener"><p class="eyebrow">Eight</p><h2>The proposal list</h2></div>
+  <p class="lede">Eleven proposals, with the dependency line beneath each. Dependencies name the files, functions and column lists a change has to touch, drawn from the feasibility memo and re-verified against the checkout. The explicit column lists are the ones that silently drop a new column if nobody adds it by hand.</p>
+
+  <div class="tablewrap">
+    <table class="tight master">
+      <thead>
+        <tr><th>#</th><th class="w-name">Name</th><th>Surface</th><th class="w-what">What changes</th><th class="w-why">Why the studio cares</th><th class="w-eff">Effort</th><th class="w-wave">Wave</th></tr>
+      </thead>
+      <tbody>
+        <tr class="head">
+          <td class="num">P0</td>
+          <td><strong>Fix the floor</strong></td>
+          <td>FF&amp;E schedule</td>
+          <td>F1, F2, F3 and one shared margin definition. Picks read the trade price already on the object; <code class="mono">consume_capture</code> prefers <code class="mono">price_trade</code>; totals read the client column; the trade-edit clobber comes out.</td>
+          <td>Until this lands the numbers on screen disagree with the database by exactly the markup, and no later proposal can be trusted.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span><code class="mono">build-proposal-item-from-pick.ts:119</code> reading <code class="mono">priceTradeCents</code> <span class="ref">product-picker-modal.tsx:87,234</span>; <code class="mono">use-proposals.ts:773,794-795,911-912</code>; <code class="mono">ffe-schedule-builder.tsx:463,1164-1177</code>; <code class="mono">proposal-total.ts:22-31</code>; re-issue <code class="mono">consume_capture</code> from its latest body <span class="ref">00142:61-63,89</span>; export one margin function to replace <code class="mono">markup.ts:78-89</code>, <code class="mono">use-account-page.ts:110-123</code>, <code class="mono">use-project-v2.ts:618-697</code> and <code class="mono">use-projects.ts:372-468</code>. <b>One migration</b> — the SQL leg is a function re-issue, which is a hand-numbered file and carries the whole numbering discipline with it. Landing one margin definition also changes reported figures on the account page and the project financials</td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P1</td>
+          <td><strong>The client price is a first-class field</strong></td>
+          <td>FF&amp;E row, edit form</td>
+          <td>Trade, Markup and Client as three fields over one number, each editable, with line margin read out beside them. Allowance and TBD rows show an em dash.</td>
+          <td>Deletes the translation step the principal in the simulated panel described: decide the client number, then key markup percentages backwards until the tool agrees.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span><code class="mono">ffe-schedule-builder.tsx:255-280</code> edit form; <code class="mono">markup.ts:35-48</code> gains the inverse computation; <code class="mono">useUpdateProposalItem</code> <span class="ref">use-proposals.ts:841-935</span> with the line-total recompute at <code class="mono">:900-906</code>. Lands <b>after P0</b>, which removes the clobber this proposal would otherwise inherit. R5 governs a client price below trade; <code class="mono">markup_percent</code> carries no CHECK on <code class="mono">proposal_items</code>, so a negative is storable pre-sale today</td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P2</td>
+          <td><strong>The Blend</strong></td>
+          <td>A sheet over a room</td>
+          <td>Lock lines, move one client price, and the difference spreads across the unlocked lines in proportion to trade. Per-line deltas, a held total, and a trace line in the record.</td>
+          <td>The motion the feedback asked for, and the one thing none of the eight products documents.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span>Draft-only writes <span class="ref">00390:370-494</span>, so a sent proposal routes through <code class="mono">clone_proposal(p_mode:'revision')</code> <span class="ref">00399</span> via <code class="mono">useCreateProposalRevision</code> <span class="ref">use-proposals.ts:1678-1716</span>; the send fingerprint hashes all three columns a blend touches <span class="ref">00390:218-227</span>; <code class="mono">_recompute_proposal_total_locked</code> <span class="ref">00399</span> and the browser-side <code class="mono">proposal-total.ts:16-36</code> must agree after a multi-row write. <b>Optional</b> atomic RPC if the per-row write path proves too chatty; no schema change either way</td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P3</td>
+          <td><strong>Studio pricing defaults</strong></td>
+          <td>Account &rsaquo; Studio</td>
+          <td>One per-studio table holding default markup, category defaults, rounding, margin floor, price-age thresholds and the margin-visibility rule.</td>
+          <td>A new line starts at a real number, so an unfinished line is legible as unfinished. States what normal looks like without anyone saying it out loud.</td>
+          <td class="w-eff">S&ndash;M</td><td class="w-wave">1</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span>New <code class="mono">studio_pricing_settings</code> shaped on <code class="mono">studio_billing_settings</code> <span class="ref">00428:42-94</span> &mdash; organization as primary key, member SELECT and admin write through the security-definer helpers, explicit grants, no DELETE policy; read through a hook shaped on <code class="mono">useStudioBillingSettings</code> <span class="ref">use-studio-billing.ts:44-59</span>; studio id from <code class="mono">account-studio-page.tsx:136</code>; applied at insert in <code class="mono">useAddProposalItem</code> <span class="ref">use-proposals.ts:773-795</span> only. <b>Do not</b> read <code class="mono">user_settings.default_markup</code> <span class="ref">00014:475</span>; wrong grain, and nothing has ever read it</td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P4</td>
+          <td><strong>Priced on</strong></td>
+          <td>FF&amp;E schedule, send sheet</td>
+          <td>Verified date, verifier, source, reference and validity on a trade price, rendered as one mono line. A Verify popover. A preflight strip before send.</td>
+          <td>The one need every simulated persona raised <span class="sim">[simulated]</span>, and the only proposal here that none of the eight documents.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span>Columns on <code class="mono">proposal_items</code> and <code class="mono">project_ffe_items</code>, then threaded by hand through every explicit column list that carries money: the fingerprint <span class="ref">00390:218-227</span>, both activation inserts <span class="ref">00279:187-206,225-244</span>, the authorization builder <span class="ref">00422:585-630</span>, the two authorization snapshot builders <span class="ref">00412:1958-1970,1985-1995</span>, <code class="mono">clone_proposal</code> <span class="ref">00399</span>, <code class="mono">supersede_project_selection</code> <span class="ref">00435:572-583</span> and the placement RPCs <span class="ref">00435:303,336</span>. Export <code class="mono">daysSince</code> <span class="ref">spec-books/model.ts:326-331</span> rather than reimplementing it; reuse the <code class="mono">FieldProvenance</code> grammar <span class="ref">spec-book-workspace.tsx:127-153</span> and the C5 refusal from <code class="mono">photo_verified_at</code> <span class="ref">00533:54-55</span>. A catalog-row verify needs an RPC, not an UPDATE <span class="ref">00152:393-397</span></td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P5</td>
+          <td><strong>Price history</strong></td>
+          <td>Line unfold, lens</td>
+          <td>Keep the prior trade price and its date when a verify moves it. The unfold states the move in words; the lens shows the markup squeeze.</td>
+          <td>Lets a bookkeeper tell &ldquo;the maker requoted&rdquo; from &ldquo;the designer moved margin&rdquo; without a phone call &mdash; the simulated bookkeeper's ask <span class="sim">[simulated]</span>.</td>
+          <td class="w-eff">S&ndash;M</td><td class="w-wave">3</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span>Lands <b>with or after P4</b>, which supplies the event that writes a row. Precedents: <code class="mono">saved_items.price_cents_at_save</code> <span class="ref">00535:21-29</span> for the old-and-new pair, <code class="mono">computeBoardDrift</code> <span class="ref">board-schedule.ts:93-110</span> for the comparison, and <code class="mono">line-unfold.tsx:364-369,446-451</code> for the sentence grammar. Not a full audit log &mdash; the simulated bookkeeper persona <span class="sim">[simulated]</span> asked for a short reason, not timestamps to the second</td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P6</td>
+          <td><strong>Purchase approval, priced honestly</strong></td>
+          <td>Review &amp; release, client document</td>
+          <td>An owner-gated Trade and Margin column group with price-age marks, and a figure band naming both frames. One line added to the client's copy.</td>
+          <td>The last screen before a number becomes a signed instrument is the one screen where the studio cannot see what it is locking in.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span><code class="mono">review-release-sheet.tsx</code> and its four-columns docblock <span class="ref">:10-11</span>, pinned by <code class="mono">review-release-sheet.test.tsx:157-170</code>, which asserts the header array and that no trade cost renders; <code class="mono">releaseSummary</code> <span class="ref">authorization-derivation.ts:458</span>; the trade columns already carried into the authorization row <span class="ref">00412:256-257</span> by <code class="mono">create_furnishings_authorization_from_schedule</code> <span class="ref">00422:585-630</span>. The client bundle emits client money only <span class="ref">00422:2110-2111</span> and must stay that way. Small migration only if the price-age fields are not already on the authorization row from P4</td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P7</td>
+          <td><strong>Post-sale money edits</strong></td>
+          <td>FF&amp;E item drawer</td>
+          <td>One guarded write path and one stated boundary: editable while unplaced, locked on a sent authorization, change order on the client price once signed (trade price and markup stay editable, through that write path and into the record), revise the configuration when configured.</td>
+          <td>Today a trade price or a markup can move on a signed line with no record of it, so a bookkeeper cannot tell a requote from an edit. The boundary is defensible; the missing trace is not.</td>
+          <td class="w-eff">M</td><td class="w-wave">3</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span><b>Ruling-gated on R8.</b> <code class="mono">guard_ffe_rpc_mutation</code> <span class="ref">00435:935-955</span> and its transaction-local escape <code class="mono">app.ffe_mutation_rpc</code> <span class="ref">:939</span>; the hook that throws today <span class="ref">use-project-v2.ts:329-347</span>; the two guards that omit the trade columns <span class="ref">00422:1431-1436,1476-1479</span>; the configured-line guard that does not <span class="ref">00403:827-836</span>. Also fixes the F5 activation clamp <span class="ref">00279:199-200,237-238</span>, which needs the <code class="mono">&gt;= 0</code> CHECK on <code class="mono">project_ffe_items</code> revisited rather than worked around</td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P8</td>
+          <td><strong>The lens, for the whole studio</strong></td>
+          <td>Financial lens</td>
+          <td>Type up to the published floors, both frames stated with their words, and a header that is not &ldquo;studio only&rdquo;.</td>
+          <td>A silent permission wall reads as a locked door to the person it is meant to protect.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span>the header string at <code class="mono">financial-lens.tsx:82</code>; the inline sizes at <code class="mono">:178,202</code> replaced by <code class="mono">.doc-type-meta</code> <span class="ref">globals.css:1189-1195</span> and the tokens at <code class="mono">:87-89</code>; <code class="mono">useIsStudioOwner</code> <span class="ref">use-permissions.ts:446-454</span> becomes a settings read once P3 lands; the bulk markup bar at <code class="mono">ffe-schedule-builder.tsx:1727-1748</code> moves inside whatever gate the lens uses, so setting and reading stop disagreeing. Tests that mock the owner hook <span class="ref">worktable-speccing.test.tsx:164,284 &middot; scheme.test.tsx:40,129</span> move with it. <b>Ruling-gated on R1</b> for the default</td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P9</td>
+          <td><strong>Library intake</strong></td>
+          <td>CSV import, picker</td>
+          <td>A trade column of its own, plus price date and source, instead of mapping every price-ish header to retail.</td>
+          <td>The studio's own library is where a trade price ought to arrive already correct.</td>
+          <td class="w-eff">S&nbsp;+&nbsp;M</td><td class="w-wave">3</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span><code class="mono">import-parse.ts:22,119-124</code>, whose single price matcher <code class="mono">/(price|cost|msrp|retail)/</code> maps a column headed &ldquo;cost&rdquo; to retail; the server leg that parses dollars to cents and stamps <code class="mono">draft</code> <span class="ref">api/catalog/import/route.ts:9,102</span>. The date and source columns land <b>with P4</b>. Personal and studio catalog layers are writable by their owner and co-members <span class="ref">00152:343,363</span>; the shared catalog layer is not <span class="ref">:393-397</span></td>
+        </tr>
+
+        <tr class="head">
+          <td class="num">P10</td>
+          <td><strong>Good through</strong></td>
+          <td>Proposal Investment block</td>
+          <td>One client-facing line on the proposal, derived from the validity date the send sheet already sets. The authorization's own line waits on a date it does not carry.</td>
+          <td>The studio's own protection, written in the client's language, at the trade's own thirty-day norm.</td>
+          <td class="w-eff">S</td><td class="w-wave">2</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="6"><span class="deplabel">Dependencies</span><code class="mono">valid_until</code> set at send <span class="ref">send-sheet.tsx:452-454</span> through <code class="mono">send_proposal(p_valid_until)</code> <span class="ref">00414:280</span>, projected by the client bundle <span class="ref">00390:1605</span>, checked by <code class="mono">sign_proposal</code> <span class="ref">00390:967</span> and swept by the expiry cron <span class="ref">00098:14-24</span>. Note there is no <code class="mono">useUpdateProposal</code> write for <code class="mono">valid_until</code> on a draft, so a designer cannot set it before send today. <b>Wave-two addition:</b> the authorization has no validity date at all &mdash; <code class="mono">project_commercial_documents</code> carries no <code class="mono">valid_until</code>, and <code class="mono">create_furnishings_authorization_from_schedule</code> <span class="ref">00422:370</span> builds one straight off a schedule with no parent proposal to inherit from, so the good-through line on that surface needs a small migration and a stated rule for schedule-born documents. <b>Ruling-gated on R7</b> for the wording</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ 09 -->
+<section id="waves">
+  <div class="opener"><p class="eyebrow">Nine</p><h2>Three waves</h2></div>
+
+  <div class="cols cols-2">
+    <div>
+      <h3>Wave one &middot; Fix the floor</h3>
+      <p class="who">P0 &middot; P1 &middot; P3 &middot; P8</p>
+      <p>Nothing here ships without P0, and P0 needs no database change beyond a function re-issue. P3 carries the wave's only new table, shaped on one that already exists and is already proven under RLS. The whole wave is walkable by Leah inside two weeks of a go, on the Lindqvist fixture, in the portal she already uses.</p>
+      <p>One ruling blocks copy and one blocks a shape: R1 sets what the lens header says and who sees it, and R2 fixes which field is the primitive — which is P1's core code decision, not a wording choice. Both are cheap to change later and expensive to get wrong in front of a first hire.</p>
+
+      <h3>Wave two &middot; Price with intent</h3>
+      <p class="who">P2 &middot; P4 &middot; P6 &middot; P10</p>
+      <p>The two database changes that thread new columns through every explicit column list live here. That threading, not the interface, is the work: a column missed in the fingerprint means a stale send ships, and a column missed in an activation insert means the fact is lost at exactly the moment a proposal becomes a project.</p>
+      <p>The walk-before-flag-enable rule applies to this wave. The Blend and the release sheet both change what a designer sees at the moment she commits a number, and neither should meet a real client without Leah having driven it once on a real room.</p>
+    </div>
+    <div>
+      <h3>Wave three &middot; Keep it honest</h3>
+      <p class="who">P5 &middot; P7 &middot; P9</p>
+      <p>Ruling-gated and library-side. P7 waits on R8, which is a real product decision about what a lock means after signature, not a technical one. P5 waits on P4 for the event that writes a row. P9 is the smallest of the three and the easiest to underestimate, because the import parser is where F1 will grow back if nobody looks.</p>
+
+      <h3>What is deliberately not in a wave</h3>
+      <p>Discount-off-retail as a second entry frame. A margin-denominated input, of the kind JobTread ships contractor-side. Freight and receiving as priced objects. Any client-safe language for a price that moved after approval &mdash; R3's research found no sourced practitioner wording for that conversation, and inventing one is worse than leaving it to the designer.</p>
+
+      <h3>The order, in one line</h3>
+      <p class="summaryline">P0 &rarr; P1, P3, P8 &rarr; P4 &rarr; P2, P6, P10 &rarr; P5, P7, P9</p>
+      <p>P4 sits between the waves on purpose. It is the only wave-two proposal with no dependency on the Blend, and it is the one the simulated panel wanted most <span class="sim">[simulated]</span>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 10 -->
+<section id="rulings">
+  <div class="opener"><p class="eyebrow">Ten</p><h2>Open rulings</h2></div>
+  <p class="lede">Eleven. Each carries the recommendation this team would make if forced, and who rules. Where a ruling is Leah's, it is because the answer is a practice question and the tool should follow the practice. Where it is Kody's, it is because the answer sets a contract the product has to keep.</p>
+
+  <div class="ruling">
+    <h4>R1 &middot; who sees margin</h4>
+    <p class="q">Owners only, as today, or everyone in the studio?</p>
+    <p>The lens is gated to the studio owner and titled <span class="quote">studio only</span>, while the bulk markup bar that sets the number sits outside the gate entirely. The first hire builds the schedule and cannot see what her work is worth; she also cannot tell whether that is a rule or an accident. A simulated junior-designer walk of a different screen in an earlier program made the same observation about a different string, at low confidence <span class="sim">[simulated]</span>. An unexplained wall reads as suspicion; a stated rule reads as ordinary.</p>
+    <p class="rec"><b>Recommendation</b>A studio setting, defaulting to <strong>everyone in the studio</strong>, with owners able to restrict. Whichever way it lands, the page says which in words rather than by hiding a tab. And setting and reading move behind the same gate, so a member can never apply a markup she is not allowed to see.</p>
+    <p class="who">Leah rules the practice &middot; Kody rules the default and the gate &middot; if the two disagree, the practice wins and the default is changed to follow it</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R2 &middot; the entry frame</h4>
+    <p class="q">Markup on cost, discount off retail, or both?</p>
+    <p>Design Manager is the only product in the researched set offering markup-on-cost, discount-off-list and a flat purchasing fee as parallel methods. The case for discount-off-retail is real: a price entered as retail minus a discount can never exceed the maker's published retail, which is the ceiling the fixture's locked rug is already up against. The case against is that it is a second mental frame in a product whose research finding number three is that designers already conflate the two they have.</p>
+    <p class="rec"><b>Recommendation</b>The field is <strong>client price</strong>. Markup on cost is shown beside it; margin on price appears in totals with the words <span class="quote">on price</span> attached. No discount-off-retail entry in v1. Revisit when a studio asks for it by name.</p>
+    <p class="who">Kody rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R3 &middot; what the Blend holds</h4>
+    <p class="q">Does the sheet hold the client total, or the blended percentage?</p>
+    <p>They are different tools. Holding the total is the motion described in the feedback: take the edge off the sofa, the room's number does not move. Holding the percentage is a planning tool: set the room to 35% and let the sheet propose a split. The mockup shows both as a mode switch, which is a hedge, and hedges cost more than they look.</p>
+    <p class="rec"><b>Recommendation</b><strong>The total</strong>, with the percentage as a readout. Build <span class="quote">hold the %</span> as a second mode only if the team asks for it after using the first.</p>
+    <p class="who">Leah rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R4 &middot; rounding</h4>
+    <p class="q">None, $1, $5, $10, or $25?</p>
+    <p>Every direct search for a named industry convention came back empty; R2 reports this as not confirmed. What is documented is that professional-services pricing favours $0 and $5 endings rather than $.99, and that designers round by hand to something that reads clean. The simulated principal's own example <span class="sim">[simulated]</span> was $2,450 rather than $2,438.60.</p>
+    <p class="rec"><b>Recommendation</b>A studio setting, default <strong>$5</strong>, applied to client unit prices only. The remainder from a blend lands on the smallest unlocked line so the room reconciles exactly, and the footer says it did.</p>
+    <p class="who">Leah rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R5 &middot; a client price below trade</h4>
+    <p class="q">Store a NULL, store a negative markup, or refuse the entry?</p>
+    <p>It happens: a piece thrown in at cost, a correction, a goodwill gesture on a job that went long. Today <code class="mono">markup_percent</code> carries no CHECK pre-sale, so a negative is storable, and activation then clamps it to zero <span class="ref">00279:199-200,237-238</span> — the number survives the proposal and dies at the project boundary.</p>
+    <p class="rec"><b>Recommendation</b>Allow it. Show the negative with its sign, warn at the floor, and stop the clamping as part of F5. A studio that gave something away should be able to see that it did.</p>
+    <p class="who">Kody rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R6 &middot; price-age thresholds</h4>
+    <p class="q">Is 60 and 90 the right pair, and does it vary by studio?</p>
+    <p>Thirty days is the modal vendor quote window, and the product's one shipping staleness rule already uses ninety <span class="ref">spec-books/model.ts:442-444</span>. Sixty and ninety give a designer a nudge before the quote is actually dead. But a studio that works mostly in custom upholstery, where a workroom holds a price for thirty days flat, will want tighter.</p>
+    <p class="rec"><b>Recommendation</b>A studio setting, defaults <strong>60 aging, 90 stale</strong>. A stated validity date always wins over the thresholds — if a quote says it expires October 11, the line goes stale on October 11 regardless of its age.</p>
+    <p class="who">Leah rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R7 &middot; the client and dates</h4>
+    <p class="q">Does the client see &ldquo;priced as of&rdquo;, or only &ldquo;good through&rdquo;?</p>
+    <p>The simulated homeowner persona <span class="sim">[simulated]</span> wanted the feeling rather than the mechanics: something small that says somebody checked, recently, before asking her to sign. A per-line date delivers that and also invites a question about the line without one. A single good-through line delivers most of it and invites nothing.</p>
+    <p class="rec"><b>Recommendation</b><strong>Good through only</strong> — on the proposal now, and on the authorization once that document carries a validity date of its own — never a per-line date on a client surface. Aisle Planner's expired-document message is the precedent for what happens after the date, and is worth reading before writing ours.</p>
+    <p class="who">Leah rules &middot; counsel on the wording</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R8 &middot; post-sale edits</h4>
+    <p class="q">Where exactly does a price stop being editable?</p>
+    <p>The database has already drawn most of this line and drawn it only around the client's money. The soft lock fires on a sent authorization; the executed freeze requires an exact match to the signed snapshot; neither mentions trade price or markup. So today a studio can revise its own cost on a signed line and cannot revise the client's, which is defensible, and can also do it with no record, which is not.</p>
+    <p class="rec"><b>Recommendation</b>Editable until a line sits on a sent authorization; then void-to-edit, in the words the database already uses; signed means a change order. Trade price and markup stay editable after signature, but through a guarded write path and into the record, so a bookkeeper can see it happened.</p>
+    <p class="who">Kody rules &middot; absorbs the queued post-sale editor ruling</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R9 &middot; the floor</h4>
+    <p class="q">Does a margin floor warn, or block?</p>
+    <p>The fixture trips its own floor on purpose. Leah takes the sofa to 19% on price knowing what she is doing, and a tool that stopped her there would be wrong about who is running the studio.</p>
+    <p>The treatment already has a precedent in the product, on the other rail. The check is <code class="mono">belowFloor = marginPct &lt; config.marginFloorPct</code>, on the config key <code class="mono">margin_floor_warning</code>, set at 25%. Its own header comment says the strip and the commission block <span class="quote">render terracotta below the margin floor</span> <span class="ref">packages/fulfillment/src/money.ts:53,76-77</span>. Copy the treatment, and say plainly what it is. That floor is a different number on a different rail that happens to share a value. It warns on Patina's own projected commission margin, not on the studio's margin on furnishings.</p>
+    <p class="rec"><b>Recommendation</b><strong>Warn, never block.</strong> The studio prices; the tool remarks. One quiet line on the row, in terracotta, with the number in it.</p>
+    <p class="who">Leah rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R10 &middot; the lock copy, in its two forms</h4>
+    <p class="q">Keep the copy &mdash; and which of the two strings?</p>
+    <p>It ships in two forms. <span class="quote">Prices lock when you release.</span> is on the FF&amp;E section <span class="ref">ffe-section.tsx:1494</span>. <span class="quote">Prices lock on release.</span> is on the release sheet <span class="ref">review-release-sheet.tsx:606</span> and the trade scope draft sheet <span class="ref">trade-scope-draft-sheet.tsx:560</span>, and it is the second form that both tests assert <span class="ref">review-release-sheet.test.tsx:424 &middot; trade-scope-draft-sheet.test.tsx:254</span>. Either survives the simulated panel's own list of words to avoid <span class="sim">[simulated]</span>, because both explain <em>when</em> — a bare &ldquo;locked&rdquo; badge would not.</p>
+    <p class="rec"><b>Recommendation</b>Keep <span class="quote">Prices lock on release.</span> &mdash; the pinned form &mdash; and bring the FF&amp;E section, which is currently out of step, into line with it. Then add <span class="quote">priced as of</span> beside it, so the sentence says both what is frozen and what it was frozen from.</p>
+    <p class="who">Kody rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R11 &middot; what stays out</h4>
+    <p class="q">What is named here and deliberately not built?</p>
+    <p>Three things. Vision ruling <strong>V1</strong>, Patina's own margin pocket, which this document does not touch, argue, or presume. Every dollar here is the studio's, on Rail A, and the two rails do not meet in the database. A design fee expressed as a percentage of furnishings spend, which the trade does use and which belongs to a different conversation about how a studio bills for its time. And the Pledge, which rides a rail this document is not on.</p>
+    <p class="rec"><b>Recommendation</b>Named and parked. V1 goes to <code class="mono">VISION-DECISIONS</code> as a candidate only when maker conversations actually begin, and not before.</p>
+    <p class="who">Kody rules</p>
+  </div>
+</section>
+
+<!-- ============================================================ 11 -->
+<section id="questions">
+  <div class="opener"><p class="eyebrow">Eleven</p><h2>Questions for the studio</h2></div>
+  <p class="lede">Ten, trimmed from the twelve the simulated panel produced <span class="sim">[simulated]</span>. Each is a single question and each takes a sentence to answer. They are grouped in the order a conversation would naturally take them, and none of them requires anyone to have read this document first.</p>
+
+  <div class="qgroup">
+    <h4>How you price today</h4>
+    <ol>
+      <li>If a new line started at a studio-set default instead of zero, would that save you time or fight the way you price?</li>
+      <li>When you want to move a client price without touching the bulk markup bar, what do you actually do today &mdash; spreadsheet, sticky note, memory?</li>
+    </ol>
+  </div>
+
+  <div class="qgroup">
+    <h4>The Blend</h4>
+    <ol start="3">
+      <li>When you take margin off one line and spread it across others, do you decide the room's total first, or the individual line's client price first?</li>
+      <li>When you spread margin across a room's unlocked lines, do you need to see that history later?</li>
+      <li>Who in your studio, besides you, is trusted to touch a client price on a live proposal?</li>
+    </ol>
+  </div>
+
+  <div class="qgroup">
+    <h4>The date</h4>
+    <ol start="6">
+      <li>Would you want a verified-pricing date on every line, or only on lines above some dollar threshold?</li>
+      <li>Would an ink change on an aging quote change how you enter prices?</li>
+    </ol>
+  </div>
+
+  <div class="qgroup">
+    <h4>Who sees what</h4>
+    <ol start="8">
+      <li>Who besides you sees the margin table today?</li>
+      <li>Would they know whether they were allowed to?</li>
+      <li>When a maker's invoice comes in at a different number than the signed proposal, how do you find out why?</li>
+    </ol>
+  </div>
+
+  <p style="margin-top:2rem">Comments on this page reach us directly, and a thirty-minute walk through the Lindqvist fixture in the portal will get further than either of us reading. Nothing in here is built, so nothing in here is expensive to change.</p>
+</section>
+
+<!-- ============================================================ 12 -->
+<section id="appendix">
+  <div class="opener"><p class="eyebrow">Twelve</p><h2>Appendix</h2></div>
+
+  <p class="lede">Five research lanes produced this document. They are not the same kind of evidence, and the difference matters more than the volume. What follows separates what was read in the code, what was read in the trade, and what was made up on purpose to sharpen a question.</p>
+
+  <h3>Verified in code, versus from the trade, versus simulated</h3>
+
+  <h4>Verified in code &middot; lane R4</h4>
+  <p>Every claim below was re-opened against the main checkout on 5 September 2026 and carries a file and line. These are the load-bearing ones.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name">Claim</th><th class="w-dep">Where</th></tr></thead>
+      <tbody>
+        <tr><td>The trade column is named as trade in its own comment, and the client column beside it</td><td><code class="mono">00014:255,257</code>; renamed line total at <code class="mono">00142:15</code></td></tr>
+        <tr><td>Every line is born at zero margin with the same number in both columns</td><td><code class="mono">use-proposals.ts:773,794-795</code>; <code class="mono">00014:256</code></td></tr>
+        <tr><td>The library pick takes retail while the trade price sits unread on the same object</td><td><code class="mono">build-proposal-item-from-pick.ts:119</code>; <code class="mono">product-picker-modal.tsx:80,87,233,234</code></td></tr>
+        <tr><td>A fifth defect site is in SQL, so a TypeScript-only fix misses it</td><td><code class="mono">00142:61-63,89</code> in <code class="mono">consume_capture</code></td></tr>
+        <tr><td>The designer's totals sum the trade column while the database sums the client column</td><td><code class="mono">ffe-schedule-builder.tsx:463,1164-1177,1621</code>; <code class="mono">proposal-total.ts:22-31</code></td></tr>
+        <tr><td>A trade edit overwrites the client price, deliberately</td><td><code class="mono">use-proposals.ts:909-912</code></td></tr>
+        <tr><td>Activation clamps an unknown trade cost to a confident zero</td><td><code class="mono">00279:184-186,199-200,237-238</code>, against <code class="mono">00185:57-60</code></td></tr>
+        <tr><td>Neither post-sale lock covers trade price or markup; the configured-line guard does</td><td><code class="mono">00422:1431-1436,1476-1479</code>; <code class="mono">00403:827-836</code></td></tr>
+        <tr><td>Four unshared margin computations, disagreeing on unit, population and removed lines</td><td><code class="mono">markup.ts:78-89</code>; <code class="mono">use-account-page.ts:110-123</code>; <code class="mono">use-project-v2.ts:618-697,627</code>; <code class="mono">use-projects.ts:372-468,395</code></td></tr>
+        <tr><td>Markup setting sits outside the gate that markup reading sits inside</td><td><code class="mono">ffe-schedule-builder.tsx:911,1367,1412</code> against <code class="mono">:1727-1748</code></td></tr>
+        <tr><td>The lens type is below both published floors, set inline so the floors were never enforced</td><td><code class="mono">financial-lens.tsx:178,202</code>; <code class="mono">globals.css:87-89</code>; <code class="mono">stamp.tsx:52</code>; <code class="mono">quiet-type-foundation.test.ts:29-31</code></td></tr>
+        <tr><td>No tier of the client bundle can carry trade or markup; they are not in the projection</td><td><code class="mono">00390:1622-1698</code>; <code class="mono">proposal-visibility.ts:114-149</code>; <code class="mono">proposal-mirror-contract.test.ts:29-38</code></td></tr>
+        <tr><td>Four columns and no fifth, on both the sheet and the executed instrument</td><td><code class="mono">review-release-sheet.tsx:10-11</code>; <code class="mono">00422:2110-2111,2157-2159</code></td></tr>
+        <tr><td>Post-sale pricing writes are RPC-only and the client hook throws before touching data</td><td><code class="mono">00435:935-955,980</code>; <code class="mono">use-project-v2.ts:329-347</code></td></tr>
+        <tr><td>Nothing in the schema records when a price was verified &mdash; a zero-hit grep across the 520 applied migrations</td><td><code class="mono">price_verified_at|price_checked_at|price_valid_until|price_source|quote_expires|price_as_of|price_history</code></td></tr>
+        <tr><td>Every ingredient of a freshness stamp exists as a partial precedent</td><td><code class="mono">00533:51-55</code>; <code class="mono">00535:21-29</code>; <code class="mono">spec-book-workspace.tsx:127-153</code>; <code class="mono">spec-books/model.ts:326-331,442-450</code></td></tr>
+        <tr><td>A default-markup setting has shipped for the life of the schedule and is read by nothing</td><td><code class="mono">00014:475</code>; repo-wide grep finds only type declarations</td></tr>
+        <tr><td>There is no studios table; the entity is organizations behind a view</td><td><code class="mono">00021:102-122</code>; <code class="mono">00084:363-372</code></td></tr>
+        <tr><td>The settings table shape to copy, including why the RLS predicate is a helper</td><td><code class="mono">00428:42-94</code>, reason at <code class="mono">:61-63</code></td></tr>
+        <tr><td>Six currency formatters, none shared, disagreeing on fraction digits</td><td><code class="mono">currency-ui.ts:7</code>; <code class="mono">format.ts:62</code>; <code class="mono">utils.ts:14</code>; <code class="mono">project-commerce.ts:458</code>; <code class="mono">piece-configuration-model.ts:623</code>; <code class="mono">order-assistant/types.ts:207</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>From the trade &middot; lanes R1, R2, R3</h4>
+  <p>Every external claim carries a URL and an access date of 5 September 2026. Where a page was paywalled, returned a certificate error, or was reachable only through a search summary, the research says so and this document repeats it rather than smoothing it over.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name">Claim</th><th>Strength</th><th class="w-why">Source</th></tr></thead>
+      <tbody>
+        <tr><td>Studios plan to a project-level blended margin and make it up across lines</td><td><strong>Quoted</strong></td><td>Interior Design Community, profit margin &mdash; the &ldquo;40% on the project as a whole&rdquo; passage</td></tr>
+        <tr><td>A 35% markup is roughly a 26% margin; designers conflate the two</td><td><strong>Quoted</strong></td><td>Interior Design Community, worked $1,000 / $1,600 example. The 35%-on-cost / 25.9%-on-price figure is derived arithmetically in the body of this document rather than attributed to a source</td></tr>
+        <tr><td>Industry average product markup around 35%, most designers 30&ndash;35%</td><td><strong>Quoted</strong></td><td>DesignFiles blog</td></tr>
+        <tr><td>Category ranges &mdash; FF&amp;E 30&ndash;40%, case goods 40&ndash;60%, upholstery higher</td><td>Asserted, not surveyed</td><td>Aggregator and practitioner-adjacent business content; R1 flags that no named methodology sits behind any of it</td></tr>
+        <tr><td>ASID requires full disclosure of all compensation</td><td><strong>Fetched</strong></td><td>ASID Code of Ethics; the section number differed between two retrievals, the clause text did not</td></tr>
+        <tr><td>&ldquo;Industry-standard markup&rdquo; is insufficient disclosure; Virginia litigation found undisclosed markups actionable</td><td><strong>Quoted</strong></td><td>Design Ink Co, with the underlying litigation also indexed by a Virginia litigation blog</td></tr>
+        <tr><td>Thirty days is the modal quote window; &ldquo;subject to change without notice&rdquo; is boilerplate</td><td><strong>Quoted</strong></td><td>LawInsider clause samples; Creature Comforts Upholstery terms; Murdock Manufacturing terms (PDF fetch 404'd on retry, summarized via search)</td></tr>
+        <tr><td>2025&ndash;26 tariff timeline and mid-cycle surcharges of 3.5&ndash;8%</td><td>Mixed</td><td>Tariff dates fetched (GHY, ABC News); the named surcharge percentages could not be re-verified at a single URL and are reported as aggregated trade coverage</td></tr>
+        <tr><td>Designers changed behavior: shrinking scope, disclosing exposure, re-sourcing</td><td><strong>Quoted</strong></td><td>Business of Home, three named designers on the record</td></tr>
+        <tr><td>None of eight design tools documents a price-date field or a blend</td><td>Absence of evidence</td><td>R2 and R3 matrices. Several help centers 404'd or returned certificate errors; &ldquo;not confirmed&rdquo; is not &ldquo;confirmed absent&rdquo;</td></tr>
+        <tr><td>Aisle Planner ships a literal Expiration Date with a client-facing expired message</td><td><strong>Fetched</strong></td><td>Aisle Planner help center &mdash; adjacent vertical, event planning</td></tr>
+        <tr><td>No named rounding increment is an industry convention</td><td><strong>Not confirmed</strong></td><td>R2 searched for it directly and came back empty; R4's $5 default is ours, not the trade's</td></tr>
+        <tr><td>The &ldquo;quoted in March, ordered in June, price rose 8%&rdquo; anecdote</td><td><strong>Not found</strong></td><td>R3 searched for it and did not find it verbatim anywhere. It is not repeated in this document</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>Simulated &middot; lane R5</h4>
+  <p><strong>The panel is not evidence.</strong> Every place this document leans on it above either says <em>simulated</em> in the sentence or carries a <span class="sim">[simulated]</span> mark. Four synthetic personas — a principal, a first hire, a bookkeeper, a homeowner — were built from the vision document and the verified facts about how Patina prices today, and interviewed against four sketches. None of these people exist. Nothing in that lane is a claim about Leah's studio, her first hire, her bookkeeper, or any homeowner.</p>
+  <p>What it was for: turning two vague sentences of feedback into questions a real conversation can answer in one sitting. Where this document leans on it — the translation-step complaint behind P1, the caution about invisible redistribution behind P2's trace line, the locked-door reading of the lens header behind R1, the request that aging be quiet behind principle five — the lean is on a <em>question</em> the persona sharpened, never on a finding. Section eleven is the output that matters; the rest of the lane is scaffolding.</p>
+
+  <h3>Where the relayed inputs were wrong</h3>
+  <p>Four inputs reached the code lane as orchestrator-relayed summaries rather than transcripts, and their line numbers were treated as claims to check. The corrections worth carrying forward:</p>
+  <ul>
+    <li>The 11px mono floor is real but is <em>not</em> in DECISIONS R126, which rules on Direction A, the hover wash and the shadow amendment and contains no type-floor rule. The floor is documented in code at <code class="mono">stamp.tsx:52</code>; the published token floor is 12px.</li>
+    <li>The blended margin is computed in <strong>four</strong> unshared places, not three. The fourth is a near-duplicate hook in the portal whose query filters removed lines where the package copy does not.</li>
+    <li>A fifth F1 site was unnamed: <code class="mono">consume_capture</code> reproduces the defect in SQL.</li>
+    <li>&ldquo;No staleness language anywhere&rdquo; holds for the schema but not for the interface &mdash; the spec-book preflight already warns past ninety days. The absence is of a price-specific timestamp, not of the concept.</li>
+    <li>Several line ranges drifted by a few lines and are corrected throughout this document.</li>
+  </ul>
+
+  <h3>Vision refusals honored</h3>
+  <ul>
+    <li><strong>No client-visible margin</strong>, under any label, softened or otherwise. Every client mockup here has the columns it has today plus, at most, one date line.</li>
+    <li><strong>No engagement metrics on the studio surface.</strong> Nothing here is optimized for time in the app, and no figure in this document is shown to Leah as a score.</li>
+    <li><strong>No Pledge copy.</strong> The Pledge rides the platform's own margin rail; this document is on the studio's rail and does not touch it. V1 is named in R11 and parked.</li>
+    <li><strong>No hidden fees introduced.</strong> Nothing proposed adds a charge, a percentage, or a line to what a studio or a homeowner pays.</li>
+    <li><strong>The term is Designer-Taught Intelligence, and it does not appear here</strong>, because nothing in this document is that. A blend is arithmetic a designer specified; a verify is a human writing down what a rep told her.</li>
+  </ul>
+
+  <h3>Explicitly not measured</h3>
+  <p>Time in the lens. Opens. Clicks. Whether a designer used the Blend this week. The only signal this program would take from a walk is what Leah says out loud while doing it.</p>
+
+  <h3>Sources</h3>
+  <p>From research lanes R1, R2 and R3. Every page was accessed <span class="acc">2026-09-05</span>. Notes name where a fetch was blocked and a search summary was used instead.</p>
+
+  <h4>Practice and pricing models</h4>
+  <ul class="srclist">
+    <li><a href="https://www.capellakincheloe.com/blog/pricing-interior-design-services">Capella Kincheloe &mdash; A Detailed Look at Pricing Interior Design Services</a></li>
+    <li><a href="https://www.capellakincheloe.com/blog/anatomy-of-an-interior-design-agreement-2">Capella Kincheloe &mdash; Anatomy of an Interior Design Agreement 2.0</a></li>
+    <li><a href="https://www.dakotadesigncompany.com/blog/how-to-price-your-interior-design-services">Dakota Design Co &mdash; How to Price Your Interior Design Services</a></li>
+    <li><a href="https://www.dakotadesigncompany.com/blog/how-to-share-interior-design-pricing-with-prospects">Dakota Design Co &mdash; Six Ways to Educate Clients About Pricing</a> <span class="acc">via search summary</span></li>
+    <li><a href="https://interiordesigncommunity.com/interior-design-profit-margin/">Interior Design Community &mdash; Interior Design Profit Margin: Why Markup Math Misleads</a></li>
+    <li><a href="https://interiordesigncommunity.com/freight-markup-interior-designers/">Interior Design Community &mdash; Freight Markup For Interior Designers</a></li>
+    <li><a href="https://interiordesigncommunity.com/markup-design-fee/">Interior Design Community &mdash; Design Fee Plus Markup</a></li>
+    <li><a href="https://blog.designfiles.co/how-should-i-markup-products/">DesignFiles &mdash; How (and Why) to Markup Products as an Interior Designer</a></li>
+    <li><a href="https://www.studiodesigner.com/blog/pricing-structures-for-interior-designers/">Studio Designer &mdash; Pricing Structures for Interior Designers</a></li>
+    <li><a href="https://procurist.io/blog/trade-discount-programs-designers">Procurist &mdash; Trade Discount Programs for Interior Designers</a> <span class="acc">multipliers paraphrased</span></li>
+    <li><a href="https://en.wikipedia.org/wiki/Psychological_pricing">Psychological pricing &mdash; Wikipedia</a></li>
+    <li><a href="https://businessofhome.com/boh/article/the-dictionary-of-markups">Business of Home &mdash; The Dictionary of Markups</a> <span class="acc">paywalled, not quoted</span></li>
+  </ul>
+
+  <h4>Disclosure and the legal edge</h4>
+  <ul class="srclist">
+    <li><a href="https://casd.asid.org/code-of-ethics">ASID Code of Ethics and Professional Conduct</a></li>
+    <li><a href="https://iidawi.org/Code_of_Ethics">IIDA Wisconsin &mdash; Code of Ethics</a> <span class="acc">via search summary</span></li>
+    <li><a href="https://www.designinkco.com/blog/interior-design-markup-disclosure">Design Ink Co &mdash; Do Interior Designers Have to Disclose Markups?</a></li>
+    <li><a href="https://www.virginiabusinesslitigationlawyer.com/interior-designers-unauthorized-markups-may-be-grounds-for-legal-action/">Virginia Business Litigation Blog &mdash; Unauthorized Markups</a></li>
+    <li><a href="https://ccidc.org/consumer-items-of-interest/">CCIDC &mdash; Consumer Information</a> <span class="acc">via search summary</span></li>
+  </ul>
+
+  <h4>The eight tools, and the adjacent precedents</h4>
+  <ul class="srclist">
+    <li><a href="https://help.studiodesigner.com/s/article/How-Defaults-Work-in-Studio-Designer">Studio Designer &mdash; How Defaults Work</a> <span class="acc">certificate error on direct fetch</span></li>
+    <li><a href="https://blog.designmanager.com/vendor-markups">Design Manager &mdash; Vendor Markup Percentages</a> <span class="acc">certificate error on direct fetch</span></li>
+    <li><a href="https://pro.houzz.com/for-pros/how-to-use-the-markup-calculator-for-proposals-estimates">Houzz Pro &mdash; How to Use the Markup Calculator</a></li>
+    <li><a href="https://help.mydomastudio.com/en/articles/3940389-designer-pricing-sheet">Mydoma &mdash; Designer Pricing Sheet</a></li>
+    <li><a href="https://intercom.help/designfiles/en/articles/3604424-add-markups-and-adjust-pricing">DesignFiles &mdash; Add Markups and Adjust Pricing</a></li>
+    <li><a href="https://join.designfiles.co/features/interior-design-quote/">DesignFiles &mdash; Quote and Proposal Software</a></li>
+    <li><a href="https://programa.design/features/interior-design-approvals">Programa &mdash; Design Approval Software</a></li>
+    <li><a href="http://help.gatherit.co/en/articles/961389-pricing-client-view">Gather &mdash; Pricing: Client View</a></li>
+    <li><a href="https://intercom.help/materio/en/articles/8261262-level-of-pricing-detail-a-client-sees">Materio &mdash; Level of pricing detail a client sees</a></li>
+    <li><a href="https://help.curate.co/en/articles/6830545-applying-markups-unlock-your-profit-potential">Curate &mdash; Applying Markups</a></li>
+    <li><a href="https://www.ivy.co/designers/magazine/ivy-news/ivys-guide-to-purchase-orders/">Ivy &mdash; Guide to Purchase Orders</a></li>
+    <li><a href="https://docs.phocassoftware.com/budgets-and-forecasts/contributor/edit-values-in-a-worksheet/spread-totals">Phocas Software &mdash; Spread totals</a></li>
+    <li><a href="https://www.jobtread.com/blog/markup-versus-profit-margin">JobTread &mdash; Markup Versus Profit Margin</a></li>
+    <li><a href="https://help.aisleplanner.com/en/articles/3130688-adding-expiration-dates-to-quotes-proposals-and-contracts">Aisle Planner &mdash; Adding Expiration Dates to Quotes, Proposals and Contracts</a></li>
+    <li><a href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/chapter_1536354469.html">NetSuite &mdash; Effective Date Pricing</a></li>
+    <li><a href="https://www.procore.com/library/material-price-tracker">Procore &mdash; Construction Materials Price Tracker</a></li>
+    <li><a href="https://camelcamelcamel.com/support/no_recent_prices">camelcamelcamel &mdash; No Recent Prices</a></li>
+    <li><a href="https://www.windmill.dev/changelog/asset-freshness">Windmill &mdash; Asset freshness with fresh and stale badges</a></li>
+  </ul>
+
+  <h4>Quote validity, tariffs and price movement</h4>
+  <ul class="srclist">
+    <li><a href="https://lawinsider.com/clause/quotation-validity">LawInsider &mdash; Quotation Validity clause samples</a></li>
+    <li><a href="https://www.creaturecomfortsupholstery.co.uk/terms-conditions/">Creature Comforts Upholstery &mdash; Terms and Conditions</a></li>
+    <li><a href="https://www.murdockmfg.com/uploads/docs/MM_Terms.pdf">Murdock Manufacturing &mdash; Terms</a> <span class="acc">PDF fetch 404'd on retry</span></li>
+    <li><a href="https://www.ghy.com/trade-compliance/us-tariffs-lumber-upholstered-furniture-cabinets-vanities/">GHY &mdash; US Tariffs on Lumber, Upholstered Furniture and Other Imports</a></li>
+    <li><a href="https://abcnews.com/Politics/white-house-delays-new-tariffs-furniture-kitchen-cabinets/story?id=128830021">ABC News &mdash; White House delays new tariffs</a></li>
+    <li><a href="https://www.statista.com/statistics/1304173/consumer-price-index-monthly-furniture-and-bedding-united-states/">Statista &mdash; US furniture and bedding price inflation</a></li>
+    <li><a href="https://businessofhome.com/articles/how-a-year-of-tariffs-changed-the-design-industry">Business of Home &mdash; How a year of tariffs changed the design industry</a></li>
+    <li><a href="https://www.homeaccentstoday.com/supply-chain/price-increases-imminent-rising-energy-and-materials-costs-could-further-challenge-recovery/">Home Accents Today &mdash; Price increases imminent</a></li>
+    <li><a href="https://www.furngully.com/trends-insights/why-there-is-a-tariff-line-on-your-furniture-quote-and-why-your-dealer-usually-cannot-remove-it">Furngully &mdash; Why there is a tariff line on your furniture quote</a></li>
+    <li><a href="https://procurist.io/blog/purchase-order-best-practices">Procurist &mdash; Purchase Order Best Practices</a></li>
+    <li><a href="https://myhfa.org/blog/advocacy-update-new-details-on-section-232-furniture-tariffs/">Home Furnishings Association &mdash; Section 232 furniture tariffs</a></li>
+    <li><a href="https://www.wallpaper.com/design-interiors/us-tariffs-impact-on-design-community-2025">Wallpaper* &mdash; Tariffs and the design industry</a></li>
+    <li><a href="https://www.datafold.com/blog/dbt-source-freshness/">Datafold &mdash; Source freshness tests</a></li>
+    <li><a href="https://foyr.com/learn/how-to-make-interior-design-quotation/">Foyr &mdash; How to Make an Interior Design Quotation</a> <span class="acc">template vendor guidance</span></li>
+    <li><a href="https://www.hellobonsai.com/quote-template/interior-design">HelloBonsai &mdash; Interior Design Quotation Template</a> <span class="acc">template vendor guidance</span></li>
+  </ul>
+
+  <p style="margin-top:2rem">Program folder <code class="mono">artifacts/pricing-mechanics-2026-09-05/</code>. The fixture arithmetic in this document is reproduced and asserted by <code class="mono">source/check-math.mjs</code>, which recomputes the room from trade prices and the stated client prices and fails loudly if any figure here drifts.</p>
+</section>
+
+</main>
+</div>
