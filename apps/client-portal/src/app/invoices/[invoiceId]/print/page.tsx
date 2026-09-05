@@ -28,11 +28,13 @@ export default function ClientInvoicePrintPage({
   // Studio brand identity (Designer Studios). projectId path; disabled until the
   // invoice resolves. name/logoUrl are nullable — fall back to the designer join.
   // A studio invoice has no project to resolve through, so it brands off the
-  // designer the invoice was drawn by instead of printing unbranded.
+  // studio it was drawn FOR (00571's p_studio_id, which takes precedence over
+  // the designer's primary studio — a two-studio designer would otherwise
+  // print the wrong letterhead), with the designer as the fallback leg.
   const { data: identity } = useStudioIdentity(
     invoice?.project_id
       ? { projectId: invoice.project_id }
-      : { designerId: invoice?.designer_id },
+      : { studioId: invoice?.studio_id, designerId: invoice?.designer_id },
   );
   // check_remit_to for the "How to pay" block (migration 00428). Falls back to
   // platform defaults on any failure — a config read never blocks printing.

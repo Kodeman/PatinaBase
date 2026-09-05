@@ -162,6 +162,13 @@ export interface HouseLedgerModel {
   owedCents: number | null;
   /** How many invoices that total is spread across. */
   owedInvoiceCount: number;
+  /**
+   * How many of those were drawn against no house at all (ruling S1). They
+   * stand in this house's letterbox by ADOPTION — the lowest project id the
+   * client can open — not because the work is here, so the owed row has to
+   * say so; the envelope already does. Zero on every house invoice.
+   */
+  owedStudioCount: number;
   /** The soonest day the house owes on, off the first open invoice. */
   owedDueDate: string | null;
   /**
@@ -498,6 +505,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     owedCents:
       openInvoices.length > 0 ? computeInvoiceRollup(openInvoices).outstandingCents : null,
     owedInvoiceCount: openInvoices.length,
+    owedStudioCount: openInvoices.filter((invoice) => invoice.project_id === null).length,
     owedDueDate: openInvoices[0]?.due_date ?? null,
     owedDatedCount: openInvoices.filter((invoice) => !!invoice.due_date).length,
     heldCents: heldDraws

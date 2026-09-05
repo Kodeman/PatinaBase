@@ -1777,6 +1777,29 @@ describe("Threshold — the studio's own letters", () => {
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
   });
 
+  // The letter is summed into this house's owed figure because it stands in
+  // this house's letterbox. The row has to say which of that money was never
+  // drawn against the house at all.
+  it('discloses the studio letter on the owed row it is summed into', () => {
+    clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
+
+    renderThreshold();
+
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
+      'Owed across 2 open invoices, one from the studio',
+    );
+  });
+
+  it('leaves the owed row alone in a house that has not adopted them', () => {
+    clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
+
+    renderThreshold(MILESTONES, [{ id: 'proj-ash', name: 'The Ash cottage' }]);
+
+    const row = screen.getByTestId('house-ledger-owed');
+    expect(row).toHaveTextContent('Owed on the open invoice');
+    expect(row).not.toHaveTextContent('studio');
+  });
+
   it('never mistakes a house invoice for a studio one', () => {
     clientInvoicesMock.mockReturnValue(settled([{ ...INVOICE, project_id: 'proj-other' }]));
 
@@ -1838,6 +1861,21 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
       'Design consultation · 12 September 2026',
     );
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
+  // 00571 gives `p_studio_id` precedence over both derivations. A designer who
+  // belongs to two studios has a primary one, and it is not necessarily the
+  // one this letter was drawn for — so the letterhead is asked for by the
+  // letter's OWN studio, with the designer only as the fallback leg.
+  it('takes the letterhead from the letter’s own studio, not the designer’s primary', () => {
+    clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
+
+    renderDoor();
+
+    expect(identityMock).toHaveBeenCalledWith({
+      studioId: 'studio-1',
+      designerId: 'designer-nora',
+    });
   });
 
   it('reads the return from the till, which the empty state never could', () => {

@@ -10,6 +10,7 @@ function ledger(overrides: Partial<HouseLedgerModel> = {}): HouseLedgerModel {
     agreedCents: 6_140_000,
     owedCents: 912_500,
     owedInvoiceCount: 1,
+    owedStudioCount: 0,
     owedDueDate: null,
     owedDatedCount: 0,
     heldCents: 144_000,
@@ -104,6 +105,40 @@ describe('HouseLedger — the house in figures, with its words', () => {
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
       'Owed across 3 open invoices',
     );
+  });
+
+  /* A letter drawn against no house stands in the adopted house's letterbox
+     and is summed into its owed figure. The row has to say which of that money
+     is not the house's, or the figure asserts work that was never done here. */
+  it('says on the owed row when the money is the studio’s, not the house’s', () => {
+    const { unmount } = render(
+      <HouseLedger ledger={ledger({ owedInvoiceCount: 1, owedStudioCount: 1 })} />,
+    );
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
+      'Owed on the open invoice from the studio, not for this house',
+    );
+    unmount();
+
+    const second = render(
+      <HouseLedger ledger={ledger({ owedInvoiceCount: 2, owedStudioCount: 2 })} />,
+    );
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
+      'Owed across 2 open invoices from the studio, not for this house',
+    );
+    second.unmount();
+
+    render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedStudioCount: 1 })} />);
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
+      'Owed across 3 open invoices, one from the studio',
+    );
+  });
+
+  it('leaves the owed row alone when every letter is this house’s', () => {
+    render(<HouseLedger ledger={ledger({ owedInvoiceCount: 2, owedStudioCount: 0 })} />);
+
+    const row = screen.getByTestId('house-ledger-owed');
+    expect(row).toHaveTextContent('Owed across 2 open invoices');
+    expect(row).not.toHaveTextContent('studio');
   });
 
   it('reads the rows in the accountant’s order', () => {

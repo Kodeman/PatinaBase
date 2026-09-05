@@ -65,9 +65,13 @@ export function LetterboxDoor() {
   // letterbox with nothing readable in it.
   const standing = useMemo(() => visibleInvoices(letters), [letters]);
 
-  // The letterhead comes off the invoice's own designer. The studio it was
-  // drawn for is the authority here, and there is no project to read it from.
+  // The letterhead comes off the letter's OWN studio (00571 gives p_studio_id
+  // precedence), never off the designer's primary studio: a designer who
+  // belongs to two would otherwise sign a letter with the other one's name.
+  // The designer rides along as the fallback the resolver falls through to
+  // when the named studio is not an active design studio.
   const identityQuery = useStudioIdentity({
+    studioId: standing[0]?.studio_id ?? null,
     designerId: standing[0]?.designer_id ?? null,
   });
 
