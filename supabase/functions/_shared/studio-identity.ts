@@ -4,7 +4,8 @@
 // so Deno, portal TS, and Swift all resolve studio brand identity through the
 // SAME precedence and can't drift:
 //
-//   project.studio_id → org  ·  else designer's primary studio → org
+//   studio_id → org  ·  else project.studio_id → org
+//   ·  else designer's primary studio → org
 //   ·  else profiles.business_name  ·  else profiles.full_name
 //
 // The RPC returns EXACTLY ONE row of brand-only columns (never email/phone/
@@ -28,22 +29,36 @@ export interface StudioIdentity {
 
 /**
  * Resolve studio brand identity via the resolve_studio_identity RPC.
- * Pass exactly one of projectId / designerId (projectId takes precedence in the
- * RPC). Returns null on error, missing input, or an empty result — never throws.
+ *
+ * Pass whichever of studioId / projectId / designerId the row carries; the RPC
+ * reads them in that precedence, so an invoice with no house still brands with
+ * its own studio's letterhead rather than the designer's primary one. Returns
+ * null on error, missing input, or an empty result — never throws.
  */
 export async function resolveStudioIdentity(
   admin: SupabaseClient,
-  opts: { projectId?: string | null; designerId?: string | null },
+  opts: {
+    projectId?: string | null;
+    designerId?: string | null;
+    studioId?: string | null;
+  },
 ): Promise<StudioIdentity | null> {
   const projectId = opts.projectId ?? null;
   const designerId = opts.designerId ?? null;
-  if (!projectId && !designerId) return null;
+  const studioId = opts.studioId ?? null;
+  if (!projectId && !designerId && !studioId) return null;
 
   try {
-    const { data, error } = await admin.rpc("resolve_studio_identity", {
+    const args: Record<string, string | null> = {
       p_project_id: projectId,
       p_designer_id: designerId,
-    });
+    };
+    // p_studio_id is named ONLY when the caller holds one. PostgREST resolves an
+    // RPC by the argument names it is sent, and the third argument is DEFAULT
+    // NULL — so a two-argument call keeps resolving exactly as it did before the
+    // studio arm existed.
+    if (studioId) args.p_studio_id = studioId;
+    const { data, error } = await admin.rpc("resolve_studio_identity", args);
     if (error) {
       console.error("resolveStudioIdentity: rpc error", error.message);
       return null;

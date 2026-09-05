@@ -9,6 +9,7 @@
 
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
+  resolveStudioIdentity,
   resolveStudioSignature,
   signatureCity,
   studioCobrand,
@@ -82,6 +83,82 @@ Deno.test("studioDisplayName: falls back when the resolver name is null/blank", 
     studioDisplayName({ ...empty, name: "   " }, "Your designer"),
     "Your designer",
   );
+});
+
+// ── The studio arm: an invoice with no house ────────────────────────────────
+// A studio invoice carries no project, so the only letterhead it can brand with
+// is its own studio's. The RPC gained p_studio_id for exactly that, and it must
+// be named ONLY when the caller has one — a two-argument call is what every
+// project-bound caller has always sent.
+
+/** Captures the exact argument object handed to the RPC. */
+function rpcSpy(row: Record<string, unknown> | null) {
+  const calls: Array<Record<string, unknown>> = [];
+  const client = {
+    rpc: (name: string, args: Record<string, unknown>) => {
+      calls.push({ name, ...args });
+      return Promise.resolve({ data: row ? [row] : [], error: null });
+    },
+  };
+  return { client, calls };
+}
+
+const STUDIO_ROW = {
+  studio_id: "s1",
+  name: "Middle West Studio",
+  logo_url: "https://cdn.patina.cloud/studio-logos/s1/1.png",
+  website: null,
+  source: "studio",
+};
+
+Deno.test("resolveStudioIdentity: a studio invoice brands by its own studio", async () => {
+  const { client, calls } = rpcSpy(STUDIO_ROW);
+  const identity = await resolveStudioIdentity(
+    client as unknown as Parameters<typeof resolveStudioIdentity>[0],
+    { projectId: null, designerId: "d1", studioId: "s1" },
+  );
+  assertEquals(calls, [{
+    name: "resolve_studio_identity",
+    p_project_id: null,
+    p_designer_id: "d1",
+    p_studio_id: "s1",
+  }]);
+  assertEquals(identity?.studioId, "s1");
+  assertEquals(identity?.name, "Middle West Studio");
+  assertEquals(identity?.source, "studio");
+});
+
+Deno.test("resolveStudioIdentity: no studio given → the two-argument call is unchanged", async () => {
+  const { client, calls } = rpcSpy(STUDIO_ROW);
+  await resolveStudioIdentity(
+    client as unknown as Parameters<typeof resolveStudioIdentity>[0],
+    { projectId: "p1", designerId: "d1" },
+  );
+  assertEquals(calls, [{
+    name: "resolve_studio_identity",
+    p_project_id: "p1",
+    p_designer_id: "d1",
+  }]);
+});
+
+Deno.test("resolveStudioIdentity: studio alone is anchor enough", async () => {
+  const { client, calls } = rpcSpy(STUDIO_ROW);
+  const identity = await resolveStudioIdentity(
+    client as unknown as Parameters<typeof resolveStudioIdentity>[0],
+    { studioId: "s1" },
+  );
+  assertEquals(calls.length, 1);
+  assertEquals(identity?.name, "Middle West Studio");
+});
+
+Deno.test("resolveStudioIdentity: no anchor at all → null, and the RPC is never called", async () => {
+  const { client, calls } = rpcSpy(STUDIO_ROW);
+  const identity = await resolveStudioIdentity(
+    client as unknown as Parameters<typeof resolveStudioIdentity>[0],
+    { projectId: null, designerId: null, studioId: null },
+  );
+  assertEquals(identity, null);
+  assertEquals(calls, []);
 });
 
 // ── R7's third element: the city on the sign-off ────────────────────────────
