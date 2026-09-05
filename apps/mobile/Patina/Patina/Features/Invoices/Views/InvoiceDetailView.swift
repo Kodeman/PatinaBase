@@ -114,7 +114,9 @@ struct InvoiceDetailView: View {
     }
 
     private func contextLine(_ invoice: RemoteInvoice) -> String {
-        let project = invoice.project?.name ?? "Your project"
+        // Studio invoices ("the studio · no house") carry no project — fall
+        // back to the invoice's own title, then to "Your studio".
+        let project = invoice.project?.name ?? invoice.title ?? "Your studio"
         let designer = invoice.designer?.displayName ?? "your designer"
         return "\(project) · from \(designer)"
     }
