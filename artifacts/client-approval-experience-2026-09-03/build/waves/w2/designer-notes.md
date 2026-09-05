@@ -394,3 +394,132 @@ suite filtered to the new describe (`-t "settled stamps in the Record"`) emits *
   is unchanged and still owed to the integration steward.
 - A rendered check is still owed at integration. No migration minted, no production
   mutation run.
+
+---
+
+# Fix pass 3 — G-01 and G-02 closed against the mid-Wave-2 rulings
+
+Round 3 left two majors open. Both turned on a question this lane could not answer
+from inside its own worktree; the 2026-09-05 rulings answered them, and this pass
+builds to the ruling rather than to the deferral.
+
+## G-01 — the attribution is no longer deferred, and it renders the key verbatim
+
+The ruling: *"00569's projection emits `whyAuthorName` (the composing designer's
+display name, frozen with the artifact); every surface renders `— {whyAuthorName}`
+only when present."* The backend lane is adding the emitter now; this lane codes
+against that exact camelCase key.
+
+Two changes fell out of the ruling's second half — **verbatim**, on every surface:
+
+- `givenName()` is gone, replaced by `whyAttribution()`, which trims and returns
+  null for a blank name and otherwise hands back the frozen string whole. The old
+  helper took the first word, which would have signed one immutable sentence
+  "Leah" on the Desk and "Leah Kochaver" in the email, the Threshold and the iOS
+  row. Shortening is the projection's call now, not the portal's.
+- The render site's comment no longer says the attribution is DEFERRED, and the
+  hook's `whyAuthorName` doc comment no longer says the key has no producer.
+  Both said so honestly at the time; both are now false.
+
+`useAuth()` is gone from this lane entirely: the last remnant was the dead
+`jest.mock('@/hooks/use-auth', …)` in `approvals-region-head.test.tsx`, whose
+comment described a reader-name attribution that was removed two passes ago. The
+component has not imported the hook since — the mock was a no-op with a false
+comment. Deleted (also closes G-06).
+
+Tests: the render case now asserts `— Leah Kochaver` (not `— Leah`); the unsigned
+case stands; `project-approval-model.test.ts` pins `whyAttribution` on a full
+name, a padded name, an empty string, whitespace, null and undefined.
+
+## G-02 — the why is one line, and there is no path by which a newline freezes
+
+The ruling: *"The composer is a single line: newlines are stripped, Enter does
+nothing."* Three gates, because the artifact is append-only and a bad line can
+never be corrected:
+
+1. **In the field.** `rows={1}`; `onKeyDown` calls `preventDefault()` on Enter, so
+   the key inserts nothing (and cannot submit the form from a textarea either);
+   `onChange` runs the typed value through `oneLine()` before the cap slice, so a
+   *pasted* newline collapses on the way in. The textarea is kept rather than
+   swapped for `<input>` precisely so Enter can be swallowed without the form
+   submitting on it.
+2. **At submit.** `why: oneLine(form.why).trim() || null`.
+3. **In the hook.** `oneLineWhy()` normalizes before `p_why` is built, on
+   **both** create and supersede. This is the last gate and it is deliberately
+   independent of the composer: any caller of the hook — this form, a future one,
+   a test — gets a single line or nothing. `oneLine` in the portal and
+   `oneLineWhy` in the package are the same rule stated on both sides of a
+   package boundary on purpose; the portal cannot enforce the package's contract
+   and the package must not assume the portal ran first.
+
+`oneLine` collapses every whitespace run (`\s+` → one space), so `\r\n`, a tab and
+a doubled space all land as one space; the trim happens at the edges only where a
+value is about to be sent.
+
+Tests: the composer case fires a real `createEvent.keyDown` and asserts
+`defaultPrevented`, then pastes `'The walnut\nholds\r\n\tthe room.'` and reads the
+field value back; a second case drives the whole form and asserts the submitted
+`why` matches `/[\r\n]/` nowhere. On the package side, create and supersede each
+get a newline-bearing payload and assert the `p_why` actually sent.
+
+## Supersede forwards the `p_why` it accepts
+
+00569 declares `supersede_project_approval_decision(…, p_why text DEFAULT NULL)`
+and does `v_why := COALESCE(v_why_given, v_old_artifact.why)` — a revision is the
+normal sequel to a RETURNED approval, so silence must carry the predecessor's line
+forward, not clear it. `useSupersedeProjectApproval` now builds `p_why` from
+`input.payload.why` (its payload type has always carried the field) and **omits
+the key** when there is nothing to re-ask, which is both the carry-forward path
+and what keeps the supersession's idempotency hash identical for any key minted
+before `p_why` existed (00569 guards the hash the same way, `:625-632`).
+
+The superseding *form* still does not offer the field — that is an orchestrator
+call, not this lane's — and the `SupersedeState` comment now says so accurately
+instead of claiming the RPC takes no `p_why` (closes G-04).
+
+## Gates (fix pass 3)
+
+Run from the lane worktree.
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `pnpm --filter @patina/supabase type-check` | **PASS** — `SB_TC_EXIT=0`, `tsc --noEmit` silent |
+| 2 | `pnpm --filter @patina/designer-portal type-check` | **PASS** — `TC_EXIT=0`, `tsc --noEmit` silent |
+| 3 | `pnpm --filter @patina/designer-portal lint` | **EXIT 1, unchanged** — `✖ 205 problems (2 errors, 203 warnings)`; the two errors are `piece-room-save-gate.test.tsx:159` (`import/first` rule not found) and `use-commercial-documents.test.ts:930` (`rules-of-hooks`), both in files this branch never opens and both present on `main`. Not fixed, per brief. |
+| 4 | `pnpm --filter @patina/designer-portal test -- src/components/document/approvals/ src/components/document/__tests__/red-letter-zone.test.tsx src/components/document/__tests__/signed-stamp.test.tsx src/lib/document/__tests__/desk-derivation.test.ts src/lib/document/__tests__/proposal-watch-derivation.test.ts` | **PASS** — `Test Suites: 7 passed, 7 total · Tests: 182 passed, 182 total` (179 + the three added here) |
+| 5 | `pnpm --filter @patina/designer-portal test -- 'src/app/\(document\)/doc/\[id\]/page.test.tsx'` | **PASS** — `1 passed · 101 passed` (parens escaped, per R3) |
+| 6 | `pnpm --filter @patina/supabase test -- src/hooks/__tests__/use-project-approvals.test.ts` | **PASS** — `Test Files 1 passed (1) · Tests 21 passed (21)` (19 + the two added here) |
+
+## Files (fix pass 3)
+
+- `apps/designer-portal/src/components/document/approvals/project-approval-model.ts`
+- `apps/designer-portal/src/components/document/approvals/project-approval-model.test.ts`
+- `apps/designer-portal/src/components/document/approvals/project-approval-document.tsx`
+- `apps/designer-portal/src/components/document/approvals/project-approval-document.test.tsx`
+- `apps/designer-portal/src/components/document/approvals/gate-anatomy.tsx` (one doc comment)
+- `apps/designer-portal/src/components/document/approvals/approvals-region-head.test.tsx` (dead mock removed)
+- `packages/supabase/src/hooks/use-project-approvals.ts`
+- `packages/supabase/src/hooks/__tests__/use-project-approvals.test.ts`
+
+No file was reformatted wholesale — `git diff --stat` for this pass is
+`8 files changed, 227 insertions(+), 53 deletions(-)`, and every hunk is one of
+the changes described above. No migration minted, no production mutation, nothing
+pushed.
+
+## Still open, and not this pass's to close
+
+Per the brief, only G-01, G-02 and the supersede `p_why` were in scope. Untouched
+and still owed at integration, all from R3: **G-03** (the helper sentence and the
+live count share one `aria-live` element), **G-05** (four SIGNED mark geometries
+across the two portals — a lockstep call, or the split in writing), **G-08** (the
+deploy order, migrations before portals, wants a line in the wave report),
+**G-09** (−1.1° and no aging step against a source doc that says −2° and ages),
+**G-13** (nothing on the composer says the why is optional), **G-14** (a 200-unit
+slice can split a surrogate pair). The W1 `client-note-composer.test.tsx` clock
+failure is still the integration steward's, per the ruling.
+
+**One thing the steward should check at integration:** whether 00569 emits
+`whyAuthorName` as a full display name or as a given name. This lane now renders
+whatever arrives, verbatim, per the ruling — so whichever it is, the email, the
+Threshold and the iOS row must render the same string, and the ruling's "verbatim"
+only holds if all four read the one key without reshaping it.
