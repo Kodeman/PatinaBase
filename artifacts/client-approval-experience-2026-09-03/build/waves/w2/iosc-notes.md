@@ -520,3 +520,179 @@ The first two commits of this round were made, then `git reset --mixed` and
 remade with explicit `--` pathspecs: `git commit` without a pathspec had swept
 the already-staged migration deletion into the stamp-pigment commit. The tree is
 identical; the record is not, and the record is the point.
+
+---
+
+# Fix round 2 — 2026-09-05
+
+Branch `approvals/w2-iosc`, from review head `359c24072`. Answering
+`iosc-review-r2.md`'s two new majors: **IOSC2-R2-01** (the change note is
+write-only on iOS) and **IOSC-R2-02** (the muted stamps' word is drawn in a
+4.2:1 ink).
+
+`git status --short` at the start of the round listed only eight `.env*`
+paths as `Operation not permitted` — the harness sandbox refusing to READ
+them, not a modification; `git diff --stat HEAD` reported them as deletions
+for the same reason. No leftover work from the usage-limit stop: the tree was
+clean at `359c24072` and nothing was discarded.
+
+## IOSC2-R2-01 · the note lands on the approval AND is read back there
+
+The destination was right and stayed. What was missing was the read: `grep -rn
+"decision_comments" apps/mobile/Patina/Patina` returned one statement, the
+INSERT, and no SELECT anywhere in the app.
+
+**`ApprovalDiscussion`** (new, `Features/Decisions/Services/`) is that read —
+`decision_comments` filtered on `decision_id`, ordered `created_at` ascending,
+which is `useDecisionComments`' own query (`use-decisions.ts:963-967`) with
+the same filter and the same order. RLS admits her: 00467:248's
+`decision_comments_participant_select` grants SELECT to any `authenticated`
+caller `app_private.is_decision_comment_client` accepts, which for a
+`project_artifact_v1` row resolves the authority snapshot's
+`decision_lead_id`. The model carries the rows, whether the read was refused,
+and who "You" is (`AuthService.shared.currentUserId`, read at load time so an
+account switch cannot leave a previous reader attributing the rows). It is a
+READ and nothing else — a second composer here would be a second rail into the
+table `IOSC-02` narrowed to one, and the change-note composer above the doors
+stays the only place a note is written on this surface.
+
+**`ApprovalDiscussionBlock`** (new, `Features/Decisions/Views/`) draws it,
+mounted by `ProjectApprovalBlock` beneath the three doors. Deliberately quiet:
+an approval with no notes draws no heading and no empty state. A read that
+FAILED is named — "These notes couldn't be read just now." — because silence
+over a thread she can see on her laptop is the same defect one layer down.
+Attribution is `approval-ask.tsx`'s `studioHand` ported unchanged: "You" for
+her own hand, otherwise `{Designer} · {Studio}` and "The studio" where either
+half is missing (`P-11` reduced).
+
+**The reread is keyed on `isSubmitting`, not on the outcome.** This is the
+whole of why the fix works. `submitApprovalResponse` records the outcome, THEN
+writes the note, and only then clears `isSubmitting` (the `defer`), so
+`approvalDiscussionKey` — `"{decisionId}#{!isSubmitting && hasAnswered}"` —
+moves exactly once, after the note is on the server. Keyed on
+`answeredOutcome` the `.task(id:)` would refire between `record(outcome)` and
+`sendChangeNoteIfWritten()` and reread a thread the note had not reached.
+`theRereadWaitsForTheNote` pins both edges by capturing the key from inside
+the note seam.
+
+**`noteHelp` is unchanged and is now simply true**: the note goes to the
+designer with the returned edition, and she can see it sitting there.
+
+### One structural consequence, taken deliberately
+
+`ProjectApprovalBlock` hit SwiftLint's 300-line `type_body_length` at 324
+(lint-delta caught it, RED, before the commit). The discussion moved to its
+own file rather than being squeezed — and **`ProjectApprovalActTests
+.theStage2BranchHasNoStatusColour` grew a third argument** so the branch-wide
+refusal still covers every view the branch draws. That test's own doc said
+"These two files ARE the branch"; it now says three, and says that a fourth
+file is a fourth argument rather than an exception. Widening the refusal was
+not optional: a new view on the Stage-2 branch outside it is exactly how a
+status colour gets back in.
+
+## IOSC-R2-02 · the muted stamps' word
+
+`Stamp.mutedInk` was `Text.muted` — `agedOak` #8B7355, the metadata value at a
+hundred sites, measured at 4.20:1 on paper and 4.02:1 on a card against the
+4.5:1 bar `ContrastTests.bodyTextClearsAA` applies to text in that same file.
+It is now `PatinaColors.oakInk` #4E4339 — the portals' `--text-muted`
+(`designer-portal/src/app/globals.css:80`), byte-identical, which is what the
+ceremony table named all along — with `DarkPalette.textMuted` as its dark
+companion. `Pigment.lightInkHex` for `.muted` follows (`8B7355` → `4E4339`),
+so `PatinaStampTests`' resolved-sRGB pin moves with it.
+
+`agedOak` itself is untouched. Every one of its other call sites is
+de-emphasised metadata taking the 3:1 bar; darkening the token would have
+moved all of them, and `ContrastTests.metaTextClearsTheMetaBar` is what keeps
+it honest there.
+
+**The gap that let it through is closed too.** The previous round extended
+`ContrastTests` to measure `pigment.rule` for every pigment and `pigment.ink`
+for none. `everyStampWordStaysReadable` now measures all SIX word inks on both
+grounds in both appearances at the 4.5:1 text bar — at full ink, because
+`PatinaStamp.words` applies no opacity and the word never ages — and
+`theMetadataInkStillCannotCarryTheWord` is the counterfactual, so "the
+metadata token was fine" is met with the number rather than an opinion.
+All twenty-four measurements pass on this lane's simulator; each failure
+message carries the real resolved ratio, so the next drift arrives as a
+number.
+
+## Findings NOT addressed (out of this fix brief's scope)
+
+The r2 minors and nits stand for the steward: IOSC-R2-03 (three states with no
+mount, `.reviewed` among them), IOSC-R2-04 (the signer's name in mono caps),
+IOSC-R2-05 (the two sublabels the table specifies), IOSC-R2-06 (the retry's
+second idempotency key), IOSC-R2-07 (`canRespond` wants `&& viewerAnswers`
+after the iosc/iosd merge), IOSC-R2-08 (lint-delta's window excludes
+PatinaDesignKit), IOSC-R2-09 (an unreachable rowLabel under the mark),
+IOSC-R2-N1..N3, and every r1 minor still open (IOSC-06..18). Two of the
+steward's five items are untouched by this round and still owed: **the `why`
+renders nowhere on iOS** (00569 freezes it; neither iOS lane claimed P-13),
+and **the walker** on the three things no test can reach.
+
+`IOSC-R2-08` is worth one line of evidence rather than a promise: I ran
+SwiftLint directly over the two design-kit files this round touches
+(`PatinaStamp.swift`, `PatinaColors.swift`) with the project config. Four
+warnings, all `identifier_name` on the `Color(hex:)` parser's `r`/`g`/`b`/`a`
+at `PatinaColors.swift:350`, all pre-existing and untouched. No lint debt is
+owed; the gate simply cannot see it.
+
+## Gates — fix round 2, on this lane's simulator, unsandboxed
+
+```
+$ IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE .../ios-gate.sh all
+** BUILD SUCCEEDED **
+━ Test run with 2537 tests in 276 suites passed after 7.873 seconds
+  with 2 known issues.
+** TEST SUCCEEDED **
+✓ lint-delta: no new warnings in touched files
+```
+
+The two known issues are the pre-existing pair inherited from Wave 1
+(`BrandVoiceLintTests` "curated_mix", `RoomLifecycleTests
+.theTodayRailFollowsALocalDelete`).
+
+The FIRST `unit` run of this round reported the load flake a third time —
+`CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves`, at
+2537 tests. Rerun with the four touched suites beside it on the same
+simulator, it passes:
+
+```
+$ xcodebuild test … -only-testing:PatinaTests/ApprovalDiscussionTests \
+    -only-testing:PatinaTests/ContrastTests -only-testing:PatinaTests/PatinaStampTests \
+    -only-testing:PatinaTests/ProjectApprovalDoorsTests \
+    -only-testing:PatinaTests/CompanionCoachingModelTests
+✔ Test introGate_freshUser_pollsUntilTourResolves() passed after 0.091 seconds.
+✔ Test run with 74 tests in 5 suites passed after 0.095 seconds.
+** TEST SUCCEEDED **
+```
+
+It also passed inside the full `all` run above, which is the tree that is
+committed. Nothing in this branch touches it.
+
+`lint-delta main` was RED once, before the split, and is green now:
+
+```
+✗ lint-delta: NEW SwiftLint warnings in touched files:
+    Patina/Features/Decisions/Views/ProjectApprovalBlock.swift: 0 → 1
+      → Type Body Length Violation: currently spans 324 lines (limit 300)
+```
+
+**Lesson for the steward, alongside round 1's `identifier_name` one:** on this
+rail the file-length walls are load-bearing design constraints, not
+housekeeping. `DecisionsViewModel.swift` is at 495 of 500 — which is why the
+discussion's state is a screen-local `@Observable` rather than three more
+stored properties on the view model — and `ProjectApprovalBlock` is now at 270
+of a 300-line type body. The next lane to add a leg to this ceremony gets a
+file split, not a hunk.
+
+The wave adds **12 tests in 1 new suite** this round (2525 → 2537, 275 → 276):
+`ApprovalDiscussionTests` (10) plus 2 in `ContrastTests`.
+
+## Commits — round 2
+
+```
+fix(ios): the muted stamps write in an ink that can be read (IOSC-R2-02)
+fix(ios): the note she writes is on the approval she is reading (IOSC-R2-01)
+docs(approvals): W2 iOS-C fix round 2 — the two majors
+```
