@@ -12,6 +12,9 @@ import Foundation
 
 enum ProjectApprovalFixture {
 
+    /// The one decision every fixture below is about.
+    static let decisionId = "a0000000-0000-0000-0000-0000000009e1"
+
     // MARK: - The wire shape
 
     /// Decoded from the RPC's own JSON rather than constructed, so this pins
