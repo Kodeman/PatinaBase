@@ -48,6 +48,14 @@ export interface ProjectApprovalReview {
   artifactChecksum: string;
   artifactTitle: string;
   question: string;
+  /**
+   * P-13 — the designer's one-line why, frozen into the artifact snapshot at
+   * compose time. Null on every artifact minted before the column existed, and
+   * on any approval whose composer left the (optional) field empty. Optional on
+   * the interface until the projection carries the column on every surface —
+   * `parseProjectApprovalReview` always sets it, to null when absent.
+   */
+  why?: string | null;
   context: string | null;
   dueAt: string;
   costCentsDelta: number;
@@ -86,6 +94,8 @@ export interface ProjectDecisionAuthority {
 export interface ProjectApprovalCreatePayload {
   title: string;
   question: string;
+  /** P-13 — optional, at most 200 characters, frozen with the artifact. */
+  why?: string | null;
   context?: string | null;
   dueAt: string;
   phaseId: string;
@@ -307,6 +317,7 @@ export function parseProjectApprovalReview(
     artifactChecksum: stringValue(row, 'artifactChecksum', label),
     artifactTitle: stringValue(row, 'artifactTitle', label),
     question: stringValue(row, 'question', label),
+    why: nullableString(row, 'why'),
     context: nullableString(row, 'context'),
     dueAt,
     costCentsDelta: numberValue(row, 'costCentsDelta', label),
@@ -559,8 +570,9 @@ export function useCreateProjectApproval() {
         payload: ProjectApprovalCreatePayload;
         idempotencyKey: string;
       },
-    ) =>
-      parseActionResult(
+    ) => {
+      const why = input.payload.why?.trim() ?? '';
+      return parseActionResult(
         await runRpc('create_project_approval_decision', {
           p_project_id: input.projectId,
           p_payload: {
@@ -576,9 +588,13 @@ export function useCreateProjectApproval() {
             scheduleDaysDelta: input.payload.scheduleDaysDelta,
             leadTimeDaysDelta: input.payload.leadTimeDaysDelta,
           },
+          // P-13 — the key is omitted entirely when there is no why, so the
+          // call still matches the pre-`p_why` RPC signature.
+          ...(why ? { p_why: why } : {}),
           p_idempotency_key: input.idempotencyKey,
         }),
-      ),
+      );
+    },
   );
 }
 

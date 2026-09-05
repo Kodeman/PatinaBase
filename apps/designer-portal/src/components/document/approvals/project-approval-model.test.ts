@@ -1,8 +1,11 @@
 import {
   eligibleSupersessionCandidates,
+  givenName,
   parseSignedDelta,
   projectApprovalActions,
   toFutureDueAt,
+  whyRemainingLine,
+  WHY_MAX_LENGTH,
 } from './project-approval-model';
 import type {
   ProjectApprovalArtifactCandidate,
@@ -111,5 +114,43 @@ describe('project approval authoring rules', () => {
     expect(eligibleSupersessionCandidates(review, candidates)).toEqual([
       candidates[2],
     ]);
+  });
+});
+
+describe("P-13 — the designer's one-line why", () => {
+  const filled = (length: number) => 'x'.repeat(length);
+
+  it('says nothing until the cap is close', () => {
+    expect(whyRemainingLine('')).toBeNull();
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 21))).toBeNull();
+  });
+
+  it('counts in words, never in figures, once twenty characters remain', () => {
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 20))).toBe(
+      'Twenty characters left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 2))).toBe(
+      'Two characters left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 1))).toBe(
+      'One character left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH))).toBe(
+      'No characters left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH + 5))).toBe(
+      'No characters left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 3))).not.toMatch(/\d/);
+  });
+
+  it('signs with a given name and nothing more, and signs nothing without one', () => {
+    expect(givenName('Leah Kochaver')).toBe('Leah');
+    expect(givenName('  Leah  ')).toBe('Leah');
+    expect(givenName('Leah van der Berg')).toBe('Leah');
+    expect(givenName('')).toBeNull();
+    expect(givenName('   ')).toBeNull();
+    expect(givenName(null)).toBeNull();
+    expect(givenName(undefined)).toBeNull();
   });
 });

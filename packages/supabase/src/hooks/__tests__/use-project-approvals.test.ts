@@ -241,6 +241,22 @@ describe('project approval sanitized reads', () => {
     ).toEqual(expect.objectContaining({ authorityRevision: null }));
   });
 
+  it('reads the frozen why, and stays null on an artifact minted before the column', () => {
+    expect(
+      parseProjectApprovalReview({
+        ...REVIEW,
+        why: 'The walnut is the only piece that holds the room.',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        why: 'The walnut is the only piece that holds the room.',
+      }),
+    );
+    expect(parseProjectApprovalReview({ ...REVIEW, why: undefined })).toEqual(
+      expect.objectContaining({ why: null }),
+    );
+  });
+
   it('requires the server-projected overdue condition instead of using a client clock', () => {
     expect(() =>
       parseProjectApprovalReview({ ...REVIEW, isOverdue: undefined }),
@@ -318,6 +334,70 @@ describe('project approval authority and lifecycle RPCs', () => {
       }),
       p_idempotency_key: 'create-1',
     });
+  });
+
+  it('carries the composer why to the RPC as p_why', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const mutation =
+      useCreateProjectApproval() as unknown as MutationConfig<any>;
+
+    await mutation.mutationFn({
+      projectId: 'project-1',
+      idempotencyKey: 'create-why',
+      payload: {
+        title: 'Budget checkpoint',
+        question: 'Approve this exact budget checkpoint?',
+        why: '  The walnut is the only piece that holds the room.  ',
+        dueAt: '2026-09-01T12:00:00.000Z',
+        phaseId: 'phase-1',
+        artifactKind: 'budget_version',
+        artifactId: 'artifact-1',
+        costCentsDelta: 0,
+        scheduleDaysDelta: 0,
+        leadTimeDaysDelta: 0,
+      },
+    });
+
+    expect(rpc).toHaveBeenCalledWith(
+      'create_project_approval_decision',
+      expect.objectContaining({
+        p_why: 'The walnut is the only piece that holds the room.',
+      }),
+    );
+  });
+
+  it('omits p_why entirely when no why was written, so the old signature still takes the call', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const mutation =
+      useCreateProjectApproval() as unknown as MutationConfig<any>;
+
+    for (const why of [undefined, null, '   ']) {
+      rpc.mockClear();
+      await mutation.mutationFn({
+        projectId: 'project-1',
+        idempotencyKey: 'create-no-why',
+        payload: {
+          title: 'Budget checkpoint',
+          question: 'Approve this exact budget checkpoint?',
+          why,
+          dueAt: '2026-09-01T12:00:00.000Z',
+          phaseId: 'phase-1',
+          artifactKind: 'budget_version',
+          artifactId: 'artifact-1',
+          costCentsDelta: 0,
+          scheduleDaysDelta: 0,
+          leadTimeDaysDelta: 0,
+        },
+      });
+
+      expect(Object.keys(rpc.mock.calls[0][1])).not.toContain('p_why');
+    }
   });
 
   it('binds review confirmation to the frozen revision and SHA-256 artifact', async () => {

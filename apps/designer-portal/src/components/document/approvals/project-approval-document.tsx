@@ -12,6 +12,7 @@ import {
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
+import { useAuth } from '@/hooks/use-auth';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
@@ -38,15 +39,19 @@ import {
   GatePartBlock,
   GatePlain,
   GateQuestion,
+  GateWhy,
 } from './gate-anatomy';
 import {
   eligibleSupersessionCandidates,
   formatGateImpact,
   gateScope,
+  givenName,
   newApprovalIdempotencyKey,
   parseSignedDelta,
   projectApprovalActions,
   toFutureDueAt,
+  whyRemainingLine,
+  WHY_MAX_LENGTH,
 } from './project-approval-model';
 import {
   FOCUS_PROJECT_APPROVAL_EVENT,
@@ -76,6 +81,8 @@ export interface ProjectApprovalPhase {
 interface ApprovalFormState {
   title: string;
   question: string;
+  /** P-13 — the composer's first field. Optional; capped at WHY_MAX_LENGTH. */
+  why: string;
   context: string;
   dueAt: string;
   phaseId: string;
@@ -86,7 +93,9 @@ interface ApprovalFormState {
   idempotencyKey: string;
 }
 
-interface SupersedeState extends Omit<ApprovalFormState, 'phaseId'> {
+/** P-13 carries the why on the composer only; `supersede_project_approval_decision`
+ *  takes no `p_why` this wave, so the superseding form does not offer one. */
+interface SupersedeState extends Omit<ApprovalFormState, 'phaseId' | 'why'> {
   decisionId: string;
 }
 
@@ -101,6 +110,7 @@ function emptyForm(): ApprovalFormState {
   return {
     title: '',
     question: '',
+    why: '',
     context: '',
     dueAt: '',
     phaseId: '',
@@ -205,6 +215,7 @@ export function ProjectApprovalDocument({
    *  destination the band's line 2 presses); null leaves `New approval`. */
   quietLeader?: { label: string; onAct: () => void } | null;
 }) {
+  const { user } = useAuth();
   const approvalsQuery = useProjectApprovals(projectId);
   const candidatesQuery = useProjectApprovalArtifactCandidates(projectId);
   const authorityQuery = useProjectDecisionAuthority(projectId);
@@ -359,6 +370,7 @@ export function ProjectApprovalDocument({
         payload: {
           title,
           question,
+          why: form.why.trim() || null,
           context: form.context.trim() || null,
           dueAt: toFutureDueAt(form.dueAt),
           phaseId: form.phaseId,
@@ -500,6 +512,12 @@ export function ProjectApprovalDocument({
   };
 
   const composerArtifact = findArtifact(candidates, form.artifactValue);
+  // P-13 — the live count, in words, only once the cap is close.
+  const whyRemaining = whyRemainingLine(form.why);
+  // The frozen why is signed with the studio hand reading it. There is no
+  // author on the projection yet, so a co-member reading a peer's approval
+  // sees her own given name here; widen when the projection carries one.
+  const designerGivenName = givenName(user?.name);
 
   const decisionLeadId = authority?.decisionLeadId ?? null;
   const decidedCount = approvals.filter(isSealed).length;
@@ -743,6 +761,31 @@ export function ProjectApprovalDocument({
           <h3 className="font-heading text-[18px] text-[var(--color-charcoal)]">
             Draft an exact review request
           </h3>
+
+          {/* P-13 — her sentence comes first, before the anatomy. It sits
+              outside the six parts on purpose: a gate has six and no more. */}
+          <div className="mt-4 min-w-0">
+            <Field
+              label="What would you tell her about this?"
+              id="approval-why"
+            >
+              <textarea
+                id="approval-why"
+                rows={2}
+                className={INPUT}
+                maxLength={WHY_MAX_LENGTH}
+                value={form.why}
+                aria-describedby="approval-why-help"
+                onChange={(event) =>
+                  updateForm({ why: event.target.value.slice(0, WHY_MAX_LENGTH) })
+                }
+              />
+            </Field>
+            <p id="approval-why-help" aria-live="polite" className={META}>
+              One line. She reads it under the question.
+              {whyRemaining ? ` ${whyRemaining}` : ''}
+            </p>
+          </div>
 
           <GateCeremony label="Gate anatomy">
             <GateFieldset part="artifact">
@@ -1035,6 +1078,11 @@ export function ProjectApprovalDocument({
 
                     <GatePartBlock part="question">
                       <GateQuestion>{review.question}</GateQuestion>
+                      {review.why && (
+                        <GateWhy attribution={designerGivenName}>
+                          {review.why}
+                        </GateWhy>
+                      )}
                     </GatePartBlock>
 
                     <GatePartBlock part="scope">

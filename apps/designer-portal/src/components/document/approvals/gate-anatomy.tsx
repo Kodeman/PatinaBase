@@ -143,6 +143,33 @@ export function GateQuestion({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * P-13 — the designer's frozen one-line why, under the question it belongs to.
+ * It is her sentence, not the system's, so it is set in the reading face and
+ * signed with a given name; without a name it stands unsigned rather than
+ * borrowing one.
+ */
+export function GateWhy({
+  children,
+  attribution,
+}: {
+  children: ReactNode;
+  attribution: string | null;
+}) {
+  return (
+    <div className="mt-2 min-w-0" data-gate-why>
+      <p className="min-w-0 break-words font-heading text-[15px] italic leading-relaxed text-[var(--text-body)]">
+        {children}
+      </p>
+      {attribution && (
+        <p className="mt-1 min-w-0 break-words font-heading text-[13px] italic text-[var(--text-muted)]">
+          {`\u2014 ${attribution}`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** SCOPE / AUTHORITY — plain sentences at the body floor. */
 export function GatePlain({ children }: { children: ReactNode }) {
   return (
