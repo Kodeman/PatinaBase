@@ -567,3 +567,208 @@ The signed walk app was rebuilt from this worktree after the last iOS change: `x
    as the ceremony, so the refusal was applied rather than recorded as an exception.
 4. **The lapsed-approval sentence is new client-facing copy.** It says the approval closed and that
    the designer can send it again; nothing on the row knows when, and it does not pretend to.
+
+---
+
+## Final fixes — the round-2 walk findings, closed (2026-09-05)
+
+Branch `approvals/w2-integration`, worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-integration`. Nine commits over
+`3428dca48`; head **`96fd71c89`**. No push, no production mutation, no migration — the wave's one
+migration is still 00569, and the local ledger already carried it (`00571, 00569, 00568, 00567`),
+so the stack was not reset.
+
+| # | Commit | What it closes |
+|---|---|---|
+| 1 | `805ef7830` | `W2R2-M1` — the Studio hub counts through the projection |
+| 2 | `8cfc27cdd` | `W2R1-m1`, `W2R1-m2`, `W2R1-n2`, `W2R2-n2`, `W2R2-n1` |
+| 3 | `300dd15f1` | `W2-01` — the swing, and P-19 on the door receipt |
+| 4 | `fa98d4695` | `W2-02` (web), `W2-04` / `W2-n5`, `W2-05` |
+| 5 | `b74709af4` | `W2-03`, `W2-06` |
+| 6 | `71ad61d4d` | `W2-02` (iOS half) |
+| 7 | `7f79cc111` | `W2-01` follow-on — an unmount releases the held-back refetch |
+| 8 | `a457c8fde` | lint-delta: `LoadStateHonestyTests` back under `file_length` |
+| 9 | `96fd71c89` | the acts dock's own measuring hook, asserted |
+
+### iOS
+
+**`W2R2-M1` — the Studio hub never counted a Stage-2 approval.** `StudioHubViewModel
+.fetchDecisions()` was `DecisionsAPIClient.listPending()`, a PostgREST read on `client_decisions`,
+and 00467 hides every Stage-2 row from the homeowner behind it — so the hub read "Three approvals
+are waiting on you" over six open ones, and a homeowner whose only open asks are approvals got no
+Awaiting-you row at all. The hub now fetches `list_my_project_decision_reviews` beside
+`listPending()` and folds both through `BadgeCountService.mergedDecisions`, the same merge Today and
+"Awaiting your call" already read. Three surfaces, one set. `StudioLoadResult` carries the
+projection but does **not** count it as a failure source of its own: it is the second half of one
+feed, and `mergedDecisions` gives a failed half the same degrade `held` gives every other source —
+the rows it last returned. Two behaviour tests (the hub's number equals Today's merged set; an
+approvals-only homeowner gets a row) plus a source pin naming the third caller.
+
+**`W2R1-m1` — one name, once.** The placeholder keeps the designer's given name ("Tell Leah what to
+change."); `noteHelp` stops naming anyone — "Optional. Your note goes with this returned edition."
+
+**`W2R1-m2` — the seal names the studio.** `whatHappensNext(studio:)` falls back to "Your studio",
+and the resolver behind it (`countersigningStudio` → **`signingStudio`**) no longer hands over
+`designer?.displayName` when `business_name` is empty. Nil is the honest answer and the copy has a
+general for it. The identifier was renamed with the sentence: "countersign" is retired in the app
+outside one historical comment.
+
+**`W2R1-n2` — the refused signature is body ink** (`PatinaColors.Text.secondary`), not
+`Text.error`. It was the only red sentence left in the ceremony.
+
+**`W2R2-n2` — the studio's terms are printed as the studio wrote them.**
+`PaymentTermsDisplay.label` humanizes a slug (underscore, no whitespace) and returns anything else
+verbatim, so "Fifty percent on signature." stops arriving at the sign act as "Fifty Percent On
+Signature." `net_45` still reads "Net 45".
+
+**`W2R2-n1` — the seal arrives without the slide under Reduce Motion.** The stamp's settle was
+already a measured cross-fade; the `.fullScreenCover` carrying it was not, because a cover's
+presentation is the system's and cross-fades only under *Prefer Cross-Fade Transitions* (off by
+default). `ProposalDetailView` reads `accessibilityReduceMotion` and disables the presentation's
+animations itself.
+
+**`W2-02`, iOS half.** `respondToProjectApproval` sent no consent method without a signature, so a
+Return or a Hold left the column NULL — the ruling's "the equivalent on iOS" was not being sent.
+It now sends `ProjectApprovalConsent.clickThrough`.
+
+### Web
+
+**`W2-01` — the door never swung, and the receipt was unreachable.** `onSign` awaited
+`invalidateSignedCommercialDocument` before it set `signedAt` or started the swing; that refetch
+takes the signed paper out of the papers the Threshold draws doors from, so `renderDoor` answered
+null and the section unmounted ~40 ms after the POST. The swing now starts on the response and runs
+on this component's own state; the invalidation waits the 520 ms out and goes last, and a refetch
+that fails after a signature that landed is no longer reported as a refusal. An unmount **releases**
+that wait rather than cancelling it, so the refetch still happens. Ordering is pinned by a test that
+holds the invalidation open: the leaf is `swinging` and the receipt is drawn with
+`invalidateSignedCommercialDocument` not yet called.
+
+And the receipt carries the ruled P-19 sentence — `{Studio} has your signature. You'll have a copy.`
+— in place of `{studio} countersigns`, on every kind of paper the door takes, trade scope included.
+
+**`W2-02` — Return and Hold record a consent method.** `clientConsentMethod` was sent only with a
+signature. It is now always sent. **The token is `click_through`, not `portal_clickthrough`:**
+`client_decisions_client_consent_method_check` allows exactly `electronic_signature`,
+`click_through`, `paper`, and `_respond_project_approval_checked` (00569:1312) allowlists the first
+two — `portal_clickthrough` would have been refused outright and cost a homeowner her Return. That
+spelling belongs to the review leg (`confirm_project_decision_review`), which is untouched. The
+ruling's meaning — never NULL, a press and hold is a click-through — is what shipped.
+
+**`W2-04` / `W2-n5` — the maker's mark leaves the on-screen plate.** R6 keeps the twelve characters
+for the printed Record of Decision (Wave 3, P-26). On screen it was the doorstep's last serious axe
+violation (`#938B83` on `#FAF7F2`, 3.13:1, 11 nodes) and `aria-hidden`, so it was a string sighted
+readers could see and screen readers could not. The plate keeps its frame, its title and its
+edition line.
+
+**`W2-05` — the discussion landmark names its own approval.** `aria-label="Discussion about
+{artifactTitle}"` replaces an `aria-labelledby` pointing at a heading whose words ("The discussion")
+are identical on all thirteen. The heading a reader sees is unchanged.
+
+**`W2-03` — the hold's retreat is stilled too.** `.da-hold[data-hold-state='idle'] .da-pool` is
+(0,3,0); `.da-hold-still .da-pool` and the `prefers-reduced-motion` block were (0,2,0), so the idle
+transition won whatever the order and the pool animated back over 180 ms for a reader who had turned
+motion off. Both blocks now name the idle state at a weight that wins.
+
+**`W2-06` — the door's other four acts dock.** At 390×844 with Sign docked at y=751 they sat at
+y=840 and y=896; the clearance (`max-[600px]:pb-16`) was what put them there. They now dock as a
+compact row riding 61 px up — the primary dock's own height (44 px act + 2×8 px padding + its 1 px
+rule) — directly on top of it. `DoorActs` returns a fragment so the sticky box is a direct child of
+the leaf (a sticky box is constrained by its parent, and a wrapper its own height pins nothing) and
+holds nothing but the row: the unfolded panels are siblings, or they would be pinned to the bottom
+edge with it. `data-acts-dock` mirrors `[data-hold-dock]` so a walk can measure both.
+
+**Cross-check.** `grep -rn countersign apps/client-portal apps/mobile` — nothing left in the
+homeowner copy this program owns. What remains is the design-services agreement's, and it is
+substantiated: see advisory 1.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE …/scripts/ios-gate.sh all` | **PASS**, exit 0 — `** BUILD SUCCEEDED **`, `Test run with 2639 tests in 285 suites passed after 8.262 seconds with 2 known issues`, `** TEST SUCCEEDED **`, `✓ lint-delta: no new warnings in touched files` |
+| `pnpm --dir … --filter @patina/client-portal type-check` | **PASS** — `tsc --noEmit`, no output |
+| `pnpm --dir … --filter @patina/client-portal test` | **PASS** — 119 suites, **1681** tests (1677 before) |
+| `pnpm --dir … --filter @patina/supabase type-check` | **NOT RUN, and not owed** — no hook changed; the whole diff is under `apps/` |
+| migrations / edge functions / designer portal | **NOT RUN, and not owed** — none touched |
+
+The two known issues are the same pre-existing pair the last pass recorded: `BrandVoiceLintTests`
+("curated_mix") and `RoomLifecycleTests.theTodayRailFollowsALocalDelete`.
+
+The gate ran three times and only the third is the pass above. The first was killed by the sandbox
+(`xcodebuild: error: Could not resolve package dependencies: error: permissionDenied`, plus
+`CoreSimulatorService connection refused`) — every xcodebuild invocation has to run unsandboxed. The
+second was green on build and unit and failed lint-delta alone
+(`PatinaTests/LoadStateHonestyTests.swift: 0 → 1`): the fixture's new `approvals:` argument put the
+file at 501 lines against SwiftLint's 500. `a457c8fde` folds it onto the `decisions` line.
+
+### The walk app, rebuilt
+
+```
+xcodebuild build -scheme Patina -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath …/apps/mobile/Patina/.build/DerivedDataWalk
+  ** BUILD SUCCEEDED **   (exit 0)
+```
+
+Signing left ON. `codesign -dv`:
+
+```
+Executable=…/DerivedDataWalk/Build/Products/Debug-iphonesimulator/Patina.app/Patina
+Identifier=cloud.patina.app
+Format=app bundle with Mach-O universal (x86_64 arm64)
+CodeDirectory v=20400 size=425 flags=0x2(adhoc) hashes=3+7 location=embedded
+Signature=adhoc
+Info.plist entries=39
+TeamIdentifier=not set
+Sealed Resources version=2 rules=10 files=61
+```
+
+`codesign --verify --verbose=2` → *valid on disk*, *satisfies its Designated Requirement*.
+`Patina.debug.dylib` stamped 2026-09-05 17:07 and carrying this pass's code — `strings` finds
+`Your studio` (4), `has your signature` (2), `Optional. Your note goes with this returned edition.`
+(2), `click_through` (2), and **no** `Your designer has your signature`.
+
+**walkAppPath**:
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-integration/apps/mobile/Patina/.build/DerivedDataWalk/Build/Products/Debug-iphonesimulator/Patina.app`
+
+### Advisories from this pass
+
+1. **"Countersigns" survives on the design-services agreement, and should.**
+   `consent-copy.ts:34,59` ("…my signature alone does not authorize work until the studio
+   countersigns", "The agreement becomes effective only after the studio countersigns") and
+   `commercial-document-shell.tsx` ("Awaiting studio countersignature") describe a second act that
+   is real for that kind — `countersign_design_services_agreement` exists, and the document carries
+   a `client_signed` state waiting on it. The ruling retired the *unsubstantiated* line, which was
+   the door receipt asserting a countersignature on every paper including a trade scope, whose own
+   consent is pinned never to claim one. Removing the DSA copy would make a legal statement of
+   effect false. Flagged for a steward reading rather than deleted.
+2. **`W2-02`'s token diverges from the ruling's wording, not its meaning.** See above: the column
+   and the checked function accept `click_through`; `portal_clickthrough` is the review leg's word.
+   Worth one line of the ruling so a future reader does not "fix" it back.
+3. **`W2-02` was closed on BOTH surfaces**, though the brief listed it under Web. The mid-Wave-2
+   ruling says "portal_clickthrough on web and the equivalent on iOS. Same on both surfaces", and
+   the iOS walk had recorded the NULL as correct. Both now send the method.
+4. **Prettier drift on the client portal is inherited, not introduced.** The pre-commit hook warns
+   (advisory) on `door-gate.tsx`, `approval-ask.tsx`, `door-acts.tsx`, `globals.css` and their
+   suites. Checked against the base commit `3428dca48`: the same files already failed
+   `prettier --check` there. Nothing was reformatted, so the diffs stay readable.
+5. **The seal's studio name is still often absent.** `signingStudio` reads
+   `projects[].designer.business_name`, and the seeded designer carries none — so the walk will read
+   "Your studio has your signature." rather than a name. That is the ruled fallback working, not a
+   defect; a walk that wants the named branch has to seed `business_name`.
+6. **`W2-06`'s 61 px is measured, not derived.** It is the primary dock's height as its classes
+   build it (`min-h-[44px]` + `max-[600px]:py-2` + a 1 px rule). If that dock's padding changes, the
+   acts row's offset has to change with it; the constant is commented at both ends.
+7. **`data-acts-dock` and `[data-hold-dock]` are the two selectors** a narrow-width walk should
+   measure. Both are asserted in their suites.
+
+### What is NOT closed
+
+- **`W2-n1`** (the weighing sentence spells to twenty then prints figures), **`W2-n2`** (the door's
+  four acts carry identical weight), **`W2-n3`** (R11's baseline never renders — no projection
+  carries `costBaselineCents`), **`W2-n4`** (the why is signed with a given name where the ruling
+  says display name), **`W2R1-n3`** (numerals on the Studio hub), **`W2R1-n4`** (the Stage-2 card
+  carries no kind chip). All are nits the walks recorded as outside this round's scope; the
+  numerals are ruled a Wave 3 sweep item (P-24 residue).
+- **The two lock-screen actions** still cannot be driven by the harness (an AX custom action), and
+  the seal's haptic still cannot be observed on a simulator. Both are harness limits, unchanged.
