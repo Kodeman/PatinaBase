@@ -131,17 +131,35 @@ struct ProjectApprovalActTests {
 
     // MARK: - The wire
 
-    @Test("the client reads the client-scoped list RPC, not the studio one")
-    func theClientReadsTheClientScopedList() throws {
+    /// `iosb-B1`. The projection is the homeowner's ONLY door: 00467:18-38
+    /// excludes `project_artifact_v1` from every raw `client_decisions` SELECT
+    /// policy she can reach, so a PostgREST read of the row returns nothing to
+    /// the person being asked.
+    @Test("the client reads the sanitized single-row RPC, not the row and not the studio one")
+    func theClientReadsTheSanitizedProjection() throws {
         let source = try SourcePin.read(
             "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
         )
-        let start = try #require(source.range(of: "public func listProjectApprovalReviews("))
+        let start = try #require(source.range(of: "public func fetchProjectApprovalReview("))
         let body = String(source[start.lowerBound...].prefix(900))
-        #expect(body.contains("callRPC(\"list_my_project_decision_reviews\""))
+        #expect(body.contains("callRPC("))
+        #expect(body.contains("\"get_project_decision_review\", body: [\"p_decision_id\": decisionId]"))
         // `get_project_decision_reviews` is studio-scoped and answers a
-        // homeowner with `insufficient_privilege`.
+        // homeowner with `insufficient_privilege`; `client_decisions` is the
+        // raw table she cannot see a Stage-2 row in at all.
         #expect(!body.contains("get_project_decision_reviews"))
+        #expect(!body.contains("client_decisions"))
+    }
+
+    /// The RPC returns `jsonb`, and NULL for a nonexistent, legacy or
+    /// unauthorized id. Four bytes of `null` are not a decoding failure.
+    @Test("an unauthorized or unknown id decodes as no approval, not as an error")
+    func aNullProjectionIsNotAnError() throws {
+        let source = try SourcePin.readCode(
+            "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
+        )
+        #expect(source.contains("payload != \"null\""))
+        #expect(source.contains("-> RemoteProjectApprovalReview?"))
     }
 
     /// The parameters `use-project-approvals.ts` sends, argument for argument.
@@ -240,8 +258,11 @@ struct ProjectApprovalActTests {
             ProjectApprovalCopy.chooseAgainAction,
             ProjectApprovalCopy.unavailable,
             ProjectApprovalCopy.noImpact,
+            ProjectApprovalCopy.withdrawn,
+            ProjectApprovalCopy.superseded,
             ProjectApprovalCopy.immutability(edition: 2)
         ]
+        strings += ProjectApprovalOutcome.allCases.map(ProjectApprovalCopy.recorded)
         // "AI" is refused as a WORD; as a substring it lives inside "again".
         for refused in ["gate", "task", "dashboard", "overdue"] {
             for line in strings {
@@ -256,18 +277,140 @@ struct ProjectApprovalActTests {
         #expect(ProjectApprovalCopy.submitAction == "Submit response")
     }
 
-    /// No red, no green, no checkmark: the ceremony's own block carries no
-    /// status colour at all.
-    @Test("the approval block draws no status colour and no seal glyph")
-    func theApprovalBlockHasNoStatusColour() throws {
-        let block = try SourcePin.readCode(
+    /// `iosb-M1`. No red, no green, no checkmark — across the WHOLE Stage-2
+    /// branch, not one file of it. The previous pin read the block alone and
+    /// passed green while the screen mounting it drew a sage
+    /// `checkmark.seal.fill` banner from `DecisionDetailView`.
+    ///
+    /// These two files ARE the branch: `DecisionDetailView`'s body draws
+    /// `ProjectApprovalScreen` and nothing else on it (pinned in
+    /// `ProjectApprovalPathTests.aStage2DecisionIsNotAnOptionChoice`), and the
+    /// screen draws the block.
+    @Test("no view on the Stage-2 branch draws a status colour or a seal glyph",
+          arguments: [
+            "Patina/Features/Decisions/Views/ProjectApprovalScreen.swift",
             "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
-        )
+          ])
+    func theStage2BranchHasNoStatusColour(file: String) throws {
+        let source = try SourcePin.readCode(file)
         for banned in [
             "PatinaColors.sage", "PatinaColors.Text.error", "PatinaColors.error",
             "checkmark", "systemName:"
         ] {
-            #expect(!block.contains(banned), "the block draws \(banned)")
+            #expect(!source.contains(banned), "\(file) draws \(banned)")
         }
+    }
+
+    /// …and the sentence the old banner printed is gone from the branch: the
+    /// ask is an approval, and it is never called a decision.
+    @Test("the Stage-2 branch never calls the ask a decision")
+    func theStage2BranchNeverSaysDecision() throws {
+        let screen = try SourcePin.readCode(
+            "Patina/Features/Decisions/Views/ProjectApprovalScreen.swift"
+        )
+        #expect(!screen.contains("You’ve responded to this decision"))
+        #expect(screen.contains("ProjectApprovalCopy.eyebrow"))
+        var strings = [
+            ProjectApprovalCopy.withdrawn,
+            ProjectApprovalCopy.superseded,
+            ProjectApprovalCopy.unavailable,
+            ProjectApprovalCopy.reviewUnavailable
+        ]
+        strings += ProjectApprovalOutcome.allCases.map(ProjectApprovalCopy.recorded)
+        for line in strings {
+            #expect(!line.lowercased().contains("decision"),
+                    "\"\(line)\" calls the approval a decision")
+        }
+    }
+}
+
+/// `P-09`, half three: what the screen says when there is no act left to take.
+/// Split from `ProjectApprovalActTests` only because SwiftLint's 300-line
+/// `type_body_length` is a per-type budget and that suite is at it.
+@MainActor
+struct ProjectApprovalClosureTests {
+
+    // MARK: - The approval that is closed, or already answered
+
+    /// `iosb-M2`. Withdrawn and superseded used to draw nothing at all.
+    @Test("a closed approval says which way it closed")
+    func aClosedApprovalIsNamed() {
+        #expect(
+            ProjectApprovalCopy.withdrawn
+                == "Your designer withdrew this approval. Nothing is being asked of you here."
+        )
+        #expect(
+            ProjectApprovalCopy.superseded
+                == "A later edition has replaced this one. This edition is closed."
+        )
+    }
+
+    /// `iosb-M3`. An answered approval named nothing; the block decoded the
+    /// outcome and never read it. "Returned" is P-16's prose word for
+    /// `changes_requested`; "held" is R8's hold word.
+    @Test("an answered approval names the answer she gave")
+    func anAnsweredApprovalNamesTheOutcome() {
+        #expect(ProjectApprovalCopy.recorded(.approved) == "You approved this edition.")
+        #expect(
+            ProjectApprovalCopy.recorded(.changesRequested)
+                == "You returned this edition for revision."
+        )
+        #expect(
+            ProjectApprovalCopy.recorded(.needsDiscussion)
+                == "You held this edition to talk it through with your designer."
+        )
+    }
+
+    /// …and the answer given in THIS session is named too, before the row has
+    /// been re-read. `submitApprovalResponse` clears the pending choice, so it
+    /// is the recorded one that has to survive.
+    @Test("the outcome just submitted survives to be named")
+    func theSubmittedOutcomeSurvives() async throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review()
+        viewModel.respondToApproval = { _, _, _, _ in }
+
+        viewModel.chooseOutcome(.needsDiscussion)
+        await viewModel.submitApprovalResponse()
+
+        #expect(viewModel.answeredOutcome == .needsDiscussion)
+        #expect(viewModel.hasAnsweredApproval)
+        #expect(viewModel.chosenOutcome == nil)
+    }
+
+    /// The block reads the recorded outcome — it decoded one and never drew it.
+    @Test("the block draws the closed and answered lines where the acts would be")
+    func theBlockDrawsTheClosureLines() throws {
+        let block = try SourcePin.readCode(
+            "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
+        )
+        #expect(block.contains("closureLeg(review)"))
+        #expect(block.contains("review.isWithdrawn"))
+        #expect(block.contains("review.isSuperseded"))
+        #expect(block.contains("viewModel.answeredOutcome ?? review.recordedOutcome"))
+        // Withdrawn and superseded stand ahead of an outcome, the house's own
+        // precedence (`client-attention.ts:55-71`).
+        let withdrawn = try #require(block.range(of: "review.isWithdrawn"))
+        let recorded = try #require(block.range(of: "review.recordedOutcome"))
+        #expect(withdrawn.lowerBound < recorded.lowerBound)
+    }
+
+    // MARK: - Failure copy that is true
+
+    /// `iosb-M5`. Both lines told her to pull down and try again for
+    /// conditions a retry can never fix — a missing frozen authority revision
+    /// is a property of the snapshot, and the same unavailable branch catches
+    /// a caller the projection will never open for.
+    @Test("no failure line promises a retry that cannot help")
+    func noFailureLinePromisesARetry() {
+        for line in [ProjectApprovalCopy.reviewUnavailable, ProjectApprovalCopy.unavailable] {
+            #expect(!line.lowercased().contains("try again"), "\"\(line)\" promises a retry")
+            #expect(!line.lowercased().contains("pull down"), "\"\(line)\" promises a retry")
+        }
+        #expect(
+            ProjectApprovalCopy.reviewUnavailable
+                == "This edition isn’t ready to be confirmed. Your designer has to send it again."
+        )
+        #expect(ProjectApprovalCopy.unavailable == "We couldn’t open this approval.")
     }
 }

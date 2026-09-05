@@ -28,7 +28,17 @@ struct DecisionDetailView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
-                if let decision = viewModel.decision {
+                // P-09: the Stage-2 approval is asked FIRST and drawn whole,
+                // by itself. It has to be first because 00467 hides the
+                // `client_decisions` row from the homeowner being asked, so on
+                // her screen there is no `decision` for the branch below to
+                // find; and it is drawn whole because the pieces below it —
+                // the resolved banner, the option cards, the "Not yet /
+                // Neither of these" pair — all answer a question a Stage-2
+                // approval does not ask.
+                if viewModel.isStage2Approval {
+                    ProjectApprovalScreen(viewModel: viewModel)
+                } else if let decision = viewModel.decision {
                     header(decision)
                     submitFailureBanner(decision)
                     ceremony(decision)
@@ -155,26 +165,19 @@ struct DecisionDetailView: View {
 
     private func header(_ decision: RemoteClientDecision) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            // P-09: "Approval" is the ask. A Stage-2 row is not a choice
-            // between named alternatives, so it is not called a decision.
-            MonoLabel(text: viewModel.isStage2Approval ? ProjectApprovalCopy.eyebrow : "DECISION")
+            MonoLabel(text: "DECISION")
                 .tracking(2)
             Text(decision.title ?? "Decision")
                 .font(PatinaTypography.h2)
                 .foregroundStyle(PatinaColors.Text.primary)
-            // The Stage-2 block prints the designer's context under the
-            // question it belongs to — `client_decisions.context` and
-            // `project_approval_artifacts.context` are the same string (00463).
-            if !viewModel.isStage2Approval,
-               let description = decision.description, !description.isEmpty {
+            if let description = decision.description, !description.isEmpty {
                 Text(description)
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
             }
             // SP-15: "Overdue · Aug 22" reached the Studio hub and stopped
             // there; the decision itself never said it was late.
-            if !viewModel.isResolved, !viewModel.isStage2Approval,
-               let due = DateDisplay.due(decision.due_date) {
+            if !viewModel.isResolved, let due = DateDisplay.due(decision.due_date) {
                 Text(due.text)
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
@@ -362,20 +365,16 @@ struct DecisionDetailView: View {
 /// move to an extension rather than buying a scoped disable.
 extension DecisionDetailView {
 
-    /// Which ceremony this decision gets. One chain, in the order the acts
-    /// exclude each other — the Stage-2 approval first, because a
-    /// `project_artifact_v1` row carries option rows it must never be drawn as.
+    /// Which ceremony a legacy decision gets. One chain, in the order the acts
+    /// exclude each other. A Stage-2 approval never reaches here — the body
+    /// takes it first — because a `project_artifact_v1` row DOES carry option
+    /// rows (one per canonical outcome, which
+    /// `_respond_project_approval_checked` looks up by `approval_outcome`) and
+    /// drawing them offers "Choose this" over `apply_client_decision`, which
+    /// refuses the contract.
     @ViewBuilder
     private func ceremony(_ decision: RemoteClientDecision) -> some View {
-            if viewModel.isStage2Approval {
-                // P-09: a `project_artifact_v1` decision carries one
-                // option row per canonical outcome, so without this
-                // branch first the screen drew three unlabelled option
-                // cards over an act (`apply_client_decision`) that
-                // refuses the contract. It is decided on the DECISION,
-                // not on the projection having loaded.
-                projectApproval
-            } else if viewModel.hasNoRenderableOptions {
+            if viewModel.hasNoRenderableOptions {
                 // SP-17: never a stack of blank, untappable cards.
                 Text(DecisionOptionCopy.allUnavailableLine)
                     .font(PatinaTypography.bodySmall)
@@ -405,11 +404,6 @@ extension DecisionDetailView {
                     optionCard(option)
                 }
             }
-    }
-
-    /// `P-09`: the Stage-2 ceremony, in its own file.
-    private var projectApproval: some View {
-        ProjectApprovalBlock(viewModel: viewModel)
     }
 
     /// SP-17: the two answers a real client gives, alongside the choices.
