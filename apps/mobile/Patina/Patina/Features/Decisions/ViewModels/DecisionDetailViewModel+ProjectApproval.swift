@@ -58,6 +58,25 @@ extension DecisionDetailViewModel {
         !approvalNeedsSignature || canSignApproval
     }
 
+    /// `IOSC-R2-01`. What the discussion under the ceremony is read against.
+    ///
+    /// It changes exactly twice: when the approval lands, and when an act has
+    /// finished recording. The second edge is `isSubmitting` and NOT
+    /// `answeredOutcome`, and the difference is the whole point —
+    /// `submitApprovalResponse` records the outcome, then writes the note,
+    /// and only then clears the flag. A reread keyed on the outcome would race
+    /// the very note it exists to show.
+    var approvalDiscussionKey: String {
+        let settled = !isSubmitting && hasAnsweredApproval
+        return "\(approvalDecisionId ?? "")#\(settled)"
+    }
+
+    /// The row the ceremony is acting on. The projection first: for the
+    /// homeowner being asked it is the only source there is.
+    var approvalDecisionId: String? {
+        approvalReview?.decisionId ?? decision?.id
+    }
+
     /// Pick an outcome. Records nothing — `submitApprovalResponse` is the act.
     func chooseOutcome(_ outcome: ProjectApprovalOutcome) {
         guard !isSubmitting, approvalReview?.canRespond == true else { return }

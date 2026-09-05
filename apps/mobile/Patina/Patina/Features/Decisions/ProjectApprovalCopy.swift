@@ -160,6 +160,37 @@ enum ProjectApprovalCopy {
     static let noteUnsent =
         "Your note didn’t send. You can write to your designer in this project’s conversation."
 
+    // MARK: - The notes already on this approval (IOSC-R2-01)
+
+    /// The eyebrow over the notes. The web's own heading, so a homeowner who
+    /// reads the approval on her laptop and answers it on her phone meets one
+    /// word for one thing.
+    static let discussionLabel = "The discussion"
+
+    /// The read failed. It is said only where notes might exist to be missed,
+    /// and it names the one true consequence — that what is here was not
+    /// read — with no apology and no invented timing.
+    static let discussionUnreadable =
+        "These notes couldn’t be read just now."
+
+    /// Who wrote a note, and when. "You" for her own hand; otherwise the
+    /// studio, in the shape `P-11` (reduced) rules for a studio comment —
+    /// `{Designer given name} · {Studio}`, never an internal reviewer's
+    /// identity — falling back to "The studio" where either half is missing.
+    /// This is `approval-ask.tsx`'s `studioHand`, ported unchanged.
+    static func noteAttribution(
+        isMine: Bool, designer: String?, studio: String?, date: String
+    ) -> String {
+        "\(isMine ? "You" : studioHand(designer: designer, studio: studio)) · \(date)"
+    }
+
+    static func studioHand(designer: String?, studio: String?) -> String {
+        let who = designer?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let house = studio?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let who, !who.isEmpty, let house, !house.isEmpty else { return "The studio" }
+        return "\(who) · \(house)"
+    }
+
     // MARK: - The approval that is neither open nor hers to answer
 
     /// Withdrawn and superseded stand AHEAD of any outcome, the same

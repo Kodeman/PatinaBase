@@ -31,6 +31,12 @@ struct ProjectApprovalBlock: View {
                 reviewLeg(review)
                 closureLeg(review)
                 outcomeLeg(review)
+                ApprovalDiscussionBlock(
+                    decisionId: viewModel.approvalDecisionId,
+                    readKey: viewModel.approvalDiscussionKey,
+                    designerGivenName: designerGivenName,
+                    studioName: studioName
+                )
             } else if viewModel.isLoading {
                 PatinaLoadingState()
             } else {
@@ -379,6 +385,16 @@ struct ProjectApprovalBlock: View {
         if let embedded, !embedded.isEmpty { return embedded }
         guard let projectId, !projectId.isEmpty else { return nil }
         return projects.first { $0.id == projectId }?.designer?.askedByName
+    }
+
+    /// The house a studio note on this approval is signed by, resolved the same way the seal
+    /// resolves it (`ProposalsViewModel.countersigningStudio`) — from the
+    /// project the app already holds, never invented.
+    private var studioName: String? {
+        guard let projectId = viewModel.approvalReview?.projectId
+            ?? viewModel.decision?.project_id else { return nil }
+        let project = BadgeCountService.shared.projects.first { $0.id == projectId }
+        return project?.designerStudioName ?? project?.designer?.displayName
     }
 
     private var chosenAct: ProjectApprovalAct? {

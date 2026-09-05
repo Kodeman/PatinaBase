@@ -294,14 +294,18 @@ struct ProjectApprovalActTests {
     /// passed green while the screen mounting it drew a sage
     /// `checkmark.seal.fill` banner from `DecisionDetailView`.
     ///
-    /// These two files ARE the branch: `DecisionDetailView`'s body draws
+    /// These three files ARE the branch: `DecisionDetailView`'s body draws
     /// `ProjectApprovalScreen` and nothing else on it (pinned in
-    /// `ProjectApprovalPathTests.aStage2DecisionIsNotAnOptionChoice`), and the
-    /// screen draws the block.
+    /// `ProjectApprovalPathTests.aStage2DecisionIsNotAnOptionChoice`), the
+    /// screen draws the block, and the block draws the discussion beneath the
+    /// acts (`IOSC-R2-01`). A branch-wide refusal is only worth its name while
+    /// it names every view the branch draws — so a fourth file here is a
+    /// fourth argument, not an exception.
     @Test("no view on the Stage-2 branch draws a status colour or a seal glyph",
           arguments: [
             "Patina/Features/Decisions/Views/ProjectApprovalScreen.swift",
-            "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
+            "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift",
+            "Patina/Features/Decisions/Views/ApprovalDiscussionBlock.swift"
           ])
     func theStage2BranchHasNoStatusColour(file: String) throws {
         let source = try SourcePin.readCode(file)
