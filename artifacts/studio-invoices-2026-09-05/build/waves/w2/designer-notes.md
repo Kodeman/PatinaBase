@@ -105,3 +105,40 @@ Fix belongs to whoever owns that suite: inject the clock, or freeze it with `jes
   registry, hierarchy and desk-action-label contract tests are untouched and green.
 - The composer's standing lede still reads "Everything billable pulls through below", which is true of a house
   and not of the studio. Left as-is: it was not in scope and the mockup does not draw it. Worth a copy pass.
+
+## Fix round 1
+
+**F1 (major) — void-panel copy, `invoice-folio.tsx`.** Fixed. The panel's paragraph is now branched on
+`documentProjectId` (the same `invoice.project_id` the doorway is gated on, read at :182). A house invoice
+keeps the unchanged sentence; a studio invoice reads the M7 line, plus the "This cannot be undone." clause
+the house copy already carried:
+
+> Voiding keeps the number and marks the invoice void. Nothing else is released; a studio invoice holds no
+> milestones or time. This cannot be undone.
+
+The review's tension is resolved the way M7 draws it: "acts unchanged" in the brief means the act row and the
+mutations are unchanged (they are — `doVoid` and the `Void`/`Void invoice` buttons are untouched); the panel's
+prose is a visible surface M7 explicitly branches, and no other lane owns this file.
+
+Two tests added to `accounts/__tests__/invoice-folio.test.tsx`: one opens the panel on a `project_id: null`
+invoice and asserts the studio sentence plus the absence of `/payment milestones and time entries/`; the twin
+opens it on the base (house) fixture and asserts the original sentence, so a future edit cannot silently
+collapse the branch to one string.
+
+### Gates, round 1
+
+```
+pnpm --filter @patina/designer-portal type-check   → clean (tsc --noEmit, no output)
+pnpm --filter @patina/designer-portal test         → Test Suites: 1 failed, 512 passed, 513 total
+                                                     Tests:       1 failed, 6134 passed, 6135 total
+```
+
+The one failure is the same pre-existing clock-dependent `client-note-composer.test.tsx:479` documented above
+(it wants "Sep 4"; today is Sep 5). `git diff studio-invoices/integration -- <that test> <that component>` is
+empty — this lane never touched either file. Lane suites alone:
+
+```
+jest --testPathPattern "invoice-folio|invoice-composer|accounts-studio-rows|desk-receivables"
+Test Suites: 5 passed, 5 total
+Tests:       43 passed, 43 total
+```

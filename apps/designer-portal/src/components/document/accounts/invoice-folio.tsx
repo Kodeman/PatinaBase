@@ -810,8 +810,9 @@ export function InvoiceFolio({
         {act === 'void' && (
           <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
             <p className="text-[11px] text-[var(--color-charcoal)]">
-              Voiding releases any linked payment milestones and time entries so they can be billed
-              again. This cannot be undone.
+              {documentProjectId
+                ? 'Voiding releases any linked payment milestones and time entries so they can be billed again. This cannot be undone.'
+                : 'Voiding keeps the number and marks the invoice void. Nothing else is released; a studio invoice holds no milestones or time. This cannot be undone.'}
             </p>
             <textarea
               autoFocus

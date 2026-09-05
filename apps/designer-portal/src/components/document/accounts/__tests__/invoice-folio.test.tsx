@@ -261,6 +261,36 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(onOpenDocument).not.toHaveBeenCalled();
   });
 
+  it('tells a studio invoice the truth about what voiding releases', () => {
+    mockInvoice = {
+      ...invoice,
+      project_id: null,
+      project: undefined,
+      title: 'Design consultation, September',
+    };
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+
+    expect(
+      screen.getByText(
+        'Voiding keeps the number and marks the invoice void. Nothing else is released; a studio invoice holds no milestones or time. This cannot be undone.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/payment milestones and time entries/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the milestone-and-time void copy on a house invoice', () => {
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+
+    expect(
+      screen.getByText(
+        'Voiding releases any linked payment milestones and time entries so they can be billed again. This cannot be undone.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('announces clipboard failure instead of silently resetting the button', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
