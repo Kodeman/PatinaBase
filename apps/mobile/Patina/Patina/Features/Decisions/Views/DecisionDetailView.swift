@@ -31,44 +31,7 @@ struct DecisionDetailView: View {
                 if let decision = viewModel.decision {
                     header(decision)
                     submitFailureBanner(decision)
-                    if viewModel.isStage2Approval {
-                        // P-09: a `project_artifact_v1` decision carries one
-                        // option row per canonical outcome, so without this
-                        // branch first the screen drew three unlabelled option
-                        // cards over an act (`apply_client_decision`) that
-                        // refuses the contract. It is decided on the DECISION,
-                        // not on the projection having loaded.
-                        projectApproval
-                    } else if viewModel.hasNoRenderableOptions {
-                        // SP-17: never a stack of blank, untappable cards.
-                        Text(DecisionOptionCopy.allUnavailableLine)
-                            .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.Text.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 24)
-                            .accessibilityIdentifier("decisionDetail.optionsPending")
-                    } else if viewModel.awaitsClientSignoff {
-                        // W1-B-03: the act the screen had no shape for. An
-                        // Approval decision carries no options BY DESIGN — the
-                        // absence is what it is, not a gap — and 00564's
-                        // `approve_client_signoff` is what resolves it. It goes
-                        // through the same consent step as a choice, because it
-                        // is the same contractual moment.
-                        signoffAction
-                    } else if viewModel.hasNoOptionsAtAll {
-                        // A decision with no options that is NOT a sign-off is
-                        // still waiting on its designer, and still says so.
-                        Text(DecisionOptionCopy.nothingToChooseYetLine)
-                            .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.Text.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 24)
-                            .accessibilityIdentifier("decisionDetail.noOptions")
-                    } else {
-                        ForEach(viewModel.options) { option in
-                            optionCard(option)
-                        }
-                    }
+                    ceremony(decision)
                     deferralActs(decision)
                     if let threadId = viewModel.discussThreadId {
                         discussAction(threadId)
@@ -166,11 +129,6 @@ struct DecisionDetailView: View {
                 }
             }
         )
-    }
-
-    /// `P-09`: the Stage-2 ceremony, in its own file.
-    private var projectApproval: some View {
-        ProjectApprovalBlock(viewModel: viewModel)
     }
 
     /// `W1-B-03`: one line saying whose the decision is, and the act.
@@ -403,6 +361,56 @@ struct DecisionDetailView: View {
 /// composition above — the acts that do NOT resolve the decision — so they
 /// move to an extension rather than buying a scoped disable.
 extension DecisionDetailView {
+
+    /// Which ceremony this decision gets. One chain, in the order the acts
+    /// exclude each other — the Stage-2 approval first, because a
+    /// `project_artifact_v1` row carries option rows it must never be drawn as.
+    @ViewBuilder
+    private func ceremony(_ decision: RemoteClientDecision) -> some View {
+            if viewModel.isStage2Approval {
+                // P-09: a `project_artifact_v1` decision carries one
+                // option row per canonical outcome, so without this
+                // branch first the screen drew three unlabelled option
+                // cards over an act (`apply_client_decision`) that
+                // refuses the contract. It is decided on the DECISION,
+                // not on the projection having loaded.
+                projectApproval
+            } else if viewModel.hasNoRenderableOptions {
+                // SP-17: never a stack of blank, untappable cards.
+                Text(DecisionOptionCopy.allUnavailableLine)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 24)
+                    .accessibilityIdentifier("decisionDetail.optionsPending")
+            } else if viewModel.awaitsClientSignoff {
+                // W1-B-03: the act the screen had no shape for. An
+                // Approval decision carries no options BY DESIGN — the
+                // absence is what it is, not a gap — and 00564's
+                // `approve_client_signoff` is what resolves it. It goes
+                // through the same consent step as a choice, because it
+                // is the same contractual moment.
+                signoffAction
+            } else if viewModel.hasNoOptionsAtAll {
+                // A decision with no options that is NOT a sign-off is
+                // still waiting on its designer, and still says so.
+                Text(DecisionOptionCopy.nothingToChooseYetLine)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 24)
+                    .accessibilityIdentifier("decisionDetail.noOptions")
+            } else {
+                ForEach(viewModel.options) { option in
+                    optionCard(option)
+                }
+            }
+    }
+
+    /// `P-09`: the Stage-2 ceremony, in its own file.
+    private var projectApproval: some View {
+        ProjectApprovalBlock(viewModel: viewModel)
+    }
 
     /// SP-17: the two answers a real client gives, alongside the choices.
     /// Neither resolves the decision — both open a note into the thread with

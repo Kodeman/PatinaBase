@@ -6,10 +6,9 @@
 //  it costs, the review of it, and the three answers.
 //
 //  It is a view of its own rather than another member of `DecisionDetailView`
-//  because that file already carries a `swiftlint:disable file_length` and a
-//  300-line type body. `viewModel` is passed as a plain `let`: the class is
-//  `@Observable`, so reading its properties in this body still registers the
-//  dependency.
+//  because that file is already over the file-length limit and at the type-body
+//  one. `viewModel` is passed as a plain `let`: the class is `@Observable`, so
+//  reading its properties in this body still registers the dependency.
 //
 
 import SwiftUI
