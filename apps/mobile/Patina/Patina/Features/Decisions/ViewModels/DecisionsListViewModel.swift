@@ -38,12 +38,14 @@ final class DecisionsListViewModel {
             // A studio co-member is the one caller both reads answer for, and
             // one obligation must not draw twice under one id.
             let carried = Set(pending.map(\.id))
-            // `W1R2-M3`: published only — an unsent draft is the studio's
-            // working copy, not an ask. `W1R2-M2`: the projects the rail has
-            // already fetched are what put the designer's name on the row.
+            // `W1R2-M3`: an unsent draft keeps its row — the reading is
+            // hers, and this is her only door to it — and loses the date it
+            // had no business stating (`asWaitingDecision`). `W1R2-M2`: the
+            // projects the rail has already fetched are what put the
+            // designer's name on the row.
             let projects = BadgeCountService.shared.projects
             self.decisions = pending
-                + approvals.filter(\.awaitsClientInFeed)
+                + approvals.filter(\.awaitsClient)
                     .map { $0.asWaitingDecision(from: projects) }
                     .filter { !carried.contains($0.id) }
         } catch {

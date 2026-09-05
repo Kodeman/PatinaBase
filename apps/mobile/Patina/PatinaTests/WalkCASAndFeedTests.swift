@@ -198,37 +198,48 @@ struct ApprovalCASOrderTests {
 @MainActor
 struct ApprovalFeedGuardTests {
 
-    // MARK: - W1R2-M3 · an edition nobody has sent is not an ask
+    // MARK: - W1R2-M3 · an edition nobody has sent states no date
 
     /// `client_decisions.sent_at` is stamped by `publish_client_decision` and
     /// by nothing else (00464:998,1061), so an unsent draft is the studio's own
     /// working copy. It was reaching Today, the Studio hub and the bell as an
-    /// ask carrying a due date — a question that had not been asked, dated.
-    @Test("an unsent draft is not a row on any homeowner feed")
-    func anUnsentDraftIsNotAnAsk() throws {
+    /// ask carrying a DUE DATE — a question that had not been asked, dated.
+    ///
+    /// The row itself stays. `needsReviewConfirmation` is the whole of what an
+    /// unpublished row can hold, and a feed row is the only door the phone has
+    /// to it (`AppRoute.decisionDetail` is pushed from a feed row and nowhere
+    /// else; 00534 writes a bell row only on the transition into `pending`) —
+    /// so a published-only feed would take P-09's review confirmation back to
+    /// web-only. What goes is the date and the word "approval".
+    @Test("an unsent draft keeps its row and loses its date")
+    func anUnsentDraftIsNotADatedAsk() throws {
         let unsent = try ProjectApprovalFixture.review(
             lifecycleStatus: "draft", completed: 0, required: 1, sentAt: NSNull()
         )
         #expect(unsent.isPublished == false)
-        #expect(unsent.awaitsClient, "the review leg is still hers on its own route")
-        #expect(unsent.awaitsClientInFeed == false, "…but a feed may not carry it")
-        #expect(BadgeCountService.mergedDecisions(
+        #expect(unsent.awaitsClient, "the reading is hers")
+        #expect(unsent.awaitsReadingOnly)
+        let draftRow = try #require(BadgeCountService.mergedDecisions(
             pending: [], approvals: [unsent], previous: []
-        )?.isEmpty == true)
+        )?.first)
+        #expect(draftRow.due_date == nil, "the studio's own plan is not her deadline")
+        #expect(draftRow.isUnissuedApproval)
 
-        // The published one is untouched.
+        // The published one is untouched: it is an ask, and it keeps its date.
         let published = try ProjectApprovalFixture.review()
         #expect(published.isPublished)
-        #expect(published.awaitsClientInFeed)
-        #expect(BadgeCountService.mergedDecisions(
+        #expect(published.awaitsReadingOnly == false)
+        let sentRow = try #require(BadgeCountService.mergedDecisions(
             pending: [], approvals: [published], previous: []
-        )?.count == 1)
+        )?.first)
+        #expect(sentRow.due_date == "2026-09-11T00:00:00+00:00")
+        #expect(sentRow.isUnissuedApproval == false)
     }
 
-    /// The decision list reads the same predicate the badge feed does, so the
-    /// two cannot disagree about which approvals are asks.
-    @Test("the decision list carries only published approvals")
-    func theDecisionListCarriesOnlyPublishedApprovals() throws {
+    /// The two homeowner merges read the same predicate, so they cannot
+    /// disagree about which approvals are hers.
+    @Test("both feeds read one predicate, and it is not the published gate")
+    func bothFeedsReadOnePredicate() throws {
         let list = try SourcePin.readCode(
             "Patina/Features/Decisions/ViewModels/DecisionsListViewModel.swift"
         )
@@ -236,10 +247,31 @@ struct ApprovalFeedGuardTests {
             "Patina/Services/Badges/BadgeCountService+Decisions.swift"
         )
         for feed in [list, badges] {
-            #expect(feed.contains("awaitsClientInFeed"))
-            #expect(!feed.contains("filter(\\.awaitsClient)"),
-                    "a feed is back to carrying unsent drafts")
+            #expect(feed.contains("filter(\\.awaitsClient)"))
+            #expect(!feed.contains("isPublished"),
+                    "a feed is back to subtracting the review leg")
         }
+    }
+
+    /// The half of M3 the date alone does not answer: the Record's copy said
+    /// "Leah asked for your approval." over an edition the studio had not
+    /// issued. What it holds is a reading.
+    @Test("the Record calls an unissued edition a reading, not an approval")
+    func theRecordCallsAnUnissuedEditionAReading() throws {
+        let asking = StudioQueueItemRow(
+            id: "decision:d1", kind: .decision, entityId: "d1",
+            title: "Kitchen millwork spec", detail: "Aspen Loft Refresh",
+            askedAt: nil, dueAt: nil, amountCents: nil,
+            designerName: "Leah Hartwell", designerIsPerson: true,
+            isApproval: true, route: .decisionDetail(decisionId: "d1")
+        )
+        #expect(HouseRecordBuilder.title(for: asking) == "Leah asked for your approval.")
+
+        var reading = asking
+        reading.awaitsReading = true
+        #expect(HouseRecordBuilder.title(for: reading)
+                == "Leah asked you to read this edition.")
+        #expect(!HouseRecordBuilder.title(for: reading).contains("approval"))
     }
 
     // MARK: - W1R2-M2 · the row names the designer the project already names

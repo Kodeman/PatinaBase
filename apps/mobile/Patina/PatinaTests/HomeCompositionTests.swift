@@ -89,7 +89,7 @@ struct HomeCompositionTests {
     func activeProjectOrder() {
         let input = HomeCompositionInput(
             isSignedIn: true, tier: .activeProject,
-            record: Self.record(needsYou: [Self.row(kind: .decisionAsked, state: .overdue)]),
+            record: Self.record(needsYou: [Self.row(kind: .decisionAsked, state: .overdue(due: Date(timeIntervalSince1970: 1_787_000_000)))]),
             roomCount: 2, hasStory: true, hasDesigner: true
         )
         #expect(HomeComposition.blocks(for: input) == [

@@ -30,9 +30,10 @@ extension BadgeCountService {
     /// rather than blanking a feed the other half answered for. Both failing
     /// is the only nil out, which is what leaves the whole floor standing.
     ///
-    /// `W1R2-M3`: only PUBLISHED approvals become rows. An unsent draft is the
-    /// studio's own working copy, and it was being drawn on Today as an ask
-    /// with a due date.
+    /// `W1R2-M3`, as re-ruled at the close: an UNSENT draft still becomes a
+    /// row — the reading it holds is hers, and a feed row is her only door to
+    /// it — but `asWaitingDecision` withholds the date, so it is no longer
+    /// drawn as an ask the studio has not made.
     ///
     /// `W1R2-M2`: `projects` is what puts the designer's name on the row, so
     /// R8's sentence can say "Leah asked on Sep 4." instead of degrading to
@@ -48,7 +49,7 @@ extension BadgeCountService {
     ) -> [RemoteClientDecision]? {
         guard pending != nil || approvals != nil else { return nil }
         let legacy = pending ?? previous.filter { !$0.isProjectArtifactApproval }
-        let stage2 = approvals?.filter(\.awaitsClientInFeed)
+        let stage2 = approvals?.filter(\.awaitsClient)
             .map { $0.asWaitingDecision(from: projects) }
             ?? previous.filter(\.isProjectArtifactApproval)
         // 00467 hides a Stage-2 row from the homeowner, not from a studio

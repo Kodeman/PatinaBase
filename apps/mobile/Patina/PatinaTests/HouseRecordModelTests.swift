@@ -70,7 +70,7 @@ struct HouseRecordModelTests {
     func everyStateRoundTripsThroughJSON() throws {
         let states: [HouseRecordRow.State] = [
             .none,
-            .overdue,
+            .overdue(due: referenceDate),
             .due(referenceDate),
             .amount(cents: 425_000, due: referenceDate),
             .amount(cents: 425_000, due: nil),

@@ -155,15 +155,24 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// copy — nothing has been asked of anybody yet.
     public var isPublished: Bool { sentAt != nil }
 
-    /// `W1R2-M3`: the row a homeowner-facing feed may carry.
+    /// The reading leg, and only it: the studio froze an edition that requires
+    /// her review and has not issued it yet.
     ///
-    /// `awaitsClient` alone let an UNSENT draft onto Today, the Studio hub and
-    /// the bell, drawn as an ask with a due date — a question the studio had
-    /// not asked yet, dated. A feed says what is waiting on her; an edition
-    /// nobody has sent is not. The review leg on a draft is still reachable by
-    /// its own route (the detail screen reads `get_project_decision_review`
-    /// directly), which is where a pre-publish act belongs.
-    public var awaitsClientInFeed: Bool { isPublished && awaitsClient }
+    /// `needsReviewConfirmation` is the whole of what an unpublished row can
+    /// hold — `canRespond` demands `pending`, and `publish_client_decision`
+    /// sets `status = 'pending'` and `sent_at` in one statement (00464:998,
+    /// 1061), so a `pending` row is always sent and a `draft` one never is.
+    /// That equality is why the feed cannot filter on `isPublished`: doing so
+    /// subtracts exactly this leg, and this leg has no other door on the
+    /// phone. `AppRoute.decisionDetail` is pushed from a feed row and from
+    /// nowhere else, and 00534 writes a bell row only on the transition into
+    /// `pending` — so a published-only feed makes P-09's review confirmation
+    /// web-only again, which is the thing P-09 exists to end.
+    ///
+    /// `W1R2-M3` was that this row was drawn as an ask WITH A DUE DATE. That
+    /// is answered where it is drawn — see `asWaitingDecision` — and not by
+    /// dropping the row.
+    public var awaitsReadingOnly: Bool { !isPublished && needsReviewConfirmation }
 
     /// This approval as a row for the feeds that carry every waiting
     /// obligation: `BadgeCountService.pendingDecisions` (the NEEDS YOU
@@ -208,7 +217,13 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
             recommended_option_id: nil,
             viewed_at: nil,
             responded_at: respondedAt,
-            due_date: dueAt,
+            // `W1R2-M3`: an edition the studio has not issued carries no date
+            // it may state to her. `dueAt` on a draft is the studio's own
+            // plan for an ask it has not made, and Today drew it as the
+            // deadline of a question nobody had asked. The row stays — the
+            // reading is hers, and it is her only door to it — with the
+            // invented deadline off it.
+            due_date: awaitsReadingOnly ? nil : dueAt,
             client_consent_method: nil,
             client_consented_at: nil,
             created_at: createdAt

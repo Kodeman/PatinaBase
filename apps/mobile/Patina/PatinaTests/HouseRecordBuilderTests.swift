@@ -72,7 +72,17 @@ struct HouseRecordBuilderTests {
     /// on every visit after it.
     @Test("the drawn sentence keeps the designer's name on a return visit")
     func askedByNameSurvivesTheReturnVisit() throws {
-        let (decisions, _, _) = try waitingFixtures()
+        // Asked BEFORE the day it was wanted by, so the clause is earned and
+        // the name is actually drawn — `W1R2-n1` drops it otherwise, and the
+        // sentence would hold with the name lost. `waitingFixtures`' own
+        // decision is asked and wanted on one day.
+        let decisions = try decode([RemoteClientDecision].self, """
+        [{ "id": "d1", "title": "Rug color — Natural vs Sand", "status": "pending",
+           "due_date": "2026-08-24", "created_at": "2026-08-22T09:00:00Z",
+           "project": { "name": "Aspen Loft Refresh",
+             "designer": { "id": "u1", "display_name": "Leah Hartwell",
+                           "business_name": "Hartwell Studio" } } }]
+        """)
         let calendar = Calendar(identifier: .gregorian)
 
         for lastSeen in [nil, day("2026-08-20T12:00:00Z")] as [Date?] {
@@ -278,7 +288,8 @@ struct HouseRecordBuilderTests {
                            lastSeen: day("2026-08-26T12:00:00Z"))
 
         #expect(record.needsYou.count == 1)
-        #expect(record.needsYou[0].state == .overdue)
+        #expect(record.needsYou[0].state
+                == .overdue(due: try #require(ISO8601DateParsing.dateOrDay(from: "2026-06-01"))))
     }
 
     // MARK: - New

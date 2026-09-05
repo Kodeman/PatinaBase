@@ -134,6 +134,7 @@ enum StudioQueueBuilder {
                     designerName: designer.name,
                     designerIsPerson: designer.isPerson,
                     isApproval: isApproval,
+                    awaitsReading: decision.isUnissuedApproval,
                     route: .decisionDetail(decisionId: decision.id)
                 )
             }
@@ -217,6 +218,11 @@ struct StudioQueueItemRow: Identifiable, Sendable, Equatable {
     /// The ask is an approval of one thing, not a choice between named
     /// alternatives. The Record's copy branches on it; nothing else does.
     var isApproval: Bool = false
+    /// `W1R2-M3`: the act this row holds is a READING — the studio froze an
+    /// edition that needs her eye and has not issued it. Calling that "asked
+    /// for your approval" claims an ask nobody has made yet, which is the
+    /// half of M3 that survives dropping the date.
+    var awaitsReading: Bool = false
     let route: AppRoute
 }
 

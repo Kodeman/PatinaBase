@@ -12,11 +12,11 @@
 //     card's own header (r1-notes §9.1);
 //   • `· new` comes from `isNew` and nothing else. `State.new` is never
 //     emitted (r1-notes §9.2) and is drawn as no state at all;
-//   • `error` red is reserved for money that is actually late. An approval
-//     that has passed its date says so in body ink and nothing else — P-04 /
-//     R8: red status is a VISION refusal, and painting a homeowner's own
-//     unanswered question red is the app editorialising on the studio's
-//     behalf. Everything else on the right is muted mono;
+//   • nothing on the card is red. An approval that has passed its date says
+//     so in body ink (P-04 / R8), and since R3-02 so does money — red status
+//     is a VISION refusal on every surface a homeowner reads, and the last
+//     `error` on this card was the late invoice line. Everything else on the
+//     right is muted mono;
 //   • the empty halves draw only where they are true answers — from engaged
 //     upward. At guest and discovering the caller does not mount the card at
 //     all (`HomeComposition.recordDraws`).
@@ -38,7 +38,9 @@ import SwiftUI
 struct HouseRecordRowPresentation: Equatable {
     /// Mono, muted. Nil for a standing condition, which claims no date.
     let leadText: String?
-    /// Mono, `error`. The only red on the card, and money only.
+    /// Mono, body ink. Money whose day has passed — the rail's muted grey
+    /// would flatten it into an unpassed date, and R3-02 refuses the red it
+    /// used to carry.
     let lateText: String?
     /// P-04 / R8. An approval past its date, said in body ink as the whole
     /// ruled sentence — "Still open, Leah asked on Aug 22." Never red, and
@@ -64,13 +66,8 @@ struct HouseRecordRowPresentation: Equatable {
 
         let tick = row.isNew
         switch row.state {
-        case .overdue:
-            // R8's sentence, printed whole. `askedBy` is the same name the
-            // title uses, so the row cannot name the designer two ways.
-            let sentence = DateDisplay.stillOpen(
-                designer: row.askedBy,
-                askedOn: HouseRecordDates.short(row.date, calendar: calendar)
-            )
+        case .overdue(let due):
+            let sentence = stillOpenSentence(row: row, due: due, calendar: calendar)
             return HouseRecordRowPresentation(
                 leadText: nil, lateText: nil, stillOpenText: sentence,
                 showsNewTick: tick,
@@ -113,6 +110,27 @@ struct HouseRecordRowPresentation: Equatable {
                 accessibilityLabel: spoken(row: row, state: date, isNew: tick)
             )
         }
+    }
+
+    /// R8's sentence, printed whole. `askedBy` is the same name the title
+    /// uses, so the row cannot name the designer two ways.
+    ///
+    /// `W1R2-n1` / `W1R2-M2`: the asked-on clause goes through the one guard
+    /// `DateDisplay.approval` uses, so the Record and the Studio hub cannot
+    /// say different things about one approval. The date itself is still
+    /// formatted here — the Record's dates are fixed to one locale on purpose
+    /// (`HouseRecordDates`), and that is what makes this a second composer
+    /// rather than a second rule.
+    private static func stillOpenSentence(
+        row: HouseRecordRow, due: Date, calendar: Calendar
+    ) -> String {
+        guard DateDisplay.askedOnClauseEarned(
+            askedAt: row.date, dueDate: due, calendar: calendar
+        ) else { return DateDisplay.stillOpenAlone }
+        return DateDisplay.stillOpen(
+            designer: row.askedBy,
+            askedOn: HouseRecordDates.short(row.date, calendar: calendar)
+        )
     }
 
     private static func spoken(row: HouseRecordRow, state: String?, isNew: Bool) -> String {
@@ -526,7 +544,12 @@ struct HouseRecordRowView: View {
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.Text.error)
+                    // R3-02: body ink, not the error ramp — the same refusal
+                    // the invoice list and detail now hold. The line still
+                    // reads differently from an unpassed one (primary against
+                    // the rail's muted), and the spoken label still says "past
+                    // its date"; what it no longer does is say it in red.
+                    .foregroundStyle(PatinaColors.Text.primary)
             }
             if let stillOpen = shown.stillOpenText {
                 // R8's sentence, in body ink and in sentence case: the state

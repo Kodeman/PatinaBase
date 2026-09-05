@@ -46,12 +46,13 @@ struct HouseRecordCardTests {
 
     /// P-04 / R8. The word "overdue" and the red it was painted in are both
     /// gone: an approval past its date prints R8's sentence whole, in body
-    /// ink, and the red slot (`lateText`) is left for money.
+    /// ink, and the money slot (`lateText`) is left empty.
     @Test("an approval past its date prints R8's sentence, and nothing is red")
     func pastItsDateDecision() {
         let shown = HouseRecordRowPresentation.make(
             row: Self.row(
-                kind: .decisionAsked, date: Self.day(8, 22), state: .overdue,
+                kind: .decisionAsked, date: Self.day(8, 22),
+                state: .overdue(due: Self.day(8, 25)),
                 askedBy: "Leah"
             ),
             now: Self.day(8, 26), calendar: Self.calendar
@@ -65,7 +66,10 @@ struct HouseRecordCardTests {
         // With no designer on the wire the sentence names none and says so,
         // rather than inventing one.
         let unnamed = HouseRecordRowPresentation.make(
-            row: Self.row(kind: .decisionAsked, date: Self.day(8, 22), state: .overdue),
+            row: Self.row(
+                kind: .decisionAsked, date: Self.day(8, 22),
+                state: .overdue(due: Self.day(8, 25))
+            ),
             now: Self.day(8, 26), calendar: Self.calendar
         )
         #expect(unnamed.stillOpenText == "Still open, your designer asked on Aug 22.")
@@ -90,20 +94,7 @@ struct HouseRecordCardTests {
         #expect(model.contains("case overdue"))
     }
 
-    /// The red that is left is money's, and only money's.
-    @Test("the error ramp is drawn for the late-money slot and nothing else")
-    func redIsMoneyOnly() throws {
-        let code = SourceScan.code(
-            in: try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
-        )
-        #expect(code.components(separatedBy: "PatinaColors.Text.error").count - 1 == 1)
-        let block = try #require(code.range(of: "if let late = shown.lateText {"))
-        let money = String(code[block.lowerBound...].prefix(600))
-        #expect(money.contains("PatinaColors.Text.error"),
-                "the one red is no longer inside the late-money branch")
-    }
-
-    @Test("a proposal prints the date it is wanted by, and nothing red")
+    @Test("a proposal prints the date it is wanted by, and no late line")
     func proposalByDate() {
         let shown = HouseRecordRowPresentation.make(
             row: Self.row(
@@ -115,7 +106,7 @@ struct HouseRecordCardTests {
         #expect(shown.lateText == nil)
     }
 
-    @Test("an invoice prints its figure and its due date, red only once it is late")
+    @Test("an invoice prints its figure and its due date, on its own line once it is late")
     func invoiceMoney() {
         let invoice = Self.row(
             kind: .invoiceDue, date: Self.day(8, 20),
@@ -181,7 +172,8 @@ struct HouseRecordCardTests {
     func voiceOverNamesTheState() {
         let shown = HouseRecordRowPresentation.make(
             row: Self.row(
-                kind: .decisionAsked, date: Self.day(8, 22), state: .overdue,
+                kind: .decisionAsked, date: Self.day(8, 22),
+                state: .overdue(due: Self.day(8, 25)),
                 title: "Leah asked about Rug color - Natural vs Sand.",
                 detail: "Aspen Loft Refresh", askedBy: "Leah"
             ),
@@ -192,8 +184,9 @@ struct HouseRecordCardTests {
                 + "Still open, Leah asked on Aug 22.")
     }
 
-    /// Late money keeps its red, and loses the retired word with everything
-    /// else: what VoiceOver hears is the phrase the web bucket now carries.
+    /// Late money loses the retired word with everything else — and, since
+    /// R3-02, its red: what VoiceOver hears is the phrase the web bucket now
+    /// carries.
     @Test("late money is spoken as past its date")
     func lateMoneyIsSpokenWithoutTheRetiredWord() {
         let shown = HouseRecordRowPresentation.make(
@@ -392,5 +385,27 @@ struct HouseRecordCardTests {
         let today = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
         #expect(today.contains("stalenessLine: RecordStaleness.line("))
         #expect(today.contains("refreshFailed: badges.lastRefreshFailed"))
+    }
+}
+
+/// R3-02, on the Record. Its own suite because `HouseRecordCardTests` sits on
+/// SwiftLint's 300-line `type_body_length` floor.
+@MainActor
+struct HouseRecordRedRefusalTests {
+
+    /// The last red on the Record was the late-money line, and the ruling
+    /// reaches money too — "never red, same refusal, every surface". The card
+    /// draws no error ramp at all now.
+    @Test("nothing on the Record is drawn in the error ramp")
+    func nothingOnTheRecordIsRed() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
+        )
+        #expect(!code.contains("PatinaColors.Text.error"))
+        // …and the passed-money line is still told apart from an unpassed one,
+        // by ink rather than by colour: primary against the rail's muted.
+        let block = try #require(code.range(of: "if let late = shown.lateText {"))
+        let money = String(code[block.lowerBound...].prefix(700))
+        #expect(money.contains("PatinaColors.Text.primary"))
     }
 }

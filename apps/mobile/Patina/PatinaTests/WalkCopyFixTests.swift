@@ -176,6 +176,33 @@ struct MoneyPastDueCopyTests {
         }
     }
 
+    /// The residue the `isPastDue` pin above could not see, because neither
+    /// site reads `isPastDue`: the invoice detail's h2 headline ("Past due",
+    /// the largest type on the screen, painted from `isOverdue(invoice)`) and
+    /// the Record's late-money line. The ruling is "never red — same refusal,
+    /// EVERY surface", so the pin is now the absence of the ramp itself.
+    ///
+    /// The proposal rail is deliberately not here: expiry keeps its red
+    /// (ruled), and the ruling named the due line.
+    @Test("no money surface a homeowner reads draws in the error ramp")
+    func noMoneySurfaceDrawsInTheErrorRamp() throws {
+        for file in [
+            "Patina/Features/Invoices/Views/InvoiceListView.swift",
+            "Patina/Features/Invoices/Views/InvoiceDetailView.swift",
+            "Patina/Features/Home/Views/HouseRecordCard.swift"
+        ] {
+            let source = try SourcePin.readCode(file)
+            #expect(!source.contains("PatinaColors.Text.error"),
+                    "\(file) still states a passed date in the alarm register")
+        }
+        // And the headline still states the fact — it lost the colour, not
+        // the word.
+        let detail = try SourcePin.readCode(
+            "Patina/Features/Invoices/Views/InvoiceDetailView.swift"
+        )
+        #expect(detail.contains("if isOverdue(invoice) { return \"Past due\" }"))
+    }
+
     // MARK: - W1R2-n1 · a clause that tells no story does not print
 
     /// "Still open, Leah asked on Sep 4." under a date of Sep 4 says the studio
@@ -201,5 +228,85 @@ struct MoneyPastDueCopyTests {
         ) == DateDisplay.ApprovalLine(
             text: "Still open, Leah asked on Sep 3.", isStillOpen: true
         ))
+    }
+}
+
+/// `W1R2-M2` · the Record and the Studio hub say one thing about one approval.
+///
+/// `W1R2-n1`'s guard landed in `DateDisplay.approval`, which the Studio hub and
+/// the decision list read. The Record composed the same R8 sentence itself, out
+/// of `DateDisplay.stillOpen`, and `HouseRecordRow.State.overdue` had thrown the
+/// due date away — so Today went on printing a clause the hub two taps later had
+/// stopped printing. The guard is one function now, and the state carries the
+/// date it needs to apply it.
+@MainActor
+struct RecordAndStudioSaySoTests {
+
+    private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
+        try JSONDecoder().decode(T.self, from: Data(json.utf8))
+    }
+
+    /// One decision, both surfaces, one sentence.
+    private func sentences(askedOn asked: String, wantedBy due: String, now: Date) throws
+    -> (today: String?, studio: String?) {
+        let decisions = try decode([RemoteClientDecision].self, """
+        [{ "id": "d-1", "title": "Kitchen millwork spec", "status": "pending",
+           "coordination_kind": "signoff", "court": "client",
+           "due_date": "\(due)", "created_at": "\(asked)",
+           "project": { "name": "Aspen Loft Refresh",
+             "designer": { "id": "u1", "display_name": "Leah Hartwell" } } }]
+        """)
+        let item = try #require(StudioQueueBuilder.itemizedAwaitingRows(
+            decisions: decisions, proposals: [], invoices: [],
+            designerFallback: nil, now: now
+        ).first)
+        let row = HouseRecordRow(
+            id: item.id, kind: .decisionAsked,
+            title: HouseRecordBuilder.title(for: item), detail: item.detail,
+            date: try #require(item.askedAt),
+            state: HouseRecordBuilder.state(for: item, now: now),
+            isNew: false, askedBy: HouseRecordBuilder.askedByName(for: item), route: nil
+        )
+        let today = HouseRecordRowPresentation.make(row: row, now: now).stillOpenText
+        let studio = StudioQueueBuilder.build(StudioQueueInput(
+            projects: [], decisions: decisions, proposals: [], invoices: [],
+            documents: [], threads: [], notifications: [],
+            currentUserId: "client", now: now
+        )).section(.awaitingYou).rows.first?.meta
+        return (today, studio)
+    }
+
+    @Test("asked on the day it was wanted by: both surfaces drop the clause")
+    func bothSurfacesDropTheClauseTogether() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-09-10T16:00:00Z"))
+        let said = try sentences(
+            askedOn: "2026-09-04T09:00:00Z", wantedBy: "2026-09-04T00:00:00Z", now: now
+        )
+        #expect(said.today == "Still open.")
+        #expect(said.studio == "Still open.")
+        #expect(said.today == said.studio)
+    }
+
+    @Test("asked before it was wanted by: both surfaces keep the same clause")
+    func bothSurfacesKeepTheClauseTogether() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-09-10T16:00:00Z"))
+        let said = try sentences(
+            askedOn: "2026-09-01T09:00:00Z", wantedBy: "2026-09-04T00:00:00Z", now: now
+        )
+        #expect(said.today == "Still open, Leah asked on Sep 1.")
+        #expect(said.today == said.studio)
+    }
+
+    /// The guard itself, so the two composers cannot grow two rules again.
+    @Test("the clause is earned in exactly one place")
+    func theGuardIsOneFunction() throws {
+        let card = try SourcePin.readCode("Patina/Features/Home/Views/HouseRecordCard.swift")
+        #expect(card.contains("DateDisplay.askedOnClauseEarned("))
+        let dates = try SourcePin.readCode("Patina/Features/Shared/DateDisplay.swift")
+        #expect(dates.contains("askedOnClauseEarned("))
+        // The state carries the day the guard needs; throwing it away is what
+        // made the Record unable to apply it.
+        let model = try SourcePin.readCode("Patina/Features/Home/Models/HouseRecord.swift")
+        #expect(model.contains("case overdue(due: Date)"))
     }
 }

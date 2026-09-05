@@ -159,6 +159,16 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
         approval_contract == "project_artifact_v1"
     }
 
+    /// `W1R2-M3`: a Stage-2 approval the studio has FROZEN but not issued.
+    /// Only the projection bridge (`asWaitingDecision`) can put one in front
+    /// of a homeowner — `listPending` reads `status=eq.pending` — and the act
+    /// it holds is the review leg: read this exact edition, so the studio can
+    /// issue it. It is not yet an ask for her approval, and the copy must not
+    /// call it one.
+    public var isUnissuedApproval: Bool {
+        isProjectArtifactApproval && status == "draft"
+    }
+
     /// A sign-off the addressed client is the one to give — exactly the shape
     /// `approve_client_signoff` (00564) accepts, so the screen never draws an
     /// act the server will refuse.

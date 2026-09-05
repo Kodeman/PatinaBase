@@ -88,7 +88,12 @@ struct InvoiceDetailView: View {
                 .tracking(2)
             Text(statusHeadline(invoice))
                 .font(PatinaTypography.h2)
-                .foregroundStyle(isOverdue(invoice) ? PatinaColors.Text.error : PatinaColors.Text.primary)
+                // R3-02: "Past due" is the largest type on this screen, and it
+                // sat in the error ramp directly above a due line in body ink
+                // — one screen saying one fact in two registers. Red status is
+                // a VISION refusal on every surface a homeowner reads, money
+                // included; the headline states the fact and nothing else.
+                .foregroundStyle(PatinaColors.Text.primary)
             Text(invoice.invoice_number ?? "Invoice")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.secondary)

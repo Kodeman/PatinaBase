@@ -57,7 +57,13 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
     /// actually late), because only it knows `now`.
     enum State: Codable, Equatable, Sendable {
         case none
-        case overdue
+        /// Past the day it was wanted by, carrying that day. `W1R2-M2`: the
+        /// due date used to be thrown away here, so the card could not apply
+        /// `DateDisplay.askedOnClauseEarned` and Today printed a sentence the
+        /// Studio hub, two taps away, no longer printed. A snapshot written
+        /// before this shape fails to decode and is ignored, which costs one
+        /// pre-fetch paint and nothing else (`RecordSnapshotStore.load`).
+        case overdue(due: Date)
         case due(Date)
         case amount(cents: Int, due: Date?)
         case new
@@ -430,6 +436,12 @@ extension HouseRecordBuilder {
     /// produce.
     static func title(for item: StudioQueueItemRow) -> String {
         switch item.kind {
+        // `W1R2-M3`: an edition the studio has frozen and not issued asks her
+        // to READ it, so the studio can issue it. Saying "asked for your
+        // approval" over it claims an ask that has not been made — the same
+        // invention as the due date this row no longer carries.
+        case .decision where item.awaitsReading:
+            return "\(subject(askedByName(for: item))) asked you to read this edition."
         // An approval is one thing to say yes or no to, so the row asks for
         // the approval and lets the second line name the thing. The choice
         // grammar below would call a sign-off a choice, and would run the
@@ -490,7 +502,7 @@ extension HouseRecordBuilder {
             guard let due = item.dueAt else { return .none }
             let calendar = Calendar.current
             if calendar.startOfDay(for: due) < calendar.startOfDay(for: now) {
-                return .overdue
+                return .overdue(due: due)
             }
             return .due(due)
         }

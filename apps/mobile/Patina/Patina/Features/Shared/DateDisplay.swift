@@ -101,6 +101,29 @@ enum DateDisplay {
         "Still open, \(designer ?? "your designer") asked on \(day)."
     }
 
+    /// The same sentence with nothing to hang the clause on.
+    static let stillOpenAlone = "Still open."
+
+    /// `W1R2-n1`: whether the asked-on clause has a story to tell.
+    ///
+    /// "Still open, Leah asked on Sep 4." under a date of Sep 4 says the
+    /// studio asked and ran out of time in the same breath. The clause earns
+    /// its place only where the studio asked BEFORE the day it wanted an
+    /// answer by, and where the wire carried both days at all.
+    ///
+    /// `W1R2-M2`: this is a seam because there are two composers. `approval`
+    /// below is one; `HouseRecordCard`, which formats the Record's dates in a
+    /// fixed locale of its own, is the other. One guard, so Today and the
+    /// Studio hub cannot print different sentences about one approval.
+    static func askedOnClauseEarned(
+        askedAt: Date?,
+        dueDate: Date?,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard let askedAt, let dueDate else { return false }
+        return calendar.startOfDay(for: askedAt) < calendar.startOfDay(for: dueDate)
+    }
+
     /// The one line an unresolved approval prints under its title.
     struct ApprovalLine: Equatable {
         let text: String
@@ -121,17 +144,11 @@ enum DateDisplay {
             return ApprovalLine(text: due(dueDate, now: now).text, isStillOpen: false)
         }
         // The sentence names the day the studio asked, never the day that
-        // passed. With no asked-on date on the wire it says only what it
-        // knows and invents nothing.
-        //
-        // `W1R2-n1`: and an asked-on date that is not BEFORE the day it was
-        // wanted by cannot be read as one — "Still open, Leah asked on Sep 4."
-        // under a date of Sep 4 says the studio asked and ran out of time in
-        // the same breath. Where the two dates do not tell a story, the clause
-        // goes and the sentence says only that it is open.
+        // passed. With no asked-on date on the wire — or with one the guard
+        // above refuses — it says only what it knows and invents nothing.
         guard let askedAt,
-              calendar.startOfDay(for: askedAt) < calendar.startOfDay(for: dueDate)
-        else { return ApprovalLine(text: "Still open.", isStillOpen: true) }
+              askedOnClauseEarned(askedAt: askedAt, dueDate: dueDate, calendar: calendar)
+        else { return ApprovalLine(text: stillOpenAlone, isStillOpen: true) }
         return ApprovalLine(
             text: stillOpen(designer: designer, askedOn: short(askedAt)),
             isStillOpen: true
