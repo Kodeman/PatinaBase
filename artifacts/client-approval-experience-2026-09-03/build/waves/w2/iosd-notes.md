@@ -107,6 +107,16 @@ approved this edition" over a co-member's studio row would be a lie about who
 acted. **Owed to the orchestrator: confirm the migration's actual value with the
 backend lane and, if it is not in either list above, add it.**
 
+**One accepted cost while `viewer_role` is absent.** `answeredApprovalRows`
+reads the same default-include rule as the feed, so until the migration lands a
+studio co-member reading her own client app would see "You approved this
+edition." over an approval her studio answered — words in her mouth, which is a
+shade worse than the misplaced NEEDS YOU row Wave 1 already leaves her. The
+alternative is to require a POSITIVE `.answers`, which would ship P-21's
+approval half dark for everyone until the backend lands. Taken deliberately:
+both lanes land in this wave's integration, and the rulings record that there
+are zero live clients in the window. **Flagged.**
+
 ### P-21 — the Codable shape
 
 `HouseRecordRow.Kind` is decoded as a raw string and an unknown one throws a
@@ -247,19 +257,42 @@ regressions. Recorded here so a reviewer can see they were moved on purpose.
    `BadgeCountService.swift` purely for the 500-line limit. Nothing moved but
    four computed properties; call sites are unchanged.
 
-## Gates
+## Gates — results
 
-Run from this worktree against `cae-w1-iosb`
-(`IOS_GATE_UDID=493547C8-D84B-478B-8673-3FF6ACAA05C6`). `xcodebuild` needs the
-unsandboxed retry: the sandboxed attempt dies at
-`Could not resolve package dependencies: error: permissionDenied`.
+Run from this worktree, unsandboxed, against `cae-w1-iosb`
+(`IOS_GATE_UDID=493547C8-D84B-478B-8673-3FF6ACAA05C6`). Final tree, `c4d98affd`.
 
-The first `build` of the wave failed on a cold per-worktree `DerivedData` with
-three `SwiftCompile` failures in the `x86_64` slice and **no `error:` diagnostic
-anywhere in the log** — the transient the gate script's own header names and the
-Wave 1 integration report recorded. The immediate re-run returned exit 0.
+| tier | result |
+|---|---|
+| `build` | **PASS** — `** BUILD SUCCEEDED **`, exit 0 |
+| `unit` | **PASS** — `** BUILD SUCCEEDED **`; `Test run with 2524 tests in 276 suites passed after 8.916 seconds with 2 known issues`; `** TEST SUCCEEDED **`; exit 0 |
+| `lint-delta main` | **PASS** — `✓ lint-delta: no new warnings in touched files`, exit 0 |
 
-Results are recorded in the lane's report-back.
+2436 tests in 265 suites at the Wave 1 close; **2524 in 276** now — this lane's
+five new suites. The two known issues are the pre-existing pair both iOS lanes
+report: a `BrandVoiceLint` expectation on "curated_mix" and
+`RoomLifecycleTests.theTodayRailFollowsALocalDelete`.
+
+**Two red rounds on the way there, both recorded rather than papered over.**
+
+1. `ApprovalVocabularySweepTests` would not compile: `contains(where: \.isNumber)`
+   reads as a throwing call inside an `#expect` expansion ("call can throw, but
+   it is not marked with 'try'"). Rewritten as a `rangeOfCharacter(from:
+   .decimalDigits)` helper.
+2. Two Wave 1 source-pins went red, and a third failure did not belong to this
+   lane. The pins are covered in their own section above. The third was
+   `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` —
+   the timing-dependent test iOS-A already recorded in Wave 1 (a 10 ms poll
+   against a 50 ms `Task.sleep` handoff, which "failed once on a loaded machine,
+   then passed on a clean re-run of the same tree"). `git diff --name-only
+   107549568..HEAD | grep -i companion` is empty: this lane touches nothing in
+   Companion, and the test passed on the final run without any change to it.
+
+**The cold-cache transient.** The first `build` of the wave reported
+`** BUILD FAILED **` with three `SwiftCompile` failures in the `x86_64` slice
+and no `error:` diagnostic anywhere in the log — the class the gate script's own
+header names and the Wave 1 integration report recorded. The immediate re-run
+returned exit 0 with `** BUILD SUCCEEDED **`.
 
 ## Files
 
