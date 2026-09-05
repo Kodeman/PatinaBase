@@ -109,7 +109,7 @@ export interface DoorGateProps {
    * its own mark.
    */
   first?: boolean;
-  /** Who countersigns, where the kind's consent says someone does. */
+  /** The studio that holds the signature, named on the receipt and the pin. */
   studioName?: string | null;
 }
 
@@ -140,6 +140,13 @@ export function DoorGate({
 
   const doorwayRef = useRef<HTMLDivElement | null>(null);
   const swingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The wait that holds the refetch back until the leaf has finished (W2-01). */
+  const invalidateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Written beside `setSignedAt`, and read in the catch — where `signedAt`
+   * itself is still the value this render closed over.
+   */
+  const signedAtRef = useRef<Date | null>(null);
   // State is render-time, so two clicks in one tick both read `submitting`
   // false. The latch closes that; the shipped route has the same hole.
   const inFlight = useRef(false);
@@ -147,6 +154,7 @@ export function DoorGate({
   useEffect(
     () => () => {
       if (swingTimer.current) clearTimeout(swingTimer.current);
+      if (invalidateTimer.current) clearTimeout(invalidateTimer.current);
     },
     [],
   );
@@ -210,14 +218,11 @@ export function DoorGate({
       };
       if (!response.ok) throw new Error(refusalSentence(body.error));
 
-      await invalidateSignedCommercialDocument(
-        queryClient,
-        proposal.id,
-        body.projectId ?? projectId,
-      );
       proposalClientEvents.signed({ proposalId: proposal.id, signedByName });
 
-      setSignedAt(new Date());
+      const stampedAt = new Date();
+      signedAtRef.current = stampedAt;
+      setSignedAt(stampedAt);
       // The route pushes ?delivery=pending_retry so CommercialNotificationRecovery
       // can offer the replay. The Threshold IS the page that param lands on, so
       // the recovery is surfaced here instead of being navigated to.
@@ -240,8 +245,36 @@ export function DoorGate({
       }
       window.requestAnimationFrame(() => setReceiptInked(true));
       onSigned?.();
+
+      // W2-01. THE INVALIDATION GOES LAST, AND IT WAITS FOR THE LEAF.
+      //
+      // It used to be awaited first, and the refetch it triggers takes the
+      // signed paper out of the papers the Threshold draws doors from — so
+      // `renderDoor` returned null and this whole section unmounted about
+      // 40 ms after the POST answered, before the swinging state was ever
+      // set. Nothing of the ceremony was drawn: no leaf, no reopened head,
+      // and no receipt, which is where P-19's sentence lives. The paper was
+      // signed correctly the whole time; the door simply never moved.
+      //
+      // The state above is this component's own, so the leaf swings on it
+      // alone. The refetch is what ends the door, and it is allowed to end
+      // it only once the swing has run.
+      await new Promise<void>((resolve) => {
+        invalidateTimer.current = setTimeout(resolve, stilled ? 0 : SWING_MS);
+      });
+      await invalidateSignedCommercialDocument(
+        queryClient,
+        proposal.id,
+        body.projectId ?? projectId,
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : refusalSentence(null));
+      // A refusal is the only thing this may say. A signature that landed and
+      // then failed to refresh a cache has not failed, and must not be
+      // reported as one — so the invalidation above throws into a caught
+      // branch only when `signedAt` is still null.
+      if (!signedAtRef.current) {
+        setError(err instanceof Error ? err.message : refusalSentence(null));
+      }
     } finally {
       inFlight.current = false;
       setSubmitting(false);
@@ -272,9 +305,14 @@ export function DoorGate({
     }
   }
 
-  const countersigns = studioName?.trim() || 'the studio';
+  // RULED 2026-09-05 (P-19). "countersigns" is retired: this line used to
+  // promise a second act on every kind of paper, including a trade scope,
+  // whose own consent line is pinned never to assert one. What is true the
+  // moment the route answers is that the studio holds her name and a copy is
+  // hers — the same sentence the phone's seal says.
+  const holder = studioName?.trim() || 'Your studio';
   const receipt = signedAt
-    ? `${proposal.title} · signed ${DAY_MONTH.format(signedAt)} · ${countersigns} countersigns`
+    ? `${proposal.title} · signed ${DAY_MONTH.format(signedAt)} · ${holder} has your signature. You’ll have a copy.`
     : null;
 
   // The document's own total is authoritative: Σ clientLineTotalCents

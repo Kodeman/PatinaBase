@@ -379,13 +379,16 @@ describe('DoorGate', () => {
     const receipt = screen.getByTestId('door-receipt');
     expect(receipt).toHaveTextContent('Furnishings authorization No. 7');
     expect(receipt).toHaveTextContent('signed');
-    expect(receipt).toHaveTextContent('Quist Interiors countersigns');
+    // RULED 2026-09-05 (P-19): the receipt says what is true — the studio holds
+    // her name — and never that anyone countersigns.
+    expect(receipt).toHaveTextContent('Quist Interiors has your signature. You’ll have a copy.');
+    expect(receipt).not.toHaveTextContent('countersign');
 
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/proposals/prop-7/sign',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(invalidateSignedCommercialDocument).toHaveBeenCalled();
+    await waitFor(() => expect(invalidateSignedCommercialDocument).toHaveBeenCalled());
     expect(proposalClientEvents.signed).toHaveBeenCalledWith({
       proposalId: 'prop-7',
       signedByName: 'Harper Vale',
@@ -497,10 +500,65 @@ describe('DoorGate', () => {
     });
     expect(screen.queryByTestId('door-way')).not.toBeInTheDocument();
     expect(screen.queryByTestId('door-leaf')).not.toBeInTheDocument();
-    expect(screen.getByTestId('door-receipt')).toHaveTextContent('Quist Interiors countersigns');
+    expect(screen.getByTestId('door-receipt')).toHaveTextContent('Quist Interiors has your signature. You’ll have a copy.');
 
     height.mockRestore();
     jest.useRealTimers();
+  });
+
+  /**
+   * `W2-01`. `onSign` used to AWAIT the invalidation before it set `signedAt`
+   * or started the swing. The refetch takes the signed paper out of the papers
+   * the Threshold draws doors from, so the whole section unmounted about 40 ms
+   * after the POST answered — measured at frame resolution in the round-2 walk:
+   * `door-way` was already gone at the first sample, `door-receipt` never
+   * appeared on three signatures, and the leaf never entered `swinging`.
+   */
+  it('starts the swing before the refetch, and waits the leaf out before asking for it', async () => {
+    jest.useFakeTimers();
+    reduceMotion(false);
+    let releaseInvalidation: () => void = () => {};
+    (invalidateSignedCommercialDocument as jest.Mock).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseInvalidation = resolve;
+        }),
+    );
+
+    renderGate();
+    signWith();
+    await holdSign({ faked: true });
+
+    // The leaf is already moving and the receipt is already drawn, with the
+    // refetch not so much as asked for.
+    expect(screen.getByTestId('door-leaf')).toHaveAttribute('data-door-state', 'swinging');
+    expect(screen.getByTestId('door-receipt')).toBeInTheDocument();
+    expect(invalidateSignedCommercialDocument).not.toHaveBeenCalled();
+
+    // The swing runs to its end on its own.
+    await act(async () => {
+      jest.advanceTimersByTime(520);
+    });
+    expect(screen.getByTestId('door-receipt')).toHaveTextContent('Quist Interiors has your signature. You’ll have a copy.');
+    expect(invalidateSignedCommercialDocument).toHaveBeenCalledTimes(1);
+
+    releaseInvalidation();
+    jest.useRealTimers();
+  });
+
+  it('does not call a signed paper a refusal when the refetch after it fails', async () => {
+    reduceMotion(true);
+    (invalidateSignedCommercialDocument as jest.Mock).mockRejectedValue(
+      new Error('network'),
+    );
+
+    renderGate();
+    signWith();
+    await holdSign();
+
+    await waitFor(() => expect(invalidateSignedCommercialDocument).toHaveBeenCalled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('door-receipt')).toBeInTheDocument();
   });
 
   it('inks the receipt from nothing, so the crossfade has something to run', async () => {
