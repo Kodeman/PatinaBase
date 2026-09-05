@@ -237,7 +237,7 @@ struct HoldToActTests {
 
             await viewModel.submitApprovalResponse()
 
-            #expect(sent == "", "\(unsigned.rawValue) carried a signature")
+            #expect(sent?.isEmpty == true, "\(unsigned.rawValue) carried a signature")
             #expect(viewModel.answeredOutcome == unsigned)
         }
     }

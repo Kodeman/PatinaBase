@@ -53,23 +53,24 @@ struct ProposalDetailView: View {
         // the whole payoff of the ceremony.
         .fullScreenCover(
             isPresented: $viewModel.showSignSheet,
-            onDismiss: { viewModel.signCoverDismissed() }
-        ) {
-            SignActView(
-                proposalTitle: viewModel.proposal?.title ?? "this proposal",
-                terms: ProposalSignTerms.make(
-                    proposal: viewModel.proposal,
-                    milestones: viewModel.milestones
-                ),
-                editionLine: viewModel.editionLine,
-                isSigning: viewModel.isSigning,
-                errorMessage: viewModel.signError,
-                onSign: { name in
-                    Task { await viewModel.sign(proposalId: proposalId, name: name) }
-                },
-                onCancel: { viewModel.cancelSigning() }
-            )
-        }
+            onDismiss: { viewModel.signCoverDismissed() },
+            content: {
+                SignActView(
+                    proposalTitle: viewModel.proposal?.title ?? "this proposal",
+                    terms: ProposalSignTerms.make(
+                        proposal: viewModel.proposal,
+                        milestones: viewModel.milestones
+                    ),
+                    editionLine: viewModel.editionLine,
+                    isSigning: viewModel.isSigning,
+                    errorMessage: viewModel.signError,
+                    onSign: { name in
+                        Task { await viewModel.sign(proposalId: proposalId, name: name) }
+                    },
+                    onCancel: { viewModel.cancelSigning() }
+                )
+            }
+        )
         .fullScreenCover(isPresented: $viewModel.showSealMoment) {
             SealMomentView(
                 studioName: viewModel.countersigningStudio,
