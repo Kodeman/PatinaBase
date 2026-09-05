@@ -15,6 +15,7 @@ import {
 } from '@/components/threshold/instruments/standing-sentence';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { useNamedInvoice } from '@/lib/threshold/checkout-return';
 import { parseSourceDate, toInvoiceModel } from '@/lib/threshold/derive';
 import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
 
@@ -65,14 +66,35 @@ export function LetterboxDoor() {
   // letterbox with nothing readable in it.
   const standing = useMemo(() => visibleInvoices(letters), [letters]);
 
-  // The letterhead comes off the letter's OWN studio (00571 gives p_studio_id
+  const open = useMemo(
+    () =>
+      standing
+        .filter((row) => OPEN_STATUSES.has(row.status) && invoiceBalanceCents(row) > 0)
+        .sort(byDueDate),
+    [standing],
+  );
+
+  // The plate has to name the studio whose letter is actually standing in the
+  // slot, and `Letterbox` chooses that letter itself: the one the address
+  // named, else the soonest-due open one. Repeating the choice here (over the
+  // same `letters` list it is handed) is what keeps a household holding
+  // letters from two studios from reading one studio's plate over the other
+  // studio's letter.
+  const namedId = useNamedInvoice();
+  const inSlot =
+    (namedId ? (letters.find((row) => row.id === namedId) ?? null) : null) ??
+    open[0] ??
+    standing[0] ??
+    null;
+
+  // The letterhead comes off that letter's OWN studio (00571 gives p_studio_id
   // precedence), never off the designer's primary studio: a designer who
   // belongs to two would otherwise sign a letter with the other one's name.
   // The designer rides along as the fallback the resolver falls through to
   // when the named studio is not an active design studio.
   const identityQuery = useStudioIdentity({
-    studioId: standing[0]?.studio_id ?? null,
-    designerId: standing[0]?.designer_id ?? null,
+    studioId: inSlot?.studio_id ?? null,
+    designerId: inSlot?.designer_id ?? null,
   });
 
   const today = useMemo(() => (hydrated ? new Date() : undefined), [hydrated]);
@@ -82,14 +104,6 @@ export function LetterboxDoor() {
   const onRefetch = useCallback(async () => {
     await refetch();
   }, [refetch]);
-
-  const open = useMemo(
-    () =>
-      standing
-        .filter((row) => OPEN_STATUSES.has(row.status) && invoiceBalanceCents(row) > 0)
-        .sort(byDueDate),
-    [standing],
-  );
 
   // A door that renders the empty state and then grows a letter is the one
   // reversal a money surface may not perform.

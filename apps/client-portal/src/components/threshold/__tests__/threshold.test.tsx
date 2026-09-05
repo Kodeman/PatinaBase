@@ -97,6 +97,12 @@ jest.mock('@patina/supabase', () => ({
   useDeclineScopeChange: jest.fn(),
   useCreateClientScopeChangeRequest: jest.fn(),
   useCancelClientScopeChangeRequest: jest.fn(),
+  // A letter the address names is unfolded on arrival, and unfolding mounts
+  // `Settlement`. Its own behaviour is `settlement.test.tsx`'s; here these only
+  // have to exist so the ceremony can stand.
+  useInvoicePaymentOptions: jest.fn(),
+  useStartCheckout: jest.fn(),
+  useNotifyCheckIntent: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-commercial-client', () => ({
@@ -190,6 +196,9 @@ import {
   useApproveScopeChange,
   useDeclineScopeChange,
   useCreateClientScopeChangeRequest,
+  useInvoicePaymentOptions,
+  useStartCheckout,
+  useNotifyCheckIntent,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -223,6 +232,9 @@ const ordersMock = useDirectOrders as jest.Mock;
 const partiesMock = useProjectParties as jest.Mock;
 const teamMock = useProjectTeamMembers as jest.Mock;
 const identityMock = useStudioIdentity as jest.Mock;
+const paymentOptionsMock = useInvoicePaymentOptions as jest.Mock;
+const startCheckoutMock = useStartCheckout as jest.Mock;
+const notifyCheckIntentMock = useNotifyCheckIntent as jest.Mock;
 const markReadMock = useMarkProjectRead as jest.Mock;
 const previousMarkMock = usePreviousReadingMark as jest.Mock;
 const selectionsMock = useClientSelections as jest.Mock;
@@ -1841,6 +1853,9 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
     standAt('');
     jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
     identityMock.mockReturnValue(settled({ name: 'Middle West Studio', source: 'studio' }));
+    paymentOptionsMock.mockReturnValue({ isPending: false, data: { card_surcharge_bps: 300 } });
+    startCheckoutMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+    notifyCheckIntentMock.mockReturnValue({ mutateAsync: jest.fn() });
   });
 
   afterEach(() => {
@@ -1909,6 +1924,82 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
     renderDoor();
 
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+
+  /* A household can hold letters from two studios at once — two designers, or
+     one designer's two studios. The plate names a studio and the slot holds a
+     letter; if they are resolved from different rows the plate signs another
+     studio's name over this studio's money. */
+
+  it('names the studio of the letter in the slot, not the newest letter’s', () => {
+    identityMock.mockImplementation(({ studioId }: { studioId: string | null }) =>
+      settled({
+        name: studioId === 'studio-ash' ? 'The Ash Studio' : 'Middle West Studio',
+        source: 'studio',
+      }),
+    );
+    // Settled first in the list (the hook orders by created_at desc) and from
+    // another studio; nothing is owed on it, so it is not the letter standing
+    // in the slot.
+    clientInvoicesMock.mockReturnValue(
+      settled([
+        {
+          ...STUDIO_INVOICE,
+          id: 'inv-30',
+          studio_id: 'studio-ash',
+          status: 'paid',
+          amount_paid_cents: 45_000,
+        },
+        STUDIO_INVOICE,
+      ]),
+    );
+
+    renderDoor();
+
+    expect(identityMock).toHaveBeenCalledWith({
+      studioId: 'studio-1',
+      designerId: 'designer-nora',
+    });
+    expect(identityMock).not.toHaveBeenCalledWith({
+      studioId: 'studio-ash',
+      designerId: 'designer-nora',
+    });
+    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
+  });
+
+  it('follows the letter the address named to that letter’s studio', () => {
+    standAt('?invoice=inv-32');
+    identityMock.mockImplementation(({ studioId }: { studioId: string | null }) =>
+      settled({
+        name: studioId === 'studio-ash' ? 'The Ash Studio' : 'Middle West Studio',
+        source: 'studio',
+      }),
+    );
+    // `inv-31` is due first, so the slot would hold it unasked; the address
+    // asks for the other studio's letter.
+    clientInvoicesMock.mockReturnValue(
+      settled([
+        STUDIO_INVOICE,
+        {
+          ...STUDIO_INVOICE,
+          id: 'inv-32',
+          studio_id: 'studio-ash',
+          designer_id: 'designer-nora',
+          invoice_number: 'Invoice No. 32',
+          title: 'Retainer · October',
+          due_date: '2026-09-01',
+        },
+      ]),
+    );
+
+    renderDoor();
+
+    expect(identityMock).toHaveBeenCalledWith({
+      studioId: 'studio-ash',
+      designerId: 'designer-nora',
+    });
+    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('The Ash Studio');
+    expect(screen.getByTestId('letterbox-regarding')).toHaveTextContent('Retainer · October');
   });
 
   it('holds rather than showing the empty state while the letters are still coming', () => {
