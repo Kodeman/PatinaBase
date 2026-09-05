@@ -318,10 +318,16 @@ struct ProjectApprovalDoorTests {
         #expect(try ProjectApprovalFixture.review(disposition: "superseded").awaitsClient == false)
     }
 
+    /// A plain decision that is not the approval — the merge carries one
+    /// obligation once, so a second row needs a second id.
+    private static let otherDecisionId = "a0000000-0000-0000-0000-0000000009e2"
+
     @Test("the feed behind NEEDS YOU carries both reads")
     func theFeedCarriesBothReads() throws {
         let merged = try #require(BadgeCountService.mergedDecisions(
-            pending: [try ProjectApprovalFixture.decision(contract: nil)],
+            pending: [try ProjectApprovalFixture.decision(
+                contract: nil, id: Self.otherDecisionId
+            )],
             approvals: [try ProjectApprovalFixture.review()],
             previous: []
         ))
@@ -338,13 +344,26 @@ struct ProjectApprovalDoorTests {
         #expect(withStudio.isEmpty)
     }
 
+    /// A studio co-member can see the parent row AND the projection — 00467
+    /// hides it from the homeowner only. One obligation, one row.
+    @Test("an approval both reads return is carried once")
+    func anApprovalVisibleToBothReadsIsNotDoubled() throws {
+        let merged = try #require(BadgeCountService.mergedDecisions(
+            pending: [try ProjectApprovalFixture.decision()],
+            approvals: [try ProjectApprovalFixture.review()],
+            previous: []
+        ))
+        #expect(merged.count == 1)
+        #expect(merged[0].id == ProjectApprovalFixture.decisionId)
+    }
+
     /// Each half that failed leaves its own last-known rows standing. Both
     /// failing is the only nil, which is what tells `performRefresh` to keep
     /// the floor it already has.
     @Test("a read that failed does not blank the feed the other read answered")
     func aFailedHalfDoesNotBlankTheFeed() throws {
         let standing = [
-            try ProjectApprovalFixture.decision(contract: nil),
+            try ProjectApprovalFixture.decision(contract: nil, id: Self.otherDecisionId),
             try ProjectApprovalFixture.review().asWaitingDecision
         ]
         #expect(BadgeCountService.mergedDecisions(
@@ -363,7 +382,9 @@ struct ProjectApprovalDoorTests {
         // And the other way round: the approval already on the feed survives a
         // projection read that failed.
         let pendingOnly = try #require(BadgeCountService.mergedDecisions(
-            pending: [try ProjectApprovalFixture.decision(contract: nil)],
+            pending: [try ProjectApprovalFixture.decision(
+                contract: nil, id: Self.otherDecisionId
+            )],
             approvals: nil, previous: standing
         ))
         #expect(pendingOnly.count == 2)

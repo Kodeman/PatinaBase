@@ -390,35 +390,6 @@ final class BadgeCountService {
         }
     }
 
-    /// One decision feed out of two reads.
-    ///
-    /// `iosb-B1`: `listPending` is a PostgREST GET on `client_decisions`, and
-    /// 00467:18-38 rewrote both SELECT policies a homeowner can reach to
-    /// `approval_contract IS DISTINCT FROM 'project_artifact_v1'` — so the read
-    /// that feeds NEEDS YOU and the Studio's "Awaiting you" is the one read
-    /// that can never return her own Stage-2 approvals. The projection is
-    /// merged in beside it, as rows, so the eyebrow can carry the truth R5
-    /// says it carries.
-    ///
-    /// Only the approvals still holding an act of hers become rows; the rest
-    /// are waiting on the studio and are not hers to answer. Each half that
-    /// failed leaves its own last-known rows standing rather than blanking a
-    /// feed the other half answered for.
-    /// `previous` is the feed as it stands, which is where a half that failed
-    /// gets its rows from. Static so it can be exercised without the singleton
-    /// this service is only ever reached through.
-    static func mergedDecisions(
-        pending: [RemoteClientDecision]?,
-        approvals: [RemoteProjectApprovalReview]?,
-        previous: [RemoteClientDecision]
-    ) -> [RemoteClientDecision]? {
-        guard pending != nil || approvals != nil else { return nil }
-        let legacy = pending ?? previous.filter { !$0.isProjectArtifactApproval }
-        let stage2 = approvals?.filter(\.awaitsClient).map(\.asWaitingDecision)
-            ?? previous.filter(\.isProjectArtifactApproval)
-        return legacy + stage2
-    }
-
     /// Fold a set of fetched rows into the counts and the retained rows. A
     /// `nil` argument means that fetch failed and its previous value stands —
     /// a stale floor beats a flickering zero.

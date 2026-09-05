@@ -68,12 +68,16 @@ enum ProjectApprovalFixture {
         )
     }
 
+    /// `id` defaults to the one decision above; pass another where a test
+    /// needs a SECOND row, since the merge that feeds NEEDS YOU carries one
+    /// obligation once (`ProjectApprovalDoorTests`).
     static func decision(
         contract: String? = "project_artifact_v1",
-        status: String = "pending"
+        status: String = "pending",
+        id: String = decisionId
     ) throws -> RemoteClientDecision {
         var row: [String: Any] = [
-            "id": decisionId,
+            "id": id,
             "title": "Kitchen millwork",
             "description": "Leah asked the mill to hold the walnut.",
             "status": status,

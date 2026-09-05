@@ -32,8 +32,12 @@ final class DecisionsListViewModel {
         do {
             let pending = try await DecisionsAPIClient.shared.listPending()
             let approvals = await approvalsFetch ?? []
+            // A studio co-member is the one caller both reads answer for, and
+            // one obligation must not draw twice under one id.
+            let carried = Set(pending.map(\.id))
             self.decisions = pending
                 + approvals.filter(\.awaitsClient).map(\.asWaitingDecision)
+                    .filter { !carried.contains($0.id) }
         } catch {
             self.error = "Couldn’t load decisions"
             #if DEBUG
