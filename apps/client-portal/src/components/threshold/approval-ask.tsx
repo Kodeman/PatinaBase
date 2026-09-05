@@ -626,6 +626,7 @@ export function ApprovalReceipt({
           {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
         </Stamp>
       </p>
+      {approval.outcome !== null && <KeepACopy decisionId={approval.decisionId} />}
       <div className="mt-3">
         <ScoredAction
           actionKey="read_approval_discussion"
@@ -652,6 +653,30 @@ export function ApprovalReceipt({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * P-26. The keepsake, offered where the mark is — and only once there is a
+ * mark to keep. It opens `/decisions/<id>/record` in a new tab rather than
+ * navigating: she is standing on a page she may still be reading, and a sheet
+ * for the drawer is not a place to send her away to.
+ */
+function KeepACopy({ decisionId }: { decisionId: string }) {
+  return (
+    <div className="mt-3">
+      <ScoredAction
+        actionKey="keep_approval_record"
+        regionKey="doorstep"
+        surfaceKey="the_threshold"
+        variant="tertiary"
+        href={`/decisions/${encodeURIComponent(decisionId)}/record`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Keep a copy
+      </ScoredAction>
+    </div>
   );
 }
 
@@ -1103,6 +1128,7 @@ export function ApprovalAsk({
           </Stamp>
         </p>
       )}
+      {recordedOutcome && <KeepACopy decisionId={approval.decisionId} />}
 
       <div className="mt-4">
         {!viewerAnswers && (

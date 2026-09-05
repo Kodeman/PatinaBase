@@ -451,6 +451,24 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(screen.queryByTestId('immutability-sentence')).not.toBeInTheDocument();
   });
 
+  /**
+   * P-26. "Keep a copy" appears beside the mark the moment the act returns —
+   * not before it, because there is nothing to keep until there is an answer
+   * — and opens the record in a new tab rather than taking her off a page she
+   * may still be reading.
+   */
+  it('offers the keepsake the moment the mark is pressed, and not before', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    expect(screen.queryByRole('link', { name: 'Keep a copy' })).not.toBeInTheDocument();
+
+    await answer(/^approve$/i);
+    await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+
+    const keep = await screen.findByRole('link', { name: 'Keep a copy' });
+    expect(keep).toHaveAttribute('href', '/decisions/dec-1/record');
+    expect(keep).toHaveAttribute('target', '_blank');
+  });
+
   it('names the consequence and takes a second beat before recording an outcome', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
@@ -1047,12 +1065,16 @@ describe('ApprovalReceipt', () => {
     expect(receipt).toHaveAttribute('id', 'approval-dec-1');
     expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('APPROVED 14 August');
     expect(receipt).toHaveTextContent('Library elevations · Edition 3');
-    // The only act on a closed approval reads its discussion; nothing on it
-    // can be changed, and it links nowhere.
+    // Nothing on a closed approval can be changed. The one button reads its
+    // discussion; the one link is P-26's keepsake, which leaves the page only
+    // in a new tab and changes nothing when it does.
     const acts = screen.getAllByRole('button');
     expect(acts).toHaveLength(1);
     expect(acts[0]).toHaveTextContent('Read the discussion');
-    expect(receipt.querySelector('a')).toBeNull();
+    const links = Array.from(receipt.querySelectorAll('a'));
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/decisions/dec-1/record');
+    expect(links[0]).toHaveTextContent('Keep a copy');
   });
 
   it('says the disposition ahead of the outcome on a superseded edition', () => {
@@ -1146,6 +1168,38 @@ describe('ApprovalReceipt', () => {
       'aria-label',
       'Discussion about approval dec-1',
     );
+  });
+
+  /**
+   * P-26. The keepsake is offered where the mark is — and only where there is
+   * a mark of HERS to keep. A gate withdrawn before any answer carries a
+   * disposition and no outcome, and there is no decision on it to print.
+   */
+  it('offers the keepsake beside the mark on a record she answered', () => {
+    render(
+      <ApprovalReceipt
+        approval={{
+          ...APPROVAL,
+          outcome: 'approved',
+          respondedAt: '2026-08-12T15:00:00Z',
+        }}
+      />,
+    );
+
+    const keep = screen.getByRole('link', { name: 'Keep a copy' });
+    expect(keep).toHaveAttribute('href', '/decisions/dec-1/record');
+    expect(keep).toHaveAttribute('target', '_blank');
+    expect(keep).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('offers no keepsake of a gate withdrawn before she answered', () => {
+    render(
+      <ApprovalReceipt
+        approval={{ ...APPROVAL, outcome: null, disposition: 'withdrawn' }}
+      />,
+    );
+
+    expect(screen.queryByRole('link', { name: 'Keep a copy' })).not.toBeInTheDocument();
   });
 
   it('says nothing about an approval that is still open', () => {

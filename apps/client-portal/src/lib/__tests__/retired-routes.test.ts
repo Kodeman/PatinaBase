@@ -59,4 +59,28 @@ describe('the instruments that already named their house', () => {
   it('leaves the printable invoice its own page', () => {
     expect(retiredRouteTarget('/invoices/inv-1/print')).toBeNull();
   });
+
+  /**
+   * P-26. The two Record of Decision sheets ride the same carve-out: a page
+   * that exists to be printed has no in-page equivalent to fold onto, and
+   * folding it would send "Keep a copy" straight back to the ask it was
+   * pressed on. Every OTHER address under both heads still folds.
+   */
+  it('leaves the two record sheets their own pages', () => {
+    expect(retiredRouteTarget('/decisions/dec-1/record')).toBeNull();
+    expect(retiredRouteTarget('/proposals/prop-7/record')).toBeNull();
+  });
+
+  it('still folds the addresses either record sits beside', () => {
+    expect(retiredRouteTarget('/decisions/dec-1')).toEqual({
+      path: '/',
+      anchor: 'approval-dec-1',
+      params: { decision: 'dec-1' },
+    });
+    expect(retiredRouteTarget('/proposals/prop-7/sign')).toEqual({
+      path: '/',
+      anchor: 'door',
+      params: { proposal: 'prop-7' },
+    });
+  });
 });
