@@ -297,6 +297,14 @@ async function loadInvoicePayable(
     // `?checkout=` at all, so a return landing there gets no receipt and no
     // cancellation notice. Ship order is: portal first, probe it, THEN these
     // functions (2026-09-04 review, finding 2).
+    //
+    // The studio leg needs MORE than that portal: the letterbox only speaks a
+    // settlement it can see a row for, and it reads rows from
+    // useProjectInvoices(projectId), which filters `.eq('project_id')` — a
+    // studio invoice is never in that list, and a payer with no house at all
+    // never mounts a Letterbox. So the studio return address is mute until W3
+    // lands the client-invoice read and the letterbox-only front door
+    // (2026-09-05 review, finding F-A).
     successUrl: invoiceCheckoutReturnAddress(
       CLIENT_PORTAL_URL,
       invoice.project_id,

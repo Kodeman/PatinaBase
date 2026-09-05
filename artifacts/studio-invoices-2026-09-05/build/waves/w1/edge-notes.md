@@ -23,12 +23,22 @@ binds exactly one signature; a two-argument call would match BOTH the pre-00570
 function and the new three-argument one if a deploy ever left them side by side,
 and Postgres answers that with 42725 — which this wrapper swallows as "no
 brand", i.e. silent letterhead loss. A `PGRST202` ("no such function") answer to
-a call that carries **no** studio falls back once to the two-argument form, so a
-project-bound letter still brands if the function lands ahead of the migration;
-a call that *does* carry a studio does not retry, because the two-argument RPC
+a call that carries **no** studio falls back once to the two-argument form; a
+call that *does* carry a studio does not retry, because the two-argument RPC
 would answer with the designer's primary studio — the wrong letterhead.
 `studioId` alone is now anchor enough (previously `!projectId && !designerId`
 returned null).
+
+⚠ That fallback protects the **other 14 importers** (they reach the RPC through
+`resolveStudioSignature(admin, { designerId?, projectId? })`, which names no
+studio) — it does **not** protect the five invoice functions. All five pass
+`studioId: invoice.studio_id`, and that column is never null on any row the
+schema can produce (`set_invoice_studio_id` raises
+`studio_id_not_designer_studio` on a null, `00511_public_sd_hardening.sql:2861`;
+00513's studioless index says "Currently unreachable in practice"). So the five
+lose co-branding — on project invoices too — if they land ahead of the
+migration. Migration first, per the ship order below; the `title` column makes
+that mandatory anyway.
 
 ### The five functions
 Same three moves in each — `create-checkout-session`, `invoice-send`,
@@ -112,7 +122,7 @@ deno test … …/supabase/functions/create-checkout-session/
   ok | 17 passed | 0 failed         (baseline: 14)
 deno test … …/supabase/functions/stripe-webhook/
   ok | 18 passed | 0 failed         (baseline: 18)
-deno check --config …/deno.json <index.ts>   — clean for all 21 deploy-set functions
+deno check --config …/deno.json <index.ts>   — clean for all 20 deploy-set functions
 ```
 
 `invoice-send`, `invoice-reminders` and `invoice-check-intent` have no test
@@ -120,10 +130,11 @@ files of their own; they are covered by `deno check` and by the `_shared`
 suites their letters and identity resolution come from. No `deno.lock` was
 created (`find . -name deno.lock` → nothing).
 
-## Deploy set — 21 functions
+## Deploy set — 20 functions
 
 Every directory importing `_shared/studio-identity.ts` transitively, ∪ the five.
-A `_shared/*` edit requires redeploying EVERY importer.
+A `_shared/*` edit requires redeploying EVERY importer. (Round 1 said 21 and
+named `morning-brief`; see Fix round 2 / F-D — it is not an importer.)
 
 Direct importers (14): `client-invite`, `commercial-document-notify`,
 `create-checkout-session`, `invoice-reminders`, `invoice-send`,
@@ -135,10 +146,13 @@ Via `_shared/decision-notify.ts` and `_shared/project-approval-notification.ts`
 (5): `decision-first-notice`, `decision-reminders`, `decision-resolved-notify`,
 `expire-decisions`, `notification-digest`.
 
-Via `notification-digest/logic.ts` → `morning-brief/render.ts` (1):
-`morning-brief`.
-
 Plus `invoice-check-intent` (edited here; not an importer of studio-identity).
+
+14 + 5 + 1 = 20. The list is the reverse transitive closure of every *relative*
+import under `supabase/functions`, recomputed by walking the import graph rather
+than by text-grepping module names — `morning-brief` mentions
+`notification-digest` only in a comment (`morning-brief/render.ts:3`) and does
+not belong.
 
 Ship order — **the migration goes first**:
 
@@ -149,9 +163,16 @@ Ship order — **the migration goes first**:
    scan, and `stripe-webhook`'s `loadInvoiceJoined` returns null, which SKIPS
    the receipt, failed-payment and refund letters SILENTLY while the money
    still settles.
-2. The client portal — `create-checkout-session`'s existing ⚠ DEPLOY ORDER
-   comment still stands: a return landing on a portal that reads no
-   `?checkout=` gets no receipt.
+2. The client portal — and for a studio invoice that means the **W3** client
+   page, not merely the currently-deployed one. See Fix round 2 / F-A: the
+   letterbox reads its rows from `useProjectInvoices(projectId)`
+   (`use-invoices.ts:465`, `.eq('project_id', projectId)`), which can never
+   return a studio invoice, so `settlement` stays null
+   (`letterbox.tsx:139-141`) and a payer with no house at all lands in
+   `ProjectsEmptyState` with no Letterbox mounted at all
+   (`app/page.tsx:61-69`). Until W3's `useClientInvoices()` and letterbox-only
+   front door land, a paid studio invoice returns to a page that states nothing
+   about the payment.
 3. These 21 functions.
 
 (The RPC argument change alone is order-tolerant — see the `studio-identity`
@@ -250,3 +271,153 @@ find . -name deno.lock -not -path "./node_modules/*"  →  nothing
 ```
 
 Deploy set is unchanged: the same 21 functions.
+
+---
+
+## Fix round 2 (adversarial review, round 3)
+
+The orchestrator's brief calls this "Fix round 1"; a section by that name
+already exists above, written against review round 1. This one answers
+`edge-review-r3.md`. One major (F-A) plus the minors whose fix was a false or
+stale sentence in this file. Gates re-run at the bottom.
+
+### F-A (major) — a paid studio invoice returns to a page that says nothing
+
+**Not lane code; the fix is a ship gate, and the gate is now written down in
+both places a shipper looks.** Re-verified independently in this worktree:
+
+- `packages/supabase/src/hooks/use-invoices.ts:465` — `.eq('project_id', projectId)`.
+  A studio invoice has `project_id IS NULL`, so `useProjectInvoices(projectId)`
+  can never return one.
+- `apps/client-portal/src/components/threshold/threshold.tsx:272` — the
+  letterbox's rows are exactly that query.
+- `apps/client-portal/src/components/threshold/letterbox.tsx:139-141` —
+  `invoices.find((row) => row.id === returned.invoiceId) ?? null`; no row, so
+  `settlement` is null and no receipt or cancellation line renders.
+- `apps/client-portal/src/app/page.tsx:61-69` — a payer with no house at all
+  gets `ProjectsEmptyState`, which mounts no `Letterbox`.
+
+The plan's own ship order (`:100`) puts the edge functions before the client
+portal, which opens exactly this window. Recorded as:
+
+1. **Ship order step 2 above**, rewritten to say the client portal that matters
+   for the studio leg is the **W3** one (`useClientInvoices()` + the
+   letterbox-only front door), not the currently-deployed one.
+2. **The code that mints the address.** `create-checkout-session/index.ts`
+   already carried a `⚠ DEPLOY ORDER` comment for the 2026-09-04 version of
+   this hazard; it now also names the studio leg's stricter requirement, at the
+   two lines that build the return URLs. A comment is the only lane-side change
+   this finding takes — the constraint is a deploy ordering the code cannot
+   express.
+
+No behavior changed. This finding does not close inside W1; it closes when W3
+lands.
+
+### F-D (minor) — the deploy set is 20, not 21
+
+Confirmed by recomputing the reverse transitive closure of
+`_shared/studio-identity.ts` over every relative import under
+`supabase/functions` (graph walk, not a text grep):
+
+```
+client-invite  commercial-document-notify  create-checkout-session
+decision-first-notice  decision-reminders  decision-resolved-notify
+expire-decisions  invoice-reminders  invoice-send  notification-digest
+notification-dispatch  po-send  proposal-nudge  proposal-sign-confirmation
+quote-request-send  review-requests  spec-pdf  stripe-webhook  trade-rfq-send
+count 19
+```
+
+∪ `invoice-check-intent` = **20**. `morning-brief` is out:
+`grep -rn "notification-digest" morning-brief/` → one hit, a comment at
+`morning-brief/render.ts:3`. The deploy-set section is corrected, and the rule
+it states is now "reverse transitive closure of the relative-import graph", not
+a module-name grep.
+
+### F-B (minor) — the PGRST202 fallback cannot fire for the five
+
+The round-1 claim *"a project-bound letter still brands if the function lands
+ahead of the migration"* was **false for the five**: they all pass
+`studioId: invoice.studio_id`, and the retry is guarded by `!studioId`
+(`studio-identity.ts:62-69`). `invoices.studio_id` is never null on a
+schema-produced row — `set_invoice_studio_id` raises
+`studio_id_not_designer_studio` when `NEW.studio_id IS NULL`
+(`00511_public_sd_hardening.sql:2861-2867`) and 00513's studioless index carries
+"Currently unreachable in practice" (`:43-44`). The clause is corrected in the
+`_shared/studio-identity.ts` section: the fallback protects the other 14
+importers (which reach the RPC via `resolveStudioSignature`, naming no studio)
+and not the five. No code change — the `&& !studioId` guard is still right (the
+two-argument RPC answers with the designer's *primary* studio, the wrong
+letterhead for a two-studio designer; no brand beats the wrong brand), and the
+migration-first order is already mandatory because all five `select` `title`.
+
+### F-J (nit) — the deploy-set rule derived from one shared module
+
+Round 1 also edited `_shared/invoice-emails.ts`. Its reverse closure is
+`{invoice-check-intent, invoice-reminders, invoice-send, stripe-webhook}` — a
+strict subset of the 20, so the set is unchanged. Stated here so a later
+`_shared` edit re-derives rather than inherits.
+
+### F-I (nit) — r2's R2-7 is unreachable; closed
+
+Agreed and closed, on the reviewer's own evidence: `set_invoice_studio_id`'s
+INSERT arm requires `project.studio_id = NEW.studio_id` **and**
+`project.designer_id = NEW.designer_id` (`00511:2851-2854`), and `p_studio_id`
+short-circuits the project branch in the new RPC (`00570:1191-1194`). Same org
+resolves before and after.
+
+### Left open, deliberately
+
+- **F-C** (minor) — the `?? title ??` chain is untested inside the five.
+  Exporting `invoiceSubjectName` from `stripe-webhook` and `invoice-reminders`
+  and lifting the three inline forms out of `invoice-send`,
+  `invoice-check-intent` and `create-checkout-session` is a refactor of five
+  files, not a trivial minor; those three have no test file because their
+  `index.ts` runs `Deno.serve` at module load. Wants its own item.
+- **F-E** (minor) — `'your studio'` reads oddly to a homeowner. Brief-mandated
+  string; a copy ruling, not a lane defect.
+- **F-F** (minor) — `branded-email.ts:221`'s "Your project" client footer under
+  a studio letter. Shared shell chrome for ~20 functions; threading
+  `footerLinks` through `invoice-emails.ts`'s private `wrap()` is a W1 addendum.
+- **F-G** (minor) — the plan's `_tests/stripe-rail.test.ts` null-project case.
+  Runs against the shared local stack, which this brief forbids; belongs to the
+  db or integration lane.
+- **F-H** (nit) — `invoice-check-intent` selects and types `studio_id` and never
+  reads it (`:67`, `:125`). Harmless; left rather than touch a select for
+  cosmetics.
+- **F-K** (nit) — Stripe line-item name length. Identical exposure on the
+  project path; parity, not new.
+
+### Gates, re-run
+
+```
+$ deno test --allow-all --config …/supabase/functions/deno.json …/supabase/functions/_shared/
+ok | 200 passed | 0 failed (5s)
+
+$ deno test … …/supabase/functions/create-checkout-session/
+ok | 17 passed | 0 failed (139ms)
+
+$ deno test … …/supabase/functions/stripe-webhook/
+ok | 18 passed | 0 failed (113ms)
+```
+
+`invoice-send`, `invoice-reminders`, `invoice-check-intent` still have no test
+files of their own (`ls …/*test*` → no matches).
+
+`deno check --config …/deno.json <index.ts>` — OK for all 20 of the deploy set:
+
+```
+create-checkout-session OK   invoice-send OK   invoice-reminders OK
+stripe-webhook OK            invoice-check-intent OK
+client-invite OK             commercial-document-notify OK
+decision-first-notice OK     decision-reminders OK
+decision-resolved-notify OK  expire-decisions OK
+notification-digest OK       notification-dispatch OK
+po-send OK                   proposal-nudge OK
+proposal-sign-confirmation OK quote-request-send OK
+review-requests OK           spec-pdf OK   trade-rfq-send OK
+```
+
+```
+$ find . -name deno.lock -not -path "*/node_modules/*"   → nothing
+```
