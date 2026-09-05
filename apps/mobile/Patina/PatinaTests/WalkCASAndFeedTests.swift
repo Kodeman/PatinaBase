@@ -57,7 +57,7 @@ struct ApprovalCASOrderTests {
         var stamped: String?
         let viewModel = DecisionDetailViewModel()
         viewModel.markDecisionViewed = { stamped = $0 }
-        viewModel.respondToApproval = { _, _, _, _ in }
+        viewModel.respondToApproval = { _, _, _, _, _ in }
         viewModel.approvalReview = try ProjectApprovalFixture.review()
         // The stamp is private; `load` reaches it, and the seam is what proves
         // the call site is no longer the singleton's network method.
@@ -83,11 +83,12 @@ struct ApprovalCASOrderTests {
             refetches += 1
             return try ProjectApprovalFixture.review(updatedAt: fresh)
         }
-        viewModel.respondToApproval = { _, _, expectedUpdatedAt, _ in
+        viewModel.respondToApproval = { _, _, _, expectedUpdatedAt, _ in
             sentValues.append(expectedUpdatedAt)
             if expectedUpdatedAt != fresh { throw Stale() }
         }
 
+        viewModel.typedSignature = "Margaret Whitfield"
         viewModel.chooseOutcome(.approved)
         await viewModel.submitApprovalResponse()
 
@@ -112,11 +113,12 @@ struct ApprovalCASOrderTests {
                 lifecycleStatus: "responded", outcome: "changes_requested"
             )
         }
-        viewModel.respondToApproval = { _, _, _, _ in
+        viewModel.respondToApproval = { _, _, _, _, _ in
             attempts += 1
             throw Boom()
         }
 
+        viewModel.typedSignature = "Margaret Whitfield"
         viewModel.chooseOutcome(.changesRequested)
         await viewModel.submitApprovalResponse()
 
@@ -134,11 +136,12 @@ struct ApprovalCASOrderTests {
         let viewModel = DecisionDetailViewModel()
         viewModel.approvalReview = try ProjectApprovalFixture.review()
         viewModel.fetchApprovalReview = { _ in try ProjectApprovalFixture.review() }
-        viewModel.respondToApproval = { _, _, _, _ in
+        viewModel.respondToApproval = { _, _, _, _, _ in
             attempts += 1
             throw Boom()
         }
 
+        viewModel.typedSignature = "Margaret Whitfield"
         viewModel.chooseOutcome(.needsDiscussion)
         await viewModel.submitApprovalResponse()
 
@@ -156,8 +159,9 @@ struct ApprovalCASOrderTests {
         let viewModel = DecisionDetailViewModel()
         viewModel.approvalReview = try ProjectApprovalFixture.review()
         viewModel.fetchApprovalReview = { _ in throw Boom() }
-        viewModel.respondToApproval = { _, _, _, _ in throw Boom() }
+        viewModel.respondToApproval = { _, _, _, _, _ in throw Boom() }
 
+        viewModel.typedSignature = "Margaret Whitfield"
         viewModel.chooseOutcome(.approved)
         await viewModel.submitApprovalResponse()
 

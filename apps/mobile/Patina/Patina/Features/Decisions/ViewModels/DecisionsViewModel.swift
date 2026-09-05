@@ -56,6 +56,16 @@ final class DecisionDetailViewModel {
     /// Said once the review of the exact edition has been recorded.
     var reviewConfirmed: Bool = false
 
+    /// `P-16` / `R10`: the change note, encouraged and never enforced. It
+    /// travels as a project-conversation message, the deferral rail's own —
+    /// `respond_project_approval` carries no note field. `noteFailure` is kept
+    /// apart from `submitFailure` on purpose: a recorded answer may never be
+    /// drawn as a failed one. `typedSignature` is `P-18` / `R1`, the legal
+    /// name the outcome is signed with.
+    var changeNote: String = ""
+    var noteFailure: String?
+    var typedSignature: String = ""
+
     /// Whichever ceremony this decision belongs to.
     ///
     /// The PROJECTION comes first, and has to: 00467:18-38 cut
@@ -421,18 +431,27 @@ final class DecisionDetailViewModel {
         )
     }
 
-    /// `respond_project_approval`, behind a seam.
-    /// Arguments: decision id, outcome, expected `updatedAt`, idempotency key.
+    /// `respond_project_approval`, behind a seam. Arguments: decision id,
+    /// outcome, the typed legal name (`P-18`), expected `updatedAt`, key.
     @ObservationIgnored
-    var respondToApproval: (String, ProjectApprovalOutcome, String, String) async throws -> Void = { decisionId, outcome, expectedUpdatedAt, key in
+    var respondToApproval: (String, ProjectApprovalOutcome, String, String, String) async throws -> Void = { decisionId, outcome, signature, expectedUpdatedAt, key in
         try await DecisionsAPIClient.shared.respondToProjectApproval(
-            decisionId: decisionId,
-            outcome: outcome,
-            expectedUpdatedAt: expectedUpdatedAt,
-            idempotencyKey: key
+            decisionId: decisionId, outcome: outcome, clientSignature: signature,
+            expectedUpdatedAt: expectedUpdatedAt, idempotencyKey: key
         )
     }
 
+    /// `P-16`. The note, behind a seam (`openThread` is private).
+    @ObservationIgnored
+    var sendApprovalNote: (MessageRoute, String) async throws -> String = { route, body in
+        let threadId: String
+        switch route {
+        case .project(let id): threadId = try await MessagingAPIClient.shared.createThread(projectId: id)
+        case .direct(let id): threadId = try await MessagingAPIClient.shared.createDirectThread(counterpart: id)
+        }
+        _ = try await MessagingAPIClient.shared.sendMessage(threadId: threadId, body: body)
+        return threadId
+    }
     /// The outcome recorded in this session. The server row is `responded` and
     /// the next load will carry the word itself; until then this is what stops
     /// the screen offering the three acts a second time, and what lets it name
