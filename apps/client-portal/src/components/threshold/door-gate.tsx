@@ -4,7 +4,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CommercialDocumentKind } from '@patina/types';
 
-import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { HoldAction, ScoredAction } from '@/components/threshold/instruments/scored-action';
+import {
+  SignatureLine,
+  signatureIsComplete,
+} from '@/components/threshold/instruments/signature-line';
 import { SpineGate } from '@/components/threshold/instruments/spine-gate';
 import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
@@ -23,7 +27,6 @@ import { noteInBrief } from '@/lib/threshold/standing';
 
 import {
   KIND_LABEL,
-  SIGNATURE_NOTICE,
   consentLineFor,
   refusalSentence,
   signLabelFor,
@@ -180,7 +183,8 @@ export function DoorGate({
   // The same validation the shipped sign page runs. A declined paper is not
   // signable, so the block that asks for her name disarms with it — a page
   // may not go on offering an answer she has already given.
-  const ready = drawn && !declined && !expired && agreed && name.trim().length >= 2;
+  const ready =
+    drawn && !declined && !expired && agreed && signatureIsComplete(name);
 
   async function onSign() {
     if (!ready || inFlight.current) return;
@@ -494,36 +498,18 @@ export function DoorGate({
                     <span>{consentLineFor(kind)}</span>
                   </label>
 
-                  <label
-                    className="mt-4 block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
-                    htmlFor={nameId}
-                  >
-                    Type your full name
-                  </label>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-3">
-                    <input
+                  {/* The name goes on a rule with the day beside it, and the
+                      electronic-signature sentence is printed there rather
+                      than in the hint below — one paper says it once. */}
+                  <div className="mt-4">
+                    <SignatureLine
                       id={nameId}
-                      type="text"
+                      testId="door-sign-name"
                       value={name}
-                      autoComplete="name"
+                      onChange={setName}
                       disabled={submitting || !!signedAt || declined || expired}
-                      onChange={(event) => setName(event.target.value)}
-                      data-testid="door-sign-name"
-                      className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
+                      describedBy={hintId}
                     />
-                    <ScoredAction
-                      actionKey="gate_sign"
-                      regionKey="gate"
-                      surfaceKey="the_threshold"
-                      variant="primary"
-                      disabled={!ready}
-                      loading={submitting}
-                      loadingLabel="Signing"
-                      aria-describedby={hintId}
-                      onClick={onSign}
-                    >
-                      {signLabelFor(kind)}
-                    </ScoredAction>
                   </div>
                   <p
                     id={hintId}
@@ -539,8 +525,8 @@ export function DoorGate({
                           ? 'This paper could not be drawn just now. Reload to try again.'
                           : 'Drawing this paper.'
                         : ready
-                          ? `Ready when you are. ${SIGNATURE_NOTICE}`
-                          : `Type your full name and tick the line to sign. ${SIGNATURE_NOTICE}`}
+                          ? 'Ready when you are.'
+                          : 'Type your full name and tick the line to sign.'}
                   </p>
                   {/* A refused signature is a genuine error, so it takes the
                       error ink — NOT terracotta, which on this surface is the
@@ -558,6 +544,36 @@ export function DoorGate({
                 </div>
               }
             />
+
+            {/* THE ACT SITS ON THE LEAF, NOT IN THE GATE. It is the scored
+                primary of this door, and on a narrow viewport it docks: sticky
+                to the bottom edge for as long as the paper it belongs to is on
+                screen, so a long document cannot bury the one thing the door is
+                asking for, and the four answers below it stay reachable.
+
+                Sticky needs a containing block with room to travel, which is
+                the leaf — inside the gate's act slot it would have had a few
+                pixels of range and docked nothing. Fixed would have been worse:
+                the doorway carries `perspective` for the swing, which makes it
+                the containing block for anything fixed inside it. */}
+            {!signedAt && (
+              <HoldAction
+                actionKey="gate_sign"
+                regionKey="gate"
+                surfaceKey="the_threshold"
+                variant="primary"
+                presentation="mobile_dock"
+                verb="sign"
+                wrapperClassName="mt-5 max-[600px]:-mx-5 max-[600px]:px-5"
+                disabled={!ready}
+                loading={submitting}
+                loadingLabel="Signing"
+                aria-describedby={hintId}
+                onHold={onSign}
+              >
+                {signLabelFor(kind)}
+              </HoldAction>
+            )}
 
             {/* The other four answers the old /proposals/[id] page took, on
                 the leaf rather than at the end of a route. They stand only

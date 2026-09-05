@@ -242,6 +242,37 @@ describe('CommercialDocumentShell', () => {
     ).toBeInTheDocument();
   });
 
+  it('stamps a fully executed document instead of ticking it green', () => {
+    const { container } = render(<CommercialDocumentShell bundle={bundle({
+      document: { ...bundle().document, state: 'executed', executedAt: '2026-08-03T00:00:00Z' },
+    })} />);
+
+    const stamp = screen.getByTestId('commercial-document-executed-stamp');
+    expect(stamp).toHaveAttribute('data-stamp-state', 'signed');
+    expect(stamp).toHaveTextContent(/^SIGNED August \d+, 2026$/);
+    // The last green on the client surface: no sage, no checkmark, no fill.
+    expect(container.innerHTML).not.toMatch(/sage/i);
+    expect(container.querySelector('svg.lucide-circle-check-big')).toBeNull();
+  });
+
+  it('stamps a paper-signed execution upright, as a mark made elsewhere', () => {
+    render(<CommercialDocumentShell bundle={bundle({
+      document: { ...bundle().document, state: 'executed', executedAt: '2026-08-03T00:00:00Z' },
+      signatures: [
+        {
+          party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-05T14:20:00Z', consentVersion: 'v1',
+          documentFingerprint: 'f1', signedOnPaper: true, paperSignedOn: '2026-01-15',
+          paperScanDocumentId: null,
+        },
+      ],
+    })} />);
+
+    const stamp = screen.getByTestId('commercial-document-executed-stamp');
+    expect(stamp).toHaveAttribute('data-stamp-state', 'signed_on_paper');
+    expect(stamp).toHaveTextContent('ON PAPER');
+    expect(stamp.style.getPropertyValue('--stamp-rotation')).toBe('0deg');
+  });
+
   it('renders a named FF&E authorization and deposit handoff without reopening design services', () => {
     render(<CommercialDocumentShell bundle={furnishingsBundle()} />);
     expect(screen.getByText('Living floor')).toBeInTheDocument();

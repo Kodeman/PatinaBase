@@ -222,7 +222,13 @@ export function DoorActs({
   return (
     <div
       data-testid="door-acts"
-      className="mt-6 border-t border-[var(--border-subtle)] pt-3"
+      /* The door's primary act docks to the bottom edge on a narrow viewport
+         (door-gate.tsx), and a stuck act is painted over whatever scrolls
+         under it. These three answers are the last thing on the leaf, so the
+         paper is given the dock's own height back at that width — Ask a
+         question, Request a change and Decline stay reachable, and none of
+         them is ever read through the act they are alternatives to. */
+      className="mt-6 border-t border-[var(--border-subtle)] pt-3 max-[600px]:pb-16"
     >
       <div ref={rowRef} tabIndex={-1} className="flex flex-wrap items-center gap-3">
         {acts.map((act) => (

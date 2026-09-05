@@ -1,4 +1,5 @@
 import {
+  approvalWeighing,
   countInWords,
   joinClauses,
   moneyInWords,
@@ -273,5 +274,93 @@ describe('moneyInWords', () => {
 
   it('rounds cents away rather than printing them', () => {
     expect(moneyInWords(912_549)).toBe('$9,125');
+  });
+});
+
+describe('approvalWeighing', () => {
+  const nothing = { costCentsDelta: 0, scheduleDaysDelta: 0, leadTimeDaysDelta: 0 };
+
+  it('says an edition that moves nothing in one sentence, and prints no ledger under it', () => {
+    expect(approvalWeighing(nothing)).toEqual({
+      sentence: 'No cost, schedule or lead-time change.',
+      ledger: '',
+    });
+  });
+
+  it('states the two deltas that did not move, in words, when one did', () => {
+    const weighing = approvalWeighing({ ...nothing, costCentsDelta: 124_000 });
+    expect(weighing.sentence).toBe(
+      'The cost rises by $1,240, the schedule does not change, and the lead time does not change.',
+    );
+    expect(weighing.ledger).toBe('Cost +$1,240 · Schedule 0 days · Lead time 0 days');
+  });
+
+  it('speaks all three when all three moved, side by side and never summed', () => {
+    const weighing = approvalWeighing({
+      costCentsDelta: 124_000,
+      scheduleDaysDelta: 6,
+      leadTimeDaysDelta: -4,
+    });
+    expect(weighing.sentence).toBe(
+      'The cost rises by $1,240, the schedule moves out by six days, and the lead time shortens by four days.',
+    );
+    expect(weighing.ledger).toBe('Cost +$1,240 · Schedule +6 days · Lead time −4 days');
+  });
+
+  it('turns the cost delta into a fact when the edition carries a baseline', () => {
+    const weighing = approvalWeighing({
+      costCentsDelta: 124_000,
+      scheduleDaysDelta: 0,
+      leadTimeDaysDelta: 0,
+      costBaselineCents: 4_688_000,
+    });
+    expect(weighing.sentence).toBe(
+      '$46,880 becomes $48,120, the schedule does not change, and the lead time does not change.',
+    );
+    expect(weighing.ledger).toBe('Cost +$1,240 · Schedule 0 days · Lead time 0 days');
+  });
+
+  it('states a baseline that did not move rather than falling silent about it', () => {
+    expect(approvalWeighing({ ...nothing, costBaselineCents: 4_688_000 }).sentence).toBe(
+      '$46,880 becomes $46,880, the schedule does not change, and the lead time does not change.',
+    );
+  });
+
+  it('falls back to the delta alone when there is no baseline to name', () => {
+    expect(approvalWeighing({ ...nothing, costCentsDelta: -50_000 }).sentence).toMatch(
+      /^The cost falls by \$500,/,
+    );
+  });
+
+  it('counts one day as a day, and past twelve in figures', () => {
+    expect(approvalWeighing({ ...nothing, scheduleDaysDelta: 1 }).sentence).toContain(
+      'the schedule moves out by one day',
+    );
+    expect(approvalWeighing({ ...nothing, scheduleDaysDelta: 20 }).sentence).toContain(
+      'the schedule moves out by 20 days',
+    );
+    expect(approvalWeighing({ ...nothing, scheduleDaysDelta: 1 }).ledger).toContain(
+      'Schedule +1 day',
+    );
+  });
+
+  it('spends no pigment on a direction', () => {
+    const weighing = approvalWeighing({
+      costCentsDelta: 124_000,
+      scheduleDaysDelta: 6,
+      leadTimeDaysDelta: -4,
+      costBaselineCents: 4_688_000,
+    });
+    expect(`${weighing.sentence}${weighing.ledger}`).not.toMatch(/terracotta|sage|red|green/i);
+  });
+
+  it('reads a missing or nonsense delta as no movement rather than throwing', () => {
+    expect(
+      approvalWeighing({
+        costCentsDelta: Number.NaN,
+        scheduleDaysDelta: Number.POSITIVE_INFINITY,
+        leadTimeDaysDelta: 0,
+      }).sentence,
+    ).toBe('No cost, schedule or lead-time change.');
   });
 });

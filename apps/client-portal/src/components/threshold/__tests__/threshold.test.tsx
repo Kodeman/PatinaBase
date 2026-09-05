@@ -867,7 +867,15 @@ describe('Threshold — the doorstep’s own asks', () => {
 
     const gate = screen.getByTestId('doorstep-approval');
     expect(gate).toHaveTextContent('Do the library elevations read right to you?');
-    expect(gate).toHaveTextContent('Library elevations · Edition 3 · Due August 20');
+    // The artifact is a plate now: named, dated, and marked at the frame's
+    // edge. The due date stands under the ask, not inside the picture.
+    const plate = within(gate).getByTestId('approval-plate');
+    expect(plate).toHaveTextContent('Library elevations');
+    // This fixture carries no issue date, and the plate says so by saying
+    // nothing — an edition is never dated with a day nobody recorded.
+    expect(plate).toHaveTextContent('Edition 3');
+    expect(plate).not.toHaveTextContent('Issued');
+    expect(gate).toHaveTextContent('Due August 20');
     // The ask is answered where it stands — no link off the page.
     expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /respond/i })).not.toBeInTheDocument();
@@ -934,7 +942,7 @@ describe('Threshold — the doorstep’s own asks', () => {
     ]);
 
     expect(screen.queryByTestId('doorstep-approval')).not.toBeInTheDocument();
-    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Approved 14 August');
+    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('APPROVED 14 August');
   });
 
   it('says so where the asks would stand when the approvals cannot be read', () => {

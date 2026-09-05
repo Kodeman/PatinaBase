@@ -2,8 +2,13 @@
 
 import { useId, useRef, useState } from 'react';
 
-import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { HoldAction } from '@/components/threshold/instruments/scored-action';
+import {
+  SignatureLine,
+  signatureIsComplete,
+} from '@/components/threshold/instruments/signature-line';
 import { SpineGate } from '@/components/threshold/instruments/spine-gate';
+import { Stamp } from '@/components/threshold/instruments/stamp';
 import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   useAcceptTradeScope,
@@ -148,7 +153,7 @@ export function WallGate({
   async function onAccept() {
     if (inFlight.current) return;
     const name = signedName.trim();
-    if (name.length < 2) {
+    if (!signatureIsComplete(name)) {
       setError('Type your full name to accept the finished work.');
       return;
     }
@@ -206,22 +211,26 @@ export function WallGate({
 
       {acceptedAt && (
         <p className="mt-3">
-          <span
+          {/* The house's one stamp, not a second grammar: an acceptance is an
+              approval of finished work, and it reads in the same ink as the
+              approvals on the doorstep. The released draw stays in the mark's
+              own line because it is the honest consequence of her name. */}
+          <Stamp
             data-testid="wall-stamp"
-            className="inline-block max-w-[38ch] -rotate-[1.1deg] border border-current px-2.5 pb-1 pt-1.5 font-mono text-[11px] uppercase leading-relaxed tracking-[0.1em] text-[var(--color-mocha)]"
+            state="approved"
+            since={acceptedAt}
+            dateLabel={DAY_MONTH.format(acceptedAt)}
           >
-            {`Accepted ${DAY_MONTH.format(acceptedAt)}${
+            {[
               gatedDraw && gatedDraw.amountCents > 0
-                ? ` · ${moneyInWords(gatedDraw.amountCents)} released`
-                : ''
-            }`}
-            {party && (
-              <span className="block font-normal normal-case tracking-[0.04em]">
-                {party}
-                {selection.roomName ? ` · ${selection.roomName}` : ''}
-              </span>
-            )}
-          </span>
+                ? `${moneyInWords(gatedDraw.amountCents)} released`
+                : null,
+              party,
+              selection.roomName || null,
+            ]
+              .filter((part): part is string => !!part)
+              .join(' · ') || null}
+          </Stamp>
         </p>
       )}
 
@@ -236,34 +245,35 @@ export function WallGate({
             act={
               proposalId ? (
                 <div>
-                  <label
-                    className="block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
-                    htmlFor={nameId}
+                  {/* The same ruled line the doors sign on, dated, with the
+                      electronic-signature sentence printed once. */}
+                  <SignatureLine
+                    id={nameId}
+                    testId="accept-trade-scope-name"
+                    value={signedName}
+                    onChange={setSignedName}
+                    disabled={accept.isPending}
+                    describedBy={hintId}
+                  />
+                  {/* Accepting finished work releases a draw: a terminal act,
+                      so it is held rather than tapped (R1). */}
+                  <HoldAction
+                    actionKey="gate_accept"
+                    regionKey="gate"
+                    variant="primary"
+                    verb="accept the finished work"
+                    wrapperClassName="mt-3"
+                    loading={accept.isPending}
+                    loadingLabel="Accepting"
+                    // Unlit until there is a name, like the three other acts:
+                    // no one spends a hold to be told what she was never armed
+                    // to do. The sentence below stays as the backstop.
+                    disabled={!signatureIsComplete(signedName)}
+                    aria-describedby={hintId}
+                    onHold={onAccept}
                   >
-                    Type your full name
-                  </label>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-3">
-                    <input
-                      id={nameId}
-                      type="text"
-                      value={signedName}
-                      onChange={(event) => setSignedName(event.target.value)}
-                      autoComplete="name"
-                      data-testid="accept-trade-scope-name"
-                      className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
-                    />
-                    <ScoredAction
-                      actionKey="gate_accept"
-                      regionKey="gate"
-                      variant="primary"
-                      loading={accept.isPending}
-                      loadingLabel="Accepting"
-                      aria-describedby={hintId}
-                      onClick={onAccept}
-                    >
-                      Accept the finished work
-                    </ScoredAction>
-                  </div>
+                    Accept the finished work
+                  </HoldAction>
                   <p
                     id={hintId}
                     data-testid="wall-hint"
