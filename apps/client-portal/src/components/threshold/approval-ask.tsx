@@ -208,9 +208,100 @@ function recordedAtOf(approval: ProjectApprovalReview): string {
   return approval.respondedAt ?? approval.updatedAt ?? approval.createdAt ?? '';
 }
 
+/**
+ * The frozen edition's own snapshot, read defensively.
+ *
+ * `source_snapshot` is a jsonb column: it may be absent from the projection
+ * altogether, may be a shape this surface has never seen, and is never trusted
+ * to be a URL because it said so. Only an http(s) or same-origin path is drawn;
+ * anything else is treated as no preview at all, and the plate falls back to
+ * naming the edition.
+ */
+function coverImageOf(approval: ProjectApprovalReview): string | null {
+  const snapshot = (approval as { sourceSnapshot?: unknown }).sourceSnapshot;
+  if (!snapshot || typeof snapshot !== 'object') return null;
+  const candidate =
+    (snapshot as { coverImageUrl?: unknown }).coverImageUrl ??
+    (snapshot as { cover_image_url?: unknown }).cover_image_url;
+  if (typeof candidate !== 'string') return null;
+  const url = candidate.trim();
+  return /^(https?:\/\/|\/)/.test(url) ? url : null;
+}
+
+/** The designer's one-line why, when the row carries one (P-13, backend lane). */
+function whyOf(approval: ProjectApprovalReview): string | null {
+  const why = (approval as { why?: unknown }).why;
+  return typeof why === 'string' && why.trim().length > 0 ? why.trim() : null;
+}
+
+/**
+ * The artifact, shown.
+ *
+ * A plate with a frame around it: the edition as a picture where the frozen
+ * snapshot carries one, the budget itself where the artifact IS a budget, and
+ * otherwise the edition named and dated — never an empty box pretending to be
+ * a document.
+ *
+ * The checksum is a maker's mark at the frame's edge: twelve characters, in
+ * mono, quiet. It is provenance, the way a stamp on the back of a chair is
+ * provenance — not a compliance string, and never presented as something she
+ * is meant to check.
+ */
+function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
+  const cover = coverImageOf(approval);
+  const issued = parseSourceDate(approval.sentAt) ?? parseSourceDate(approval.createdAt);
+  const makersMark = approval.artifactChecksum.slice(0, 12);
+
+  return (
+    <figure
+      data-testid="approval-plate"
+      className="relative mt-3 max-w-[52ch] border border-[var(--border-default)] p-3"
+    >
+      {cover ? (
+        // The cover is an arbitrary remote URL out of the plan pipeline, not a
+        // configured image host — the reading `RoomCapture` takes.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          data-testid="approval-plate-cover"
+          src={cover}
+          alt={`${approval.artifactTitle}, edition ${approval.artifactVersion}`}
+          className="block max-h-[360px] w-full object-contain"
+        />
+      ) : approval.artifactKind === 'budget_version' ? (
+        <BudgetInEdition approval={approval} />
+      ) : null}
+
+      <figcaption className="mt-2">
+        <p
+          data-testid="approval-plate-title"
+          className="font-heading text-[1.05rem] leading-[1.45] text-[var(--text-primary)]"
+        >
+          {approval.artifactTitle}
+        </p>
+        <p className="mt-0.5 text-[15px] leading-normal text-[var(--text-body)]">
+          {`Edition ${approval.artifactVersion}`}
+          {issued ? ` · Issued ${LONG_MONTH_DAY.format(issued)}` : ''}
+        </p>
+      </figcaption>
+
+      <span
+        data-testid="approval-makers-mark"
+        aria-hidden="true"
+        className="absolute bottom-1.5 right-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] opacity-60"
+      >
+        {makersMark}
+      </span>
+    </figure>
+  );
+}
+
 function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
   const workingBudget = useProjectWorkingBudget(approval.projectId);
   const budget = workingBudget.data;
+  // The three totals are the budget; the room-by-room breakdown is the reading
+  // behind it. On a phone the breakdown buries the act, so it folds — and only
+  // there: at reading width the whole of it stands open with no control at all.
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   // Fail closed: the figures are shown only when the edition on the page and
   // the budget the query returned are provably the same document.
   const matchesArtifact =
@@ -255,7 +346,12 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
             ))}
           </dl>
           {budget.lines.length > 0 && (
-            <ul className="mt-3 divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
+            <div className={breakdownOpen ? 'block' : 'hidden sm:block'}>
+            <ul
+              id="approval-budget-breakdown"
+              data-testid="approval-budget-breakdown"
+              className="mt-3 divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]"
+            >
               {budget.lines.map((line, index) => (
                 <li key={`${line.roomName}-${line.category}-${index}`} className="py-2.5">
                   <p className="text-[15px] leading-normal">
@@ -270,6 +366,22 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
                 </li>
               ))}
             </ul>
+            </div>
+          )}
+          {budget.lines.length > 0 && (
+            <div className="mt-2 sm:hidden">
+              <ScoredAction
+                actionKey="read_approval_budget_breakdown"
+                regionKey="doorstep"
+                surfaceKey="the_threshold"
+                variant="tertiary"
+                aria-expanded={breakdownOpen}
+                aria-controls="approval-budget-breakdown"
+                onClick={() => setBreakdownOpen((was) => !was)}
+              >
+                {breakdownOpen ? 'Close the breakdown' : 'Read the breakdown'}
+              </ScoredAction>
+            </div>
           )}
         </div>
       )}
@@ -628,6 +740,8 @@ export function ApprovalAsk({
   const chosenAct = OUTCOME_ACTS.find((act) => act.outcome === chosen) ?? null;
   /** The designer, named where the copy has room for a name. */
   const designer = designerGivenName?.trim() || null;
+  /** His one line about this edition, frozen with it, when the row carries one. */
+  const why = whyOf(approval);
 
   // Words, not a tally: what she is being told is whether her own review is in,
   // and on the rare approval that takes several, how many of them are.
@@ -746,16 +860,44 @@ export function ApprovalAsk({
               ? 'Your approval · read the edition first'
               : 'Your approval · your answer is needed'}
       </p>
-      <h2
-        id={`approval-gate-${approval.decisionId}`}
-        className="font-heading mt-1.5 text-[1.35rem] font-medium tracking-[-0.012em]"
+      <ArtifactPlate approval={approval} />
+
+      {/* The ask is a thing someone said, so it is set as one: a pull-quote on
+          a clay rule, in the designer's hand, and signed. No attribution is
+          drawn when the house has no name to sign it with. */}
+      <blockquote
+        data-testid="approval-question"
+        className="mt-4 max-w-[52ch] border-l-2 border-[var(--accent-primary)] pl-4"
       >
-        {approval.question}
-      </h2>
-      <p className="mt-2 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]">
-        {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-        {due ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
-      </p>
+        <h2
+          id={`approval-gate-${approval.decisionId}`}
+          className="font-heading text-[1.35rem] font-medium leading-[1.35] tracking-[-0.012em]"
+        >
+          {approval.question}
+        </h2>
+        {why && (
+          <p
+            data-testid="approval-why"
+            className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-[1.62] text-[var(--text-body)]"
+          >
+            {why}
+          </p>
+        )}
+        {designer && (
+          <p
+            data-testid="approval-attribution"
+            className="mt-2 text-[15px] leading-normal text-[var(--text-muted)]"
+          >
+            {`— ${designer}`}
+          </p>
+        )}
+      </blockquote>
+
+      {due && (
+        <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]">
+          {`Due ${LONG_MONTH_DAY.format(due)}`}
+        </p>
+      )}
       <p
         data-testid="immutability-sentence"
         className="mt-1.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
@@ -771,8 +913,6 @@ export function ApprovalAsk({
           {approval.context}
         </p>
       )}
-
-      {approval.artifactKind === 'budget_version' && <BudgetInEdition approval={approval} />}
 
       <div data-testid="approval-impact" className="mt-4 max-w-[52ch]">
         <p

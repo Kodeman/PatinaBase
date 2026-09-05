@@ -1,4 +1,12 @@
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 
 import type { ProjectApprovalReview } from '@patina/supabase';
 
@@ -166,7 +174,12 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(ask).toHaveAttribute('data-threshold-unit', 'doorstep-approval');
     expect(ask).toHaveAttribute('data-never-dim');
     expect(ask).toHaveTextContent('Do the library elevations read right to you?');
-    expect(ask).toHaveTextContent('Library elevations · Edition 3 · Due August 20');
+    // The artifact is a plate now: named, dated, and marked at the frame's
+    // edge. The due date stands under the ask, not inside the picture.
+    const plate = within(ask).getByTestId('approval-plate');
+    expect(plate).toHaveTextContent('Library elevations');
+    expect(plate).toHaveTextContent(/Edition 3 · Issued August \d+/);
+    expect(ask).toHaveTextContent('Due August 20');
     expect(screen.getByTestId('approval-rationale')).toHaveTextContent(
       'This releases the joinery package for pricing.',
     );
@@ -482,6 +495,94 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
   });
 });
 
+describe('the artifact, shown', () => {
+  it('names and dates the edition on a plate, and marks it at the frame', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    const plate = screen.getByTestId('approval-plate');
+    expect(within(plate).getByTestId('approval-plate-title')).toHaveTextContent(
+      'Library elevations',
+    );
+    expect(plate).toHaveTextContent(/Edition 3 · Issued August \d+/);
+    // Provenance, not a compliance string: twelve characters of the checksum,
+    // and never the whole sixty-four.
+    const makersMark = within(plate).getByTestId('approval-makers-mark');
+    expect(makersMark).toHaveTextContent('a'.repeat(12));
+    expect(makersMark.textContent).toHaveLength(12);
+    expect(plate).not.toHaveTextContent('a'.repeat(13));
+    expect(plate.textContent).not.toMatch(/checksum|sha|fingerprint|verify/i);
+  });
+
+  it('frames the edition itself when the frozen snapshot carries a cover', () => {
+    render(
+      <ApprovalAsk
+        approval={
+          {
+            ...APPROVAL,
+            sourceSnapshot: { coverImageUrl: 'https://plans.example/cover.png' },
+          } as ProjectApprovalReview
+        }
+      />,
+    );
+
+    const cover = screen.getByTestId('approval-plate-cover');
+    expect(cover).toHaveAttribute('src', 'https://plans.example/cover.png');
+    expect(cover).toHaveAttribute('alt', 'Library elevations, edition 3');
+  });
+
+  it.each([
+    ['a snapshot that is not an object', 'nope'],
+    ['a snapshot with no cover at all', {}],
+    ['a cover that is not a string', { coverImageUrl: 42 }],
+    ['a cover that is not an address', { coverImageUrl: 'javascript:alert(1)' }],
+  ])('draws no picture for %s', (_case, sourceSnapshot) => {
+    render(
+      <ApprovalAsk approval={{ ...APPROVAL, sourceSnapshot } as ProjectApprovalReview} />,
+    );
+
+    expect(screen.queryByTestId('approval-plate-cover')).not.toBeInTheDocument();
+    expect(screen.getByTestId('approval-plate-title')).toHaveTextContent('Library elevations');
+  });
+
+  it('sets the ask as a pull-quote and signs it in the designer’s name', () => {
+    render(<ApprovalAsk approval={APPROVAL} designerGivenName="Leah" />);
+
+    const quote = screen.getByTestId('approval-question');
+    expect(quote).toHaveTextContent('Do the library elevations read right to you?');
+    expect(within(quote).getByTestId('approval-attribution')).toHaveTextContent('— Leah');
+    expect(quote.className).toContain('border-l-2');
+    expect(quote.className).toContain('border-[var(--accent-primary)]');
+  });
+
+  it('signs nothing when the house has no name to sign with', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    expect(screen.queryByTestId('approval-attribution')).not.toBeInTheDocument();
+  });
+
+  it('carries the designer’s own line about the edition under the question', () => {
+    render(
+      <ApprovalAsk
+        approval={
+          { ...APPROVAL, why: 'The stair-hall sconces move up two inches.' } as ProjectApprovalReview
+        }
+        designerGivenName="Leah"
+      />,
+    );
+
+    expect(within(screen.getByTestId('approval-question')).getByTestId('approval-why'))
+      .toHaveTextContent('The stair-hall sconces move up two inches.');
+  });
+
+  it.each([
+    ['no why at all', undefined],
+    ['a why that is blank', '   '],
+    ['a why that is not a string', 12],
+  ])('draws no note for %s', (_case, why) => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, why } as ProjectApprovalReview} />);
+    expect(screen.queryByTestId('approval-why')).not.toBeInTheDocument();
+  });
+});
+
 describe('ApprovalAsk — a budget edition', () => {
   const BUDGET_APPROVAL: ProjectApprovalReview = {
     ...APPROVAL,
@@ -529,6 +630,30 @@ describe('ApprovalAsk — a budget edition', () => {
     expect(details).toHaveTextContent('$50,000');
     expect(details).toHaveTextContent('Library · seating');
     expect(details).toHaveTextContent('Target $1,500');
+  });
+
+  it('draws the budget inside the plate, and folds the breakdown on a phone', () => {
+    budgetHook.mockReturnValue({ data: BUDGET, isLoading: false, isError: false });
+    render(<ApprovalAsk approval={BUDGET_APPROVAL} />);
+
+    // The budget IS the picture on the plate when the artifact is a budget.
+    expect(
+      within(screen.getByTestId('approval-plate')).getByTestId('approval-budget'),
+    ).toBeInTheDocument();
+
+    // Three totals stand; the room-by-room breakdown folds on a narrow
+    // viewport and stands open at reading width, with no control there at all.
+    const breakdown = screen.getByTestId('approval-budget-breakdown');
+    expect(breakdown.parentElement).toHaveClass('hidden', 'sm:block');
+    const disclosure = screen.getByRole('button', { name: /read the breakdown/i });
+    expect(disclosure.parentElement).toHaveClass('sm:hidden');
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(disclosure);
+    expect(screen.getByTestId('approval-budget-breakdown').parentElement).toHaveClass('block');
+    expect(
+      screen.getByRole('button', { name: /close the breakdown/i }),
+    ).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('fails closed when the budget on hand is not that exact edition', () => {
