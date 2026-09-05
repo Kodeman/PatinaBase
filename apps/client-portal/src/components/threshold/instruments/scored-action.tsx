@@ -567,13 +567,23 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
              dispatching a click, and there is nothing to press and hold. That
              click IS the deliberate gesture — it costs several steps to reach
              — so it takes the act at once, exactly as the iOS HoldableModifier
-             answers its "Activate" action. A trusted click is a real finger or
-             mouse and stays inert; so does an untrusted one trailing a pointer
-             sequence on this control, which is a gesture, not a screen reader. */
+             answers its "Activate" action.
+
+             The pointer tail is the whole guard, and `isTrusted` is deliberately
+             NOT consulted: a screen reader activates through the platform
+             accessibility API (AXPress / kDoDefault / doAction) and the browser
+             then dispatches the click ITSELF, trusted — which is why activating
+             a button with VoiceOver or Voice Control counts as user activation
+             at all. Testing `isTrusted` would therefore refuse every real
+             assistive activation and admit only a scripted one. What separates
+             a hand from assistive technology is not trust but history: a hand
+             always leaves a pointerdown/pointerup on THIS control within
+             POINTER_TAIL_MS before its click, and a physical-keyboard hold
+             produces no click at all (both keydown and keyup are prevented). A
+             click with no pointer behind it is not a hand. */
           onClick={(event) => {
             event.preventDefault();
             if (unavailable || running.current) return;
-            if (event.isTrusted) return;
             if (Date.now() - pointerAt.current < POINTER_TAIL_MS) return;
             take();
           }}

@@ -153,6 +153,36 @@ describe('HoldAction — the act, held', () => {
     );
   });
 
+  /* The guard on that click is the POINTER TAIL and nothing else. `isTrusted`
+     is deliberately not consulted: a screen reader activates through the
+     platform accessibility API and the browser dispatches the resulting click
+     itself, TRUSTED — which is why AT activation counts as user activation at
+     all — so a trust test would refuse every real assistive activation and
+     admit only a scripted one. jsdom marks every dispatched event untrusted,
+     so this test cannot assert the trust flag; what it pins is that the only
+     thing standing between a click and the act is recent pointer history. */
+  it('takes an activation that arrives long after a pointer gesture', () => {
+    draw();
+    const target = actWord();
+
+    jest.useFakeTimers();
+    // A gesture released early, and refused for it.
+    fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+    fireEvent.pointerUp(target);
+    expect(onHold).not.toHaveBeenCalled();
+
+    // Long enough after that the click cannot be that gesture's own tail.
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+    act(() => {
+      target.click();
+    });
+    jest.useRealTimers();
+
+    expect(onHold).toHaveBeenCalledTimes(1);
+  });
+
   it('an unavailable act is not taken by an assistive click either', () => {
     draw({ disabled: true });
     act(() => {
