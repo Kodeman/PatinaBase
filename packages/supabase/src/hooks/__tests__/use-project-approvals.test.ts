@@ -62,6 +62,7 @@ const REVIEW = {
   question: 'Approve this exact budget checkpoint?',
   context: null,
   why: 'The stone slab we chose is no longer quarried.',
+  whyAuthorName: 'Leah Quist',
   viewerRole: 'lead',
   dueAt: '2026-09-01T12:00:00.000Z',
   costCentsDelta: 0,
@@ -249,10 +250,14 @@ describe('project approval sanitized reads', () => {
     ).toThrow('Project approval review is missing isOverdue');
   });
 
-  it('carries the frozen why and the viewer’s chair through to the surface', () => {
+  it('carries the frozen why, its author and the viewer’s chair to the surface', () => {
     expect(parseProjectApprovalReview(REVIEW)).toEqual(
       expect.objectContaining({
         why: 'The stone slab we chose is no longer quarried.',
+        // The why is signed by the hand that WROTE it, frozen with the
+        // artifact — a studio has more than one designer and the record is
+        // immutable and client-facing (ruling, 2026-09-05).
+        whyAuthorName: 'Leah Quist',
         viewerRole: 'lead',
       }),
     );
@@ -272,9 +277,20 @@ describe('project approval sanitized reads', () => {
       parseProjectApprovalReview({
         ...REVIEW,
         why: undefined,
+        whyAuthorName: undefined,
         viewerRole: undefined,
       }),
-    ).toEqual(expect.objectContaining({ why: null, viewerRole: null }));
+    ).toEqual(
+      expect.objectContaining({ why: null, whyAuthorName: null, viewerRole: null }),
+    );
+  });
+
+  // An unsigned sentence is honest; a wrongly signed one is not. The parser
+  // never substitutes another name for an author it was not given.
+  it('leaves the why unsigned when the projection names no author', () => {
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, whyAuthorName: null }),
+    ).toEqual(expect.objectContaining({ whyAuthorName: null }));
   });
 
   it('never guesses a chair from a role it does not recognise', () => {

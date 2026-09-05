@@ -56,12 +56,25 @@ export interface ProjectApprovalReview {
   artifactChecksum: string;
   artifactTitle: string;
   question: string;
-  context: string | null;
   /**
-   * The designer's one-line why, frozen into the artifact when the ask was
-   * composed (00569, P-13). Null on every approval created before it.
+   * P-13 — the designer's one-line why, frozen into the artifact snapshot at
+   * compose time. Null on every artifact minted before the column existed, and
+   * on any approval whose composer left the (optional) field empty. Optional on
+   * the interface until the projection carries the column on every surface —
+   * `parseProjectApprovalReview` always sets it, to null when absent.
    */
-  why: string | null;
+  why?: string | null;
+  /**
+   * P-13 — the display name of the hand that WROTE the why, carried by the
+   * projection so the sentence is signed by its author rather than by whoever
+   * is reading it: a studio has more than one designer, and the record is
+   * immutable and client-facing. Null on any row minted before the projection
+   * carried the name, and on any artifact whose author cannot be resolved; an
+   * unsigned sentence is honest, a wrongly signed one is not. Every surface
+   * renders this value verbatim (ruling, 2026-09-05) — no surface shortens it.
+   */
+  whyAuthorName?: string | null;
+  context: string | null;
   /** Null when the projection predates 00569 — never guessed from the client. */
   viewerRole: ProjectApprovalViewerRole | null;
   dueAt: string;
@@ -326,10 +339,11 @@ export function parseProjectApprovalReview(
     artifactChecksum: stringValue(row, 'artifactChecksum', label),
     artifactTitle: stringValue(row, 'artifactTitle', label),
     question: stringValue(row, 'question', label),
-    context: nullableString(row, 'context'),
-    // Both arrived with 00569 and are absent from every older projection, so
-    // neither may be required here: absence is null, not a thrown row.
     why: nullableString(row, 'why'),
+    whyAuthorName: nullableString(row, 'whyAuthorName'),
+    context: nullableString(row, 'context'),
+    // Arrived with 00569 and absent from every older projection, so it may
+    // not be required here: absence is null, never a guess.
     viewerRole: isViewerRole(row.viewerRole) ? row.viewerRole : null,
     dueAt,
     costCentsDelta: numberValue(row, 'costCentsDelta', label),
