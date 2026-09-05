@@ -199,19 +199,28 @@ struct ProjectApprovalActTests {
 
     /// Verb, then consequence. Not the web's strings: "gate" is refused on
     /// every client-facing surface, and the homeowner approves an EDITION.
-    @Test("the three acts read verb-then-consequence, in the house's words")
+    ///
+    /// `P-16`: Approve / Return / Hold, in that order. "Decline" and "Ask a
+    /// question" are both gone — `changes_requested` is RETURNED everywhere,
+    /// and the third door holds the approval open rather than describing the
+    /// message a homeowner might send about it.
+    @Test("the three doors read verb-then-consequence, in the house's words")
     func theActsReadVerbThenConsequence() {
         let acts = ProjectApprovalCopy.acts
-        #expect(acts.map(\.outcome) == [.approved, .needsDiscussion, .changesRequested])
+        #expect(acts.map(\.outcome) == [.approved, .changesRequested, .needsDiscussion])
         #expect(acts[0].label == "Approve")
         #expect(acts[0].consequence == "Accept this exact edition and its stated impacts.")
-        #expect(acts[1].label == "Ask a question")
-        #expect(acts[1].consequence == "Hold this while you and your designer talk it through.")
-        // RETURNED everywhere for `changes_requested` (rulings-2026-09-04,
-        // P-16). "Declined" belongs to a commercial document that was
-        // declined, and to nothing on this rail.
-        #expect(acts[2].label == "Return")
-        #expect(acts[2].consequence == "Return this edition for revision and a new approval request.")
+        #expect(acts[1].label == "Return")
+        #expect(
+            acts[1].consequence
+                == "Send this edition back for revision and a new approval request."
+        )
+        #expect(acts[2].label == "Hold")
+        #expect(
+            acts[2].consequence
+                == "Keep this open while you and your designer talk it through."
+        )
+        #expect(!acts.contains { $0.label == "Decline" })
     }
 
     @Test("the immutability sentence names the edition it binds")

@@ -24,7 +24,17 @@ struct ProjectApprovalAct: Identifiable, Equatable {
 
 enum ProjectApprovalCopy {
 
-    /// The three acts, in the order the client meets them.
+    /// The three doors, in the order the client meets them: Approve, Return,
+    /// Hold. Verb, then consequence, and no verb is louder than another —
+    /// `P-16` gives all three equal weight, so the screen does not lean on a
+    /// homeowner to say yes.
+    ///
+    /// "Decline" is gone. `changes_requested` is RETURNED on the stamp and
+    /// "Returned" in prose, on every surface — the two words the rail used to
+    /// carry ("Declined" on the day, "Changes requested" the next visit) said
+    /// two different things about one row. "Declined" survives in this product
+    /// only as a commercial document a client refused, which is a different
+    /// act on a different paper.
     static let acts: [ProjectApprovalAct] = [
         ProjectApprovalAct(
             outcome: .approved,
@@ -32,20 +42,14 @@ enum ProjectApprovalCopy {
             consequence: "Accept this exact edition and its stated impacts."
         ),
         ProjectApprovalAct(
-            outcome: .needsDiscussion,
-            label: "Ask a question",
-            consequence: "Hold this while you and your designer talk it through."
+            outcome: .changesRequested,
+            label: "Return",
+            consequence: "Send this edition back for revision and a new approval request."
         ),
         ProjectApprovalAct(
-            outcome: .changesRequested,
-            // "Return", not "Decline". `rulings-2026-09-04.md` is flat about
-            // it — `changes_requested` is RETURNED everywhere — and P-16
-            // reconciles the day's word to the next visit's, which
-            // `recorded(_:)` below has always printed as "returned". Declined
-            // belongs to a commercial document that was declined, and to
-            // nothing on this rail.
-            label: "Return",
-            consequence: "Return this edition for revision and a new approval request."
+            outcome: .needsDiscussion,
+            label: "Hold",
+            consequence: "Keep this open while you and your designer talk it through."
         )
     ]
 
