@@ -1,9 +1,10 @@
 import {
   eligibleSupersessionCandidates,
-  givenName,
+  oneLine,
   parseSignedDelta,
   projectApprovalActions,
   toFutureDueAt,
+  whyAttribution,
   whyRemainingLine,
   WHY_MAX_LENGTH,
 } from './project-approval-model';
@@ -144,13 +145,25 @@ describe("P-13 — the designer's one-line why", () => {
     expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 3))).not.toMatch(/\d/);
   });
 
-  it('signs with a given name and nothing more, and signs nothing without one', () => {
-    expect(givenName('Leah Kochaver')).toBe('Leah');
-    expect(givenName('  Leah  ')).toBe('Leah');
-    expect(givenName('Leah van der Berg')).toBe('Leah');
-    expect(givenName('')).toBeNull();
-    expect(givenName('   ')).toBeNull();
-    expect(givenName(null)).toBeNull();
-    expect(givenName(undefined)).toBeNull();
+  it('signs with the frozen name exactly as the projection carries it', () => {
+    expect(whyAttribution('Leah Kochaver')).toBe('Leah Kochaver');
+    expect(whyAttribution('  Leah  ')).toBe('Leah');
+    expect(whyAttribution('')).toBeNull();
+    expect(whyAttribution('   ')).toBeNull();
+    expect(whyAttribution(null)).toBeNull();
+    expect(whyAttribution(undefined)).toBeNull();
+  });
+
+  it('collapses every run of whitespace so the why can only be one line', () => {
+    expect(oneLine('The walnut\nholds the room.')).toBe(
+      'The walnut holds the room.',
+    );
+    expect(oneLine('a\r\n\r\nb')).toBe('a b');
+    expect(oneLine('a\tb')).toBe('a b');
+    expect(oneLine('a  b')).toBe('a b');
+    expect(oneLine('The walnut holds the room.')).toBe(
+      'The walnut holds the room.',
+    );
+    expect(oneLine('')).toBe('');
   });
 });

@@ -146,8 +146,8 @@ export function GateQuestion({ children }: { children: ReactNode }) {
 /**
  * P-13 — the designer's frozen one-line why, under the question it belongs to.
  * It is her sentence, not the system's, so it is set in the reading face and
- * signed with a given name; without a name it stands unsigned rather than
- * borrowing one.
+ * signed with the name the record froze beside it; without a name it stands
+ * unsigned rather than borrowing one.
  */
 export function GateWhy({
   children,

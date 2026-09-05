@@ -197,11 +197,22 @@ export function whyRemainingLine(value: string): string | null {
 }
 
 /**
- * The given name the frozen why is signed with. A display name arrives as
- * whatever the designer typed into her profile, so take the first word and
- * nothing else; an empty or absent name signs nothing rather than guessing.
+ * The name the frozen why is signed with: exactly the display name the
+ * projection froze beside the sentence (`whyAuthorName`), never a name taken
+ * off the reader. The ruling of 2026-09-05 renders that key verbatim on every
+ * surface, so the portal does not shorten it here — email, the client
+ * Threshold and the iOS row would then sign one sentence three ways. An empty
+ * or absent name signs nothing rather than guessing.
  */
-export function givenName(fullName: string | null | undefined): string | null {
-  const first = (fullName ?? '').trim().split(/\s+/u)[0] ?? '';
-  return first || null;
+export function whyAttribution(name: string | null | undefined): string | null {
+  return (name ?? '').trim() || null;
+}
+
+/**
+ * The why is one line. Every interior run of whitespace — a pasted newline
+ * above all — collapses to a single space before the sentence can freeze into
+ * the immutable artifact, where it can never be corrected.
+ */
+export function oneLine(value: string): string {
+  return value.replace(/\s+/gu, ' ');
 }

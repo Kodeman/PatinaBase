@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { axe, toHaveNoViolations } from 'jest-axe';
 
 import { ProjectApprovalDocument } from './project-approval-document';
@@ -372,6 +378,56 @@ describe("P-13 — the designer's one-line why", () => {
     expect(help()).toContain('No characters left.');
   });
 
+  // The sentence freezes into an append-only artifact and is read on four
+  // surfaces, each of which would break an interior newline differently.
+  it('holds the why to one line: Enter does nothing and a pasted newline collapses', () => {
+    openComposer();
+    const why = screen.getByLabelText(
+      'What would you tell her about this?',
+    ) as HTMLTextAreaElement;
+
+    const enter = createEvent.keyDown(why, { key: 'Enter', code: 'Enter' });
+    fireEvent(why, enter);
+    expect(enter.defaultPrevented).toBe(true);
+
+    fireEvent.change(why, {
+      target: { value: 'The walnut\nholds\r\n\tthe room.' },
+    });
+    expect(why.value).toBe('The walnut holds the room.');
+    expect(why.value).not.toMatch(/[\r\n]/u);
+  });
+
+  it('sends a why with no newline in it, however it was pasted', async () => {
+    openComposer();
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Drawing set 02' },
+    });
+    fireEvent.change(screen.getByLabelText('Approval question'), {
+      target: { value: 'Approve this exact drawing set?' },
+    });
+    fireEvent.change(screen.getByLabelText('Exact project phase'), {
+      target: { value: 'phase-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Issued artifact'), {
+      target: { value: 'plan_issue:issue-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Due date and time'), {
+      target: { value: '2099-09-01T12:00' },
+    });
+    fireEvent.change(
+      screen.getByLabelText('What would you tell her about this?'),
+      { target: { value: '\n The walnut\nholds the room. \n' } },
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Create review draft' }),
+    );
+
+    await waitFor(() => expect(createApproval).toHaveBeenCalledTimes(1));
+    const sent = createApproval.mock.calls[0][0].payload.why as string;
+    expect(sent).toBe('The walnut holds the room.');
+    expect(sent).not.toMatch(/[\r\n]/u);
+  });
+
   it('carries the trimmed line to the create call, and null when she wrote none', async () => {
     openComposer();
     fireEvent.change(screen.getByLabelText('Title'), {
@@ -428,7 +484,7 @@ describe("P-13 — the designer's one-line why", () => {
     expect(createApproval.mock.calls[0][0].payload.why).toBeNull();
   });
 
-  it("prints the frozen why under the question, signed with its author's given name", () => {
+  it("prints the frozen why under the question, signed with its author's frozen name", () => {
     authority = {
       projectId: 'project-1',
       decisionLeadId: 'client-1',
@@ -452,7 +508,7 @@ describe("P-13 — the designer's one-line why", () => {
     expect(why).toHaveTextContent(
       'The walnut is the only piece that holds the room.',
     );
-    expect(why).toHaveTextContent('\u2014 Leah');
+    expect(why).toHaveTextContent('\u2014 Leah Kochaver');
   });
 
   // A studio has more than one hand. The sentence is frozen and client-facing,

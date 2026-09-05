@@ -33,12 +33,6 @@ afterEach(() => {
   __setDensityForTest(undefined);
 });
 
-// The region head renders the full document, which signs a frozen why with the
-// reading designer's given name (P-13); the real hook reaches Supabase auth.
-jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => ({ user: { id: 'designer-1', name: 'Leah Kochaver' } }),
-}));
-
 jest.mock('@patina/supabase', () => ({
   useProjectApprovals: () => ({
     data: approvals,

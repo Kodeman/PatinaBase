@@ -44,11 +44,12 @@ import {
   eligibleSupersessionCandidates,
   formatGateImpact,
   gateScope,
-  givenName,
   newApprovalIdempotencyKey,
+  oneLine,
   parseSignedDelta,
   projectApprovalActions,
   toFutureDueAt,
+  whyAttribution,
   whyRemainingLine,
   WHY_MAX_LENGTH,
 } from './project-approval-model';
@@ -92,8 +93,10 @@ interface ApprovalFormState {
   idempotencyKey: string;
 }
 
-/** P-13 carries the why on the composer only; `supersede_project_approval_decision`
- *  takes no `p_why` this wave, so the superseding form does not offer one. */
+/** P-13 carries the why on the composer only. `supersede_project_approval_decision`
+ *  does take a defaulted `p_why`, and the hook forwards one when a caller passes
+ *  it; this form does not ask again, so silence carries the predecessor's frozen
+ *  line forward rather than dropping it. */
 interface SupersedeState extends Omit<ApprovalFormState, 'phaseId' | 'why'> {
   decisionId: string;
 }
@@ -368,7 +371,7 @@ export function ProjectApprovalDocument({
         payload: {
           title,
           question,
-          why: form.why.trim() || null,
+          why: oneLine(form.why).trim() || null,
           context: form.context.trim() || null,
           dueAt: toFutureDueAt(form.dueAt),
           phaseId: form.phaseId,
@@ -763,15 +766,23 @@ export function ProjectApprovalDocument({
               label="What would you tell her about this?"
               id="approval-why"
             >
+              {/* One line means one line: a pasted newline collapses on the
+                  way in and Enter does nothing, because the sentence freezes
+                  into an immutable artifact that no one can correct after. */}
               <textarea
                 id="approval-why"
-                rows={2}
+                rows={1}
                 className={INPUT}
                 maxLength={WHY_MAX_LENGTH}
                 value={form.why}
                 aria-describedby="approval-why-help"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.preventDefault();
+                }}
                 onChange={(event) =>
-                  updateForm({ why: event.target.value.slice(0, WHY_MAX_LENGTH) })
+                  updateForm({
+                    why: oneLine(event.target.value).slice(0, WHY_MAX_LENGTH),
+                  })
                 }
               />
             </Field>
@@ -1073,15 +1084,14 @@ export function ProjectApprovalDocument({
                     <GatePartBlock part="question">
                       <GateQuestion>{review.question}</GateQuestion>
                       {review.why && (
-                        /* P-13 — signed by the hand that wrote it. A studio
-                           has more than one designer, so the given name comes
-                           off the frozen record, never off the reader; with no
-                           author on the record the sentence stands unsigned.
-                           Which is what every row does today: no projection
-                           emits `whyAuthorName` (00569 carries the why alone),
-                           so the attribution is DEFERRED and this branch is
-                           the landing site for the day one does. */
-                        <GateWhy attribution={givenName(review.whyAuthorName)}>
+                        /* P-13 — signed by the hand that wrote it. A studio has
+                           more than one designer, so the name comes off the
+                           frozen record under `whyAuthorName`, never off the
+                           reader; with no author on the record the sentence
+                           stands unsigned rather than borrowing a name. */
+                        <GateWhy
+                          attribution={whyAttribution(review.whyAuthorName)}
+                        >
                           {review.why}
                         </GateWhy>
                       )}
