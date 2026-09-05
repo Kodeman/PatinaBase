@@ -151,8 +151,12 @@ enum ProjectApprovalCopy {
     /// "$1,251" on both, and 99 cents of change has to stop reading "+$0" under
     /// a row that exists only because the cost changed.
     static func money(_ cents: Int) -> String {
-        let figure = PatinaCurrency.formatWholeDollars(cents: abs(cents))
-        return "\(cents > 0 ? "+" : "−")\(figure)"
+        let sign = cents > 0 ? "+" : "−"
+        // A row exists only because the cost changed, so it may not print
+        // "$0" — under fifty cents the whole-dollar figure rounds to nothing
+        // and the row would contradict its own reason for being drawn.
+        guard abs(cents) >= 50 else { return "\(sign)less than $1" }
+        return "\(sign)\(PatinaCurrency.formatWholeDollars(cents: abs(cents)))"
     }
 
     /// "+3 days" / "−1 day".
