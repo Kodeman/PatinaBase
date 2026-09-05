@@ -267,15 +267,18 @@ struct AttentionCountTests {
     /// takes to be honest is (a) one derivation for the attention count, and
     /// (b) a card that says out loud when it is showing fewer rows than the
     /// count it sits under.
-    @Test("the bell and the Studio pill count different things, and both say which")
-    func theTwoCountsAreDistinctAndBothAreNamed() throws {
+    /// `P-24` / **R5** answered (a) by deletion: there is no Studio count any
+    /// more, so there is nothing left for it to disagree with the bell about.
+    /// The bell survives — it is the delivered half, and it still names itself.
+    @Test("the bell names what it counts, and the Studio pill counts nothing")
+    func theBellIsTheOnlyCountLeftOnTheHeader() throws {
         let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         // The bell is unread notifications and names itself as such.
         #expect(header.contains(#"accessibilityLabel("Notifications")"#))
         #expect(header.contains(#"\(unreadCount) unread"#))
-        // The Studio control prints THE attention count and names it.
-        #expect(header.contains("StudioControlLabel.waitingValue(count: attentionCount)"))
-        // And it does not recompute either from a fetch of its own.
+        // The Studio control carries no number at all.
+        #expect(SourceScan.code(in: header).contains("attentionCount") == false)
+        // And it does not recompute anything from a fetch of its own.
         #expect(header.contains("BadgeCountService") == false)
     }
 

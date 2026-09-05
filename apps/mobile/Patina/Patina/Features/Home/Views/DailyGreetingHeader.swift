@@ -8,17 +8,18 @@ import SwiftUI
 /// The labelled `Studio` control that replaced the bare monogram (B §2; the
 /// graft synthesis §5 takes from Direction A). Named so its copy is a fact a
 /// test can hold rather than a string buried in a view.
+///
+/// `P-24` / **R5**: the control no longer carries a count. The clay capsule
+/// beside the word, and the "N waiting" VoiceOver value that spoke the same
+/// number, were the app's in-product attention badge — a numeric count chip,
+/// which VISION §6 refuses. The springboard (home-screen) badge is kept as the
+/// permitted re-engagement instrument, and inside the app the NEEDS YOU eyebrow
+/// on the Record is what carries the truth, in rows a client can act on rather
+/// than a number she can only feel.
 enum StudioControlLabel {
     /// The canonical surface name in full, for VoiceOver (C4 / B-7).
     static let voiceOverName = "Your Studio"
     static let title = "Studio"
-
-    /// What the control says is waiting. Nil at zero — a control that prints
-    /// "0 waiting" is a chore counter, and this one counts nothing at anybody.
-    static func waitingValue(count: Int) -> String? {
-        guard count > 0 else { return nil }
-        return count == 1 ? "1 waiting" : "\(count) waiting"
-    }
 }
 
 struct DailyGreetingHeader: View {
@@ -27,8 +28,6 @@ struct DailyGreetingHeader: View {
     /// carried unused. The surface is still named "Today" (C4); the greeting
     /// is what it says, not what it is called.
     let greeting: String
-    /// SP-16's one attention count, printed beside the Studio label.
-    var attentionCount: Int = 0
     /// Tap handler for the `?` help affordance. When non-nil, a small
     /// SF-Symbol question-mark button is rendered to the left of the
     /// monogram avatar; tapping it opens the contextual help panel for
@@ -65,7 +64,7 @@ struct DailyGreetingHeader: View {
     /// the help glyph and the Studio pill, so its width is whatever the
     /// cluster leaves — about 150 pt. At XXXL the serif h4 broke inside words
     /// ("Good / afternoo / n."), at AX-XXXL into six fragments, while the
-    /// Studio chip truncated to "Stu…" and still drew its count. Above
+    /// Studio chip truncated to "Stu…". Above
     /// `.accessibility1` the band splits: the greeting takes the full content
     /// width and the cluster gets its own row underneath.
     static func stacksControls(at size: DynamicTypeSize) -> Bool {
@@ -119,7 +118,7 @@ struct DailyGreetingHeader: View {
             studioControl
                 // First-launch tour anchor — Step 3 popover attaches to the
                 // same slot the monogram held; the control there is now
-                // labelled, and carries the count. The anchor travels with the
+                // labelled. The anchor travels with the
                 // control: on the house-first root the door is the bar's Studio
                 // tab and the anchor is mounted there instead.
                 .firstLaunchTourAnchor(.profileMonogram)
@@ -214,28 +213,18 @@ struct DailyGreetingHeader: View {
         }
     }
 
-    /// The Studio control: the surface's name and the one attention count,
-    /// where a bare initial used to sit. A monogram said who you are; this
-    /// says what is waiting (B §2, synthesis §5).
+    /// The Studio control: the surface's name, where a bare initial used to
+    /// sit. A monogram said who you are; this says where the door goes
+    /// (B §2, synthesis §5). `P-24` / R5 took the count off it.
     @ViewBuilder
     private var studioControl: some View {
-        let control = HStack(spacing: 6) {
-            Text(StudioControlLabel.title)
-                .font(PatinaTypography.uiSmall)
-                .foregroundStyle(PatinaColors.Text.primary)
-                .lineLimit(1)
-            if attentionCount > 0 {
-                Text("\(attentionCount)")
-                    .font(PatinaTypography.monoMedium)
-                    .foregroundStyle(PatinaColors.offWhite)
-                    .padding(.horizontal, PatinaSpacing.xs)
-                    .frame(minWidth: 18, minHeight: 18)
-                    .background(Capsule().fill(PatinaColors.clayInk))
-            }
-        }
-        .padding(.horizontal, PatinaSpacing.xsm)
-        .frame(minHeight: 44)
-        .background(Capsule().fill(PatinaColors.Background.secondary))
+        let control = Text(StudioControlLabel.title)
+            .font(PatinaTypography.uiSmall)
+            .foregroundStyle(PatinaColors.Text.primary)
+            .lineLimit(1)
+            .padding(.horizontal, PatinaSpacing.xsm)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(PatinaColors.Background.secondary))
 
         if let onStudioTap {
             Button(action: onStudioTap) {
@@ -243,7 +232,6 @@ struct DailyGreetingHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(StudioControlLabel.voiceOverName)
-            .accessibilityValue(StudioControlLabel.waitingValue(count: attentionCount) ?? "")
             .accessibilityHint("Opens your studio.")
             .accessibilityIdentifier("DailyRoomView.StudioButton")
         } else {
@@ -288,7 +276,6 @@ private struct UnreadBadge: View {
         DailyGreetingHeader(
             dateString: "WEDNESDAY · APR 7",
             greeting: "Good evening.",
-            attentionCount: 4,
             onHelpTap: {},
             onStudioTap: {},
             onBellTap: {},
