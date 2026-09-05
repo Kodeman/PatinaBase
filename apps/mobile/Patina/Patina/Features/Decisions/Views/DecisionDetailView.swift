@@ -165,7 +165,9 @@ struct DecisionDetailView: View {
 
     private func header(_ decision: RemoteClientDecision) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            MonoLabel(text: "DECISION")
+            // "Approval" is the ask; "decision" is reserved for a choice
+            // between named alternatives (`rulings-2026-09-04.md`).
+            MonoLabel(text: viewModel.isApprovalAsk ? "APPROVAL" : "DECISION")
                 .tracking(2)
             Text(decision.title ?? "Decision")
                 .font(PatinaTypography.h2)
@@ -418,7 +420,8 @@ extension DecisionDetailView {
         if !viewModel.isResolved, viewModel.canDefer {
             VStack(alignment: .leading, spacing: 10) {
                 if let sent = viewModel.sentDeferral {
-                    Text("You told your designer: \(sent.actLabel.lowercased()). This decision is still open.")
+                    Text("You told your designer: \(sent.actLabel.lowercased()). "
+                         + "This \(viewModel.isApprovalAsk ? "approval" : "decision") is still open.")
                         .font(PatinaTypography.caption)
                         .foregroundStyle(PatinaColors.Text.muted)
                         .accessibilityIdentifier("decisionDetail.deferralSent")
@@ -431,14 +434,14 @@ extension DecisionDetailView {
                 // label holds its own line.
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(DecisionDeferral.allCases) { deferral in
+                        ForEach(viewModel.availableDeferrals) { deferral in
                             deferralAct(deferral)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 } else {
                     HStack(spacing: 24) {
-                        ForEach(DecisionDeferral.allCases) { deferral in
+                        ForEach(viewModel.availableDeferrals) { deferral in
                             deferralAct(deferral)
                         }
                         Spacer(minLength: 0)

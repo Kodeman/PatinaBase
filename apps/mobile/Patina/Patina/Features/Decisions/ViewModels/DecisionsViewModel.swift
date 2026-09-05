@@ -280,6 +280,24 @@ final class DecisionDetailViewModel {
         return decision.isApprovableClientSignoff && options.isEmpty
     }
 
+    /// The deferral acts this ask actually offers.
+    ///
+    /// "Neither of these" answers a choice between named alternatives. On a
+    /// sign-off — which carries no options by design — and on a decision whose
+    /// options have not arrived, there is nothing to be neither of, and the
+    /// screen said so in the same breath ("Nothing to choose") as it offered
+    /// the act. Only "Not yet" survives there.
+    var availableDeferrals: [DecisionDeferral] {
+        options.isEmpty ? [.notYet] : DecisionDeferral.allCases
+    }
+
+    /// The eyebrow the ask wears. An approval is not a decision
+    /// (`rulings-2026-09-04.md`, Vocabulary): "decision" is reserved for a
+    /// choice between named alternatives.
+    var isApprovalAsk: Bool {
+        decision?.isClientSignoff == true || decision?.isProjectArtifactApproval == true
+    }
+
     /// Whether the decision is already resolved (any option chosen, a sign-off
     /// given, or the status says so). Used to hide the per-option choose CTAs.
     var isResolved: Bool {
