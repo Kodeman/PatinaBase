@@ -500,6 +500,49 @@ a:hover {
   }
 }
 
+/* ── the held act (P-18) · the same ink, given a direction and a length ──────
+   A terminal act is held, not tapped, and what marks the holding is the ink
+   this grammar already floods on contact — clipped to a left-to-right inset
+   instead of a circle, so it fills ALONG the rule under the word. No bar, no
+   ring, no percentage: the rule inking to its end is the whole report.
+
+   These rules are last on purpose. `.da-act:hover/.da-act:active .da-pool`
+   above are (0,3,0) and would otherwise reclaim the circle exactly while the
+   finger is down, so each is answered here at equal specificity and later in
+   the cascade.
+
+   `--hold-fill` (0 or 1) and `--hold-ms` are parked on the control by
+   HoldAction. Stilled, the ink arrives at once and the hold keeps its length:
+   the wait is the deliberation; the fill was only ever its portrait. */
+.da-hold .da-pool,
+.da-hold:hover .da-pool,
+.da-hold:active .da-pool {
+  clip-path: inset(0 calc(100% * (1 - var(--hold-fill, 0))) 0 0);
+  transition: clip-path var(--hold-ms, 900ms) linear;
+}
+/* released, or never begun: the ink retreats quickly and says nothing about it */
+.da-hold[data-hold-state='idle'] .da-pool,
+.da-hold[data-hold-state='idle']:hover .da-pool,
+.da-hold[data-hold-state='idle']:active .da-pool {
+  transition: clip-path 180ms var(--ease-editorial);
+}
+/* the press snap is a tap's punctuation; a hold has none to give */
+.da-hold:active {
+  transform: none;
+}
+.da-hold-still .da-pool,
+.da-hold-still:hover .da-pool,
+.da-hold-still:active .da-pool {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .da-hold .da-pool,
+  .da-hold:hover .da-pool,
+  .da-hold:active .da-pool {
+    transition: none;
+  }
+}
+
 /* Scored Ink ad-hoc kit (I107 sweep) — score mechanics for non-DocumentAction controls.
    DocumentAction owns the full grammar above; everywhere else a control still needs
    to draw a hairline score under a hover or hold one steady when selected, and an

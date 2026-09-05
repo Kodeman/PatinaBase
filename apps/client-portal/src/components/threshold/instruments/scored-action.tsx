@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { forwardRef, useEffect, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useId, useRef, useState } from 'react';
 import type {
   AnchorHTMLAttributes,
   ButtonHTMLAttributes,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
@@ -250,3 +251,321 @@ export const ScoredAction = forwardRef<
 });
 
 ScoredAction.displayName = 'ScoredAction';
+
+/* ── THE HELD ACT (P-18) ─────────────────────────────────────────────────────
+   Some acts are terminal: a signature, an acceptance, an outcome recorded
+   against a frozen edition. A tap is the wrong shape for those — it is over
+   before the hand has agreed with the eye. So the act is HELD: the finger
+   rests on the word and the same scored ink fills along the rule beneath it,
+   left to right, until the rule is inked and the act is taken.
+
+   IT IS THE SAME INK, NOT A NEW DEVICE. No spinner, no bar, no percentage, no
+   ring — `.da-pool` is already the ink this grammar floods on contact, and a
+   hold simply gives it a direction and a length. The one addition in
+   globals.css is `.da-hold`, which swaps the pool's circular clip for a
+   left-to-right inset and hands it the hold's own duration.
+
+   RELEASING EARLY IS A CANCEL, NOT A FAILURE. Nothing is said about it: the
+   ink retreats and the word stands unmarked again. Scrolling cancels too — a
+   thumb that starts to read is not a thumb that meant to sign.
+
+   THE KEYBOARD HOLDS TOO. Enter or Space held for the same length takes the
+   act, so nobody is offered a shorter path to a terminal decision than the
+   one the mouse gets. The sentence naming the gesture is on the control for
+   every reader (`aria-describedby`); the visible "or press and hold Enter" is
+   drawn only when the focus arrived by key, because a pointer user is already
+   holding the thing it describes.
+
+   REDUCED MOTION STILLS THE FILL, NOT THE WAIT. The ink arrives at once and
+   the hold still takes its length: the delay is the deliberation, and the
+   animation was only ever its portrait. ─────────────────────────────────── */
+
+/** The length of a hold, in milliseconds. One beat of deliberation. */
+export const HOLD_MS = 900;
+
+/* Which way the last interaction came from. A visible keyboard hint on an act
+   the client reached with her thumb is noise, so the hint waits for a key. One
+   pair of listeners is shared by every held act on the page and retired with
+   the last of them. */
+let keyboardModality = false;
+let modalityHolders = 0;
+const noteKey = () => {
+  keyboardModality = true;
+};
+const notePointer = () => {
+  keyboardModality = false;
+};
+
+function retainModality(): () => void {
+  if (typeof document === 'undefined') return () => {};
+  modalityHolders += 1;
+  if (modalityHolders === 1) {
+    document.addEventListener('keydown', noteKey, true);
+    document.addEventListener('pointerdown', notePointer, true);
+  }
+  return () => {
+    modalityHolders -= 1;
+    if (modalityHolders === 0) {
+      document.removeEventListener('keydown', noteKey, true);
+      document.removeEventListener('pointerdown', notePointer, true);
+    }
+  };
+}
+
+function stilled(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  // A stubbed matchMedia can answer with nothing at all; a missing answer is
+  // not a request for stillness.
+  return !!window.matchMedia('(prefers-reduced-motion: reduce)')?.matches;
+}
+
+export interface HoldActionProps
+  extends Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    'children' | 'className' | 'disabled' | 'onClick'
+  > {
+  /** Stable telemetry key for this act, e.g. `gate_sign`. */
+  actionKey: string;
+  surfaceKey?: string;
+  regionKey?: string;
+  variant?: ScoredActionVariant;
+  /**
+   * `mobile_dock` keeps the act on the bottom edge of a narrow viewport while
+   * its paper is still on screen, so a long document cannot bury it.
+   */
+  presentation?: ScoredActionPresentation;
+  /**
+   * The verb the sentence names: "Press and hold to {verb}." Lower case, no
+   * full stop — the sentence supplies its own.
+   */
+  verb: string;
+  /** The act itself. Runs once, when the hold reaches its length. */
+  onHold: () => void | Promise<void>;
+  holdMs?: number;
+  loading?: boolean;
+  loadingLabel?: ReactNode;
+  disabled?: boolean;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
+  children: ReactNode;
+  /** Classes for the word itself. */
+  className?: string;
+  /** Classes for the act's own box — where a dock's spacing belongs. */
+  wrapperClassName?: string;
+}
+
+export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
+  function HoldAction(
+    {
+      actionKey,
+      surfaceKey = 'the_making',
+      regionKey = 'unscoped',
+      variant = 'primary',
+      presentation = 'inline',
+      verb,
+      onHold,
+      holdMs = HOLD_MS,
+      loading = false,
+      loadingLabel,
+      disabled = false,
+      restoreFocusRef,
+      children,
+      className,
+      wrapperClassName,
+      ...rest
+    },
+    ref,
+  ) {
+    const unavailable = disabled || loading;
+    const [holding, setHolding] = useState(false);
+    const [keyboardHint, setKeyboardHint] = useState(false);
+    // Read after mount, never during render: the server has no media query to
+    // answer with, and a class that appears only on the client is a hydration
+    // mismatch.
+    const [still, setStill] = useState(false);
+    const control = useRef<HTMLButtonElement | null>(null);
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const running = useRef(false);
+    const shown = useRef(new Set<string>());
+    const shownKey = `${actionKey}:${presentation}`;
+    const saidId = `hold-${useId().replace(/:/g, '')}`;
+
+    useEffect(() => retainModality(), []);
+    useEffect(() => setStill(stilled()), []);
+
+    useEffect(() => {
+      if (shown.current.has(shownKey)) return;
+      shown.current.add(shownKey);
+      makingEvents.actionShown({
+        surface_key: surfaceKey,
+        region_key: regionKey,
+        action_key: actionKey,
+        variant,
+        presentation,
+      });
+    }, [actionKey, presentation, regionKey, shownKey, surfaceKey, variant]);
+
+    const ink = useCallback((fill: 0 | 1) => {
+      control.current?.style.setProperty('--hold-fill', `${fill}`);
+    }, []);
+
+    const stop = useCallback(() => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      running.current = false;
+      ink(0);
+      setHolding(false);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('scroll', stop, true);
+      }
+    }, [ink]);
+
+    useEffect(() => stop, [stop]);
+
+    const start = useCallback(() => {
+      if (unavailable || running.current) return;
+      running.current = true;
+      setHolding(true);
+      control.current?.style.setProperty('--hold-ms', `${holdMs}ms`);
+      // The fill is a CSS transition on the pool, so it is set on the next
+      // frame in a browser and immediately in jsdom; either way the timer,
+      // not the paint, is what decides when the act is taken.
+      ink(1);
+      if (typeof window !== 'undefined') {
+        window.addEventListener('scroll', stop, true);
+      }
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        running.current = false;
+        setHolding(false);
+        ink(0);
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('scroll', stop, true);
+        }
+        makingEvents.actionSelected({
+          surface_key: surfaceKey,
+          region_key: regionKey,
+          action_key: actionKey,
+          variant,
+          presentation,
+        });
+        void Promise.resolve(onHold()).finally(() => {
+          restoreFocus(restoreFocusRef);
+        });
+      }, holdMs);
+    }, [
+      actionKey,
+      holdMs,
+      ink,
+      onHold,
+      presentation,
+      regionKey,
+      restoreFocusRef,
+      stop,
+      surfaceKey,
+      unavailable,
+      variant,
+    ]);
+
+    function onKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+        return;
+      }
+      // A native button fires click on Enter down and Space up. Neither may
+      // reach the act: the only way through this control is the hold.
+      event.preventDefault();
+      if (event.repeat) return;
+      start();
+    }
+
+    function onKeyUp(event: ReactKeyboardEvent<HTMLButtonElement>) {
+      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+        return;
+      }
+      event.preventDefault();
+      stop();
+    }
+
+    return (
+      <span
+        data-hold-dock={presentation === 'mobile_dock' ? '' : undefined}
+        className={[
+          'inline-flex flex-wrap items-center gap-x-3 gap-y-1',
+          presentation === 'mobile_dock'
+            ? 'max-[600px]:sticky max-[600px]:bottom-0 max-[600px]:z-20 max-[600px]:flex max-[600px]:border-t max-[600px]:border-[var(--border-default)] max-[600px]:bg-[var(--bg-surface)] max-[600px]:py-2'
+            : '',
+          wrapperClassName ?? '',
+        ].join(' ')}
+      >
+        <button
+          {...rest}
+          ref={(node) => {
+            control.current = node;
+            if (typeof ref === 'function') ref(node);
+            else if (ref) ref.current = node;
+          }}
+          type={rest.type ?? 'button'}
+          disabled={unavailable}
+          data-action-key={actionKey}
+          data-action-variant={variant}
+          data-action-region={regionKey}
+          data-hold-state={holding ? 'holding' : 'idle'}
+          data-hold-ms={holdMs}
+          aria-busy={loading || undefined}
+          aria-describedby={
+            [rest['aria-describedby'], saidId].filter(Boolean).join(' ') || undefined
+          }
+          className={[
+            BASE_CLASS,
+            VARIANT_CLASS[variant],
+            'da-hold',
+            still ? 'da-hold-still' : '',
+            className ?? '',
+          ].join(' ')}
+          onPointerDown={(event) => {
+            markInkPoint(event);
+            start();
+          }}
+          onPointerUp={stop}
+          onPointerLeave={stop}
+          onPointerCancel={stop}
+          onKeyDown={onKeyDown}
+          onKeyUp={onKeyUp}
+          onBlur={(event) => {
+            setKeyboardHint(false);
+            stop();
+            rest.onBlur?.(event);
+          }}
+          onFocus={(event) => {
+            setKeyboardHint(keyboardModality);
+            rest.onFocus?.(event);
+          }}
+          // A hold is the only way in. A click that arrives anyway — a
+          // synthetic one, an assistive click — is not the act.
+          onClick={(event) => event.preventDefault()}
+        >
+          {variant !== 'tertiary' && <span aria-hidden className="da-pool" />}
+          <span className="da-label">
+            {loading && loadingLabel ? loadingLabel : children}
+          </span>
+          <span aria-hidden="true" data-action-hit className="da-hit" />
+        </button>
+        {keyboardHint && !unavailable && (
+          <span
+            aria-hidden="true"
+            data-testid={`${actionKey}-key-hint`}
+            className="font-mono text-[11px] leading-none tracking-[0.06em] text-[var(--text-muted)]"
+          >
+            or press and hold Enter
+          </span>
+        )}
+        <span id={saidId} className="sr-only">
+          {`Press and hold to ${verb}.`}
+        </span>
+      </span>
+    );
+  },
+);
+
+HoldAction.displayName = 'HoldAction';
