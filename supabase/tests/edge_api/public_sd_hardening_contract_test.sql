@@ -1705,15 +1705,15 @@ VALUES
     -- lock and returns before the project lookups. The branch holds direct
     -- authenticated DML to the same clean-draft predicate the project path
     -- applies, so no caller can write state or money around the billing RPCs,
-    -- and its INSERT arm requires the household to sit on the stamped
-    -- member's designer_clients roster and that member to hold a
-    -- designer-domain role (both unlocked reads), so a houseless invoice can
-    -- no more be addressed to a stranger than a project one can. The UPDATE
-    -- arm judges neither, exactly as the project path judges its lead only on
-    -- insert: the four identity columns are immutable there.
+    -- and BOTH arms require the household to sit on the designer_clients
+    -- roster of an active non-guest member of the invoice's studio (an
+    -- unlocked read), so a houseless invoice can no more be addressed to a
+    -- stranger than a project one can. The designer-domain check stays on the
+    -- INSERT arm, exactly as the project path judges its lead only on insert:
+    -- the four identity columns are immutable on UPDATE.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '03db693656dbaf6b747709b9514543bfabd19873b3f812d9054ec8d0371b7307',
+    'f39043a2f3d9f70f5bb8d97c23f436a1f159085a49dc961d928ca25723ee94a6',
     ARRAY[]::text[]
   ),
   (
@@ -2373,7 +2373,7 @@ BEGIN
                'amount_paid_cents','memo','internal_notes','sent_at','paid_at',
                'voided_at','void_reason','stripe_checkout_session_id',
                'reminder_count','last_reminder_at','ar_flagged_at',
-               'ar_last_chased_at','created_at','updated_at'
+               'ar_last_chased_at','created_at','updated_at','title'
              ], attname))
            FROM pg_attribute
            WHERE attrelid = 'public.invoices'::regclass
@@ -2386,11 +2386,11 @@ BEGIN
                  'internal_notes','sent_at','paid_at','voided_at','void_reason',
                  'stripe_checkout_session_id','reminder_count',
                  'last_reminder_at','ar_flagged_at','ar_last_chased_at',
-                 'created_at','updated_at'
+                 'created_at','updated_at','title'
                ]
              )),
           NULL::text, 0::oid,
-          'createtriggerset_invoice_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,project_id,status,invoice_number,issue_date,due_date,payment_terms_days,currency,subtotal_cents,tax_rate,tax_cents,total_cents,amount_paid_cents,memo,internal_notes,sent_at,paid_at,voided_at,void_reason,stripe_checkout_session_id,reminder_count,last_reminder_at,ar_flagged_at,ar_last_chased_at,created_at,updated_atoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+          'createtriggerset_invoice_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,project_id,status,invoice_number,issue_date,due_date,payment_terms_days,currency,subtotal_cents,tax_rate,tax_cents,total_cents,amount_paid_cents,memo,internal_notes,sent_at,paid_at,voided_at,void_reason,stripe_checkout_session_id,reminder_count,last_reminder_at,ar_flagged_at,ar_last_chased_at,created_at,updated_at,titleoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
         ),
         (
           'public.commercial_document_signatures'::text,

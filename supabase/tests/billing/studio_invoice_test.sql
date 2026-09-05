@@ -11,6 +11,8 @@
 -- at the row (S4, S7) whether or not the composer RPC wrote it, the
 -- clean-draft bound it puts on direct PostgREST DML, and a two-studio
 -- designer drawing off the studio they named rather than their primary one.
+-- Also: the trigger watches title, the household read path has an index, and
+-- the brand resolver only short-circuits on an active design studio.
 
 BEGIN;
 
@@ -48,7 +50,8 @@ INSERT INTO public.organizations (id, type, name, slug)
 VALUES
   ('5f110000-0000-4000-8000-000000000001', 'design_studio', 'Studio Invoice One', 'studio-invoice-one'),
   ('5f110000-0000-4000-8000-000000000002', 'design_studio', 'Studio Invoice Two', 'studio-invoice-two'),
-  ('5f110000-0000-4000-8000-000000000003', 'design_studio', 'Studio Invoice Three', 'studio-invoice-three');
+  ('5f110000-0000-4000-8000-000000000003', 'design_studio', 'Studio Invoice Three', 'studio-invoice-three'),
+  ('5f110000-0000-4000-8000-000000000004', 'manufacturer', 'Studio Invoice Maker', 'studio-invoice-maker');
 
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
@@ -698,6 +701,139 @@ BEGIN
   ) AS identity;
   ASSERT v_name = 'Studio Invoice Two',
     'a named studio brands the letter, never the designer''s primary studio';
+END;
+$$;
+
+-- ── The trigger's watch list and the household read path's index. ──
+RESET ROLE;
+DO $$
+BEGIN
+  ASSERT (SELECT position('title' IN pg_get_triggerdef(watcher.oid)) > 0
+          FROM pg_trigger AS watcher
+          WHERE watcher.tgname = 'set_invoice_studio_id'
+            AND watcher.tgrelid = 'public.invoices'::regclass),
+    'the studio-stamp trigger watches title, so a bare regarding-line write is judged';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename = 'invoices'
+      AND indexname = 'idx_invoices_client'
+  ), 'the household read path stands on an index over invoices.client_id';
+END;
+$$;
+
+-- The regarding line of a clean studio draft still edits from the composer.
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_studio_actor('5f100000-0000-4000-8000-000000000001');
+DO $$
+DECLARE v_draft uuid;
+BEGIN
+  SELECT id INTO v_draft FROM studio_invoice_ids WHERE label = 'draft';
+  UPDATE public.invoices SET title = 'Design consultation, revised'
+  WHERE id = v_draft;
+  ASSERT (SELECT title = 'Design consultation, revised'
+          FROM public.invoices WHERE id = v_draft),
+    'a clean studio draft still edits its regarding line';
+END;
+$$;
+
+-- S4 is the row's law on the UPDATE arm too. The machine writes a studio
+-- invoice for a household on nobody's roster (service_role returns before the
+-- actor checks, exactly as the project path lets it reconcile history); a
+-- member then cannot touch it by hand - not its memo, and not its title, which
+-- reaches the trigger only because title now sits in the UPDATE OF list.
+RESET ROLE;
+SET LOCAL ROLE service_role;
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, studio_id, title, status,
+  subtotal_cents, total_cents
+) VALUES (
+  '5f140000-0000-4000-8000-000000000006', NULL,
+  '5f100000-0000-4000-8000-000000000001',
+  '5f100000-0000-4000-8000-000000000004',
+  '5f110000-0000-4000-8000-000000000001',
+  'Machine-written for a stranger', 'draft', 1000, 1000
+);
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_studio_actor('5f100000-0000-4000-8000-000000000001');
+DO $$
+DECLARE
+  v_state text;
+  v_accepted boolean;
+BEGIN
+  v_accepted := false;
+  v_state := NULL;
+  BEGIN
+    UPDATE public.invoices SET memo = 'Editing a stranger''s invoice'
+    WHERE id = '5f140000-0000-4000-8000-000000000006';
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'the UPDATE arm holds a studio invoice to its household''s roster too';
+
+  v_accepted := false;
+  v_state := NULL;
+  BEGIN
+    UPDATE public.invoices SET title = 'Renamed by hand'
+    WHERE id = '5f140000-0000-4000-8000-000000000006';
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'a title-only write reaches the trigger and is judged like any other';
+
+  ASSERT (SELECT title = 'Machine-written for a stranger' AND memo IS NULL
+          FROM public.invoices
+          WHERE id = '5f140000-0000-4000-8000-000000000006'),
+    'the refused writes left the machine-written row exactly as it stood';
+END;
+$$;
+
+-- ── The brand resolver short-circuits on an active design studio only. ──
+RESET ROLE;
+SET LOCAL ROLE anon;
+DO $$
+DECLARE
+  v_studio uuid;
+  v_name text;
+  v_source text;
+BEGIN
+  SELECT identity.studio_id, identity.name, identity.source
+  INTO v_studio, v_name, v_source
+  FROM public.resolve_studio_identity(
+    NULL, '5f100000-0000-4000-8000-000000000003',
+    '5f110000-0000-4000-8000-000000000004'
+  ) AS identity;
+  ASSERT v_studio IS NULL AND v_name IS NULL AND v_source IS NULL,
+    'a manufacturer id never names itself through the brand resolver';
+
+  SELECT identity.studio_id, identity.name, identity.source
+  INTO v_studio, v_name, v_source
+  FROM public.resolve_studio_identity(
+    NULL, '5f100000-0000-4000-8000-000000000001',
+    '5f110000-0000-4000-8000-000000000004'
+  ) AS identity;
+  ASSERT v_source = 'studio'
+     AND v_studio IS DISTINCT FROM '5f110000-0000-4000-8000-000000000004'::uuid
+     AND v_name IS DISTINCT FROM 'Studio Invoice Maker',
+    'an unresolvable studio falls through to the designer derivation';
+
+  SELECT identity.studio_id, identity.name, identity.source
+  INTO v_studio, v_name, v_source
+  FROM public.resolve_studio_identity(
+    NULL, '5f100000-0000-4000-8000-000000000001',
+    '5f110000-0000-4000-8000-000000000002'
+  ) AS identity;
+  ASSERT v_source = 'studio'
+     AND v_studio = '5f110000-0000-4000-8000-000000000002'
+     AND v_name = 'Studio Invoice Two',
+    'an active design studio still brands the letter it is named on';
 END;
 $$;
 
