@@ -550,3 +550,169 @@ The gates in the table above are the ones that ran on this restored stack. For
 the integration steward: env.md's reset-ownership rule (backend lane only, during
 builds) was not held to, so treat any other lane's "reset + walk" evidence from
 this window as taken against a stack that may not have carried 00569.
+
+---
+
+## Round 3 — the R3 fix pass (2026-09-05)
+
+Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-backend`
+(`git rev-parse --show-toplevel` returns exactly that), branch
+`approvals/w2-backend`. Tree was clean on arrival — the only `git status` output
+was the sandbox's "Operation not permitted" read denials on the eight
+`.env.example` files, not leftovers. Nothing to finish or discard.
+
+Two commits: `459de403b` (the edge surface) and `951545a84` (the database).
+
+### B1 — the letter now signs the line with the hand that wrote it
+
+The ruling says every surface renders `— {whyAuthorName}` when present. The
+projection did; the letter signed with `cobrand.designerGivenName`, which
+`resolveStudioSignature` resolves live from the project's `designer_id`. Two
+separate wrongs in one: a studio co-member may compose (the fixture's `W2 issued
+set 7` carries `why_author_name = 'Peer'` against a project designer of
+`W2 Designer`), so the very first send was already mis-signed; and a rename
+between the first notice and the overdue letter would rewrite a sentence she had
+already read.
+
+- `why_author_name` added to all four embedded `project_approval_artifacts`
+  selects — `decision-first-notice`, `decision-reminders`, `expire-decisions`,
+  `decision-resolved-notify`. `notification-digest`'s select is deliberately
+  left alone: it never selected `why` either, so it renders no note.
+- `EmbeddedApprovalArtifact.why_author_name` → `ApprovalArtifactCitation
+  .whyAuthorName`, trimmed, and dropped whenever the why is absent (a name under
+  no line attributes nothing — 00569's CHECK says the same, and the resolver
+  does not lean on it for pre-00569 rows).
+- `renderDesignerNote` now takes the citation rather than the bare string, and
+  prefers frozen author → cobrand given name → studio name → nothing. The
+  fallback chain below the frozen name is untouched.
+
+Rendered end to end through the real modules, with the row shape the selects now
+return and the values taken verbatim from the probe of `W2 issued set 7`:
+
+```
+Hi Harper,"Kitchen plan set" is ready, exactly as drawn.
+"You asked us to hold the island where it was."— Peer
+Edition 3 · issued September 1  Due Saturday, September 12.
+… — Leah, Middle West StudioChicago
+```
+
+The quoted line changes hands; the sign-off at the foot still speaks for the
+studio. This is R3's own reproduction inverted — it rendered `— Leah` there.
+
+### B2 — a receipt is not a summons
+
+Ruled nowhere in three rounds, so this pass takes the reading the vision line
+argues for and the review proposed: the receipt is **push-silent and read on
+arrival**.
+
+`notify_client_attention` is redefined in 00569 (grafted whole from 00534, same
+6-arg signature). A row whose `metadata.kind` is `decision_receipt` is written
+with `status = 'opened'` and `opened_at = now()`, and returns before the push
+envelope — no row, no `invoke_edge_function`, no `apns-send`. Every other caller
+mints no `kind` and is byte-for-byte unaffected.
+
+Why this makes the badge behave rather than merely stay put: `apns-send`'s
+`collapsedBadgeCount` drops an entity as soon as **any** row of it reads as
+read, and `BADGE_VISIBLE_STATUSES` includes `opened`, so the receipt row comes
+back, marks the entity read, and the springboard number **falls**. Because
+00534 de-dupes the bell row on (user, entity, unopened), the receipt *replaces*
+the ask's "needs you" line rather than stacking beside it, so there is one row
+and it is read. `status = 'opened'` beside `opened_at` is the exact shape
+`NotificationsAPIClient.markOpened` writes, so iOS's
+`opened_at != nil || status == "opened"` and the portal agree.
+
+One real defect the gate caught and I fixed before committing: the first cut
+wrote `status = CASE … END` un-cast, and `notification_log.status` is
+`public.notification_status`. It failed inside the caller's `EXCEPTION WHEN
+OTHERS` handler, so the receipt was silently swallowed with a WARNING rather
+than raising — `column "status" is of type notification_status but expression is
+of type text`. Both the UPDATE and the INSERT now cast explicitly. This is the
+argument for running the contract test against a real database rather than
+reading the migration.
+
+### B3 — a comma is not a list
+
+Both owners changed together, `_project_approval_release_sentence` and
+`decisionReleaseSentence`. A piece is named only when it is the only one **and**
+its name carries no comma; every other case is counted in words, one through
+twenty, "the pieces" past that. `project_ffe_items.name` is Title Case catalogue
+text the studio typed.
+
+Rendered through the real SQL function and the real Deno helper, identical on
+both:
+
+```
+It releases the cabinet order.                       (one, clean)
+It releases one piece that was waiting on it.        (one, "Built-in shelving, north wall")
+It releases two pieces that were waiting on it.      (that one + "Built-in Window Banquette")
+```
+
+The two-piece "and" join is gone, so the second line no longer reads as three
+things on the email, the bell and the lock screen at once.
+
+### Gates
+
+The shared stack had moved again — ledger tail **00571, 00568, 00567**, still no
+00569, `why`/`why_author_name` absent. A fourth lane has reset it since round 2.
+I did not reset: at R3 the other lanes are in review, and R3's own technique is
+strictly better evidence anyway. Every SQL result below was taken by applying
+00569 inside a transaction and rolling it back — DDL is transactional, so this
+exercises the real migration against the real schema and leaves the shared stack
+byte-identical. It also re-proves that **00569 applies cleanly on a database
+already carrying 00570/00571**.
+
+| gate | result |
+|---|---|
+| `deno test --allow-all --config supabase/functions/deno.json supabase/functions/_shared/` | **ok · 204 passed · 0 failed** (was 200; +4 new) |
+| `deno test … _tests/apns-send.test.ts _tests/client-attention-deep-links.test.ts` | **ok · 42 passed · 0 failed** |
+| `deno check` on all six deploy-set `index.ts` | six `Check …` lines, clean |
+| `deno fmt --check` on all 12 branch-touched function files | **clean — "Checked 12 files"** (m1 closed) |
+| `pnpm --dir <wt> --filter @patina/supabase run type-check` | clean (exit 0) |
+| `python3 scripts/generate-legacy-grants.py` | no drift; seed unchanged, tree clean |
+| 00569 contract test, 00569 applied in a rolled-back tx | **exit 0**, no ERROR, no failed ASSERT |
+| 00463 + 00464 contract tests, same way | **exit 0** each |
+| `notify_client_attention` ACL after CREATE OR REPLACE | anon `f`, authenticated `f`, service_role `t` — 00534's posture intact |
+| `bash scripts/run-sql-tests.sh` (shared stack, at 00571 **without** 00569) | 157 total · 131 green · 21 expected-fail · **5 unexpected** — byte-identical to R3's baseline |
+| — of those 5: `00463`, `00464`, `00569` | environmental: they assert 00569's shapes and 00569 is not on the shared stack. All three pass in-tx, above. |
+| — of those 5: `edge_api/public_sd_hardening`, `mood_boards/project_board_share` | fail from the main checkout too — not this branch (R3 confirmed the same) |
+| letters + receipts rendered through the real modules | attribution and all three consequence clauses, quoted above |
+
+`run-sql-tests.sh` needs `dangerouslyDisableSandbox` — its `mktemp` writes
+outside the sandbox's allowed roots and the run otherwise dies with
+"mkdtemp failed … Operation not permitted" followed by a misleading
+"no .sql files found".
+
+### Tests added
+
+- `decision-notify.test.ts` — the frozen author signs the note on all three
+  letters while the foot keeps the studio sign-off; a blank frozen author falls
+  back to the cobrand; the author is escaped.
+- `project-approval-notification.test.ts` — `why_author_name` rides the citation
+  trimmed, and is dropped both when the why is blank and when the name is.
+- `decision-notify.test.ts` — a catalogue name with a comma is counted, alone
+  and paired; the comma has to be in a surviving name, not in a blank the filter
+  drops. The two-piece case in the existing test now expects the count.
+- 00569 contract test — two comma cases on the SQL helper; the receipt writes no
+  push row of its own and leaves the ask's single envelope alone; its bell row
+  is `opened` with `opened_at` set; and a non-receipt call on an entity of its
+  own still writes its envelope and still arrives unread.
+
+One correction worth recording: my first cut of the "no push" assertion counted
+**all** push rows for the entity and found 1. That row is the **ask's** envelope,
+written at publish by `notify_client_decision_raised` — correct and untouched.
+The assertion now pins no push row carrying `kind = 'decision_receipt'`, plus
+the envelope count staying at exactly the ask's one.
+
+### Still open after this pass
+
+Unchanged from R3 and out of this lane's fix scope: m2 (a revision cannot CLEAR
+the why — unreachable today, still a ruling owed), m3 (drafts reach the lead
+through the projection, now carrying the why), m5 (the designer leg is unguarded
+in front of the receipt in `decision-resolved-notify`), m6 (the receipt has no
+retry — same ticket as the Wave-1 first-notice retry, P-28), m7 (the
+`deliverDecisionReceipt` docstring overclaims its own gate), m9 ("signature only
+on Approve" is enforced on neither surface's behalf in SQL), m10 (no unique index
+behind `pickProjectThreadId`), m11 (R16's 8am–8pm window does not exist on this
+rail), and n1–n4. The deploy set is unchanged: **apns-send, decision-first-notice,
+decision-reminders, decision-resolved-notify, expire-decisions,
+notification-digest** — the two edited `_shared` modules' importers.
