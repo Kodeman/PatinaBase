@@ -415,3 +415,117 @@ $ pnpm --filter @patina/designer-portal test -- accounts desk-receivables
 ```
 
 `deploySet` is now `['migration 00571_studio_invoices.sql']`.
+
+## Fix round 1 — re-verification (fixer re-dispatched on the same F1/F2 list)
+
+The round-1 fix list (F1 blocker, F2 major) was dispatched a second time. On
+entry the worktree was **clean** — `git status --short` printed nothing — and
+the two fixes were already on the branch as committed work:
+
+```
+$ git -C …/agent-si-db branch --show-current
+studio-invoices/w1-db
+$ git -C …/agent-si-db status --short
+(no output)
+$ git -C …/agent-si-db log --oneline -8
+07bfdd55c docs(studio-invoices): W1 DB lane fix round 2 notes
+5cddbe157 chore(db): renumber the studio-invoices migration 00570 to 00571
+31fd3b89d docs(studio-invoices): W1 DB lane adversarial review round 2
+6bd7a3e61 docs(studio-invoices): W1 DB lane fix round 1 notes
+d74af98f1 test(billing): drive the studio invoice through the Checkout rail
+feb4903a6 fix(db): hold direct DML on a studio invoice to a clean draft
+232de29e4 docs(studio-invoices): W1 DB lane review round 1
+c6cacaee8 docs(studio-invoices): W1 DB lane notes and stack-reset log
+```
+
+No further code change was owed. Both findings were re-read in the tree rather
+than taken on trust:
+
+**F1** — `00571_studio_invoices.sql`. Both studio branches carry the
+clean-draft gate, and the identity-immutability check that guards the UPDATE
+arm runs *before* either branch:
+
+| what | where |
+|---|---|
+| UPDATE identity immutability (`id`, `created_at`, `project_id`, `designer_id`, `client_id`, `studio_id`) | :98–106, ahead of the studio branch |
+| UPDATE-arm studio branch, clean-draft gate | :159–178 (`current_user = 'authenticated' AND NOT (…)` → `RAISE`), incl. `updated_at IS NOT DISTINCT FROM OLD.updated_at` at :174 |
+| INSERT-arm studio branch, clean-draft gate | :259–277 (same predicate, no `updated_at` term — there is no `OLD` on INSERT) |
+| machine roles keep the early return | :136–138 / :236–238 (`v_active_role = 'service_role' OR v_postgres_migration`) |
+
+The predicate is field-for-field the project path's own (`:503–541`): `status
+= 'draft'`, `invoice_number`/`issue_date`/`sent_at`/`paid_at`/`voided_at`/
+`void_reason`/`stripe_checkout_session_id` NULL, `amount_paid_cents = 0`,
+`reminder_count = 0`, `last_reminder_at`/`ar_flagged_at`/`ar_last_chased_at`
+NULL.
+
+**F2** — `supabase/tests/billing/studio_invoice_test.sql:155–214`. The payment
+leg drives the Checkout RPCs, not a direct `invoice_payments` INSERT: the
+household's `stripe_customer_id` is seeded (:163), then
+`claim_invoice_checkout_attempt` (:177, asserting `amount_cents = 66000` and
+`surcharge_cents = 1980`) → `finalize_invoice_checkout_attempt` (:188,
+asserting the session id lands on a project-less invoice) →
+`settle_invoice_checkout_payment` (:196, `outcome = 'succeeded'`), then the
+invoice `paid`/`66000`/`paid_at` and one `designer_earnings` row with
+`project_id IS NULL`, `net_amount = 66000` and the title in the description.
+
+### Gates re-run this round (fresh, after a full reset)
+
+```
+$ supabase --workdir …/agent-si-db db reset
+Finished supabase db reset on branch main.
+{"target":"local","version":"","message":"Reset local database."}
+
+$ psql … -At -c "select version from supabase_migrations.schema_migrations order by version desc limit 5"
+00571
+00568
+00567
+00566
+00565
+
+$ bash …/agent-si-db/scripts/run-sql-tests.sh
+total:             157
+green:             136
+expected-fail:      21  (documented in supabase/tests/KNOWN_FAILURES.md)
+unexpected-fail:    0
+effective-green:   157 / 157  (green + expected-fail)
+
+  PASS supabase/tests/billing/invoice_checkout_integrity_test.sql       0s
+  PASS supabase/tests/billing/studio_invoice_test.sql                   0s
+  PASS supabase/tests/commercial/multi_studio_signature_test.sql        0s
+  PASS supabase/tests/edge_api/public_sd_hardening_contract_test.sql    2s
+  PASS supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql  0s
+
+$ psql … -At -c "SELECT encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex'), length(prosrc)
+                 FROM pg_proc WHERE oid = 'public.set_invoice_studio_id()'::regprocedure;"
+99100c8e3832adf7d7a27a22eab3651f3154d28be28dfeabe8d1dbd3f7ed2878|23102
+```
+
+That digest is byte-identical to the value pinned at
+`supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1710`, so the
+re-pin is still correct against the deployed body after a clean replay.
+
+```
+$ pnpm --filter @patina/supabase type-check
+> tsc --noEmit                                        (clean, no diagnostics)
+
+$ pnpm --filter @patina/supabase test -- use-invoices
+ ✓ src/hooks/__tests__/use-invoices.test.ts  (48 tests) 10ms
+ Test Files  1 passed (1)      Tests  48 passed (48)
+
+$ pnpm --filter @patina/designer-portal type-check
+> tsc --noEmit                                        (clean, no diagnostics)
+
+$ pnpm --filter @patina/client-portal type-check
+> tsc --noEmit                                        (clean, no diagnostics)
+
+$ pnpm --filter @patina/designer-portal test -- accounts desk-receivables
+PASS src/components/document/accounts/__tests__/invoice-folio.test.tsx
+PASS src/lib/document/__tests__/desk-receivables.test.ts
+PASS src/components/document/accounts/accounts-query-states.test.tsx
+Test Suites: 3 passed, 3 total     Tests: 12 passed, 12 total
+```
+
+Still deferred, unchanged: the Deno case in
+`supabase/functions/_tests/stripe-rail.test.ts` needs the integration runtime
+and did not run in this lane. The advisories listed under "Left as advisories"
+above (F3–F8) are untouched — none were on this round's fix list.
