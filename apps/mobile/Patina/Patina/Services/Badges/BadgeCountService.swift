@@ -114,6 +114,12 @@ final class BadgeCountService {
     /// (`W1R2-n4`).
     private(set) var projectApprovals: [RemoteProjectApprovalReview] = []
     private(set) var pendingProposals: [RemoteProposal] = []
+    /// `P-21`: the proposals SHE signed, kept for the same reason
+    /// `projectApprovals` keeps its answered rows — the Record's afterglow line
+    /// is her own act, and `pendingProposals` is by definition everything that
+    /// is not it. Not persisted: an afterglow row is a week of daily surface,
+    /// not a floor to draw offline.
+    private(set) var signedProposals: [RemoteProposal] = []
     private(set) var payableInvoices: [RemoteInvoice] = []
     private(set) var threadSummaries: [RemoteCommsThreadSummary] = []
     private(set) var projects: [RemoteProject] = []
@@ -122,48 +128,6 @@ final class BadgeCountService {
     /// Expected empty until a client SELECT policy on `designer_clients`
     /// exists; see `RosterAPIClient`.
     private(set) var roster: [RosterDesigner] = []
-
-    /// SP-16: THE attention count. One number, computed once, printed by the
-    /// Profile/Studio subhead, the Companion (which is the footer on both the
-    /// Studio and the Daily Room) and the Daily Room itself.
-    ///
-    /// It counts ITEMS, not rows — four things needing the client is four,
-    /// even where the Studio groups them into three cards.
-    var attentionCount: Int {
-        pendingDecisionCount + proposalsAwaitingSignatureCount + payableInvoiceCount
-    }
-
-    /// That count as the one sentence every surface prints.
-    var attentionHint: String? {
-        StudioAttentionSummary.attentionHint(count: attentionCount)
-    }
-
-    /// Projects that are still live work — the last rung of `studioHint`.
-    var activeProjectCount: Int {
-        projects.filter { !StudioQueueBuilder.projectIsArchived($0) }.count
-    }
-
-    /// THE Studio sentence, and the reason `attentionHint` alone is not it.
-    ///
-    /// `attentionHint` is nil whenever nothing is *awaiting* the client, so a
-    /// surface that printed it alone told a client with three unread threads
-    /// and no decisions "Nothing needs your attention right now." directly
-    /// above a Conversation block reading "3 unread threads". The count stays
-    /// single-sourced; the rest of the chain `StudioAttentionSummary.hint`
-    /// always had comes back with it.
-    ///
-    /// The one rung it cannot carry is unread Studio *updates*
-    /// (`notification_log`), which this service does not fetch — consumers
-    /// that have a Studio snapshot fall through to `attentionSummary.hint`
-    /// for it.
-    var studioHint: String? {
-        if let attention = attentionHint { return attention }
-        if unreadMessageCount == 1 { return "1 new conversation" }
-        if unreadMessageCount > 1 { return "\(unreadMessageCount) new conversations" }
-        if activeProjectCount == 1 { return "1 project is moving" }
-        if activeProjectCount > 1 { return "\(activeProjectCount) projects are moving" }
-        return nil
-    }
 
     /// True once a refresh has completed for an authenticated session.
     /// Guests never load — the rail renders invitations, not counts.
@@ -313,6 +277,14 @@ final class BadgeCountService {
     /// that method's `hasLoaded = true` branch and nowhere else — which
     /// `BadgeCountPersistenceTests` pins in source.
     func persistCountsForTesting() { persistCounts() }
+
+    /// The projection rows `performRefresh` writes, without the six network
+    /// round trips it takes to get to them. `apply` deliberately does not
+    /// carry them — every other retained array is a filter over one of its own
+    /// arguments, and this one is a whole second read.
+    func applyProjectApprovalsForTesting(_ approvals: [RemoteProjectApprovalReview]) {
+        projectApprovals = approvals
+    }
     #endif
 
     /// Fetch both counts. Guests resolve to zero without a network round
@@ -345,6 +317,7 @@ final class BadgeCountService {
             pendingDecisions = []
             projectApprovals = []
             pendingProposals = []
+            signedProposals = []
             payableInvoices = []
             threadSummaries = []
             projects = []
@@ -432,6 +405,10 @@ final class BadgeCountService {
             // it, and `isSignable` reads a Postgres `date` as "no expiry".
             pendingProposals = proposals.filter { $0.isAwaitingSignature(now: now) }
             proposalsAwaitingSignatureCount = pendingProposals.count
+            // `hasSignatureRecord`, not `isSigned` alone: a designer-side
+            // accept sets `status = 'accepted'` too, and "You signed it" may
+            // only be said of a signature this client actually gave.
+            signedProposals = proposals.filter { $0.isSigned && $0.hasSignatureRecord }
         }
         if let invoices {
             payableInvoices = invoices.filter { $0.isPayable }
@@ -471,6 +448,7 @@ final class BadgeCountService {
         projectCount = 0
         pendingDecisions = []
         pendingProposals = []
+        signedProposals = []
         payableInvoices = []
         threadSummaries = []
         projects = []

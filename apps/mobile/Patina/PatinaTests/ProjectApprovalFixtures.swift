@@ -33,7 +33,10 @@ enum ProjectApprovalFixture {
         costCentsDelta: Int = 0,
         scheduleDaysDelta: Int = 0,
         leadTimeDaysDelta: Int = 0,
-        context: Any = "Leah asked the mill to hold the walnut."
+        context: Any = "Leah asked the mill to hold the walnut.",
+        /// Absent by default — that is the projection every build before the
+        /// Wave 2 migration returns.
+        viewerRole: Any = NSNull()
     ) throws -> RemoteProjectApprovalReview {
         let row: [String: Any] = [
             "decisionId": decisionId,
@@ -63,7 +66,8 @@ enum ProjectApprovalFixture {
             "createdAt": "2026-09-01T00:00:00+00:00",
             "sentAt": sentAt,
             "respondedAt": respondedAt,
-            "updatedAt": updatedAt
+            "updatedAt": updatedAt,
+            "viewerRole": viewerRole
         ]
         return try JSONDecoder().decode(
             RemoteProjectApprovalReview.self,

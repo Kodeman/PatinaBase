@@ -269,7 +269,12 @@ struct ApprovalFeedGuardTests {
         let client = try SourcePin.readCode(
             "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
         )
-        #expect(client.contains("var awaitsClientInFeed: Bool { awaitsClient && isPublished }"))
+        // Wave 2 / P-21 widened the predicate with `viewerAnswers`: a row this
+        // caller does not ANSWER is not hers either, drafts or not. The pin
+        // carries all three clauses so dropping any one of them goes red.
+        #expect(client.contains(
+            "var awaitsClientInFeed: Bool { awaitsClient && isPublished && viewerAnswers }"
+        ))
     }
 
     /// `W1R2-M2`: the Studio hub's aggregate names its rows "approvals are
@@ -290,7 +295,10 @@ struct ApprovalFeedGuardTests {
         ))
         let row = try #require(snapshot.section(.awaitingYou).rows
             .first { $0.id == "awaiting.decisions" })
-        #expect(row.title == "Decision")
+        // Wave 2's vocabulary sweep: a group holding only approvals is named
+        // for what it holds. The issued row is a Stage-2 approval and the
+        // unissued one is filtered out, so this group is all approvals.
+        #expect(row.title == "Approval")
         #expect(row.detail == "Approve the kitchen millwork as drawn?")
         #expect(!row.detail.contains("Two approvals"))
 
