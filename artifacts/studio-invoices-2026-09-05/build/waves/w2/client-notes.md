@@ -110,3 +110,93 @@ run without them (`pnpm --filter @patina/design-system --filter @patina/aesthete
    flashing, but it is a hold the housed front door does not have.
 
 deploySet: client portal.
+
+---
+
+## Fix round 1 — 2026-09-05
+
+Three findings from the lane's adversarial review (C1 major, C2 major, C3 major),
+all fixed. Carried items 1 and 2 above are now closed by C1 and C3.
+
+### C1 · the letterhead came off the designer, not off the letter's own studio
+
+`packages/supabase/src/hooks/use-studio-identity.ts` — `UseStudioIdentityParams`
+gains `studioId`, passed as `p_studio_id`. 00571 gave the resolver that argument
+precedence ("a studio invoice carries its own studio_id, so neither the project
+nor the designer's primary studio is consulted"), and `database.types.ts` already
+carries it; nothing was threading it. Without it a designer who belongs to two
+studios — Kody does — signs a studio invoice with the other studio's name.
+
+The query key widened from `['studio-identity', projectId ?? designerId]` to
+`['studio-identity', { studioId, projectId, designerId }]`, because a caller that
+names a studio AND a designer fallback must not read the answer cached for a
+caller that named only one of them. `useUpdateOrganization` invalidates by the
+`['studio-identity']` prefix, which is unaffected; no caller reads the exact key.
+
+Call sites: `letterbox-door.tsx:70` and `app/invoices/[invoiceId]/print/page.tsx:32`
+now pass `{ studioId: invoice.studio_id, designerId: invoice.designer_id }` — the
+designer stays as the leg 00571 falls through to when the named studio is not an
+active design studio.
+
+### C2 · the merged list made household money read as owed on the adopted house
+
+`deriveThreshold` sums every open invoice into the ledger, so merging the studio
+letter into `invoices` made the adopted house state "Owed across 2 open invoices
+$9,575 · soonest due 10 August" with no clause saying part of it was never drawn
+against this house.
+
+Ruled: KEEP it in the rollup, DISCLOSE it on the row. Dropping it would put the
+letterbox and the ledger into disagreement — the letter standing in the slot,
+settleable, with its money missing from the only figure the page states — which
+is the one thing a money surface may not do. So `HouseLedgerModel` gains
+`owedStudioCount` and the owed row's words carry the origin:
+
+- all of them from the studio: `Owed on the open invoice from the studio, not for
+  this house` / `Owed across N open invoices from the studio, not for this house`
+- mixed: `Owed across N open invoices, one from the studio`
+- none: unchanged.
+
+### C3 · a folded studio line was indistinguishable from a house line
+
+`earlier-invoices.tsx` gains `origin()`, keyed off `project_id === null`, carrying
+the envelope's own clause onto the line:
+`Invoice No. 31 · $450 · due August 20 · from the studio · not for a house`.
+House lines are byte-identical to before.
+
+### Tests
+
+- `packages/supabase/src/hooks/__tests__/use-studio-identity.test.ts` (new, 4 cases):
+  the rpc args for a studio + designer call, for a project call, the studio-alone
+  enable and key, and the idle case.
+- `components/threshold/__tests__/threshold.test.tsx`: the door asks for the
+  letterhead by the letter's own studio; the adopted house's owed row discloses
+  the studio letter; a non-adopting house's owed row does not.
+- `components/threshold/__tests__/house-ledger.test.tsx`: the three owed-row
+  branches, plus the unchanged all-house row.
+- `components/threshold/__tests__/earlier-invoices.test.tsx`: the studio line's
+  clause; a house line says nothing about the studio.
+- `lib/threshold/__tests__/derive.test.ts`: `owedStudioCount` counted and not
+  counted.
+- Fixtures in `house-ledger.test.tsx` and `threshold-robustness.test.tsx` carry
+  `owedStudioCount: 0`.
+
+### Gates
+
+```
+pnpm --filter @patina/client-portal type-check   → clean
+pnpm --filter @patina/client-portal test         → 116 suites, 1576 tests, all pass
+pnpm --filter @patina/supabase type-check        → clean
+pnpm --filter @patina/supabase test              → 85 files, 998 passed | 12 skipped
+pnpm --filter @patina/designer-portal type-check → clean (shared-hook consumer)
+```
+
+### Still carried
+
+- Items 3 and 4 above stand as written (both are deliberate, not defects).
+- `earlier-invoices.tsx` hands `Settlement` the `designerName` prop the ADOPTED
+  HOUSE's studio name when the row's own `designer` join is absent; for a studio
+  letter drawn by a different studio of a two-studio designer, the check payee
+  line could name the house's studio. The letterbox has the same shape. Not in
+  the finding list; a `studio_id`-keyed payee is a separate ruling.
+- The print sheet has no test suite in this repo (no `app/invoices/**/__tests__`),
+  so C1's print-side change is covered at the hook boundary only.
