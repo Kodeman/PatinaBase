@@ -207,13 +207,49 @@ enum ProjectApprovalCopy {
     /// "Returned" is the word for `changes_requested` in prose (P-16), and
     /// "held" is the hold word (R8).
     static func recorded(_ outcome: ProjectApprovalOutcome) -> String {
+        recorded(outcome, thing: unnamedEdition)
+    }
+
+    /// The same sentence, naming the thing it is about.
+    ///
+    /// The deck's afterglow row is "You approved the dining room budget." —
+    /// the act and the thing in one sentence — and the Record needs that,
+    /// because three answered approvals in one week would otherwise print one
+    /// headline three times. What it cannot use is `artifactTitle`: that is a
+    /// proper-ish name ("Budget checkpoint BC-3", "Kitchen millwork spec"), so
+    /// interpolating it puts a capital mid-sentence. `artifactKind` is the
+    /// wire's other name for the same thing and it is a common noun, so it
+    /// goes in the sentence and the title goes on the second line.
+    static func recorded(_ outcome: ProjectApprovalOutcome, thing: String) -> String {
         switch outcome {
         case .approved:
-            return "You approved this edition."
+            return "You approved \(thing)."
         case .changesRequested:
-            return "You returned this edition for revision."
+            return "You returned \(thing) for revision."
         case .needsDiscussion:
-            return "You held this edition to talk it through with your designer."
+            return "You held \(thing) to talk it through with your designer."
+        }
+    }
+
+    /// What the sentence calls an edition whose kind the wire did not name, or
+    /// named with a word this build does not know. It is what every one of
+    /// these sentences said before `artifactKind` was read, so an unknown kind
+    /// degrades to the previous copy rather than to a guess.
+    static let unnamedEdition = "this edition"
+
+    /// `project_approval_artifacts.source_kind` in the homeowner's words, in
+    /// lower case, ready to be dropped into a sentence. Nil for an absent or
+    /// unrecognised kind — the caller then says "this edition".
+    ///
+    /// The three kinds are the CHECK constraint's own (00463:134-135); a
+    /// fourth added later reads as nil here until it is named, which is a
+    /// duller row, not a wrong one.
+    static func artifactNoun(kind: String?) -> String? {
+        switch kind {
+        case "plan_issue": return "the plan set"
+        case "spec_book_artifact": return "the spec book"
+        case "budget_version": return "the budget"
+        default: return nil
         }
     }
 

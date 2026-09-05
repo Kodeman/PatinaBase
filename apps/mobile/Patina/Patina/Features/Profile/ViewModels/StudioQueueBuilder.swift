@@ -322,9 +322,19 @@ private extension StudioQueueBuilder {
             ? (decisions[0].title ?? "A project approval is ready")
             : "\(PatinaCount.inWordsCapitalized(decisions.count)) approvals are waiting on you"
 
+        // Vocabulary: "decision" belongs to an option choice between named
+        // alternatives. Where every waiting row is an approval — the ordinary
+        // case now that Stage-2 and the client sign-off both come through here
+        // — the group is named for what it holds. A mixed group keeps the
+        // older word, which is true of at least one of its rows.
+        //
+        // `groupNoun` is the one definition of that rule; `DecisionListView`,
+        // the screen this row opens, reads the same one so the two frames
+        // cannot say two words for one thing.
+        let noun = decisions.groupNoun
         return StudioQueueRow(
             id: "awaiting.decisions",
-            title: countLabel(decisions.count, singular: "Decision", plural: "Decisions"),
+            title: countLabel(decisions.count, singular: noun.singular, plural: noun.plural),
             detail: detail,
             meta: DateDisplay.approval(
                 due: dueDate, askedAt: askedAt, designer: askedBy,

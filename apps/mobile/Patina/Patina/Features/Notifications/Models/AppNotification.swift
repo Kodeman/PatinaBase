@@ -51,6 +51,11 @@ struct AppNotification: Identifiable {
     /// a passed date has to draw a clock. Set from `notification_log.type`
     /// where the row is one of them, nil everywhere else.
     let iconOverride: String?
+    /// `metadata.deep_link` — the portal address of the same thing (00534:156).
+    /// `P-06`: the Threshold's own links name their entity in a query param or
+    /// a `#approval-<id>` anchor rather than in an entity pair, so this is the
+    /// only field that can route them. Nil for a row that carried none.
+    let deepLink: String?
 
     /// The one route a tap follows, whichever kind of row this is.
     var route: AppRoute? {
@@ -70,7 +75,8 @@ struct AppNotification: Identifiable {
         isStudioFallback: Bool = false,
         fallbackRoute: AppRoute? = nil,
         coveredEntityIds: [String] = [],
-        iconOverride: String? = nil
+        iconOverride: String? = nil,
+        deepLink: String? = nil
     ) {
         self.id = id
         self.remoteId = remoteId
@@ -85,6 +91,7 @@ struct AppNotification: Identifiable {
         self.fallbackRoute = fallbackRoute
         self.coveredEntityIds = coveredEntityIds
         self.iconOverride = iconOverride
+        self.deepLink = deepLink
     }
 
     var icon: String {

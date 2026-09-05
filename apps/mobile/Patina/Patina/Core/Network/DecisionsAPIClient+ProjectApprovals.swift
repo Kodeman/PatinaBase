@@ -54,6 +54,53 @@ public enum ProjectApprovalConsent {
     nonisolated public static let electronicSignature = "electronic_signature"
 }
 
+/// What the caller is to one Stage-2 approval.
+///
+/// 00467 admits two readers and the projection names which one this is. The
+/// spellings are normalised rather than matched byte-for-byte — the field is a
+/// Wave 2 migration this lane does not own, and a snake-cased, hyphenated or
+/// camel-cased variant of the same word must not change what a homeowner sees.
+public enum ProjectApprovalViewerRole: Sendable, Equatable {
+    /// The frozen decision lead. The ask is hers.
+    case answers
+    /// A studio co-member reading her own client app. She can see it; she is
+    /// not the one being asked.
+    case observes
+    /// The projection said nothing, or said something this build does not know.
+    case unspecified
+
+    /// Roles that ANSWER. Checked first, so a compound naming both (a
+    /// `client_lead`) reads as the answering one.
+    static let answering: Set<String> = [
+        "decisionlead", "lead", "client", "recipient", "owner", "clientlead"
+    ]
+    /// Roles that only WATCH.
+    ///
+    /// `household` is the projection's third real value (00569:884-888:
+    /// `lead` → `studio` → `household`) and it WATCHES: the migration's own
+    /// comment calls it "the project's client on a row whose frozen lead is
+    /// somebody else", reachable after a lead reassignment. Only the frozen
+    /// lead answers — `respond_project_approval` accepts nobody else — so a
+    /// household reader who is not the lead may neither be asked nor be told
+    /// she approved something the lead approved.
+    static let observing: Set<String> = [
+        "studiocomember", "comember", "studiomember", "studio", "designer",
+        "teammate", "observer", "viewer", "watcher", "household"
+    ]
+
+    public init(raw: String?) {
+        guard let raw else { self = .unspecified; return }
+        let key = raw.lowercased().filter(\.isLetter)
+        if key.isEmpty { self = .unspecified } else if Self.answering.contains(key) {
+            self = .answers
+        } else if Self.observing.contains(key) {
+            self = .observes
+        } else {
+            self = .unspecified
+        }
+    }
+}
+
 /// One Stage-2 approval, as the client-safe projection returns it.
 ///
 /// Every field is the RPC's own key — the projection is already camelCase, so
@@ -65,6 +112,12 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     public let decisionId: String
     public let projectId: String
     public let artifactId: String
+    /// `project_approval_artifacts.source_kind` — `plan_issue`,
+    /// `spec_book_artifact` or `budget_version` (00463:134-135), served as
+    /// `artifactKind` (00569:865). Optional so a projection written before
+    /// this key existed decodes rather than throwing; the copy that reads it
+    /// falls back to the unnamed edition.
+    public let artifactKind: String?
     public let artifactVersion: Int
     public let artifactChecksum: String
     public let artifactTitle: String
@@ -95,6 +148,19 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     public let respondedAt: String?
     /// The CAS value `respond_project_approval` demands, echoed back verbatim.
     public let updatedAt: String
+    /// Who this caller is to this approval, when the projection says.
+    ///
+    /// `W1R2-M3`'s remainder, ruled at the Wave 1 close: 00467 lets two people
+    /// read a Stage-2 row — the frozen decision lead
+    /// (`snapshot.decision_lead_id = p_actor`) and any studio co-member
+    /// (`is_design_studio_comember(decision.designer_id)`) — and the projection
+    /// carried nothing to tell them apart, so a designer reading her own client
+    /// app saw her studio's approvals under NEEDS YOU. Wave 1 could only
+    /// subtract the drafts; this field subtracts the rest.
+    ///
+    /// Absent on every projection written before the Wave 2 migration, which
+    /// decodes as nil and behaves exactly as Wave 1 did.
+    public let viewerRole: String?
 
     public var id: String { decisionId }
 
@@ -103,6 +169,14 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
         guard let outcome else { return nil }
         return ProjectApprovalOutcome(rawValue: outcome)
     }
+
+    /// Whether this caller is the one the approval is asked OF.
+    ///
+    /// Default-INCLUDE, deliberately: a role the app does not recognise reads
+    /// as hers. Excluding an unknown spelling would silently drop a
+    /// homeowner's own obligations off every feed she has, which is a far
+    /// worse failure than the one this field exists to fix.
+    public var viewerAnswers: Bool { ProjectApprovalViewerRole(raw: viewerRole) != .observes }
 
     /// The studio pulled this approval back.
     public var isWithdrawn: Bool { disposition == "withdrawn" }
@@ -190,7 +264,10 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// P-09's review confirmation is therefore WEB-ONLY for Wave 1; the
     /// viewer-role field that would let the phone carry it is a Wave 2
     /// migration item.
-    public var awaitsClientInFeed: Bool { awaitsClient && isPublished }
+    ///
+    /// Wave 2 adds `viewerRole` beside it: a row this caller does not ANSWER
+    /// never reaches a homeowner-facing feed at all, drafts or not.
+    public var awaitsClientInFeed: Bool { awaitsClient && isPublished && viewerAnswers }
 
     /// This approval as a row for the feeds that carry every waiting
     /// obligation: `BadgeCountService.pendingDecisions` (the NEEDS YOU

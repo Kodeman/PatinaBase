@@ -35,6 +35,12 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         case savedPieceWithdrawn
         case story
         case matchedDesigner
+        /// `P-21`, the afterglow. Her own answer to a Stage-2 approval, the day
+        /// she gave it: the row does not vanish when it leaves NEEDS YOU, it
+        /// crosses the eyebrow carrying the word that was stamped on it.
+        case decisionAnswered
+        /// The same crossing for a proposal she signed.
+        case proposalSigned
 
         /// True for the three kinds that are obligations — the NEEDS YOU
         /// half. P-12 draws these with a margin rule so an obligation stops
@@ -46,8 +52,23 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
             case .decisionAsked, .proposalSent, .invoiceDue:
                 return true
             case .messageReceived, .orderMoved, .savedPieceRepriced,
-                 .savedPieceWithdrawn, .story, .matchedDesigner:
+                 .savedPieceWithdrawn, .story, .matchedDesigner,
+                 .decisionAnswered, .proposalSigned:
                 return false
+            }
+        }
+
+        /// `P-21`: the two kinds that name the reader's OWN act.
+        ///
+        /// They never carry a "new" tick. The Record does not report the reader
+        /// to himself as news — the same rule (B §2) that keeps a save off the
+        /// card and keeps a repriced piece from claiming the save date. The row
+        /// still carries its real date and still ages out on the ordinary
+        /// window; it simply is not announced back to the person who did it.
+        var isOwnAct: Bool {
+            switch self {
+            case .decisionAnswered, .proposalSigned: return true
+            default: return false
             }
         }
     }
@@ -118,7 +139,16 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
-        kind = try container.decode(Kind.self, forKey: .kind)
+        // `P-21`: a kind this build does not know is one row, not a lost
+        // record. `Kind` gains cases over time and the snapshot on disk
+        // outlives the build that wrote it — decoding the raw string and
+        // throwing a typed error for an unknown one lets `HouseRecord` drop
+        // that row and keep the rest (see its own `init(from:)`).
+        let rawKind = try container.decode(String.self, forKey: .kind)
+        guard let decodedKind = Kind(rawValue: rawKind) else {
+            throw HouseRecordDecodingError.unknownRowKind(rawKind)
+        }
+        kind = decodedKind
         title = try container.decode(String.self, forKey: .title)
         detail = try container.decodeIfPresent(String.self, forKey: .detail)
         date = try container.decode(Date.self, forKey: .date)
@@ -144,6 +174,12 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         try container.encodeIfPresent(askedBy, forKey: .askedBy)
         try container.encodeIfPresent(route.flatMap(RouteToken.init(_:)), forKey: .route)
     }
+}
+
+/// Why one row of a snapshot was dropped. Never surfaced — the record simply
+/// paints without it.
+enum HouseRecordDecodingError: Error {
+    case unknownRowKind(String)
 }
 
 /// `AppRoute` is `Hashable`, not `Codable`, and belongs to the coordinator —
@@ -213,6 +249,66 @@ struct HouseRecord: Codable, Equatable, Sendable {
     let hasMoreMoved: Bool
 
     var isEmpty: Bool { needsYou.isEmpty && moved.isEmpty }
+
+    init(
+        needsYou: [HouseRecordRow], moved: [HouseRecordRow], window: DateInterval,
+        lastSeenAt: Date?, hasMoreNeedsYou: Bool, hasMoreMoved: Bool
+    ) {
+        self.needsYou = needsYou
+        self.moved = moved
+        self.window = window
+        self.lastSeenAt = lastSeenAt
+        self.hasMoreNeedsYou = hasMoreNeedsYou
+        self.hasMoreMoved = hasMoreMoved
+    }
+
+    /// `P-21`: one unreadable row is dropped; the record is not.
+    ///
+    /// Before this, a snapshot written by a build that knew a row kind this one
+    /// does not threw out of `RecordSnapshotStore.load`, and Today painted
+    /// blank on the cold launch after a downgrade. The two halves decode
+    /// row-by-row and keep what they understand — the same "a smaller failure
+    /// than a snapshot that will not decode at all" rule `RouteToken` already
+    /// follows for a route it cannot name.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        needsYou = try Self.rows(in: container, forKey: .needsYou)
+        moved = try Self.rows(in: container, forKey: .moved)
+        window = try container.decode(DateInterval.self, forKey: .window)
+        lastSeenAt = try container.decodeIfPresent(Date.self, forKey: .lastSeenAt)
+        hasMoreNeedsYou = try container.decode(Bool.self, forKey: .hasMoreNeedsYou)
+        hasMoreMoved = try container.decode(Bool.self, forKey: .hasMoreMoved)
+    }
+
+    private static func rows(
+        in container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> [HouseRecordRow] {
+        var unkeyed = try container.nestedUnkeyedContainer(forKey: key)
+        var rows: [HouseRecordRow] = []
+        while !unkeyed.isAtEnd {
+            // A row that will not decode must still be CONSUMED, or the
+            // container never advances. `SkippedRow` decodes anything.
+            if let row = try? unkeyed.decode(HouseRecordRow.self) {
+                rows.append(row)
+            } else {
+                _ = try? unkeyed.decode(SkippedRow.self)
+            }
+        }
+        return rows
+    }
+
+    /// Consumes one element of an array without reading it, so the container
+    /// advances past a row this build cannot decode.
+    private struct SkippedRow: Decodable {
+        init(from decoder: Decoder) throws {}
+    }
+
+    /// Declared rather than synthesized: `rows(in:forKey:)` names these keys,
+    /// and a synthesized enum is an implementation detail to lean on.
+    private enum CodingKeys: String, CodingKey {
+        case needsYou, moved, window, lastSeenAt, hasMoreNeedsYou, hasMoreMoved
+    }
 
     /// Nothing known yet — before the first build, and after a failed load.
     /// Draws nothing at any tier.
@@ -529,6 +625,9 @@ private extension HouseRecordBuilder {
         }
         rows.append(contentsOf: messageRows(badges: badges, designerName: designerName))
         rows.append(contentsOf: HouseRecordBuilder.orderRows(orders))
+        // `P-21`: her own answers, crossing the eyebrow the day she gave them.
+        rows.append(contentsOf: HouseRecordBuilder.answeredApprovalRows(badges.projectApprovals))
+        rows.append(contentsOf: HouseRecordBuilder.signedProposalRows(badges.signedProposals))
         rows.append(contentsOf: savedPieceRows(saved: saved, products: products))
         if let story = storyRow(story) {
             rows.append(story)
@@ -749,12 +848,104 @@ extension HouseRecordBuilder {
     }
 }
 
+// MARK: - MOVED · the afterglow (P-21)
+
+/// Internal, not private: the second-person copy is a ruling, and so is the
+/// silence — a row draws only where the wire carries both an answer and the
+/// day it was given.
+extension HouseRecordBuilder {
+
+    /// "You approved the budget." — the Stage-2 approval she answered.
+    ///
+    /// Four rules, all of them the ones the rest of this file already keeps:
+    ///
+    ///  1. **Her answer, in her words, once.** The sentence is
+    ///     `ProjectApprovalCopy.recorded`, which the approval screen and the
+    ///     bell already print for the same row — so the three surfaces cannot
+    ///     name one outcome three ways, and RETURNED stays the word for
+    ///     `changes_requested` wherever it is read.
+    ///  2. **Only where the projection names the outcome.** A row that carries
+    ///     `respondedAt` and a word this build does not know draws nothing
+    ///     rather than "your approval was recorded" over a verb it invented.
+    ///  3. **The date is the wire's.** `respondedAt` is stamped by
+    ///     `_respond_project_approval_checked` and by nothing else. No date, no
+    ///     row — the same rule `orderRows` keeps.
+    ///  4. **Only rows that were HERS.** A studio co-member can read her own
+    ///     studio's approvals through 00467; "You approved this edition" over
+    ///     one of them would be a lie about who acted. Withdrawn and superseded
+    ///     stand ahead of an outcome (`isClosedByDisposition`), so neither
+    ///     draws an afterglow either.
+    static func answeredApprovalRows(
+        _ approvals: [RemoteProjectApprovalReview]
+    ) -> [HouseRecordRow] {
+        approvals.compactMap { approval in
+            guard approval.viewerAnswers, !approval.isClosedByDisposition,
+                  let outcome = approval.recordedOutcome,
+                  let raw = approval.respondedAt,
+                  let answered = ISO8601DateParsing.dateOrDay(from: raw)
+            else { return nil }
+            return HouseRecordRow(
+                id: "approval-answered:\(approval.decisionId)",
+                kind: .decisionAnswered,
+                // The act AND the thing, in one sentence, from the wire's
+                // common noun (`artifactKind`) rather than its proper-ish
+                // title — see `ProjectApprovalCopy.recorded(_:thing:)`. The
+                // title still names WHICH one on the second line, because two
+                // budgets in a week are two rows.
+                title: ProjectApprovalCopy.recorded(
+                    outcome,
+                    thing: ProjectApprovalCopy.artifactNoun(kind: approval.artifactKind)
+                        ?? ProjectApprovalCopy.unnamedEdition
+                ),
+                detail: approval.artifactTitle,
+                date: answered,
+                state: .none,
+                isNew: false,
+                route: .decisionDetail(decisionId: approval.decisionId)
+            )
+        }
+    }
+
+    /// "You signed the proposal." — and only where SHE signed it.
+    ///
+    /// `hasSignatureRecord` is the gate `ProposalStatusDisplay` already applies:
+    /// a designer-side accept sets `status = 'accepted'` too, and the second
+    /// person may only be used of a signature the client actually gave.
+    /// `signed_at` is that signature's own timestamp; without one there is no
+    /// honest day to date the row by and it does not draw.
+    static func signedProposalRows(_ proposals: [RemoteProposal]) -> [HouseRecordRow] {
+        proposals.compactMap { proposal in
+            guard proposal.isSigned, proposal.hasSignatureRecord,
+                  let raw = proposal.signed_at,
+                  let signed = ISO8601DateParsing.dateOrDay(from: raw)
+            else { return nil }
+            return HouseRecordRow(
+                id: "proposal-signed:\(proposal.id)",
+                kind: .proposalSigned,
+                title: signedProposalTitle,
+                detail: proposal.title,
+                date: signed,
+                state: .none,
+                isNew: false,
+                route: .proposalDetail(proposalId: proposal.id)
+            )
+        }
+    }
+
+    /// One sentence, not a name interpolated into one: a proposal's title is a
+    /// project's name ("Living Room Refresh"), and "You signed Living Room
+    /// Refresh." puts a capital mid-sentence over a thing that is not a
+    /// sentence. The title goes on the second line, where the open row already
+    /// puts it.
+    static let signedProposalTitle = "You signed the proposal."
+}
+
 private extension HouseRecordRow {
     /// New relative to the last visit, and to nothing else. On a first run
     /// there is no visit, so nothing is new — and a standing condition is
     /// never new, because its `date` is not the date of the change it names.
     func markingNew(against lastSeen: Date?) -> HouseRecordRow {
-        guard let lastSeen, !isStandingCondition else { return self }
+        guard let lastSeen, !isStandingCondition, !kind.isOwnAct else { return self }
         return HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
             state: state, isNew: date > lastSeen,
