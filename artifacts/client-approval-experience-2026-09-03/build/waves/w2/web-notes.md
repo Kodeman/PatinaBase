@@ -489,3 +489,106 @@ whispers under the scored primary; their ranking did not need changing.
   is advisory. Not run, because reformatting these files would conflict with every other lane.
 - **`pnpm lint` was not run** — only designer-portal has a working ESLint config, and the brief
   names type-check and test as the gates.
+
+---
+
+# Wave 2 · WEB lane, stage B — fix pass, round 1
+
+Four findings from the stage-B adversarial review (W2B-R1-01 … 04). Worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-web`, branch `approvals/w2-web`.
+Nothing pushed, no production mutation, no stack reset. Working tree at the start of the pass
+was clean except the sandbox's `.env*` "Operation not permitted" lines, which are the sandbox
+reading, not repo state.
+
+## W2B-R1-01 (blocker) — the act had no assistive path · FIXED
+
+`HoldAction` reached `onHold` only from `onPointerDown` and `onKeyDown`, and its `onClick` did
+nothing but `preventDefault()`. VoiceOver, Voice Control and switch access take a control by
+DISPATCHING A CLICK — there is no pointer to hold and no key to keep down — so all four terminal
+acts (door sign, wall accept, scope approve, outcome submit) were unreachable to them. That is a
+Wave-1 regression: before this stage they were plain `ScoredAction` clicks, and ux/02:325 says
+the iOS `HoldableModifier`'s VoiceOver "Activate" fallback "must not be lost".
+
+The act is now taken from a click when BOTH hold:
+
+- `!event.isTrusted` — a real finger or mouse produces a trusted click, and that click is the
+  tail of a gesture this control has already answered (by refusing it). Assistive technology's
+  click is untrusted.
+- no pointer event on this control within `POINTER_TAIL_MS` (700 ms) — jsdom and synthetic
+  pointer libraries dispatch untrusted clicks too, so a scripted tap must not slip through the
+  first guard. `pointerAt` is stamped on pointerdown/up/leave/cancel.
+
+`unavailable` and a hold already running both refuse it, so a disabled act is not clickable and
+an AT click mid-hold cannot double-fire. The act body was lifted into one `take()` callback used
+by the timer and by the assistive click, so telemetry (`makingEvents.actionSelected`) and
+`restoreFocus` are identical on both paths. The physical-keyboard Enter/Space hold is unchanged
+at 900 ms, as briefed.
+
+**Could not verify**: real AT. jsdom marks EVERY dispatched event untrusted, so the
+"a trusted click stays inert" half of the guard is provable only by reading. A residual gap
+worth a walker's attention: iOS Safari VoiceOver's double-tap synthesises a TRUSTED tap at the
+element, which this control refuses like any other short press. There is no way to tell that
+apart from a sighted quick tap, and refusing the quick tap is the point of the ceremony; the
+desktop screen readers, Voice Control and switch access all take the untrusted-click path.
+
+Tests (`instruments/__tests__/hold-action.test.tsx`): the old "a plain click is not the act"
+became "the click that trails a tap is not the act" (pointerdown → pointerup → click), plus
+three new ones — an assistive `.click()` takes the act and reports it, an unavailable act is not
+taken by one, and an assistive click during a hold does not take the act twice. Three neighbour
+suites carried the same bare-click idiom and were given the pointer tail: door-gate ("takes the
+signature on a hold, never on a tap"), scope-change-ask (P-18), wall-gate (P-18).
+
+## W2B-R1-02 (major) — a signature demanded for Hold and Return · FIXED, scoped to Approve
+
+Taken as ruled by ux/02:308 rather than escalated: "Asking a homeowner to type her name to say
+'needs discussion' would be theatre. The choice is the act; the hold is the commitment."
+
+`approval-ask.tsx` now draws the `SignatureLine` only for `approved`; the submit arms without a
+name for `changes_requested` (still gated on its note, R10) and `needs_discussion`; and
+`submitResponse` sends `clientSignature` / `clientConsentMethod` only on the approval. The hook's
+degradation guard (`use-project-approvals.ts:685-693`) then sends `{ outcome }` alone for those
+two — the payload every wrapper before 00570 accepts. R1's "every surface" is met: all three
+outcomes are still HELD; only the one that consents to the edition is signed.
+
+Tests: "carries her name on a return as well as on an approval" is replaced by "asks no name of
+a return or a hold, and records no consent for them" and "asks no name of a hold either" (both
+assert `clientSignature: undefined, clientConsentMethod: undefined` on the recorded call). The
+`answer()` helper signs only when a rule is drawn.
+
+## W2B-R1-03 (major) — 00570 minted outside the lane's files · STEWARD CALL, evidence below
+
+Left in place, with the ordering the steward needs — and one hazard the review did not see.
+
+- My branch's migration tail is `00568` then **`00570_approval_response_signature.sql`**: this
+  branch does not carry backend's 00569 at all. 00570's body is backend's 00569 wrapper body
+  (verified by extracting `CREATE OR REPLACE FUNCTION public.respond_project_approval` from
+  `agent-cae-w2-backend/supabase/migrations/00569_approval_why_viewer_role_and_receipt.sql`:1376
+  — same DECLARE block, same two-key allowlist, same `NULL, NULL` tail) plus the two payload
+  keys. So 00570 must apply AFTER backend's 00569, and both must land before the client-portal
+  deploy.
+- **The 00569 number is double-minted.** `agent-cae-w2-backend` has
+  `00569_approval_why_viewer_role_and_receipt.sql`; `agent-cae-w2-iosc` has
+  `00569_stage2_outcome_signature_payload.sql`. Two different files, same number, and the iosc
+  one is a SECOND widening of the same wrapper — lineage `00464:811 → (this)`, i.e. built on
+  00464's body, not on backend's. That is the "one wrapper body, never both" hazard, and it is
+  worse than a duplicate: ordered after backend's 00569 it would restate a body that never saw
+  backend's file.
+- Recommendation: keep **00570** as the single final wrapper body (highest number, correct
+  lineage, supersedes either 00569 whichever way the collision is renumbered), drop or renumber
+  iosc's `00569_stage2_outcome_signature_payload.sql`, and resolve the backend/iosc 00569
+  collision before any push. Deploy order: backend 00569 → web 00570 → client-portal Worker.
+- Unchanged from stage B: no SQL test — no neighbouring suite covers this RPC, and only the
+  backend lane may reset the local stack, so 00570 is read-verified, not executed.
+
+## W2B-R1-04 (major) — the wall held 900 ms to be refused · FIXED
+
+`wall-gate.tsx`'s `HoldAction` now takes `disabled={!signatureIsComplete(signedName)}`, matching
+door-gate's `ready`, approval-ask and scope-change-ask. The refusal sentence in `onAccept` stays
+as the same-tick backstop. Its test became "stays unlit until a name is on the rule, and accepts
+nothing": disabled with no name, still disabled on one character, armed on "Harper Vale".
+
+## Gates (from the worktree, after the pass)
+
+- `pnpm --filter @patina/client-portal type-check` → `tsc --noEmit`, no output, exit 0.
+- `pnpm --filter @patina/client-portal test` → **Test Suites: 119 passed, 119 total; Tests: 1654
+  passed, 1654 total** (1650 before the pass; +4 net — five added, one replaced in place).
