@@ -595,3 +595,148 @@ this wave), **−comms-notification-dispatch** (imports only
   need you".
 - The first notice has still never been sent end to end against a served edge
   runtime; the trigger dispatch and the letter are each proven separately.
+
+# Close-out, round 2 — the three majors from `backend-review-r3` review
+
+Round 1 of the close-out shipped the badge, the city and the letters; the
+adversarial pass on that work found three majors. All three are fixed here.
+
+## M1 — the springboard number counts what the bell counts
+
+R5's first pass counted unread `in_app` rows raw. The bell does not: it collapses
+on `entity_type|entity_id` (`NotificationsViewModel.collapseDuplicates`) because
+more than one row can name one thing. 00534's `notify_client_attention` de-dups
+its own bell row, but it is not the only producer —
+`00289_design_request_client_status_notifications.sql` inserts `in_app` rows
+carrying `entity_type='design_request'` from a status-change trigger (:227) and
+the claim path (:110) with no de-dup, so two status changes on one lead leave two
+unread rows naming one entity. The walk measured the divergence live: 15 raw
+unread rows, bell 14.
+
+So the icon would have said a number the app itself never draws, and — because
+the app only rewrites the badge when the feed loads — it would have stood for as
+long as the app stayed closed, which is the entire point of the badge.
+
+`apns-send/index.ts` now selects `metadata` for the unread `in_app` rows rather
+than asking Postgres for a count, and folds them through a new pure helper
+`collapsedBadgeCount` (`apns-send/core.ts`): distinct `entity_type|entity_id`,
+with entity-less rows counted individually exactly as the bell keeps them. The
+read window is the bell's own (`NotificationsAPIClient.list(limit: 50)`), so
+neither surface can see rows the other cannot. Every failure path still returns
+`undefined` and the payload still omits `aps.badge` rather than sending a 0.
+
+`core.ts`'s payload doc, which claimed an agreement the code did not have, is
+corrected — as is round 1's commit body, which cannot be rewritten and is
+corrected here instead: apns-send and the bell agree because both collapse, not
+because a single producer de-dups.
+
+Four new cases in `_tests/apns-send.test.ts`: two rows on one entity fold to one;
+entity-less rows count individually; empty is zero; distinct entities of one kind
+all survive.
+
+## M2 — three letters that were signing cityless forever
+
+R3-04 fixed the precedence inside `resolveStudioSignature`, and three
+homeowner-addressed letters never call it: `proposal-nudge/index.ts:222`,
+`client-invite/index.ts:158` and `review-requests/index.ts:264` each resolved
+their own identity and then assembled `signOff` by hand from
+`profiles.city` alone. `select id, full_name, city from public.profiles where
+city is not null` returns 0 rows on the local stack — `profiles.city` is a 00013
+column no surface writes — so the approval letter signed "— Leah, Middle West
+Studio · Kansas City" while the invitation, the nudge and the review request from
+the same studio, in the same inbox, signed with no city at all.
+
+`_shared/studio-identity.ts` gains `studioSignatureCity(admin, identity,
+profileCity)`: the org-address read plus the ruling's precedence, for callers
+that already hold a resolved identity. `resolveStudioSignature` now goes through
+it too, so there is one code path and not two — its only visible change is the
+order of its two reads (`profiles` then `organizations`), which the existing
+read-order assertion records.
+
+`proposal-send` stays cityless by the close-out ruling's own carve-out (its
+dispatch snapshot is not widened this wave); no other client letter is left.
+
+Four new cases in `_shared/studio-identity.test.ts` cover the helper: the org
+fallback, the profile winning over it, no studio to read, and a failed org read
+signing without a city rather than throwing.
+
+## M3 — the digest link named the approval but not the house
+
+F12 gave the digest the mail's own builder, which was right, but the anchor it
+replaced named the project and the Universal Link does not: `clientDecisionLink`
+emits `/decisions/<id>`, `retired-routes.ts` folded that to `{ path: '/',
+anchor: 'approval-<id>' }`, and `/` "resolves to the client's ACTIVE project".
+A homeowner with two projects clicking a digest line — or a mail door, which
+shared the defect — for an approval on the other one landed on the wrong
+doorstep with a fragment that resolves to nothing.
+
+Fixed on the portal side, so mail and digest are cured together and the link
+stays the Universal Link the iOS app claims. The fold now carries
+`?decision=<id>`, the way `?proposal=` and `?invoice=` already did for exactly
+this reason, and `resolveHouseForInstrument` resolves the approval's house before
+the active-house clocks are consulted. It reads both paths an approval can take:
+Stage-2 rows are outside the client read model (`client_decisions` RLS excludes
+`project_artifact_v1`), so their house comes from
+`list_my_project_decision_reviews` — the same sanitized list the doorstep itself
+is built from — and a legacy option choice is read directly, scoped to the
+client's own project ids. An id that resolves to nothing, or to a project outside
+her list, leaves the active house standing.
+
+Files: `apps/client-portal/src/lib/retired-routes.ts`,
+`apps/client-portal/src/lib/data/active-project.ts`,
+`apps/client-portal/src/app/page.tsx`, plus the doc on
+`_shared/client-portal-links.ts` and `notification-digest/logic.ts`, which
+described the old fold.
+
+New `apps/client-portal/src/lib/__tests__/retired-routes.test.ts` (the decisions
+case with and without a usable id, the bare list, a deeper path, and the two
+instruments that already named their house), five cases on
+`resolveHouseForInstrument` in `lib/data/__tests__/active-project.test.ts`, and
+one on the front door in `app/__tests__/page.test.tsx`.
+
+## Gates
+
+- `deno test _shared/` — 190 passed, 0 failed.
+- `deno test _tests/apns-send.test.ts` — 19 passed (4 new).
+- `deno test _shared/studio-identity.test.ts` — 17 passed (4 new).
+- `deno test decision-reminders/` — 6 passed. `notification-digest/` — 11 passed.
+- `deno check` on apns-send, proposal-nudge, client-invite, review-requests,
+  notification-digest, decision-reminders, decision-first-notice — all clean.
+  (`campaign-dispatch` and `digest-dispatcher` keep their pre-existing check
+  errors; untouched, unfixed, as instructed.)
+- client-portal `pnpm test` — 1527 passed, 1 failed: `portal-access.test.ts`
+  expects `foreignPortalFromDomain('manufacturer')` to be null while the source
+  returns the maker workspace. Both files are byte-identical to the main
+  checkout's and neither is in this branch's diff — a pre-existing failure on
+  main, named here rather than fixed.
+- client-portal `pnpm type-check` — clean (after
+  `pnpm turbo run build --filter=@patina/client-portal^...`; without the
+  workspace dists it reports 242 phantom module errors).
+- No `deno.lock` at the repo root or in the worktree.
+
+## Deploy set — 28 functions
+
+Round 1's 27 plus `comms-notification-dispatch`, which round 1 dropped because it
+imports only `client-portal-links.ts` — edited in this pass, so it is back. The
+closure over this round's edited `_shared` modules
+(`studio-identity.ts`, `client-portal-links.ts`) plus the directories edited here
+is 21 functions, all inside the branch total:
+
+```
+apns-send campaign-dispatch client-invite commercial-document-notify
+comms-notification-dispatch create-checkout-session decision-first-notice
+decision-reminders decision-resolved-notify digest-dispatcher expire-decisions
+fulfillment-notify invoice-check-intent invoice-reminders invoice-send
+morning-brief notification-digest notification-dispatch po-send proposal-nudge
+proposal-send proposal-sign-confirmation quote-request-send review-requests
+spec-pdf stripe-webhook trade-rfq-send waitlist-notify
+```
+
+## Left standing, named
+
+- The iOS lane's `BadgeCountService.applyNotificationRows` doc (quoted by the
+  review) argues the two counts agree because `notify_client_attention` de-dups.
+  That reasoning was wrong and is now moot — they agree because both collapse —
+  but the file lives on the iOS branch, not this one, and is not edited here.
+- This round touches three client-portal files. They are the frontend lane's
+  neighbourhood; the integration steward should expect them in this branch.
