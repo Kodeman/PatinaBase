@@ -33,8 +33,12 @@ import { useAuth } from '@/hooks/use-auth';
  * destination the old header offered is now a retired route that 308s
  * straight back here, so restoring the header would be a ring of dead links
  * rather than navigation.
+ *
+ * Exported for the letterbox-only front door (`components/threshold/
+ * letterbox-door.tsx`), which stands where this state would and owes the same
+ * two acts for the same reason.
  */
-function EmptyStateActs() {
+export function EmptyStateActs() {
   const { signOut } = useAuth();
   const [detailsOpen, setDetailsOpen] = useState(false);
 

@@ -174,6 +174,73 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
   });
 
+  /* ── A letter for no house ───────────────────────────────────────────────
+     A studio invoice stands in the letterbox of the adopted house, which is
+     not the house the work is in — the envelope has to say so on its own
+     line, and name itself by the regarding line that stands where a house
+     name would. ────────────────────────────────────────────────────────── */
+
+  it('says a studio letter is not for a house, and names it by its regarding line', () => {
+    render(
+      <Letterbox
+        invoice={invoice({
+          id: 'inv-31',
+          number: 'Invoice No. 31',
+          totalCents: 45_000,
+          paidCents: 0,
+          balanceCents: 45_000,
+          dueDate: '2026-09-20',
+        })}
+        invoices={[
+          invoiceRow({
+            id: 'inv-31',
+            invoice_number: 'Invoice No. 31',
+            status: 'sent',
+            project_id: null,
+            title: 'Design consultation · 12 September 2026',
+          }),
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('letterbox-from-studio')).toHaveTextContent(
+      'From the studio · not for a house',
+    );
+    expect(screen.getByTestId('letterbox-regarding')).toHaveTextContent(
+      'Design consultation · 12 September 2026',
+    );
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 31');
+  });
+
+  it('says nothing of the studio for a letter this house holds', () => {
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-3', number: 'Invoice No. 3' })}
+        invoices={[invoiceRow({ id: 'inv-3', status: 'sent' })]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.queryByTestId('letterbox-from-studio')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('letterbox-regarding')).not.toBeInTheDocument();
+  });
+
+  it('states the studio line for a letter with no regarding line to print', () => {
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
+        invoices={[
+          invoiceRow({ id: 'inv-31', status: 'sent', project_id: null, title: null }),
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('letterbox-from-studio')).toBeInTheDocument();
+    expect(screen.queryByTestId('letterbox-regarding')).not.toBeInTheDocument();
+  });
+
   it('carries the anchor, the unit, and never opts into dimming', () => {
     render(<Letterbox invoice={invoice()} />);
 

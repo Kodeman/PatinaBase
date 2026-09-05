@@ -196,6 +196,13 @@ export function Letterbox({
     row?.designer?.business_name?.trim() ||
     'your designer';
 
+  // A letter for no house at all (ruling S1). It stands in this letterbox
+  // because this is the adopted house, not because the work is here, and it
+  // says so on its own line rather than letting the plate above imply it. Its
+  // regarding line stands where a house name would.
+  const fromTheStudio = row !== null && row.project_id === null;
+  const regarding = fromTheStudio ? row.title?.trim() || null : null;
+
   return (
     <div
       ref={slot}
@@ -230,6 +237,22 @@ export function Letterbox({
 
       {invoice ? (
         <>
+          {fromTheStudio && (
+            <p
+              data-testid="letterbox-from-studio"
+              className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-muted)]"
+            >
+              From the studio &middot; not for a house
+            </p>
+          )}
+          {regarding && (
+            <p
+              data-testid="letterbox-regarding"
+              className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+            >
+              {regarding}
+            </p>
+          )}
           <p
             data-testid="letterbox-body"
             className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"

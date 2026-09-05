@@ -25,7 +25,12 @@ import { Settlement } from './settlement';
    A line that is still owed is not only a record. The letterbox holds the
    soonest-due letter; a studio that sent two can be paid for both, and the
    second one settles here — the same ceremony, unfolded on its own line, so
-   retiring `/invoices/[id]` strands no balance. ──────────────────────────── */
+   retiring `/invoices/[id]` strands no balance.
+
+   A letter drawn against no house at all is folded away here too, because the
+   adopted house holds it. It carries the same clause the envelope carries in
+   the slot: a money line she can act on may never leave her to assume the
+   work is hers. ─────────────────────────────────────────────────────────── */
 
 const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
 const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
@@ -79,6 +84,11 @@ function receiptTrail(invoice: Invoice, today?: Date): string {
   if (due) return `due ${due}`;
   const sent = longDate(invoice.sent_at, today);
   return sent ? `sent ${sent}` : 'awaiting payment';
+}
+
+/** Where it came from, when it came from no house — the envelope's own clause. */
+function origin(invoice: Invoice): string {
+  return invoice.project_id === null ? ' · from the studio · not for a house' : '';
 }
 
 function byArrival(a: Invoice, b: Invoice): number {
@@ -156,7 +166,7 @@ export function EarlierInvoices({
                       {`${invoice.invoice_number ?? 'Invoice'} · ${moneyInWords(
                         invoice.total_cents || 0,
                         invoice.currency || 'USD',
-                      )} · ${receiptTrail(invoice, today)}`}
+                      )} · ${receiptTrail(invoice, today)}${origin(invoice)}`}
                     </span>
                     <span className="flex flex-wrap items-baseline gap-x-4">
                       {isOpen(invoice) && (

@@ -210,6 +210,55 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
     expect(screen.getByRole('button', { name: 'Settle the balance' })).toBeDisabled();
   });
 
+  // A studio invoice reaches the adopted house's letterbox alongside that
+  // house's own letters, so an open one has to keep its settle act here for
+  // the same reason a second house invoice does — and, carrying a settle act,
+  // it may not read as one of this house's own letters.
+  it('keeps a studio letter behind the slot, with its balance still settleable', () => {
+    render(
+      <EarlierInvoices
+        invoices={[
+          invoice({
+            id: 'inv-31',
+            invoice_number: 'Invoice No. 31',
+            project_id: null,
+            title: 'Design consultation',
+            status: 'sent',
+            total_cents: 45_000,
+            amount_paid_cents: 0,
+            due_date: '2026-08-20',
+            paid_at: null,
+          }),
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+
+    expect(
+      screen.getByText(
+        'Invoice No. 31 · $450 · due August 20 · from the studio · not for a house',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Settle this balance' })).toBeInTheDocument();
+  });
+
+  it('says nothing about the studio on a line this house was billed for', () => {
+    render(
+      <EarlierInvoices
+        invoices={[invoice({ id: 'inv-3', invoice_number: 'Invoice No. 3' })]}
+        today={TODAY}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+
+    const line = screen.getByText(/^Invoice No\. 3 ·/);
+    expect(line).toHaveTextContent('Invoice No. 3 · $9,125 · paid June 12');
+    expect(line).not.toHaveTextContent('from the studio');
+  });
+
   it('offers a settled line its record and nothing to pay', () => {
     render(<EarlierInvoices invoices={[invoice()]} today={TODAY} />);
     fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));

@@ -1,6 +1,9 @@
 'use client';
 
-import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+import {
+  countInWords,
+  moneyInWords,
+} from '@/components/threshold/instruments/standing-sentence';
 import { parseSourceDate, type HouseLedgerModel } from '@/lib/threshold/derive';
 import { owedDueLine } from '@/lib/threshold/standing';
 
@@ -42,9 +45,25 @@ function figure(cents: number | null | undefined): cents is number {
   return typeof cents === 'number' && Number.isFinite(cents) && cents > 0;
 }
 
-/** One open invoice is "the open invoice"; several are counted in words. */
-function owedWords(count: number): string {
-  return count > 1 ? `Owed across ${count} open invoices` : 'Owed on the open invoice';
+/**
+ * One open invoice is "the open invoice"; several are counted in words.
+ *
+ * A letter drawn against no house stands in this house's letterbox by
+ * adoption, not because the work is here. The envelope says so on its own
+ * line, and the figure it is summed into may not quietly imply otherwise — a
+ * homeowner reading "owed" against her house has to be able to tell which of
+ * that money is her house's.
+ */
+function owedWords(count: number, studioCount: number): string {
+  if (studioCount <= 0) {
+    return count > 1 ? `Owed across ${count} open invoices` : 'Owed on the open invoice';
+  }
+  if (studioCount >= count) {
+    return count > 1
+      ? `Owed across ${count} open invoices from the studio, not for this house`
+      : 'Owed on the open invoice from the studio, not for this house';
+  }
+  return `Owed across ${count} open invoices, ${countInWords(studioCount)} from the studio`;
 }
 
 /**
@@ -71,7 +90,7 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
   const rows: LedgerRow[] = [
     {
       key: 'owed' as const,
-      words: owedWords(ledger.owedInvoiceCount),
+      words: owedWords(ledger.owedInvoiceCount, ledger.owedStudioCount),
       cents: ledger.owedCents,
       due: owedDueLine(
         parseSourceDate(ledger.owedDueDate),
