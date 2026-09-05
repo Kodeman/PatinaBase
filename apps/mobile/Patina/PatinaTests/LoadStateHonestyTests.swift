@@ -231,13 +231,14 @@ struct LoadStateHonestyTests {
         """)
         if everythingFailed {
             return StudioLoadResult(
-                projects: nil, decisions: nil, proposals: nil, invoices: nil,
+                projects: nil, decisions: nil, approvals: nil, proposals: nil, invoices: nil,
                 documents: nil, threads: nil, notifications: nil
             )
         }
         return StudioLoadResult(
             projects: projects,
             decisions: decisionsFailed ? nil : decisions,
+            approvals: decisionsFailed ? nil : [],
             proposals: [], invoices: [], documents: [], threads: [], notifications: []
         )
     }
