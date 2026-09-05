@@ -254,11 +254,15 @@ struct DecisionApprovalPathTests {
     func theOptionRetryIsUnchanged() throws {
         let viewModel = DecisionDetailViewModel()
         viewModel.decision = try decision(kind: "selection")
+        viewModel.options = [try option()]
         viewModel.lastAttemptedOptionId = "00000000-0000-0000-0000-0000000000aa"
         viewModel.submitFailure = MoneyFailureCopy.decision
 
         viewModel.retrySelection()
-        #expect(viewModel.pendingOptionId == "00000000-0000-0000-0000-0000000000aa")
+        // `P-30`: the retry puts the failed option back UNDER THE ACT rather
+        // than re-opening a consent step the option path no longer has.
+        #expect(viewModel.leaningOptionId == "00000000-0000-0000-0000-0000000000aa")
+        #expect(viewModel.pendingOptionId == nil)
         #expect(viewModel.isApprovingSignoff == false)
     }
 
@@ -307,13 +311,16 @@ struct DecisionApprovalPathTests {
         #expect(code.contains("decisionDetail.signoff"))
         #expect(code.contains("viewModel.beginSignoff()"))
         #expect(code.contains("await viewModel.confirmSignoff("))
-        // One sheet type on this screen, used twice.
+        // One sheet type on this screen, used once. It was used twice until
+        // `P-30`: the option path's call site went with the spread, whose own
+        // named held act IS the consent. The sign-off, which carries no
+        // options and no spread, still needs it.
         #expect(code.components(separatedBy: "private struct DecisionConsentSheet").count - 1 == 1)
-        #expect(code.components(separatedBy: "DecisionConsentSheet(").count - 1 == 2,
-                "the consent sheet is presented for a choice and for a sign-off, and nowhere else")
+        #expect(code.components(separatedBy: "DecisionConsentSheet(").count - 1 == 1,
+                "the consent sheet is presented for the sign-off, and nowhere else")
         // And it is still reached through the one binding, so a swipe-dismiss
-        // clears whichever act was pending.
-        #expect(code.contains("viewModel.pendingOptionId != nil || viewModel.isApprovingSignoff"))
+        // clears the act that was pending.
+        #expect(code.contains("get: { viewModel.isApprovingSignoff }"))
     }
 
     /// The migration is in the tree, numbered after the head W1 left, and its

@@ -23,8 +23,16 @@ final class DecisionDetailViewModel {
     var isSubmitting: Bool = false
     var error: String?
 
-    /// Option the client tapped "Choose" on — drives the consent sheet.
+    /// Option the client tapped "Choose" on — the one the act is carrying.
     var pendingOptionId: String?
+    /// `P-30`. The option she is LEANING toward: tapped, marked with a clay
+    /// dot, and committing to nothing.
+    ///
+    /// It is deliberately not `pendingOptionId`: that one is the act in
+    /// flight, and a homeowner comparing two fabrics has to be able to put her
+    /// finger on one without the phone treating the touch as an answer. The
+    /// only thing that answers is the held act.
+    private(set) var leaningOptionId: String?
     /// Option the client has committed to (locally, after a successful
     /// `selectOption`). Mirrors the server `selected` flag for instant UI.
     var selectedOptionId: String?
@@ -303,6 +311,39 @@ final class DecisionDetailViewModel {
         pendingOptionId = nil
     }
 
+    /// `P-30`. Lean toward an option. This writes nothing, sends nothing and
+    /// resolves nothing — it moves a dot and fires a selection haptic.
+    ///
+    /// A contentless option is not leanable for the same reason it was never
+    /// choosable (`R06`): the act above it would name nothing.
+    func chooseLeaning(optionId: String) {
+        guard !isResolved, !isSubmitting else { return }
+        guard options.first(where: { $0.id == optionId })?.hasRenderableContent == true else {
+            return
+        }
+        leaningOptionId = optionId
+    }
+
+    /// The option the named act is standing over, if any.
+    var leaningOption: RemoteDecisionOption? {
+        guard let leaningOptionId else { return nil }
+        return options.first { $0.id == leaningOptionId }
+    }
+
+    /// `P-30`. The act itself: the held press on "I choose {name}".
+    ///
+    /// The consent is `click_through` and carries no signature. That is what
+    /// the consent step this replaces sent on its default path — its "Add my
+    /// signature" toggle rested OFF — and it is the token the mid-Wave-2
+    /// ruling reserves for an act with no name on it. A choice between two
+    /// named alternatives is not the signature moment; R1's typed name belongs
+    /// to Approve on the ceremony rail, which has its own screen.
+    func commitLeaning(decisionId: String) async {
+        guard let optionId = leaningOptionId, !isSubmitting, !isResolved else { return }
+        pendingOptionId = optionId
+        await confirmSelection(decisionId: decisionId, consent: .clickThrough)
+    }
+
     /// Commit the pending option with the client's consent. On success the
     /// decision is `responded` and the chosen option's `selected` flag is set
     /// server-side (via `apply_decision`); we mirror that locally.
@@ -324,6 +365,7 @@ final class DecisionDetailViewModel {
             )
             self.selectedOptionId = optionId
             self.pendingOptionId = nil
+            self.leaningOptionId = nil
         } catch {
             MoneyFailureCopy.log("decision", error)
             self.submitFailure = MoneyFailureCopy.decision
@@ -333,8 +375,8 @@ final class DecisionDetailViewModel {
         isSubmitting = false
     }
 
-    /// SP-15's first act on the decision path: re-open the consent step on the
-    /// option the failed submit was carrying — or, on a sign-off, on the
+    /// SP-15's first act on the decision path: put the failed submit's option
+    /// back under the act — or, on a sign-off, re-open the consent step on the
     /// sign-off itself, which carries no option to remember.
     func retrySelection() {
         guard !isSubmitting, !isResolved else { return }
@@ -351,8 +393,11 @@ final class DecisionDetailViewModel {
             return
         }
         guard let optionId = lastAttemptedOptionId else { return }
+        // `P-30`: the retry is the leaning restored and the act live again.
+        // There is no consent step on this path any more to re-open.
         submitFailure = nil
-        pendingOptionId = optionId
+        pendingOptionId = nil
+        leaningOptionId = optionId
     }
 
     // MARK: - W1-B-03 · the sign-off

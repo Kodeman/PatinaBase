@@ -439,6 +439,9 @@ struct HouseRecordRowView: View {
     var onTap: () -> Void = {}
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// `P-30`: the namespace the pushed decision screen zooms out of. Nil
+    /// wherever the Record is drawn outside a stack that publishes one.
+    @Environment(\.decisionZoomNamespace) private var decisionZoomNamespace
 
     private var presentation: HouseRecordRowPresentation {
         HouseRecordRowPresentation.make(row: row, now: now)
@@ -485,6 +488,10 @@ struct HouseRecordRowView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityAddTraits(row.route == nil ? [] : .isButton)
+        // `P-30`: the Record row is where the decision screen comes FROM, so
+        // it is the row the zoom grows out of. Every other row publishes
+        // nothing and its destination pushes as it always did.
+        .decisionZoomSource(row.route, in: decisionZoomNamespace)
     }
 
     /// Two points, per the sheet.
