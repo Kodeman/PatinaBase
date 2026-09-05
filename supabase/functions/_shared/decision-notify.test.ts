@@ -104,11 +104,13 @@ for (const kind of ["decision_required", "decision_overdue"] as const) {
   });
 }
 
+const FIRST: DecisionContext = { ...STAGE2, notice: "first" };
+
 Deno.test("a first notice reads like one, not like a reminder (P-02)", () => {
   const rendered = renderDecisionEmail(
     "decision_required",
     "Anne",
-    STAGE2,
+    FIRST,
     STUDIO,
   );
   assertEquals(
@@ -122,7 +124,7 @@ Deno.test("a first notice reads like one, not like a reminder (P-02)", () => {
 });
 
 Deno.test("a first notice names the studio when no person is known", () => {
-  const rendered = renderDecisionEmail("decision_required", "Anne", STAGE2, {
+  const rendered = renderDecisionEmail("decision_required", "Anne", FIRST, {
     studioName: "Middle West Studio",
   });
   assertEquals(
@@ -132,7 +134,7 @@ Deno.test("a first notice names the studio when no person is known", () => {
 });
 
 Deno.test("a first notice falls back to a plain asker with no identity at all", () => {
-  const rendered = renderDecisionEmail("decision_required", "Anne", STAGE2, {});
+  const rendered = renderDecisionEmail("decision_required", "Anne", FIRST, {});
   assertEquals(
     rendered.subject,
     "Your designer sent Client <issued> set for your approval.",
@@ -143,7 +145,7 @@ Deno.test("a reminder is subject-lined by the day it is due (P-02)", () => {
   const rendered = renderDecisionEmail(
     "decision_required",
     "Anne",
-    { ...STAGE2, reminderSentAt: "2026-10-06T09:00:00Z" },
+    { ...STAGE2, notice: "reminder" },
     STUDIO,
   );
   assertEquals(rendered.subject, "Thursday: Client <issued> set.");
@@ -151,11 +153,56 @@ Deno.test("a reminder is subject-lined by the day it is due (P-02)", () => {
   assertStringIncludes(rendered.html, "Nothing has changed since it was sent.");
 });
 
+Deno.test("an undeclared decision_required letter speaks as a reminder (P-02)", () => {
+  // The only live producer is the 48-hour cron, which returns to an approval
+  // the studio sent days or weeks earlier. A letter that says "Leah sent this"
+  // must never be the default.
+  const rendered = renderDecisionEmail(
+    "decision_required",
+    "Anne",
+    STAGE2,
+    STUDIO,
+  );
+  assertEquals(rendered.subject, "Thursday: Client <issued> set.");
+  assert(!rendered.subject.includes("sent"));
+  assertStringIncludes(rendered.html, "Nothing has changed since it was sent.");
+});
+
+Deno.test("the first notice promises what the kind can keep (M3)", () => {
+  const drawn = renderDecisionEmail("decision_required", "Anne", FIRST, STUDIO);
+  assertStringIncludes(drawn.html, "is ready, exactly as drawn.");
+
+  const priced = renderDecisionEmail("decision_required", "Anne", {
+    ...FIRST,
+    artifact: { ...FIRST.artifact!, kind: "budget_version" },
+  }, STUDIO);
+  assertStringIncludes(priced.html, "is ready, exactly as priced.");
+  assert(!priced.html.includes("as drawn"));
+  assertStringIncludes(priced.html, "Review the budget");
+
+  const specified = renderDecisionEmail("decision_required", "Anne", {
+    ...FIRST,
+    artifact: { ...FIRST.artifact!, kind: "spec_book_artifact" },
+  }, STUDIO);
+  assertStringIncludes(specified.html, "is ready, exactly as specified.");
+  assert(!specified.html.includes("as drawn"));
+
+  // A legacy decision carries no edition at all — it claims nothing about one.
+  const legacy = renderDecisionEmail("decision_required", "Anne", {
+    id: "legacy-2",
+    title: "Choose a finish",
+    dueDate: null,
+    notice: "first",
+  }, STUDIO);
+  assertStringIncludes(legacy.html, "is ready for your answer.");
+  assert(!legacy.html.includes("as drawn"));
+});
+
 Deno.test("a reminder with no due date says so without inventing one", () => {
   const rendered = renderDecisionEmail(
     "decision_required",
     "Anne",
-    { ...STAGE2, dueDate: null, reminderSentAt: "2026-10-06T09:00:00Z" },
+    { ...STAGE2, dueDate: null, notice: "reminder" },
     STUDIO,
   );
   assertEquals(rendered.subject, "Still waiting: Client <issued> set.");
@@ -167,7 +214,7 @@ Deno.test("the weekday is printed in the recipient's own zone", () => {
   const decision: DecisionContext = {
     ...STAGE2,
     dueDate: "2026-10-09T01:00:00Z",
-    reminderSentAt: "2026-10-06T09:00:00Z",
+    notice: "reminder",
   };
   assertEquals(
     renderDecisionEmail("decision_required", "Anne", decision, STUDIO).subject,

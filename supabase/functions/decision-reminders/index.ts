@@ -149,10 +149,10 @@ Deno.serve(async (_req: Request) => {
         dueDate: d.due_date,
         artifact,
         sentAt: d.sent_at,
-        // The query above already requires reminder_sent_at IS NULL, so every
-        // send from this cron is the first word she has had about this
-        // approval — and must not be subject-lined as a reminder (P-02).
-        reminderSentAt: d.reminder_sent_at,
+        // This cron fires 48 hours before the due date, which is days or weeks
+        // after the studio pressed send. It returns to an approval already
+        // made; it never announces one (P-02).
+        notice: "reminder",
       },
       recipient!,
       signature,

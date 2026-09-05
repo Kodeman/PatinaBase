@@ -9,6 +9,7 @@ import {
 import {
   artifactCitationsForDigest,
   buildReminderDigestEmail,
+  decisionDigestTitle,
   isReminderDigestDue,
   type ReminderDigestItem,
 } from "./logic.ts";
@@ -90,7 +91,38 @@ Deno.test("buildReminderDigestEmail: escapes HTML in titles", () => {
   assertStringIncludes(html, "&lt;script&gt;");
 });
 
-Deno.test("Stage-2 digest item cites immutable artifact and logs no reviewer IDs", () => {
+Deno.test("the digest never says 'overdue' to a homeowner (P-04)", () => {
+  assertEquals(
+    decisionDigestTitle("decision_overdue", "The kitchen plan set"),
+    "Still open: The kitchen plan set",
+  );
+  assertEquals(
+    decisionDigestTitle("decision_required", "The kitchen plan set"),
+    "The kitchen plan set",
+  );
+  const { html } = buildReminderDigestEmail(
+    [{
+      category: "decision",
+      title: decisionDigestTitle("decision_overdue", "The kitchen plan set"),
+      link: null,
+    }],
+    "https://client.patina.cloud",
+  );
+  assert(!html.toLowerCase().includes("overdue"));
+  assertStringIncludes(html, "Still open: The kitchen plan set");
+});
+
+Deno.test("the digest is addressed to the homeowner's own door (P-03b)", () => {
+  const { html } = buildReminderDigestEmail(
+    [{ category: "proposal", title: "A", link: null }],
+    "https://client.patina.cloud",
+  );
+  assert(!html.includes(">Dashboard</a>"));
+  assert(!html.includes("app.patina.cloud"));
+  assertStringIncludes(html, ">Your project</a>");
+});
+
+Deno.test("Stage-2 digest item cites the edition, not the checksum (R6)", () => {
   const checksum = "c".repeat(64);
   const items: ReminderDigestItem[] = [{
     category: "decision",
@@ -102,15 +134,17 @@ Deno.test("Stage-2 digest item cites immutable artifact and logs no reviewer IDs
       version: 6,
       checksum,
       title: "Client <specification> book",
+      issuedAt: "2026-09-28T14:00:00Z",
     },
   }];
   const { html } = buildReminderDigestEmail(
     items,
     "https://client.patina.cloud",
   );
-  assertStringIncludes(html, "spec_book_artifact");
-  assertStringIncludes(html, "v6");
-  assertStringIncludes(html, checksum);
+  assertStringIncludes(html, "Edition 6 · issued September 28");
+  assert(!html.includes(checksum), "the hash stays in the record");
+  assert(!html.includes("SHA-256"));
+  assert(!html.includes("spec_book_artifact"), "the enum spelling is not her word");
   assertStringIncludes(html, "Client &lt;specification&gt; book");
 
   const citations = artifactCitationsForDigest(items);

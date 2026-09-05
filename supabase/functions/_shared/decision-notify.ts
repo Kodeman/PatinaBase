@@ -29,7 +29,6 @@ import { sendCompliantEmail } from "./send-email.ts";
 import {
   ctaButton,
   escapeHtml,
-  givenName,
   muted,
   paragraph,
   portalBaseFor,
@@ -38,7 +37,7 @@ import {
   type StudioSignOff,
 } from "./branded-email.ts";
 import { clientDecisionLink } from "./client-portal-links.ts";
-import { resolveStudioIdentity, studioCobrand } from "./studio-identity.ts";
+import { resolveStudioSignature } from "./studio-identity.ts";
 
 // The three decision notification kinds. These mirror the
 // decision_notification_kind enum (00173) and the NotificationType members
@@ -123,6 +122,18 @@ const ARTIFACT_KIND_LABEL: Record<
   budget_version: "budget",
 };
 
+// The promise the first notice makes about the edition attached to it. A
+// budget is not drawn and a spec book is not priced, so each kind gets the
+// predicate that is true of it.
+const ARTIFACT_KIND_PREDICATE: Record<
+  ApprovalArtifactCitation["kind"],
+  string
+> = {
+  plan_issue: "exactly as drawn",
+  spec_book_artifact: "exactly as specified",
+  budget_version: "exactly as priced",
+};
+
 export interface DecisionContext {
   id: string;
   title: string | null;
@@ -131,12 +142,15 @@ export interface DecisionContext {
   /** client_decisions.sent_at — the day the studio asked. */
   sentAt?: string | null;
   /**
-   * client_decisions.reminder_sent_at. NULL means nothing has been sent about
-   * this approval yet, so the notice is a first notice and must not read as a
-   * reminder. It is the only "have we spoken about this before" state the
-   * schema carries; decision-reminders' own query requires it to be NULL.
+   * Which register a decision_required letter speaks in. The producer declares
+   * it, because no state on the row can be read backwards into it: the only
+   * live producer is decision-reminders, whose notice arrives 48 hours before
+   * the due date and therefore long after the studio pressed send. It says
+   * "reminder", and so does the default — a letter that claims the studio just
+   * sent something is a lie unless its producer runs at the moment of sending.
+   * A publish-time producer, when one exists, says "first".
    */
-  reminderSentAt?: string | null;
+  notice?: "first" | "reminder";
 }
 
 export interface DeliverDecisionNotificationResult {
@@ -335,24 +349,7 @@ export async function resolveDecisionSignature(
   supabase: SupabaseClient,
   opts: { designerId?: string | null; projectId?: string | null },
 ): Promise<DecisionCobrand> {
-  const identity = await resolveStudioIdentity(supabase, opts);
-  const signature: DecisionCobrand = studioCobrand(identity);
-  if (!opts.designerId) return signature;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("full_name, city")
-    .eq("id", opts.designerId)
-    .maybeSingle();
-  if (error) {
-    console.error("decision-notify: designer profile lookup failed", error);
-    return signature;
-  }
-  const profile = data as { full_name: string | null; city: string | null } | null;
-  const given = givenName(profile?.full_name);
-  if (given) signature.designerGivenName = given;
-  const city = profile?.city?.trim();
-  if (city) signature.city = city;
-  return signature;
+  return await resolveStudioSignature(supabase, opts);
 }
 
 // The zone loadPreferences falls back to, so a weekday printed for a recipient
@@ -552,10 +549,8 @@ export function renderDecisionEmail(
   }
 
   // decision_required. Two letters, one kind: a first notice announces, a
-  // reminder returns. reminder_sent_at is the schema's own record of which.
-  const isFirstNotice = !decision.reminderSentAt;
-
-  if (isFirstNotice) {
+  // reminder returns. The producer says which; absent that, the letter returns.
+  if (decision.notice === "first") {
     const subject = `${asker} sent ${title} for your approval.`;
     const preview = decision.artifact
       ? (dueWeekday
@@ -576,7 +571,11 @@ export function renderDecisionEmail(
           paragraph(
             `<strong style="color:#1F1B16; font-weight:600;">${
               escapeHtml(title)
-            }</strong> is ready, exactly as drawn.`,
+            }</strong> ${
+              decision.artifact
+                ? `is ready, ${ARTIFACT_KIND_PREDICATE[decision.artifact.kind]}.`
+                : "is ready for your answer."
+            }`,
           ),
           editionLine,
           dueWeekday && dueDay
