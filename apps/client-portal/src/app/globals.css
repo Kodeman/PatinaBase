@@ -20,6 +20,17 @@
      (GateStamp's `hold` variant) until a second caller needs it. */
   --color-gold: #E8C547;
 
+  /* ── The stamp's inks (P-17 / R13) ────────────────────────────────────────
+     The three pigments the eleven-state stamp presses, at the designer
+     portal's own values so one mark reads identically on both sides of the
+     table. Each is a darkened companion of a material pigment, taken to 4.5:1
+     on paper: a border has to read as a mark, not as a wash.
+     --color-terracotta-ink appears on exactly one state (DECLINED) and never
+     opposite a sage counterpart. */
+  --color-clay-ink: #7C5E30;
+  --color-terracotta-ink: #9C5340;
+  --color-golden-hour-ink: #79651E;
+
   /* Semantic aliases */
   --bg-primary: var(--color-off-white);
   --bg-surface: #FFFFFF;

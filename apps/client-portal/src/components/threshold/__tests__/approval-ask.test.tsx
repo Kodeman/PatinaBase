@@ -231,12 +231,12 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     });
 
     const stamp = await screen.findByTestId('approval-stamp');
-    expect(stamp).toHaveTextContent(/^Approved/);
+    expect(stamp).toHaveTextContent(/^APPROVED/);
     expect(stamp).toHaveTextContent('Library elevations · Edition 3');
     expect(onAnswered).toHaveBeenCalledWith('dec-1');
   });
 
-  it('declines as changes_requested and reads back as Declined', async () => {
+  it('returns the edition as changes_requested and reads back as RETURNED', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
     await answer(/^decline$/i);
@@ -246,7 +246,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       outcome: 'changes_requested',
       decisionId: 'dec-1',
     });
-    expect(await screen.findByTestId('approval-stamp')).toHaveTextContent(/^Declined/);
+    expect(await screen.findByTestId('approval-stamp')).toHaveTextContent(/^RETURNED/);
   });
 
   it('holds the approval when the client asks a question', async () => {
@@ -256,10 +256,10 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(respondMutate.mock.calls[0][0]).toMatchObject({ outcome: 'needs_discussion' });
-    expect(await screen.findByTestId('approval-stamp')).toHaveTextContent(/^Held/);
+    expect(await screen.findByTestId('approval-stamp')).toHaveTextContent(/^HELD/);
   });
 
-  it('reads a recorded decline back from the row, with its own date', () => {
+  it('reads a recorded return back from the row, with its own date', () => {
     render(
       <ApprovalAsk
         approval={{
@@ -271,7 +271,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       />,
     );
 
-    expect(screen.getByTestId('approval-stamp')).toHaveTextContent('Declined 14 August');
+    expect(screen.getByTestId('approval-stamp')).toHaveTextContent('RETURNED 14 August');
     expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
       'Your approval · answered',
     );
@@ -295,7 +295,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     );
 
     const stamp = screen.getByTestId('approval-stamp');
-    expect(stamp).toHaveTextContent(/^Approved\s*Library elevations/);
+    expect(stamp).toHaveTextContent(/^APPROVED\s*Library elevations/);
     expect(stamp).not.toHaveTextContent('September');
   });
 
@@ -643,7 +643,7 @@ describe('ApprovalReceipt', () => {
 
     const receipt = screen.getByTestId('doorstep-approval-receipt');
     expect(receipt).toHaveAttribute('id', 'approval-dec-1');
-    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Approved 14 August');
+    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('APPROVED 14 August');
     expect(receipt).toHaveTextContent('Library elevations · Edition 3');
     // The only act on a closed approval reads its discussion; nothing on it
     // can be changed, and it links nowhere.
@@ -666,10 +666,10 @@ describe('ApprovalReceipt', () => {
       />,
     );
 
-    // Reading plainly "Declined" beside the edition that replaced it is what
+    // Reading plainly RETURNED beside the edition that replaced it is what
     // this precedence exists to prevent.
-    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Superseded 14 August');
-    expect(screen.getByTestId('approval-receipt-stamp')).not.toHaveTextContent('Declined');
+    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('SUPERSEDED 14 August');
+    expect(screen.getByTestId('approval-receipt-stamp')).not.toHaveTextContent('RETURNED');
   });
 
   it('keeps the discussion readable, and unwritable, after the approval closed', () => {

@@ -934,7 +934,7 @@ describe('Threshold — the doorstep’s own asks', () => {
     ]);
 
     expect(screen.queryByTestId('doorstep-approval')).not.toBeInTheDocument();
-    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Approved 14 August');
+    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('APPROVED 14 August');
   });
 
   it('says so where the asks would stand when the approvals cannot be read', () => {

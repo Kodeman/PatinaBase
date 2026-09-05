@@ -218,7 +218,10 @@ describe('WallGate', () => {
     });
 
     const stamp = screen.getByTestId('wall-stamp');
-    expect(stamp).toHaveTextContent('Accepted');
+    // The house's one stamp — an acceptance of finished work is an approval,
+    // and it carries the same mark the doorstep's approvals carry.
+    expect(stamp).toHaveTextContent('APPROVED');
+    expect(stamp).toHaveAttribute('data-stamp-state', 'approved');
     expect(stamp).toHaveTextContent('$1,440 released');
     expect(stamp).toHaveTextContent('Prairie Coat Painting');
     expect(screen.getByTestId('wall-hatch')).toHaveAttribute('data-wall-state', 'settled');

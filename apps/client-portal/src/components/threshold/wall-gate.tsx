@@ -4,6 +4,7 @@ import { useId, useRef, useState } from 'react';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { SpineGate } from '@/components/threshold/instruments/spine-gate';
+import { Stamp } from '@/components/threshold/instruments/stamp';
 import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   useAcceptTradeScope,
@@ -206,22 +207,26 @@ export function WallGate({
 
       {acceptedAt && (
         <p className="mt-3">
-          <span
+          {/* The house's one stamp, not a second grammar: an acceptance is an
+              approval of finished work, and it reads in the same ink as the
+              approvals on the doorstep. The released draw stays in the mark's
+              own line because it is the honest consequence of her name. */}
+          <Stamp
             data-testid="wall-stamp"
-            className="inline-block max-w-[38ch] -rotate-[1.1deg] border border-current px-2.5 pb-1 pt-1.5 font-mono text-[11px] uppercase leading-relaxed tracking-[0.1em] text-[var(--color-mocha)]"
+            state="approved"
+            since={acceptedAt}
+            dateLabel={DAY_MONTH.format(acceptedAt)}
           >
-            {`Accepted ${DAY_MONTH.format(acceptedAt)}${
+            {[
               gatedDraw && gatedDraw.amountCents > 0
-                ? ` · ${moneyInWords(gatedDraw.amountCents)} released`
-                : ''
-            }`}
-            {party && (
-              <span className="block font-normal normal-case tracking-[0.04em]">
-                {party}
-                {selection.roomName ? ` · ${selection.roomName}` : ''}
-              </span>
-            )}
-          </span>
+                ? `${moneyInWords(gatedDraw.amountCents)} released`
+                : null,
+              party,
+              selection.roomName || null,
+            ]
+              .filter((part): part is string => !!part)
+              .join(' · ') || null}
+          </Stamp>
         </p>
       )}
 

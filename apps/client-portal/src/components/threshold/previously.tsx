@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import type { PreviouslyEntry, PreviouslyState } from '@/lib/threshold/derive';
 
+import { STAMP_DIALS } from './instruments/stamp';
 import { InstrumentReading } from './instrument-reading';
 
 /* ── PREVIOUSLY ──────────────────────────────────────────────────────────────
@@ -20,11 +21,27 @@ import { InstrumentReading } from './instrument-reading';
 
 const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
+/**
+ * The four words, and the one of them that is a stamp.
+ *
+ * A signed instrument was sealed, so its word and its ink are the house's
+ * stamp's (`instruments/stamp.tsx`, state `signed`) and nowhere else's — one
+ * mark, one pigment, wherever it is drawn. The other three are a note's
+ * lifecycle, not a mark: they read in the muted ink of the date beside them,
+ * so mocha on this page means "sealed" and nothing else.
+ */
 const STATE_WORD: Record<PreviouslyState, string> = {
   answered: 'Answered',
   standing: 'Standing',
   sent: 'Sent',
-  signed: 'Signed',
+  signed: STAMP_DIALS.signed.word ?? 'Signed',
+};
+
+const STATE_INK: Record<PreviouslyState, string> = {
+  answered: 'var(--text-muted)',
+  standing: 'var(--text-muted)',
+  sent: 'var(--text-muted)',
+  signed: STAMP_DIALS.signed.ink,
 };
 
 const ONE_LINE = 58;
@@ -110,7 +127,9 @@ export function Previously({ entries, correspondence }: PreviouslyProps) {
               />
               <span
                 data-testid="previously-state"
-                className="shrink-0 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
+                data-previously-state={entry.state}
+                className="shrink-0 font-mono text-[11px] uppercase tracking-[0.14em]"
+                style={{ color: STATE_INK[entry.state] }}
               >
                 {STATE_WORD[entry.state]}
               </span>

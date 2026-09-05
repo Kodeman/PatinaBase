@@ -14,6 +14,7 @@ import {
 } from '@patina/supabase';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { Stamp, stampStateForApproval } from '@/components/threshold/instruments/stamp';
 import {
   countInWords,
   moneyInWords,
@@ -23,7 +24,6 @@ import { useAuth } from '@/hooks/use-auth';
 import {
   isClientActionableProjectApproval,
   isProjectApprovalAwaitingStudioIssue,
-  projectApprovalAttentionLabel,
 } from '@/lib/client-attention';
 import { parseSourceDate } from '@/lib/threshold/derive';
 import { refusalSentence } from '@/lib/threshold/refusal';
@@ -101,14 +101,6 @@ const OUTCOME_ACTS: Array<{
   },
 ];
 
-const STAMP_WORD: Record<ProjectApprovalOutcome, string> = {
-  approved: 'Approved',
-  changes_requested: 'Declined',
-  needs_discussion: 'Held',
-};
-
-const STAMP_CLASS =
-  'inline-block max-w-[38ch] -rotate-[1.1deg] border border-current px-2.5 pb-1 pt-1.5 font-mono text-[11px] uppercase leading-relaxed tracking-[0.1em] text-[var(--color-mocha)]';
 const EYEBROW_CLASS =
   'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]';
 const SECTION_CLASS =
@@ -168,7 +160,7 @@ function dayDelta(days: number): string {
  * A gate that is neither open nor answered — withdrawn, or superseded by a
  * later edition — is history too, and stood on no surface at all until it was
  * filed here. It reads as its own word (Withdrawn / Superseded, ahead of any
- * outcome, the order `projectApprovalAttentionLabel` keeps) and carries no act
+ * outcome, the precedence `stampStateForApproval` keeps) and carries no act
  * and no revision link: a closed edition is read, not navigated from.
  *
  * `asks` wins over `records` — an id may anchor exactly one element on the
@@ -431,9 +423,8 @@ function Discussion({
  * explains it, and no link out of itself.
  *
  * The stamp takes the house's own precedence: `Withdrawn` / `Superseded` stand
- * AHEAD of an outcome (`projectApprovalAttentionLabel`), so a superseded
- * edition never reads plainly "Declined" beside the live edition that replaced
- * it.
+ * AHEAD of an outcome (`stampStateForApproval`), so a superseded edition
+ * never reads plainly RETURNED beside the live edition that replaced it.
  */
 export function ApprovalReceipt({
   approval,
@@ -473,14 +464,14 @@ export function ApprovalReceipt({
         {approval.question}
       </h3>
       <p className="mt-3">
-        <span data-testid="approval-receipt-stamp" className={STAMP_CLASS}>
-          {`${projectApprovalAttentionLabel(approval)}${
-            stampedAt ? ` ${DAY_MONTH.format(stampedAt)}` : ''
-          }`}
-          <span className="block font-normal normal-case tracking-[0.04em]">
-            {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-          </span>
-        </span>
+        <Stamp
+          data-testid="approval-receipt-stamp"
+          state={stampStateForApproval(approval)}
+          since={stampedAt}
+          dateLabel={stampedAt ? DAY_MONTH.format(stampedAt) : null}
+        >
+          {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
+        </Stamp>
       </p>
       <div className="mt-3">
         <ScoredAction
@@ -782,12 +773,17 @@ export function ApprovalAsk({
 
       {recordedOutcome && (
         <p className="mt-4">
-          <span data-testid="approval-stamp" className={STAMP_CLASS}>
-            {`${STAMP_WORD[recordedOutcome]}${stampedAt ? ` ${DAY_MONTH.format(stampedAt)}` : ''}`}
-            <span className="block font-normal normal-case tracking-[0.04em]">
-              {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-            </span>
-          </span>
+          <Stamp
+            data-testid="approval-stamp"
+            state={stampStateForApproval({
+              disposition: approval.disposition,
+              outcome: recordedOutcome,
+            })}
+            since={stampedAt}
+            dateLabel={stampedAt ? DAY_MONTH.format(stampedAt) : null}
+          >
+            {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
+          </Stamp>
         </p>
       )}
 
