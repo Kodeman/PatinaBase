@@ -102,6 +102,12 @@ export interface DoorGateProps {
    */
   note: NoteModel | null;
   projectId: string;
+  /**
+   * Fired the moment the signature lands, BEFORE the refetch that takes the
+   * paper out of the open papers. The Threshold answers it by keeping this
+   * mark and its paper for the rest of the visit, which is what leaves the
+   * receipt on the page (W3-01) instead of unmounting it mid-crossfade.
+   */
   onSigned?: () => void;
   /**
    * The first door on the page carries the page-level `#door` anchor that the
@@ -229,9 +235,13 @@ export function DoorGate({
       const stampedAt = new Date();
       signedAtRef.current = stampedAt;
       setSignedAt(stampedAt);
-      // The route pushes ?delivery=pending_retry so CommercialNotificationRecovery
-      // can offer the replay. The Threshold IS the page that param lands on, so
-      // the recovery is surfaced here instead of being navigated to.
+      // W3-02. The recovery lives here and only here: the retired
+      // /proposals/[id] route pushed ?delivery=pending_retry at a
+      // CommercialNotificationRecovery that no longer exists, and no other
+      // surface reads the state — the sign response is the only place it is
+      // ever spoken. So the block stands for as long as the door does, and
+      // the Threshold keeps a signed door standing for the rest of the visit
+      // (threshold.tsx, `sealedDoors`).
       setDeliveryPending(body.notificationDelivery?.state === 'pending_retry');
 
       const stilled =
@@ -265,6 +275,12 @@ export function DoorGate({
       // The state above is this component's own, so the leaf swings on it
       // alone. The refetch is what ends the door, and it is allowed to end
       // it only once the swing has run.
+      //
+      // W3-01. The refetch no longer ends the section either: `onSigned` has
+      // already told the Threshold to keep this mark and its paper, so what
+      // is left standing after the leaf goes is the header, the P-19 receipt
+      // and the delivery recovery — read for as long as she likes rather than
+      // for the 520 ms the swing lasted.
       await new Promise<void>((resolve) => {
         releaseWait.current = resolve;
         invalidateTimer.current = setTimeout(resolve, stilled ? 0 : SWING_MS);

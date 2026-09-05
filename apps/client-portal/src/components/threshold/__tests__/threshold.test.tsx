@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
@@ -193,6 +193,7 @@ import {
   useRecordProjectReviewFeedback,
 } from '@/hooks/use-commercial-client';
 
+import { HOLD_MS } from '../instruments/scored-action';
 import { Threshold } from '../threshold';
 
 const approvalsMock = useMyProjectApprovalReviews as jest.Mock;
@@ -1340,6 +1341,121 @@ describe('Threshold — enclosures and history', () => {
     const line = screen.getByTestId('doorstep-previously');
     expect(line).toHaveTextContent('Design services agreement');
     expect(line).not.toHaveTextContent('run right off the doorstep');
+  });
+});
+
+/* ── The door that opened on her name ───────────────────────────────────────
+   W3-01 / W3-02. Signing takes the paper out of the open papers, and the
+   refetch that follows used to end the whole door section about half a second
+   after the leaf swung — taking P-19's sentence and the delivery recovery with
+   it, to nowhere. The page keeps the mark now, so the receipt is a plate that
+   stands, not a frame that flickers. ─────────────────────────────────────── */
+
+describe('Threshold — the door that opened on her name', () => {
+  /** The same paper, as the refetch after a signature returns it. */
+  const SIGNED_AUTHORIZATION = {
+    ...AUTHORIZATION,
+    commercial_state: 'executed',
+    status: 'accepted',
+    signed_at: '2026-08-06',
+    updated_at: '2026-08-06',
+  } as unknown as Proposal;
+
+  const theDoor = () =>
+    document.querySelector('[data-threshold-unit="door"]') as HTMLElement;
+
+  function drawHouse() {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const tree = () => (
+      <QueryClientProvider client={client}>
+        <Threshold projectId={PROJECT_ID} project={PROJECT} milestones={MILESTONES} />
+      </QueryClientProvider>
+    );
+    const view = render(tree());
+    return { redraw: () => view.rerender(tree()) };
+  }
+
+  /** Type the name, tick the line, hold the act out (P-18). */
+  async function signTheDoor() {
+    fireEvent.change(within(theDoor()).getByLabelText('Type your full name'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(within(theDoor()).getByRole('checkbox'));
+    const held = within(theDoor()).getByRole('button', { name: /^Sign/ });
+    jest.useFakeTimers();
+    fireEvent.pointerDown(held, { clientX: 4, clientY: 4 });
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS);
+    });
+    jest.useRealTimers();
+    await act(async () => {
+      fireEvent.pointerUp(held);
+    });
+  }
+
+  beforeEach(() => {
+    // Reduced motion: the leaf goes at once, so the refetch is released on the
+    // same tick the signature lands — the tightest version of the race.
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })) as unknown as typeof window.matchMedia;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        projectId: PROJECT_ID,
+        notificationDelivery: { state: 'pending_retry' },
+      }),
+    }) as unknown as typeof fetch;
+  });
+
+  it('leaves the receipt and the delivery recovery standing after the paper is gone', async () => {
+    const { redraw } = drawHouse();
+    await signTheDoor();
+
+    expect(within(theDoor()).getByTestId('door-receipt')).toHaveTextContent(
+      'Quist Interiors has your signature. You’ll have a copy.',
+    );
+
+    // The refetch: the paper is no longer one of the papers waiting for her.
+    proposalsMock.mockReturnValue(settled([SIGNED_AUTHORIZATION, SIGNED_AGREEMENT]));
+    redraw();
+
+    // The record has it now — which is exactly what used to end the section.
+    await waitFor(() =>
+      expect(document.querySelector('#previously')).toHaveTextContent(
+        'Furnishings authorization',
+      ),
+    );
+    expect(theDoor()).not.toBeNull();
+    expect(within(theDoor()).getByTestId('door-receipt')).toHaveTextContent(
+      'has your signature',
+    );
+    expect(within(theDoor()).getByTestId('door-delivery-pending')).toHaveTextContent(
+      'confirmation delivery is still pending',
+    );
+    // The leaf is gone — the plate is what stands, not the act.
+    expect(within(theDoor()).queryByTestId('door-leaf')).not.toBeInTheDocument();
+  });
+
+  it('stops counting a signed door among the papers still asking', async () => {
+    const { redraw } = drawHouse();
+    await signTheDoor();
+    proposalsMock.mockReturnValue(settled([SIGNED_AUTHORIZATION, SIGNED_AGREEMENT]));
+    redraw();
+
+    const mat = screen.getByTestId('mat-papers');
+    const listed = within(mat).getAllByText(/Furnishings authorization No\. 7/);
+    expect(listed).toHaveLength(1);
+    expect(listed[0].closest('a')).toHaveAttribute('href', '#previously');
   });
 });
 
