@@ -86,13 +86,23 @@ const REFUSALS: Record<string, string> = {
   not_found: 'This paper could not be found. It may have been withdrawn.',
   unauthorized: 'Your session has ended. Sign in again to sign this paper.',
   invalid_name: 'Type your full name to sign.',
+  sign_failed: 'This paper could not be signed just now. Your designer can help from their side.',
 };
 
-/** A refusal the client can read. Anything unrecognized keeps its own words. */
+/**
+ * A refusal the client can read.
+ *
+ * `W1-02`: an unrecognized token is spoken in the house's own words, never
+ * echoed. This used to return whatever it was handed, and the route used to
+ * hand it `executeError.message` — so the door printed the database's sentence
+ * to a homeowner mid-signature, UUID and "access denied" and all. Both halves
+ * are closed: the route answers in tokens, and an unmapped one falls back here
+ * rather than being read aloud.
+ */
 export function refusalSentence(token: string | undefined | null): string {
   const trimmed = token?.trim();
   if (!trimmed) return 'This paper could not be signed just now.';
-  return REFUSALS[trimmed] ?? trimmed;
+  return REFUSALS[trimmed] ?? 'This paper could not be signed just now.';
 }
 
 /** Every refusal token the sign route can return, for the drift guard. */
