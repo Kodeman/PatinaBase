@@ -26,7 +26,19 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "./send-email.ts";
-import { escapeHtml, paragraph, renderBrandedShell } from "./branded-email.ts";
+import {
+  ctaButton,
+  escapeHtml,
+  givenName,
+  muted,
+  paragraph,
+  portalBaseFor,
+  renderBrandedShell,
+  signOff,
+  type StudioSignOff,
+} from "./branded-email.ts";
+import { clientDecisionLink } from "./client-portal-links.ts";
+import { resolveStudioIdentity, studioCobrand } from "./studio-identity.ts";
 
 // The three decision notification kinds. These mirror the
 // decision_notification_kind enum (00173) and the NotificationType members
@@ -96,13 +108,35 @@ export interface ApprovalArtifactCitation {
   version: number;
   checksum: string;
   title: string;
+  /** When this edition was issued (project_approval_artifacts.created_at). */
+  issuedAt?: string | null;
 }
+
+// What a homeowner calls each artifact kind. The enum spelling is a database
+// word and never reaches her inbox.
+const ARTIFACT_KIND_LABEL: Record<
+  ApprovalArtifactCitation["kind"],
+  string
+> = {
+  plan_issue: "plan set",
+  spec_book_artifact: "spec book",
+  budget_version: "budget",
+};
 
 export interface DecisionContext {
   id: string;
   title: string | null;
   dueDate: string | null;
   artifact?: ApprovalArtifactCitation | null;
+  /** client_decisions.sent_at — the day the studio asked. */
+  sentAt?: string | null;
+  /**
+   * client_decisions.reminder_sent_at. NULL means nothing has been sent about
+   * this approval yet, so the notice is a first notice and must not read as a
+   * reminder. It is the only "have we spoken about this before" state the
+   * schema carries; decision-reminders' own query requires it to be NULL.
+   */
+  reminderSentAt?: string | null;
 }
 
 export interface DeliverDecisionNotificationResult {
@@ -281,13 +315,79 @@ interface RenderedEmail {
   html: string;
 }
 
-/** Optional studio co-brand byline for the client-facing decision emails. */
-export interface DecisionCobrand {
+/**
+ * Who the client-facing decision emails come from: the co-brand byline in the
+ * shell AND the sign-off at the foot of the letter. Patina never signs a
+ * homeowner's mail (R7).
+ */
+export interface DecisionCobrand extends StudioSignOff {
   studioName?: string;
   studioLogoUrl?: string;
 }
 
-function renderArtifactCitation(
+/**
+ * Resolve the studio that signs a decision's client mail: the brand identity
+ * (studio → business name → person, via the canonical RPC) plus the designer's
+ * own given name and city. Never throws — an unresolved signature leaves the
+ * letter unsigned rather than signing it "Patina".
+ */
+export async function resolveDecisionSignature(
+  supabase: SupabaseClient,
+  opts: { designerId?: string | null; projectId?: string | null },
+): Promise<DecisionCobrand> {
+  const identity = await resolveStudioIdentity(supabase, opts);
+  const signature: DecisionCobrand = studioCobrand(identity);
+  if (!opts.designerId) return signature;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("full_name, city")
+    .eq("id", opts.designerId)
+    .maybeSingle();
+  if (error) {
+    console.error("decision-notify: designer profile lookup failed", error);
+    return signature;
+  }
+  const profile = data as { full_name: string | null; city: string | null } | null;
+  const given = givenName(profile?.full_name);
+  if (given) signature.designerGivenName = given;
+  const city = profile?.city?.trim();
+  if (city) signature.city = city;
+  return signature;
+}
+
+// The zone loadPreferences falls back to, so a weekday printed for a recipient
+// with no stored preference matches the one the rest of the rail assumes.
+const DEFAULT_TIME_ZONE = "America/New_York";
+
+/** "Thursday" in the recipient's zone, or null when there is no date. */
+function weekday(iso: string | null | undefined, timeZone: string): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  return new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" })
+    .format(at);
+}
+
+/** "October 8" in the recipient's zone, or null when there is no date. */
+function calendarDay(
+  iso: string | null | undefined,
+  timeZone: string,
+): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "long",
+    day: "numeric",
+  }).format(at);
+}
+
+/**
+ * The designer's copy of the citation: the immutable evidence, checksum and
+ * all. This is traceability for the studio, and it stays exactly as it was.
+ */
+function renderArtifactEvidence(
   artifact: ApprovalArtifactCitation | null | undefined,
 ): string {
   if (!artifact) return "";
@@ -309,6 +409,24 @@ function renderArtifactCitation(
   ].join("");
 }
 
+/**
+ * The homeowner's copy of the same citation (R6): which edition, issued when.
+ * The hash stays in the record and on the printed Record of Decision — it was
+ * never a fact she could act on, and 64 hex characters in a letter read as an
+ * error message.
+ */
+function renderEditionLine(
+  artifact: ApprovalArtifactCitation | null | undefined,
+  timeZone: string,
+): string {
+  if (!artifact) return "";
+  const issued = calendarDay(artifact.issuedAt, timeZone);
+  const line = issued
+    ? `Edition ${artifact.version} &middot; issued ${escapeHtml(issued)}`
+    : `Edition ${artifact.version}`;
+  return muted(line);
+}
+
 export function decisionNotificationMetadata(
   kind: DecisionNotificationKind,
   decision: DecisionContext,
@@ -326,105 +444,173 @@ export function decisionNotificationMetadata(
   return metadata;
 }
 
+export interface DecisionEmailRenderOptions {
+  /** IANA zone the weekday and the date are printed in. */
+  timeZone?: string;
+}
+
+/**
+ * The door in the email (P-01): one bulletproof button onto the approval's own
+ * address plus the same address in plain text, for the clients that strip the
+ * button. Built through client-portal-links so nobody hand-writes an anchor.
+ */
+function renderDoor(decisionId: string, label: string): string {
+  const url = clientDecisionLink(portalBaseFor("client"), decisionId);
+  return [
+    ctaButton(url, label),
+    muted(
+      `Or open it directly: <a href="${url}" style="color:#4E7A66; text-decoration:none;">${
+        escapeHtml(url)
+      }</a>`,
+    ),
+  ].join("");
+}
+
 export function renderDecisionEmail(
   kind: DecisionNotificationKind,
   recipientName: string,
   decision: DecisionContext,
   cobrand: DecisionCobrand = {},
+  options: DecisionEmailRenderOptions = {},
 ): RenderedEmail {
   const name = recipientName || "there";
-  const title = decision.title || "a decision";
-  const artifactCitation = renderArtifactCitation(decision.artifact);
+  const timeZone = options.timeZone || DEFAULT_TIME_ZONE;
+  const decisionTitle = decision.title || "the approval";
+  // What she was actually sent, in her words: the artifact's own title when
+  // there is one, the decision's title otherwise.
+  const title = decision.artifact?.title || decisionTitle;
+  const kindLabel = decision.artifact
+    ? ARTIFACT_KIND_LABEL[decision.artifact.kind]
+    : "approval";
+  const studioSignature = signOff(cobrand);
+  const asker = (cobrand.designerGivenName ?? "").trim() ||
+    (cobrand.studioName ?? "").trim() ||
+    "Your designer";
 
   if (kind === "decision_resolved") {
-    // Designer-facing — never co-branded (the designer IS the studio).
+    // Designer-facing — never co-branded (the designer IS the studio), and the
+    // one decision letter Patina still signs.
+    const deskUrl = `${portalBaseFor("designer")}/desk`;
     return {
-      subject: `Resolved: "${title}"`,
+      subject: `Resolved: "${decisionTitle}"`,
       html: renderBrandedShell({
-        title: `Resolved: "${title}"`,
-        preview: `Your client has responded to "${title}".`,
+        title: `Resolved: "${decisionTitle}"`,
+        preview: `Your client has responded to "${decisionTitle}".`,
         eyebrow: "Resolved",
+        audience: "designer",
         body: [
           paragraph(`Hi ${escapeHtml(name)},`),
           paragraph(
             `Your client has responded to the decision <strong style="color:#1F1B16; font-weight:600;">${
-              escapeHtml(title)
+              escapeHtml(decisionTitle)
             }</strong>.`,
           ),
-          artifactCitation,
-          paragraph("Open your Patina dashboard to review their selection."),
+          renderArtifactEvidence(decision.artifact),
+          ctaButton(deskUrl, "Open your desk"),
           paragraph("— Patina"),
         ].join(""),
       }),
     };
   }
 
+  const editionLine = renderEditionLine(decision.artifact, timeZone);
+  const door = renderDoor(decision.id, `Review the ${kindLabel}`);
+  const dueWeekday = weekday(decision.dueDate, timeZone);
+  const dueDay = calendarDay(decision.dueDate, timeZone);
+
   if (kind === "decision_overdue") {
+    // P-04. No "overdue", no passed-its-date, no gentle nudge: the word she
+    // reads is the state she is in, and the studio carries the rest.
+    const subject = `Still open: ${title}`;
+    const askedOn = calendarDay(decision.sentAt, timeZone);
+    const opening = askedOn
+      ? `Still open, ${escapeHtml(asker)} asked on ${escapeHtml(askedOn)}.`
+      : "Still open.";
     return {
-      subject: `Overdue: "${title}" still needs your decision`,
+      subject,
       html: renderBrandedShell({
-        title: `Overdue: "${title}" still needs your decision`,
-        preview:
-          `"${title}" has passed its due date and still needs your decision.`,
-        eyebrow: "Overdue",
+        title: subject,
+        preview: "Still open.",
+        eyebrow: "Approval",
+        audience: "client",
+        studioName: cobrand.studioName,
+        studioLogoUrl: cobrand.studioLogoUrl,
+        body: [
+          paragraph(`Hi ${escapeHtml(name)},`),
+          paragraph(opening),
+          paragraph(
+            `<strong style="color:#1F1B16; font-weight:600;">${
+              escapeHtml(title)
+            }</strong> is waiting for your answer, exactly as it was sent.`,
+          ),
+          editionLine,
+          door,
+          studioSignature,
+        ].join(""),
+      }),
+    };
+  }
+
+  // decision_required. Two letters, one kind: a first notice announces, a
+  // reminder returns. reminder_sent_at is the schema's own record of which.
+  const isFirstNotice = !decision.reminderSentAt;
+
+  if (isFirstNotice) {
+    const subject = `${asker} sent ${title} for your approval.`;
+    const preview = decision.artifact
+      ? (dueWeekday
+        ? `Edition ${decision.artifact.version}, due ${dueWeekday}.`
+        : `Edition ${decision.artifact.version}, ready for your answer.`)
+      : (dueWeekday ? `Due ${dueWeekday}.` : "Ready for your answer.");
+    return {
+      subject,
+      html: renderBrandedShell({
+        title: subject,
+        preview,
+        eyebrow: "Approval",
+        audience: "client",
         studioName: cobrand.studioName,
         studioLogoUrl: cobrand.studioLogoUrl,
         body: [
           paragraph(`Hi ${escapeHtml(name)},`),
           paragraph(
-            `The decision <strong style="color:#1F1B16; font-weight:600;">${
+            `<strong style="color:#1F1B16; font-weight:600;">${
               escapeHtml(title)
-            }</strong> has passed its due date and is still waiting on you.`,
+            }</strong> is ready, exactly as drawn.`,
           ),
-          artifactCitation,
-          paragraph(
-            "Open your Patina dashboard to review the options and pick one.",
-          ),
-          paragraph("— Patina"),
+          editionLine,
+          dueWeekday && dueDay
+            ? paragraph(`Due ${escapeHtml(dueWeekday)}, ${escapeHtml(dueDay)}.`)
+            : "",
+          door,
+          studioSignature,
         ].join(""),
       }),
     };
   }
 
-  // decision_required
-  const dueClause = decision.dueDate
-    ? (() => {
-      const hoursLeft = Math.max(
-        0,
-        Math.round(
-          (new Date(decision.dueDate as string).getTime() - Date.now()) /
-            (1000 * 60 * 60),
-        ),
-      );
-      return paragraph(
-        `It's due in approximately <strong style="color:#1F1B16; font-weight:600;">${hoursLeft} hour${
-          hoursLeft === 1 ? "" : "s"
-        }</strong>.`,
-      );
-    })()
-    : "";
-
+  const subject = dueWeekday ? `${dueWeekday}: ${title}.` : `Still waiting: ${title}.`;
   return {
-    subject: `Reminder: "${title}" needs your decision`,
+    subject,
     html: renderBrandedShell({
-      title: `Reminder: "${title}" needs your decision`,
-      preview: `Your designer is waiting on a decision: "${title}".`,
-      eyebrow: "Decision needed",
+      title: subject,
+      preview: dueWeekday ? `Still open. Due ${dueWeekday}.` : "Still open.",
+      eyebrow: "Approval",
+      audience: "client",
       studioName: cobrand.studioName,
       studioLogoUrl: cobrand.studioLogoUrl,
       body: [
         paragraph(`Hi ${escapeHtml(name)},`),
         paragraph(
-          `Your designer is waiting on a decision: <strong style="color:#1F1B16; font-weight:600;">${
+          `<strong style="color:#1F1B16; font-weight:600;">${
             escapeHtml(title)
-          }</strong>.`,
+          }</strong> is still open${
+            dueWeekday ? ` and due ${escapeHtml(dueWeekday)}` : ""
+          }. Nothing has changed since it was sent.`,
         ),
-        artifactCitation,
-        dueClause,
-        paragraph(
-          "Open your Patina dashboard to review the options and pick one.",
-        ),
-        paragraph("— Patina"),
+        editionLine,
+        door,
+        studioSignature,
       ].join(""),
     }),
   };
@@ -460,8 +646,12 @@ export async function deliverDecisionNotification(
   }
 
   // 3. Preference / quiet-hours gate (only when we know the auth user).
+  // The recipient's zone also decides which weekday her due date is, so it is
+  // hoisted out of the gate and handed to the renderer.
+  let timeZone = DEFAULT_TIME_ZONE;
   if (recipient.userId) {
     const pref = await loadPreferences(supabase, recipient.userId);
+    timeZone = pref.timezone?.trim() || DEFAULT_TIME_ZONE;
 
     const typeCol = KIND_TO_PREF_COLUMN[kind];
     const typeEnabled = pref[typeCol] !== false; // null/undefined ⇒ default on
@@ -541,6 +731,7 @@ export async function deliverDecisionNotification(
     recipient.name ?? "",
     decision,
     cobrand,
+    { timeZone },
   );
   const result = await sendCompliantEmail(supabase, {
     to: recipient.email,

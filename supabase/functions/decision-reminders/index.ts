@@ -29,10 +29,7 @@ import {
   resolveApprovalArtifactCitation,
   resolveFrozenLeadRecipient,
 } from "../_shared/project-approval-notification.ts";
-import {
-  resolveStudioIdentity,
-  studioCobrand,
-} from "../_shared/studio-identity.ts";
+import { resolveDecisionSignature } from "../_shared/decision-notify.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -55,6 +52,7 @@ interface DecisionWithClient {
       email: string | null;
     } | null;
   } | null;
+  sent_at: string | null;
   approval_artifact:
     | EmbeddedApprovalArtifact
     | EmbeddedApprovalArtifact[]
@@ -74,7 +72,7 @@ Deno.serve(async (_req: Request) => {
   const { data, error } = await supabase
     .from("client_decisions")
     .select(`
-      id, title, due_date, reminder_sent_at, designer_id, project_id,
+      id, title, due_date, reminder_sent_at, sent_at, designer_id, project_id,
       approval_contract,
       designer_client:designer_clients(
         client_id,
@@ -83,7 +81,7 @@ Deno.serve(async (_req: Request) => {
         client:profiles!client_id(id, full_name, email)
       ),
       approval_artifact:project_approval_artifacts(
-        source_kind, source_version, artifact_hash, artifact_title
+        source_kind, source_version, artifact_hash, artifact_title, created_at
       ),
       authority_snapshot:project_decision_authority_snapshots(
         decision_lead_id,
@@ -135,9 +133,9 @@ Deno.serve(async (_req: Request) => {
       continue;
     }
 
-    // Studio co-brand (Designer Studios): prefer a linked project's studio,
-    // else the decision's designer's primary studio.
-    const identity = await resolveStudioIdentity(supabase, {
+    // Who signs the letter (R7): the studio's brand for the byline, the
+    // designer's given name and city for the sign-off.
+    const signature = await resolveDecisionSignature(supabase, {
       projectId: d.project_id,
       designerId: d.designer_id,
     });
@@ -145,9 +143,19 @@ Deno.serve(async (_req: Request) => {
     const result = await deliverDecisionNotification(
       supabase,
       "decision_required",
-      { id: d.id, title: d.title, dueDate: d.due_date, artifact },
+      {
+        id: d.id,
+        title: d.title,
+        dueDate: d.due_date,
+        artifact,
+        sentAt: d.sent_at,
+        // The query above already requires reminder_sent_at IS NULL, so every
+        // send from this cron is the first word she has had about this
+        // approval — and must not be subject-lined as a reminder (P-02).
+        reminderSentAt: d.reminder_sent_at,
+      },
       recipient!,
-      studioCobrand(identity),
+      signature,
     );
 
     const stampDelivery = async () => {
