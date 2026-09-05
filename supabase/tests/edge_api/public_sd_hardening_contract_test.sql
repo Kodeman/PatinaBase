@@ -1861,10 +1861,16 @@ VALUES
     '02f9aab1ace96f0e439dee937ecd50e5b0b58a8366c732caafe66d70e1b25dd8'
   ),
   (
+    -- 00566 rewrote the origin branch's studio resolution (00511's hash was
+    -- 1d0db8c0c2e123121a24d4c2ade04d507e42399a708b2e598c199559cd46a89e).
+    -- Everything this file pins about the function is unchanged: still
+    -- SECURITY DEFINER, still no nonowner ACL row, same signature and
+    -- search_path, and the canonical roles -> user_roles -> memberships ->
+    -- organization lock order is untouched — the resolution takes no lock.
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '1d0db8c0c2e123121a24d4c2ade04d507e42399a708b2e598c199559cd46a89e'
+    '430d3a45b0f3a3cc35b85160e244c045c2500e91dd952297eb8ef44ea854a770'
   ),
   (
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
@@ -1892,9 +1898,15 @@ VALUES
     '0c3b935559ff383878d7c36f4057378663f52c5825088335c7e62f6c5412295e'
   ),
   (
+    -- 00566 replaced the origin leg's shared-studio COUNT with an EXISTS over
+    -- the identical join (00511's hash was
+    -- cebd8924bd0de977fc47b137c77df7945906eb4955acf70fdb41f386eb04f255).
+    -- Everything this file pins about the function is unchanged: still
+    -- SECURITY INVOKER (asserted immediately below), still no nonowner ACL
+    -- row, same trigger signature and search_path.
     'public.guard_commercial_signature_insert()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'cebd8924bd0de977fc47b137c77df7945906eb4955acf70fdb41f386eb04f255'
+    '0f12aca3038b2165fc75dbabcbe41391821fa1eac5905d775c378f63b9c7f471'
   );
 
 UPDATE _00511_expected_dependency

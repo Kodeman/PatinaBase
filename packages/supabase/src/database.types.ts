@@ -2041,6 +2041,7 @@ export type Database = {
           keep_items: Json
           lifestyle: Json
           project_type: string | null
+          project_type_custom: string | null
           ready_at: string | null
           room_scan_id: string | null
           rooms: Json
@@ -2067,6 +2068,7 @@ export type Database = {
           keep_items?: Json
           lifestyle?: Json
           project_type?: string | null
+          project_type_custom?: string | null
           ready_at?: string | null
           room_scan_id?: string | null
           rooms?: Json
@@ -2093,6 +2095,7 @@ export type Database = {
           keep_items?: Json
           lifestyle?: Json
           project_type?: string | null
+          project_type_custom?: string | null
           ready_at?: string | null
           room_scan_id?: string | null
           rooms?: Json

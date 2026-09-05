@@ -48,7 +48,7 @@ describe('screenNameFromPath', () => {
   it('names the document surfaces', () => {
     expect(screenNameFromPath('/desk')).toBe('The Desk');
     expect(screenNameFromPath('/library/personal')).toBe('Library');
-    expect(screenNameFromPath('/drafting/abc')).toBe('Drafting Room');
+    expect(screenNameFromPath('/drafting/abc')).toBe('Contract Room');
     expect(screenNameFromPath('/doc/xyz')).toBe('Document');
     expect(screenNameFromPath('/people')).toBe('People');
   });

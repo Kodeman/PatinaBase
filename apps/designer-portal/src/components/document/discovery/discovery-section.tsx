@@ -51,6 +51,7 @@ import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const EMPTY_DRAFT: DiscoveryDraft = {
   project_type: null,
+  project_type_custom: null,
   rooms: [],
   budget_min_cents: null,
   budget_max_cents: null,
@@ -71,6 +72,7 @@ const EMPTY_DRAFT: DiscoveryDraft = {
 function toFacts(d: DiscoveryDraft): DiscoveryFacts {
   return {
     project_type: d.project_type,
+    project_type_custom: d.project_type_custom,
     rooms: d.rooms,
     budget_max_cents: d.budget_max_cents,
     target_date: d.target_date,

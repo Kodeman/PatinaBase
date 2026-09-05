@@ -269,7 +269,7 @@ export function DraftProposalSheet({
           Draft a design agreement
         </p>
         <p className="mb-4 mt-1 text-[0.78rem] text-[var(--color-aged-oak)]">
-          For an existing household — no lead, no discovery. Pick the client and the Drafting Room
+          For an existing household — no lead, no discovery. Pick the client and the Contract Room
           opens in its services posture.
         </p>
         <ClientPicker

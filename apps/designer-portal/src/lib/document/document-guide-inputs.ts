@@ -29,6 +29,7 @@ const DISCOVERY_INPUTS: Record<EssentialKey, DocumentGuideInputFact> = {
 
 const EMPTY_DISCOVERY: DiscoveryFacts = {
   project_type: null,
+  project_type_custom: null,
   rooms: [],
   budget_max_cents: null,
   target_date: null,

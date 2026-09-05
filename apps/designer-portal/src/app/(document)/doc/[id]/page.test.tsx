@@ -964,7 +964,7 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open the Drafting Room' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Contract Room' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/drafting/proposal-1');
     // `Input needed · phases & fees` is deleted with the guide strip (see the
     // Discovery case above); the gap still elects the act.

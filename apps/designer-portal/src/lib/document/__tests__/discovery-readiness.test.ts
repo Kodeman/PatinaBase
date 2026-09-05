@@ -9,6 +9,7 @@ import {
 
 const EMPTY: DiscoveryFacts = {
   project_type: null,
+  project_type_custom: null,
   rooms: [],
   budget_max_cents: null,
   target_date: null,
@@ -40,6 +41,28 @@ describe('deriveBlockDone — each essential gate', () => {
     expect(deriveBlockDone({ ...EMPTY, rooms: [{ name: 'A' }] }).scope).toBe(false);
     expect(
       deriveBlockDone({ ...EMPTY, project_type: 'full_room', rooms: [{ name: 'A' }] }).scope
+    ).toBe(true);
+  });
+
+  it('scope with project type "custom" also requires a non-empty custom description', () => {
+    expect(
+      deriveBlockDone({ ...EMPTY, project_type: 'custom', rooms: [{ name: 'A' }] }).scope
+    ).toBe(false);
+    expect(
+      deriveBlockDone({
+        ...EMPTY,
+        project_type: 'custom',
+        rooms: [{ name: 'A' }],
+        project_type_custom: '   ',
+      }).scope
+    ).toBe(false);
+    expect(
+      deriveBlockDone({
+        ...EMPTY,
+        project_type: 'custom',
+        rooms: [{ name: 'A' }],
+        project_type_custom: 'A whole-property refresh',
+      }).scope
     ).toBe(true);
   });
 

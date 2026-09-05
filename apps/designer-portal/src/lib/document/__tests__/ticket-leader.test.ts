@@ -115,7 +115,7 @@ describe('deriveTicketLeader — the fourteen states', () => {
   it.each([
     ['brief', 'Accept and begin'],
     ['discovery', 'Add scope & rooms'],
-    ['direction', 'Open the Drafting Room'],
+    ['direction', 'Open the Contract Room'],
     // `proposal` never reaches the sixth rung — rung five owns it
     // (direction-b §3.3) — but the leader is total over the seven stages.
     ['proposal', 'Review signing controls'],

@@ -569,7 +569,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     });
 
     expect(screen.getAllByText('Boards')).toHaveLength(1);
-    expect(screen.queryByText('Drafting Room')).not.toBeInTheDocument();
+    expect(screen.queryByText('Contract Room')).not.toBeInTheDocument();
     expect(screen.queryByText('Mood boards')).not.toBeInTheDocument();
   });
 

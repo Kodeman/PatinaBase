@@ -191,11 +191,11 @@ describe('the boards page', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
 
     expect(
-      screen.getByRole('link', { name: 'Open the Drafting Room →' }),
+      screen.getByRole('link', { name: 'Open the Contract Room →' }),
     ).toHaveAttribute('href', '/drafting/prop-9');
     expect(
       screen.getByText(
-        'This paper is still a proposal — its boards are in the Drafting Room.',
+        'This paper is still a proposal — its boards are in the Contract Room.',
       ),
     ).toBeInTheDocument();
   });
@@ -205,7 +205,7 @@ describe('the boards page', () => {
       engagement({ engagement_kind: 'proposal', project_id: null }),
     );
     render(<ProjectBoardsView routeId="eng-1" />);
-    expect(screen.queryByRole('link', { name: /Drafting Room/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Contract Room/ })).toBeNull();
     expect(
       screen.getByText(
         'This paper has no project yet — the boards open when one does.',

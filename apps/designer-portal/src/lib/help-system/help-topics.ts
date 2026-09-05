@@ -49,7 +49,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     label: 'Rooms',
-    description: 'The places you walk into: the Library, the People room, the Drafting Room, Composing.',
+    description: 'The places you walk into: the Library, the People room, the Contract Room, Composing.',
     prefixes: [
       'designer-portal/document/library',
       'designer-portal/document/people',

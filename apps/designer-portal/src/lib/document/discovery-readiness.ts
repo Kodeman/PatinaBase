@@ -22,6 +22,7 @@ import type { FillState } from './fill-state';
 /** The subset of client_discovery the readiness gate reads (arrays pre-parsed). */
 export interface DiscoveryFacts {
   project_type: string | null;
+  project_type_custom: string | null;
   rooms: unknown[];
   budget_max_cents: number | null;
   target_date: string | null;
@@ -89,7 +90,10 @@ export function capturedLifestyle(rows: unknown[]): unknown[] {
 /** Each block's done-state. Essentials gate readiness; deepening never does. */
 export function deriveBlockDone(f: DiscoveryFacts): Record<BlockKey, boolean> {
   return {
-    scope: !!(f.project_type && f.project_type.trim()) && capturedRooms(f.rooms).length > 0,
+    scope:
+      !!(f.project_type && f.project_type.trim()) &&
+      capturedRooms(f.rooms).length > 0 &&
+      (f.project_type !== 'custom' || !!(f.project_type_custom && f.project_type_custom.trim())),
     budget: f.budget_max_cents != null,
     timeline: !!(f.target_date || f.hard_date),
     style: (f.style_tag_ids?.length ?? 0) > 0 || (f.style_keywords?.length ?? 0) > 0,

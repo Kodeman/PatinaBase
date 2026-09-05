@@ -359,7 +359,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
 
     await openPaletteAndType('drafting');
 
-    const row = screen.getByText('Drafting Room');
+    const row = screen.getByText('Contract Room');
     await act(async () => {
       fireEvent.click(row.closest('button')!);
     });
@@ -373,7 +373,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
 
     await openPaletteAndType('drafting');
 
-    expect(screen.queryByText('Drafting Room')).not.toBeInTheDocument();
+    expect(screen.queryByText('Contract Room')).not.toBeInTheDocument();
   });
 
   it('gives \'moodboards\' to the Boards door alone (F62 — three names become one)', async () => {
@@ -397,7 +397,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
     // The alias the Drafting Room used to squat on now names one door, and it
     // is not the Drafting Room — even with the draft proposal in hand that
     // would otherwise have offered it.
-    expect(screen.queryByText('Drafting Room')).not.toBeInTheDocument();
+    expect(screen.queryByText('Contract Room')).not.toBeInTheDocument();
     expect(screen.getAllByText('Boards')).toHaveLength(1);
   });
 });

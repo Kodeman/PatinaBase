@@ -373,7 +373,7 @@ function DraftingRoomEditor({
 
   return (
     <RoomShell
-      title="The Drafting Room"
+      title="The Contract Room"
       count={pct > 0 ? `${pct}% drafted` : undefined}
       backLabel={exitLabel}
       // C2 — the share instrument is the Room's sole head action: a quiet

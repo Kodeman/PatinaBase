@@ -17,6 +17,7 @@ import type {
 import {
   Field,
   Select,
+  TextInput,
   NumberInput,
   DateInput,
   ChipMultiSelect,
@@ -29,6 +30,7 @@ import { DiscoveryFolio } from './discovery-folio';
 /** The editable shape the orchestrator threads through (a draft of the row). */
 export interface DiscoveryDraft {
   project_type: string | null;
+  project_type_custom: string | null;
   rooms: DiscoveryRoom[];
   budget_min_cents: number | null;
   budget_max_cents: number | null;
@@ -50,9 +52,11 @@ export type Commit = (patch: Partial<DiscoveryDraft>) => void;
 
 export const PROJECT_TYPES: Option[] = [
   { value: 'full_room', label: 'Full room' },
+  { value: 'full_house', label: 'Full house' },
   { value: 'consultation', label: 'Consultation' },
   { value: 'single_piece', label: 'Single piece' },
   { value: 'staging', label: 'Staging' },
+  { value: 'custom', label: 'Custom' },
 ];
 
 const ROOM_TYPES: Option[] = [
@@ -92,11 +96,27 @@ export function ScopeEditor({ draft, commit }: { draft: DiscoveryDraft; commit: 
       <Field label="Project type">
         <Select
           value={draft.project_type}
-          onChange={(v) => commit({ project_type: v })}
+          onChange={(v) =>
+            commit(
+              v === 'custom'
+                ? { project_type: v }
+                : { project_type: v, project_type_custom: null },
+            )
+          }
           options={PROJECT_TYPES}
           placeholder="Choose a type"
         />
       </Field>
+      {draft.project_type === 'custom' && (
+        <Field label="Describe the scope">
+          <TextInput
+            value={draft.project_type_custom ?? ''}
+            onChange={(v) => commit({ project_type_custom: v || null })}
+            placeholder="What's the scope?"
+            ariaLabel="Describe the scope"
+          />
+        </Field>
+      )}
       <div>
         <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
           Rooms in scope
