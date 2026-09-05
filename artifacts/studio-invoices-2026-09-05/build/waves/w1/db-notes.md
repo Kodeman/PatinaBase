@@ -998,3 +998,99 @@ triggerdef_has_title = true | idx_invoices_client = 1
 | `pnpm --filter @patina/designer-portal type-check` | clean (`tsc --noEmit`, no output) |
 
 deploySet: `migration 00571_studio_invoices.sql`.
+
+---
+
+## Fix round 1 — F1 (major): the machine INSERT arm now judges the row's law
+
+**Finding.** On the INSERT arm the `IF v_active_role = 'service_role' OR
+v_postgres_migration THEN RETURN NEW` early return sat ABOVE the roster
+`EXISTS` and `has_designer_domain_role(NEW.designer_id)`, so `service_role`
+could write a studio invoice addressed to a household on nobody's roster and
+stamped to a co-member who designs nothing. The project path holds
+`service_role` to both (its live tuple at the `FOR SHARE` select, and
+`has_designer_domain_role`); only a true postgres/no-`SET ROLE` session takes
+the bounded legacy bypass there.
+
+**Fix** — `supabase/migrations/00571_studio_invoices.sql`, INSERT arm only
+(00571:268-320). The roster + designer-domain pair moved above the machine
+early return, guarded by `IF NOT v_postgres_migration`, so the bypass the
+project path grants at exactly this point is the only one that survives. The
+actor-membership `EXISTS` stays authenticated-only, below the early return.
+The UPDATE arm is untouched: its live-authority reads still sit BELOW its
+machine early return, because the four identity columns are immutable there
+and a settle or a void must replay after the stamped designer has left.
+Project-path lines stay byte-identical; the branch still takes no lock, so the
+canonical `root -> user_roles -> memberships -> organization` order is
+untouched.
+
+```
+268:      -- S4 is the row's law for every caller that judges live authority, not
+...
+286:      IF NOT v_postgres_migration THEN
+287:        IF NOT EXISTS (
+288:             SELECT 1
+289:             FROM public.designer_clients AS studio_roster
+290:             JOIN public.organization_members AS roster_membership
+291:               ON roster_membership.organization_id = NEW.studio_id
+292:              AND roster_membership.user_id = studio_roster.designer_id
+293:             WHERE studio_roster.client_id = NEW.client_id
+294:               AND roster_membership.status = 'active'
+295:               AND roster_membership.role <> 'guest'
+296:           )
+297:           OR NOT public.has_designer_domain_role(NEW.designer_id)
+298:        THEN
+299:          RAISE EXCEPTION 'studio_id_not_designer_studio';
+300:        END IF;
+301:      END IF;
+302:
+303:      IF v_active_role = 'service_role' OR v_postgres_migration THEN
+304:        RETURN NEW;
+305:      END IF;
+```
+
+**Contract test re-pinned** —
+`supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1724`. Body
+sha256 `b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89` →
+`3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c`, read live
+after the reset:
+
+```
+$ psql ... -tAc "SELECT encode(extensions.digest(convert_to(p.prosrc,'UTF8'),'sha256'),'hex')
+                 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+                 WHERE n.nspname='public' AND p.proname='set_invoice_studio_id';"
+3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c
+```
+
+The pin's comment now records that the INSERT arm's roster and designer-domain
+reads sit above the machine early return while the UPDATE arm's sit below.
+
+**Tests** — `supabase/tests/billing/studio_invoice_test.sql:742-817`, a new
+`SET LOCAL ROLE service_role` block carrying the r1 probes verbatim:
+
+- P4a: machine INSERT, household `…0004` (on nobody's roster), designer `…0001`
+  → refused `P0001`, row never landed.
+- P4b: machine INSERT, household `…0006` (on co-member B's roster, so the
+  roster half holds), designer `…0002` (no designer-domain role) → refused
+  `P0001`, row never landed.
+- Positive: machine INSERT, roster household `…0003` stamped to designer
+  `…0001` → accepted, lands `draft`.
+
+The UPDATE-arm stranger fixture at what was :747-758 was written as
+`SET LOCAL ROLE service_role`; it is now a bare `RESET ROLE` (postgres
+session) write, the one caller the INSERT arm still lets past. Its two
+assertions — a member can touch neither the memo nor the title of a
+stranger-household row — are unchanged and still pass.
+
+### Gates (fix round 1)
+
+| gate | result |
+|---|---|
+| `supabase --workdir <wt> db reset` | clean — seeds replayed, `Finished supabase db reset on branch main.` / `Reset local database.` |
+| `bash <wt>/scripts/run-sql-tests.sh` | `total 157 · green 136 · expected-fail 21 · unexpected-fail 0 · effective-green 157/157` |
+| — `billing/studio_invoice_test.sql` | PASS |
+| — `edge_api/public_sd_hardening_contract_test.sql` | PASS (2s) |
+| `pnpm --dir <wt> --filter @patina/supabase type-check` | clean (`tsc --noEmit`, no output) |
+| `pnpm --dir <wt> --filter @patina/designer-portal type-check` | clean (`tsc --noEmit`, no output) |
+
+deploySet unchanged: `migration 00571_studio_invoices.sql`.
