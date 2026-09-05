@@ -173,3 +173,159 @@ production object was touched.
 - Latent, documented not fixed (plan item 9): `invoices.client_id … ON DELETE SET NULL`
   (00178:33) now conflicts with `chk_invoices_anchor` on a hard profile delete. The purge
   path (00538/00539) anonymizes rather than deletes, so it cannot fire today.
+
+---
+
+## Fix round 1 (review `db-review-r1.md`)
+
+Both listed findings addressed; minors F3–F8 left as advisories (none trivial enough
+to touch without widening scope, and none blocks the program).
+
+### F1 — BLOCKER, fixed · `supabase/migrations/00570_studio_invoices.sql`
+
+The studio branch used to `RETURN NEW` for any active non-guest member, on both
+arms, with no predicate on state or money. Direct PostgREST DML
+(`current_user = 'authenticated'`) could therefore hand-write a `paid` studio
+invoice with a spoofed `invoice_number` and a pre-set `amount_paid_cents` — an
+ungated status write, and a number that would later collide with
+`studio_invoice_counters` under `uniq_invoices_studio_number`.
+
+Both studio branches now apply, after the actor-membership check, the same
+clean-draft predicate the project path applies at the `current_user =
+'authenticated'` fork: `status = 'draft'`, `invoice_number / issue_date /
+sent_at / paid_at / voided_at / void_reason / stripe_checkout_session_id IS
+NULL`, `amount_paid_cents = 0`, `reminder_count = 0`, `last_reminder_at /
+ar_flagged_at / ar_last_chased_at IS NULL`, plus (UPDATE arm only)
+`updated_at` unchanged — `created_at`, `id` and the four identity columns are
+already pinned by 00511's immutability check at the top of that arm. When
+`current_user = 'postgres'` (every SECURITY DEFINER billing RPC) the branch
+returns `NEW` exactly as before, so `issue_invoice`, `void_invoice`,
+`record_payment` and the Checkout RPCs are unaffected.
+
+Trigger ordering makes the `updated_at` term safe: on `public.invoices` the
+BEFORE-UPDATE triggers are `set_invoice_studio_id` and
+`set_invoices_updated_at`, fired in name order (`_` < `s`), so the gate reads
+`NEW.updated_at` before `update_updated_at_column()` bumps it — a plain draft
+edit from the composer still passes.
+
+Diff against the true head (`00511_public_sd_hardening.sql`) body:
+**145 lines added across the two arms, 0 removed** — every project-path line is
+still byte-identical.
+
+Re-pinned body SHA-256 at
+`supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1708`:
+
+| | value |
+|---|---|
+| was (00570 round 0) | `06609af25c627f49c7b489c07968790c593ce1ad269e6a42e5bda6b1eb0a065a` |
+| now | `e329335f260c48e56032a7445feffea2505cdd11972d23f75949ea9394509c97` (23106 bytes) |
+
+Computed exactly as the contract test computes it, against the deployed body
+after the reset:
+
+```
+$ psql … -At -c "SELECT encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex')
+                 FROM pg_proc WHERE oid = 'public.set_invoice_studio_id()'::regprocedure;"
+e329335f260c48e56032a7445feffea2505cdd11972d23f75949ea9394509c97
+```
+
+The review's own probes, re-run against the fixed body (transaction rolled
+back), now refuse:
+
+```
+=== P1 direct INSERT of a non-draft studio invoice as an authenticated member
+ERROR:  studio_id_not_designer_studio
+CONTEXT:  PL/pgSQL function set_invoice_studio_id() line 197 at RAISE
+ P1 spoofed paid studio row exists |     0
+=== P1e clean draft direct INSERT still allowed
+ P1e clean draft landed |     1
+=== P1c direct UPDATE of a studio draft as authenticated
+ERROR:  studio_id_not_designer_studio
+CONTEXT:  PL/pgSQL function set_invoice_studio_id() line 98 at RAISE
+ P1c after refused update | 0 |  | 0 | draft
+=== P1f benign draft edit still allowed
+ P1f memo | edited
+```
+
+Two new blocks in `supabase/tests/billing/studio_invoice_test.sql` pin this as
+member A: a direct INSERT of a `paid` row with `INV-9999` → `P0001` and no row;
+a direct UPDATE setting `amount_paid_cents`, then one setting `invoice_number`
+/ `status` / `sent_at` → `P0001` each, the draft unchanged after both; and a
+positive control (a `memo` edit) so the gate cannot pass by refusing
+everything. The blocks use a `v_accepted` sentinel rather than a `RAISE
+EXCEPTION` sentinel — `RAISE EXCEPTION` defaults to SQLSTATE `P0001`, so the
+suite's existing sentinel style cannot distinguish "refused" from "accepted"
+when the expected code is itself `P0001`.
+
+### F2 — MAJOR, fixed · `supabase/tests/billing/studio_invoice_test.sql`
+
+The payment leg no longer settles with a direct `invoice_payments` INSERT. It
+now drives the same three RPCs the sibling suite drives
+(`invoice_checkout_integrity_test.sql:766 / 854 / 999`), as `service_role`,
+with the household's `stripe_customer_id` seeded first:
+
+`claim_invoice_checkout_attempt(v_id, household, 'cus_studio_invoice_household',
+false, 'card')` → asserts `amount_cents = 66000` and `surcharge_cents = 1980`
+(the studio's own 300 bps, read off `studio_billing_settings` by `studio_id` —
+the project-less path) → `finalize_invoice_checkout_attempt(…,
+'cs_studio_invoice_1')` → `settle_invoice_checkout_payment(…, 67980, 'card')`
+→ `outcome = succeeded`, invoice `paid` at `66000` with `paid_at` set, and one
+`designer_earnings` row with `status = 'confirmed'` (the stripe rail's status,
+where the old direct check-payment insert produced `'paid'`), `project_id
+NULL`, `net_amount 66000`, and the title in the description. Plan risk #2 is
+now proven by the lane's own suite rather than only by a reviewer probe. The
+refund-contra block that follows is unchanged and still passes against the
+Stripe payment row.
+
+The Deno case in `supabase/functions/_tests/stripe-rail.test.ts` still needs
+the integration runtime and did not run here (unchanged from round 0).
+
+### Gates, fix round 1
+
+| Gate | Result |
+|---|---|
+| `supabase --workdir <wt> db reset` | clean (logged in `stack-reset-notice.md`) |
+| `bash scripts/run-sql-tests.sh` | `total 157 · green 136 · expected-fail 21 · unexpected-fail 0` |
+| — `billing/studio_invoice_test.sql` | PASS |
+| — `edge_api/public_sd_hardening_contract_test.sql` | PASS (re-pinned hash) |
+| — `billing/invoice_checkout_integrity_test.sql` | PASS |
+| — `commercial/multi_studio_signature_test.sql` | PASS |
+| — `rls/00563_proposal_signing_multi_studio.test.sql` | PASS |
+| `pnpm --filter @patina/supabase type-check` | clean |
+| `pnpm --filter @patina/supabase test -- use-invoices` | 48 passed |
+| `pnpm --filter @patina/designer-portal type-check` | clean |
+| `pnpm --filter @patina/client-portal type-check` | clean |
+| `pnpm --filter @patina/designer-portal test -- accounts desk-receivables` | 3 suites, 12 tests passed |
+
+### Not regenerated: `packages/supabase/src/database.types.ts`
+
+This round changed no schema shape (one function body, plus tests), so the
+committed types stay as round 0 left them. `pnpm db:generate` was run twice
+against the local stack to confirm nothing was owed, and **its output is not
+deterministic on this machine**: two consecutive runs against the same
+unchanged database differ from each other, and both differ from the committed
+file by thousands of lines of view-derived `Relationships` entries
+(`edge_catalog_products`, `admin_studio_overview`, …) that come and go even
+though both views exist (`SELECT relkind FROM pg_class` → `v`, `v`). The
+generated file was discarded with `git checkout --`. Flagged as an advisory,
+not a lane defect.
+
+### Left as advisories (from the review's minors)
+
+- **F3** — the round-0 reset log is incomplete and the first round-0 reset ran
+  against the main checkout, dropping a peer's `00569`. Nothing to fix in code.
+- **F4** — `create_draft_studio_invoice` is registered by a `DO` block in the
+  migration, not pinned in the contract test's `atomic_draft_catalog_contract`
+  manifest, so its body/ACL can drift silently after merge.
+- **F5** — `resolve_studio_identity(NULL, designer, <unknown studio id>)` falls
+  to the profile identity instead of the project derivation. Unreachable from a
+  real invoice (`studio_id` is FK-checked).
+- **F6** — the studio branch does not require `has_designer_domain_role
+  (NEW.designer_id)` where the project path does. Deliberate (no project lead);
+  a member with no designer-domain role can hold a studio invoice's earnings.
+- **F7** — `useCreateDraftStudioInvoice` forces `kind: 'adhoc'`, so a
+  milestone line becomes an adhoc line instead of surfacing the RPC's
+  `check_violation`.
+- **F8** — `ADD CONSTRAINT chk_invoices_anchor` is unguarded (harmless on a
+  fresh apply); `title` has no length CHECK, so direct DML can exceed the RPC's
+  200-char bound.
