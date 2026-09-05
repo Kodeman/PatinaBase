@@ -651,3 +651,148 @@ scripts/run-sql-tests.sh              total 157 | green 136 | expected-fail 21 |
 ### Advisories still standing
 
 F3, F4, F5, F7, F8 from round 1 are unchanged. **F6 is now closed** by R3-2.
+
+---
+
+## Close — the four ruled items (W1 CLOSE, 2026-09-05)
+
+Fable ruled on `db-review-r3.md` / `db-review-r4.md`. Four items, nothing else.
+
+### 1. The roster is the row's law on BOTH trigger arms (was R3-1 / R3-2's neighbour)
+
+`public.set_invoice_studio_id()`, studio branch, both arms. The roster rule is
+now the RPC's rule verbatim — the household must sit on the `designer_clients`
+roster of an **active non-guest member of `NEW.studio_id`**, not (as the
+previous round had it) of the stamped designer only:
+
+```sql
+OR NOT EXISTS (
+  SELECT 1
+  FROM public.designer_clients AS studio_roster
+  JOIN public.organization_members AS roster_membership
+    ON roster_membership.organization_id = NEW.studio_id
+   AND roster_membership.user_id = studio_roster.designer_id
+  WHERE studio_roster.client_id = NEW.client_id
+    AND roster_membership.status = 'active'
+    AND roster_membership.role <> 'guest'
+)
+```
+
+- INSERT arm: the designer-keyed `EXISTS` is replaced by the studio-keyed one.
+  `OR NOT public.has_designer_domain_role(NEW.designer_id)` stays as it was —
+  identity is settled on insert, so that is where it is judged.
+- UPDATE arm: the same predicate is **added** to the actor `IF`, replacing the
+  comment that argued the arm should judge neither. The designer-domain check
+  is deliberately not added there (designer_id is immutable on that arm).
+- Error family unchanged: `RAISE EXCEPTION 'studio_id_not_designer_studio'`
+  (`P0001`), the same the project path raises.
+- Project-path lines stay byte-identical; the branch is now **187 inserted
+  lines, 0 removed** across the two arms (the banner says so).
+- Body hash re-pinned in `supabase/tests/edge_api/public_sd_hardening_contract_test.sql`:
+  `03db693656db…` → `f39043a2f3d9f70f5bb8d97c23f436a1f159085a49dc961d928ca25723ee94a6`
+  (`octet_length 25627`), and the pin's note now says both arms carry the roster.
+
+Isolation probe (scratch transaction, not the suite) — the roster row is the
+only variable:
+
+```
+no designer_clients row  → UPDATE invoices SET memo=… → ERROR: studio_id_not_designer_studio
+                            CONTEXT: set_invoice_studio_id() line 91 at RAISE
+same row, roster row added → UPDATE memo … OK; UPDATE title … OK
+```
+
+### 2. `resolve_studio_identity` short-circuits on an active design studio only
+
+Step 0 no longer assigns `p_studio_id` blind. It resolves
+
+```sql
+SELECT o.id INTO v_studio_id
+FROM organizations o
+WHERE o.id = p_studio_id AND o.type = 'design_studio' AND o.status = 'active';
+```
+
+so a manufacturer id, an archived studio, or a dead id leaves `v_studio_id`
+NULL and **falls through** to the project (step 1) and designer (step 2)
+derivations. Closes R3-5 and R2-5: the anon-granted brand resolver cannot be
+used as an organization-name lookup.
+
+### 3. `title` joins the trigger's `UPDATE OF` list
+
+00511's list predates the column, so a direct `UPDATE … SET title = …` never
+fired the gate. 00571 now recreates the trigger with 00511:3076-3083's list
+verbatim plus `title` appended. Both contract-test column arrays and the
+normalized definition string are re-pinned (`…created_at,updated_at,title
+oninvoices…`); `tgattr` orders `title` last (attnum 30), matching the arrays'
+`array_position` ordering.
+
+### 4. `idx_invoices_client`
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_invoices_client
+  ON public.invoices (client_id)
+  WHERE client_id IS NOT NULL;
+```
+
+placed with PART 5, the household read path it exists for. `pg_indexes` for
+`invoices` now lists it alongside the seven that were there.
+
+### Tests added — `supabase/tests/billing/studio_invoice_test.sql`
+
+New fixture: a `manufacturer` organization (`5f110000-…0004`, "Studio Invoice
+Maker"). New blocks, all at the tail so nothing upstream shifts:
+
+- structural — `pg_get_triggerdef` contains `title`; `pg_indexes` has
+  `idx_invoices_client`.
+- positive — a clean studio draft still edits its regarding line by direct DML.
+- UPDATE-arm roster gate — `service_role` writes a studio invoice for a
+  household on nobody's roster (it returns before the actor checks, as the
+  project path lets it reconcile history); member A then cannot edit it:
+  `memo` → `P0001`, `title` → `P0001` (that one reaches the trigger only
+  because `title` is now watched), and the row is unchanged after both.
+- resolver, as `anon` — a manufacturer id with a non-designer designer arg
+  returns the all-NULL row (never "Studio Invoice Maker"); with designer A it
+  falls through to `source = 'studio'` on a studio that is not the
+  manufacturer; an active design studio id still returns "Studio Invoice Two".
+
+The round-3 stranger-bill rejection and its positive control were already in
+the suite (`'a household on nobody''s roster cannot be billed by hand'` and
+`'a roster household stamped to a designer still writes a clean draft'`) and
+still pass under the studio-wide rule.
+
+`packages/supabase/src/database.types.ts` did not move — no signature changed;
+no TypeScript was touched this round; no GRANT/REVOKE changed, so
+`supabase/seed/00-legacy-grants.sql` needs no regeneration.
+
+### Gates (W1 CLOSE)
+
+```
+supabase --workdir <wt> db reset                      "Finished supabase db reset" (clean, tip 00571)
+bash <wt>/scripts/run-sql-tests.sh                    total 157 | green 136 | expected-fail 21
+                                                      | unexpected-fail 0 | effective-green 157/157
+  billing/studio_invoice_test.sql                     PASS
+  edge_api/public_sd_hardening_contract_test.sql      PASS
+  billing/invoice_checkout_integrity_test.sql         PASS
+  commercial/multi_studio_signature_test.sql          PASS
+  rls/00563_proposal_signing_multi_studio.test.sql    PASS
+pnpm --filter @patina/supabase type-check             clean (tsc --noEmit)
+pnpm --filter @patina/designer-portal type-check      clean (tsc --noEmit)
+```
+
+### Advisory left standing by these four
+
+Widening the INSERT arm's roster from the stamped designer's to the studio's is
+what the ruling asks for and is what the composer RPC resolves through, but it
+is a real widening at the row: member A can now hand-write an invoice stamped
+to themselves for a household that sits only on co-member B's roster (A still
+needs a designer-domain role, and B must be an active non-guest member of the
+same studio). The RPC would have stamped B for that household; direct DML may
+now stamp A. Intra-studio, and the shared-workspace model already makes the
+roster studio-wide (`designer_clients_studio_rw`, 00316:39).
+
+Adding the roster to the UPDATE arm means an outstanding studio invoice becomes
+uneditable — including by `issue_invoice` / `void_invoice`, which reach that arm
+as the actor — the day the household leaves **every** member's roster of that
+studio. Wider than the designer-keyed version would have been, so the stranding
+window is narrower, but it is not zero.
+
+`deploySet = ['migration 00571_studio_invoices.sql']`
