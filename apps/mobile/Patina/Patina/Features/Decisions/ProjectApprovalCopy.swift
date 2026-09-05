@@ -51,10 +51,11 @@ enum ProjectApprovalCopy {
         "You are approving edition \(edition), exactly as shown."
     }
 
-    /// Title and edition, with the day it is wanted by when there is one.
+    /// The edition, with the day it is wanted by when there is one. The title
+    /// is the screen's own heading, so it is not repeated here.
     /// Never "overdue" — R8 keeps lateness out of the client's register.
-    static func editionLine(title: String, edition: Int, due: String?) -> String {
-        let base = "\(title) · Edition \(edition)"
+    static func editionLine(edition: Int, due: String?) -> String {
+        let base = "Edition \(edition)"
         guard let due else { return base }
         return "\(base) · Due \(due)"
     }
@@ -65,8 +66,11 @@ enum ProjectApprovalCopy {
     static let reviewAction = "Review exact edition"
     static let reviewConfirmed = "Review confirmed. Your designer can issue this next."
     static let awaitingStudioIssue = "Review complete. Your designer can issue this next."
+    /// The frozen snapshot carried no authority revision, so there is nothing
+    /// for a confirmation to bind to. That is a property of the edition, not a
+    /// passing one — a retry cannot fix it, so the line does not ask for one.
     static let reviewUnavailable =
-        "This edition can’t be confirmed just now. Pull down to try again."
+        "This edition isn’t ready to be confirmed. Your designer has to send it again."
 
     // MARK: - The outcome leg
 
@@ -75,9 +79,36 @@ enum ProjectApprovalCopy {
     static let chooseAgainAction = "Choose another outcome"
 
     /// The approval could not be read. The screen says so rather than falling
-    /// back to the option cards, which would answer the wrong question.
-    static let unavailable =
-        "We couldn’t open this approval just now. Pull down to try again."
+    /// back to the option cards, which would answer the wrong question. No
+    /// retry instruction: the same branch catches a caller the projection will
+    /// never open for, and telling her to pull again would be untrue.
+    static let unavailable = "We couldn’t open this approval."
+
+    // MARK: - The approval that is neither open nor hers to answer
+
+    /// Withdrawn and superseded stand AHEAD of any outcome, the same
+    /// precedence the web keeps (`client-attention.ts:55-71`).
+    static let withdrawn =
+        "Your designer withdrew this approval. Nothing is being asked of you here."
+    static let superseded =
+        "A later edition has replaced this one. This edition is closed."
+
+    // MARK: - The answer already given
+
+    /// One flat line naming what she answered, on a return visit. The stamp
+    /// and its grammar are P-16 / P-17, in Wave 2; this is the fact alone.
+    /// "Returned" is the word for `changes_requested` in prose (P-16), and
+    /// "held" is the hold word (R8).
+    static func recorded(_ outcome: ProjectApprovalOutcome) -> String {
+        switch outcome {
+        case .approved:
+            return "You approved this edition."
+        case .changesRequested:
+            return "You returned this edition for revision."
+        case .needsDiscussion:
+            return "You held this edition to talk it through with your designer."
+        }
+    }
 
     // MARK: - Impact (R11)
 

@@ -29,6 +29,7 @@ struct ProjectApprovalBlock: View {
                 }
                 impact(review)
                 reviewLeg(review)
+                closureLeg(review)
                 outcomeLeg(review)
             } else if viewModel.isLoading {
                 PatinaLoadingState()
@@ -55,7 +56,6 @@ struct ProjectApprovalBlock: View {
                 .accessibilityIdentifier("decisionDetail.approval.question")
 
             Text(ProjectApprovalCopy.editionLine(
-                title: review.artifactTitle,
                 edition: review.artifactVersion,
                 due: review.dueAt.map(DateDisplay.fromTimestamp)
             ))
@@ -138,6 +138,34 @@ struct ProjectApprovalBlock: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("decisionDetail.approval.awaitingIssue")
         }
+    }
+
+    // MARK: - The approval that is closed, or already answered
+
+    /// Why there are no acts. An approval can be closed three ways, and each
+    /// of them left the screen silent: withdrawn and superseded stood ahead of
+    /// everything with nothing to say, and an answered approval never named
+    /// the answer she had given it.
+    ///
+    /// The order is the house's own (`client-attention.ts:55-71`): the
+    /// disposition first, then the outcome.
+    @ViewBuilder
+    private func closureLeg(_ review: RemoteProjectApprovalReview) -> some View {
+        if review.isWithdrawn {
+            closureLine(ProjectApprovalCopy.withdrawn, id: "withdrawn")
+        } else if review.isSuperseded {
+            closureLine(ProjectApprovalCopy.superseded, id: "superseded")
+        } else if let answered = viewModel.answeredOutcome ?? review.recordedOutcome {
+            closureLine(ProjectApprovalCopy.recorded(answered), id: "recorded")
+        }
+    }
+
+    private func closureLine(_ text: String, id: String) -> some View {
+        Text(text)
+            .font(PatinaTypography.bodySmallMedium)
+            .foregroundStyle(PatinaColors.Text.primary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("decisionDetail.approval.\(id)")
     }
 
     // MARK: - The three answers
