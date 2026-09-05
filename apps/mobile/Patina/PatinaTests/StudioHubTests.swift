@@ -72,7 +72,7 @@ struct StudioHubTests {
         #expect(snapshot.attentionSummary.unreadConversationCount == 1)
         #expect(snapshot.attentionSummary.unreadUpdateCount == 1)
         #expect(snapshot.attentionSummary.activeProjectCount == 1)
-        #expect(snapshot.attentionSummary.hint == "3 things need your eye")
+        #expect(snapshot.attentionSummary.hint == "Three things need your eye")
     }
 
     @Test
@@ -116,7 +116,7 @@ struct StudioHubTests {
                 unreadConversationCount: 0,
                 unreadUpdateCount: 0,
                 activeProjectCount: 0
-            ).hint == "1 thing needs your eye"
+            ).hint == "One thing needs your eye"
         )
         #expect(
             StudioAttentionSummary(
@@ -124,7 +124,7 @@ struct StudioHubTests {
                 unreadConversationCount: 2,
                 unreadUpdateCount: 0,
                 activeProjectCount: 0
-            ).hint == "2 new conversations"
+            ).hint == "Two new conversations"
         )
         #expect(StudioAttentionSummary.empty.hint == nil)
     }

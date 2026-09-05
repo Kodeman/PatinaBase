@@ -88,7 +88,7 @@ struct AttentionCountTests {
         #expect(badges.proposalsAwaitingSignatureCount == 1)
         #expect(badges.payableInvoiceCount == 1)
         #expect(badges.attentionCount == 4)
-        #expect(badges.attentionHint == "4 things need your eye")
+        #expect(badges.attentionHint == "Four things need your eye")
     }
 
     @Test("one thing needing the client reads in the singular")
@@ -101,7 +101,7 @@ struct AttentionCountTests {
             projects: rows.projects, roster: []
         )
         #expect(badges.attentionCount == 1)
-        #expect(badges.attentionHint == "1 thing needs your eye")
+        #expect(badges.attentionHint == "One thing needs your eye")
     }
 
     @Test("nothing needing the client prints no count at all")
@@ -130,7 +130,7 @@ struct AttentionCountTests {
         )
 
         let expected = StudioAttentionSummary.attentionHint(count: badges.attentionCount)
-        #expect(expected == "4 things need your eye")
+        #expect(expected == "Four things need your eye")
 
         // The Studio snapshot's own summary carries the same number rather
         // than recomputing it from a different fetch.

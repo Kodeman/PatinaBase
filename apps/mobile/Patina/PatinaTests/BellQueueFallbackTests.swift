@@ -176,7 +176,7 @@ struct BellQueueFallbackTests {
         #expect(proposals.filter(\.isStudioFallback).count == 1)
         // And the stand-in still says what the Studio says.
         #expect(proposals.first(where: \.isStudioFallback)?.body
-            .contains("2 proposals are ready to review") == true)
+            .contains("Two proposals are ready to review") == true)
     }
 
     /// Once every entity the stand-in speaks for has a delivered row, it has
