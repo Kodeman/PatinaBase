@@ -273,20 +273,32 @@ references `HoldToActButton`. P-17 and P-19 are their own commits as asked.
 
 ---
 
-## Gates (final tree, `e2b41b262`)
+## One thing the final gate caught
+
+`lint-delta` failed on the committed tree: `ProjectApprovalActTests.swift`
+went 497 → 506, over `file_length`, because P-18's signature assertions and
+the `typedSignature` lines landed in it after the earlier clean run.
+`theResponseRPCParametersMatchTheWeb` moved into `HoldToActTests` — which is
+where what the outcome sends now belongs anyway — taking the file to 489.
+That is `bea62be0e`; the code it pins did not change.
+
+## Gates (final tree)
 
 ```
 IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE .../ios-gate.sh build
   ** BUILD SUCCEEDED **
 
 IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE .../ios-gate.sh unit
-  Test run with 2516 tests in 275 suites … 3 issues (including 2 known issues)
+  ━ Test run with 2515 tests in 275 suites passed after 8.718 seconds
+    with 2 known issues.
+  ** TEST SUCCEEDED **
 
 .../ios-gate.sh lint-delta main
   ✓ lint-delta: no new warnings in touched files          EXIT=0
 ```
 
-The third issue is the load flake the brief names —
+On the run before this one the suite reported a third issue — the load flake
+the brief names —
 `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves`. Rerun
 in isolation on the same simulator it **passes**:
 
@@ -300,7 +312,7 @@ The two known issues are the pre-existing pair this branch inherited from Wave
 1: a `BrandVoiceLint` expectation on "curated_mix" and
 `RoomLifecycleTests.theTodayRailFollowsALocalDelete`.
 
-The wave adds **49 tests across 4 new suites** (2467 → 2516, 271 → 275):
+The wave adds **48 tests across 4 new suites** (2467 → 2515, 271 → 275):
 `PatinaStampTests` (12), `ProjectApprovalDoorsTests` (9), `HoldToActTests`
 (11), `SealMomentTests` (8), plus the rewrites in
 `ProposalDetailStatusIconTests` and the six existing suites the seam and path

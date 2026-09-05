@@ -185,23 +185,6 @@ struct ProjectApprovalActTests {
         #expect(body.contains("\"p_idempotency_key\": idempotencyKey"))
     }
 
-    @Test("the response RPC is called with the web's own parameters")
-    func theResponseRPCParametersMatchTheWeb() throws {
-        let source = try SourcePin.read(
-            "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
-        )
-        let start = try #require(source.range(of: "public func respondToProjectApproval("))
-        let body = String(source[start.lowerBound...].prefix(1400))
-        #expect(body.contains("callRPC(\"respond_project_approval\""))
-        #expect(body.contains("\"p_decision_id\": decisionId"))
-        #expect(body.contains("\"outcome\": outcome.rawValue"))
-        #expect(body.contains("\"p_expected_updated_at\": expectedUpdatedAt"))
-        #expect(body.contains("\"p_idempotency_key\": idempotencyKey"))
-        // The payload admits exactly one of outcome / optionId, and iOS sends
-        // the outcome — an option id would answer the wrong question.
-        #expect(!body.contains("optionId"))
-    }
-
     // MARK: - The words
 
     /// Verb, then consequence. Not the web's strings: "gate" is refused on

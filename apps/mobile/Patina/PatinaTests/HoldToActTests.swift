@@ -159,8 +159,18 @@ struct HoldToActTests {
         #expect(body.contains("clientSignature"))
         #expect(body.contains("clientConsentMethod"))
         #expect(body.contains("ProjectApprovalConsent.electronicSignature"))
-        #expect(body.contains("\"p_expected_updated_at\": expectedUpdatedAt"))
         #expect(ProjectApprovalConsent.electronicSignature == "electronic_signature")
+        // Moved here from `ProjectApprovalActTests`, which is at
+        // `file_length`: the rest of the call is the same one shape, and it is
+        // this suite that now owns what the outcome sends.
+        #expect(body.contains("callRPC(\"respond_project_approval\""))
+        #expect(body.contains("\"p_decision_id\": decisionId"))
+        #expect(body.contains("\"outcome\": outcome.rawValue"))
+        #expect(body.contains("\"p_expected_updated_at\": expectedUpdatedAt"))
+        #expect(body.contains("\"p_idempotency_key\": idempotencyKey"))
+        // The payload admits exactly one of outcome / optionId, and iOS sends
+        // the outcome — an option id would answer the wrong question.
+        #expect(!body.contains("optionId"))
     }
 
     /// The wrapper had to be opened for any of the above to reach the server:
