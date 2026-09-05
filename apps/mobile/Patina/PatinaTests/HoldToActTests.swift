@@ -160,6 +160,11 @@ struct HoldToActTests {
         #expect(body.contains("clientConsentMethod"))
         #expect(body.contains("ProjectApprovalConsent.electronicSignature"))
         #expect(ProjectApprovalConsent.electronicSignature == "electronic_signature")
+        // RULED 2026-09-05: Return and Hold record a method too — never NULL.
+        // A press and hold is a click-through, and `client_decisions`' own
+        // check constraint spells that `click_through`.
+        #expect(body.contains("ProjectApprovalConsent.clickThrough"))
+        #expect(ProjectApprovalConsent.clickThrough == "click_through")
         // Moved here from `ProjectApprovalActTests`, which is at
         // `file_length`: the rest of the call is the same one shape, and it is
         // this suite that now owns what the outcome sends.

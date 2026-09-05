@@ -52,6 +52,11 @@ public enum ProjectApprovalConsent {
     /// `nonisolated`: the actor reads it, and the module's default isolation
     /// would otherwise make a constant string a main-actor property.
     nonisolated public static let electronicSignature = "electronic_signature"
+    /// A press and hold with no name on it. RULED 2026-09-05: Return and Hold
+    /// record a consent method too — never NULL — and this is the token
+    /// `client_decisions`' own check constraint and
+    /// `_respond_project_approval_checked` allowlist for it.
+    nonisolated public static let clickThrough = "click_through"
 }
 
 /// What the caller is to one Stage-2 approval.
@@ -459,7 +464,13 @@ extension DecisionsAPIClient {
     ) async throws {
         var payload: [String: Any] = ["outcome": outcome.rawValue]
         let signature = clientSignature.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !signature.isEmpty {
+        if signature.isEmpty {
+            // Return and Hold: held, unsigned, and still recorded as consent
+            // given by hand rather than left NULL (RULED 2026-09-05). The
+            // checked function refuses a signature without a method, never a
+            // method without a signature.
+            payload["clientConsentMethod"] = ProjectApprovalConsent.clickThrough
+        } else {
             payload["clientSignature"] = signature
             payload["clientConsentMethod"] = ProjectApprovalConsent.electronicSignature
         }
