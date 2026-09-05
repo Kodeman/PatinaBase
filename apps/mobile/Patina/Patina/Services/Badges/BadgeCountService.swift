@@ -354,6 +354,7 @@ final class BadgeCountService {
         }
 
         async let decisionsFetch = try? DecisionsAPIClient.shared.listPending()
+        async let approvalsFetch = try? DecisionsAPIClient.shared.fetchProjectApprovalReviews()
         async let summariesFetch = try? MessagingAPIClient.shared.listThreadSummaries()
         async let proposalsFetch = try? ProposalsAPIClient.shared.listProposals()
         async let invoicesFetch = try? InvoicesAPIClient.shared.listInvoices()
@@ -362,17 +363,21 @@ final class BadgeCountService {
         let (decisions, summaries, proposals, invoices, fetchedProjects) = await (
             decisionsFetch, summariesFetch, proposalsFetch, invoicesFetch, projectsFetch
         )
+        let approvals = await approvalsFetch
         let fetchedRoster = await rosterFetch
 
         // The account changed while these were in the air: these are the
         // previous account's rows and there is nothing here to write them to.
         guard token == refreshToken else { return }
 
+        let merged = Self.mergedDecisions(
+            pending: decisions, approvals: approvals, previous: pendingDecisions
+        )
         apply(
-            decisions: decisions, summaries: summaries, proposals: proposals,
+            decisions: merged, summaries: summaries, proposals: proposals,
             invoices: invoices, projects: fetchedProjects, roster: fetchedRoster
         )
-        if decisions != nil || summaries != nil || proposals != nil
+        if merged != nil || summaries != nil || proposals != nil
             || invoices != nil || fetchedProjects != nil {
             hasLoaded = true
             lastRefreshFailed = false
@@ -383,6 +388,35 @@ final class BadgeCountService {
         } else {
             lastRefreshFailed = true
         }
+    }
+
+    /// One decision feed out of two reads.
+    ///
+    /// `iosb-B1`: `listPending` is a PostgREST GET on `client_decisions`, and
+    /// 00467:18-38 rewrote both SELECT policies a homeowner can reach to
+    /// `approval_contract IS DISTINCT FROM 'project_artifact_v1'` — so the read
+    /// that feeds NEEDS YOU and the Studio's "Awaiting you" is the one read
+    /// that can never return her own Stage-2 approvals. The projection is
+    /// merged in beside it, as rows, so the eyebrow can carry the truth R5
+    /// says it carries.
+    ///
+    /// Only the approvals still holding an act of hers become rows; the rest
+    /// are waiting on the studio and are not hers to answer. Each half that
+    /// failed leaves its own last-known rows standing rather than blanking a
+    /// feed the other half answered for.
+    /// `previous` is the feed as it stands, which is where a half that failed
+    /// gets its rows from. Static so it can be exercised without the singleton
+    /// this service is only ever reached through.
+    static func mergedDecisions(
+        pending: [RemoteClientDecision]?,
+        approvals: [RemoteProjectApprovalReview]?,
+        previous: [RemoteClientDecision]
+    ) -> [RemoteClientDecision]? {
+        guard pending != nil || approvals != nil else { return nil }
+        let legacy = pending ?? previous.filter { !$0.isProjectArtifactApproval }
+        let stage2 = approvals?.filter(\.awaitsClient).map(\.asWaitingDecision)
+            ?? previous.filter(\.isProjectArtifactApproval)
+        return legacy + stage2
     }
 
     /// Fold a set of fetched rows into the counts and the retained rows. A

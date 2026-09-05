@@ -17,6 +17,10 @@
 //     which. Its serialization is `get_project_decision_reviews`' own
 //     (00465:370) — the same camelCase shape
 //     `packages/supabase/src/hooks/use-project-approvals.ts` parses.
+//   • `list_my_project_decision_reviews` (00467:135) — every approval this
+//     caller can reach, for the feeds that carry what is waiting on her. The
+//     detail screen still reads one row by id; this is what puts a door on the
+//     home and in the decision list at all.
 //   • `confirm_project_decision_review` (00463:1467) — the review leg. CAS on
 //     the authority revision AND the artifact hash, and only while the
 //     decision is still `draft`.
@@ -134,6 +138,53 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
             && isReviewComplete
             && outcome == nil
     }
+
+    /// The ceremony still holds an act that is hers to take. Everything else —
+    /// a draft with no frozen revision, one already with the studio, a closed
+    /// or answered one — is waiting on somebody who is not her.
+    public var awaitsClient: Bool {
+        needsReviewConfirmation || canRespond
+    }
+
+    /// This approval as a row for the feeds that carry every waiting
+    /// obligation: `BadgeCountService.pendingDecisions` (the NEEDS YOU
+    /// eyebrow, the Studio's "Awaiting you") and the decision list.
+    ///
+    /// It has to be synthesized. Those feeds read `listPending`, a PostgREST
+    /// GET on `client_decisions`, and 00467:18-38 rewrote both SELECT policies
+    /// a homeowner can reach to `approval_contract IS DISTINCT FROM
+    /// 'project_artifact_v1'` — so her own Stage-2 approvals are the one thing
+    /// that read can never return, and without this bridge a push notification
+    /// was her only door to the ceremony.
+    ///
+    /// `approval_contract` is carried verbatim so the detail screen knows
+    /// which ceremony it is opening before the projection lands, and
+    /// `lifecycleStatus` is carried unchanged rather than flattened to
+    /// `pending` — `draft` and `pending` both read as unresolved downstream,
+    /// so there is nothing to gain by saying the row is further along than it
+    /// is. The projection carries no project name and no designer, so the row
+    /// names neither rather than inventing them.
+    var asWaitingDecision: RemoteClientDecision {
+        RemoteClientDecision(
+            id: decisionId,
+            project_id: projectId,
+            project: nil,
+            title: question,
+            description: context,
+            status: lifecycleStatus,
+            decision_type: nil,
+            coordination_kind: nil,
+            court: nil,
+            approval_contract: "project_artifact_v1",
+            recommended_option_id: nil,
+            viewed_at: nil,
+            responded_at: respondedAt,
+            due_date: dueAt,
+            client_consent_method: nil,
+            client_consented_at: nil,
+            created_at: createdAt
+        )
+    }
 }
 
 extension DecisionsAPIClient {
@@ -155,6 +206,22 @@ extension DecisionsAPIClient {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard let payload, !payload.isEmpty, payload != "null" else { return nil }
         return try JSONDecoder().decode(RemoteProjectApprovalReview.self, from: data)
+    }
+
+    /// Every Stage-2 approval this caller can reach, across all her projects.
+    ///
+    /// `list_my_project_decision_reviews()` (00467:135) takes no arguments and
+    /// answers `[]` for an unauthenticated caller. It is the only read that
+    /// hands a homeowner her own approvals at all — see `asWaitingDecision`
+    /// for why the list feeds cannot find them any other way.
+    public func fetchProjectApprovalReviews() async throws -> [RemoteProjectApprovalReview] {
+        let data = try await callRPC(
+            "list_my_project_decision_reviews", body: [String: Any]()
+        )
+        let payload = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let payload, !payload.isEmpty, payload != "null" else { return [] }
+        return try JSONDecoder().decode([RemoteProjectApprovalReview].self, from: data)
     }
 
     /// Record that this client read the exact edition, bound to the authority

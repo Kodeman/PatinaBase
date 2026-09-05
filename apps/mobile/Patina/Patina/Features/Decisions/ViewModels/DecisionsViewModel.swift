@@ -16,11 +16,24 @@ final class DecisionsListViewModel {
     var isLoading: Bool = false
     var error: String?
 
+    /// The list every decision reaches the client through — and, since
+    /// `iosb-B1`, the Stage-2 approvals too.
+    ///
+    /// Two reads, because there is no one read that returns both: 00467:18-38
+    /// hides a `project_artifact_v1` row from the very person being asked, so
+    /// `listPending` returns everything EXCEPT her approvals and the projection
+    /// returns only those. A failed projection leaves the ordinary decisions
+    /// standing; it does not empty the list.
     func load() async {
         isLoading = true
         error = nil
+        async let approvalsFetch = try? DecisionsAPIClient.shared
+            .fetchProjectApprovalReviews()
         do {
-            self.decisions = try await DecisionsAPIClient.shared.listPending()
+            let pending = try await DecisionsAPIClient.shared.listPending()
+            let approvals = await approvalsFetch ?? []
+            self.decisions = pending
+                + approvals.filter(\.awaitsClient).map(\.asWaitingDecision)
         } catch {
             self.error = "Couldn’t load decisions"
             #if DEBUG
@@ -60,7 +73,7 @@ final class DecisionDetailViewModel {
     // MARK: - P-09 · the Stage-2 approval
 
     /// The client-safe projection for a `project_artifact_v1` decision, read
-    /// from `list_my_project_decision_reviews`. Nil for every other decision,
+    /// from `get_project_decision_review`. Nil for every other decision,
     /// and nil for a Stage-2 decision whose fetch failed — which is a state
     /// the screen names, never one it falls back to option cards from.
     var approvalReview: RemoteProjectApprovalReview?

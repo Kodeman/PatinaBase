@@ -268,3 +268,127 @@ struct ProjectApprovalPathTests {
         #expect(try ProjectApprovalFixture.review().isClosedByDisposition == false)
     }
 }
+
+/// `iosb2-B1`, the door: what puts a Stage-2 approval in front of the
+/// homeowner at all.
+///
+/// Every feed that could send her to the ceremony — the NEEDS YOU eyebrow, the
+/// Studio's "Awaiting you", the decision list — reads either
+/// `BadgeCountService.pendingDecisions` or `listPending`, and both are the same
+/// PostgREST GET on `client_decisions`. 00467:18-38 rewrote both SELECT
+/// policies she can reach to `approval_contract IS DISTINCT FROM
+/// 'project_artifact_v1'`, so that read returns her own approvals to nobody.
+/// Until the projection was merged in beside it, a push notification was the
+/// only route to P-09 — and R5 had just taken the Studio count off on the
+/// grounds that the eyebrow carries the truth.
+///
+/// A suite of its own because SwiftLint's `type_body_length` is a per-type
+/// budget and the suite above is at it.
+@MainActor
+struct ProjectApprovalDoorTests {
+
+    @Test("an approval still holding an act of hers becomes a waiting row")
+    func anOpenApprovalIsAWaitingRow() throws {
+        let row = try ProjectApprovalFixture.review().asWaitingDecision
+        #expect(row.id == ProjectApprovalFixture.decisionId)
+        #expect(row.title == "Approve the kitchen millwork as drawn?")
+        #expect(row.due_date == "2026-09-11T00:00:00+00:00")
+        #expect(row.created_at == "2026-09-01T00:00:00+00:00")
+        #expect(row.isResolved == false, "a waiting row that reads resolved never draws")
+        #expect(row.isProjectArtifactApproval, "the row has to open the Stage-2 ceremony")
+        #expect(row.isClientSignoff == false, "00564's act refuses this contract")
+    }
+
+    /// Only the approvals that are hers. The rest are with the studio, and
+    /// NEEDS YOU is what needs HER.
+    @Test("only the approvals holding one of her acts count as waiting")
+    func onlyHerApprovalsWait() throws {
+        #expect(try ProjectApprovalFixture.review().awaitsClient)
+        #expect(try ProjectApprovalFixture.review(
+            lifecycleStatus: "draft", completed: 0, required: 1
+        ).awaitsClient)
+        #expect(try ProjectApprovalFixture.review(
+            lifecycleStatus: "draft", completed: 1, required: 1
+        ).awaitsClient == false, "a reviewed draft is with the studio")
+        #expect(try ProjectApprovalFixture.review(
+            lifecycleStatus: "draft", completed: 0, required: 1, authorityRevision: NSNull()
+        ).awaitsClient == false, "an act the RPC refuses is not an act she has")
+        #expect(try ProjectApprovalFixture.review(outcome: "approved").awaitsClient == false)
+        #expect(try ProjectApprovalFixture.review(disposition: "withdrawn").awaitsClient == false)
+        #expect(try ProjectApprovalFixture.review(disposition: "superseded").awaitsClient == false)
+    }
+
+    @Test("the feed behind NEEDS YOU carries both reads")
+    func theFeedCarriesBothReads() throws {
+        let merged = try #require(BadgeCountService.mergedDecisions(
+            pending: [try ProjectApprovalFixture.decision(contract: nil)],
+            approvals: [try ProjectApprovalFixture.review()],
+            previous: []
+        ))
+        #expect(merged.count == 2)
+        #expect(merged.filter(\.isProjectArtifactApproval).count == 1)
+        // …and the studio's half of the projection is not her waiting work.
+        let withStudio = try #require(BadgeCountService.mergedDecisions(
+            pending: [],
+            approvals: [try ProjectApprovalFixture.review(
+                lifecycleStatus: "draft", completed: 1, required: 1
+            )],
+            previous: []
+        ))
+        #expect(withStudio.isEmpty)
+    }
+
+    /// Each half that failed leaves its own last-known rows standing. Both
+    /// failing is the only nil, which is what tells `performRefresh` to keep
+    /// the floor it already has.
+    @Test("a read that failed does not blank the feed the other read answered")
+    func aFailedHalfDoesNotBlankTheFeed() throws {
+        let standing = [
+            try ProjectApprovalFixture.decision(contract: nil),
+            try ProjectApprovalFixture.review().asWaitingDecision
+        ]
+        #expect(BadgeCountService.mergedDecisions(
+            pending: nil, approvals: nil, previous: standing
+        ) == nil)
+
+        // The approvals answered; the ordinary decisions did not, and keep
+        // the rows they had.
+        let approvalsOnly = try #require(BadgeCountService.mergedDecisions(
+            pending: nil, approvals: [try ProjectApprovalFixture.review()],
+            previous: standing
+        ))
+        #expect(approvalsOnly.count == 2)
+        #expect(approvalsOnly.filter(\.isProjectArtifactApproval).count == 1)
+
+        // And the other way round: the approval already on the feed survives a
+        // projection read that failed.
+        let pendingOnly = try #require(BadgeCountService.mergedDecisions(
+            pending: [try ProjectApprovalFixture.decision(contract: nil)],
+            approvals: nil, previous: standing
+        ))
+        #expect(pendingOnly.count == 2)
+        #expect(pendingOnly.filter(\.isProjectArtifactApproval).count == 1)
+    }
+
+    /// The two feeds read the list RPC, and it is the caller-global one — not
+    /// the single-row detail read the ceremony screen uses.
+    @Test("both feeds read list_my_project_decision_reviews")
+    func bothFeedsReadTheListRPC() throws {
+        let client = try SourcePin.readCode(
+            "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
+        )
+        #expect(client.contains(#""list_my_project_decision_reviews""#))
+        #expect(client.contains("func fetchProjectApprovalReviews()"))
+
+        let list = try SourcePin.readCode(
+            "Patina/Features/Decisions/ViewModels/DecisionsViewModel.swift"
+        )
+        #expect(list.contains("fetchProjectApprovalReviews()"))
+        #expect(list.contains("map(\\.asWaitingDecision)"))
+
+        let badges = try SourcePin.readCode("Patina/Services/Badges/BadgeCountService.swift")
+        #expect(badges.contains("fetchProjectApprovalReviews()"))
+        #expect(badges.contains("Self.mergedDecisions("))
+        #expect(badges.contains("pending: decisions, approvals: approvals, previous: pendingDecisions"))
+    }
+}
