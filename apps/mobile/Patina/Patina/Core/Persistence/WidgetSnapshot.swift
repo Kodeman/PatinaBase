@@ -143,6 +143,14 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// on a surface whose only affordance is a tap (GAP7B-05).
     init(record: HouseRecord, houseLine: String?, refreshedAt: Date, flagOn: Bool, ownerId: String?) {
         self.movedRows = record.moved.compactMap { row in
+            // `R15`: the widget is untouched by "The Decision, Delivered".
+            // `P-21`'s afterglow rows are the reader's OWN acts — "You
+            // approved the budget." — and the Home Screen is where other
+            // people's news goes. Reporting her back to herself on a surface
+            // she cannot answer from is the one thing this projection has
+            // always refused (B §2, and the same rule that keeps a save off
+            // the card); the ceremony does not get an exception.
+            guard !row.kind.isOwnAct else { return nil }
             guard let route = row.route.flatMap(WidgetRouteToken.init) else { return nil }
             return WidgetRow(id: row.id, title: row.title, date: row.date, route: route)
         }
