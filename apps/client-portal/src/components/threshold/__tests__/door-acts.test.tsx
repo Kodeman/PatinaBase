@@ -404,6 +404,9 @@ describe('DoorActs', () => {
     // scrolling past the act they are alternatives to. So they dock too, as a
     // compact row riding 61px up, directly on top of the primary's dock.
     const acts = screen.getByTestId('door-acts');
+    // The same hook `[data-hold-dock]` gives the primary act, so a walk can
+    // measure both docks with one selector each.
+    expect(acts).toHaveAttribute('data-acts-dock');
     expect(acts).toHaveClass('max-[600px]:sticky');
     expect(acts).toHaveClass('max-[600px]:bottom-[61px]');
     expect(acts).not.toHaveClass('max-[600px]:pb-16');
