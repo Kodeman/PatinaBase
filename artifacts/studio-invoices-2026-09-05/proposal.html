@@ -1,0 +1,762 @@
+<title>Studio Invoices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+:root{
+  --ground:#FAF7F2;
+  --paper:#FCFAF6;
+  --paper-inset:#F5F1EA;
+  --rule:#E5E2DD;
+  --rule-2:#CFC9C0;
+  --ink:#2C2926;
+  --body:#4A453F;
+  --mocha:#5C4A3C;
+  --clay:#C4A57B;
+  --clay-ink:#7C5E30;
+  --gold-ink:#79651E;
+  --terracotta-ink:#9C5340;
+  --sage-ink:#5F6B57;
+  --blue-ink:#7E8FA6;
+  --muted:#635C53;
+  --faint:#726A5F;
+  --accent:#7C5E30;
+  --focus:#7C5E30;
+  --stamp-border:#5C4A3C;
+  --stamp-ink:#5C4A3C;
+  --charcoal-fill:#2C2926;
+  --charcoal-text:#FCFAF6;
+  --font-display:"Playfair Display","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --font-body:"Newsreader","Iowan Old Style",Georgia,"Times New Roman",serif;
+  --font-mono:"DM Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#1F1C19; --paper:#2A2622; --paper-inset:#231F1C;
+    --rule:#3B3631; --rule-2:#4C463F; --ink:#EDE7DF; --body:#C9C1B6;
+    --mocha:#C7AB92; --clay:#D6B98F; --clay-ink:#D6B98F; --gold-ink:#C9AE55;
+    --terracotta-ink:#D08A72; --sage-ink:#9DB093; --blue-ink:#9FB0C6;
+    --muted:#ABA294; --faint:#998F80; --accent:#D6B98F; --focus:#D6B98F;
+    --stamp-border:#C7AB92; --stamp-ink:#C7AB92;
+    --charcoal-fill:#EDE7DF; --charcoal-text:#1F1C19;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#1F1C19; --paper:#2A2622; --paper-inset:#231F1C;
+  --rule:#3B3631; --rule-2:#4C463F; --ink:#EDE7DF; --body:#C9C1B6;
+  --mocha:#C7AB92; --clay:#D6B98F; --clay-ink:#D6B98F; --gold-ink:#C9AE55;
+  --terracotta-ink:#D08A72; --sage-ink:#9DB093; --blue-ink:#9FB0C6;
+  --muted:#ABA294; --faint:#998F80; --accent:#D6B98F; --focus:#D6B98F;
+  --stamp-border:#C7AB92; --stamp-ink:#C7AB92;
+  --charcoal-fill:#EDE7DF; --charcoal-text:#1F1C19;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--ground);
+  color:var(--body);
+  font-family:var(--font-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  margin:0;
+}
+.shell{max-width:1240px;margin:0 auto;padding:0 20px 8rem;}
+p,li{max-width:66ch;}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--rule-2);}
+a:hover{border-bottom-color:var(--accent);}
+a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:3px;}
+code{font-family:var(--font-mono);font-size:.82em;color:var(--mocha);}
+
+/* ---------- running index ---------- */
+.index{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;line-height:1.5;padding:2rem 0 1rem;border-bottom:1px solid var(--rule);margin-bottom:2.5rem;}
+.index .idxhead{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0 0 .9rem;font-weight:500;}
+.index ol{list-style:none;margin:0;padding:0;display:grid;gap:.5rem;grid-template-columns:repeat(auto-fill,minmax(20rem,1fr));}
+.index li{max-width:none;}
+.index a{color:var(--muted);border-bottom:none;display:grid;grid-template-columns:1.9rem 1fr;gap:.3rem;}
+.index a:hover{color:var(--ink);}
+.index .n{color:var(--faint);font-variant-numeric:tabular-nums;}
+
+/* ---------- masthead ---------- */
+.masthead{padding:3.5rem 0 2.5rem;border-bottom:1.5px solid var(--ink);}
+.masthead .eyebrow{margin-bottom:1.4rem;}
+.masthead h1{font-family:var(--font-display);font-size:clamp(2.6rem,6vw,4.4rem);line-height:1.02;font-weight:500;color:var(--ink);margin:0 0 1.4rem;text-wrap:balance;letter-spacing:-.01em;}
+.standing{font-family:var(--font-display);font-style:italic;font-size:clamp(1.15rem,2.4vw,1.5rem);line-height:1.45;color:var(--mocha);max-width:44ch;margin:0 0 2.2rem;}
+.masthead-meta{display:flex;flex-wrap:wrap;gap:2rem 3rem;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+.masthead-meta div{max-width:26ch;}
+.masthead-meta b{display:block;color:var(--faint);font-weight:400;margin-bottom:.45rem;}
+.masthead-meta span{display:block;text-transform:none;letter-spacing:.02em;font-size:12px;color:var(--body);}
+
+/* ---------- sections ---------- */
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0;}
+section{padding-top:4.5rem;scroll-margin-top:1.5rem;}
+.opener{border-top:1px solid var(--rule);padding-top:1.1rem;margin-bottom:2rem;}
+section > h2{font-family:var(--font-display);font-size:clamp(1.8rem,3.6vw,2.7rem);line-height:1.12;font-weight:500;color:var(--ink);margin:.7rem 0 0;text-wrap:balance;max-width:24ch;}
+h3{font-family:var(--font-display);font-size:1.35rem;line-height:1.25;font-weight:500;color:var(--ink);margin:2.8rem 0 .8rem;text-wrap:balance;}
+h4{font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);font-weight:500;margin:2rem 0 .7rem;}
+.lede{font-size:1.12rem;color:var(--body);}
+.mono{font-family:var(--font-mono);font-size:.82em;letter-spacing:.02em;color:var(--muted);}
+.ref{font-family:var(--font-mono);font-size:.74em;letter-spacing:.02em;color:var(--faint);}
+td .ref,th .ref{overflow-wrap:anywhere;}
+blockquote{margin:1.4rem 0;padding-left:1.1rem;border-left:2px solid var(--clay);font-family:var(--font-display);font-style:italic;font-size:1.1rem;color:var(--mocha);}
+blockquote p{max-width:52ch;}
+.cols{display:grid;gap:2.2rem;grid-template-columns:minmax(0,1fr);}
+@media (min-width:760px){ .cols-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} }
+hr{border:none;border-top:1px solid var(--rule);margin:2.6rem 0;}
+ul.plain{padding-left:1.1rem;}
+ul.plain li{margin:.35rem 0;}
+ol.rulings{list-style:none;padding:0;margin:0;}
+ol.rulings li{max-width:none;border-top:1px solid var(--rule);padding:1.3rem 0;display:grid;grid-template-columns:3.6rem minmax(0,1fr);gap:.2rem 1rem;}
+ol.rulings .sid{font-family:var(--font-mono);font-size:13px;letter-spacing:.1em;color:var(--clay-ink);padding-top:.35rem;grid-row:1 / span 3;}
+ol.rulings .q{font-family:var(--font-display);font-size:1.18rem;color:var(--ink);margin:0 0 .35rem;max-width:44ch;}
+ol.rulings .opts{margin:0 0 .4rem;color:var(--muted);font-size:.95rem;max-width:66ch;}
+ol.rulings .rec{margin:0;max-width:66ch;}
+ol.rulings .rec b{color:var(--ink);}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:1.4rem 0;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--rule-2);}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45;}
+th,td{text-align:left;vertical-align:top;padding:.72rem .9rem .72rem 0;border-bottom:1px solid var(--rule);}
+th{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:500;white-space:nowrap;}
+td{color:var(--body);}
+td strong{color:var(--ink);font-weight:600;}
+tbody tr:last-child td{border-bottom:none;}
+.tight td,.tight th{font-size:13.5px;}
+.w-name{min-width:11rem;}
+.w-what{min-width:18rem;}
+.w-path{min-width:16rem;}
+
+/* ---------- mock panels (the Document idiom) ---------- */
+.panel{background:var(--paper);border:1px solid var(--rule);border-radius:2px;padding:1.6rem 1.5rem;margin:1.4rem 0;}
+.panel-cap{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 1rem;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
+.panel-cap .answers{color:var(--clay-ink);}
+.panelrow{display:grid;gap:1.4rem;align-items:start;grid-template-columns:minmax(0,1fr);}
+@media (min-width:900px){ .panelrow-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} }
+.mockwrap{overflow-x:auto;}
+.mock{min-width:0;font-size:12.5px;line-height:1.5;color:var(--ink);}
+.mock .sheet-title{font-family:var(--font-display);font-size:1.25rem;color:var(--ink);margin:0 0 .2rem;}
+.mock .sub{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:0 0 1rem;}
+.lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin:1rem 0 .35rem;}
+.lbl:first-child{margin-top:0;}
+.fld{font-family:var(--font-body);font-size:12.5px;color:var(--ink);border:1px solid var(--rule);border-radius:3px;background:transparent;padding:.4rem .55rem;display:block;width:100%;min-height:2rem;}
+.fld.sel::after{content:"▾";float:right;color:var(--faint);}
+.fld.ph{color:var(--faint);font-style:italic;}
+.fld.ta{min-height:3.2rem;}
+.fld.on{border-color:var(--clay);}
+.picker{border:1px solid var(--rule);border-top:none;border-radius:0 0 3px 3px;margin:-1px 0 .4rem;background:var(--paper);}
+.picker .prow{display:flex;justify-content:space-between;gap:1rem;padding:.35rem .55rem;border-top:1px solid var(--rule);font-size:12.5px;color:var(--ink);}
+.picker .prow:first-child{border-top:none;}
+.picker .prow.on{background:var(--paper-inset);}
+.picker .prow.add{color:var(--clay-ink);border-top:1px solid var(--rule-2);}
+.grid-lines{display:grid;grid-template-columns:minmax(0,1fr) 3.2rem 5rem 1.4rem;gap:.4rem;align-items:center;margin:.3rem 0;}
+.grid-lines .fld{margin:0;}
+.grid-lines .x{color:var(--faint);text-align:center;font-family:var(--font-mono);}
+.grid-lines.head span{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
+.tick{display:grid;grid-template-columns:1rem 1fr auto;gap:.6rem;align-items:baseline;padding:.3rem 0;border-top:1px solid var(--rule);}
+.tick:first-of-type{border-top:none;}
+.tick .box{width:11px;height:11px;border:1.5px solid var(--ink);display:inline-block;position:relative;top:1px;}
+.tick .amt{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--muted);}
+.acts{display:flex;gap:.9rem;flex-wrap:wrap;align-items:center;margin:1.1rem 0 0;}
+.act{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:.42rem .8rem;border-radius:3px;border:1px solid transparent;background:none;cursor:default;white-space:nowrap;}
+.act.primary{background:var(--charcoal-fill);color:var(--charcoal-text);}
+.act.inked{color:var(--clay-ink);border-bottom:1.5px solid var(--clay);border-radius:0;padding-left:0;padding-right:0;}
+.act.secondary{border-color:var(--rule-2);color:var(--ink);}
+.act.tertiary{color:var(--muted);padding-left:0;padding-right:0;}
+.act.danger{color:var(--terracotta-ink);padding-left:0;padding-right:0;}
+.totals{display:grid;grid-template-columns:1fr auto;gap:.15rem 2rem;font-family:var(--font-mono);font-size:12px;font-variant-numeric:tabular-nums;margin:1rem 0 0;padding-top:.7rem;border-top:1px solid var(--rule);}
+.totals .k{color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-size:10px;}
+.totals .v{text-align:right;color:var(--ink);}
+.totals .total .v{font-weight:500;}
+.st{display:inline-block;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:.08rem .38rem;border:1px solid currentColor;border-radius:2px;line-height:1.4;vertical-align:middle;}
+.st.draft{color:var(--muted);}
+.st.sent{color:var(--blue-ink);}
+.st.part{color:var(--gold-ink);}
+.st.paid{color:var(--sage-ink);}
+.st.void{color:var(--terracotta-ink);}
+.st.studio{color:var(--clay-ink);}
+.st.over{color:var(--terracotta-ink);}
+.lrow{display:grid;grid-template-columns:minmax(0,1.6fr) 5.4rem 5rem 6rem;gap:.8rem;align-items:baseline;padding:.55rem 0;border-top:1px solid var(--rule);}
+.lrow.head{border-top:none;padding-bottom:.2rem;}
+.lrow.head span{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+.lrow .house{font-family:var(--font-display);font-size:14px;color:var(--ink);}
+.lrow .house .st{margin-left:.4rem;position:relative;top:-1px;}
+.lrow .num,.lrow .amt{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--muted);}
+.lrow .amt{text-align:right;color:var(--ink);}
+.lrow .amt.over{color:var(--terracotta-ink);}
+.lrow.wide{grid-template-columns:minmax(0,1.5fr) 5rem 5.4rem 6rem auto;}
+.figrail{display:flex;gap:1.6rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted);padding:.7rem 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);margin:.9rem 0;}
+.figrail b{display:block;font-weight:400;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:.15rem;}
+.figrail span{color:var(--ink);}
+.folio-head{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;flex-wrap:wrap;}
+.folio-head .no{font-family:var(--font-display);font-size:1.4rem;color:var(--ink);}
+.folio-head .line{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+.lineitem{display:grid;grid-template-columns:minmax(0,1fr) 3rem 5rem 5.6rem;gap:.6rem;padding:.35rem 0;border-top:1px solid var(--rule);font-size:12px;}
+.lineitem span:not(:first-child){font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--muted);}
+.lineitem .kind{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-left:.4rem;}
+.band{border:1px solid var(--terracotta-ink);border-radius:3px;padding:.6rem .8rem;margin:.9rem 0 0;font-size:12px;color:var(--ink);display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;}
+.band .msg{max-width:52ch;}
+.note{font-size:12px;color:var(--muted);font-style:italic;margin:.6rem 0 0;max-width:60ch;}
+.inset{border-left:2px solid var(--clay);padding-left:1rem;margin:1.2rem 0 0;}
+
+/* client-page mock */
+.letterhead{font-family:var(--font-display);font-size:1.3rem;color:var(--ink);letter-spacing:.01em;margin:0 0 .2rem;}
+.hair{border-top:1px solid var(--rule-2);margin:.7rem 0 1rem;}
+.envelope{border:1px solid var(--rule-2);background:var(--paper-inset);padding:1rem 1.1rem;margin:.6rem 0;}
+.envelope .from{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:0 0 .4rem;}
+.envelope .regarding{font-family:var(--font-display);font-size:1.15rem;color:var(--ink);margin:0;}
+.envelope .due{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin:.25rem 0 0;font-variant-numeric:tabular-nums;}
+.waiting{font-family:var(--font-display);font-style:italic;font-size:1.1rem;line-height:1.42;color:var(--mocha);margin:0 0 .4rem;max-width:46ch;}
+.choice{border-top:1px solid var(--rule);padding:.6rem 0 .6rem 1.7rem;position:relative;}
+.choice:first-of-type{border-top:none;}
+.choice .box{position:absolute;left:0;top:.75rem;width:12px;height:12px;border:1.5px solid var(--ink);border-radius:50%;}
+.choice.on .box::after{content:"";position:absolute;left:2.5px;top:2.5px;width:5px;height:5px;border-radius:50%;background:var(--ink);}
+.choice .word{font-family:var(--font-display);font-size:1rem;color:var(--ink);display:block;}
+.choice .meaning{font-size:.85rem;color:var(--muted);margin:.05rem 0 0;}
+.scored{display:inline-block;margin:1rem 0 0;font-family:var(--font-mono);}
+.scored .word{display:block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);padding:.2rem 0 .35rem;}
+.scored .track{display:block;height:1.5px;background:var(--rule-2);}
+.scored .under{display:block;height:1px;background:var(--clay);margin-top:2.5px;}
+.hint{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:.35rem 0 0;}
+
+/* email mock */
+.email{font-size:13px;}
+.email .subj{font-family:var(--font-display);font-size:1.1rem;color:var(--ink);margin:0 0 .3rem;}
+.email .meta{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 1rem;}
+.email p{max-width:52ch;margin:.5rem 0;}
+.email .link{font-family:var(--font-mono);font-size:11px;color:var(--clay-ink);border-bottom:1px solid var(--clay);}
+
+/* rail diagram */
+.rail{display:flex;flex-wrap:wrap;gap:.5rem .4rem;align-items:center;font-family:var(--font-mono);font-size:11px;margin:1.2rem 0;}
+.rail .node{border:1px solid var(--rule-2);border-radius:3px;padding:.35rem .6rem;color:var(--ink);background:var(--paper);white-space:nowrap;}
+.rail .node.db{border-color:var(--clay);}
+.rail .node.client{border-style:dashed;}
+.rail .arrow{color:var(--faint);}
+.rail .node small{display:block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:.1rem;}
+
+/* waves */
+.wave{border-top:1px solid var(--rule);padding:1.4rem 0;display:grid;gap:.6rem 2rem;grid-template-columns:minmax(0,1fr);}
+@media (min-width:860px){ .wave{grid-template-columns:9rem minmax(0,1fr);} }
+.wave .wname{font-family:var(--font-display);font-size:1.2rem;color:var(--ink);}
+.wave .wname small{display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:.3rem;}
+.wave dl{margin:0;display:grid;grid-template-columns:5.5rem minmax(0,1fr);gap:.35rem 1rem;font-size:14px;}
+.wave dt{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding-top:.2rem;}
+.wave dd{margin:0;max-width:none;}
+
+.footer{margin-top:5rem;padding-top:1.4rem;border-top:1.5px solid var(--ink);font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--faint);}
+@media (prefers-reduced-motion: reduce){ *{scroll-behavior:auto;} }
+</style>
+
+<div class="shell">
+
+<header class="masthead" id="top">
+  <p class="eyebrow">Patina · The Document · A proposal for rulings</p>
+  <h1>Studio invoices</h1>
+  <p class="standing">An invoice with no house.</p>
+  <div class="masthead-meta">
+    <div><b>Asked by</b><span>Middle West Studio, via Kody</span></div>
+    <div><b>Prepared</b><span>5 September 2026</span></div>
+    <div><b>Status</b><span>For rulings. Nothing built.</span></div>
+    <div><b>Reads in</b><span>About fifteen minutes; the rulings are at the end.</span></div>
+  </div>
+</header>
+
+<nav class="index" aria-label="Contents">
+  <p class="idxhead">Contents</p>
+  <ol>
+    <li><a href="#why"><span class="n">1</span><span>Why now</span></a></li>
+    <li><a href="#exists"><span class="n">2</span><span>What exists today</span></a></li>
+    <li><a href="#design"><span class="n">3</span><span>The design in one paragraph</span></a></li>
+    <li><a href="#mockups"><span class="n">4</span><span>Mockups M1–M7</span></a></li>
+    <li><a href="#rail"><span class="n">5</span><span>Data model and the rail</span></a></li>
+    <li><a href="#waves"><span class="n">6</span><span>Waves</span></a></li>
+    <li><a href="#risks"><span class="n">7</span><span>Risk register</span></a></li>
+    <li><a href="#rulings"><span class="n">8</span><span>Rulings S1–S12</span></a></li>
+    <li><a href="#appendix"><span class="n">9</span><span>Appendix</span></a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<section id="why">
+  <div class="opener">
+    <p class="eyebrow">1 · Why now</p>
+    <h2>The studio bills things that are not a house.</h2>
+  </div>
+  <p class="lede">A consultation. A site visit. A paid design review. A retainer that holds a slot on the calendar. A reimbursable. None of these is a project, and today every invoice in Patina is a project's invoice.</p>
+
+  <h4>The vision test</h4>
+  <div class="tablewrap"><table class="tight">
+    <tbody>
+      <tr><td class="w-name"><strong>Surface</strong></td><td>The Document. The client page is its homeowner face (R135), not a fourth surface.</td></tr>
+      <tr><td><strong>Studio moment</strong></td><td>The first hire, or the bookkeeper, billing the studio's smaller work without opening a project to do it.</td></tr>
+      <tr><td><strong>Stream</strong></td><td>The floor. The Document earns a subscription only if it carries the studio's whole book; a studio that keeps its consult invoices in another tool has not moved in.</td></tr>
+      <tr><td><strong>Promise</strong></td><td>The studio won't notice Patina. Today it notices, because it has to invent a house to bill a morning's work.</td></tr>
+    </tbody>
+  </table></div>
+  <p>It passes on all four. This is not a side journey.</p>
+
+  <h3>The workaround, and what it costs</h3>
+  <p>The ruled path for billing without a proposal is R79: open a project directly (<code>open_project_direct</code>, migration 00237), then draw an invoice inside it. For a consult that may never become a house that means a phantom project. The phantom sits on the Desk as a folder with nothing in it. It sits on the homeowner's page as a house with no rooms, no schedule, and one letter. It sits on the Accounts ledger under a project name the studio had to make up. And it stays there after the invoice is paid, because a project is not a thing the studio closes for a single morning's work.</p>
+  <p>Middle West Studio is Patina's own parent and first customer (VISION.md, line 25). Leah's studio is the customer the vision names, at the moment the vision names. This is that customer asking.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="exists">
+  <div class="opener">
+    <p class="eyebrow">2 · What exists today</p>
+    <h2>Every layer assumes a project.</h2>
+  </div>
+  <p>Three surveys read the invoice rail end to end and a fourth traced what would break if <code>project_id</code> were allowed to be null. The full reports sit beside this page in <span class="ref">discovery/01–04</span>. The couplings, in the order a studio invoice would meet them:</p>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-name">Layer</th><th class="w-what">Coupling</th><th class="w-path">Where</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Schema</strong></td><td><code>invoices.project_id UUID NOT NULL … ON DELETE CASCADE</code></td><td><span class="ref">supabase/migrations/00178_invoices_v1.sql:31</span></td></tr>
+      <tr><td><strong>Create RPC</strong></td><td><code>create_draft_invoice(p_project_id, …)</code> re-validates the designer · client · studio · <code>status='active'</code> tuple through the project, twice.</td><td><span class="ref">00511_public_sd_hardening.sql:3344-3417</span></td></tr>
+      <tr><td><strong>Studio trigger</strong> — the real gate</td><td><code>set_invoice_studio_id()</code> raises <code>studio_id_not_designer_studio</code> on any null-project row, on INSERT and on UPDATE, before its service-role early return. Issue, record payment, void, chase, reminders and the Stripe webhook's settle all fail. Its body hash is pinned in a contract test.</td><td><span class="ref">00511:2616-3040; trigger :3076-3088; hash at supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1733</span></td></tr>
+      <tr><td><strong>Money trigger</strong></td><td><code>apply_invoice_payment_effects</code> inner-joins <code>projects</code> to write <code>designer_earnings</code>. A project-less invoice would settle and <em>silently record no earnings</em>.</td><td><span class="ref">00277_refund_reconciliation.sql:128-268, join at :203</span></td></tr>
+      <tr><td><strong>Client RLS</strong></td><td>All three client-read policies (invoices, line items, payments) reach the homeowner only through <code>projects.client_id</code>.</td><td><span class="ref">00178:257-354</span></td></tr>
+      <tr><td><strong>Checkout</strong></td><td>Success and cancel URLs are hard-coded to <code>/projects/${invoice.project_id}?invoice=…#letterbox</code>.</td><td><span class="ref">supabase/functions/create-checkout-session/index.ts:292-293</span></td></tr>
+      <tr><td><strong>Hook</strong></td><td><code>CreateDraftInvoiceInput.projectId: string</code> plus a "canonical billing tuple" guard.</td><td><span class="ref">packages/supabase/src/hooks/use-invoices.ts:260, 711-718</span></td></tr>
+      <tr><td><strong>Composer</strong></td><td>Nothing renders below the project <code>&lt;select&gt;</code> until a project is chosen.</td><td><span class="ref">apps/designer-portal/src/components/document/accounts/invoice-composer.tsx:320-343</span></td></tr>
+      <tr><td><strong>Desk</strong></td><td><code>buildDeskReceivables</code> keys its map on <code>project_id</code>.</td><td><span class="ref">apps/designer-portal/src/lib/document/desk-receivables.ts:69</span></td></tr>
+      <tr><td><strong>Client page</strong></td><td>One page keyed on <code>projectId</code>; a household with no house sees <code>ProjectsEmptyState</code>, and nothing else.</td><td><span class="ref">apps/client-portal/src/components/threshold/threshold.tsx:272; src/app/page.tsx:57-68</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>What already works without a project</h3>
+  <p>More than you would expect. The rail was built with fallbacks that were never exercised because nothing could reach them.</p>
+  <ul class="plain">
+    <li><strong>Numbering</strong> is studio-keyed: <code>studio_invoice_counters</code> mints <code>INV-0031</code> off <code>studio_id</code>, and the uniqueness index already has a studio-less branch. <span class="ref">00318:155-172; 00513:39-48</span></li>
+    <li><strong>The browser issue path</strong> (<code>issue_invoice</code> → the 00318 body) never reads <code>projects</code>. Only the trigger stands in its way. <span class="ref">00412:2694 → 00397:1372 → 00318:99-207</span></li>
+    <li><strong>Recipient and letterhead</strong>: every email function reads <code>invoices.client_id</code> first, falls back to the roster's <code>client_email</code>, and <code>resolveStudioIdentity</code> already accepts a designer as well as a project. Copy already says <code>invoice.project?.name ?? 'your project'</code>. <span class="ref">invoice-send:202, 238-247; _shared/studio-identity.ts:33-45</span></li>
+    <li><strong>Checkout's payer check</strong> reads <code>invoices.client_id</code> before it looks at the project. <span class="ref">create-checkout-session/index.ts:234</span></li>
+    <li><strong>The email link needs no change.</strong> <code>/invoices/&lt;id&gt;</code> already folds to <code>/?invoice=&lt;id&gt;#letterbox</code>. <span class="ref">apps/client-portal/src/lib/retired-routes.ts:129-138</span></li>
+    <li><strong>A ruled precedent for money with no house.</strong> A direct order raised without a project stands on the road of the client's lowest-id house, and says so on its own line. <span class="ref">apps/client-portal/src/lib/threshold/road-orders.ts:18-24</span></li>
+    <li><strong>One identity model.</strong> <code>ClientPicker</code> picks a household from the roster and can invite-and-create inline (R73); <code>open-project-sheet.tsx</code> is the structural precedent: a household, a few fields, one RPC. <span class="ref">apps/designer-portal/src/components/portal/client-picker.tsx:484-513</span></li>
+    <li><strong>The Accounts book is already the studio's book</strong> (R36), unscoped, and its registry entry already answers to <em>billing</em>, <em>money</em>, <em>payments</em>. "Draw an invoice" is already an unscoped verb on the Desk and in ⌘K.</li>
+    <li><strong>iOS decodes the project as optional already.</strong> A null project cannot crash the Invoices list. <span class="ref">apps/mobile/Patina/Patina/Services/API/InvoicesAPIClient.swift:71, 91</span></li>
+  </ul>
+  <p class="note">One word is taken. "Ad-hoc" is R74's fourth line kind on a project invoice. The thing proposed here is not an ad-hoc invoice; it is a <em>studio invoice</em>, drawn for a household with no house, and its lines happen to be ad-hoc lines.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="design">
+  <div class="opener">
+    <p class="eyebrow">3 · The design</p>
+    <h2>The same invoice, no house.</h2>
+  </div>
+  <p class="lede">A studio invoice is an ordinary invoice whose <code>project_id</code> is null, whose household is named directly, and whose <em>regarding</em> line stands where the house name would. Same number series, same folio, same acts (issue &amp; send · record payment · resend · void · print), same rail (chooser, surcharge, Checkout, webhook), same earnings. No new table. No new ledger page. No new nav entry. No new client route.</p>
+  <p>What changes is small and deep: the schema lets go of one <code>NOT NULL</code>, the studio trigger learns a second branch, the earnings join becomes a left join, three read policies key on the household, five edge functions stop assuming a project, the composer gains a first choice, and the homeowner's page learns where to put a letter that belongs to no house.</p>
+  <p><strong>v1 does not re-parent.</strong> A studio invoice stays a studio invoice forever. If the household later opens a project, the invoice's number, its earnings row and its letterbox placement do not move; the new project starts its own money from zero. An act to file an old studio invoice under a house is a Wave 4 candidate (§6), not part of this build.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="mockups">
+  <div class="opener">
+    <p class="eyebrow">4 · Mockups</p>
+    <h2>Seven panels, drawn in the Document's own hand.</h2>
+  </div>
+  <p>Working HTML, not screenshots. Fixture studio: Middle West Studio. Fixture household: the Hollises. Every figure is invented for the page.</p>
+
+  <!-- M1 -->
+  <div class="panel">
+    <p class="panel-cap"><span>M1 · The composer — "Draw an invoice"</span><span class="answers">Answers S3 · S6 · S8 · S12</span></p>
+    <div class="panelrow panelrow-2">
+      <div class="mockwrap"><div class="mock">
+        <p class="sheet-title">Draw an invoice</p>
+        <p class="sub">Today · for a house</p>
+        <span class="lbl">the document</span>
+        <div class="fld sel">Hollis House</div>
+        <span class="lbl">payment milestones · unbilled</span>
+        <div class="tick"><span class="box"></span><span>Production start</span><span class="amt">$12,500.00</span></div>
+        <div class="tick"><span class="box"></span><span>When the living room settles</span><span class="amt">$8,200.00</span></div>
+        <span class="lbl">unbilled time</span>
+        <div class="tick"><span class="box"></span><span>Week of 24 Aug · 6.5 h · $175/h</span><span class="amt">$1,137.50</span></div>
+        <span class="lbl">ff&amp;e · uninvoiced</span>
+        <div class="tick"><span class="box"></span><span>Walnut credenza · Hedges &amp; Co.</span><span class="amt">$4,860.00</span></div>
+        <span class="lbl">ad-hoc lines</span>
+        <div class="grid-lines"><div class="fld ph">description</div><div class="fld ph">1</div><div class="fld ph">0.00</div><span class="x">×</span></div>
+        <div class="acts"><span class="act tertiary">Add line</span></div>
+        <span class="lbl">tax rate (%)</span><div class="fld">0</div>
+        <span class="lbl">terms (net days)</span><div class="fld">15</div>
+        <span class="lbl">memo · shown to the client</span><div class="fld ta ph"></div>
+        <div class="totals"><span class="k">subtotal</span><span class="v">$0.00</span><span class="k">tax</span><span class="v">$0.00</span><span class="k total">total</span><span class="v total">$0.00</span></div>
+        <div class="acts"><span class="act primary">Draft invoice</span></div>
+      </div></div>
+
+      <div class="mockwrap"><div class="mock">
+        <p class="sheet-title">Draw an invoice</p>
+        <p class="sub">Proposed · for the studio, no house</p>
+        <span class="lbl">for</span>
+        <div class="fld sel on">the studio · no house</div>
+        <span class="lbl">household</span>
+        <div class="fld sel on">Tom &amp; Priya Hollis</div>
+        <div class="picker">
+          <div class="prow on"><span>Tom &amp; Priya Hollis</span><span class="mono">hollis@…</span></div>
+          <div class="prow"><span>Marguerite Holland</span><span class="mono">Verona · site visit</span></div>
+          <div class="prow"><span>Dan &amp; Ellie Hollister</span><span class="mono">prospect</span></div>
+          <div class="prow add"><span>+ Add new client "Holl…"</span><span class="mono">invited on send · R73</span></div>
+        </div>
+        <span class="lbl">regarding</span>
+        <div class="fld on">Design consultation · 12 Sept 2026</div>
+        <span class="lbl">ad-hoc lines</span>
+        <div class="grid-lines head"><span>description</span><span>qty</span><span>unit $</span><span></span></div>
+        <div class="grid-lines"><div class="fld">Design consultation, on site (2 h)</div><div class="fld">1</div><div class="fld">450.00</div><span class="x">×</span></div>
+        <div class="grid-lines"><div class="fld ph">description</div><div class="fld ph">1</div><div class="fld ph">0.00</div><span class="x">×</span></div>
+        <div class="acts"><span class="act tertiary">Add line</span></div>
+        <span class="lbl">tax rate (%)</span><div class="fld">0</div>
+        <span class="lbl">terms (net days)</span><div class="fld">15</div>
+        <span class="lbl">memo · shown to the client</span><div class="fld ta">Thank you for a good morning in the house. Notes from the walk are in your page.</div>
+        <div class="totals"><span class="k">subtotal</span><span class="v">$450.00</span><span class="k">tax</span><span class="v">$0.00</span><span class="k total">total</span><span class="v total">$450.00</span></div>
+        <div class="acts"><span class="act primary">Draft invoice</span></div>
+        <div class="inset">
+          <span class="lbl">When the designer belongs to two studios</span>
+          <span class="lbl" style="margin-top:.4rem">studio</span>
+          <div class="fld sel">Middle West Studio</div>
+          <p class="note">This line appears only when there is a choice to make. One studio stays silent (S8).</p>
+        </div>
+      </div></div>
+    </div>
+    <p class="note">One composer, one habit. "For" replaces "the document" as the first section; every house stays in the list, and "the studio · no house" is its first entry. Choosing it swaps the pull-through sections (milestones, time, FF&amp;E are all house-bound) for a household and a regarding line, then the ad-hoc lines and totals the composer already has.</p>
+  </div>
+
+  <!-- M2 -->
+  <div class="panel">
+    <p class="panel-cap"><span>M2 · The Accounts book · Ledger</span><span class="answers">Answers S2 · S7</span></p>
+    <div class="mockwrap"><div class="mock">
+      <p class="sheet-title">The Accounts <span class="mono">· ledger · receivables · earnings</span></p>
+      <p class="sub">Studio eyes only · newest first</p>
+      <div class="lrow head"><span>house</span><span>no.</span><span>standing</span><span style="text-align:right">total</span></div>
+      <div class="lrow"><span class="house">Design consultation <span class="st studio">studio</span></span><span class="num">INV-0031</span><span><span class="st sent">sent</span></span><span class="amt">$450.00</span></div>
+      <div class="lrow"><span class="house">Hollis House</span><span class="num">INV-0030</span><span><span class="st part">part paid</span></span><span class="amt">$9,125.00</span></div>
+      <div class="lrow"><span class="house">Lakeshore Cottage</span><span class="num">INV-0029</span><span><span class="st paid">paid</span></span><span class="amt">$14,300.00</span></div>
+      <div class="lrow"><span class="house">Site visit · Verona <span class="st studio">studio</span></span><span class="num">INV-0028</span><span><span class="st paid">paid</span></span><span class="amt">$275.00</span></div>
+      <div class="lrow"><span class="house">Hollis House</span><span class="num">—</span><span><span class="st draft">draft</span></span><span class="amt">$8,200.00</span></div>
+    </div></div>
+    <p class="note">The house column reads the regarding line with a small <code>studio</code> stamp where a house name would sit. Rows are folio-first as today; the quiet <code>document ↗</code> doorway on a house row simply does not render on a studio row. Studio revenue counts in the front-matter Revenue and A/R figures, and each paid studio invoice lands on the Earnings page as a design fee (S7).</p>
+  </div>
+
+  <!-- M3 -->
+  <div class="panel">
+    <p class="panel-cap"><span>M3 · The Invoice folio · head and acts</span><span class="answers">Answers S12</span></p>
+    <div class="mockwrap"><div class="mock">
+      <div class="folio-head">
+        <span class="no">INV-0031 <span class="st sent">sent</span></span>
+        <span class="line">Tom &amp; Priya Hollis · Design consultation · 12 Sept 2026</span>
+      </div>
+      <div class="figrail">
+        <div><b>issued</b><span>5 Sept 2026</span></div>
+        <div><b>due</b><span>20 Sept 2026</span></div>
+        <div><b>total</b><span>$450.00</span></div>
+        <div><b>paid</b><span>$0.00</span></div>
+        <div><b>balance</b><span>$450.00</span></div>
+      </div>
+      <div class="lineitem"><span>Design consultation, on site (2 h) <span class="kind">ad-hoc</span></span><span>1</span><span>$450.00</span><span>$450.00</span></div>
+      <p class="note" style="margin-top:.8rem">Memo · Thank you for a good morning in the house. Notes from the walk are in your page.</p>
+      <div class="acts">
+        <span class="act primary">Issue &amp; send</span>
+        <span class="act secondary">Record payment</span>
+        <span class="act tertiary">Resend</span>
+        <span class="act danger">Void</span>
+        <span class="act tertiary">Print</span>
+      </div>
+    </div></div>
+    <p class="note">Identical to a house folio except the head line: <em>household · regarding · status</em> where it reads <em>household · house · status</em> today, and no <code>document ↗</code> doorway. The folio still prints itself. Nothing about the acts, the payments history, or the surcharge line changes.</p>
+  </div>
+
+  <!-- M4 -->
+  <div class="panel">
+    <p class="panel-cap"><span>M4 · The Accounts book · Receivables</span><span class="answers">Answers S9</span></p>
+    <div class="mockwrap"><div class="mock">
+      <p class="sheet-title">Receivables</p>
+      <p class="sub">A/R aging · the chase</p>
+      <div class="lrow head wide"><span>house</span><span>no.</span><span>due</span><span style="text-align:right">balance</span><span></span></div>
+      <div class="lrow wide"><span class="house">Hollis House</span><span class="num">INV-0030</span><span class="num">in 9 days</span><span class="amt">$4,562.50</span><span></span></div>
+      <div class="lrow wide"><span class="house">Paid design review <span class="st studio">studio</span></span><span class="num">INV-0026</span><span class="num"><span class="st over">18 days past</span></span><span class="amt over">$1,200.00</span><span class="act inked">Send reminder</span></div>
+    </div></div>
+    <p class="note">A studio invoice ages like any other and the same reminder act appears on the overdue row. Past due is terracotta ink, never red. In v1 this page is where an overdue studio invoice is seen and chased; the Desk has no folder to hang a need line on, and whether it should grow one is S9.</p>
+  </div>
+
+  <!-- M5 -->
+  <div class="panel">
+    <p class="panel-cap"><span>M5 · The client page · the letterbox</span><span class="answers">Answers S4 · S5</span></p>
+    <div class="panelrow panelrow-2">
+      <div class="mockwrap"><div class="mock">
+        <p class="sub">(a) The Hollises have a house · the letter stands in its letterbox</p>
+        <p class="letterhead">Hollis House</p>
+        <p class="mono">Middle West Studio · Madison</p>
+        <div class="hair"></div>
+        <span class="lbl">letterbox</span>
+        <div class="envelope">
+          <p class="from">From the studio · not for a house</p>
+          <p class="regarding">Design consultation · 12 Sept 2026</p>
+          <p class="due">Invoice No. 31 · $450.00 · due 20 September</p>
+        </div>
+        <div class="envelope" style="opacity:.75">
+          <p class="from">Invoice No. 30 · this house</p>
+          <p class="regarding">Living room · production start</p>
+          <p class="due">$4,562.50 remaining · due 14 September</p>
+        </div>
+        <div class="scored"><span class="word">Settle · $450.00</span><span class="track"></span><span class="under"></span></div>
+        <p class="hint">Opens the letter in place</p>
+      </div></div>
+
+      <div class="mockwrap"><div class="mock">
+        <p class="sub">(b) A household with no house · the front door is a letterbox</p>
+        <p class="letterhead">Middle West Studio</p>
+        <p class="mono">Leah Kochaver · Madison, Wisconsin</p>
+        <div class="hair"></div>
+        <p class="waiting">One letter is waiting for you.</p>
+        <div class="envelope">
+          <p class="from">From the studio</p>
+          <p class="regarding">Design consultation · 12 Sept 2026</p>
+          <p class="due">Invoice No. 31 · $450.00 · due 20 September</p>
+        </div>
+        <span class="lbl">how you'd like to settle</span>
+        <div class="choice on"><span class="box"></span><span class="word">Bank transfer (ACH)</span><span class="meaning">A small transfer fee, $3.60, is added.</span></div>
+        <div class="choice"><span class="box"></span><span class="word">Card</span><span class="meaning">A 3% card fee, $13.50, is added.</span></div>
+        <div class="choice"><span class="box"></span><span class="word">Mail a check</span><span class="meaning">We'll note that it's on its way.</span></div>
+        <div class="scored"><span class="word">Settle · $453.60</span><span class="track"></span><span class="under"></span></div>
+        <p class="hint">Press and hold</p>
+      </div></div>
+    </div>
+    <p class="note">The letter never leaves the page (R135). With a house, it stands in the letterbox of the household's adopted house, the lowest-id house they can open, the same deterministic rule that already places a houseless order, and it says so on its own line. The rule re-evaluates on every visit: a household with no house sees the letterbox alone today, and the moment a house exists the same letter stands in that house's letterbox (lowest project id). That is by design; the invoice itself never moves. With no house at all, the front door renders the letterbox alone with the studio's letterhead, and the settlement act, chooser and surcharge run unchanged. The email link, <code>/invoices/&lt;id&gt;</code>, folds to <code>/?invoice=&lt;id&gt;#letterbox</code> exactly as it does now. No public pay page: the household is on the roster and the R73 invite creates the account when the letter is opened (S4).</p>
+  </div>
+
+  <!-- M6 -->
+  <div class="panel">
+    <p class="panel-cap"><span>M6 · The email</span><span class="answers">Answers S12</span></p>
+    <div class="mockwrap"><div class="mock email">
+      <p class="subj">Invoice from Middle West Studio · Design consultation</p>
+      <p class="meta">to hollis@… · from hello@patina.cloud · operational</p>
+      <p>Tom and Priya,</p>
+      <p>Leah has sent you an invoice for the design consultation on 12 September. It comes to $450.00 and is due 20 September.</p>
+      <p>Thank you for a good morning in the house. Notes from the walk are in your page.</p>
+      <p><span class="link">Read the invoice and settle it in your page →</span></p>
+      <p class="mono">Middle West Studio · Madison, Wisconsin</p>
+    </div></div>
+    <p class="note">The regarding line stands where the house name stands today ("Invoice for Hollis House"). One link, the same one the email carries now. Letterhead resolves from the invoice's own studio, never from the designer's primary studio, so a two-studio designer never sends the wrong name.</p>
+  </div>
+
+  <!-- M7 -->
+  <div class="panel">
+    <p class="panel-cap"><span>M7 · The failure band and the void confirmation</span><span class="answers">House rules R83 · D2</span></p>
+    <div class="panelrow panelrow-2">
+      <div class="mockwrap"><div class="mock">
+        <p class="sub">Under the Draft act (R83, inline, no toast)</p>
+        <div class="acts"><span class="act primary">Draft invoice</span></div>
+        <div class="band"><span class="msg">The draft didn't take. The household isn't on this studio's roster yet; pick them again or add them.</span><span class="act inked">Try again</span></div>
+      </div></div>
+      <div class="mockwrap"><div class="mock">
+        <p class="sub">Void panel copy</p>
+        <span class="lbl">reason · required</span>
+        <div class="fld ta">Consultation rescheduled; will re-draw for the new date.</div>
+        <p class="note">Voiding keeps the number and marks the invoice void. Nothing else is released; a studio invoice holds no milestones or time.</p>
+        <div class="acts"><span class="act danger">Void INV-0031</span><span class="act tertiary">Keep it</span></div>
+      </div></div>
+    </div>
+    <p class="note">The house-invoice void copy says milestones and time entries are released so they can be billed again. A studio invoice has neither, so its copy says only what is true.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="rail">
+  <div class="opener">
+    <p class="eyebrow">5 · Data model and the rail</p>
+    <h2>One migration, five functions, no new tables.</h2>
+  </div>
+
+  <div class="rail" aria-label="The studio invoice rail">
+    <span class="node">composer<small>studio-invoice flag</small></span><span class="arrow">→</span>
+    <span class="node db">create_draft_studio_invoice<small>new rpc</small></span><span class="arrow">→</span>
+    <span class="node db">invoices<small>project_id null · client_id · studio_id · title</small></span><span class="arrow">→</span>
+    <span class="node db">issue_invoice<small>studio counter · unchanged</small></span><span class="arrow">→</span>
+    <span class="node">invoice-send<small>edge</small></span><span class="arrow">→</span>
+    <span class="node client">letterbox<small>client page</small></span><span class="arrow">→</span>
+    <span class="node">create-checkout-session<small>edge</small></span><span class="arrow">→</span>
+    <span class="node">Stripe</span><span class="arrow">→</span>
+    <span class="node">stripe-webhook<small>edge</small></span><span class="arrow">→</span>
+    <span class="node db">apply_invoice_payment_effects<small>left join</small></span><span class="arrow">→</span>
+    <span class="node db">designer_earnings<small>design_fee</small></span>
+  </div>
+
+  <h3>The migration</h3>
+  <p>One file, minted from <code>00570</code> (a peer session holds 00569; re-check the tip before merge).</p>
+  <div class="tablewrap"><table class="tight">
+    <tbody>
+      <tr><td class="w-name"><strong>1 · Column</strong></td><td><code>ALTER TABLE invoices ALTER COLUMN project_id DROP NOT NULL</code>; keep the FK. Add <code>chk_invoices_anchor CHECK (project_id IS NOT NULL OR (client_id IS NOT NULL AND studio_id IS NOT NULL))</code>. The studio is required so the number always comes off the studio counter, never the designer-keyed fallback.</td></tr>
+      <tr><td><strong>2 · Column</strong></td><td><code>ADD COLUMN title text</code>, the regarding line. House invoices leave it null and keep reading the house name.</td></tr>
+      <tr><td><strong>3 · The real gate</strong></td><td><code>set_invoice_studio_id()</code> gains an <code>IF NEW.project_id IS NULL THEN … END IF</code> branch on both the INSERT and UPDATE arms: the studio is an active <code>design_studio</code>, the designer an active non-guest member, the actor a member or service role. The immutability checks on project, designer, client and studio stay; every project-path line stays byte-identical. Re-hash the contract test. <span class="ref">00511:2616-3040; test :1733</span></td></tr>
+      <tr><td><strong>4 · New RPC</strong></td><td><code>create_draft_studio_invoice(p_client_id, p_studio_id, p_title, p_tax_rate, p_payment_terms_days, p_memo, p_lines)</code>. SECURITY DEFINER, registered in the 00511 roster. Guards: <code>is_active_studio_member(p_studio_id)</code>; the household is on the roster of an active member of that studio (the roster is per designer, so that member is stamped as <code>designer_id</code>, which is what RLS and co-member reads hang off); lines are <code>adhoc</code> only, milestone/time/ffe rejected by name; same payload checks as <code>create_draft_invoice</code>. Do not overload <code>create_draft_invoice</code>. <span class="ref">00511:3344, 3482-3560, 7189</span></td></tr>
+      <tr><td><strong>5 · Leave alone</strong></td><td><code>app_private.issue_invoice_for_actor</code> is not on the browser path, requires exactly one commercial anchor line, and has a pinned hash. The browser chain is <code>issue_invoice</code> → the 00318 body, which never reads <code>projects</code>. Once (3) lands, issue, record payment, void and chase all work unchanged. <span class="ref">00412:2694 → 00397:1372 → 00318:99-207; test :1846</span></td></tr>
+      <tr><td><strong>6 · Earnings</strong></td><td><code>apply_invoice_payment_effects</code>: <code>LEFT JOIN projects</code>; description <code>COALESCE(pr.name, i.title, 'Studio invoice')</code>; <code>designer_earnings.project_id</code> stays null. Only the forward earnings insert needs the left join: the refund-contra leg joins only <code>invoice_payments</code> → <code>designer_earnings</code> and copies <code>orig.project_id</code>, so refunds on a studio invoice are already project-agnostic. Rebase on the true head (anchored grep, never the doc). <span class="ref">00277:128-270; contra leg :221-243</span></td></tr>
+      <tr><td><strong>7 · RLS</strong></td><td>Three additive SELECT policies: <code>invoices</code> where <code>client_id = auth.uid() AND status &lt;&gt; 'draft'</code>; <code>invoice_line_items</code> and <code>invoice_payments</code> via <code>EXISTS invoices i</code>. The 00178 project-keyed policies stay.</td></tr>
+      <tr><td><strong>8 · Identity</strong></td><td><code>resolve_studio_identity(p_project_id, p_designer_id)</code> has no studio argument and falls to the designer's primary studio, the wrong letterhead for a two-studio designer. Add <code>p_studio_id</code>, or read <code>organizations</code> by <code>invoice.studio_id</code> in the shared helper. <span class="ref">00320:27; _shared/studio-identity.ts:33</span></td></tr>
+      <tr><td><strong>9 · Latent</strong></td><td><code>client_id … ON DELETE SET NULL</code> now conflicts with the CHECK on a hard profile delete. The purge path anonymizes rather than deletes, so it never fires today. Documented, not fixed. <span class="ref">00178:33; 00538/00539</span></td></tr>
+      <tr><td><strong>10 · Tests</strong></td><td>New <code>supabase/tests/billing/studio_invoice_test.sql</code>: draft → issue (studio number) → claim → settle (earnings row present, project null) → refund contra → void; household reads issued only, co-member reads, a stranger never confirms existence; a two-studio designer numbers off the chosen studio. Keep the contractor-rejection assertion and both <code>studio_id_not_designer_studio</code> suites green. Add a null-project case to <code>stripe-rail.test.ts</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Five edge functions</h3>
+  <p>The <code>project:projects!invoices_project_id_fkey(…)</code> embed is already a left embed; <code>project: null</code> is safe at runtime, and the lie is the local TypeScript type. Each function: fix the type, select <code>title</code>, and let <code>projectName</code> fall to the title.</p>
+  <ul class="plain">
+    <li><code>create-checkout-session</code>: return URLs through the already null-tolerant <code>clientProjectLink(…)</code>, so a studio invoice returns to <code>/?invoice=…&amp;checkout=…#letterbox</code>; the Stripe product name falls to the title; letterhead by <code>studio_id</code>. <span class="ref">index.ts:292-293; _shared/client-portal-links.ts:51</span></li>
+    <li><code>invoice-send</code>, <code>invoice-reminders</code>, <code>stripe-webhook</code>: same pattern; <code>notification_log.metadata.project_id</code> nullable.</li>
+    <li><code>invoice-check-intent</code>: missed on the first pass; same pattern. <span class="ref">index.ts:65, 124, 141, 167, 220, 260</span></li>
+  </ul>
+  <p>A shared-module edit means redeploying every importer; these five are the importers that matter.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="waves">
+  <div class="opener">
+    <p class="eyebrow">6 · Waves</p>
+    <h2>Three to ship, one to consider.</h2>
+  </div>
+
+  <div class="wave">
+    <div class="wname">Wave 1<small>DB and edge</small></div>
+    <dl>
+      <dt>Files</dt><dd>One migration (the ten items above); <code>_shared/studio-identity.ts</code>; the five edge functions; <code>packages/supabase/src/database.types.ts</code> regenerated; the new SQL suite; the re-hashed contract test.</dd>
+      <dt>Gates</dt><dd><code>supabase db reset</code> clean; the SQL suite green including the new studio-invoice file; Deno <code>_shared</code> tests plus the null-project case in <code>stripe-rail.test.ts</code>; <code>deno check</code> on all five functions; the signer-script webhook probe settles a studio invoice and produces the earnings row.</dd>
+      <dt>Deploys</dt><dd><code>supabase db push</code> → the five functions.</dd>
+    </dl>
+  </div>
+  <div class="wave">
+    <div class="wname">Wave 2<small>Designer portal · flag <code>studio-invoice</code></small></div>
+    <dl>
+      <dt>Files</dt><dd><code>use-invoices.ts</code> (<code>project_id: string | null</code>, <code>title</code>, <code>useCreateDraftStudioInvoice</code>); <code>invoice-composer.tsx</code> and its pure twin <code>lib/document/invoice-composer.ts</code>; <code>invoice-overlays.tsx</code>; <code>invoice-folio.tsx</code>; <code>accounts-ledger-page.tsx</code>; <code>accounts-receivables-page.tsx</code>; <code>desk-receivables.ts</code> (skip null in v1); the four designer test files.</dd>
+      <dt>Gates</dt><dd><code>pnpm --filter @patina/designer-portal type-check</code>; the full designer jest on a clean checkout; flag off → no "the studio" entry; flag on → draft → issue → send (Mailhog) → folio; no hydration error; QA in <code>live</code> data mode.</dd>
+      <dt>Deploys</dt><dd><code>./infra/deploy-portal.sh designer</code>; PostHog flag verified against <code>/flags</code> with a real-browser UA before enabling; fail-closed lever <code>NEXT_PUBLIC_FLAG_OVERRIDES=studio-invoice:false</code>.</dd>
+    </dl>
+  </div>
+  <div class="wave">
+    <div class="wname">Wave 3<small>Client page and iOS</small></div>
+    <dl>
+      <dt>Files</dt><dd><code>useClientInvoices()</code> in <code>@patina/supabase</code>; <code>threshold.tsx</code> merges studio rows into the adopted house's letterbox; <code>app/page.tsx</code> and <code>lib/data/active-project.ts</code> resolve a named studio invoice to the adopted house and render the letterbox-only front door for a household with no house; <code>invoices/[invoiceId]/print/page.tsx</code> title fallback; six client test files. iOS: <code>title</code> in <code>listSelect</code>; <code>InvoiceDetailView</code> title fallback; Budget grouping per S11; two test files.</dd>
+      <dt>Gates</dt><dd>Client jest; a walk as a seeded household with zero houses and with two houses; a Stripe test-mode card and ACH settle returning to <code>/</code>; iOS build plus a studio-invoice fixture decoded without crash.</dd>
+      <dt>Deploys</dt><dd><code>./infra/deploy-portal.sh client</code> (with <code>NEXT_PUBLIC_SUPABASE_STORAGE_KEY</code> exported); iOS rides the next TestFlight build.</dd>
+    </dl>
+  </div>
+  <div class="wave">
+    <div class="wname">Wave 4<small>Candidates · not proposed</small></div>
+    <dl>
+      <dt>Ideas</dt><dd>A Desk need line for an overdue studio invoice (S9). Placement in the iOS Budget (S11). "File this invoice under a house": re-parenting a studio invoice onto a project that opened later (v1 never re-parents). A studio default for payment terms. Recurring retainers. Each is its own ruling when it is wanted.</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="risks">
+  <div class="opener">
+    <p class="eyebrow">7 · Risk register</p>
+    <h2>Eight ways this goes wrong, and the answer to each.</h2>
+  </div>
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th>#</th><th class="w-what">Risk</th><th class="w-what">Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>The <code>set_invoice_studio_id</code> rewrite loosens the 00511 authority model.</td><td>Studio branch only when <code>project_id IS NULL</code>; the project path stays byte-identical; contract-test re-hash; the contractor-rejection assertion at <code>invoice_checkout_integrity_test:326</code> stays green.</td></tr>
+      <tr><td class="num">2</td><td>The Stripe webhook's settle fails on a studio invoice (the trigger's UPDATE arm).</td><td>Trigger and <code>apply_invoice_payment_effects</code> ship in the same migration; the SQL suite settles a null-project invoice end to end.</td></tr>
+      <tr><td class="num">3</td><td>Studio revenue missing from Earnings (the 00277 inner join).</td><td>Left join plus title; assert the <code>designer_earnings</code> row.</td></tr>
+      <tr><td class="num">4</td><td>Wrong letterhead for a two-studio designer.</td><td>Identity by <code>invoice.studio_id</code>, never the designer's primary studio.</td></tr>
+      <tr><td class="num">5</td><td>The household lands on the wrong house, or the named letter is missing.</td><td>Adopted-house branch in <code>page.tsx</code> and <code>active-project.ts</code>; merged list in <code>threshold.tsx</code>; an e2e on <code>/?invoice=&lt;studio&gt;</code>.</td></tr>
+      <tr><td class="num">6</td><td>A household with no house hits <code>ProjectsEmptyState</code> and the Checkout return is never read.</td><td>The letterbox-only front door mounts <code>Letterbox</code>, which owns the return reader.</td></tr>
+      <tr><td class="num">7</td><td>A nullable <code>project_id</code> breaks TypeScript across portals.</td><td>The type change and every red site in one PR; the designer and client <code>type-check</code> commands are the gates, because their builds do not check types.</td></tr>
+      <tr><td class="num">8</td><td>Overdue studio invoices invisible on the Desk and in the iOS Budget.</td><td>An explicit v1 ruling (S9, S11); they always appear in the ledger, receivables and the iOS invoice list.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="rulings">
+  <div class="opener">
+    <p class="eyebrow">8 · Rulings</p>
+    <h2>Twelve rulings, each with a recommendation.</h2>
+  </div>
+  <p class="lede">"Go with your recommendations" builds every row below as recommended. Overturn any one inline.</p>
+  <ol class="rulings">
+    <li><span class="sid">S1</span><p class="q">Shape. First-class project-less invoice, a hidden shell project per invoice, or "use R79 and open a project"?</p><p class="opts">Nullable <code>project_id</code> · a shell project the studio never sees · the existing open-a-project route.</p><p class="rec"><b>First-class.</b> Shell projects pollute the Desk, the client page and the ledger; R79 is the wrong answer for a consult that may never become a house.</p></li>
+    <li><span class="sid">S2</span><p class="q">Name. What is this thing called?</p><p class="opts">Studio invoice · loose invoice · direct invoice.</p><p class="rec"><b>Studio invoice.</b> It reads on the ledger as <em>Design consultation · studio</em> beside <em>Hollis House</em>. "Ad-hoc" stays the line kind (R74).</p></li>
+    <li><span class="sid">S3</span><p class="q">Where is it drawn?</p><p class="opts">The same composer with a first entry "the studio · no house" · a separate "Draw a studio invoice" verb and sheet.</p><p class="rec"><b>The same composer.</b> One verb, one sheet, one habit; no registry, ⌘K, Contents or help-parity churn.</p></li>
+    <li><span class="sid">S4</span><p class="q">Who is it for?</p><p class="opts">A household on the roster, invited on send (R73) · an email-only recipient with a tokenized public pay page.</p><p class="rec"><b>A household on the roster.</b> One identity model. A public pay page is new attack surface with no precedent, and it contradicts R135.</p></li>
+    <li><span class="sid">S5</span><p class="q">Where does the homeowner pay?</p><p class="opts">The letterbox of the adopted house plus a letterbox-only front door · a new client route.</p><p class="rec"><b>The letterbox.</b> R135 forbids new routes; houseless orders already ruled the adopted-house pattern.</p></li>
+    <li><span class="sid">S6</span><p class="q">Which lines can it carry?</p><p class="opts">Ad-hoc lines only · also unbilled time and FF&amp;E.</p><p class="rec"><b>Ad-hoc only.</b> Time entries and FF&amp;E are house-bound; pulling them across houses invents a second pull-through.</p></li>
+    <li><span class="sid">S7</span><p class="q">Does it count as earnings?</p><p class="opts">Yes, as a design fee on the Earnings page · no, kept off the Earnings page.</p><p class="rec"><b>Yes.</b> R36 and R37 gather design fees under "what you earn" regardless of house.</p></li>
+    <li><span class="sid">S8</span><p class="q">Two-studio designers. Which studio draws it?</p><p class="opts">Silently the designer's primary studio · an explicit studio line whenever the designer belongs to more than one.</p><p class="rec"><b>Explicit when there is a choice, silent otherwise.</b> The signature flow already needed a two-studio guard (00566); Kody's own account is in two studios.</p></li>
+    <li><span class="sid">S9</span><p class="q">Should an overdue studio invoice reach the Desk?</p><p class="opts">Receivables page only in v1 · a Desk need line.</p><p class="rec"><b>Receivables only in v1.</b> A studio invoice has no folder to hang a need on. The Desk line is a Wave 4 candidate.</p></li>
+    <li><span class="sid">S10</span><p class="q">Flag?</p><p class="opts">Flag <code>studio-invoice</code> on the designer side only; DB and client page unflagged · flag everything.</p><p class="rec"><b>Designer side only.</b> The client page is flagless by R135, and the DB change is inert until a row exists.</p></li>
+    <li><span class="sid">S11</span><p class="q">iOS in v1?</p><p class="opts">Null-safety plus a title fallback only · full placement in the Invoices list and Budget.</p><p class="rec"><b>Null-safety only.</b> The decoder already tolerates a null project; full placement waits for the approvals and Daily Return programs to settle.</p></li>
+    <li><span class="sid">S12</span><p class="q">Is the regarding line required?</p><p class="opts">Required · optional.</p><p class="rec"><b>Required.</b> It is the only thing that names the letter on the ledger, in the email subject and on the homeowner's page.</p></li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<section id="appendix">
+  <div class="opener">
+    <p class="eyebrow">9 · Appendix</p>
+    <h2>Every path cited, and what the code could not answer.</h2>
+  </div>
+
+  <h4>Paths cited on this page</h4>
+  <div class="tablewrap"><table class="tight">
+    <tbody>
+      <tr><td><span class="ref">apps/client-portal/src/app/invoices/[invoiceId]/print/page.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/client-portal/src/app/page.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/client-portal/src/components/threshold/threshold.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/client-portal/src/lib/data/active-project.ts</span></td></tr>
+      <tr><td><span class="ref">apps/client-portal/src/lib/retired-routes.ts</span></td></tr>
+      <tr><td><span class="ref">apps/client-portal/src/lib/threshold/road-orders.ts</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/components/document/accounts/accounts-ledger-page.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/components/document/accounts/accounts-receivables-page.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/components/document/accounts/invoice-composer.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/components/document/accounts/invoice-folio.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/components/document/accounts/invoice-overlays.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/components/document/overlays/open-project-sheet.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/components/portal/client-picker.tsx</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/lib/document/desk-receivables.ts</span></td></tr>
+      <tr><td><span class="ref">apps/designer-portal/src/lib/document/invoice-composer.ts</span></td></tr>
+      <tr><td><span class="ref">apps/mobile/Patina/Patina/Services/API/InvoicesAPIClient.swift</span></td></tr>
+      <tr><td><span class="ref">docs/design/the-document/DECISIONS.md (R36, R73, R74, R79, R83, R135, D2)</span></td></tr>
+      <tr><td><span class="ref">docs/vision/VISION.md</span></td></tr>
+      <tr><td><span class="ref">infra/deploy-portal.sh</span></td></tr>
+      <tr><td><span class="ref">packages/supabase/src/database.types.ts</span></td></tr>
+      <tr><td><span class="ref">packages/supabase/src/hooks/use-invoices.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/functions/_shared/client-portal-links.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/functions/_shared/studio-identity.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/functions/_tests/stripe-rail.test.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/functions/create-checkout-session/index.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/functions/invoice-check-intent/index.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/functions/invoice-reminders/index.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/functions/invoice-send/index.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/functions/stripe-webhook/index.ts</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00178_invoices_v1.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00237_open_project_direct.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00277_refund_reconciliation.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00318_studio_invoice_numbering_and_ops.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00320 (resolve_studio_identity)</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00397_billing_checkout_integrity.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00412_design_services_commercial_authority.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00511_public_sd_hardening.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00513_invoice_numbering_studio_uniqueness.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00538 / 00539 (client purge)</span></td></tr>
+      <tr><td><span class="ref">supabase/migrations/00566 (signature two-studio guard)</span></td></tr>
+      <tr><td><span class="ref">supabase/tests/billing/invoice_checkout_integrity_test.sql</span></td></tr>
+      <tr><td><span class="ref">supabase/tests/edge_api/public_sd_hardening_contract_test.sql</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>What the code could not answer</h4>
+  <ul class="plain">
+    <li><strong>What Middle West's first studio invoices actually are.</strong> Consult fees, site visits, retainers, reimbursables, or something else. Nothing on disk records the request; the ad-hoc-lines-only shape (S6) covers all of them, but a recurring retainer would want its own ruling.</li>
+    <li><strong>Whether a Desk need line is wanted</strong> for an overdue studio invoice, or whether the Receivables page is enough (S9).</li>
+    <li><strong>Whether the iOS Budget should show studio invoices</strong>, and under what heading, given the Budget groups by house (S11).</li>
+    <li><strong>Whether a studio wants a default for payment terms</strong> instead of typing 15 each time. No such setting exists for house invoices either.</li>
+    <li><strong>Whether a household with no house should ever see more than the letterbox</strong> on the front door, or whether the letterbox-only state is the whole page until a house exists.</li>
+    <li><strong>Whether a studio invoice should ever be filed under a house that opens later.</strong> v1 never re-parents: number, earnings row and placement stay put, and a later project starts its own money. If the studio wants the consult to roll into the house's account, that is the Wave 4 "file under a house" act and its own ruling.</li>
+  </ul>
+
+  <p class="footer">Prepared 5 September 2026 · research in <span class="mono">artifacts/studio-invoices-2026-09-05/discovery/</span> · nothing built</p>
+</section>
+
+</div>
