@@ -102,11 +102,15 @@ struct DecisionListView: View {
                     .foregroundStyle(PatinaColors.Text.muted)
                     .lineLimit(3)
             }
-            // SP-15: the same due line the Studio hub prints.
-            if let due = DateDisplay.due(d.due_date) {
-                Text(due.text)
+            // SP-15: the same line the Studio hub prints. P-04 / R8: a date
+            // that has passed says the ask is still open, in body ink — the
+            // red and the retired word are money's alone.
+            if let standing = DateDisplay.approval(dueDate: d.due_date, askedAt: d.created_at) {
+                Text(standing.text)
                     .font(PatinaTypography.captionSmall)
-                    .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.muted)
+                    .foregroundStyle(
+                        standing.isStillOpen ? PatinaColors.Text.primary : PatinaColors.Text.muted
+                    )
             }
         }
         .padding(16)
@@ -147,7 +151,9 @@ struct DecisionListView: View {
         if let type = d.decision_type { parts.append(type.capitalized) }
         if let projectName = d.project?.name, !projectName.isEmpty { parts.append(projectName) }
         if let description = d.description, !description.isEmpty { parts.append(description) }
-        if let due = DateDisplay.due(d.due_date) { parts.append(due.text) }
+        if let standing = DateDisplay.approval(dueDate: d.due_date, askedAt: d.created_at) {
+            parts.append(standing.text)
+        }
         return parts.joined(separator: ", ")
     }
 

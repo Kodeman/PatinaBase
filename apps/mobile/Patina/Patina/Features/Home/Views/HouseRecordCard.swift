@@ -40,16 +40,13 @@ struct HouseRecordRowPresentation: Equatable {
     let leadText: String?
     /// Mono, `error`. The only red on the card, and money only.
     let lateText: String?
-    /// P-04 / R8. An approval past its date, said in body ink: it is still
-    /// open, and the row's own title already names who asked and about what.
-    /// Never red, and never the word this program retired.
+    /// P-04 / R8. An approval past its date, said in body ink as the whole
+    /// ruled sentence — "Still open, Leah asked on Aug 22." Never red, and
+    /// never the word this program retired. Drawn under the title rather than
+    /// in the rail, because it is a sentence and not a status token.
     let stillOpenText: String?
     let showsNewTick: Bool
     let accessibilityLabel: String
-
-    /// The one word the state prints. Ruled copy — pinned rather than spelled
-    /// out at each of its three sites.
-    static let stillOpen = "Still open"
 
     static func make(
         row: HouseRecordRow,
@@ -68,17 +65,16 @@ struct HouseRecordRowPresentation: Equatable {
         let tick = row.isNew
         switch row.state {
         case .overdue:
-            // R8's sentence, assembled across the row it belongs to: the title
-            // beside this already opens with the designer's given name and the
-            // question ("Leah asked about Rug color."), so the rail carries the
-            // rest of it and VoiceOver hears the whole line at once.
-            let asked = "asked \(HouseRecordDates.short(row.date, calendar: calendar))"
+            // R8's sentence, printed whole. `askedBy` is the same name the
+            // title uses, so the row cannot name the designer two ways.
+            let sentence = DateDisplay.stillOpen(
+                designer: row.askedBy,
+                askedOn: HouseRecordDates.short(row.date, calendar: calendar)
+            )
             return HouseRecordRowPresentation(
-                leadText: asked, lateText: nil, stillOpenText: Self.stillOpen,
+                leadText: nil, lateText: nil, stillOpenText: sentence,
                 showsNewTick: tick,
-                accessibilityLabel: spoken(
-                    row: row, state: "\(Self.stillOpen), \(asked)", isNew: tick
-                )
+                accessibilityLabel: spoken(row: row, state: sentence, isNew: tick)
             )
 
         case .due(let due):
@@ -481,7 +477,9 @@ struct HouseRecordRowView: View {
 
     private var rowContent: some View {
         Group {
-            if dynamicTypeSize.isAccessibilitySize {
+            // R8's sentence is a line of prose, not a rail token: it stacks
+            // under the title so it has the row's full width to read on.
+            if dynamicTypeSize.isAccessibilitySize || presentation.stillOpenText != nil {
                 VStack(alignment: .leading, spacing: 4) {
                     title
                     state
@@ -531,18 +529,14 @@ struct HouseRecordRowView: View {
                     .foregroundStyle(PatinaColors.Text.error)
             }
             if let stillOpen = shown.stillOpenText {
-                if shown.leadText != nil {
-                    Text("·")
-                        .font(PatinaTypography.monoLabel)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                }
-                // Body ink at the rail's own size — the state is stated, not
-                // flagged (P-04).
+                // R8's sentence, in body ink and in sentence case: the state
+                // is stated, not flagged (P-04). Never the rail's uppercase
+                // mono, which would turn a sentence back into a status token.
                 Text(stillOpen)
-                    .font(PatinaTypography.monoLabel)
-                    .tracking(0.4)
-                    .textCase(.uppercase)
+                    .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
             }
             if shown.showsNewTick {
                 Text("· new")

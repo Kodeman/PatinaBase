@@ -267,6 +267,9 @@ private extension StudioQueueBuilder {
         guard !context.pendingDecisions.isEmpty else { return nil }
         let decisions = context.pendingDecisions
         let dueDate = decisions.compactMap { parsedDate($0.due_date) }.min()
+        // P-04 / R8: the approval rail says when it was asked, not that it is
+        // late. `dueLabel` stays where it belongs, on the money row above.
+        let askedAt = decisions.compactMap { parsedDate($0.created_at) }.min()
         let detail = decisions.count == 1
             ? (decisions[0].title ?? "A project decision is ready")
             : "\(decisions.count) project choices are ready"
@@ -275,7 +278,9 @@ private extension StudioQueueBuilder {
             id: "awaiting.decisions",
             title: countLabel(decisions.count, singular: "Decision", plural: "Decisions"),
             detail: detail,
-            meta: dueDate.map { dueLabel($0, now: context.input.now) },
+            meta: DateDisplay.approval(
+                due: dueDate, askedAt: askedAt, now: context.input.now
+            )?.text,
             systemImage: "checkmark.circle",
             route: .decisionList,
             priority: urgencyPriority(

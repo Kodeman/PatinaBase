@@ -45,6 +45,26 @@ struct HouseRecordBuilderTests {
         return service
     }
 
+    /// P-04 / R8: the name the still-open sentence uses, by the same rule
+    /// `title(for:)` follows — a person's given name, a studio's whole name,
+    /// and nothing invented when the wire carried none.
+    @Test("the row is handed the name its own title already uses")
+    func askedByNameFollowsTheTitleRule() {
+        func item(_ name: String?, isPerson: Bool) -> StudioQueueItemRow {
+            StudioQueueItemRow(
+                id: "item", kind: .decision, entityId: "d-1", title: "Rug color",
+                detail: nil, askedAt: now, dueAt: now, amountCents: nil,
+                designerName: name, designerIsPerson: isPerson,
+                route: .decisionDetail(decisionId: "d-1")
+            )
+        }
+        #expect(HouseRecordBuilder.askedByName(for: item("Leah Hartwell", isPerson: true))
+                == "Leah")
+        #expect(HouseRecordBuilder.askedByName(for: item("Hartwell Studio", isPerson: false))
+                == "Hartwell Studio")
+        #expect(HouseRecordBuilder.askedByName(for: item(nil, isPerson: false)) == nil)
+    }
+
     /// The seed's three waiting things, as the walk sees them.
     private func waitingFixtures() throws -> ( // swiftlint:disable:this large_tuple
         [RemoteClientDecision], [RemoteProposal], [RemoteInvoice]

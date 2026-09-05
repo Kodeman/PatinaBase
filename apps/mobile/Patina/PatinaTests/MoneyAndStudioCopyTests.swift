@@ -94,14 +94,62 @@ struct MoneyAndStudioCopyTests {
 
         let decisions = try decode([RemoteClientDecision].self, """
         [{ "id": "d-1", "title": "Rug color", "status": "pending",
-           "due_date": "2026-08-22T00:00:00Z", "created_at": "2026-08-01T00:00:00Z" }]
+           "due_date": "2026-08-22T00:00:00Z", "created_at": "2026-08-01T12:00:00Z" }]
         """)
         let snapshot = StudioQueueBuilder.build(StudioQueueInput(
             projects: [], decisions: decisions, proposals: [], invoices: [],
             documents: [], threads: [], notifications: [],
             currentUserId: "client", now: now
         ))
-        #expect(snapshot.section(.awaitingYou).rows.first?.meta == stamped.text)
+        // P-04 / R8: the approval row is the one that stopped saying it. The
+        // shared helper still parses the same two shapes — `stamped` proves
+        // the timestamptz form reads as past — but the approval rail names
+        // the day the studio asked instead.
+        #expect(snapshot.section(.awaitingYou).rows.first?.meta
+                == "Still open, your designer asked on Aug 1.")
+    }
+
+    // MARK: - P-04 / R8 · the approval surfaces stopped saying it
+
+    @Test("an approval past its date reads as still open, and money keeps its own line")
+    func approvalLineIsTheRuledSentence() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
+        #expect(DateDisplay.approval(
+            dueDate: "2026-08-22T00:00:00Z", askedAt: "2026-08-01T12:00:00Z",
+            designer: "Leah", now: now
+        ) == DateDisplay.ApprovalLine(
+            text: "Still open, Leah asked on Aug 1.", isStillOpen: true
+        ))
+        // Not yet past: the ordinary due line, muted, exactly as before.
+        #expect(DateDisplay.approval(
+            dueDate: "2026-09-01", askedAt: "2026-08-01", now: now
+        ) == DateDisplay.ApprovalLine(text: "Due Sep 1", isStillOpen: false))
+        #expect(DateDisplay.approval(
+            dueDate: "2026-08-27", askedAt: "2026-08-01", now: now
+        ) == DateDisplay.ApprovalLine(text: "Due today", isStillOpen: false))
+        // No asked-on date on the wire: say only what is known, invent nothing.
+        #expect(DateDisplay.approval(dueDate: "2026-08-22", askedAt: nil, now: now)
+                == DateDisplay.ApprovalLine(text: "Still open.", isStillOpen: true))
+        #expect(DateDisplay.approval(dueDate: nil, askedAt: "2026-08-01", now: now) == nil)
+        // Money is untouched — the one place the other word still belongs.
+        #expect(DateDisplay.due("2026-08-22", now: now)?.isPastDue == true)
+    }
+
+    /// The three approval surfaces read the approval helper, never the money
+    /// one, and none of them carries the error ramp for a passed date.
+    @Test("no approval surface prints the retired word or paints a date red")
+    func approvalSurfacesCarryNoRedAndNoRetiredWord() throws {
+        for file in [
+            "Patina/Features/Decisions/Views/DecisionListView.swift",
+            "Patina/Features/Decisions/Views/DecisionDetailView.swift",
+            "Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift"
+        ] {
+            let source = try String(contentsOf: Self.sourceURL(file), encoding: .utf8)
+            #expect(source.contains("DateDisplay.approval("), "\(file) still reads the money line")
+            #expect(!source.contains("DateDisplay.due(d."), "\(file) still reads the money line")
+            #expect(!source.contains("isPastDue ? PatinaColors.Text.error"),
+                    "\(file) still paints a passed date red")
+        }
     }
 
     /// B-1: the invoice list formatted its own "Due Aug 22, 2026" in muted

@@ -32,30 +32,43 @@ struct HouseRecordCardTests {
         isNew: Bool = false,
         standing: Bool = false,
         title: String = "Something happened.",
-        detail: String? = nil
+        detail: String? = nil,
+        askedBy: String? = nil
     ) -> HouseRecordRow {
         HouseRecordRow(
             id: "row", kind: kind, title: title, detail: detail, date: date,
-            state: state, isNew: isNew, isStandingCondition: standing, route: nil
+            state: state, isNew: isNew, isStandingCondition: standing,
+            askedBy: askedBy, route: nil
         )
     }
 
     // MARK: - The right-hand side
 
     /// P-04 / R8. The word "overdue" and the red it was painted in are both
-    /// gone: an approval past its date says it is still open, in body ink, and
-    /// the red slot (`lateText`) is left for money.
-    @Test("an approval past its date says it is still open, and nothing is red")
+    /// gone: an approval past its date prints R8's sentence whole, in body
+    /// ink, and the red slot (`lateText`) is left for money.
+    @Test("an approval past its date prints R8's sentence, and nothing is red")
     func pastItsDateDecision() {
         let shown = HouseRecordRowPresentation.make(
-            row: Self.row(kind: .decisionAsked, date: Self.day(8, 22), state: .overdue),
+            row: Self.row(
+                kind: .decisionAsked, date: Self.day(8, 22), state: .overdue,
+                askedBy: "Leah"
+            ),
             now: Self.day(8, 26), calendar: Self.calendar
         )
-        #expect(shown.leadText == "asked Aug 22")
-        #expect(shown.stillOpenText == "Still open")
+        #expect(shown.stillOpenText == "Still open, Leah asked on Aug 22.")
+        #expect(shown.leadText == nil, "the sentence is the whole state — no rail beside it")
         #expect(shown.lateText == nil)
         #expect(shown.showsNewTick == false)
         #expect(!shown.accessibilityLabel.lowercased().contains("overdue"))
+
+        // With no designer on the wire the sentence names none and says so,
+        // rather than inventing one.
+        let unnamed = HouseRecordRowPresentation.make(
+            row: Self.row(kind: .decisionAsked, date: Self.day(8, 22), state: .overdue),
+            now: Self.day(8, 26), calendar: Self.calendar
+        )
+        #expect(unnamed.stillOpenText == "Still open, your designer asked on Aug 22.")
     }
 
     /// The retired word must not survive anywhere in the two files that draw
@@ -163,20 +176,20 @@ struct HouseRecordCardTests {
         #expect(shown.showsNewTick == false)
     }
 
-    /// R8's sentence, assembled across the row: the title supplies the
-    /// designer's given name and the question, the rail supplies the rest.
+    /// VoiceOver hears exactly what is drawn — R8's sentence included.
     @Test("every row says its state to VoiceOver")
     func voiceOverNamesTheState() {
         let shown = HouseRecordRowPresentation.make(
             row: Self.row(
                 kind: .decisionAsked, date: Self.day(8, 22), state: .overdue,
                 title: "Leah asked about Rug color - Natural vs Sand.",
-                detail: "Aspen Loft Refresh"
+                detail: "Aspen Loft Refresh", askedBy: "Leah"
             ),
             now: Self.day(8, 26), calendar: Self.calendar
         )
         #expect(shown.accessibilityLabel ==
-                "Leah asked about Rug color - Natural vs Sand. Aspen Loft Refresh. Still open, asked Aug 22.")
+                "Leah asked about Rug color - Natural vs Sand. Aspen Loft Refresh. "
+                + "Still open, Leah asked on Aug 22.")
     }
 
     /// Late money keeps its red, and loses the retired word with everything
