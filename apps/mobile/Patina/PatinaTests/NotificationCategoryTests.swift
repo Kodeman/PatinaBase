@@ -166,18 +166,84 @@ struct NotificationCategoryTests {
         )
     }
 
-    /// The app will not invent a thread that does not exist: the inbox is where
-    /// she writes to the studio, and it is never a dead end.
-    @Test("Ask a question opens the inbox when the envelope names no thread")
-    func askFallsBackToTheInbox() {
-        for entity in ["decision", "proposal", "invoice"] {
+    /// No `PATINA_*` envelope carries a thread today — `buildApnsPayload`
+    /// (`apns-send/core.ts`) writes `aps`, `entity_type`, `entity_id` and
+    /// `notification_log_id` and nothing else — so this is the leg that
+    /// actually runs. The act belongs to the document: it lands on the
+    /// document's own screen, where "Ask a question" is an act she can take,
+    /// not in a general inbox with the approval's identity thrown away.
+    @Test("Ask a question opens the document itself when the envelope names no thread")
+    func askOpensTheDocumentItself() {
+        let expected: [String: AppRoute] = [
+            "decision": .decisionDetail(decisionId: "x-1"),
+            "proposal": .proposalDetail(proposalId: "x-1"),
+            "invoice": .invoiceDetail(invoiceId: "x-1")
+        ]
+        for (entity, route) in expected {
             #expect(
                 NotificationCategories.route(
                     forActionIdentifier: PatinaNotificationAction.askQuestion.rawValue,
                     apnsUserInfo: ["entity_type": entity, "entity_id": "x-1"]
-                ) == .threadList
+                ) == route,
+                "\(entity)"
             )
         }
+    }
+
+    /// The real payload, byte for byte, as `buildApnsPayload` assembles it for
+    /// a Stage-2 approval: an `aps` block with the category, the entity pair,
+    /// the log id — and no `thread_id`.
+    @Test("Ask a question on the real decision envelope reaches the approval")
+    func askOnTheRealEnvelopeReachesTheApproval() {
+        let userInfo: [AnyHashable: Any] = [
+            "aps": [
+                "alert": ["title": "An approval needs you", "body": "Kitchen millwork spec"],
+                "category": "PATINA_DECISION",
+                "thread-id": "decision-d-1",
+                "interruption-level": "active"
+            ],
+            "entity_type": "decision",
+            "entity_id": "d-1",
+            "notification_log_id": "n-1"
+        ]
+        #expect(
+            NotificationCategories.route(
+                forActionIdentifier: PatinaNotificationAction.askQuestion.rawValue,
+                apnsUserInfo: userInfo
+            ) == .decisionDetail(decisionId: "d-1")
+        )
+    }
+
+    /// A Threshold link, and then the sender's grouping key, are the two
+    /// remaining ways an envelope can name the document.
+    @Test("Ask a question follows the deep link, then the thread identifier")
+    func askFollowsTheLinkThenTheGroupingKey() {
+        #expect(
+            NotificationCategories.route(
+                forActionIdentifier: PatinaNotificationAction.askQuestion.rawValue,
+                apnsUserInfo: ["deep_link": "/projects/proj-1?invoice=inv-4#ledger"]
+            ) == .invoiceDetail(invoiceId: "inv-4")
+        )
+        #expect(
+            NotificationCategories.route(
+                forActionIdentifier: PatinaNotificationAction.askQuestion.rawValue,
+                apnsUserInfo: [:],
+                threadIdentifier: "decision-d-7"
+            ) == .decisionDetail(decisionId: "d-7")
+        )
+    }
+
+    /// The app will not invent a thread that does not exist, and it will not
+    /// invent a document either: an envelope that names nothing lands in the
+    /// inbox, where she writes to the studio. Never a dead end.
+    @Test("Ask a question opens the inbox when the envelope names nothing at all")
+    func askFallsBackToTheInbox() {
+        #expect(
+            NotificationCategories.route(
+                forActionIdentifier: PatinaNotificationAction.askQuestion.rawValue,
+                apnsUserInfo: ["notification_log_id": "n-1"]
+            ) == .threadList
+        )
     }
 
     @Test("a dismissal opens nothing and is not an opening")

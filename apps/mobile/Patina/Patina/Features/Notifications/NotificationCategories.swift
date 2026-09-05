@@ -157,9 +157,10 @@ public enum NotificationCategories {
     /// - `Open`, and the plain banner tap, resolve through `NotificationRouter`
     ///   exactly as they did before this file existed: the entity pair, then
     ///   the portal deep link (P-06).
-    /// - `Ask a question` opens the conversation. The envelope names a thread
-    ///   when the sender knows one; when it does not, the inbox is the honest
-    ///   destination — the app will not invent a thread that does not exist.
+    /// - `Ask a question` opens the conversation about THIS document: the
+    ///   thread the envelope names, else the document's own screen, where the
+    ///   act of the same name lives. The inbox is the last resort, for a
+    ///   letter that names nothing.
     /// - A dismissal opens nothing.
     ///
     /// Nil means "this act does not navigate"; the caller decides whether that
@@ -171,7 +172,7 @@ public enum NotificationCategories {
     ) -> AppRoute? {
         if actionIdentifier == UNNotificationDismissActionIdentifier { return nil }
         if PatinaNotificationAction(rawValue: actionIdentifier) == .askQuestion {
-            return conversationRoute(apnsUserInfo: userInfo)
+            return conversationRoute(apnsUserInfo: userInfo, threadIdentifier: threadIdentifier)
         }
         return NotificationRouter.resolve(apnsUserInfo: userInfo).route
             ?? route(forThreadIdentifier: threadIdentifier)
@@ -192,12 +193,30 @@ public enum NotificationCategories {
         )
     }
 
-    /// The thread this letter belongs to, or the inbox.
+    /// The thread this letter belongs to; failing that, the document it is
+    /// about; failing that, the inbox.
     ///
     /// `thread_id` is read first; `entity_type: "thread"` is the same fact in
     /// the envelope's own vocabulary, and is what a message push already
-    /// carries.
-    static func conversationRoute(apnsUserInfo userInfo: [AnyHashable: Any]) -> AppRoute {
+    /// carries. Neither is on a `PATINA_*` envelope today —
+    /// `apns-send/core.ts`'s `buildApnsPayload` writes `aps`, `entity_type`,
+    /// `entity_id` and `notification_log_id` and nothing else — so the second
+    /// leg is the one that actually runs, and it is the important one:
+    ///
+    /// **the act belongs to the document.** "Ask a question" is the same act
+    /// on the lock screen as it is inside the app (`ProjectApprovalCopy.acts`
+    /// — the honest non-answer, which the deck puts on the banner precisely so
+    /// it is "as reachable as the answer"). Landing on the inbox threw the
+    /// approval's identity away and dropped her somewhere the act does not
+    /// exist. Her own screen is where it does.
+    ///
+    /// The inbox stays the last resort, for an envelope that names no entity
+    /// at all: it is where she writes to the studio, and it is never a dead
+    /// end.
+    static func conversationRoute(
+        apnsUserInfo userInfo: [AnyHashable: Any],
+        threadIdentifier: String? = nil
+    ) -> AppRoute {
         if let threadId = userInfo["thread_id"] as? String, !threadId.isEmpty {
             return .threadDetail(threadId: threadId)
         }
@@ -205,7 +224,9 @@ public enum NotificationCategories {
            let threadId = userInfo["entity_id"] as? String, !threadId.isEmpty {
             return .threadDetail(threadId: threadId)
         }
-        return .threadList
+        return NotificationRouter.resolve(apnsUserInfo: userInfo).route
+            ?? route(forThreadIdentifier: threadIdentifier)
+            ?? .threadList
     }
 
     /// Whether this response should be treated as an opening at all. A
