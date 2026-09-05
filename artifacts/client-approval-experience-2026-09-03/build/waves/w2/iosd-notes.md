@@ -647,3 +647,31 @@ pre-existing pair both iOS lanes report — `BrandVoiceLintTests` on "curated_mi
 (`RoomLifecycleTests.swift:297`) — neither touched here. **No transient this
 round:** `CompanionCoachingModelTests` did not flake, and no tier needed a
 re-run.
+
+---
+
+# Round 3 — adversarial review (reviewer's append, 2026-09-05)
+
+`iosd-review-r3.md` is the record. Headline for whoever picks this up:
+
+- **Both round-2 majors are closed.** `thread_id` is on the wire
+  (`approvals/w2-backend` `6d2316922`, `core.ts:286-288`) and `conversationRoute` reads it
+  first on all three rails; `ProjectApprovalCopy.acts` is byte-identical to
+  `approvals/w2-iosc` (verified by extracting both files and diffing — the acts block
+  produces no hunk).
+- **One major is open:** the hub row says **Approvals** and `.decisionList` says
+  **DECISIONS** (`Coordinator.swift:155`, `DecisionListView.swift:33`). Lane-introduced by
+  the sweep, carried as a minor twice and dropped by both rounds' triage.
+- **Two items want a ruling, not a fix:** the afterglow rows now reach the house widget
+  (`WidgetSnapshot.swift:144-149` projects every routed MOVED row; R15 says the widget is
+  untouched; gated by the `houseWidget` flag), and the row still draws no `PatinaStamp` MARK
+  now that P-17 exists on iOS-C.
+- **Two lane claims corrected against the wire:** `artifactKind` is live on `main`
+  (`00464:3063`, `00465:423`), not new in 00569; and the live beneficiary of
+  `route(forDeepLink:)` is `proposal-nudge/index.ts:153-166` (an `in_app` bell row with
+  `deep_link: /proposals/<id>` and no entity pair), not the Threshold links and not the lock
+  screen — no APNs envelope carries `deep_link`.
+- **Gates:** `build` PASS (exit 0), `lint-delta main` PASS, `unit` exit 65 on both runs with
+  `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` as the only
+  non-known failure. Proven pre-existing: it passes alone (21 tests, exit 0) and it fails
+  identically with all five of this lane's suites skipped (2468 tests in 271 suites, exit 65).
