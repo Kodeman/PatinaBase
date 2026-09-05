@@ -10,6 +10,14 @@
   --color-pearl: #E5E2DD;
   --color-clay: #C4A57B;
   --color-aged-oak: #8B7355;
+  /* The same oak, taken to ink (`W1-04`). #8B7355 is 4.19:1 on paper, which
+     clears nothing at the 11px meta register this portal sets so much of its
+     quiet copy in — axe read 104 serious contrast failures on the doorstep,
+     39 of them inside a single approval. iOS moved its muted ink to this
+     value in `IOSC-R2-02`; the two surfaces now write the register in the
+     same ink. --color-aged-oak itself is unchanged: it is still the right
+     hairline and the right glyph. */
+  --color-oak-ink: #4E4339;
   --color-mocha: #5C4A3C;
   --color-charcoal: #2C2926;
   --color-sage: #A8B5A0;
@@ -36,7 +44,7 @@
   --bg-surface: #FFFFFF;
   --text-primary: var(--color-charcoal);
   --text-body: var(--color-mocha);
-  --text-muted: var(--color-aged-oak);
+  --text-muted: var(--color-oak-ink);
   --border-default: var(--color-pearl);
   --border-subtle: rgba(229, 226, 221, 0.6);
   --accent-primary: var(--color-clay);
@@ -529,6 +537,28 @@ a:hover {
 /* the press snap is a tap's punctuation; a hold has none to give */
 .da-hold:active {
   transform: none;
+}
+/* ── the held word turns over with the ink, on either path (`W1-03`) ────────
+   The inverted label above is hung on `:active`, and a keyboard hold never
+   gets it: `onKeyDown` calls preventDefault(), so Enter or Space floods the
+   pool while the word stays charcoal on charcoal — contrast 1.00, measured,
+   for the whole 900ms of a legally consequential act. The ink is what the
+   word is reading against, so the word is driven by the same state the ink
+   is: the hold, not the press. The pointer path keeps its own `:active`
+   rules and looks no different for it. */
+.da-primary.da-hold[data-hold-state='holding'],
+.da-danger.da-hold[data-hold-state='holding'] {
+  color: var(--color-off-white);
+  transition-property: color;
+  transition-duration: 120ms;
+  transition-delay: 60ms;
+  transition-timing-function: linear;
+}
+.da-primary.da-hold[data-hold-state='holding'] .da-leading,
+.da-primary.da-hold[data-hold-state='holding'] .da-trailing,
+.da-danger.da-hold[data-hold-state='holding'] .da-leading,
+.da-danger.da-hold[data-hold-state='holding'] .da-trailing {
+  color: var(--color-off-white);
 }
 .da-hold-still .da-pool,
 .da-hold-still:hover .da-pool,
