@@ -461,3 +461,109 @@ The signed walk app was rebuilt from this worktree after the last iOS change —
 5. **`TodayNextMove.symbol` can now be empty**, and exactly one move uses that. A future move that
    forgets to set a symbol will silently draw no tile rather than crash — worth a default in the
    type if more such moves appear.
+
+---
+
+## Walk fixes — round 1 (2026-09-05)
+
+Every blocker and major from the round-1 iOS and web walks, fixed on this branch. Worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-integration`, branch
+`approvals/w2-integration`.
+
+### The two blockers
+
+**`W2R1-B1` — an expired approval drew nothing at all.** A lapsed row
+(`lifecycleStatus='expired'`, `disposition='active'`, published, never answered) satisfied none of
+`closureLeg`'s three branches, and `outcomeLeg` withheld the doors because `canRespond` is false —
+so the ceremony drew the question, the edition line and the impact block and then stopped.
+`PatinaStamp.State.expired` had existed since P-17 and was mounted nowhere in the app.
+
+- `DecisionsAPIClient+ProjectApprovals.swift` — `isLapsed`: `expired`, no disposition closure, no
+  outcome. An expired row that DOES carry an answer stays an answered approval.
+- `ProjectApprovalBlock.swift` — a fourth `closureLeg` branch, last in the house's own order
+  (disposition → outcome → the clock).
+- `ProjectApprovalCopy.expired` — "This approval closed before it was answered. Your designer can
+  send it again." A fact about the paper, never about her: no "overdue", no blame, and the next
+  move named because there is one (R8).
+- `PatinaTests/ProjectApprovalLapseTests.swift` (new, 4 tests). It is its own file because
+  `ProjectApprovalActTests.swift` is at SwiftLint's 500-line `file_length` — adding there tripped
+  it at 534 lines, which `lint-delta` would have failed.
+
+**`W2R1-B2` — the discussion read never fired, so `IOSC-R2-01` was inert.** `body` was
+`content.task(id: readKey)`, and `content` is a ViewBuilder whose only branches are
+"there are comments" / "the read failed". On first mount both are false, so the `.task` hung off an
+unrendered empty view and never ran — the comments could therefore never become non-empty and her
+own returned note was write-only on the phone, on submit, on re-entry and on a cold deep-link
+launch alike.
+
+- `ApprovalDiscussionBlock.swift` — the read is attached to a `VStack` that is always in the tree.
+- `ApprovalDiscussionTests.swift` — a pin: the span between `var body` and `.task(id: readKey)`
+  must contain a container, so the read can never be hung off the conditional again.
+
+### The two iOS majors
+
+**`W2R1-M1` — sage marking an answered state on the proposals list.** The ACCEPTED section header
+took `PatinaColors.sage` (~2.2:1 as a text heading). Ruled 2026-09-05: sage stops carrying approval
+meaning; SIGNED/APPROVED/answered marks move to mocha. `ProposalListView.swift` now takes
+`PatinaColors.Stamp.mocha` — the same ink the stamps are held to at 4.5:1.
+
+**`W2R1-M2` — a filled sage checkmark as status, one row from the ceremony.** The legacy
+option-choice branch drew `checkmark.circle.fill` in sage over "Your choice", inside a sage-stroked
+card: an icon standing in for status, a fill, and sage carrying approval meaning, all on a screen
+reached from the same list as the Stage-2 ceremony. `DecisionDetailView.swift` now draws the word
+alone, in mocha, and the selected card's rule is mocha too. The branch keeps its own grammar
+otherwise — this is the refusal, applied, not a rewrite of the option rail.
+
+### The four web majors
+
+**`W1-01` — "You are approving edition N, exactly as shown." was unconditional**, and false in
+three states the lead reaches: a draft with the review outstanding (the act on offer is READING),
+a reviewed edition sitting with the studio, and the moment after she answers, beside her own stamp
+under an eyebrow reading "answered". `approval-ask.tsx` now derives the sentence from the act
+actually offered — present tense under `canRespond`, conditional ("You would be approving edition
+N, exactly as shown.") on a draft, silent everywhere else. Two tests cover all four states,
+including the no-refetch case where the row in hand still says she may answer.
+
+**`W1-02` — the sign route printed the database's own sentence to the homeowner.** Three sites
+answered `executeError.message`, and `refusalSentence()` renders an unmapped token verbatim, so the
+door leaf read "trade scope b0000000-… not found or access denied" mid-signature. Both halves are
+closed: the route answers `sign_failed` and logs the detail server-side, and `refusalSentence` falls
+back to the house's own line instead of echoing. `sign_failed` joins `REFUSALS` (so the drift guard
+holds it), and a new guard fails the build if any `NextResponse.json({ error: …message })` returns.
+
+**`W1-03` — the keyboard hold's label was charcoal-on-charcoal at 1.00 for 900ms.** `.da-primary`
+inverts its word under `:active`, and a keyboard hold never gets `:active` because `onKeyDown`
+calls `preventDefault()`. The inverted ink is now driven by `[data-hold-state='holding']` for the
+two variants that flood a dark pool (primary, danger), so both paths light the word identically.
+
+**`W1-04` — `--text-muted` was `#8B7355`, 4.19:1 at 11px** (axe: 104 serious failures on the
+doorstep, 39 inside one approval). It now aliases a new `--color-oak-ink: #4E4339` — the value iOS
+moved to in `IOSC-R2-02`, so the two surfaces write the meta register in the same ink.
+`--color-aged-oak` itself is untouched: it is still the right hairline and the right glyph.
+
+### Gates re-run after these fixes
+
+| Gate | Result |
+|---|---|
+| `IOS_GATE_UDID=B6AD…CCAE apps/mobile/Patina/scripts/ios-gate.sh all` | **PASS** — `** BUILD SUCCEEDED **`, `Test run with 2634 tests in 285 suites passed … with 2 known issues` (the same pre-existing pair: `BrandVoiceLintTests` "curated_mix", `RoomLifecycleTests.theTodayRailFollowsALocalDelete`), `✓ lint-delta: no new warnings in touched files`, exit 0 |
+| `pnpm --dir … --filter @patina/client-portal type-check` | **PASS** — `tsc --noEmit`, no output |
+| `pnpm --dir … --filter @patina/client-portal test` | **PASS** — 119 suites, 1677 tests (1669 before) |
+| migrations / edge functions / designer portal | **NOT RUN, and not owed** — none touched |
+
+The signed walk app was rebuilt from this worktree after the last iOS change: `xcodebuild build -scheme Patina -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath …/.build/DerivedDataWalk` → `** BUILD SUCCEEDED **` (exit 0). `Patina.debug.dylib` re-stamped 2026-09-05 15:40 and carrying this pass's code — `strings` finds "This approval closed before it was answered", `decision_comments` and `The discussion`. `codesign --verify` → `valid on disk`, `Identifier=cloud.patina.app`, `Signature=adhoc`.
+
+**walkAppPath**:
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-integration/apps/mobile/Patina/.build/DerivedDataWalk/Build/Products/Debug-iphonesimulator/Patina.app`
+
+### Advisories from this pass
+
+1. **`--text-muted` is a portal-wide token.** 218 uses; four of them are not text (three
+   `border-[var(--text-muted)]` on `proposal-line-feedback.tsx`, one `fill-` in `room-band.tsx`).
+   Those four now draw a shade stronger. Nothing else about the token changed.
+2. **`ProjectApprovalActTests.swift` is at exactly 500 lines** — SwiftLint's `file_length` ceiling.
+   The next assertion on that suite needs a new file, as `ProjectApprovalLapseTests.swift` did.
+3. **`W2R1-M2` was ruled, not deferred.** The finding asked for a scope ruling; the vision refusals
+   are binding on every surface a homeowner reaches, and this screen is reached from the same list
+   as the ceremony, so the refusal was applied rather than recorded as an exception.
+4. **The lapsed-approval sentence is new client-facing copy.** It says the approval closed and that
+   the designer can send it again; nothing on the row knows when, and it does not pretend to.
