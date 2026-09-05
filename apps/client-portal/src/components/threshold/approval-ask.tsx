@@ -14,7 +14,10 @@ import {
 } from '@patina/supabase';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
-import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+import {
+  countInWords,
+  moneyInWords,
+} from '@/components/threshold/instruments/standing-sentence';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -55,7 +58,8 @@ const RESPOND_REFUSED = 'This approval changed while it was open. Refresh before
 
 /**
  * Codex's three outcomes, in the house's words. The values are load-bearing,
- * and each consequence line is the old page's own description, verbatim.
+ * and each consequence line is the old page's own description — kept verbatim
+ * but for the word "gate", which no homeowner reads on this surface.
  */
 const OUTCOME_ACTS: Array<{
   outcome: ProjectApprovalOutcome;
@@ -84,7 +88,7 @@ const OUTCOME_ACTS: Array<{
     writeKey: 'question_project_approval',
     selectKey: 'consider_question_project_approval',
     label: 'Ask a question',
-    consequence: 'Hold the gate while you and your designer talk it through.',
+    consequence: 'Hold the approval while you and your designer talk it through.',
     variant: 'secondary',
   },
   {
@@ -109,6 +113,26 @@ const EYEBROW_CLASS =
   'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]';
 const SECTION_CLASS =
   'relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]';
+
+/**
+ * Who a comment that is not the client's own is from. The studio answers as
+ * itself: the designer she knows, under the studio's name. An internal
+ * reviewer's identity is never a name a client reads, so a thread the studio
+ * cannot be resolved for stays "The studio".
+ */
+function studioHand(
+  designerGivenName: string | null | undefined,
+  studioName: string | null | undefined,
+): string {
+  const designer = designerGivenName?.trim();
+  const studio = studioName?.trim();
+  return designer && studio ? `${designer} · ${studio}` : 'The studio';
+}
+
+/** A word that opens a sentence. */
+function upperFirst(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
 
 function moneyDelta(cents: number): string {
   return `${cents > 0 ? '+' : '−'}${moneyInWords(Math.abs(cents))}`;
@@ -263,7 +287,20 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
  *   outcome is half the record, so it stays readable — but nothing may be added
  *   to a discussion whose gate has already been answered.
  */
-function Discussion({ decisionId, readOnly = false }: { decisionId: string; readOnly?: boolean }) {
+function Discussion({
+  decisionId,
+  readOnly = false,
+  designerGivenName,
+  studioName,
+  composerRef,
+}: {
+  decisionId: string;
+  readOnly?: boolean;
+  designerGivenName?: string | null;
+  studioName?: string | null;
+  /** Handed the composer itself, so the ask above can put her in it. */
+  composerRef?: (node: HTMLTextAreaElement | null) => void;
+}) {
   const { user } = useAuth();
   const comments = useDecisionComments(decisionId);
   const createComment = useCreateDecisionComment();
@@ -331,7 +368,9 @@ function Discussion({ decisionId, readOnly = false }: { decisionId: string; read
           {written.map((comment) => (
             <li key={comment.id} className="py-3">
               <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                {user && comment.author_id === user.id ? 'You' : 'The studio'}
+                {user && comment.author_id === user.id
+                  ? 'You'
+                  : studioHand(designerGivenName, studioName)}
                 {' · '}
                 {LETTER_DATE.format(new Date(comment.created_at))}
               </p>
@@ -353,6 +392,7 @@ function Discussion({ decisionId, readOnly = false }: { decisionId: string; read
           </label>
           <textarea
             id={`approval-comment-${fieldId}`}
+            ref={composerRef}
             data-testid="approval-comment-field"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -395,7 +435,15 @@ function Discussion({ decisionId, readOnly = false }: { decisionId: string; read
  * edition never reads plainly "Declined" beside the live edition that replaced
  * it.
  */
-export function ApprovalReceipt({ approval }: { approval: ProjectApprovalReview }) {
+export function ApprovalReceipt({
+  approval,
+  designerGivenName,
+  studioName,
+}: {
+  approval: ProjectApprovalReview;
+  designerGivenName?: string | null;
+  studioName?: string | null;
+}) {
   const [reading, setReading] = useState(false);
   const closed = approval.outcome !== null || approval.disposition !== 'active';
   const stampedAt = parseSourceDate(approval.respondedAt);
@@ -412,7 +460,9 @@ export function ApprovalReceipt({ approval }: { approval: ProjectApprovalReview 
       className={SECTION_CLASS}
     >
       <p className={`pt-2.5 ${EYEBROW_CLASS}`}>
-        {approval.disposition === 'active' ? 'A gate · answered' : 'A gate · closed'}
+        {approval.disposition === 'active'
+          ? 'Your approval · answered'
+          : 'Your approval · closed'}
       </p>
       {/* A heading, so a screen-reader user browsing by heading finds the
           records as well as the asks. */}
@@ -447,7 +497,12 @@ export function ApprovalReceipt({ approval }: { approval: ProjectApprovalReview 
       </div>
       {reading && (
         <div id={threadId}>
-          <Discussion decisionId={approval.decisionId} readOnly />
+          <Discussion
+            decisionId={approval.decisionId}
+            readOnly
+            designerGivenName={designerGivenName}
+            studioName={studioName}
+          />
         </div>
       )}
     </section>
@@ -458,11 +513,20 @@ export function ApprovalReceipt({ approval }: { approval: ProjectApprovalReview 
 const RECORDS_SHOWN = 3;
 
 /**
- * The closed gates, under one heading with their count, newest first — the
+ * The approvals already closed, under one heading, newest first — the
  * `History (N)` pile `/decisions` kept, rather than a year of full-width stamps
- * stacked between the ask and the plan key.
+ * stacked between the ask and the plan key. The pile is not counted at her:
+ * how many she has answered is not a thing she is being asked to carry.
  */
-export function ApprovalRecords({ approvals }: { approvals: ProjectApprovalReview[] }) {
+export function ApprovalRecords({
+  approvals,
+  designerGivenName,
+  studioName,
+}: {
+  approvals: ProjectApprovalReview[];
+  designerGivenName?: string | null;
+  studioName?: string | null;
+}) {
   const [all, setAll] = useState(false);
   if (approvals.length === 0) return null;
   const shown = all ? approvals : approvals.slice(0, RECORDS_SHOWN);
@@ -474,10 +538,15 @@ export function ApprovalRecords({ approvals }: { approvals: ProjectApprovalRevie
       className="mt-8 border-t border-[var(--border-default)] pt-3"
     >
       <h2 id="approval-records-heading" className={EYEBROW_CLASS}>
-        {`Gates closed · ${approvals.length}`}
+        Earlier approvals
       </h2>
       {shown.map((approval) => (
-        <ApprovalReceipt key={approval.decisionId} approval={approval} />
+        <ApprovalReceipt
+          key={approval.decisionId}
+          approval={approval}
+          designerGivenName={designerGivenName}
+          studioName={studioName}
+        />
       ))}
       {!all && approvals.length > RECORDS_SHOWN && (
         <div className="mt-3">
@@ -488,7 +557,7 @@ export function ApprovalRecords({ approvals }: { approvals: ProjectApprovalRevie
             variant="tertiary"
             onClick={() => setAll(true)}
           >
-            {`Read the earlier gates · ${approvals.length - RECORDS_SHOWN}`}
+            Read the earlier approvals
           </ScoredAction>
         </div>
       )}
@@ -502,12 +571,18 @@ export interface ApprovalAskProps {
   onAnswered?: (decisionId: string) => void;
   /** Decision ids that carry an `#approval-<id>` anchor on this page. */
   anchoredDecisionIds?: string[];
+  /** The designer the client deals with, by the name she calls him. */
+  designerGivenName?: string | null;
+  /** The studio's own name, as the doorplate resolves it. */
+  studioName?: string | null;
 }
 
 export function ApprovalAsk({
   approval,
   onAnswered,
   anchoredDecisionIds = [],
+  designerGivenName = null,
+  studioName = null,
 }: ApprovalAskProps) {
   const confirmReview = useConfirmProjectApprovalReview();
   const respond = useRespondProjectApproval();
@@ -520,6 +595,10 @@ export function ApprovalAsk({
   // client submits it.
   const [chosen, setChosen] = useState<ProjectApprovalOutcome | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The discussion composer itself, once it is on the page. Held as state
+  // rather than a ref because the act that puts her in it may only be drawn
+  // when there is something to put her in.
+  const [composer, setComposer] = useState<HTMLTextAreaElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
 
@@ -548,6 +627,21 @@ export function ApprovalAsk({
   // with the wrong date is not.
   const stampedAt = parseSourceDate(approval.respondedAt) ?? justAnswered?.at ?? null;
   const chosenAct = OUTCOME_ACTS.find((act) => act.outcome === chosen) ?? null;
+  /** The designer, named where the copy has room for a name. */
+  const designer = designerGivenName?.trim() || null;
+
+  // Words, not a tally: what she is being told is whether her own review is in,
+  // and on the rare approval that takes several, how many of them are.
+  const reviewStanding =
+    approval.requiredReviewCount <= 1
+      ? reviewComplete
+        ? 'Your review is confirmed.'
+        : 'Your review is still needed.'
+      : approval.completedReviewCount === 0
+        ? `None of ${countInWords(approval.requiredReviewCount)} reviews are confirmed yet.`
+        : `${upperFirst(countInWords(approval.completedReviewCount))} of ${countInWords(
+            approval.requiredReviewCount,
+          )} reviews confirmed.`;
 
   const revisions = [
     { id: approval.predecessorDecisionId, label: 'Review previous edition' },
@@ -630,12 +724,12 @@ export function ApprovalAsk({
     >
       <p className={`pt-2.5 ${EYEBROW_CLASS}`}>
         {recordedOutcome
-          ? 'A gate · answered'
+          ? 'Your approval · answered'
           : awaitingStudioIssue
-            ? 'A gate · with your studio'
+            ? 'Your approval · with your studio'
             : approval.lifecycleStatus === 'draft'
-              ? 'A gate · your review is required'
-              : 'A gate · your response is required'}
+              ? 'Your approval · read the edition first'
+              : 'Your approval · your answer is needed'}
       </p>
       <h2
         id={`approval-gate-${approval.decisionId}`}
@@ -702,7 +796,7 @@ export function ApprovalAsk({
           data-testid="approval-review-count"
           className="max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
         >
-          {`${approval.completedReviewCount} of ${approval.requiredReviewCount} required reviews confirmed.`}
+          {reviewStanding}
         </p>
 
         {canConfirm && (
@@ -733,13 +827,34 @@ export function ApprovalAsk({
           </p>
         )}
 
+        {/* Not a dead end: it says what she did, who has it, and that she is
+            free — and no timing, because nothing on this row knows one. The
+            act beside it is drawn only once the composer it opens is on the
+            page, so it can never be a button that does nothing. */}
         {awaitingStudioIssue && (
-          <p
-            data-testid="approval-awaiting-studio-issue"
-            className="mt-2.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-          >
-            Review complete. Your designer can now issue this request.
-          </p>
+          <>
+            <p
+              data-testid="approval-awaiting-studio-issue"
+              className="mt-2.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+            >
+              {`You've confirmed edition ${approval.artifactVersion}. ${
+                designer ?? 'Your designer'
+              } issues it next. Nothing is waiting on you.`}
+            </p>
+            {composer && (
+              <div className="mt-2.5">
+                <ScoredAction
+                  actionKey="ask_designer_about_approval"
+                  regionKey="doorstep"
+                  surfaceKey="the_threshold"
+                  variant="secondary"
+                  onClick={() => composer.focus()}
+                >
+                  {`Ask ${designer ?? 'your designer'} about this`}
+                </ScoredAction>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -798,6 +913,14 @@ export function ApprovalAsk({
               </div>
             </div>
           )}
+          {/* Named on the picker itself: the answer is hers to give, and no
+              one else's name is on this page to give it. */}
+          <p
+            data-testid="approval-who-answers"
+            className="mt-3 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-muted)]"
+          >
+            {"You're the one who answers this."}
+          </p>
         </div>
       )}
 
@@ -838,7 +961,12 @@ export function ApprovalAsk({
         </nav>
       )}
 
-      <Discussion decisionId={approval.decisionId} />
+      <Discussion
+        decisionId={approval.decisionId}
+        designerGivenName={designerGivenName}
+        studioName={studioName}
+        composerRef={setComposer}
+      />
     </section>
   );
 }

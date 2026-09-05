@@ -159,9 +159,10 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(screen.getByTestId('immutability-sentence')).toHaveTextContent(
       'You are approving edition 3, exactly as shown.',
     );
-    // Authority is unconditional copy, not a companion of the confirm act.
+    // Authority is unconditional copy, not a companion of the confirm act —
+    // and one review is a sentence about her own, never a tally.
     expect(screen.getByTestId('approval-review-count')).toHaveTextContent(
-      '1 of 1 required reviews confirmed.',
+      'Your review is confirmed.',
     );
 
     const impact = screen.getByTestId('approval-impact');
@@ -248,7 +249,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(await screen.findByTestId('approval-stamp')).toHaveTextContent(/^Declined/);
   });
 
-  it('holds the gate when the client asks a question', async () => {
+  it('holds the approval when the client asks a question', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
     await answer(/ask a question/i);
@@ -271,7 +272,9 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     );
 
     expect(screen.getByTestId('approval-stamp')).toHaveTextContent('Declined 14 August');
-    expect(screen.getByTestId('doorstep-approval')).toHaveTextContent('A gate · answered');
+    expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
+      'Your approval · answered',
+    );
     expect(screen.queryByTestId('approval-acts')).not.toBeInTheDocument();
     expect(screen.getByTestId('doorstep-approval')).not.toHaveAttribute('data-never-dim');
   });
@@ -306,7 +309,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     );
 
     expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
-      'your review is required',
+      'Your approval · read the edition first',
     );
     fireEvent.click(screen.getByRole('button', { name: /review exact edition/i }));
 
@@ -357,10 +360,11 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     );
 
     expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
-      'A gate · with your studio',
+      'Your approval · with your studio',
     );
+    // No timing: nothing on this row knows when the studio will issue it.
     expect(screen.getByTestId('approval-awaiting-studio-issue')).toHaveTextContent(
-      'Review complete. Your designer can now issue this request.',
+      "You've confirmed edition 3. Your designer issues it next. Nothing is waiting on you.",
     );
     expect(screen.queryByRole('button', { name: /review exact edition/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId('approval-acts')).not.toBeInTheDocument();
@@ -577,6 +581,8 @@ describe('ApprovalAsk — the discussion', () => {
     const thread = screen.getByTestId('approval-discussion');
     expect(thread).toHaveTextContent('You');
     expect(thread).toHaveTextContent('The studio');
+    // Never the internal reviewer who typed it.
+    expect(thread).not.toHaveTextContent('designer-9');
     expect(thread).toHaveTextContent('I will bring both finishes on Thursday.');
     expect(screen.queryByTestId('approval-comments-empty')).not.toBeInTheDocument();
   });
@@ -623,7 +629,7 @@ describe('ApprovalAsk — the discussion', () => {
 });
 
 describe('ApprovalReceipt', () => {
-  it('stands as the record of a gate answered on an earlier visit', () => {
+  it('stands as the record of an approval answered on an earlier visit', () => {
     render(
       <ApprovalReceipt
         approval={{
@@ -639,8 +645,8 @@ describe('ApprovalReceipt', () => {
     expect(receipt).toHaveAttribute('id', 'approval-dec-1');
     expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Approved 14 August');
     expect(receipt).toHaveTextContent('Library elevations · Edition 3');
-    // The only act on a closed gate reads its discussion; nothing on it can be
-    // changed, and it links nowhere.
+    // The only act on a closed approval reads its discussion; nothing on it
+    // can be changed, and it links nowhere.
     const acts = screen.getAllByRole('button');
     expect(acts).toHaveLength(1);
     expect(acts[0]).toHaveTextContent('Read the discussion');
@@ -666,7 +672,7 @@ describe('ApprovalReceipt', () => {
     expect(screen.getByTestId('approval-receipt-stamp')).not.toHaveTextContent('Declined');
   });
 
-  it('keeps the discussion readable, and unwritable, after the gate closed', () => {
+  it('keeps the discussion readable, and unwritable, after the approval closed', () => {
     render(
       <ApprovalReceipt
         approval={{
@@ -684,7 +690,7 @@ describe('ApprovalReceipt', () => {
     expect(screen.queryByTestId('approval-comment-field')).not.toBeInTheDocument();
   });
 
-  it('says nothing about a gate that is still open', () => {
+  it('says nothing about an approval that is still open', () => {
     const { container } = render(<ApprovalReceipt approval={APPROVAL} />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -699,10 +705,13 @@ describe('ApprovalRecords', () => {
     respondedAt: at,
   });
 
-  it('stands the closed gates under one heading with their count', () => {
+  it('stands the closed approvals under one heading, and counts none of them', () => {
     render(<ApprovalRecords approvals={[closed('a', '2026-08-14T12:00:00Z')]} />);
 
-    expect(screen.getByTestId('approval-records')).toHaveTextContent('Gates closed · 1');
+    const records = screen.getByTestId('approval-records');
+    expect(records).toHaveTextContent('Earlier approvals');
+    expect(records).not.toHaveTextContent('Gates closed');
+    expect(records.textContent).not.toMatch(/·\s*\d/);
   });
 
   it('folds the tail rather than stacking a year of stamps on the page', () => {
@@ -715,11 +724,11 @@ describe('ApprovalRecords', () => {
     render(<ApprovalRecords approvals={many} />);
 
     expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
-    fireEvent.click(screen.getByRole('button', { name: /read the earlier gates/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^read the earlier approvals$/i }));
     expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(4);
   });
 
-  it('says nothing when no gate has closed', () => {
+  it('says nothing when no approval has closed', () => {
     const { container } = render(<ApprovalRecords approvals={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -762,5 +771,243 @@ describe('useDoorstepApprovals', () => {
     );
     expect(result.current.asks).toHaveLength(1);
     expect(result.current.records).toHaveLength(0);
+  });
+});
+
+/* ── The words the homeowner reads ───────────────────────────────────────────
+   P-04 (no "gate" in front of a client), P-24 (words where a number was),
+   P-10 (the wait names who has it and offers a way to ask), P-11 (the studio
+   answers as itself, and one line says who answers).
+   ────────────────────────────────────────────────────────────────────────── */
+
+const AWAITING: ProjectApprovalReview = {
+  ...APPROVAL,
+  lifecycleStatus: 'draft',
+  completedReviewCount: 1,
+  requiredReviewCount: 1,
+};
+
+describe('the ask in the house’s vocabulary', () => {
+  it('never prints the word gate, in any of the four states it stands in', () => {
+    const states: ProjectApprovalReview[] = [
+      { ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 },
+      APPROVAL,
+      AWAITING,
+      {
+        ...APPROVAL,
+        outcome: 'approved',
+        lifecycleStatus: 'responded',
+        respondedAt: '2026-08-14T12:00:00Z',
+      },
+    ];
+
+    for (const approval of states) {
+      const { unmount } = render(<ApprovalAsk approval={approval} />);
+      expect(screen.getByTestId('doorstep-approval').textContent).not.toMatch(/gate/i);
+      unmount();
+    }
+  });
+
+  it('names the state without the word, in each of the four', () => {
+    const { rerender } = render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 }}
+      />,
+    );
+    expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
+      'Your approval · read the edition first',
+    );
+
+    rerender(<ApprovalAsk approval={APPROVAL} />);
+    expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
+      'Your approval · your answer is needed',
+    );
+  });
+
+  it('reads the record of a closed edition without the word either', () => {
+    render(
+      <ApprovalReceipt
+        approval={{
+          ...APPROVAL,
+          outcome: 'changes_requested',
+          disposition: 'superseded',
+          lifecycleStatus: 'responded',
+          respondedAt: '2026-08-14T12:00:00Z',
+        }}
+      />,
+    );
+
+    const receipt = screen.getByTestId('doorstep-approval-receipt');
+    expect(receipt).toHaveTextContent('Your approval · closed');
+    expect(receipt.textContent).not.toMatch(/gate/i);
+  });
+
+  it('holds the approval, not the gate, when the client considers a question', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: /ask a question/i }));
+
+    expect(screen.getByTestId('approval-consequence')).toHaveTextContent(
+      'Ask a question · Hold the approval while you and your designer talk it through.',
+    );
+  });
+});
+
+describe('reviews counted in words', () => {
+  it('says her own review is still needed rather than nought of one', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 }}
+      />,
+    );
+
+    const line = screen.getByTestId('approval-review-count');
+    expect(line).toHaveTextContent('Your review is still needed.');
+    expect(line.textContent).not.toMatch(/\d/);
+  });
+
+  it('counts several reviews in words', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, completedReviewCount: 2, requiredReviewCount: 3 }}
+      />,
+    );
+
+    const line = screen.getByTestId('approval-review-count');
+    expect(line).toHaveTextContent('Two of three reviews confirmed.');
+    expect(line.textContent).not.toMatch(/\d/);
+  });
+
+  it('says none rather than zero when several are still owed', () => {
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          lifecycleStatus: 'draft',
+          completedReviewCount: 0,
+          requiredReviewCount: 3,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('approval-review-count')).toHaveTextContent(
+      'None of three reviews are confirmed yet.',
+    );
+  });
+});
+
+describe('the end of the wait', () => {
+  it('names what she did, who has it, and that nothing waits on her', () => {
+    render(<ApprovalAsk approval={AWAITING} designerGivenName="Nora" studioName="Quist Interiors" />);
+
+    const said = screen.getByTestId('approval-awaiting-studio-issue');
+    expect(said).toHaveTextContent(
+      "You've confirmed edition 3. Nora issues it next. Nothing is waiting on you.",
+    );
+    // No invented timing — the row carries no date the studio promised.
+    expect(said.textContent).not.toMatch(/day|week|soon|shortly/i);
+  });
+
+  it('falls back to "your designer" when the house has no lead named', () => {
+    render(<ApprovalAsk approval={AWAITING} />);
+
+    expect(screen.getByTestId('approval-awaiting-studio-issue')).toHaveTextContent(
+      'Your designer issues it next.',
+    );
+    expect(screen.getByRole('button', { name: /ask your designer about this/i }))
+      .toBeInTheDocument();
+  });
+
+  it('puts her in the composer already on the page, and opens no route', () => {
+    render(<ApprovalAsk approval={AWAITING} designerGivenName="Nora" studioName="Quist Interiors" />);
+
+    const act = screen.getByRole('button', { name: /ask nora about this/i });
+    expect(act.tagName).toBe('BUTTON');
+    fireEvent.click(act);
+
+    expect(screen.getByTestId('approval-comment-field')).toHaveFocus();
+  });
+
+  it('draws no act at all when there is no composer to put her in', () => {
+    commentsHook.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    render(<ApprovalAsk approval={AWAITING} designerGivenName="Nora" studioName="Quist Interiors" />);
+
+    expect(screen.getByTestId('approval-awaiting-studio-issue')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ask nora about this/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('who is speaking, and who answers', () => {
+  const thread = [
+    {
+      id: 'c1',
+      decision_id: 'dec-1',
+      author_id: 'user-1',
+      body: 'Can we see the brass in daylight?',
+      created_at: '2026-08-13T12:00:00Z',
+      updated_at: '2026-08-13T12:00:00Z',
+    },
+    {
+      id: 'c2',
+      decision_id: 'dec-1',
+      author_id: 'designer-9',
+      body: 'I will bring both finishes on Thursday.',
+      created_at: '2026-08-13T15:00:00Z',
+      updated_at: '2026-08-13T15:00:00Z',
+    },
+  ];
+
+  it('signs the studio’s side with the designer she knows, under the studio', () => {
+    commentsHook.mockReturnValue({ data: thread, isLoading: false, isError: false });
+    render(
+      <ApprovalAsk approval={APPROVAL} designerGivenName="Nora" studioName="Quist Interiors" />,
+    );
+
+    const written = screen.getByTestId('approval-discussion');
+    expect(written).toHaveTextContent('Nora · Quist Interiors');
+    expect(written).toHaveTextContent('You');
+    expect(written).not.toHaveTextContent('designer-9');
+  });
+
+  it('keeps the studio anonymous when only half the name is known', () => {
+    commentsHook.mockReturnValue({ data: thread, isLoading: false, isError: false });
+    render(<ApprovalAsk approval={APPROVAL} designerGivenName="Nora" />);
+
+    const written = screen.getByTestId('approval-discussion');
+    expect(written).toHaveTextContent('The studio');
+    expect(written).not.toHaveTextContent('Nora ·');
+  });
+
+  it('signs a closed approval’s thread the same way', () => {
+    commentsHook.mockReturnValue({ data: thread, isLoading: false, isError: false });
+    render(
+      <ApprovalRecords
+        approvals={[
+          {
+            ...APPROVAL,
+            outcome: 'approved',
+            lifecycleStatus: 'responded',
+            respondedAt: '2026-08-14T12:00:00Z',
+          },
+        ]}
+        designerGivenName="Nora"
+        studioName="Quist Interiors"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /read the discussion/i }));
+    expect(screen.getByTestId('approval-discussion')).toHaveTextContent('Nora · Quist Interiors');
+  });
+
+  it('says who answers, once, under the outcomes', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    expect(screen.getByTestId('approval-who-answers')).toHaveTextContent(
+      "You're the one who answers this.",
+    );
+  });
+
+  it('says it only where an answer is hers to give', () => {
+    render(<ApprovalAsk approval={AWAITING} />);
+    expect(screen.queryByTestId('approval-who-answers')).not.toBeInTheDocument();
   });
 });

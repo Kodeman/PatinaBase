@@ -146,6 +146,12 @@ function words(value: string | null | undefined): string | null {
   return text ? text : null;
 }
 
+/** The name a client calls her designer by: the first word of his own. */
+function givenName(value: string | null | undefined): string | null {
+  const first = value?.trim().split(/\s+/)[0];
+  return first ? first : null;
+}
+
 /**
  * A room's target: the published plan's own figure where it has one, and the
  * room's `budget_cents` where it does not.
@@ -517,6 +523,12 @@ export function Threshold({
   );
   const openChapter = openChapterOf(phases, project.currentPhase);
   const studioName = words(identityQuery.data?.name);
+  // The lead is the hand on this house. A house with no lead named yet has no
+  // name to print, and the copy that would have used one says "your designer".
+  const designerGivenName = givenName(
+    (teamQuery.data ?? []).find((member) => member.role === 'lead_designer')?.user
+      ?.full_name,
+  );
 
   // The plan and the trade bundles are in this gate for the same reason the
   // other six are: they are not decoration on a settled page, they DECIDE what
@@ -879,7 +891,11 @@ export function Threshold({
           ) : undefined
         }
       />
-      <ApprovalRecords approvals={doorstepRecords} />
+      <ApprovalRecords
+        approvals={doorstepRecords}
+        designerGivenName={designerGivenName}
+        studioName={studioName}
+      />
       <SubmittedReviewsPrevious projectId={projectId} standsUnfiled={standsUnfiledAsks} />
       <ResolvedScopeChangesPrevious projectId={projectId} />
     </>
@@ -940,6 +956,8 @@ export function Threshold({
           approval={approval}
           onAnswered={onApprovalAnswered}
           anchoredDecisionIds={anchoredDecisionIds}
+          designerGivenName={designerGivenName}
+          studioName={studioName}
         />
       ))}
       <StudioReviewAsk projectId={projectId} standsUnfiled={standsUnfiledAsks} />

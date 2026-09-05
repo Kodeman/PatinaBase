@@ -118,8 +118,14 @@ describe('foreignPortalFromDomain (authoritative, from middleware hint)', () => 
     expect(foreignPortalFromDomain('admin')?.url).toBe('https://admin.patina.cloud');
   });
 
-  it('returns null for manufacturer (no manufacturer portal) and unknown values', () => {
-    expect(foreignPortalFromDomain('manufacturer')).toBeNull();
+  it('maps the manufacturer domain to the maker workspace', () => {
+    expect(foreignPortalFromDomain('manufacturer')).toEqual({
+      label: 'the Patina maker workspace',
+      url: 'https://manufacturer.patina.cloud',
+    });
+  });
+
+  it('returns null for permitted and unknown values', () => {
     expect(foreignPortalFromDomain('consumer')).toBeNull();
     expect(foreignPortalFromDomain('nonsense')).toBeNull();
   });

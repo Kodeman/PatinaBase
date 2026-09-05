@@ -87,9 +87,11 @@ describe('SpineGate', () => {
     expect(screen.getByTestId('spine-gate-resume')).toBeInTheDocument();
   });
 
-  it('names the kind of break in the mono eyebrow — the line stops until you sign', () => {
+  it('names what the break waits on, in the mono eyebrow, without the word gate', () => {
     render(<SpineGate {...FURNISHINGS_GATE} />);
-    expect(screen.getByText('A gate · the line stops until you sign')).toBeInTheDocument();
+    expect(
+      screen.getByText('Your name is needed before the line continues.'),
+    ).toBeInTheDocument();
   });
 
   it('states the paper, its kind, its total, and what the deposit does on signing', () => {
@@ -126,7 +128,9 @@ describe('SpineGate', () => {
   it('an acceptance gate stops the line until you ACCEPT, and names the released draw', () => {
     render(<SpineGate {...PAINTWORK_GATE} />);
     expect(screen.getByTestId('spine-gate')).toHaveAttribute('data-gate-variant', 'acceptance');
-    expect(screen.getByText('A gate · the line stops until you accept')).toBeInTheDocument();
+    expect(
+      screen.getByText('Your acceptance is needed before the line continues.'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('spine-gate-deposit')).toHaveTextContent(
       '$1,440 releases on your acceptance',
     );

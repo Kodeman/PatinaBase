@@ -593,7 +593,7 @@ function NotificationsSection() {
               Reminders
             </p>
             <p className="text-[13px] text-[var(--text-muted)]">
-              How gentle nudges — proposal reminders and decision requests —
+              How gentle nudges — proposal reminders and approval requests —
               reach you. A new proposal and invoice reminders are time-sensitive
               and always arrive right away, regardless of this setting.
             </p>
