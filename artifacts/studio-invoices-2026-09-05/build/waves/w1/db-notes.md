@@ -906,3 +906,95 @@ window (unchanged by this fix) is the one recorded in the close-round advisory
 above.
 
 `deploySet = ['migration 00571_studio_invoices.sql']`
+
+---
+
+## Close — W1 db lane, the four ruled items (2026-09-05)
+
+Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-si-db`
+(`git rev-parse --show-toplevel` → same), branch `studio-invoices/w1-db`.
+
+**The brief named tip `07bfdd55c`; the branch was already at `4fbbc6624`.** All four
+ruled items had landed in the intervening fix commits — `aaf511c5a`
+(*hold a studio invoice to its household's roster and a designer*), `c289902d9`
+(*hold a studio invoice to its studio's roster on both trigger arms*),
+`c98ad2e51` (*pin the roster gate, the watched title, and the brand resolver
+fall-through*). This step re-verified each against the true head, replayed the
+ledger on the shared stack, and ran every named gate. **No new code was written:
+writing the same predicates a second time would have been a rewrite, not a fix.**
+
+### Item-by-item verification
+
+| ruled item | where it lives | proof |
+|---|---|---|
+| **R3-1** roster rule on BOTH arms of `set_invoice_studio_id()` | `00571:150-173` (UPDATE arm), `00571:284-305` (INSERT arm) | the exact clause the ruling names — `designer_clients` JOIN `organization_members ON organization_id = NEW.studio_id AND user_id = dc.designer_id`, `status = 'active'`, `role <> 'guest'` — inside each arm's authority `IF`, raising the project path's own `RAISE EXCEPTION 'studio_id_not_designer_studio'` (`P0001`) |
+| **R3-2** `resolve_studio_identity` short-circuit falls through | `00571:1329-1341` | step 0 is now `SELECT o.id INTO v_studio_id FROM organizations o WHERE o.id = p_studio_id AND o.type = 'design_studio' AND o.status = 'active'`; steps 1/2 are guarded on `v_studio_id IS NULL`, so a dead id, a manufacturer org, or an archived studio derives from project/designer instead |
+| **R3-3** `title` in the trigger's `UPDATE OF` list | `00571:727-734` | `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER`, list byte-identical to `00511:3078-3083` with `title` appended |
+| **R3-7** household-read index | `00571:1253-1255` | `CREATE INDEX IF NOT EXISTS idx_invoices_client ON public.invoices (client_id) WHERE client_id IS NOT NULL;` |
+
+### Rebase proof — bodies came off their TRUE heads
+
+```
+grep -rln "CREATE OR REPLACE FUNCTION[^(]*set_invoice_studio_id" supabase/migrations/*.sql | sort | tail -1
+  supabase/migrations/00571_studio_invoices.sql
+grep -rln "CREATE OR REPLACE FUNCTION[^(]*resolve_studio_identity" supabase/migrations/*.sql | sort | tail -1
+  supabase/migrations/00571_studio_invoices.sql
+```
+
+`set_invoice_studio_id` body, 00511 head → 00571 (`difflib.unified_diff`, n=0):
+
+```
+00511 head lines 441 | 00571 lines 640
+added 199 removed 0
+```
+
+**Zero removed — every project-path line byte-identical.**
+
+Deployed body hash equals the re-pinned contract value:
+
+```
+SELECT encode(sha256(convert_to(prosrc,'UTF8')),'hex'), octet_length(prosrc)
+FROM pg_proc WHERE proname='set_invoice_studio_id';
+  b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89 | 26272
+```
+
+= `supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1719`. The
+normalized `pg_get_triggerdef` pinned at `:2396` also ends `…,titleoninvoices…`.
+
+### Tests behind the four items (`supabase/tests/billing/studio_invoice_test.sql`)
+
+- `:538-565` — the r3 probe verbatim as **direct DML**: an INSERT addressed to
+  `5f100000-…-0004`, a profile on nobody's roster, refused `P0001`, and
+  `:566-569` asserts the row never landed.
+- `:569-593` — the co-member-without-a-designer-domain-role INSERT, refused `P0001`.
+- `:596-611` — **the positive case**: a roster household stamped to a designer
+  member still writes a clean draft.
+- `:380-395` — the RPC's own off-roster refusal (`create_draft_studio_invoice`).
+- `:757-779` — the UPDATE arm: a service_role-written stranger row cannot be
+  hand-edited by a member, `'the UPDATE arm holds a studio invoice to its
+  household''s roster too'`.
+- `:810-833` — `resolve_studio_identity` as **anon**: a manufacturer org id
+  (`5f110000-…-0004`) never names itself and returns the fall-through; an active
+  `design_studio` id returns it.
+- `:712` — `ASSERT position('title' IN pg_get_triggerdef(watcher.oid)) > 0`.
+- `:722` — `ASSERT` on `pg_indexes … indexname = 'idx_invoices_client'`.
+
+Live confirmation after the reset:
+
+```
+triggerdef_has_title = true | idx_invoices_client = 1
+```
+
+### Gates
+
+| gate | result |
+|---|---|
+| `supabase --workdir <wt> db reset` | clean — `Applying migration 00571_studio_invoices.sql…` then every seed, `Finished supabase db reset` |
+| `bash <wt>/scripts/run-sql-tests.sh` | `total 157 · green 136 · expected-fail 21 · unexpected-fail 0 · effective-green 157/157` |
+| — `billing/studio_invoice_test.sql` | PASS |
+| — `edge_api/public_sd_hardening_contract_test.sql` | PASS |
+| — `billing/invoice_checkout_integrity_test.sql` | PASS |
+| `pnpm --filter @patina/supabase type-check` | clean (`tsc --noEmit`, no output) |
+| `pnpm --filter @patina/designer-portal type-check` | clean (`tsc --noEmit`, no output) |
+
+deploySet: `migration 00571_studio_invoices.sql`.
