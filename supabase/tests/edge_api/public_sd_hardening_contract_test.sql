@@ -1702,10 +1702,12 @@ VALUES
     -- SECURITY INVOKER, still no direct grants, every project-path line
     -- byte-identical, and the canonical root -> user_roles -> memberships ->
     -- organization lock order below is untouched - the new branch takes no
-    -- lock and returns before the project lookups.
+    -- lock and returns before the project lookups. The branch holds direct
+    -- authenticated DML to the same clean-draft predicate the project path
+    -- applies, so no caller can write state or money around the billing RPCs.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '06609af25c627f49c7b489c07968790c593ce1ad269e6a42e5bda6b1eb0a065a',
+    'e329335f260c48e56032a7445feffea2505cdd11972d23f75949ea9394509c97',
     ARRAY[]::text[]
   ),
   (

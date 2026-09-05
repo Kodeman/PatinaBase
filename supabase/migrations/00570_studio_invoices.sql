@@ -24,8 +24,9 @@
 -- which RAISEs on every NULL-project row on both the INSERT and the UPDATE
 -- arm, before its service_role early return. PART 2 adds a studio branch to
 -- both arms; every project-path line is byte-identical to 00511's body (the
--- branch is 48 inserted lines per arm, zero removed). Its body SHA-256 is
--- re-pinned in supabase/tests/edge_api/public_sd_hardening_contract_test.sql.
+-- branch is 145 inserted lines across the two arms, zero removed). Its body
+-- SHA-256 is re-pinned in
+-- supabase/tests/edge_api/public_sd_hardening_contract_test.sql.
 --
 -- Adds GRANT/REVOKE (function) -> regenerate seed/00-legacy-grants.sql after
 -- this file.
@@ -64,9 +65,12 @@ COMMENT ON COLUMN public.invoices.title IS
 -- branch placed before the project lookups in BOTH arms. On UPDATE the branch
 -- sits after 00511's identity-immutability check, so project_id, designer_id,
 -- client_id and studio_id are as immutable on a studio invoice as they are on
--- a project one. The branch reads no project and takes no lock, so the
--- canonical root -> user_roles -> memberships -> organization lock order the
--- contract test pins is untouched.
+-- a project one. Direct PostgREST DML (current_user = 'authenticated') is
+-- held to the same clean-draft predicate the project path applies below, so
+-- status, invoice_number and amount_paid_cents stay the billing RPCs' to
+-- write. The branch reads no project and takes no lock, so the canonical
+-- root -> user_roles -> memberships -> organization lock order the contract
+-- test pins is untouched.
 
 CREATE OR REPLACE FUNCTION public.set_invoice_studio_id()
 RETURNS trigger
@@ -148,6 +152,31 @@ BEGIN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
       END IF;
 
+      -- Direct PostgREST DML (current_user = 'authenticated') may write only a
+      -- clean draft, exactly as the project path below allows: every state,
+      -- number and money field on an issued invoice belongs to the SECURITY
+      -- DEFINER billing RPCs, which reach here as current_user = 'postgres'.
+      IF current_user = 'authenticated'
+         AND NOT (
+           NEW.status = 'draft'
+           AND NEW.invoice_number IS NULL
+           AND NEW.issue_date IS NULL
+           AND NEW.sent_at IS NULL
+           AND NEW.paid_at IS NULL
+           AND NEW.voided_at IS NULL
+           AND NEW.void_reason IS NULL
+           AND NEW.stripe_checkout_session_id IS NULL
+           AND NEW.amount_paid_cents = 0
+           AND NEW.reminder_count = 0
+           AND NEW.last_reminder_at IS NULL
+           AND NEW.ar_flagged_at IS NULL
+           AND NEW.ar_last_chased_at IS NULL
+           AND NEW.updated_at IS NOT DISTINCT FROM OLD.updated_at
+         )
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
       RETURN NEW;
     END IF;
 
@@ -218,6 +247,30 @@ BEGIN
              AND studio_actor.user_id = v_actor
              AND studio_actor.status = 'active'
              AND studio_actor.role <> 'guest'
+         )
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      -- Direct PostgREST DML (current_user = 'authenticated') may write only a
+      -- clean draft, exactly as the project path below allows: every state,
+      -- number and money field on an issued invoice belongs to the SECURITY
+      -- DEFINER billing RPCs, which reach here as current_user = 'postgres'.
+      IF current_user = 'authenticated'
+         AND NOT (
+           NEW.status = 'draft'
+           AND NEW.invoice_number IS NULL
+           AND NEW.issue_date IS NULL
+           AND NEW.sent_at IS NULL
+           AND NEW.paid_at IS NULL
+           AND NEW.voided_at IS NULL
+           AND NEW.void_reason IS NULL
+           AND NEW.stripe_checkout_session_id IS NULL
+           AND NEW.amount_paid_cents = 0
+           AND NEW.reminder_count = 0
+           AND NEW.last_reminder_at IS NULL
+           AND NEW.ar_flagged_at IS NULL
+           AND NEW.ar_last_chased_at IS NULL
          )
       THEN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
