@@ -755,6 +755,25 @@ export function ApprovalAsk({
   // The stamp is written the moment the act returns, and it survives the
   // refetch that follows: the recorded outcome takes over from the local one.
   const recordedOutcome = approval.outcome ?? justAnswered?.outcome ?? null;
+
+  /**
+   * What is fixed about this edition, said in the tense the reader is actually
+   * in (`W1-01`).
+   *
+   * Present tense while the three doors are drawn — that is the act the
+   * sentence introduces. Conditional on a draft, where the act on offer is
+   * READING the exact edition and nothing is being approved yet. Silent
+   * everywhere else: once she has answered, the stamp and the eyebrow beside
+   * it say what was done, and repeating "you are approving" over a recorded
+   * outcome is the surface contradicting its own record.
+   */
+  const immutabilitySentence = recordedOutcome
+    ? null
+    : canRespond
+      ? `You are approving edition ${approval.artifactVersion}, exactly as shown.`
+      : canConfirm || confirmationUnavailable
+        ? `You would be approving edition ${approval.artifactVersion}, exactly as shown.`
+        : null;
   // `updatedAt` moves on any later write to the row, so it is never a stand-in
   // for the day the client answered. A stamp with no date is honest; a stamp
   // with the wrong date is not.
@@ -953,12 +972,21 @@ export function ApprovalAsk({
           {`Due ${LONG_MONTH_DAY.format(due)}`}
         </p>
       )}
-      <p
-        data-testid="immutability-sentence"
-        className="mt-1.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-      >
-        {`You are approving edition ${approval.artifactVersion}, exactly as shown.`}
-      </p>
+      {/* `W1-01`. The sentence is present tense, so it stands only while the
+          approving is what is actually on offer. Unguarded it was false in
+          three states the lead herself reaches: on a draft, where the only act
+          is reading the edition; while the studio holds it and nothing is
+          waiting on her; and beside her own stamp the moment she has answered,
+          under an eyebrow already reading "answered". iOS closed exactly these
+          (`W1R2-M1`, `iosb2-M2`): after she answers it is gone. */}
+      {immutabilitySentence && (
+        <p
+          data-testid="immutability-sentence"
+          className="mt-1.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {immutabilitySentence}
+        </p>
+      )}
 
       {approval.context && (
         <p

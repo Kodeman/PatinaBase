@@ -291,6 +291,50 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(screen.queryByTestId('approval-impact-ledger')).not.toBeInTheDocument();
   });
 
+  // `W1-01`. The sentence is present tense and it was unconditional, so it
+  // said "You are approving edition 3" over three states the lead herself
+  // reaches and is not approving in. iOS closed the same three.
+  it('speaks in the tense the reader is actually in', () => {
+    // A draft with her review outstanding: the act on offer is READING.
+    const { unmount } = render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 }}
+      />,
+    );
+    expect(screen.getByTestId('immutability-sentence')).toHaveTextContent(
+      'You would be approving edition 3, exactly as shown.',
+    );
+    unmount();
+
+    // Reviewed, and with the studio: nothing is waiting on her at all.
+    const awaiting = render(
+      <ApprovalAsk approval={{ ...APPROVAL, lifecycleStatus: 'draft' }} />,
+    );
+    expect(screen.queryByTestId('immutability-sentence')).not.toBeInTheDocument();
+    awaiting.unmount();
+
+    // Answered: the stamp says what was done, in the past.
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, outcome: 'approved', lifecycleStatus: 'responded' }}
+      />,
+    );
+    expect(screen.queryByTestId('immutability-sentence')).not.toBeInTheDocument();
+  });
+
+  it('drops the present tense the moment she answers, without a refetch', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    expect(screen.getByTestId('immutability-sentence')).toHaveTextContent(
+      'You are approving edition 3, exactly as shown.',
+    );
+
+    await answer(/^approve$/i);
+
+    await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+    expect(await screen.findByTestId('approval-stamp')).toHaveTextContent(/^APPROVED/);
+    expect(screen.queryByTestId('immutability-sentence')).not.toBeInTheDocument();
+  });
+
   it('names the consequence and takes a second beat before recording an outcome', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
