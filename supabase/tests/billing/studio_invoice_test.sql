@@ -4,10 +4,12 @@
 --     -v ON_ERROR_STOP=1 -f supabase/tests/billing/studio_invoice_test.sql
 --
 -- Covers the whole houseless rail: draft (create_draft_studio_invoice) ->
--- issue (studio-keyed number) -> pay (earnings with a NULL project) -> refund
--- contra -> void, the household/co-member/stranger read boundary, the payload
--- and authority rejections, and a two-studio designer drawing off the studio
--- they named rather than their primary one.
+-- issue (studio-keyed number) -> pay (Stripe Checkout claim -> finalize ->
+-- settle, earnings with a NULL project) -> refund contra -> void, the
+-- household/co-member/stranger read boundary, the payload and authority
+-- rejections, the clean-draft bound set_invoice_studio_id puts on direct
+-- PostgREST DML, and a two-studio designer drawing off the studio they named
+-- rather than their primary one.
 
 BEGIN;
 
@@ -151,21 +153,51 @@ BEGIN
 END;
 $$;
 
--- ── Payment: the earnings credit lands with no house on it. ──
+-- ── Payment: the Stripe rail carries a houseless invoice end to end. ──
+--
+-- Driven through claim -> finalize -> settle exactly as the sibling suite
+-- invoice_checkout_integrity_test.sql drives it, because the Checkout rail on
+-- an invoice with no project is the one leg no other suite covers.
 RESET ROLE;
+UPDATE public.profiles
+SET stripe_customer_id = 'cus_studio_invoice_household'
+WHERE id = '5f100000-0000-4000-8000-000000000003';
+
+SET LOCAL ROLE service_role;
 DO $$
 DECLARE
   v_id uuid;
+  v_claim jsonb;
+  v_final jsonb;
+  v_settled jsonb;
   v_payment uuid;
 BEGIN
   SELECT id INTO v_id FROM studio_invoice_ids WHERE label = 'issued';
-  INSERT INTO public.invoice_payments (
-    invoice_id, amount_cents, method, status, reference, recorded_by, received_at
-  ) VALUES (
-    v_id, 66000, 'check', 'succeeded', 'CHECK-STUDIO-01',
-    '5f100000-0000-4000-8000-000000000001', now()
-  ) RETURNING id INTO v_payment;
+
+  v_claim := public.claim_invoice_checkout_attempt(
+    v_id, '5f100000-0000-4000-8000-000000000003',
+    'cus_studio_invoice_household', false, 'card'
+  );
+  ASSERT (v_claim->>'amount_cents')::int = 66000
+         AND (v_claim->>'surcharge_cents')::int = 1980,
+    'the claim reads the houseless invoice''s own balance and its studio''s fee';
+
+  v_payment := (v_claim->>'payment_id')::uuid;
   INSERT INTO studio_invoice_ids VALUES ('payment', v_payment);
+
+  v_final := public.finalize_invoice_checkout_attempt(
+    (v_claim->>'attempt_id')::uuid,
+    '5f100000-0000-4000-8000-000000000003',
+    'cus_studio_invoice_household', 'cs_studio_invoice_1'
+  );
+  ASSERT v_final->>'stripe_checkout_session_id' = 'cs_studio_invoice_1',
+    'finalize stamps the session on an invoice with no project';
+
+  v_settled := public.settle_invoice_checkout_payment(
+    v_payment, 'evt_studio_invoice_1', 'pi_studio_invoice_1', 67980, 'card'
+  );
+  ASSERT v_settled->>'outcome' = 'succeeded',
+    'the webhook settles the houseless charge at gross';
 
   ASSERT (SELECT status = 'paid' AND amount_paid_cents = 66000
                  AND paid_at IS NOT NULL
@@ -175,12 +207,14 @@ BEGIN
           WHERE invoice_payment_id = v_payment
             AND designer_id = '5f100000-0000-4000-8000-000000000001'
             AND source_type = 'design_fee'
+            AND status = 'confirmed'
             AND project_id IS NULL
             AND net_amount = 66000
             AND description LIKE '%Design consultation, September%'),
     'studio revenue earns a design fee with no project and the title on it';
 END;
 $$;
+RESET ROLE;
 
 -- ── Refund: the contra row mirrors the credit, still houseless. ──
 DO $$
@@ -378,6 +412,87 @@ BEGIN
     SELECT 1 FROM public.invoices
     WHERE id = '5f140000-0000-4000-8000-000000000001'
   ), 'the refused row rolled back';
+END;
+$$;
+
+-- Direct PostgREST DML on a studio invoice is held to the same clean draft the
+-- project path allows: state, number and money belong to the billing RPCs, so
+-- a member cannot hand-write a paid invoice or a number the studio counter
+-- never minted.
+DO $$
+DECLARE
+  v_state text;
+  v_accepted boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id, title, status,
+      invoice_number, subtotal_cents, total_cents, amount_paid_cents,
+      sent_at, paid_at
+    ) VALUES (
+      '5f140000-0000-4000-8000-000000000002', NULL,
+      '5f100000-0000-4000-8000-000000000001',
+      '5f100000-0000-4000-8000-000000000003',
+      '5f110000-0000-4000-8000-000000000001',
+      'Spoofed paid studio invoice', 'paid', 'INV-9999',
+      100000, 100000, 100000, now(), now()
+    );
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'direct DML cannot hand-write a paid studio invoice or its number';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.invoices
+    WHERE id = '5f140000-0000-4000-8000-000000000002'
+  ), 'the spoofed paid row never landed';
+END;
+$$;
+
+DO $$
+DECLARE
+  v_draft uuid;
+  v_state text;
+  v_accepted boolean;
+BEGIN
+  SELECT id INTO v_draft FROM studio_invoice_ids WHERE label = 'draft';
+
+  v_accepted := false;
+  v_state := NULL;
+  BEGIN
+    UPDATE public.invoices SET amount_paid_cents = 9999 WHERE id = v_draft;
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'direct DML cannot move money onto a studio draft';
+
+  v_accepted := false;
+  v_state := NULL;
+  BEGIN
+    UPDATE public.invoices
+    SET invoice_number = 'INV-7777', status = 'sent', sent_at = now()
+    WHERE id = v_draft;
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'direct DML cannot issue a studio draft or name its number';
+
+  ASSERT (SELECT status = 'draft' AND amount_paid_cents = 0
+                 AND invoice_number IS NULL AND sent_at IS NULL
+          FROM public.invoices WHERE id = v_draft),
+    'the refused writes left the draft exactly as it stood';
+
+  UPDATE public.invoices
+  SET memo = 'Two sessions and a site walk, revised.'
+  WHERE id = v_draft;
+  ASSERT (SELECT memo = 'Two sessions and a site walk, revised.'
+          FROM public.invoices WHERE id = v_draft),
+    'a clean studio draft still edits from the composer';
 END;
 $$;
 
