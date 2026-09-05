@@ -648,3 +648,117 @@ flattens withdrawn and superseded, which the detail screen keeps apart. `n-1` �
 document gave three of its own suites are wrong. `n-3` — three "sign-off"
 strings survive in `DecisionDeferral.swift`. `n-4` — the detail screen's first
 paint now waits on the stamp.
+
+---
+
+# Close-out — round two (2026-09-05)
+
+The round-two adversarial review returned three majors on the round-one fixes.
+All three are addressed below. Worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w1-integration`,
+branch `approvals/w1-integration`, base `ab86807c8`.
+
+## R2-M1 — the ruling wins: drafts are excluded
+
+My round-one escalation asked the orchestrator to choose between the written
+ruling and P-09's review leg. **The ruling stands**, and this round implements
+it: `rulings-2026-09-04.md`, "Rulings made at Wave 1 close" — *"Studio
+co-member in the client app sees studio-wide approvals as 'waiting on you'
+(projection carries no viewer role). Drafts are excluded now; the viewer-role
+field is a Wave 2 migration item."*
+
+- `RemoteProjectApprovalReview.awaitsClientInFeed` (`awaitsClient &&
+  isPublished`) is the ONE predicate both homeowner-facing merges read —
+  `DecisionsListViewModel.load` and `BadgeCountService.mergedDecisions`.
+  `awaitsClient` alone survives as the ceremony's own question (does this row
+  still hold an act of hers), which the detail screen and the bell copy ask.
+- The `previous` fallback in `mergedDecisions` — the leg that stands the feed
+  up when the projection read fails — drops `isUnissuedApproval` rows too. A
+  phone upgrading from the build that DID carry drafts has them on disk
+  (`BadgeCountPersistence` stores `pendingDecisions` whole), and without this
+  a failed projection read would put one back.
+
+**The cost, recorded rather than argued away.** `!isPublished` and
+`awaitsReadingOnly` are the same set — `publish_client_decision` sets `status =
+'pending'` and `sent_at` in one statement (00464:998,1061) — so this subtracts
+exactly the review-confirmation leg, and `AppRoute.decisionDetail` is pushed
+from a feed row and nowhere else. **P-09's review confirmation is therefore
+WEB-ONLY for Wave 1 on this branch.** Walk-r2 reached it from the Studio hub
+(`walk-shots-r2/37-g1-draft-review.png`); that path is gone until the
+viewer-role field lands in Wave 2, at which point the exclusion can narrow from
+"every unpublished row" to "every unpublished row belonging to a studio this
+viewer works for". The reason is in a doc comment on `awaitsClientInFeed` so
+the next reader does not rediscover the argument.
+
+The round-one machinery is NOT deleted, because none of it is dead:
+`awaitsReadingOnly` still withholds `due_date` in `asWaitingDecision`,
+`isUnissuedApproval` is now an exclusion predicate in two places, and
+`StudioQueueItemRow.awaitsReading` still corrects the Record's noun for a row
+arriving from an earlier build's cache.
+
+## R2-M2 — the aggregate's noun
+
+`StudioQueueContext.pendingDecisions` was `input.decisions.filter {
+!$0.isResolved }`, and an unissued draft is `status = 'draft'`,
+`responded_at = nil` — in. Its plural line is *"Two approvals are waiting on
+you"*, which is the exact claim round one's own commit message forbade, and it
+reaches the bell as well as the hub (`NotificationsViewModel
+.currentFallbackRows` composes its stand-in from this same snapshot).
+
+The filter now also drops `isUnissuedApproval`. With R2-M1 restored this is
+belt-and-braces for one real path — the disk-restored `pendingDecisions` a
+version upgrade can hand straight to the bell before any merge runs — and it
+makes the aggregate's noun true by construction rather than by upstream luck.
+
+## R2-M3 — the widened opened-write may not launder a failed delivery
+
+`markAllOpened`'s only predicates were `opened_at=is.null` and
+`channel=in.(in_app,push)`, and the body writes `status: "opened"`. 00562's
+`USING` has no status leg either. The push leg is the one that carries delivery
+state — `notify_client_attention` inserts it `queued` (00534:192), `apns-send`
+stamps it `delivered` or `failed` with an error string — so mark-all over a
+failed push turned `failed` into `opened`: the record would say she read a
+notice that never arrived, and P-28's Wave 3 retry sweep, keyed on `failed`,
+would skip exactly the rows that were laundered. Introduced by round one's
+widening; before it, the write reached `in_app` only, where `failed` does not
+occur in practice.
+
+`NotificationsAPIClient.openedWriteStatusFilter =
+"in.(queued,sending,delivered,unconfirmed)"` now rides on the PATCH beside the
+channel predicate. A terminal `failed` or `suppressed` row keeps its state and
+its `opened_at IS NULL`.
+
+## Tests
+
+In `WalkCASAndFeedTests` (`ApprovalFeedGuardTests`):
+
+- `anUnsentDraftIsNotADatedAsk` — rewritten: the unsent draft is `awaitsClient`
+  but NOT `awaitsClientInFeed`, and `mergedDecisions` returns it empty. The
+  published one still merges and still keeps its date.
+- `aCachedDraftDoesNotSurviveTheFallback` — the `previous` leg drops it.
+- `bothFeedsReadOnePredicate` — inverted: both merges must read
+  `filter(\.awaitsClientInFeed)` and neither may read `filter(\.awaitsClient)`,
+  plus a pin on the predicate's own definition.
+- `anUnissuedEditionIsNotCountedAsAnApproval` — one issued plus one unissued
+  makes a singular row naming the issued one, never "Two approvals"; unissued
+  alone makes no aggregate at all.
+
+In `NotificationsAPIClientContractTests`:
+
+- `theOpenedWriteLeavesAFailedDeliveryAlone` — the constant, and that it
+  admits neither `failed` nor `suppressed`.
+- `markAllSendsTheStatusPredicate` — the predicate is on the mark-all request
+  beside the channel one, and read from the constant at exactly one site.
+
+## Gate
+
+`IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE scripts/ios-gate.sh all`
+— `Test run with 2467 tests in 271 suites passed ... with 2 known issues`,
+`✓ lint-delta: no new warnings in touched files`.
+
+## Still owed from round one (unchanged, not in this brief)
+
+`m-1` (`markOpened(id:)` still PATCHes the one `in_app` row while the badge
+comment claims both legs), `m-2` (`retitleApprovals`' unconditional cold-bell
+rename), `m-3` (`bellClosed` flattens withdrawn and superseded), `n-1`, `n-2`,
+`n-3`, `n-4`. Left alone by ruling: `W1R2-n2` (Wave 2 P-16), `W1R2-n3`.
