@@ -171,7 +171,8 @@ struct AttentionCountTests {
 
         #expect(badges.attentionCount == 0)
         #expect(badges.attentionHint == nil, "nothing is awaiting, so there is no count to print")
-        #expect(badges.studioHint == "1 new conversation",
+        // `iosd4-M2`: in words, in the sibling composer's own sentence.
+        #expect(badges.studioHint == "One new conversation",
                 "the sentence a consumer prints must fall through to the rest of the chain")
     }
 
@@ -183,7 +184,7 @@ struct AttentionCountTests {
             decisions: [], summaries: [], proposals: [], invoices: [],
             projects: rows.projects, roster: []
         )
-        #expect(badges.studioHint == "1 project is moving")
+        #expect(badges.studioHint == "One project is moving")
     }
 
     @Test("with nothing at all there is no sentence")
@@ -446,5 +447,30 @@ extension AttentionCountTests {
                 == "one thing awaiting you")
         #expect(StudioQueueSectionKind.awaitingYou.badgeLabel(count: 5)
                 == "five things awaiting you")
+    }
+
+    /// `iosd4-M2`. `attentionHint` had already been ruled into words while the
+    /// three rungs below it still printed figures, so one surface said "One
+    /// thing needs your eye" on Monday and "3 new conversations" on Tuesday.
+    /// The rungs now compose in the sibling's own words.
+    @Test("every rung of the Studio sentence counts in words, never in figures")
+    func theStudioSentenceCountsInWords() throws {
+        let rows = try fixtures()
+        let badges = BadgeCountService.makeForTests()
+        badges.apply(
+            decisions: [], summaries: [], proposals: [], invoices: [],
+            projects: rows.projects + rows.projects + rows.projects, roster: []
+        )
+        #expect(badges.activeProjectCount == 3)
+        #expect(badges.studioHint == "Three projects are moving")
+
+        let source = try SourcePin.readCode(
+            "Patina/Services/Badges/BadgeCountService+Attention.swift"
+        )
+        for figure in ["\\(unreadMessageCount) new", "\\(activeProjectCount) project"] {
+            #expect(!source.contains(figure), "the Studio sentence prints a figure: \(figure)")
+        }
+        #expect(source.contains("PatinaCount.inWordsCapitalized(unreadMessageCount)"))
+        #expect(source.contains("PatinaCount.inWordsCapitalized(activeProjectCount)"))
     }
 }

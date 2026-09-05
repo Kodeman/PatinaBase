@@ -61,6 +61,9 @@ const REVIEW = {
   artifactTitle: 'Budget checkpoint 03',
   question: 'Approve this exact budget checkpoint?',
   context: null,
+  why: 'The stone slab we chose is no longer quarried.',
+  whyAuthorName: 'Leah Quist',
+  viewerRole: 'lead',
   dueAt: '2026-09-01T12:00:00.000Z',
   costCentsDelta: 0,
   scheduleDaysDelta: 0,
@@ -241,10 +244,84 @@ describe('project approval sanitized reads', () => {
     ).toEqual(expect.objectContaining({ authorityRevision: null }));
   });
 
+  it('reads the frozen why, and stays null on an artifact minted before the column', () => {
+    expect(
+      parseProjectApprovalReview({
+        ...REVIEW,
+        why: 'The walnut is the only piece that holds the room.',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        why: 'The walnut is the only piece that holds the room.',
+      }),
+    );
+    expect(parseProjectApprovalReview({ ...REVIEW, why: undefined })).toEqual(
+      expect.objectContaining({ why: null }),
+    );
+  });
+
+  it("reads the why's author, and stays null until the projection carries one", () => {
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, whyAuthorName: 'Leah Kochaver' }),
+    ).toEqual(expect.objectContaining({ whyAuthorName: 'Leah Kochaver' }));
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, whyAuthorName: undefined }),
+    ).toEqual(expect.objectContaining({ whyAuthorName: null }));
+  });
+
   it('requires the server-projected overdue condition instead of using a client clock', () => {
     expect(() =>
       parseProjectApprovalReview({ ...REVIEW, isOverdue: undefined }),
     ).toThrow('Project approval review is missing isOverdue');
+  });
+
+  it('carries the frozen why, its author and the viewer’s chair to the surface', () => {
+    expect(parseProjectApprovalReview(REVIEW)).toEqual(
+      expect.objectContaining({
+        why: 'The stone slab we chose is no longer quarried.',
+        // The why is signed by the hand that WROTE it, frozen with the
+        // artifact — a studio has more than one designer and the record is
+        // immutable and client-facing (ruling, 2026-09-05).
+        whyAuthorName: 'Leah Quist',
+        viewerRole: 'lead',
+      }),
+    );
+  });
+
+  it.each(['lead', 'studio', 'household'])(
+    'keeps the %s chair exactly as the projection stated it',
+    (viewerRole) => {
+      expect(parseProjectApprovalReview({ ...REVIEW, viewerRole })).toEqual(
+        expect.objectContaining({ viewerRole }),
+      );
+    },
+  );
+
+  it('reads a why and a chair as absent rather than throwing a pre-00569 row away', () => {
+    expect(
+      parseProjectApprovalReview({
+        ...REVIEW,
+        why: undefined,
+        whyAuthorName: undefined,
+        viewerRole: undefined,
+      }),
+    ).toEqual(
+      expect.objectContaining({ why: null, whyAuthorName: null, viewerRole: null }),
+    );
+  });
+
+  // An unsigned sentence is honest; a wrongly signed one is not. The parser
+  // never substitutes another name for an author it was not given.
+  it('leaves the why unsigned when the projection names no author', () => {
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, whyAuthorName: null }),
+    ).toEqual(expect.objectContaining({ whyAuthorName: null }));
+  });
+
+  it('never guesses a chair from a role it does not recognise', () => {
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, viewerRole: 'owner' }),
+    ).toEqual(expect.objectContaining({ viewerRole: null }));
   });
 });
 
@@ -318,6 +395,100 @@ describe('project approval authority and lifecycle RPCs', () => {
       }),
       p_idempotency_key: 'create-1',
     });
+  });
+
+  it('carries the composer why to the RPC as p_why', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const mutation =
+      useCreateProjectApproval() as unknown as MutationConfig<any>;
+
+    await mutation.mutationFn({
+      projectId: 'project-1',
+      idempotencyKey: 'create-why',
+      payload: {
+        title: 'Budget checkpoint',
+        question: 'Approve this exact budget checkpoint?',
+        why: '  The walnut is the only piece that holds the room.  ',
+        dueAt: '2026-09-01T12:00:00.000Z',
+        phaseId: 'phase-1',
+        artifactKind: 'budget_version',
+        artifactId: 'artifact-1',
+        costCentsDelta: 0,
+        scheduleDaysDelta: 0,
+        leadTimeDaysDelta: 0,
+      },
+    });
+
+    expect(rpc).toHaveBeenCalledWith(
+      'create_project_approval_decision',
+      expect.objectContaining({
+        p_why: 'The walnut is the only piece that holds the room.',
+      }),
+    );
+  });
+
+  it('omits p_why entirely when no why was written, so the old signature still takes the call', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const mutation =
+      useCreateProjectApproval() as unknown as MutationConfig<any>;
+
+    for (const why of [undefined, null, '   ']) {
+      rpc.mockClear();
+      await mutation.mutationFn({
+        projectId: 'project-1',
+        idempotencyKey: 'create-no-why',
+        payload: {
+          title: 'Budget checkpoint',
+          question: 'Approve this exact budget checkpoint?',
+          why,
+          dueAt: '2026-09-01T12:00:00.000Z',
+          phaseId: 'phase-1',
+          artifactKind: 'budget_version',
+          artifactId: 'artifact-1',
+          costCentsDelta: 0,
+          scheduleDaysDelta: 0,
+          leadTimeDaysDelta: 0,
+        },
+      });
+
+      expect(Object.keys(rpc.mock.calls[0][1])).not.toContain('p_why');
+    }
+  });
+
+  it('sends p_why as one line, whatever whitespace the payload arrived with', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const mutation =
+      useCreateProjectApproval() as unknown as MutationConfig<any>;
+
+    await mutation.mutationFn({
+      projectId: 'project-1',
+      idempotencyKey: 'create-why-newline',
+      payload: {
+        title: 'Budget checkpoint',
+        question: 'Approve this exact budget checkpoint?',
+        why: '\n The walnut is the only piece\r\n\tthat holds the room. \n',
+        dueAt: '2026-09-01T12:00:00.000Z',
+        phaseId: 'phase-1',
+        artifactKind: 'budget_version',
+        artifactId: 'artifact-1',
+        costCentsDelta: 0,
+        scheduleDaysDelta: 0,
+        leadTimeDaysDelta: 0,
+      },
+    });
+
+    const sent = rpc.mock.calls[0][1].p_why as string;
+    expect(sent).toBe('The walnut is the only piece that holds the room.');
+    expect(sent).not.toMatch(/[\r\n]/u);
   });
 
   it('binds review confirmation to the frozen revision and SHA-256 artifact', async () => {
@@ -395,6 +566,63 @@ describe('project approval authority and lifecycle RPCs', () => {
     expect(JSON.stringify(rpc.mock.calls[0])).not.toContain('comment');
   });
 
+  it('carries the typed name and its consent method when one is given (P-18)', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        projectId: 'project-1',
+        decisionId: 'decision-1',
+        outcome: 'approved',
+      },
+      error: null,
+    });
+    const mutation =
+      useRespondProjectApproval() as unknown as MutationConfig<any>;
+
+    await mutation.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      outcome: 'approved',
+      expectedUpdatedAt: '2026-08-10T12:05:00.000Z',
+      idempotencyKey: 'respond-2',
+      clientSignature: 'Harper Vale',
+      clientConsentMethod: 'electronic_signature',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('respond_project_approval', {
+      p_decision_id: 'decision-1',
+      p_payload: {
+        outcome: 'approved',
+        clientConsentMethod: 'electronic_signature',
+        clientSignature: 'Harper Vale',
+      },
+      p_expected_updated_at: '2026-08-10T12:05:00.000Z',
+      p_idempotency_key: 'respond-2',
+    });
+  });
+
+  it('sends neither key without a consent method, so a pre-00570 wrapper still answers', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const mutation =
+      useRespondProjectApproval() as unknown as MutationConfig<any>;
+
+    // A signature with no method is a check_violation in the RPC, and the two
+    // extra keys are refused outright by any wrapper minted before 00570 — so
+    // the method is what decides whether either travels.
+    await mutation.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      outcome: 'needs_discussion',
+      expectedUpdatedAt: '2026-08-10T12:05:00.000Z',
+      idempotencyKey: 'respond-3',
+      clientSignature: 'Harper Vale',
+    });
+
+    expect(rpc.mock.calls[0][1].p_payload).toEqual({ outcome: 'needs_discussion' });
+  });
+
   it('uses the exact withdrawal and supersession signatures', async () => {
     rpc.mockResolvedValue({
       data: { projectId: 'project-1', decisionId: 'decision-1' },
@@ -443,6 +671,53 @@ describe('project approval authority and lifecycle RPCs', () => {
         p_idempotency_key: 'supersede-1',
       },
     );
+  });
+
+  it('carries a re-asked why to the supersede RPC as one line, and omits the key when none was re-asked', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-2' },
+      error: null,
+    });
+    const supersede =
+      useSupersedeProjectApproval() as unknown as MutationConfig<any>;
+    const basePayload = {
+      title: 'Budget checkpoint 04',
+      question: 'Approve revision 04?',
+      dueAt: '2026-09-05T12:00:00.000Z',
+      artifactKind: 'budget_version' as const,
+      artifactId: 'artifact-2',
+      costCentsDelta: 0,
+      scheduleDaysDelta: 0,
+      leadTimeDaysDelta: 0,
+    };
+
+    await supersede.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      expectedUpdatedAt: '2026-08-10T12:05:00.000Z',
+      idempotencyKey: 'supersede-why',
+      payload: {
+        ...basePayload,
+        why: ' The walnut\nstill holds the room. ',
+      },
+    });
+    const sent = rpc.mock.calls[0][1].p_why as string;
+    expect(sent).toBe('The walnut still holds the room.');
+    expect(sent).not.toMatch(/[\r\n]/u);
+
+    // Silence is not a clearing: the RPC carries the predecessor's frozen why
+    // forward when the key is absent.
+    for (const why of [undefined, null, '  ']) {
+      rpc.mockClear();
+      await supersede.mutationFn({
+        projectId: 'project-1',
+        decisionId: 'decision-1',
+        expectedUpdatedAt: '2026-08-10T12:05:00.000Z',
+        idempotencyKey: 'supersede-no-why',
+        payload: { ...basePayload, why },
+      });
+      expect(Object.keys(rpc.mock.calls[0][1])).not.toContain('p_why');
+    }
   });
 });
 

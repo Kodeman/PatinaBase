@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { axe, toHaveNoViolations } from 'jest-axe';
 
 import { ProjectApprovalDocument } from './project-approval-document';
@@ -107,6 +113,8 @@ const baseReview = {
   artifactTitle: 'Issued drawing set 02',
   question: 'Approve this exact drawing set?',
   context: null,
+  why: null,
+  viewerRole: 'lead',
   dueAt: '2099-09-01T12:00:00.000Z',
   costCentsDelta: 0,
   scheduleDaysDelta: -2,
@@ -318,6 +326,232 @@ describe('ProjectApprovalDocument authority and composer', () => {
     expect(createApproval.mock.calls[1][0].idempotencyKey).toBe(
       createApproval.mock.calls[0][0].idempotencyKey,
     );
+  });
+});
+
+describe("P-13 — the designer's one-line why", () => {
+  const openComposer = () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    const view = renderDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'New approval' }));
+    return view;
+  };
+
+  it('asks for her line first, above the gate anatomy, and says where it lands', () => {
+    const { container } = openComposer();
+
+    const why = screen.getByLabelText('What would you tell her about this?');
+    expect(why).toBeVisible();
+    expect(why).not.toBeRequired();
+    expect(why).toHaveAttribute('maxlength', '200');
+    expect(
+      screen.getByText(/One line\. She reads it under the question\./),
+    ).toBeVisible();
+
+    // First field on the paper: it precedes the artifact fieldset.
+    const form = container.querySelector('form');
+    const firstPart = form?.querySelector('[data-gate-part]');
+    expect(
+      why.compareDocumentPosition(firstPart as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('counts down in words only as the cap comes close, and never in figures', () => {
+    openComposer();
+    const why = screen.getByLabelText('What would you tell her about this?');
+    const help = () =>
+      screen.getByText(/One line\. She reads it under the question\./)
+        .textContent ?? '';
+
+    fireEvent.change(why, { target: { value: 'x'.repeat(120) } });
+    expect(help()).toBe('One line. She reads it under the question.');
+
+    fireEvent.change(why, { target: { value: 'x'.repeat(199) } });
+    expect(help()).toContain('One character left.');
+    expect(help()).not.toMatch(/\d/);
+
+    fireEvent.change(why, { target: { value: 'x'.repeat(200) } });
+    expect(help()).toContain('No characters left.');
+  });
+
+  // The sentence freezes into an append-only artifact and is read on four
+  // surfaces, each of which would break an interior newline differently.
+  it('holds the why to one line: Enter does nothing and a pasted newline collapses', () => {
+    openComposer();
+    const why = screen.getByLabelText(
+      'What would you tell her about this?',
+    ) as HTMLTextAreaElement;
+
+    const enter = createEvent.keyDown(why, { key: 'Enter', code: 'Enter' });
+    fireEvent(why, enter);
+    expect(enter.defaultPrevented).toBe(true);
+
+    fireEvent.change(why, {
+      target: { value: 'The walnut\nholds\r\n\tthe room.' },
+    });
+    expect(why.value).toBe('The walnut holds the room.');
+    expect(why.value).not.toMatch(/[\r\n]/u);
+  });
+
+  it('sends a why with no newline in it, however it was pasted', async () => {
+    openComposer();
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Drawing set 02' },
+    });
+    fireEvent.change(screen.getByLabelText('Approval question'), {
+      target: { value: 'Approve this exact drawing set?' },
+    });
+    fireEvent.change(screen.getByLabelText('Exact project phase'), {
+      target: { value: 'phase-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Issued artifact'), {
+      target: { value: 'plan_issue:issue-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Due date and time'), {
+      target: { value: '2099-09-01T12:00' },
+    });
+    fireEvent.change(
+      screen.getByLabelText('What would you tell her about this?'),
+      { target: { value: '\n The walnut\nholds the room. \n' } },
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Create review draft' }),
+    );
+
+    await waitFor(() => expect(createApproval).toHaveBeenCalledTimes(1));
+    const sent = createApproval.mock.calls[0][0].payload.why as string;
+    expect(sent).toBe('The walnut holds the room.');
+    expect(sent).not.toMatch(/[\r\n]/u);
+  });
+
+  it('carries the trimmed line to the create call, and null when she wrote none', async () => {
+    openComposer();
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Drawing set 02' },
+    });
+    fireEvent.change(screen.getByLabelText('Approval question'), {
+      target: { value: 'Approve this exact drawing set?' },
+    });
+    fireEvent.change(screen.getByLabelText('Exact project phase'), {
+      target: { value: 'phase-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Issued artifact'), {
+      target: { value: 'plan_issue:issue-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Due date and time'), {
+      target: { value: '2099-09-01T12:00' },
+    });
+    fireEvent.change(
+      screen.getByLabelText('What would you tell her about this?'),
+      { target: { value: '  The walnut holds the room.  ' } },
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Create review draft' }),
+    );
+
+    await waitFor(() => expect(createApproval).toHaveBeenCalledTimes(1));
+    expect(createApproval.mock.calls[0][0].payload.why).toBe(
+      'The walnut holds the room.',
+    );
+  });
+
+  it('leaves the why null when the field is untouched', async () => {
+    openComposer();
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Drawing set 02' },
+    });
+    fireEvent.change(screen.getByLabelText('Approval question'), {
+      target: { value: 'Approve this exact drawing set?' },
+    });
+    fireEvent.change(screen.getByLabelText('Exact project phase'), {
+      target: { value: 'phase-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Issued artifact'), {
+      target: { value: 'plan_issue:issue-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Due date and time'), {
+      target: { value: '2099-09-01T12:00' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Create review draft' }),
+    );
+
+    await waitFor(() => expect(createApproval).toHaveBeenCalledTimes(1));
+    expect(createApproval.mock.calls[0][0].payload.why).toBeNull();
+  });
+
+  it("prints the frozen why under the question, signed with its author's frozen name", () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'pending',
+        why: 'The walnut is the only piece that holds the room.',
+        whyAuthorName: 'Leah Kochaver',
+      },
+    ];
+    const { container } = renderDocument();
+
+    const question = container.querySelector('[data-gate-part="question"]');
+    expect(question).not.toBeNull();
+    const why = question?.querySelector('[data-gate-why]');
+    expect(why).not.toBeNull();
+    expect(why).toHaveTextContent(
+      'The walnut is the only piece that holds the room.',
+    );
+    expect(why).toHaveTextContent('\u2014 Leah Kochaver');
+  });
+
+  // A studio has more than one hand. The sentence is frozen and client-facing,
+  // so with no author on the record it stands unsigned rather than borrowing
+  // the given name of whoever happens to be reading it.
+  it('leaves the why unsigned when the record names no author', () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'pending',
+        why: 'The walnut is the only piece that holds the room.',
+        whyAuthorName: null,
+      },
+    ];
+    const { container } = renderDocument();
+
+    const why = container.querySelector('[data-gate-why]');
+    expect(why).not.toBeNull();
+    expect(why).toHaveTextContent(
+      'The walnut is the only piece that holds the room.',
+    );
+    expect(why?.textContent).not.toContain('\u2014');
+  });
+
+  it('prints nothing under the question when no why was frozen', () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [{ ...baseReview, lifecycleStatus: 'pending', why: null }];
+    const { container } = renderDocument();
+
+    expect(container.querySelector('[data-gate-why]')).toBeNull();
   });
 });
 

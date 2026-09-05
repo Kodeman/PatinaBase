@@ -191,7 +191,12 @@ extension AppNotification {
             isRead: remote.opened_at != nil || remote.status == "opened" || remote.status == "clicked",
             entityType: entityType,
             entityId: entityId,
-            iconOverride: pushType?.icon
+            iconOverride: pushType?.icon,
+            // `P-06`: 00534 writes `deep_link` and mirrors it into `url`; the
+            // Threshold's own links (`_shared/client-portal-links.ts`) name
+            // their entity nowhere else.
+            deepLink: remote.metadata?["deep_link"]?.value as? String
+                ?? remote.metadata?["url"]?.value as? String
         )
     }
 }

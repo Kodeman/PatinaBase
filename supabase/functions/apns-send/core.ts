@@ -122,6 +122,116 @@ export function collapsedBadgeCount(rows: BadgeRow[]): number {
 }
 
 /**
+ * The notification category the lock screen looks up for its actions (P-22).
+ * Derived from the entity the row already names — no producer passes it, and
+ * none needs to. An entity the app has no category for gets none: iOS then
+ * draws the plain banner, which is exactly the graceful degradation the
+ * proposal asks for.
+ */
+const ENTITY_CATEGORY: Record<string, string> = {
+  decision: "PATINA_DECISION",
+  proposal: "PATINA_PROPOSAL",
+  invoice: "PATINA_INVOICE",
+};
+
+export function apnsCategoryFor(
+  entityType: string | null | undefined,
+): string | null {
+  if (typeof entityType !== "string") return null;
+  return ENTITY_CATEGORY[entityType] ?? null;
+}
+
+/**
+ * One thread per thing (P-22): `decision-<id>`, `proposal-<id>`,
+ * `invoice-<id>`. iOS groups a thread's notifications together. Grouping is
+ * safe for every entity — it stacks the notices, it never replaces one — so
+ * this is derived for any entity that names an id, routed or not.
+ *
+ * APNs caps `apns-collapse-id` at 64 bytes and rejects the request outright
+ * past it, so an over-long id yields no thread rather than a failed push. An
+ * entity with no id has nothing to thread on.
+ */
+export function apnsThreadId(input: ApnsSendInput): string | null {
+  const entityType = input.entity_type;
+  const entityId = input.entity_id;
+  if (typeof entityType !== "string" || !entityType) return null;
+  if (typeof entityId !== "string" || !entityId) return null;
+  const id = `${entityType}-${entityId}`;
+  return new TextEncoder().encode(id).length <= 64 ? id : null;
+}
+
+/**
+ * Where an entity's project id is kept, for the three entities the lock screen
+ * routes. Used to find the conversation "Ask a question" should open (P-22).
+ * An entity absent from this table has no project to ask in.
+ */
+const ENTITY_PROJECT_TABLE: Record<string, string> = {
+  decision: "client_decisions",
+  proposal: "proposals",
+  invoice: "invoices",
+};
+
+export function projectTableFor(
+  entityType: string | null | undefined,
+): string | null {
+  if (typeof entityType !== "string") return null;
+  return ENTITY_PROJECT_TABLE[entityType] ?? null;
+}
+
+/**
+ * "Ask a question" needs one thread to open, and only one (P-22, ruled
+ * mid-Wave-2: the action opens that thread, else the entity's own screen —
+ * never the inbox as a dead end). A project normally has a single
+ * `comms_threads` row of kind 'project'; where it somehow has two, there is no
+ * honest way to choose between them from here, so the key is omitted and the
+ * action falls back to the entity. Omitted, never blank.
+ */
+export function pickProjectThreadId(
+  rows: Array<{ id?: unknown }> | null | undefined,
+): string | null {
+  if (!Array.isArray(rows) || rows.length !== 1) return null;
+  const id = rows[0]?.id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+/**
+ * The request headers for one device send.
+ *
+ * `apns-collapse-id` is the thread id (P-22), and it is sent ONLY for an
+ * entity this app routes — decision, proposal, invoice. Collapsing REPLACES an
+ * unread notice with the next one carrying the same id, which is exactly what
+ * a reminder for one approval should do and exactly what must never happen to
+ * two different events that merely name the same row. Three design_request
+ * producers push on the lead id (00330 accept, 00331 ceremony complete, 00334
+ * refreshed slots); collapsing those would have let "your studio accepted" be
+ * swallowed by "new times are offered", while the bell — written separately,
+ * outside notify_client_attention's dedupe — still listed both. So the gate is
+ * the category: an entity whose notices are a known repeating ask collapses,
+ * everything else stacks.
+ *
+ * Omitted, never blank, when there is none — an empty collapse id is not the
+ * same as no collapse id, and APNs treats "" as a real (shared) bucket.
+ */
+export function buildApnsHeaders(
+  input: ApnsSendInput,
+  topic: string,
+  jwt: string,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    authorization: `bearer ${jwt}`,
+    "apns-topic": topic,
+    "apns-push-type": "alert",
+    "apns-priority": "10",
+    "content-type": "application/json",
+  };
+  const thread = apnsThreadId(input);
+  if (thread && apnsCategoryFor(input.entity_type)) {
+    headers["apns-collapse-id"] = thread;
+  }
+  return headers;
+}
+
+/**
  * The push payload: a standard alert + the routing refs the iOS
  * NotificationRouter expects (mirrors notification_log metadata keys).
  *
@@ -130,24 +240,53 @@ export function collapsedBadgeCount(rows: BadgeRow[]): number {
  * entity key, resolved by the caller. It is OMITTED, never zeroed, when that
  * count could not be read — an absent key leaves the badge as it stands, where
  * a 0 would silently clear a number that is still true.
+ *
+ * P-22 adds three keys, all derived from what the row already carries:
+ *  - `category` — which action set the lock screen offers (Open / Ask a
+ *    question; never Approve or Sign).
+ *  - `thread-id` — one thread per thing, matching `apns-collapse-id`.
+ *  - `interruption-level: "active"` — the notice wakes the screen and is
+ *    never `time-sensitive`. A homeowner's approval is not an emergency, and
+ *    time-sensitive would break through a Focus the studio was not invited into.
+ *
+ * The Notification Service Extension is deferred by ruling, so there is no
+ * `mutable-content` and no attachment key here.
+ *
+ * The custom `thread_id` is a different thing from `aps["thread-id"]`, and the
+ * near-collision is worth the plain name: `aps["thread-id"]` is APNs' grouping
+ * key (`decision-<id>`), while `thread_id` is the id of the CONVERSATION the
+ * "Ask a question" action opens (ruled mid-Wave-2 — that thread, else the
+ * entity's own screen, never the inbox as a dead end). It is resolved by the
+ * caller from the entity's project and omitted whenever there is no single
+ * project thread to open.
  */
 export function buildApnsPayload(
   input: ApnsSendInput,
   badge?: number,
+  conversationThreadId?: string | null,
 ): Record<string, unknown> {
   const aps: Record<string, unknown> = {
     alert: { title: input.title, body: input.body },
     sound: "default",
+    "interruption-level": "active",
   };
   if (typeof badge === "number" && Number.isFinite(badge) && badge >= 0) {
     aps.badge = Math.trunc(badge);
   }
-  return {
+  const category = apnsCategoryFor(input.entity_type);
+  if (category) aps.category = category;
+  const thread = apnsThreadId(input);
+  if (thread) aps["thread-id"] = thread;
+  const payload: Record<string, unknown> = {
     aps,
     entity_type: input.entity_type ?? null,
     entity_id: input.entity_id ?? null,
     notification_log_id: input.notification_log_id ?? null,
   };
+  if (typeof conversationThreadId === "string" && conversationThreadId) {
+    payload.thread_id = conversationThreadId;
+  }
+  return payload;
 }
 
 /**

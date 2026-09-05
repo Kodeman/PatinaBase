@@ -1,0 +1,142 @@
+
+> @patina/client-portal@0.1.0 dev /Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-integration/apps/client-portal
+> next dev --webpack -p 3002
+
+▲ Next.js 16.2.10 (webpack)
+- Local:         http://localhost:3002
+- Network:       http://192.168.1.63:3002
+✓ Ready in 835ms
+> [PWA] PWA support is disabled
+> [PWA] PWA support is disabled
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · serverActions
+
+○ Compiling /auth/signin ...
+Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+warn - The class `duration-[320ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;320ms&rsqb;` to silence this warning.
+
+warn - The class `duration-[420ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;420ms&rsqb;` to silence this warning.
+
+warn - The class `duration-[520ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;520ms&rsqb;` to silence this warning.
+
+warn - The class `ease-[cubic-bezier(.24,.78,.28,1)]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(.24,.78,.28,1)&rsqb;` to silence this warning.
+
+warn - The class `ease-[cubic-bezier(0.25,1,0.5,1)]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(0.25,1,0.5,1)&rsqb;` to silence this warning.
+
+warn - The class `max-[600px]:duration-[240ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `max-&lsqb;600px&rsqb;:duration-[240ms]` to silence this warning.
+
+warn - The class `motion-safe:duration-[420ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `motion-safe:duration-&lsqb;420ms&rsqb;` to silence this warning.
+ GET /auth/signin 200 in 37ms (next.js: 1845µs, proxy.ts: 9ms, application-code: 26ms)
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 4.6s (next.js: 3.3s, proxy.ts: 59ms, application-code: 1272ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 3.2s (next.js: 2.1s, proxy.ts: 62ms, application-code: 1030ms)
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'trade_scope_executed',
+  error: 'Edge Function returned a non-2xx status code'
+}
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'deposit_ready',
+  error: 'Edge Function returned a non-2xx status code'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd202/sign 200 in 1969ms (next.js: 1825ms, proxy.ts: 41ms, application-code: 103ms)
+ GET /auth/signin 200 in 1058ms (next.js: 164ms, proxy.ts: 10ms, application-code: 884ms)
+ GET / 200 in 483ms (next.js: 153ms, proxy.ts: 54ms, application-code: 276ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 307ms (next.js: 129ms, proxy.ts: 42ms, application-code: 136ms)
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'trade_scope_executed',
+  error: 'Edge Function returned a non-2xx status code'
+}
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'deposit_ready',
+  error: 'Edge Function returned a non-2xx status code'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd202/sign 200 in 132ms (next.js: 5ms, proxy.ts: 43ms, application-code: 85ms)
+ GET /auth/signin 200 in 26ms (next.js: 1222µs, proxy.ts: 3ms, application-code: 22ms)
+ GET / 200 in 220ms (next.js: 1510µs, proxy.ts: 52ms, application-code: 166ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 181ms (next.js: 5ms, proxy.ts: 40ms, application-code: 136ms)
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'trade_scope_executed',
+  error: 'Edge Function returned a non-2xx status code'
+}
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'deposit_ready',
+  error: 'Edge Function returned a non-2xx status code'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd202/sign 200 in 113ms (next.js: 5ms, proxy.ts: 42ms, application-code: 65ms)
+[?25h
+ ELIFECYCLE  Command failed with exit code 143.
+
+> @patina/client-portal@0.1.0 dev /Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-integration/apps/client-portal
+> next dev --webpack -p 3002
+
+▲ Next.js 16.2.10 (webpack)
+- Local:         http://localhost:3002
+- Network:       http://192.168.1.63:3002
+✓ Ready in 442ms
+> [PWA] PWA support is disabled
+> [PWA] PWA support is disabled
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · serverActions
+
+○ Compiling /auth/signin ...
+Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+warn - The class `duration-[320ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;320ms&rsqb;` to silence this warning.
+
+warn - The class `duration-[420ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;420ms&rsqb;` to silence this warning.
+
+warn - The class `duration-[520ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;520ms&rsqb;` to silence this warning.
+
+warn - The class `ease-[cubic-bezier(.24,.78,.28,1)]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(.24,.78,.28,1)&rsqb;` to silence this warning.
+
+warn - The class `ease-[cubic-bezier(0.25,1,0.5,1)]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(0.25,1,0.5,1)&rsqb;` to silence this warning.
+
+warn - The class `max-[600px]:duration-[240ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `max-&lsqb;600px&rsqb;:duration-[240ms]` to silence this warning.
+
+warn - The class `motion-safe:duration-[420ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `motion-safe:duration-&lsqb;420ms&rsqb;` to silence this warning.
+ GET /auth/signin 200 in 8.0s (next.js: 7.0s, proxy.ts: 110ms, application-code: 865ms)
+ GET /auth/signin 200 in 27ms (next.js: 2ms, proxy.ts: 11ms, application-code: 14ms)
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 4.5s (next.js: 3.2s, proxy.ts: 58ms, application-code: 1199ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 2.9s (next.js: 1914ms, proxy.ts: 50ms, application-code: 956ms)
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'trade_scope_executed',
+  error: 'Edge Function returned a non-2xx status code'
+}
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'deposit_ready',
+  error: 'Edge Function returned a non-2xx status code'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd202/sign 200 in 1559ms (next.js: 1429ms, proxy.ts: 38ms, application-code: 93ms)
+ GET /auth/signin?callbackUrl=%2F 200 in 781ms (next.js: 146ms, proxy.ts: 4ms, application-code: 631ms)
+[?25h
+ ELIFECYCLE  Command failed with exit code 143.

@@ -13,17 +13,21 @@ import {
   type ProjectApprovalReview,
 } from '@patina/supabase';
 
-import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { HoldAction, ScoredAction } from '@/components/threshold/instruments/scored-action';
 import {
+  SignatureLine,
+  signatureIsComplete,
+} from '@/components/threshold/instruments/signature-line';
+import { Stamp, stampStateForApproval } from '@/components/threshold/instruments/stamp';
+import {
+  approvalWeighing,
   countInWords,
-  moneyInWords,
 } from '@/components/threshold/instruments/standing-sentence';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
 import { useAuth } from '@/hooks/use-auth';
 import {
   isClientActionableProjectApproval,
   isProjectApprovalAwaitingStudioIssue,
-  projectApprovalAttentionLabel,
 } from '@/lib/client-attention';
 import { parseSourceDate } from '@/lib/threshold/derive';
 import { refusalSentence } from '@/lib/threshold/refusal';
@@ -55,60 +59,63 @@ const LETTER_DATE = new Intl.DateTimeFormat('en-GB', {
 const CONFIRM_REFUSED =
   'The artifact changed or the review could not be confirmed. Refresh and review it again.';
 const RESPOND_REFUSED = 'This approval changed while it was open. Refresh before responding.';
+/**
+ * The note IS the return: an edition sent back with nothing said about it is
+ * a designer's dead end. So a note that does not land stops the outcome, and
+ * says so without blaming her for it.
+ */
+const NOTE_REFUSED =
+  'The note could not be sent, so the edition was not returned. Your note is still here; try again.';
 
 /**
- * Codex's three outcomes, in the house's words. The values are load-bearing,
- * and each consequence line is the old page's own description — kept verbatim
- * but for the word "gate", which no homeowner reads on this surface.
+ * Three doors, one weight. The three outcomes are peers — a house that ranks
+ * them has already answered for her — so they carry ONE variant between them;
+ * the old primary / secondary / tertiary ranking is retired here (P-16).
+ *
+ * Each label is a verb and each consequence says what the verb does, so the
+ * act is legible before it is taken. The telemetry keys are unchanged and
+ * deliberately so: they are the same events the retired detail page emitted,
+ * and renaming them would break the series, not the copy.
  */
+const OUTCOME_VARIANT = 'secondary' as const;
+
 const OUTCOME_ACTS: Array<{
   outcome: ProjectApprovalOutcome;
   /**
    * The act that WRITES the outcome. Choosing one records nothing, so the
-   * outcome's own event belongs on the submit — a client who considers Decline
-   * and then approves must not have emitted `decline_project_approval`.
+   * outcome's own event belongs on the submit — a client who considers
+   * returning an edition and then approves it must not have emitted
+   * `decline_project_approval`.
    */
   writeKey: string;
   /** Choosing an outcome to read its consequence: a selection, not a record. */
   selectKey: string;
   label: string;
   consequence: string;
-  variant: 'primary' | 'secondary' | 'tertiary';
 }> = [
   {
     outcome: 'approved',
     writeKey: 'approve_project_approval',
     selectKey: 'consider_approve_project_approval',
     label: 'Approve',
-    consequence: 'Accept this exact artifact and its stated impacts.',
-    variant: 'primary',
-  },
-  {
-    outcome: 'needs_discussion',
-    writeKey: 'question_project_approval',
-    selectKey: 'consider_question_project_approval',
-    label: 'Ask a question',
-    consequence: 'Hold the approval while you and your designer talk it through.',
-    variant: 'secondary',
+    consequence: 'Accept this exact edition and its stated impacts.',
   },
   {
     outcome: 'changes_requested',
     writeKey: 'decline_project_approval',
     selectKey: 'consider_decline_project_approval',
-    label: 'Decline',
-    consequence: 'Return this edition for revision and a new approval request.',
-    variant: 'tertiary',
+    label: 'Return',
+    consequence: 'Send this edition back for revision and a new approval request.',
+  },
+  {
+    outcome: 'needs_discussion',
+    writeKey: 'question_project_approval',
+    selectKey: 'consider_question_project_approval',
+    label: 'Hold',
+    consequence: 'Keep this open while you and your designer talk it through.',
   },
 ];
 
-const STAMP_WORD: Record<ProjectApprovalOutcome, string> = {
-  approved: 'Approved',
-  changes_requested: 'Declined',
-  needs_discussion: 'Held',
-};
-
-const STAMP_CLASS =
-  'inline-block max-w-[38ch] -rotate-[1.1deg] border border-current px-2.5 pb-1 pt-1.5 font-mono text-[11px] uppercase leading-relaxed tracking-[0.1em] text-[var(--color-mocha)]';
 const EYEBROW_CLASS =
   'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]';
 const SECTION_CLASS =
@@ -134,10 +141,6 @@ function upperFirst(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-function moneyDelta(cents: number): string {
-  return `${cents > 0 ? '+' : '−'}${moneyInWords(Math.abs(cents))}`;
-}
-
 /**
  * The artifact's own figures, to the cent — `formatMoney` from the retired
  * `/decisions/[id]` page, verbatim. The house's prose rounds to whole dollars
@@ -146,11 +149,6 @@ function moneyDelta(cents: number): string {
  */
 function moneyExact(cents: number, currency: string): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
-}
-
-function dayDelta(days: number): string {
-  const whole = Math.abs(days);
-  return `${days > 0 ? '+' : '−'}${whole} ${whole === 1 ? 'day' : 'days'}`;
 }
 
 /**
@@ -168,7 +166,7 @@ function dayDelta(days: number): string {
  * A gate that is neither open nor answered — withdrawn, or superseded by a
  * later edition — is history too, and stood on no surface at all until it was
  * filed here. It reads as its own word (Withdrawn / Superseded, ahead of any
- * outcome, the order `projectApprovalAttentionLabel` keeps) and carries no act
+ * outcome, the precedence `stampStateForApproval` keeps) and carries no act
  * and no revision link: a closed edition is read, not navigated from.
  *
  * `asks` wins over `records` — an id may anchor exactly one element on the
@@ -213,9 +211,91 @@ function recordedAtOf(approval: ProjectApprovalReview): string {
   return approval.respondedAt ?? approval.updatedAt ?? approval.createdAt ?? '';
 }
 
+/**
+ * The designer's one-line why, when the row carries one (P-13). Null on every
+ * approval composed before 00569, and a whitespace-only why is no why at all.
+ */
+function whyOf(approval: ProjectApprovalReview): string | null {
+  const why = approval.why;
+  return typeof why === 'string' && why.trim().length > 0 ? why.trim() : null;
+}
+
+/**
+ * The name of the hand that WROTE the why, frozen with the artifact (P-13,
+ * ruling 2026-09-05). A studio has more than one designer and this sentence is
+ * immutable and client-facing, so it is signed by its author or by nobody —
+ * never by whoever happens to hold the project on the day she reads it. Null
+ * on every row whose projection predates the name, and rendered verbatim.
+ */
+function whyAuthorOf(approval: ProjectApprovalReview): string | null {
+  const name = approval.whyAuthorName;
+  return typeof name === 'string' && name.trim().length > 0 ? name.trim() : null;
+}
+
+/**
+ * The artifact, shown.
+ *
+ * A plate with a frame around it: the budget itself where the artifact IS a
+ * budget, and otherwise the edition named and dated — never an empty box
+ * pretending to be a document.
+ *
+ * There is no picture of a plan issue here, and there cannot be one yet:
+ * `_resolve_project_approval_artifact` freezes a plan_issue snapshot as exactly
+ * kind/id/version/checksum/title/issuedAt/sheetCount (00463), the immutability
+ * guard rejects any artifact row whose snapshot differs from that, and
+ * `parseProjectApprovalReview` builds its object field by field so no snapshot
+ * reaches this surface at all. A cover preview needs both a widened snapshot
+ * and a widened projection; naming the edition is the honest plate until then.
+ *
+ * The checksum is a maker's mark at the frame's edge: twelve characters, in
+ * mono, quiet. It is provenance, the way a stamp on the back of a chair is
+ * provenance — not a compliance string, and never presented as something she
+ * is meant to check.
+ */
+/**
+ * RULED 2026-09-05, at the Wave 2 walks: **the maker's mark leaves the
+ * doorstep.** R6 keeps the twelve-character checksum for the printed Record of
+ * Decision only (Wave 3, P-26), so it is not drawn here. It was also the last
+ * serious contrast failure on this surface — `--text-muted` at `opacity-60`
+ * composites to #938B83 on the page ground, 3.13:1 against a 4.5:1 floor —
+ * and it was `aria-hidden`, which made it a string a sighted reader could see
+ * and a screen reader could not. The frame stays: the plate is still a plate.
+ */
+function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
+  const issued = parseSourceDate(approval.sentAt) ?? parseSourceDate(approval.createdAt);
+
+  return (
+    <figure
+      data-testid="approval-plate"
+      className="relative mt-3 max-w-[52ch] border border-[var(--border-default)] p-3"
+    >
+      {approval.artifactKind === 'budget_version' ? (
+        <BudgetInEdition approval={approval} />
+      ) : null}
+
+      <figcaption className="mt-2">
+        <p
+          data-testid="approval-plate-title"
+          className="font-heading text-[1.05rem] leading-[1.45] text-[var(--text-primary)]"
+        >
+          {approval.artifactTitle}
+        </p>
+        <p className="mt-0.5 text-[15px] leading-normal text-[var(--text-body)]">
+          {`Edition ${approval.artifactVersion}`}
+          {issued ? ` · Issued ${LONG_MONTH_DAY.format(issued)}` : ''}
+        </p>
+      </figcaption>
+    </figure>
+  );
+}
+
 function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
   const workingBudget = useProjectWorkingBudget(approval.projectId);
   const budget = workingBudget.data;
+  // The three totals are the budget; the room-by-room breakdown is the reading
+  // behind it. On a phone the breakdown buries the act, so it folds — and only
+  // there: at reading width the whole of it stands open with no control at all.
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   // Fail closed: the figures are shown only when the edition on the page and
   // the budget the query returned are provably the same document.
   const matchesArtifact =
@@ -260,7 +340,12 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
             ))}
           </dl>
           {budget.lines.length > 0 && (
-            <ul className="mt-3 divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
+            <div className={breakdownOpen ? 'block' : 'hidden sm:block'}>
+            <ul
+              id="approval-budget-breakdown"
+              data-testid="approval-budget-breakdown"
+              className="mt-3 divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]"
+            >
               {budget.lines.map((line, index) => (
                 <li key={`${line.roomName}-${line.category}-${index}`} className="py-2.5">
                   <p className="text-[15px] leading-normal">
@@ -275,6 +360,22 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
                 </li>
               ))}
             </ul>
+            </div>
+          )}
+          {budget.lines.length > 0 && (
+            <div className="mt-2 sm:hidden">
+              <ScoredAction
+                actionKey="read_approval_budget_breakdown"
+                regionKey="doorstep"
+                surfaceKey="the_threshold"
+                variant="tertiary"
+                aria-expanded={breakdownOpen}
+                aria-controls="approval-budget-breakdown"
+                onClick={() => setBreakdownOpen((was) => !was)}
+              >
+                {breakdownOpen ? 'Close the breakdown' : 'Read the breakdown'}
+              </ScoredAction>
+            </div>
           )}
         </div>
       )}
@@ -289,12 +390,20 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
  */
 function Discussion({
   decisionId,
+  artifactTitle,
   readOnly = false,
   designerGivenName,
   studioName,
   composerRef,
 }: {
   decisionId: string;
+  /**
+   * `W2-05`. Thirteen approvals stand on one doorstep, each with a section
+   * headed "The discussion", and a landmark that cannot be told from its
+   * twelve neighbours is a landmark a screen-reader user cannot navigate by.
+   * The edition's own title is what makes this one itself.
+   */
+  artifactTitle?: string | null;
   readOnly?: boolean;
   designerGivenName?: string | null;
   studioName?: string | null;
@@ -310,6 +419,11 @@ function Discussion({
 
   const fieldId = useId().replace(/:/g, '');
   const headingId = `approval-discussion-${decisionId}`;
+  // The heading reads "The discussion" on every one of them, so it cannot be
+  // the accessible name. `aria-label` wins over `aria-labelledby`, which is
+  // why the heading keeps its id for the eye and gives up naming the landmark.
+  const named = artifactTitle?.trim();
+  const landmarkName = named ? `Discussion about ${named}` : 'The discussion';
   const written = (comments.data ?? []) as DecisionComment[];
 
   function post() {
@@ -329,7 +443,7 @@ function Discussion({
   }
 
   return (
-    <section className="mt-6" aria-labelledby={headingId} data-testid="approval-discussion">
+    <section className="mt-6" aria-label={landmarkName} data-testid="approval-discussion">
       <h3 id={headingId} className={`${EYEBROW_CLASS} leading-[1.5]`}>
         The discussion
       </h3>
@@ -431,9 +545,8 @@ function Discussion({
  * explains it, and no link out of itself.
  *
  * The stamp takes the house's own precedence: `Withdrawn` / `Superseded` stand
- * AHEAD of an outcome (`projectApprovalAttentionLabel`), so a superseded
- * edition never reads plainly "Declined" beside the live edition that replaced
- * it.
+ * AHEAD of an outcome (`stampStateForApproval`), so a superseded edition
+ * never reads plainly RETURNED beside the live edition that replaced it.
  */
 export function ApprovalReceipt({
   approval,
@@ -473,14 +586,14 @@ export function ApprovalReceipt({
         {approval.question}
       </h3>
       <p className="mt-3">
-        <span data-testid="approval-receipt-stamp" className={STAMP_CLASS}>
-          {`${projectApprovalAttentionLabel(approval)}${
-            stampedAt ? ` ${DAY_MONTH.format(stampedAt)}` : ''
-          }`}
-          <span className="block font-normal normal-case tracking-[0.04em]">
-            {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-          </span>
-        </span>
+        <Stamp
+          data-testid="approval-receipt-stamp"
+          state={stampStateForApproval(approval)}
+          since={stampedAt}
+          dateLabel={stampedAt ? DAY_MONTH.format(stampedAt) : null}
+        >
+          {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
+        </Stamp>
       </p>
       <div className="mt-3">
         <ScoredAction
@@ -499,6 +612,7 @@ export function ApprovalReceipt({
         <div id={threadId}>
           <Discussion
             decisionId={approval.decisionId}
+            artifactTitle={approval.artifactTitle}
             readOnly
             designerGivenName={designerGivenName}
             studioName={studioName}
@@ -586,6 +700,15 @@ export function ApprovalAsk({
 }: ApprovalAskProps) {
   const confirmReview = useConfirmProjectApprovalReview();
   const respond = useRespondProjectApproval();
+  // A returned edition carries its reason into the thread the studio already
+  // reads. R10 rules the requirement out of the database on purpose: this is
+  // the web's own asymmetry, and iOS's encouraged composer is the other half.
+  const changeNoteComment = useCreateDecisionComment();
+  const [changeNote, setChangeNote] = useState('');
+  // The name she signs the outcome with (R1). The RPC keeps the same
+  // two-character floor the signing route does, and refuses a signature that
+  // arrives without a consent method — so the two travel together or not at all.
+  const [signature, setSignature] = useState('');
   const [justAnswered, setJustAnswered] = useState<{
     outcome: ProjectApprovalOutcome;
     at: Date;
@@ -601,19 +724,43 @@ export function ApprovalAsk({
   const [composer, setComposer] = useState<HTMLTextAreaElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  // The note that already reached the thread. A refused outcome leaves the note
+  // posted and invites her to press Submit again; without this latch the second
+  // press says the same thing twice in the designer's thread. Editing the note
+  // before retrying makes it a different thing to say, so it is sent.
+  const notePosted = useRef<string | null>(null);
 
+  /**
+   * Whether the reader is the one this approval waits on. 00569 says which
+   * chair she is sitting in; `respond_project_approval` and
+   * `confirm_project_decision_review` both accept the frozen lead alone, so a
+   * studio co-member — or a household member who is not the lead — reads the
+   * ask and is offered no door that would only refuse her.
+   *
+   * Stated the negative way on purpose: only a chair the projection NAMES as
+   * somebody else's withholds the acts. A role that is null, absent, or a word
+   * this build does not know is a projection older or stranger than 00569, and
+   * that is not a licence to guess — the surface behaves exactly as it did
+   * before the field existed rather than silently taking the lead's own doors
+   * away from her.
+   */
+  const viewerAnswers =
+    approval.viewerRole !== 'studio' && approval.viewerRole !== 'household';
   const due = parseSourceDate(approval.dueAt);
   const reviewComplete = approval.completedReviewCount >= approval.requiredReviewCount;
   const canConfirm =
+    viewerAnswers &&
     approval.lifecycleStatus === 'draft' &&
     !reviewComplete &&
     approval.authorityRevision !== null;
   const confirmationUnavailable =
+    viewerAnswers &&
     approval.lifecycleStatus === 'draft' &&
     !reviewComplete &&
     approval.authorityRevision === null;
   const awaitingStudioIssue = isProjectApprovalAwaitingStudioIssue(approval);
   const canRespond =
+    viewerAnswers &&
     approval.lifecycleStatus === 'pending' &&
     approval.disposition === 'active' &&
     reviewComplete &&
@@ -622,6 +769,25 @@ export function ApprovalAsk({
   // The stamp is written the moment the act returns, and it survives the
   // refetch that follows: the recorded outcome takes over from the local one.
   const recordedOutcome = approval.outcome ?? justAnswered?.outcome ?? null;
+
+  /**
+   * What is fixed about this edition, said in the tense the reader is actually
+   * in (`W1-01`).
+   *
+   * Present tense while the three doors are drawn — that is the act the
+   * sentence introduces. Conditional on a draft, where the act on offer is
+   * READING the exact edition and nothing is being approved yet. Silent
+   * everywhere else: once she has answered, the stamp and the eyebrow beside
+   * it say what was done, and repeating "you are approving" over a recorded
+   * outcome is the surface contradicting its own record.
+   */
+  const immutabilitySentence = recordedOutcome
+    ? null
+    : canRespond
+      ? `You are approving edition ${approval.artifactVersion}, exactly as shown.`
+      : canConfirm || confirmationUnavailable
+        ? `You would be approving edition ${approval.artifactVersion}, exactly as shown.`
+        : null;
   // `updatedAt` moves on any later write to the row, so it is never a stand-in
   // for the day the client answered. A stamp with no date is honest; a stamp
   // with the wrong date is not.
@@ -629,14 +795,22 @@ export function ApprovalAsk({
   const chosenAct = OUTCOME_ACTS.find((act) => act.outcome === chosen) ?? null;
   /** The designer, named where the copy has room for a name. */
   const designer = designerGivenName?.trim() || null;
+  /** His one line about this edition, frozen with it, when the row carries one. */
+  const why = whyOf(approval);
+  /** And the hand that wrote it, frozen beside it. Never the live designer. */
+  const whyAuthor = whyAuthorOf(approval);
 
   // Words, not a tally: what she is being told is whether her own review is in,
   // and on the rare approval that takes several, how many of them are.
   const reviewStanding =
     approval.requiredReviewCount <= 1
       ? reviewComplete
-        ? 'Your review is confirmed.'
-        : 'Your review is still needed.'
+        ? viewerAnswers
+          ? 'Your review is confirmed.'
+          : 'The review is confirmed.'
+        : viewerAnswers
+          ? 'Your review is still needed.'
+          : 'The review is still needed.'
       : approval.completedReviewCount === 0
         ? `None of ${countInWords(approval.requiredReviewCount)} reviews are confirmed yet.`
         : `${upperFirst(countInWords(approval.completedReviewCount))} of ${countInWords(
@@ -679,16 +853,51 @@ export function ApprovalAsk({
 
   async function submitResponse() {
     if (inFlight.current || !canRespond || !chosen) return;
+    const note = changeNote.trim();
+    if (chosen === 'changes_requested' && note.length === 0) return;
+    // Only an approval is signed. Asking a homeowner to type her legal name to
+    // say "let's talk" or "here is what to change" would record an electronic
+    // signature against a consent she never gave (ux/02:308): on those two the
+    // choice is the act and the hold is the commitment.
+    const signing = chosen === 'approved';
+    const signedByName = signature.trim();
+    if (signing && !signatureIsComplete(signedByName)) return;
     inFlight.current = true;
     setError(null);
     setNotice(null);
     try {
+      // The note lands FIRST. An outcome recorded against a note that never
+      // arrived would send the edition back saying nothing — and a note that
+      // already landed is not sent twice when the outcome is retried.
+      if (chosen === 'changes_requested' && notePosted.current !== note) {
+        try {
+          await changeNoteComment.mutateAsync({ decisionId: approval.decisionId, body: note });
+          notePosted.current = note;
+        } catch (cause) {
+          setError(refusalSentence(cause, NOTE_REFUSED));
+          return;
+        }
+      }
       await respond.mutateAsync({
         projectId: approval.projectId,
         decisionId: approval.decisionId,
         outcome: chosen,
         expectedUpdatedAt: approval.updatedAt,
         idempotencyKey: crypto.randomUUID(),
+        // 00569 carries the pair through the wrapper into the columns 00117
+        // added. A signature with no method is a check_violation by design, so
+        // the name rides only with the method that claims one.
+        //
+        // RULED 2026-09-05: Return and Hold record a consent method too —
+        // never NULL. A press and hold is a click-through, and the record of
+        // an answer should say how it was given whatever the answer was. The
+        // token is the schema's own word for it: `client_decisions`'
+        // check constraint and `_respond_project_approval_checked` both
+        // allowlist `click_through`, which is what the ruling's
+        // "portal_clickthrough" names on this column (that spelling belongs to
+        // the review leg, `confirm_project_decision_review`).
+        clientSignature: signing ? signedByName : undefined,
+        clientConsentMethod: signing ? 'electronic_signature' : 'click_through',
       });
       setJustAnswered({ outcome: chosen, at: new Date() });
       onAnswered?.(approval.decisionId);
@@ -699,16 +908,23 @@ export function ApprovalAsk({
     }
   }
 
-  // Absence is silence: a delta of nothing is not a fact worth a row — but an
-  // edition that changes nothing at all is a fact the client is agreeing to,
-  // and it says so in one line rather than showing a blank.
-  const impact: Array<{ label: string; value: string }> = [];
-  if (approval.costCentsDelta)
-    impact.push({ label: 'Cost', value: moneyDelta(approval.costCentsDelta) });
-  if (approval.scheduleDaysDelta)
-    impact.push({ label: 'Schedule', value: dayDelta(approval.scheduleDaysDelta) });
-  if (approval.leadTimeDaysDelta)
-    impact.push({ label: 'Lead time', value: dayDelta(approval.leadTimeDaysDelta) });
+  // What the edition weighs, spoken once and then printed as figures. The
+  // three deltas stand side by side and are never summed (R11), and a delta of
+  // zero is said in words rather than left out — she is agreeing to all three.
+  //
+  // The baseline is read through a cast on purpose. `why` and `viewerRole` are
+  // now real fields because 00569 projects them; no migration projects a cost
+  // baseline, so typing one on ProjectApprovalReview would promise a field the
+  // mapper could only ever set to null. A cost delta beside the figure it moves
+  // from is a fact where the delta alone is a fragment, so the composer takes
+  // one the moment a projection carries it — and the cast goes with it.
+  const weighing = approvalWeighing({
+    costCentsDelta: approval.costCentsDelta,
+    scheduleDaysDelta: approval.scheduleDaysDelta,
+    leadTimeDaysDelta: approval.leadTimeDaysDelta,
+    costBaselineCents:
+      (approval as { costBaselineCents?: number | null }).costBaselineCents ?? null,
+  });
 
   // `data-never-dim` is spared the Since-Yesterday dim only while something is
   // actually owed on it: a gate she has reviewed and that now waits on the
@@ -717,36 +933,81 @@ export function ApprovalAsk({
     <section
       id={`approval-${approval.decisionId}`}
       data-threshold-unit="doorstep-approval"
-      {...(recordedOutcome || awaitingStudioIssue ? {} : { 'data-never-dim': '' })}
+      {...(recordedOutcome || awaitingStudioIssue || !viewerAnswers
+        ? {}
+        : { 'data-never-dim': '' })}
       data-testid="doorstep-approval"
       aria-labelledby={`approval-gate-${approval.decisionId}`}
       className={SECTION_CLASS}
     >
       <p className={`pt-2.5 ${EYEBROW_CLASS}`}>
-        {recordedOutcome
-          ? 'Your approval · answered'
-          : awaitingStudioIssue
-            ? 'Your approval · with your studio'
-            : approval.lifecycleStatus === 'draft'
-              ? 'Your approval · read the edition first'
-              : 'Your approval · your answer is needed'}
+        {!viewerAnswers
+          ? recordedOutcome
+            ? 'This approval · answered'
+            : 'This approval · yours to read'
+          : recordedOutcome
+            ? 'Your approval · answered'
+            : awaitingStudioIssue
+              ? 'Your approval · with your studio'
+              : approval.lifecycleStatus === 'draft'
+                ? 'Your approval · read the edition first'
+                : 'Your approval · your answer is needed'}
       </p>
-      <h2
-        id={`approval-gate-${approval.decisionId}`}
-        className="font-heading mt-1.5 text-[1.35rem] font-medium tracking-[-0.012em]"
+      <ArtifactPlate approval={approval} />
+
+      {/* The ask is a thing someone said, so it is set as one: a pull-quote on
+          a clay rule, in the designer's hand, and signed by the hand that wrote
+          it — the name frozen with the artifact, never the designer who holds
+          the project today. No attribution is drawn when the row carries no
+          author: an unsigned sentence is honest, a wrongly signed one is not. */}
+      <blockquote
+        data-testid="approval-question"
+        className="mt-4 max-w-[52ch] border-l-2 border-[var(--accent-primary)] pl-4"
       >
-        {approval.question}
-      </h2>
-      <p className="mt-2 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]">
-        {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-        {due ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
-      </p>
-      <p
-        data-testid="immutability-sentence"
-        className="mt-1.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-      >
-        {`You are approving edition ${approval.artifactVersion}, exactly as shown.`}
-      </p>
+        <h2
+          id={`approval-gate-${approval.decisionId}`}
+          className="font-heading text-[1.35rem] font-medium leading-[1.35] tracking-[-0.012em]"
+        >
+          {approval.question}
+        </h2>
+        {why && (
+          <p
+            data-testid="approval-why"
+            className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-[1.62] text-[var(--text-body)]"
+          >
+            {why}
+          </p>
+        )}
+        {whyAuthor && (
+          <p
+            data-testid="approval-attribution"
+            className="mt-2 text-[15px] leading-normal text-[var(--text-muted)]"
+          >
+            {`— ${whyAuthor}`}
+          </p>
+        )}
+      </blockquote>
+
+      {due && (
+        <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]">
+          {`Due ${LONG_MONTH_DAY.format(due)}`}
+        </p>
+      )}
+      {/* `W1-01`. The sentence is present tense, so it stands only while the
+          approving is what is actually on offer. Unguarded it was false in
+          three states the lead herself reaches: on a draft, where the only act
+          is reading the edition; while the studio holds it and nothing is
+          waiting on her; and beside her own stamp the moment she has answered,
+          under an eyebrow already reading "answered". iOS closed exactly these
+          (`W1R2-M1`, `iosb2-M2`): after she answers it is gone. */}
+      {immutabilitySentence && (
+        <p
+          data-testid="immutability-sentence"
+          className="mt-1.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {immutabilitySentence}
+        </p>
+      )}
 
       {approval.context && (
         <p
@@ -757,41 +1018,48 @@ export function ApprovalAsk({
         </p>
       )}
 
-      {approval.artifactKind === 'budget_version' && <BudgetInEdition approval={approval} />}
-
-      {impact.length > 0 ? (
-        <dl
-          data-testid="approval-impact"
-          className="mt-4 flex max-w-[52ch] flex-wrap gap-x-10 gap-y-2"
-        >
-          {impact.map((row) => (
-            <div key={row.label}>
-              <dt className={EYEBROW_CLASS}>{row.label}</dt>
-              <dd className="mt-0.5 text-[15px] leading-normal">{row.value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
+      <div data-testid="approval-impact" className="mt-4 max-w-[52ch]">
         <p
-          data-testid="approval-no-impact"
-          className="mt-4 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+          data-testid="approval-impact-sentence"
+          className="text-[15px] leading-[1.62] text-[var(--text-body)]"
         >
-          No cost, schedule or lead-time change.
+          {weighing.sentence}
         </p>
-      )}
+        {weighing.ledger && (
+          <p
+            data-testid="approval-impact-ledger"
+            className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
+          >
+            {weighing.ledger}
+          </p>
+        )}
+      </div>
 
       {recordedOutcome && (
         <p className="mt-4">
-          <span data-testid="approval-stamp" className={STAMP_CLASS}>
-            {`${STAMP_WORD[recordedOutcome]}${stampedAt ? ` ${DAY_MONTH.format(stampedAt)}` : ''}`}
-            <span className="block font-normal normal-case tracking-[0.04em]">
-              {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-            </span>
-          </span>
+          <Stamp
+            data-testid="approval-stamp"
+            state={stampStateForApproval({
+              disposition: approval.disposition,
+              outcome: recordedOutcome,
+            })}
+            since={stampedAt}
+            dateLabel={stampedAt ? DAY_MONTH.format(stampedAt) : null}
+          >
+            {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
+          </Stamp>
         </p>
       )}
 
       <div className="mt-4">
+        {!viewerAnswers && (
+          <p
+            data-testid="approval-answered-by-another"
+            className="mb-2 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+          >
+            This one is answered by the person it was sent to.
+          </p>
+        )}
         <p
           data-testid="approval-review-count"
           className="max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
@@ -801,17 +1069,21 @@ export function ApprovalAsk({
 
         {canConfirm && (
           <div className="mt-2.5">
-            <ScoredAction
+            {/* Held, not tapped (R1). The review METHOD is unchanged —
+                `portal_clickthrough`, because a hold is still a click-through
+                — so no migration rides with this one. */}
+            <HoldAction
               actionKey="confirm_project_approval_review"
               regionKey="doorstep"
               surfaceKey="the_threshold"
               variant="primary"
+              verb="confirm this exact edition"
               loading={confirmReview.isPending}
               loadingLabel="Confirming"
-              onClick={confirmExactEdition}
+              onHold={confirmExactEdition}
             >
               Review exact edition
-            </ScoredAction>
+            </HoldAction>
           </div>
         )}
 
@@ -837,9 +1109,13 @@ export function ApprovalAsk({
               data-testid="approval-awaiting-studio-issue"
               className="mt-2.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
             >
-              {`You've confirmed edition ${approval.artifactVersion}. ${
-                designer ?? 'Your designer'
-              } issues it next. Nothing is waiting on you.`}
+              {viewerAnswers
+                ? `You've confirmed edition ${approval.artifactVersion}. ${
+                    designer ?? 'Your designer'
+                  } issues it next. Nothing is waiting on you.`
+                : `Edition ${approval.artifactVersion} is confirmed. ${
+                    designer ?? 'The designer'
+                  } issues it next.`}
             </p>
             {composer && (
               <div className="mt-2.5">
@@ -873,7 +1149,7 @@ export function ApprovalAsk({
                   actionKey={act.selectKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
-                  variant={act.variant}
+                  variant={OUTCOME_VARIANT}
                   onClick={() => setChosen(act.outcome)}
                 >
                   {act.label}
@@ -888,18 +1164,69 @@ export function ApprovalAsk({
               >
                 {`${chosenAct.label} · ${chosenAct.consequence}`}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-6">
-                <ScoredAction
+              {/* The change note, required here and nowhere else (R10). It asks
+                  for the thing the designer needs rather than reporting that a
+                  field is empty: no error state, no red, no "required" — the
+                  submit simply is not ready until she has said something. */}
+              {chosenAct.outcome === 'changes_requested' && (
+                <div className="mt-3 max-w-[52ch]">
+                  <label
+                    className="block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
+                    htmlFor={`approval-change-note-${approval.decisionId}`}
+                  >
+                    {`Tell ${designer ?? 'your designer'} what to change.`}
+                  </label>
+                  <textarea
+                    id={`approval-change-note-${approval.decisionId}`}
+                    data-testid="approval-change-note"
+                    value={changeNote}
+                    onChange={(event) => setChangeNote(event.target.value)}
+                    rows={3}
+                    className="mt-1.5 w-full resize-none border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.05rem] text-[var(--text-primary)]"
+                  />
+                  <p
+                    data-testid="approval-change-note-help"
+                    className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]"
+                  >
+                    It goes into the discussion below with your answer.
+                  </p>
+                </div>
+              )}
+              {/* The name, on a rule, dated — on the approval and on nothing
+                  else. R1 asks every terminal act for a held gesture; only the
+                  act that consents to the edition is also signed. Returning it
+                  and holding it consent to nothing, so they take no signature
+                  (ux/02:308). */}
+              {chosenAct.outcome === 'approved' && (
+                <div className="mt-3">
+                  <SignatureLine
+                    id={`approval-signature-${approval.decisionId}`}
+                    testId="approval-signature"
+                    value={signature}
+                    onChange={setSignature}
+                    disabled={respond.isPending}
+                  />
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-x-6">
+                <HoldAction
                   actionKey={chosenAct.writeKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
                   variant="primary"
-                  loading={respond.isPending}
+                  verb={chosenAct.label.toLowerCase()}
+                  loading={respond.isPending || changeNoteComment.isPending}
                   loadingLabel="Recording response"
-                  onClick={submitResponse}
+                  disabled={
+                    (chosenAct.outcome === 'approved' &&
+                      !signatureIsComplete(signature)) ||
+                    (chosenAct.outcome === 'changes_requested' &&
+                      changeNote.trim().length === 0)
+                  }
+                  onHold={submitResponse}
                 >
                   Submit response
-                </ScoredAction>
+                </HoldAction>
                 <ScoredAction
                   actionKey="cancel_project_approval_response"
                   regionKey="doorstep"
@@ -963,6 +1290,7 @@ export function ApprovalAsk({
 
       <Discussion
         decisionId={approval.decisionId}
+        artifactTitle={approval.artifactTitle}
         designerGivenName={designerGivenName}
         studioName={studioName}
         composerRef={setComposer}

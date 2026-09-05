@@ -351,7 +351,7 @@ struct MoneyAndStudioCopyTests {
     @Test("the money sheets reserve the status bar too")
     func moneySheetsReserveTheStatusBar() throws {
         let sheets = [
-            "Patina/Features/Proposals/Views/ProposalSignSheet.swift",
+            "Patina/Features/Proposals/Views/SignActView.swift",
             "Patina/Features/Decisions/Views/DecisionDeferSheet.swift",
             "Patina/Features/Decisions/Views/DecisionDetailView.swift" // DecisionConsentSheet
         ]

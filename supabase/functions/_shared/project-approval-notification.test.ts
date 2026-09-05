@@ -21,6 +21,10 @@ Deno.test("Stage-2 evidence resolves the immutable artifact citation", () => {
       checksum: CHECKSUM,
       title: "Issued construction set",
       issuedAt: "2026-09-28T14:00:00Z",
+      // P-13 (00569). An artifact composed without a why carries none, and
+      // therefore carries no author either.
+      why: null,
+      whyAuthorName: null,
     },
   );
 });
@@ -39,6 +43,8 @@ Deno.test("an edition with no issue stamp cites no date", () => {
       checksum: CHECKSUM,
       title: "Issued construction set",
       issuedAt: null,
+      why: null,
+      whyAuthorName: null,
     },
   );
 });
@@ -83,6 +89,67 @@ Deno.test("frozen lead evidence fails closed on profile mismatch", () => {
         email: "other@example.test",
       },
     }),
+    null,
+  );
+});
+
+Deno.test("the designer's one-line why rides the citation, blank-trimmed (P-13)", () => {
+  assertEquals(
+    resolveApprovalArtifactCitation({
+      source_kind: "plan_issue",
+      source_version: 7,
+      artifact_hash: CHECKSUM,
+      artifact_title: "Issued construction set",
+      created_at: "2026-09-28T14:00:00Z",
+      why: "The island moved a foot.",
+    })?.why,
+    "The island moved a foot.",
+  );
+  assertEquals(
+    resolveApprovalArtifactCitation({
+      source_kind: "plan_issue",
+      source_version: 7,
+      artifact_hash: CHECKSUM,
+      artifact_title: "Issued construction set",
+      why: "   ",
+    })?.why,
+    null,
+  );
+});
+
+Deno.test("the why's author rides beside it, frozen, and never alone (P-13)", () => {
+  const resolved = resolveApprovalArtifactCitation({
+    source_kind: "plan_issue",
+    source_version: 7,
+    artifact_hash: CHECKSUM,
+    artifact_title: "Issued construction set",
+    why: "The island moved a foot.",
+    why_author_name: "  Peer  ",
+  });
+  assertEquals(resolved?.whyAuthorName, "Peer");
+
+  // A name under no line attributes nothing — 00569's CHECK says so, and the
+  // resolver does not lean on it for rows written before that migration.
+  assertEquals(
+    resolveApprovalArtifactCitation({
+      source_kind: "plan_issue",
+      source_version: 7,
+      artifact_hash: CHECKSUM,
+      artifact_title: "Issued construction set",
+      why: "   ",
+      why_author_name: "Peer",
+    })?.whyAuthorName,
+    null,
+  );
+  assertEquals(
+    resolveApprovalArtifactCitation({
+      source_kind: "plan_issue",
+      source_version: 7,
+      artifact_hash: CHECKSUM,
+      artifact_title: "Issued construction set",
+      why: "The island moved a foot.",
+      why_author_name: "   ",
+    })?.whyAuthorName,
     null,
   );
 });

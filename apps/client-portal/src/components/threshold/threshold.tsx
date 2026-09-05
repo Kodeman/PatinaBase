@@ -318,6 +318,23 @@ export function Threshold({
   const [papersOpen, setPapersOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  /* W3-01 / W3-02. THE DOOR THAT OPENED ON HER NAME STAYS ON THE PAGE.
+     Signing takes the paper out of `pendingProposals`, so the refetch the door
+     awaits used to end the section about half a second after the leaf swung —
+     and P-19's sentence ("{Studio} has your signature. You'll have a copy.")
+     and the pending-delivery recovery went with it, to nowhere: no other
+     surface carries either, and the sign route no longer pushes a `?delivery=`
+     param at anything. So the mark and its paper are kept here, by id, for the
+     rest of the visit. The DoorGate is never unmounted, its `open` state is
+     the receipt plate, and the reader has the whole visit to read it. */
+  const [sealedDoors, setSealedDoors] = useState<
+    { mark: ThresholdMark; paper: DoorProposal }[]
+  >([]);
+  const sealDoor = (mark: ThresholdMark, paper: DoorProposal) =>
+    setSealedDoors((held) =>
+      held.some((door) => door.mark.id === mark.id) ? held : [...held, { mark, paper }],
+    );
+
   const today = useMemo(
     () => (hydrated ? new Date() : undefined),
     // One `new Date()` per mount is what the surface means by "today"; a fresh
@@ -392,7 +409,12 @@ export function Threshold({
       },
     ];
   });
-  const paperById = new Map(signatureGates.map((paper) => [paper.id, paper]));
+  // A sealed door's paper is gone from the open papers; the door is still
+  // drawn from it, so the lookup keeps it. A live paper always wins.
+  const paperById = new Map<string, DoorProposal>([
+    ...sealedDoors.map((door) => [door.paper.id, door.paper] as const),
+    ...signatureGates.map((paper) => [paper.id, paper] as const),
+  ]);
 
   const instrumentReceipts: ThresholdReceipt[] = accepted.flatMap(
     (proposal) => {
@@ -596,7 +618,16 @@ export function Threshold({
   // ── the marks, sorted onto their rooms ─────────────────────────────────────
   // `first` is decided ACROSS the page, not per band, so `#door` and `#wall`
   // are unique ids: the collapsed /proposals route lands on exactly one door.
-  const doorMarks = model.marks.filter((mark) => mark.kind === 'door');
+  const openDoorMarks = model.marks.filter((mark) => mark.kind === 'door');
+  const openDoorIds = new Set(openDoorMarks.map((mark) => mark.id));
+  // The signed doors the model has stopped minting, kept in the same rooms
+  // they were shut in — `onDoorstep` reads the retained mark's own roomId, so
+  // a sealed door never moves house, and React's keyed reconciliation keeps
+  // the component (and with it the receipt) mounted through the reorder.
+  const sealedMarks = sealedDoors
+    .filter((door) => !openDoorIds.has(door.mark.id))
+    .map((door) => door.mark);
+  const doorMarks = [...openDoorMarks, ...sealedMarks];
   const wallMarks = model.marks.filter((mark) => mark.kind === 'wall');
   // The first door that will actually RENDER: `renderDoor` answers null for a
   // mark whose paper is missing, and a pin or a `#door` anchor on a door that
@@ -643,6 +674,7 @@ export function Threshold({
         projectId={projectId}
         first={mark.id === firstDoorId}
         studioName={studioName}
+        onSigned={() => sealDoor(mark, paper)}
       />
     );
   };
@@ -772,7 +804,9 @@ export function Threshold({
     ...(model.bands.length > 0
       ? [{ label: "The drawing set", href: "#key" }]
       : []),
-    ...doorMarks.flatMap((mark) =>
+    // The doors still asking. A sealed one is in Previously by now, and the
+    // mat may not list one paper twice.
+    ...openDoorMarks.flatMap((mark) =>
       paperById.has(mark.proposalId ?? "")
         ? [{ label: mark.label, href: `#${gateAnchor(mark)}` }]
         : [],
@@ -1074,7 +1108,16 @@ export function Threshold({
 
           {model.bands.map((band) => (
             <RoomBand key={band.roomId} band={band} projectId={projectId}>
-              {band.marks.map((mark) =>
+              {/* ONE array, keyed by mark: a door that has just been signed
+                  leaves `band.marks` (the band's own sentence may not go on
+                  saying a door waits on her name) and arrives from
+                  `sealedMarks`, and React keeps the component — and the
+                  receipt printed on it — mounted only if both stand in the
+                  same child slot. */}
+              {[
+                ...band.marks,
+                ...sealedMarks.filter((mark) => mark.roomId === band.roomId),
+              ].map((mark) =>
                 mark.kind === "door" ? renderDoor(mark) : renderWall(mark),
               )}
               <RoomCapture projectId={projectId} roomId={band.roomId} roomName={band.name} />

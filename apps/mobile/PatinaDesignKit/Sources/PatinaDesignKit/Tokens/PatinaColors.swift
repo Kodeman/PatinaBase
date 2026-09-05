@@ -59,6 +59,38 @@ public enum PatinaColors {
     /// AR light slider, highlights
     public static let goldenHour = Color(hex: "E8C547")
 
+    /// Golden hour dark enough to be a MARK rather than a wash — the stamp
+    /// grammar's `held` border (P-17 / R13). `goldenHour` was added for one
+    /// caller and is 1.66:1 on the light canvas; this is the same hue at
+    /// 5.45:1 on paper, byte-identical to the portals' `--color-golden-hour-ink`.
+    public static let goldenHourInk = Color(hex: "79651E")
+
+    /// Terracotta dark enough to carry a word — the stamp grammar's `declined`
+    /// border and ink, and the one warm exception in a palette that refuses a
+    /// red/green pair. `--color-terracotta-ink` in the portals.
+    public static let terracottaInk = Color(hex: "9C5340")
+
+    /// The portals' `--text-subtle` (`globals.css:81`), byte-identical: the
+    /// pigment the stamp table specifies for a CLOSED mark's rule. `IOSC-04`:
+    /// the muted rule was `Border.strong`, a hairline separator token that
+    /// composited to 1.54:1 on paper at the stamp's own border opacity — a
+    /// floating word with nothing drawn round it on every expired, withdrawn,
+    /// superseded and reviewed approval.
+    public static let subtleInk = Color(hex: "5A4E43")
+
+    /// `agedOak` dark enough to carry a WORD — the portals' `--text-muted`
+    /// (`globals.css:80`), byte-identical, and the ink the stamp table names
+    /// for a closed mark.
+    ///
+    /// `IOSC-R2-02`: the four muted states — REVIEWED, WITHDRAWN, SUPERSEDED,
+    /// EXPIRED — wrote their word in `agedOak` itself, which measures 4.20:1
+    /// on paper and 4.02:1 on a card, below the 4.5:1 bar every other stamp
+    /// word clears. Two of those marks stand with no sentence beside them, so
+    /// the word is the whole content of the row. `agedOak` is untouched: it
+    /// is the metadata value at a hundred sites, all of them de-emphasised
+    /// text taking the 3:1 bar, and darkening it would move every one.
+    public static let oakInk = Color(hex: "4E4339")
+
     // MARK: - Status Colors
 
     /// Success, match badges
@@ -228,6 +260,56 @@ public enum PatinaColors {
         public static let active = Color.patinaDynamic(
             light: charcoal, dark: DarkPalette.textPrimary
         )
+    }
+
+    /// The client stamp grammar's four pigments (P-17 / R13).
+    ///
+    /// Four dials, no fills, no shadows: border weight, border pigment, word
+    /// ink, rotation. The light values are the portals' own `-ink` tokens, all
+    /// measured at or above 4.5:1 on paper; each carries a dark companion for
+    /// the same reason every other ink here does — a stamp drawn in `mocha` on
+    /// the warm-graphite canvas is 1.6:1 and is not a mark at all.
+    ///
+    /// `sage` is deliberately absent. R13 moves SIGNED to mocha and leaves
+    /// terracotta standing alone as Declined, so no traffic-light reading is
+    /// available anywhere in the system.
+    public enum Stamp {
+        /// Approved, Signed, Signed on paper. The ink of a signed hand.
+        public static let mocha = Color.patinaDynamic(
+            light: PatinaColors.mocha, dark: DarkPalette.textSecondary
+        )
+        /// Held, and the un-stamped Awaiting-you outline.
+        public static let goldenHour = Color.patinaDynamic(
+            light: goldenHourInk, dark: PatinaColors.goldenHour
+        )
+        /// Returned — a single rule, because it is not terminal.
+        public static let clay = Color.patinaDynamic(
+            light: clayInk, dark: PatinaColors.clay
+        )
+        /// Declined, once, with no counterpart.
+        public static let terracotta = Color.patinaDynamic(
+            light: terracottaInk, dark: DarkPalette.textError
+        )
+        /// Withdrawn, Superseded, Expired, Reviewed — the muted grammar's WORD.
+        ///
+        /// `oakInk`, not `Text.muted`: the ceremony table names `--text-muted`
+        /// for this ink and the two share that name without sharing its value.
+        /// `Text.muted` is `agedOak`, de-emphasised METADATA at the 3:1 bar; a
+        /// stamp's word is text, takes 4.5:1, and on EXPIRED and SUPERSEDED it
+        /// is the only thing on the row (`IOSC-R2-02`).
+        public static let mutedInk = Color.patinaDynamic(
+            light: oakInk, dark: DarkPalette.textMuted
+        )
+        /// …and the rule those four are drawn in. NOT `Border.strong`: that
+        /// is the page's field-outline hairline, and a stamp is a mark, which
+        /// owes the 3:1 bar a non-text mark takes. `ContrastTests` measures
+        /// all five rules at both aging opacities so the number cannot drift.
+        public static let mutedRule = Color.patinaDynamic(
+            light: subtleInk, dark: DarkPalette.textMuted
+        )
+        /// The word inside a held, returned or declined stamp: legibility
+        /// never degrades, so the word is always the page's own primary ink.
+        public static let word = PatinaColors.Text.primary
     }
 
     // MARK: - Strata Mark Colors

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useState } from 'react';
-import { CheckCircle2, Clock3, FileText, ReceiptText } from 'lucide-react';
+import { Clock3, FileText, ReceiptText } from 'lucide-react';
 import { createBrowserClient } from '@patina/supabase';
 import {
   Button,
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@patina/design-system';
+import { Stamp } from '@/components/threshold/instruments/stamp';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { formatCalendarDate } from '@/lib/utils/format';
 import type {
@@ -71,6 +72,9 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
     (signature) => signature.party === 'client' && signature.signedOnPaper,
   );
   const anySignedOnPaper = bundle.signatures.some((signature) => signature.signedOnPaper);
+  // The mark's own age, for the stamp's one thirty-day step. An unparseable
+  // date leaves the mark drawn fresh rather than guessed at.
+  const executedOn = document.executedAt ? new Date(document.executedAt) : null;
 
   return (
     <article
@@ -106,9 +110,20 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
         </div>
       )}
 
+      {/* The last green on the client surface. A signed paper is stamped, not
+          ticked: the house's own SIGNED mark in mocha (R13), with the date it
+          was executed beside it. No check, no sage, no fill. */}
       {document.state === 'executed' && (
-        <div className="mt-6 flex items-start gap-2 border-l-2 border-patina-sage bg-patina-sage/5 px-4 py-3">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-patina-sage" />
+        <div
+          className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-l-2 border-[var(--border-default)] px-4 py-3"
+          data-testid="commercial-document-executed"
+        >
+          <Stamp
+            data-testid="commercial-document-executed-stamp"
+            state={anySignedOnPaper ? 'signed_on_paper' : 'signed'}
+            since={executedOn}
+            dateLabel={document.executedAt ? date(document.executedAt) : null}
+          />
           <p className="type-body-small text-[var(--text-primary)]">
             Fully executed{document.executedAt ? ` on ${date(document.executedAt)}` : ''}.
             {anySignedOnPaper ? ` ${SIGNED_ON_PAPER_NOTE}` : ''}
@@ -471,7 +486,7 @@ function TradeScopeBody({ bundle }: { bundle: CommercialDocumentBundle }) {
 
       {scope.progress.acceptedAt && (
         <section
-          className="border-l-2 border-patina-sage bg-patina-sage/5 px-4 py-3"
+          className="border-l-2 border-[var(--border-default)] px-4 py-3"
           data-testid="trade-scope-acceptance"
         >
           <h2 className="type-section-head">Acceptance</h2>

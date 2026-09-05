@@ -11,7 +11,14 @@ import {
   type Database,
 } from "@patina/supabase";
 
-import { ScoredAction } from "@/components/threshold/instruments/scored-action";
+import {
+  HoldAction,
+  ScoredAction,
+} from "@/components/threshold/instruments/scored-action";
+import {
+  SignatureLine,
+  signatureIsComplete,
+} from "@/components/threshold/instruments/signature-line";
 import {
   countInWords,
   joinClauses,
@@ -20,7 +27,6 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { refusalSentence } from "@/lib/threshold/refusal";
 
-import { SIGNATURE_NOTICE } from "./consent-copy";
 
 /* ── SCOPE CHANGE ─────────────────────────────────────────────────────────────
    Absorbs `/projects/[id]/scope-change/new` (raise a request) and
@@ -480,7 +486,7 @@ function ScopeChangeDecideCard({
   function handleApprove() {
     if (actInFlight.current) return;
     setError(null);
-    if (!signName.trim()) {
+    if (!signatureIsComplete(signName)) {
       setError("Type your full name to approve.");
       return;
     }
@@ -551,38 +557,32 @@ function ScopeChangeDecideCard({
 
       {!showDecline ? (
         <div className="mt-4">
-          <label
-            htmlFor={`scope-change-sign-${request.id}`}
-            className="block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
-          >
-            Type your full name
-          </label>
-          <p className="mt-1 max-w-[52ch] text-[12px] leading-snug text-[var(--text-muted)]">
-            {SIGNATURE_NOTICE}
-          </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-3">
-            <input
-              id={`scope-change-sign-${request.id}`}
-              type="text"
-              value={signName}
-              autoComplete="name"
-              onChange={(event) => setSignName(event.target.value)}
-              data-testid="scope-change-sign-name"
-              className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
-            />
-            <ScoredAction
+          {/* The name on a rule, dated, with the electronic-signature
+              sentence the line itself carries — the same instrument the doors
+              and the wall sign on. */}
+          <SignatureLine
+            id={`scope-change-sign-${request.id}`}
+            testId="scope-change-sign-name"
+            value={signName}
+            onChange={setSignName}
+            disabled={approve.isPending}
+          />
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {/* A change to the scope moves the budget: held, not tapped (R1). */}
+            <HoldAction
               actionKey="scope_change_approve"
               regionKey="doorstep"
               surfaceKey="the_threshold"
               variant="primary"
-              disabled={!signName.trim()}
+              verb="approve the change"
+              disabled={!signatureIsComplete(signName)}
               loading={approve.isPending}
               loadingLabel="Approving"
-              onClick={handleApprove}
+              onHold={handleApprove}
               data-testid="scope-change-approve"
             >
               Approve the change
-            </ScoredAction>
+            </HoldAction>
             <ScoredAction
               actionKey="scope_change_decline_open"
               regionKey="doorstep"

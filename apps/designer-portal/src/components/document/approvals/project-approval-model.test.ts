@@ -1,8 +1,12 @@
 import {
   eligibleSupersessionCandidates,
+  oneLine,
   parseSignedDelta,
   projectApprovalActions,
   toFutureDueAt,
+  whyAttribution,
+  whyRemainingLine,
+  WHY_MAX_LENGTH,
 } from './project-approval-model';
 import type {
   ProjectApprovalArtifactCandidate,
@@ -111,5 +115,55 @@ describe('project approval authoring rules', () => {
     expect(eligibleSupersessionCandidates(review, candidates)).toEqual([
       candidates[2],
     ]);
+  });
+});
+
+describe("P-13 — the designer's one-line why", () => {
+  const filled = (length: number) => 'x'.repeat(length);
+
+  it('says nothing until the cap is close', () => {
+    expect(whyRemainingLine('')).toBeNull();
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 21))).toBeNull();
+  });
+
+  it('counts in words, never in figures, once twenty characters remain', () => {
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 20))).toBe(
+      'Twenty characters left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 2))).toBe(
+      'Two characters left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 1))).toBe(
+      'One character left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH))).toBe(
+      'No characters left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH + 5))).toBe(
+      'No characters left.',
+    );
+    expect(whyRemainingLine(filled(WHY_MAX_LENGTH - 3))).not.toMatch(/\d/);
+  });
+
+  it('signs with the frozen name exactly as the projection carries it', () => {
+    expect(whyAttribution('Leah Kochaver')).toBe('Leah Kochaver');
+    expect(whyAttribution('  Leah  ')).toBe('Leah');
+    expect(whyAttribution('')).toBeNull();
+    expect(whyAttribution('   ')).toBeNull();
+    expect(whyAttribution(null)).toBeNull();
+    expect(whyAttribution(undefined)).toBeNull();
+  });
+
+  it('collapses every run of whitespace so the why can only be one line', () => {
+    expect(oneLine('The walnut\nholds the room.')).toBe(
+      'The walnut holds the room.',
+    );
+    expect(oneLine('a\r\n\r\nb')).toBe('a b');
+    expect(oneLine('a\tb')).toBe('a b');
+    expect(oneLine('a  b')).toBe('a b');
+    expect(oneLine('The walnut holds the room.')).toBe(
+      'The walnut holds the room.',
+    );
+    expect(oneLine('')).toBe('');
   });
 });

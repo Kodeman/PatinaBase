@@ -19,6 +19,10 @@ public struct HoldableModifier: ViewModifier {
     @State private var isHolding = false
     @State private var progress: CGFloat = 0
     @State private var holdTask: Task<Void, Never>?
+    /// `P-18`. Reduced motion keeps the DELAY and drops the movement: the
+    /// press is a deliberate act, not an animation, and shortening it for one
+    /// reader would make the same act mean two different things.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         duration: Double = 2.0,
@@ -34,8 +38,8 @@ public struct HoldableModifier: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(isHolding ? 0.97 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: isHolding)
+            .scaleEffect(reduceMotion ? 1.0 : (isHolding ? 0.97 : 1.0))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isHolding)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
@@ -66,7 +70,7 @@ public struct HoldableModifier: ViewModifier {
         onProgress(1)
         HapticManager.shared.notification(.success)
         onComplete()
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
             resetState()
         }
     }
@@ -101,7 +105,7 @@ public struct HoldableModifier: ViewModifier {
             onCancel()
         }
 
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
             resetState()
         }
     }

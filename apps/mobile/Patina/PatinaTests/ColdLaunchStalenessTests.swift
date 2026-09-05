@@ -74,7 +74,7 @@ struct ColdLaunchStalenessTests {
 
     private func totalFailure() -> StudioLoadResult {
         StudioLoadResult(
-            projects: nil, decisions: nil, proposals: nil, invoices: nil,
+            projects: nil, decisions: nil, approvals: nil, proposals: nil, invoices: nil,
             documents: nil, threads: nil, notifications: nil
         )
     }
@@ -170,7 +170,7 @@ struct ColdLaunchStalenessTests {
         let success = Date(timeIntervalSinceNow: -120)
         hub.apply(
             StudioLoadResult(
-                projects: [], decisions: [], proposals: [], invoices: [],
+                projects: [], decisions: [], approvals: [], proposals: [], invoices: [],
                 documents: [], threads: [], notifications: []
             ),
             now: success

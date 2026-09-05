@@ -38,14 +38,24 @@ const MULTI_OTHER_HOUSE_COUNT = 2;
        .party_display_name                                      → Marta Voss
    3 · the joinery held back until she accepts it: the trade scope's
        client_price_cents (298000c)                             → $2,980
-   4 · invoice INV-2026-0301, sent and unpaid: 406000c due 2026-09-11
+   4 · invoice INV-2026-0301, sent and unpaid: 406000c due CURRENT_DATE + 7
    ────────────────────────────────────────────────────────────────────────── */
 const AUTHORIZATION_TOTAL = '$8,120';
 const LIVE_WORKING_FIGURE = '$7,800';
 const MAKER = 'Marta Voss';
 const HELD_DRAW = '$2,980';
 const INVOICE_BALANCE = '$4,060';
-const INVOICE_DUE_DAY = 'September 11';
+/**
+ * The seed dates this invoice `CURRENT_DATE + 7` (the-client-page.sql:621), so
+ * the day it falls due moves with the clock. A literal 'September 11' was true
+ * only on the day it was written and turned the suite red the next morning —
+ * read the day off the same rule the seed uses.
+ */
+const INVOICE_DUE_DAY = (() => {
+  const due = new Date();
+  due.setDate(due.getDate() + 7);
+  return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(due);
+})();
 
 const STANDING_NOTE_BODY =
   'The shelving is up and oiled. Look at it when you can, and if it reads right I will have Marta move on to the hall.';
@@ -255,8 +265,14 @@ test.describe('The Threshold — the client page', () => {
     await expect(name).toBeVisible();
     const accept = page.getByRole('button', { name: /accept the finished work/i });
     await expect(accept).toBeVisible();
-    await expect(accept).toBeEnabled();
+    // Wave 2 (R1): accepting is signed, so the act stays unlit until the legal
+    // name is on the line — no one spends a hold to be told what she was never
+    // armed to do (wall-gate.tsx:271).
+    await expect(accept).toBeDisabled();
     await expect(page.getByTestId('wall-hint')).toContainText('Type your full name to accept');
+
+    await name.fill('Nora Ellison');
+    await expect(accept).toBeEnabled();
   });
 
   test('settling the balance reaches the checkout start and returns to the letterbox', async ({

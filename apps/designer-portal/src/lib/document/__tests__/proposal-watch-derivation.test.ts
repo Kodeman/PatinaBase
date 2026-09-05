@@ -89,6 +89,15 @@ describe('deriveProposalWatch — status → stamp', () => {
     expect(m.awaitingClient).toBe(false);
   });
 
+  // P-17 / R13 — sage is a green on the most consequential state, and it stops
+  // carrying approval meaning. SIGNED is mocha, border and word both.
+  it('SIGNED is stamped in mocha, never sage', () => {
+    const m = deriveProposalWatch(input({ status: 'accepted' }), stats(), [], NOW);
+    expect(m.stamp.color).toBe('var(--color-mocha)');
+    expect(m.stamp.ink).toBe('var(--color-mocha)');
+    expect(m.stamp.color).not.toBe('var(--color-sage)');
+  });
+
   it('declined is terminal — DECLINED (terracotta)', () => {
     const m = deriveProposalWatch(input({ status: 'declined' }), stats(), [], NOW);
     expect(m.stamp.label).toBe('DECLINED');

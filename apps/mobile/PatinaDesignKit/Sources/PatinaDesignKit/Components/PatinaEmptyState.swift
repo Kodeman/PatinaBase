@@ -26,14 +26,19 @@ public struct PatinaEmptyStateContent: Equatable, Sendable {
 /// Patina Design System - Centered empty/zero state with an icon, title,
 /// supporting body, and an optional call-to-action button.
 public struct PatinaEmptyState: View {
-    let icon: String
+    /// `P-17`: optional. A glyph that carries a STATE is refused on the
+    /// approval surfaces — the empty decision list said "nothing waiting on
+    /// you" under a check mark, which is a check mark used as status. Nil
+    /// draws the words alone, in the same layout; every other surface keeps
+    /// its illustrative glyph, which is a picture of a thing, not a verdict.
+    let icon: String?
     let title: String
     let message: String
     var ctaTitle: String?
     var ctaAction: (() -> Void)?
 
     public init(
-        icon: String,
+        icon: String? = nil,
         title: String,
         message: String,
         ctaTitle: String? = nil,
@@ -58,9 +63,11 @@ public struct PatinaEmptyState: View {
 
     public var body: some View {
         VStack(spacing: PatinaSpacing.md) {
-            Image(systemName: icon)
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(PatinaColors.Text.muted)
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 40, weight: .light))
+                    .foregroundStyle(PatinaColors.Text.muted)
+            }
 
             VStack(spacing: PatinaSpacing.xs) {
                 Text(title)

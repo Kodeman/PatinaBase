@@ -4,6 +4,7 @@ import {
   isClientActionableLegacyDecision,
   isClientActionableProjectApproval,
   isProjectApprovalAwaitingStudioIssue,
+  projectApprovalAttentionLabel,
 } from '../client-attention';
 
 const approval = (
@@ -57,6 +58,40 @@ describe('client attention predicates', () => {
         approval({ lifecycleStatus: 'pending' }),
       ),
     ).toBe(false);
+  });
+
+  // One outcome, one word, whichever day she reads it (P-16). The stamp says
+  // RETURNED and the prose says Returned; "Declined" belongs to a commercial
+  // document, never to an edition sent back for revision.
+  it.each([
+    [{ disposition: 'withdrawn', outcome: 'approved' }, 'Withdrawn'],
+    [{ disposition: 'superseded', outcome: 'changes_requested' }, 'Superseded'],
+    [{ disposition: 'active', outcome: 'approved' }, 'Approved'],
+    [{ disposition: 'active', outcome: 'changes_requested' }, 'Returned'],
+    [{ disposition: 'active', outcome: 'needs_discussion' }, 'Held'],
+    [
+      {
+        disposition: 'active',
+        lifecycleStatus: 'draft',
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+      },
+      'Awaiting studio issue',
+    ],
+    [{ disposition: 'active', lifecycleStatus: 'draft' }, 'Review required'],
+    [{ disposition: 'active', lifecycleStatus: 'pending' }, 'Response required'],
+  ])('names %p in the house’s one vocabulary', (row, expected) => {
+    expect(projectApprovalAttentionLabel(approval(row as Partial<ProjectApprovalReview>))).toBe(
+      expected,
+    );
+  });
+
+  it('never calls a returned edition declined', () => {
+    expect(
+      projectApprovalAttentionLabel(
+        approval({ outcome: 'changes_requested' } as Partial<ProjectApprovalReview>),
+      ),
+    ).not.toBe('Declined');
   });
 
   it.each([

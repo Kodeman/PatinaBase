@@ -24,6 +24,14 @@ export type ProjectApprovalOutcome =
   | 'changes_requested'
   | 'needs_discussion';
 export type ProjectApprovalDisposition = 'active' | 'withdrawn' | 'superseded';
+/**
+ * Which chair the caller is sitting in for one projected row (00569).
+ * `lead` is the frozen decision lead — the only person respond_project_approval
+ * accepts; `studio` is a design-studio co-member reading over her shoulder;
+ * `household` is the project's client on a row whose frozen lead is somebody
+ * else. Null for a projection minted before 00569.
+ */
+export type ProjectApprovalViewerRole = 'lead' | 'studio' | 'household';
 
 /** Studio-safe immutable artifact identity returned by the 00438 candidate RPC. */
 export interface ProjectApprovalArtifactCandidate {
@@ -48,7 +56,27 @@ export interface ProjectApprovalReview {
   artifactChecksum: string;
   artifactTitle: string;
   question: string;
+  /**
+   * P-13 — the designer's one-line why, frozen into the artifact snapshot at
+   * compose time. Null on every artifact minted before the column existed, and
+   * on any approval whose composer left the (optional) field empty. Optional on
+   * the interface until the projection carries the column on every surface —
+   * `parseProjectApprovalReview` always sets it, to null when absent.
+   */
+  why?: string | null;
+  /**
+   * P-13 — the display name of the hand that WROTE the why, carried by the
+   * projection so the sentence is signed by its author rather than by whoever
+   * is reading it: a studio has more than one designer, and the record is
+   * immutable and client-facing. Null on any row minted before the projection
+   * carried the name, and on any artifact whose author cannot be resolved; an
+   * unsigned sentence is honest, a wrongly signed one is not. Every surface
+   * renders this value verbatim (ruling, 2026-09-05) — no surface shortens it.
+   */
+  whyAuthorName?: string | null;
   context: string | null;
+  /** Null when the projection predates 00569 — never guessed from the client. */
+  viewerRole: ProjectApprovalViewerRole | null;
   dueAt: string;
   costCentsDelta: number;
   scheduleDaysDelta: number;
@@ -86,6 +114,8 @@ export interface ProjectDecisionAuthority {
 export interface ProjectApprovalCreatePayload {
   title: string;
   question: string;
+  /** P-13 — optional, at most 200 characters, frozen with the artifact. */
+  why?: string | null;
   context?: string | null;
   dueAt: string;
   phaseId: string;
@@ -270,6 +300,10 @@ function isDisposition(value: unknown): value is ProjectApprovalDisposition {
   return value === 'active' || value === 'withdrawn' || value === 'superseded';
 }
 
+function isViewerRole(value: unknown): value is ProjectApprovalViewerRole {
+  return value === 'lead' || value === 'studio' || value === 'household';
+}
+
 export function parseProjectApprovalReview(
   value: unknown,
 ): ProjectApprovalReview {
@@ -307,7 +341,12 @@ export function parseProjectApprovalReview(
     artifactChecksum: stringValue(row, 'artifactChecksum', label),
     artifactTitle: stringValue(row, 'artifactTitle', label),
     question: stringValue(row, 'question', label),
+    why: nullableString(row, 'why'),
+    whyAuthorName: nullableString(row, 'whyAuthorName'),
     context: nullableString(row, 'context'),
+    // Arrived with 00569 and absent from every older projection, so it may
+    // not be required here: absence is null, never a guess.
+    viewerRole: isViewerRole(row.viewerRole) ? row.viewerRole : null,
     dueAt,
     costCentsDelta: numberValue(row, 'costCentsDelta', label),
     scheduleDaysDelta: numberValue(row, 'scheduleDaysDelta', label),
@@ -550,6 +589,16 @@ export function useSetProjectDecisionAuthority() {
   });
 }
 
+/**
+ * P-13 — the why is one line on its way to `p_why`. The composer strips
+ * newlines as they are typed; this is the last gate before the sentence
+ * freezes into `project_approval_artifacts`, a table that is append-only by
+ * design, so an interior newline reaching it could never be corrected.
+ */
+function oneLineWhy(value: string | null | undefined): string {
+  return (value ?? '').replace(/\s+/gu, ' ').trim();
+}
+
 export function useCreateProjectApproval() {
   const queryClient = useQueryClient();
   return approvalMutation(
@@ -559,8 +608,9 @@ export function useCreateProjectApproval() {
         payload: ProjectApprovalCreatePayload;
         idempotencyKey: string;
       },
-    ) =>
-      parseActionResult(
+    ) => {
+      const why = oneLineWhy(input.payload.why);
+      return parseActionResult(
         await runRpc('create_project_approval_decision', {
           p_project_id: input.projectId,
           p_payload: {
@@ -576,9 +626,13 @@ export function useCreateProjectApproval() {
             scheduleDaysDelta: input.payload.scheduleDaysDelta,
             leadTimeDaysDelta: input.payload.leadTimeDaysDelta,
           },
+          // P-13 — the key is omitted entirely when there is no why, so the
+          // call still matches the pre-`p_why` RPC signature.
+          ...(why ? { p_why: why } : {}),
           p_idempotency_key: input.idempotencyKey,
         }),
-      ),
+      );
+    },
   );
 }
 
@@ -631,6 +685,15 @@ export function usePublishProjectApproval() {
   );
 }
 
+/**
+ * How the client agreed. `respond_project_approval` accepts the pair from
+ * 00570 onward; before it the wrapper refused any payload key but `outcome`
+ * and `optionId`, which is why the keys are sent ONLY when a method is given.
+ */
+export type ProjectApprovalConsentMethod =
+  | 'electronic_signature'
+  | 'click_through';
+
 export function useRespondProjectApproval() {
   const queryClient = useQueryClient();
   return approvalMutation(
@@ -641,12 +704,21 @@ export function useRespondProjectApproval() {
         outcome: ProjectApprovalOutcome;
         expectedUpdatedAt: string;
         idempotencyKey: string;
+        /** The typed legal name (R1). Required by the RPC for a signature. */
+        clientSignature?: string | null;
+        clientConsentMethod?: ProjectApprovalConsentMethod | null;
       },
     ) =>
       parseActionResult(
         await runRpc('respond_project_approval', {
           p_decision_id: input.decisionId,
-          p_payload: { outcome: input.outcome },
+          p_payload: input.clientConsentMethod
+            ? {
+                outcome: input.outcome,
+                clientConsentMethod: input.clientConsentMethod,
+                clientSignature: input.clientSignature ?? null,
+              }
+            : { outcome: input.outcome },
           p_expected_updated_at: input.expectedUpdatedAt,
           p_idempotency_key: input.idempotencyKey,
         }),
@@ -688,8 +760,9 @@ export function useSupersedeProjectApproval() {
         expectedUpdatedAt: string;
         idempotencyKey: string;
       },
-    ) =>
-      parseActionResult(
+    ) => {
+      const why = oneLineWhy(input.payload.why);
+      return parseActionResult(
         await runRpc('supersede_project_approval_decision', {
           p_decision_id: input.decisionId,
           p_payload: {
@@ -703,9 +776,15 @@ export function useSupersedeProjectApproval() {
             scheduleDaysDelta: input.payload.scheduleDaysDelta,
             leadTimeDaysDelta: input.payload.leadTimeDaysDelta,
           },
+          // P-13 — a re-ask travels; silence omits the key, and the RPC then
+          // carries the predecessor's frozen why forward rather than clearing
+          // it. Omitting also leaves the supersession's idempotency hash
+          // unchanged for every key minted before `p_why` existed.
+          ...(why ? { p_why: why } : {}),
           p_expected_updated_at: input.expectedUpdatedAt,
           p_idempotency_key: input.idempotencyKey,
         }),
-      ),
+      );
+    },
   );
 }

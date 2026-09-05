@@ -67,6 +67,7 @@ struct ProjectApprovalActTests {
         struct Sent {
             let id: String
             let outcome: ProjectApprovalOutcome
+            let signature: String
             let expectedUpdatedAt: String
             let key: String
         }
@@ -74,9 +75,13 @@ struct ProjectApprovalActTests {
         let viewModel = DecisionDetailViewModel()
         viewModel.decision = try ProjectApprovalFixture.decision()
         viewModel.approvalReview = try ProjectApprovalFixture.review()
-        viewModel.respondToApproval = { id, chosen, expectedUpdatedAt, key in
-            sent = Sent(id: id, outcome: chosen, expectedUpdatedAt: expectedUpdatedAt, key: key)
+        viewModel.respondToApproval = { id, chosen, signature, expectedUpdatedAt, key in
+            sent = Sent(
+                id: id, outcome: chosen, signature: signature,
+                expectedUpdatedAt: expectedUpdatedAt, key: key
+            )
         }
+        viewModel.typedSignature = "Margaret Whitfield"
 
         viewModel.chooseOutcome(outcome)
         #expect(viewModel.chosenOutcome == outcome, "choosing records nothing yet")
@@ -87,6 +92,12 @@ struct ProjectApprovalActTests {
         let call = try #require(sent, "the outcome never reached the RPC")
         #expect(call.id == ProjectApprovalFixture.decisionId)
         #expect(call.outcome == outcome)
+        // RULED 2026-09-05: Approve is the signed act. Return and Hold are
+        // held, not signed, and carry no name (`HoldToActTests`).
+        #expect(
+            call.signature == (outcome == .approved ? "Margaret Whitfield" : ""),
+            "P-18: the agreement is signed and the other two are not"
+        )
         #expect(call.expectedUpdatedAt == "2026-09-04T10:15:00+00:00")
         #expect(!call.key.isEmpty)
         #expect(viewModel.hasAnsweredApproval)
@@ -110,7 +121,8 @@ struct ProjectApprovalActTests {
         let viewModel = DecisionDetailViewModel()
         viewModel.decision = try ProjectApprovalFixture.decision()
         viewModel.approvalReview = try ProjectApprovalFixture.review()
-        viewModel.respondToApproval = { _, _, _, _ in throw Boom() }
+        viewModel.respondToApproval = { _, _, _, _, _ in throw Boom() }
+        viewModel.typedSignature = "Margaret Whitfield"
 
         viewModel.chooseOutcome(.changesRequested)
         await viewModel.submitApprovalResponse()
@@ -178,37 +190,32 @@ struct ProjectApprovalActTests {
         #expect(body.contains("\"p_idempotency_key\": idempotencyKey"))
     }
 
-    @Test("the response RPC is called with the web's own parameters")
-    func theResponseRPCParametersMatchTheWeb() throws {
-        let source = try SourcePin.read(
-            "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
-        )
-        let start = try #require(source.range(of: "public func respondToProjectApproval("))
-        let body = String(source[start.lowerBound...].prefix(1400))
-        #expect(body.contains("callRPC(\"respond_project_approval\""))
-        #expect(body.contains("\"p_decision_id\": decisionId"))
-        #expect(body.contains("\"outcome\": outcome.rawValue"))
-        #expect(body.contains("\"p_expected_updated_at\": expectedUpdatedAt"))
-        #expect(body.contains("\"p_idempotency_key\": idempotencyKey"))
-        // The payload admits exactly one of outcome / optionId, and iOS sends
-        // the outcome — an option id would answer the wrong question.
-        #expect(!body.contains("optionId"))
-    }
-
     // MARK: - The words
 
     /// Verb, then consequence. Not the web's strings: "gate" is refused on
     /// every client-facing surface, and the homeowner approves an EDITION.
-    @Test("the three acts read verb-then-consequence, in the house's words")
+    ///
+    /// `P-16`: Approve / Return / Hold, in that order. "Decline" and "Ask a
+    /// question" are both gone — `changes_requested` is RETURNED everywhere,
+    /// and the third door holds the approval open rather than describing the
+    /// message a homeowner might send about it.
+    @Test("the three doors read verb-then-consequence, in the house's words")
     func theActsReadVerbThenConsequence() {
         let acts = ProjectApprovalCopy.acts
-        #expect(acts.map(\.outcome) == [.approved, .needsDiscussion, .changesRequested])
+        #expect(acts.map(\.outcome) == [.approved, .changesRequested, .needsDiscussion])
         #expect(acts[0].label == "Approve")
         #expect(acts[0].consequence == "Accept this exact edition and its stated impacts.")
-        #expect(acts[1].label == "Ask a question")
-        #expect(acts[1].consequence == "Hold this while you and your designer talk it through.")
-        #expect(acts[2].label == "Decline")
-        #expect(acts[2].consequence == "Return this edition for revision and a new approval request.")
+        #expect(acts[1].label == "Return")
+        #expect(
+            acts[1].consequence
+                == "Send this edition back for revision and a new approval request."
+        )
+        #expect(acts[2].label == "Hold")
+        #expect(
+            acts[2].consequence
+                == "Keep this open while you and your designer talk it through."
+        )
+        #expect(!acts.contains { $0.label == "Decline" })
     }
 
     @Test("the immutability sentence names the edition it binds")
@@ -260,7 +267,13 @@ struct ProjectApprovalActTests {
             ProjectApprovalCopy.noImpact,
             ProjectApprovalCopy.withdrawn,
             ProjectApprovalCopy.superseded,
-            ProjectApprovalCopy.immutability(edition: 2)
+            ProjectApprovalCopy.expired,
+            ProjectApprovalCopy.immutability(edition: 2),
+            ProjectApprovalCopy.noteLabel,
+            ProjectApprovalCopy.noteHelp,
+            ProjectApprovalCopy.noteUnsent,
+            ProjectApprovalCopy.notePlaceholder(designer: "Leah"),
+            ProjectApprovalCopy.notePlaceholder(designer: nil)
         ]
         strings += ProjectApprovalOutcome.allCases.map(ProjectApprovalCopy.recorded)
         // "AI" is refused as a WORD; as a substring it lives inside "again".
@@ -282,14 +295,18 @@ struct ProjectApprovalActTests {
     /// passed green while the screen mounting it drew a sage
     /// `checkmark.seal.fill` banner from `DecisionDetailView`.
     ///
-    /// These two files ARE the branch: `DecisionDetailView`'s body draws
+    /// These three files ARE the branch: `DecisionDetailView`'s body draws
     /// `ProjectApprovalScreen` and nothing else on it (pinned in
-    /// `ProjectApprovalPathTests.aStage2DecisionIsNotAnOptionChoice`), and the
-    /// screen draws the block.
+    /// `ProjectApprovalPathTests.aStage2DecisionIsNotAnOptionChoice`), the
+    /// screen draws the block, and the block draws the discussion beneath the
+    /// acts (`IOSC-R2-01`). A branch-wide refusal is only worth its name while
+    /// it names every view the branch draws — so a fourth file here is a
+    /// fourth argument, not an exception.
     @Test("no view on the Stage-2 branch draws a status colour or a seal glyph",
           arguments: [
             "Patina/Features/Decisions/Views/ProjectApprovalScreen.swift",
-            "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
+            "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift",
+            "Patina/Features/Decisions/Views/ApprovalDiscussionBlock.swift"
           ])
     func theStage2BranchHasNoStatusColour(file: String) throws {
         let source = try SourcePin.readCode(file)
@@ -313,6 +330,7 @@ struct ProjectApprovalActTests {
         var strings = [
             ProjectApprovalCopy.withdrawn,
             ProjectApprovalCopy.superseded,
+            ProjectApprovalCopy.expired,
             ProjectApprovalCopy.unavailable,
             ProjectApprovalCopy.reviewUnavailable
         ]
@@ -368,7 +386,8 @@ struct ProjectApprovalClosureTests {
     func theSubmittedOutcomeSurvives() async throws {
         let viewModel = DecisionDetailViewModel()
         viewModel.approvalReview = try ProjectApprovalFixture.review()
-        viewModel.respondToApproval = { _, _, _, _ in }
+        viewModel.respondToApproval = { _, _, _, _, _ in }
+        viewModel.typedSignature = "Margaret Whitfield"
 
         viewModel.chooseOutcome(.needsDiscussion)
         await viewModel.submitApprovalResponse()
@@ -386,7 +405,8 @@ struct ProjectApprovalClosureTests {
     func theImmutabilitySentenceGoesWithTheAct() async throws {
         let viewModel = DecisionDetailViewModel()
         viewModel.approvalReview = try ProjectApprovalFixture.review()
-        viewModel.respondToApproval = { _, _, _, _ in }
+        viewModel.respondToApproval = { _, _, _, _, _ in }
+        viewModel.typedSignature = "Margaret Whitfield"
 
         viewModel.chooseOutcome(.approved)
         await viewModel.submitApprovalResponse()

@@ -12,7 +12,12 @@
 //      `DeepLinkHandler.shared.navigate(to:)`. The originating
 //      `notification_log.id` is marked opened via
 //      `NotificationsAPIClient.markOpened`.
-//   3. APNs registration callbacks → `PushTokenService`, which uploads
+//   3. `P-22`: the three lock-screen categories are registered here, at
+//      launch, so a banner draws Patina's own two acts (Open, Ask a
+//      question) and never an Approve or a Sign. A tapped act routes
+//      through the same `DeepLinkHandler.navigate` seam as a plain tap,
+//      which holds the route until the app can show it (P-08).
+//   4. APNs registration callbacks → `PushTokenService`, which uploads
 //      the hex-encoded device token to `device_push_tokens`. Registration
 //      itself (`requestAuthorization` / `registerForRemoteNotifications`)
 //      is triggered elsewhere (post-first-submission, foreground
@@ -40,6 +45,10 @@ final class PatinaAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // `P-22`: before any banner can arrive. The OS keeps the set for the
+        // life of the install; a letter that lands before this has run draws
+        // without its acts rather than with the wrong ones.
+        NotificationCategories.register()
 
         if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
             handleNotificationPayload(userInfo, source: "cold_launch")
@@ -104,28 +113,57 @@ final class PatinaAppDelegate: NSObject, UIApplicationDelegate {
     /// tap never silently no-ops.
     private func handleNotificationPayload(
         _ userInfo: [AnyHashable: Any],
-        source: String
+        source: String,
+        actionIdentifier: String = UNNotificationDefaultActionIdentifier,
+        threadIdentifier: String? = nil
     ) {
-        let (route, notificationLogId) = NotificationRouter.resolve(apnsUserInfo: userInfo)
-        let resolved = route ?? .notifications
+        // A dismissal cleared the letter; it did not read it. Nothing opens,
+        // and nothing is marked opened — telling the studio she has seen a
+        // document she swiped away would be the invention C5 forbids.
+        guard NotificationCategories.isOpening(actionIdentifier: actionIdentifier) else { return }
+
+        let (_, notificationLogId) = NotificationRouter.resolve(apnsUserInfo: userInfo)
+        // `P-22`: the act decides the destination — "Ask a question" opens the
+        // conversation, everything else opens the thing itself. The fall-back
+        // is unchanged: a tap never silently no-ops.
+        let resolved = NotificationCategories.route(
+            forActionIdentifier: actionIdentifier, apnsUserInfo: userInfo,
+            threadIdentifier: threadIdentifier
+        ) ?? .notifications
 
         #if DEBUG
         PatinaLog.nav.debug("[APNs] tap (\(source)) → \(resolved.displayName) (logId=\(notificationLogId ?? "nil"))")
         #endif
 
         Task { @MainActor in
+            // `DecisionPushHandler` recognises the three type-aware decision
+            // pushes (`decision_required` / `_overdue` / `_resolved`) and was a
+            // stub with no caller; this is the wiring its own header asks for.
+            // It navigates through the same `DeepLinkHandler` seam and marks
+            // the row opened itself, so a payload it claims is finished here —
+            // otherwise the row would be PATCHed twice for one tap. Every
+            // other letter, 00534's `*_attention` rows included, falls through
+            // to the generic route above. "Ask a question" never takes this
+            // door: its destination is the conversation, not the decision.
+            if actionIdentifier != PatinaNotificationAction.askQuestion.rawValue,
+               DecisionPushHandler.handle(apnsUserInfo: userInfo) {
+                return
+            }
             DeepLinkHandler.shared.navigate(to: resolved)
+            Self.markOpened(notificationLogId)
         }
+    }
 
-        if let notificationLogId {
-            Task {
-                do {
-                    try await NotificationsAPIClient.shared.markOpened(id: notificationLogId)
-                } catch {
-                    #if DEBUG
-                    PatinaLog.nav.error("[APNs] markOpened failed for \(notificationLogId): \(error.localizedDescription)")
-                    #endif
-                }
+    /// One PATCH, from whichever door the tap came through.
+    private static func markOpened(_ notificationLogId: String?) {
+        guard let notificationLogId else { return }
+        Task {
+            do {
+                try await NotificationsAPIClient.shared.markOpened(id: notificationLogId)
+            } catch {
+                #if DEBUG
+                PatinaLog.nav.error("[APNs] markOpened failed for \(notificationLogId): \(error.localizedDescription)")
+                #endif
             }
         }
     }
@@ -144,7 +182,12 @@ extension PatinaAppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
-        handleNotificationPayload(userInfo, source: "tap")
+        handleNotificationPayload(
+            userInfo, source: "tap", actionIdentifier: response.actionIdentifier,
+            // P-22: the backend groups a reminder onto the letter it repeats
+            // with `decision-<id>`. Honoured as a last resort for the entity.
+            threadIdentifier: response.notification.request.content.threadIdentifier
+        )
         // C.1 / R29: a tapped push usually means new studio activity —
         // re-poll the Studio-rail badge counts + design-request status.
         Task { @MainActor in
