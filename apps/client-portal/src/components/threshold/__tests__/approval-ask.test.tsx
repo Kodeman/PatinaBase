@@ -715,6 +715,162 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       screen.queryByRole('link', { name: 'Review revised edition' }),
     ).not.toBeInTheDocument();
   });
+
+  /**
+   * P-27. Both links used to be drawn, which asked her to choose a direction
+   * through her own history. One act, and the forward one wins: the revised
+   * edition is where the conversation is.
+   */
+  it('keeps ONE act along the thread, and points it forward', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, predecessorDecisionId: 'dec-0', successorDecisionId: 'dec-2' }}
+        anchoredDecisionIds={['dec-0', 'dec-1', 'dec-2']}
+      />,
+    );
+
+    const acts = within(screen.getByTestId('approval-revisions')).getAllByRole('link');
+    expect(acts).toHaveLength(1);
+    expect(acts[0]).toHaveTextContent('Review revised edition');
+    expect(acts[0]).toHaveAttribute('href', '#approval-dec-2');
+  });
+});
+
+/* ── P-27 · the successor read as one thread ──────────────────────────────── */
+
+describe('ApprovalAsk — the thread', () => {
+  const ANSWERED_BEFORE: ProjectApprovalReview = {
+    ...APPROVAL,
+    decisionId: 'dec-0',
+    artifactVersion: 2,
+    costCentsDelta: 120_000,
+    scheduleDaysDelta: 0,
+    leadTimeDaysDelta: 0,
+    outcome: 'changes_requested',
+    lifecycleStatus: 'responded',
+    disposition: 'superseded',
+    respondedAt: '2026-08-12T15:00:00Z',
+  };
+
+  const SUCCESSOR: ProjectApprovalReview = {
+    ...APPROVAL,
+    decisionId: 'dec-1',
+    artifactVersion: 4,
+    predecessorDecisionId: 'dec-0',
+    costCentsDelta: 80_000,
+    scheduleDaysDelta: 6,
+    leadTimeDaysDelta: 0,
+  };
+
+  it('opens by saying what it replaces, in the words of the answer she gave', () => {
+    render(<ApprovalAsk approval={SUCCESSOR} predecessor={ANSWERED_BEFORE} />);
+
+    expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
+      'Edition 4 replaces the edition you returned on August 12.',
+    );
+  });
+
+  it('says approved and held in the same grammar', () => {
+    const { rerender } = render(
+      <ApprovalAsk
+        approval={SUCCESSOR}
+        predecessor={{ ...ANSWERED_BEFORE, outcome: 'approved' }}
+      />,
+    );
+    expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
+      'the edition you approved on August 12',
+    );
+
+    rerender(
+      <ApprovalAsk
+        approval={SUCCESSOR}
+        predecessor={{ ...ANSWERED_BEFORE, outcome: 'needs_discussion' }}
+      />,
+    );
+    expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
+      'the edition you held on August 12',
+    );
+  });
+
+  /** A successor is a new decision, never a reopening of the old one. */
+  it('never says her earlier answer was undone or reopened', () => {
+    const { container } = render(
+      <ApprovalAsk approval={SUCCESSOR} predecessor={ANSWERED_BEFORE} />,
+    );
+    expect(container.textContent).not.toMatch(/undone|reopen|reversed|void|no longer counts/i);
+  });
+
+  it('states what changed since her last answer, from the two projections', () => {
+    render(<ApprovalAsk approval={SUCCESSOR} predecessor={ANSWERED_BEFORE} />);
+
+    const block = screen.getByTestId('approval-changed-since');
+    expect(block).toHaveTextContent('What changed since your last answer');
+    // $1,200 asked before, $800 now, and six days of schedule that were not
+    // being asked for at all.
+    expect(block).toHaveTextContent(
+      'The cost falls by $400, the schedule moves out by six days, and the lead time does not change.',
+    );
+  });
+
+  it('names a retitled edition beside what it moved', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...SUCCESSOR, artifactTitle: 'Library elevations, revised' }}
+        predecessor={ANSWERED_BEFORE}
+      />,
+    );
+
+    expect(screen.getByTestId('approval-changed-since')).toHaveTextContent(
+      'It is titled “Library elevations, revised”; the one you answered was “Library elevations”.',
+    );
+  });
+
+  it('says the studio issued a new edition, and no more, when nothing computable differs', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...SUCCESSOR, costCentsDelta: 120_000, scheduleDaysDelta: 0 }}
+        predecessor={ANSWERED_BEFORE}
+      />,
+    );
+
+    const block = screen.getByTestId('approval-changed-since');
+    expect(block).toHaveTextContent('The studio issued a new edition.');
+    expect(block).not.toHaveTextContent('cost');
+    expect(block).not.toHaveTextContent('schedule');
+  });
+
+  it('claims no thread at all when the predecessor’s row is not in hand', () => {
+    render(<ApprovalAsk approval={SUCCESSOR} />);
+
+    expect(screen.queryByTestId('approval-continuation')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('approval-changed-since')).not.toBeInTheDocument();
+  });
+
+  /**
+   * "Since your last answer" is a false heading over an edition she never
+   * answered — a predecessor withdrawn before she reached it, say.
+   */
+  it('claims no last answer over a predecessor that carries none', () => {
+    render(
+      <ApprovalAsk
+        approval={SUCCESSOR}
+        predecessor={{
+          ...ANSWERED_BEFORE,
+          outcome: null,
+          disposition: 'withdrawn',
+          respondedAt: null,
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('approval-continuation')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('approval-changed-since')).not.toBeInTheDocument();
+  });
+
+  it('opens nothing on an edition that follows nothing', () => {
+    render(<ApprovalAsk approval={APPROVAL} predecessor={ANSWERED_BEFORE} />);
+    expect(screen.queryByTestId('approval-continuation')).not.toBeInTheDocument();
+  });
 });
 
 describe('the artifact, shown', () => {
@@ -1243,6 +1399,108 @@ describe('ApprovalRecords', () => {
   it('says nothing when no approval has closed', () => {
     const { container } = render(<ApprovalRecords approvals={[]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  /* ── P-27 · the fold opens for the record the address named ────────────── */
+
+  describe('the address that names a folded record', () => {
+    const many = [
+      closed('a', '2026-08-14T12:00:00Z'),
+      closed('b', '2026-08-13T12:00:00Z'),
+      closed('c', '2026-08-12T12:00:00Z'),
+      closed('d', '2026-08-11T12:00:00Z'),
+      closed('e', '2026-08-10T12:00:00Z'),
+    ];
+
+    afterEach(() => {
+      window.location.hash = '';
+    });
+
+    /**
+     * Wave 1's re-map risk #4. `/decisions/<id>` folds onto `#approval-<id>`,
+     * and a receipt or supersession mail can name the fifth closed approval on
+     * a house whose pile shows three. The fragment resolved to nothing, the
+     * browser left her at the top of the page, and the letter she came to
+     * answer appeared to have been about nothing at all.
+     */
+    it('opens the fold for a record beyond the three the pile shows', async () => {
+      window.location.hash = '#approval-e';
+      render(<ApprovalRecords approvals={many} />);
+
+      await waitFor(() =>
+        expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(5),
+      );
+      expect(document.getElementById('approval-e')).not.toBeNull();
+      // The fold's own act is gone with the fold.
+      expect(
+        screen.queryByRole('button', { name: /^read the earlier approvals$/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('leaves the fold shut for a record already standing open', () => {
+      window.location.hash = '#approval-b';
+      render(<ApprovalRecords approvals={many} />);
+
+      expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
+    });
+
+    it('leaves the fold shut for an address that names no record here', () => {
+      window.location.hash = '#approval-not-on-this-house';
+      render(<ApprovalRecords approvals={many} />);
+
+      expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
+    });
+
+    it('opens the fold when the address changes under her', async () => {
+      render(<ApprovalRecords approvals={many} />);
+      expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
+
+      await act(async () => {
+        window.location.hash = '#approval-d';
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+
+      await waitFor(() =>
+        expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(5),
+      );
+    });
+  });
+});
+
+/* ── P-27 · a superseded record points forward ─────────────────────────────── */
+
+describe('ApprovalReceipt — the way forward', () => {
+  const superseded: ProjectApprovalReview = {
+    ...APPROVAL,
+    outcome: 'changes_requested',
+    lifecycleStatus: 'responded',
+    disposition: 'superseded',
+    respondedAt: '2026-08-12T15:00:00Z',
+    successorDecisionId: 'dec-2',
+  };
+
+  it('offers the revised edition when it stands on this page', () => {
+    render(<ApprovalReceipt approval={superseded} anchoredDecisionIds={['dec-1', 'dec-2']} />);
+
+    const forward = screen.getByTestId('approval-receipt-forward');
+    expect(forward).toHaveTextContent('Review revised edition');
+    expect(forward).toHaveAttribute('href', '#approval-dec-2');
+  });
+
+  it('claims no revised edition the page is not drawing', () => {
+    render(<ApprovalReceipt approval={superseded} anchoredDecisionIds={['dec-1']} />);
+    expect(screen.queryByTestId('approval-receipt-forward')).not.toBeInTheDocument();
+  });
+
+  /** Backwards is not a way forward: a record does not point at its own past. */
+  it('never points a closed record back at the edition before it', () => {
+    render(
+      <ApprovalReceipt
+        approval={{ ...superseded, successorDecisionId: null, predecessorDecisionId: 'dec-0' }}
+        anchoredDecisionIds={['dec-0', 'dec-1']}
+      />,
+    );
+    expect(screen.queryByTestId('approval-receipt-forward')).not.toBeInTheDocument();
   });
 });
 

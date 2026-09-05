@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import {
   useConfirmProjectApprovalReview,
@@ -167,8 +167,10 @@ function moneyExact(cents: number, currency: string): string {
  * A gate that is neither open nor answered — withdrawn, or superseded by a
  * later edition — is history too, and stood on no surface at all until it was
  * filed here. It reads as its own word (Withdrawn / Superseded, ahead of any
- * outcome, the precedence `stampStateForApproval` keeps) and carries no act
- * and no revision link: a closed edition is read, not navigated from.
+ * outcome, the precedence `stampStateForApproval` keeps). Nothing on it can be
+ * changed; P-27 gives it one act that changes nothing — the way FORWARD, to
+ * the edition that replaced it, so a superseded record is not the dead end at
+ * the end of the thread.
  *
  * `asks` wins over `records` — an id may anchor exactly one element on the
  * page, and the `#approval-<id>` links depend on it.
@@ -231,6 +233,106 @@ function whyOf(approval: ProjectApprovalReview): string | null {
 function whyAuthorOf(approval: ProjectApprovalReview): string | null {
   const name = approval.whyAuthorName;
   return typeof name === 'string' && name.trim().length > 0 ? name.trim() : null;
+}
+
+/* ── THE THREAD ──────────────────────────────────────────────────────────────
+   P-27. A superseded approval and the edition that replaced it are one
+   conversation, and they used to read as two bare links. The successor opens
+   by saying what it follows and what moved since she last answered.
+
+   IT NEVER SAYS UNDONE. A successor is a NEW decision, not a reopening: her
+   earlier answer stands on its own record and is not taken back by the
+   edition that came after it. So the line is "replaces the edition you
+   approved", never "your approval was reversed", and nothing here reaches for
+   the words reopened, undone or void.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** What she did last time, in the past tense the outcome words take. */
+const OUTCOME_IN_PAST: Record<ProjectApprovalOutcome, string> = {
+  approved: 'approved',
+  changes_requested: 'returned',
+  needs_discussion: 'held',
+};
+
+/**
+ * "Edition 4 replaces the edition you returned on August 12."
+ *
+ * Null unless the predecessor is in hand AND carries an answer of hers with a
+ * date on it. A predecessor withdrawn before she ever answered is not "the
+ * edition you ...", and a sentence that has to guess which verb goes in the
+ * blank is a sentence this surface does not write.
+ */
+export function successionLine(
+  edition: number,
+  predecessor: Pick<ProjectApprovalReview, 'outcome' | 'respondedAt'> | null | undefined,
+): string | null {
+  const outcome = predecessor?.outcome;
+  if (!outcome) return null;
+  const at = parseSourceDate(predecessor?.respondedAt);
+  if (!at) return null;
+  return `Edition ${edition} replaces the edition you ${OUTCOME_IN_PAST[outcome]} on ${LONG_MONTH_DAY.format(
+    at,
+  )}.`;
+}
+
+/**
+ * The single act along the thread, forward first.
+ *
+ * Only a sibling that is itself anchored on this page is offered — an
+ * `#approval-<id>` link to a row the doorstep is not drawing lands nowhere.
+ */
+export function revisionAct(
+  approval: Pick<ProjectApprovalReview, 'predecessorDecisionId' | 'successorDecisionId'>,
+  anchoredDecisionIds: readonly string[],
+): { id: string; label: string } | null {
+  const successor = approval.successorDecisionId;
+  if (successor && anchoredDecisionIds.includes(successor)) {
+    return { id: successor, label: 'Review revised edition' };
+  }
+  const predecessor = approval.predecessorDecisionId;
+  if (predecessor && anchoredDecisionIds.includes(predecessor)) {
+    return { id: predecessor, label: 'Review previous edition' };
+  }
+  return null;
+}
+
+/** The fallback, when the two projections differ in nothing she can read. */
+export const NEW_EDITION_ONLY = 'The studio issued a new edition.';
+
+/**
+ * What changed between the edition she answered and the one in front of her,
+ * computed from the two projections and nothing else.
+ *
+ * The title/version is one line; the three deltas are the standing sentence's
+ * own weighing grammar, run over the DIFFERENCE between the two asks — so
+ * "the cost rises by $400" here means this edition asks four hundred dollars
+ * more than the last one did, which is the question she actually has.
+ *
+ * When nothing computable differs it says the studio issued a new edition and
+ * no more. Inventing a reason the projection does not carry would be the
+ * surface speaking for the designer.
+ */
+export function whatChangedSince(
+  predecessor: ProjectApprovalReview,
+  current: ProjectApprovalReview,
+): string[] {
+  const lines: string[] = [];
+
+  const was = predecessor.artifactTitle.trim();
+  const now = current.artifactTitle.trim();
+  if (was && now && was !== now) {
+    lines.push(`It is titled \u201C${now}\u201D; the one you answered was \u201C${was}\u201D.`);
+  }
+
+  const moved = approvalWeighing({
+    costCentsDelta: current.costCentsDelta - predecessor.costCentsDelta,
+    scheduleDaysDelta: current.scheduleDaysDelta - predecessor.scheduleDaysDelta,
+    leadTimeDaysDelta: current.leadTimeDaysDelta - predecessor.leadTimeDaysDelta,
+  });
+  // An empty ledger is the composer's own word for "all three are zero".
+  if (moved.ledger) lines.push(moved.sentence);
+
+  return lines.length > 0 ? lines : [NEW_EDITION_ONLY];
 }
 
 /**
@@ -581,14 +683,24 @@ function Discussion({
  */
 export function ApprovalReceipt({
   approval,
+  anchoredDecisionIds = [],
   designerGivenName,
   studioName,
 }: {
   approval: ProjectApprovalReview;
+  /**
+   * P-27. A closed record whose successor stands on this page keeps ONE act,
+   * and it points forward: a superseded edition that says nothing about the
+   * edition that replaced it is a dead end at the end of a thread. Nothing
+   * else on a closed record can be acted on, and this changes nothing — it
+   * moves her along the page she is already standing on.
+   */
+  anchoredDecisionIds?: readonly string[];
   designerGivenName?: string | null;
   studioName?: string | null;
 }) {
   const [reading, setReading] = useState(false);
+  const forward = revisionAct(approval, anchoredDecisionIds);
   const closed = approval.outcome !== null || approval.disposition !== 'active';
   const stampedAt = parseSourceDate(approval.respondedAt);
   const headingId = `approval-record-${approval.decisionId}`;
@@ -626,6 +738,17 @@ export function ApprovalReceipt({
           {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
         </Stamp>
       </p>
+      {forward?.label === 'Review revised edition' && (
+        <p className="mt-3">
+          <a
+            data-testid="approval-receipt-forward"
+            href={`#approval-${forward.id}`}
+            className="inline-flex min-h-11 items-center text-[15px] leading-normal underline"
+          >
+            {forward.label}
+          </a>
+        </p>
+      )}
       {approval.outcome !== null && <KeepACopy decisionId={approval.decisionId} />}
       <div className="mt-3">
         <ScoredAction
@@ -691,14 +814,56 @@ const RECORDS_SHOWN = 3;
  */
 export function ApprovalRecords({
   approvals,
+  anchoredDecisionIds = [],
   designerGivenName,
   studioName,
 }: {
   approvals: ProjectApprovalReview[];
+  anchoredDecisionIds?: readonly string[];
   designerGivenName?: string | null;
   studioName?: string | null;
 }) {
   const [all, setAll] = useState(false);
+  /** The record the address named, until the page has put her in front of it. */
+  const [seek, setSeek] = useState<string | null>(null);
+
+  /**
+   * P-27, and Wave 1's re-map risk #4.
+   *
+   * `/decisions/<id>` folds onto `#approval-<id>`, and a receipt mail or a
+   * supersession notice can name a record that is the fourth or fortieth
+   * closed approval on this house. The pile shows three. So the fragment
+   * resolved to nothing, the browser left her at the top of the page, and the
+   * letter she was answering appeared to have been about nothing at all.
+   *
+   * The fold opens itself for a named record, and then puts her in front of
+   * it — the browser has already given up on the fragment by the time the
+   * element exists.
+   */
+  useEffect(() => {
+    function named() {
+      const match = /^#approval-(.+)$/.exec(window.location.hash);
+      if (match) setSeek(match[1]);
+    }
+    named();
+    window.addEventListener('hashchange', named);
+    return () => window.removeEventListener('hashchange', named);
+  }, []);
+
+  useEffect(() => {
+    if (!seek) return;
+    const index = approvals.findIndex((row) => row.decisionId === seek);
+    // Not among the records at all: it is an open ask, or it is not on this
+    // house. Either way the fold is not what is hiding it.
+    if (index < 0) return;
+    if (index >= RECORDS_SHOWN && !all) {
+      setAll(true);
+      return;
+    }
+    document.getElementById(`approval-${seek}`)?.scrollIntoView?.();
+    setSeek(null);
+  }, [all, approvals, seek]);
+
   if (approvals.length === 0) return null;
   const shown = all ? approvals : approvals.slice(0, RECORDS_SHOWN);
 
@@ -715,6 +880,7 @@ export function ApprovalRecords({
         <ApprovalReceipt
           key={approval.decisionId}
           approval={approval}
+          anchoredDecisionIds={anchoredDecisionIds}
           designerGivenName={designerGivenName}
           studioName={studioName}
         />
@@ -738,6 +904,13 @@ export function ApprovalRecords({
 
 export interface ApprovalAskProps {
   approval: ProjectApprovalReview;
+  /**
+   * P-27. The edition this one replaces, when the page holds its row. The
+   * continuation line and the "what changed" block are computed from the two
+   * projections side by side, so without the row there is nothing to compute
+   * and the ask reads exactly as it did before.
+   */
+  predecessor?: ProjectApprovalReview | null;
   /** Told the decision id once this ask's own act lands. */
   onAnswered?: (decisionId: string) => void;
   /** Decision ids that carry an `#approval-<id>` anchor on this page. */
@@ -750,6 +923,7 @@ export interface ApprovalAskProps {
 
 export function ApprovalAsk({
   approval,
+  predecessor = null,
   onAnswered,
   anchoredDecisionIds = [],
   designerGivenName = null,
@@ -903,13 +1077,16 @@ export function ApprovalAsk({
             approval.requiredReviewCount,
           )} reviews confirmed.`;
 
-  const revisions = [
-    { id: approval.predecessorDecisionId, label: 'Review previous edition' },
-    { id: approval.successorDecisionId, label: 'Review revised edition' },
-  ].filter(
-    (row): row is { id: string; label: string } =>
-      !!row.id && anchoredDecisionIds.includes(row.id),
-  );
+  /**
+   * ONE act along the thread, and the forward one wins (P-27).
+   *
+   * Both links used to be drawn, which put "Review previous edition" beside
+   * "Review revised edition" and asked her to pick a direction through her own
+   * history. The revised edition is where the conversation actually is; the
+   * one she answered is behind her, and the continuation line above already
+   * names it.
+   */
+  const forward = revisionAct(approval, anchoredDecisionIds);
 
   async function confirmExactEdition() {
     if (inFlight.current || !canConfirm || approval.authorityRevision === null) return;
@@ -1004,6 +1181,21 @@ export function ApprovalAsk({
     costBaselineCents: baselineCents,
   });
 
+  // P-27. Both are drawn only where the predecessor is in hand AND carries an
+  // answer of hers: "since your last answer" is a false heading over an
+  // edition she never answered, and a continuation line that cannot name the
+  // verb is a line this surface does not write.
+  const answeredBefore =
+    approval.predecessorDecisionId !== null &&
+    predecessor !== null &&
+    predecessor.decisionId === approval.predecessorDecisionId &&
+    predecessor.outcome !== null;
+  const continuation = answeredBefore
+    ? successionLine(approval.artifactVersion, predecessor)
+    : null;
+  const changedSince =
+    answeredBefore && continuation ? whatChangedSince(predecessor, approval) : null;
+
   // `data-never-dim` is spared the Since-Yesterday dim only while something is
   // actually owed on it: a gate she has reviewed and that now waits on the
   // studio owes her nothing, and reads like the other two gates do.
@@ -1031,6 +1223,17 @@ export function ApprovalAsk({
                 ? 'Your approval · read the edition first'
                 : 'Your approval · your answer is needed'}
       </p>
+      {/* P-27. The ask opens by saying what it follows, so the two editions
+          read as one conversation rather than as two asks with a link between
+          them. It never says her earlier answer was undone. */}
+      {continuation && (
+        <p
+          data-testid="approval-continuation"
+          className="mt-1.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {continuation}
+        </p>
+      )}
       <ArtifactPlate approval={approval} />
 
       {/* The ask is a thing someone said, so it is set as one: a pull-quote on
@@ -1112,6 +1315,28 @@ export function ApprovalAsk({
           </p>
         )}
       </div>
+
+      {/* P-27. Beside the weighing, because it is the same reading one step
+          back: what this edition asks, against what the last one asked. */}
+      {changedSince && (
+        <section
+          data-testid="approval-changed-since"
+          aria-labelledby={`approval-changed-${approval.decisionId}`}
+          className="mt-4 max-w-[52ch]"
+        >
+          <h3 id={`approval-changed-${approval.decisionId}`} className={EYEBROW_CLASS}>
+            What changed since your last answer
+          </h3>
+          {changedSince.map((line) => (
+            <p
+              key={line}
+              className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]"
+            >
+              {line}
+            </p>
+          ))}
+        </section>
+      )}
 
       {recordedOutcome && (
         <p className="mt-4">
@@ -1346,24 +1571,18 @@ export function ApprovalAsk({
         </p>
       )}
 
-      {revisions.length > 0 && (
+      {forward && (
         <nav
-          aria-label="Approval revision history"
+          aria-label={`Approval revision history for ${approval.artifactTitle}`}
           data-testid="approval-revisions"
           className="mt-4"
         >
-          <ul className="flex flex-wrap gap-x-6">
-            {revisions.map((row) => (
-              <li key={row.id}>
-                <a
-                  href={`#approval-${row.id}`}
-                  className="inline-flex min-h-11 items-center text-[15px] leading-normal underline"
-                >
-                  {row.label}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <a
+            href={`#approval-${forward.id}`}
+            className="inline-flex min-h-11 items-center text-[15px] leading-normal underline"
+          >
+            {forward.label}
+          </a>
         </nav>
       )}
 
