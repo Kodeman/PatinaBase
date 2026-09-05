@@ -395,3 +395,203 @@ sibling, which the legacy baseline still leaves anon-executable.
 - I overwrote the steward's `stack-reset-notice.md` in the main checkout instead of
   appending to it (it was gitignored, so there is no copy to restore). Its content is
   now this wave's single reset entry.
+
+---
+
+# Close-out (2026-09-05) — the backend fix lane
+
+Worktree `git -C /Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w1-backend
+rev-parse --show-toplevel` → `/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w1-backend`,
+branch `approvals/w1-backend`, base for this pass `3e3b890f8`.
+
+Four commits:
+
+```
+7fc0c5941 fix(edge): the letters a homeowner reads, sentence by sentence (F4-F12)
+fd13b9ebb fix(edge): the sign-off reads the designer's own city first (R3-04)
+4eb12e776 fix(edge): the springboard number moves while the app is closed (R5)
+61da87110 fix(edge): the 48-hour cron returns, it never announces (R3-01)
+```
+
+13 files, all under `supabase/functions/`. No migration minted, no `.env` touched,
+no `deno.lock` created (checked at the repo root and under `supabase/functions/`).
+
+## R3-01 — the cron's register is no longer derived
+
+`decision-reminders/index.ts` passed `notice: announced ? "reminder" : "first"`,
+where `announced` was a `notification_log` read for a prior first notice. The
+close-out ruling removes the branch: the 48-hour cron ALWAYS speaks the reminder
+register, because it fires 48 hours before the due date and can never truthfully
+say the studio just pressed send. Only `decision-first-notice` (00568's
+publish-time trigger) announces.
+
+`firstNoticeAlreadySent` had exactly one caller, so it is deleted from
+`_shared/decision-notify.ts` along with the read it performed. Nothing else
+imported it (`grep -rn firstNoticeAlreadySent supabase/` → the three lines that
+are now gone). No test covered it directly; the register default and the
+two-key dedupe (`decisionLogKey`) are still covered.
+
+The consequence the ruling accepts: a homeowner whose publish-time letter was
+suppressed (quiet hours at the moment of sending, or an approval published
+before 00568) hears only the reminder. She is never silent and never told a
+send happened days after it did.
+
+## R5 / W1R2-m3 — the springboard badge is real
+
+`apns-send/core.ts` `buildApnsPayload(input, badge?)` writes `aps.badge` when it
+is handed a finite, non-negative number, and omits the key otherwise. `index.ts`
+resolves that number once per push:
+
+```ts
+supabase.from("notification_log")
+  .select("id", { count: "exact", head: true })
+  .eq("user_id", userId).eq("channel", "in_app").is("opened_at", null)
+```
+
+Only the `in_app` leg — `notify_client_attention` (00534) writes one `in_app`
+row and one `push` row per event, so counting both would make the icon say
+twice what the bell does. The count is taken only when the push names a
+`user_id` (the explicit-tokens path has nobody to count), and every failure
+path — no user, PostgREST error, a throw — returns `undefined`, so the payload
+omits the key rather than sending 0 and clearing a number that is still true.
+A genuine 0 IS sent: that is the write that clears the badge.
+
+The `count: "exact", head: true` idiom is the repo's own (`price-drop-check`,
+`resend-webhook`, `delete-account`, `lead-expiration-check`,
+`ab-winner-evaluator`). Shape confirmed against the local DB:
+
+```
+select user_id, count(*) filter (where opened_at is null) from notification_log
+ where channel='in_app' group by 1;
+ a0000000-…-004 | 3
+ a0000000-…-005 | 0
+```
+
+`apns-send` therefore joins the deploy set — it is the first change to that
+function since the Arrival Arc.
+
+## R3-04 — the city precedence is the ruling's
+
+`signatureCity(profileCity, orgAddress)` (argument order flipped, so the
+precedence is legible at the call site): `profiles.city` first, then
+`organizations.address->>'city'`, then omitted. `organizations.address` is the
+JSONB the designer portal's branding form writes (`{line1, line2, city, state,
+zip}`); `profiles.city` is the 00013 column nothing writes yet, so in practice
+the fallback is what signs the letter today — and a designer who later states
+her own city out-ranks the studio address, which is what the ruling asks for.
+
+Covered by the file's existing conventions: four pure `signatureCity` cases
+(profile wins, org fallback incl. blank/undefined profile, neither → undefined,
+a non-string `city` on the JSONB is not a city) plus a fourth stub-client
+`resolveStudioSignature` test proving the designer's city out-ranks the org's.
+No DB needed.
+
+## The carried copy defects
+
+| id | was | now |
+|---|---|---|
+| F4 | `kitchen plan set is ready, undefined.` / `Review the undefined` | unknown kind → `is ready for your answer.` / `Review the approval` |
+| F5 | `Leah sent approve the issued set for your approval.` | `Leah sent "approve the issued set" for your approval` — quoted in subject AND body |
+| F6 | `Still open, Your designer asked on…` | `Still open, your designer asked on…`; a real name keeps its capitals; the subject's sentence-initial fallback still reads `Your designer sent …` |
+| F7 | a legacy option choice rendered eyebrow `Approval`, `for your approval`, `Review the approval` | eyebrow `Decision`, `for your decision`, `Review the decision`; only a row carrying a frozen edition says approval |
+| F8 | `Nothing has changed since it was sent.` unconditional | printed only when the artifact was issued no later than the ask (`editionUnchangedSinceSent`); a legacy row — the one `extend_and_reopen_client_decision` moves the date on and wipes the answer from (00399:3595) — never claims it |
+| F9 | `Patina · A workshop for interior designers…` under the studio's sign-off, twice | dropped from client mail in both places; the wordmark stays; designer mail byte-identical (the co-brand baseline snapshot still matches) |
+| F11 | `… for your approval.` / `Thursday: kitchen plan set.` / `Still open: kitchen plan set` | one rule: quoted title, no trailing period, all three letters |
+| F12 | digest linked `…/projects/<p>#approval-<id>`, mail linked `…/decisions/<id>` | both go through `clientDecisionLink`; the digest calls it via `decisionDigestLink` in its own pure-logic module so the agreement is unit-tested |
+
+F7's discriminator is `decision.artifact`: both Stage-2 producers resolve a
+citation or refuse to send, so an artifact-less letter is a legacy row. That is
+the same discriminator the pre-existing "legacy notification rendering remains
+artifact-optional" test already relied on.
+
+F9 is gated on `audience === "client"` inside `renderBrandedShell`, so every
+designer-addressed letter in the repo is unchanged — proven by the committed
+`__snapshots__/branded-shell.baseline.html` still matching byte for byte.
+
+Rendered probes (throwaway `deno run` against the real modules):
+
+```
+FIRST     Leah sent "kitchen plan set" for your approval
+          "kitchen plan set" is ready, exactly as drawn.
+REMINDER  Thursday: "kitchen plan set"
+          "kitchen plan set" is still open and due Thursday. Nothing has changed since it was sent.
+OVERDUE   Still open: "kitchen plan set"
+          Still open, Leah asked on September 28.
+OVERDUE   (no identity) Still open, your designer asked on September 28.
+LEGACY    Leah sent "Rug color — Natural vs Sand" for your decision / Review the decision
+UNMAPPED  Leah sent "kitchen plan set" for your approval / is ready for your answer. / Review the approval
+digest    https://client.patina.cloud/decisions/8abe08ed-…
+tagline present in any client letter: false   ·   "undefined" anywhere: false
+```
+
+## W1R1-m2 / W1R2-m1 — checked, nothing server-side owed
+
+The ruling asks that the opened WRITE mark both legs. It already does, and no
+RPC is in the path:
+
+- `markAllOpened` is a PostgREST PATCH from the iOS client
+  (`NotificationsAPIClient.swift:101`), not an RPC.
+- Every `public` function whose body mentions both `notification_log` and
+  `opened_at` on the local stack is `notify_client_attention` and
+  `get_ab_variant_stats` — both only READ it (`AND n.opened_at IS NULL`,
+  `COUNT(*) FILTER (WHERE log.opened_at IS NOT NULL)`).
+- 00562's policy already scopes the client's own UPDATE to
+  `channel IN ('in_app','push')`, i.e. both legs, with the column grant pinned
+  to `(opened_at, clicked_at, status)`.
+
+So the narrowing is a read-side concern on the client, and the server needs no
+change. Nothing was migrated.
+
+## Gates
+
+```
+deno test --allow-all --config supabase/functions/deno.json supabase/functions/_shared/
+  → ok | 186 passed | 0 failed (2s)          (was 175; +11 new)
+
+deno test … commercial-document-notify/ create-checkout-session/ decision-reminders/
+           digest-dispatcher/ notification-digest/ po-send/ proposal-send/
+           quote-request-send/ spec-pdf/ stripe-webhook/ trade-rfq-send/
+           _tests/apns-send.test.ts
+  → ok | 223 passed | 0 failed (1s)
+
+deno check on all 27 deploy-set entrypoints
+  → 0 errors on 25. campaign-dispatch (10) and digest-dispatcher (5) carry
+    PRE-EXISTING supabase-js generic drift (TS2345 SupabaseClient<any,"public",…>
+    vs never, TS2339 on `never`) in code this lane never touched — left alone,
+    as briefed.
+
+ls deno.lock · ls supabase/functions/deno.lock  → No such file or directory
+git status --porcelain  → clean apart from the sandbox's .env.example read denials
+```
+
+## Deploy set — 27 functions
+
+Recomputed as the transitive closure over relative imports (both quote styles —
+the earlier hand count missed the single-quoted importers) of the three edited
+`_shared` modules (`decision-notify.ts`, `branded-email.ts`,
+`studio-identity.ts`), plus every function directory edited in this pass:
+
+```
+apns-send campaign-dispatch client-invite commercial-document-notify
+create-checkout-session decision-first-notice decision-reminders
+decision-resolved-notify digest-dispatcher expire-decisions fulfillment-notify
+invoice-check-intent invoice-reminders invoice-send morning-brief
+notification-digest notification-dispatch po-send proposal-nudge proposal-send
+proposal-sign-confirmation quote-request-send review-requests spec-pdf
+stripe-webhook trade-rfq-send waitlist-notify
+```
+
+Deltas from round 1's list of 25: **+apns-send** (edited here), **+spec-pdf**
+(imports `studio-identity.ts`, missed before), **+decision-first-notice** (new
+this wave), **−comms-notification-dispatch** (imports only
+`client-portal-links.ts` and `comms-token.ts`, neither edited in this pass).
+
+## Left standing, named
+
+- **F10** (`decision-resolved-notify/index.ts:77` selects a `created_at` its
+  path never reads) was not on the fix list and is untouched.
+- **Digest residue**, still homeowner-facing and still unruled: the subject
+  counts ("2 reminders from Patina") and the section heading "Decisions that
+  need you".
+- The first notice has still never been sent end to end against a served edge
+  runtime; the trigger dispatch and the letter are each proven separately.
