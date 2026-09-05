@@ -153,12 +153,14 @@ export function SpineGate({
         style={{ backgroundColor: `color-mix(in srgb, ${accent} 50%, transparent)` }}
       />
 
-      {/* the kind line takes the phase's ink darkened into legibility — the
-          deck writes gold as #8a6f18 here for exactly this reason */}
-      <p
-        className="type-meta-small"
-        style={{ color: `color-mix(in srgb, ${accent} 52%, var(--color-charcoal))` }}
-      >
+      {/* `W3-03`. The kind line used to take the phase's ink darkened into the
+          charcoal — `color-mix(procurement 52%, charcoal)` composites to
+          #8E7A37, which is 3.40:1 on this block's own `--bg-warm` ground and
+          fails AA at an 11px meta register. The tint is not worth a line the
+          eye has to work at: the line takes the house's body ink (6.9:1 on the
+          same ground), and the phase's colour keeps saying what it says on the
+          two rules and the caps, where contrast is not a legibility question. */}
+      <p data-testid="spine-gate-kind" className="type-meta-small text-[var(--text-body)]">
         {KIND_LINE[variant]}
       </p>
 

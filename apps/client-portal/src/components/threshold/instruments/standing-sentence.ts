@@ -143,6 +143,64 @@ export function countInWords(count: number): string {
   return COUNT_WORDS[whole] ?? String(whole);
 }
 
+const TEEN_WORDS = [
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
+] as const;
+
+const TENS_WORDS = [
+  '',
+  '',
+  'twenty',
+  'thirty',
+  'forty',
+  'fifty',
+  'sixty',
+  'seventy',
+  'eighty',
+  'ninety',
+] as const;
+
+/**
+ * A whole number spelled all the way out — no figure fallback.
+ *
+ * `countInWords` hands over to figures past twelve, which is right for a
+ * standing sentence that has to stay scannable. It is wrong INSIDE one clause:
+ * "the schedule moves out by 14 days, and the lead time shortens by four days"
+ * writes the same quantity in two registers in one breath, which reads as two
+ * voices. So the weighing sentence spells throughout, and this is the speller
+ * it uses.
+ *
+ * Past nine hundred and ninety-nine the words stop being a sentence and become
+ * a paragraph; a lead time that long is a fact, not a phrase, so the figure is
+ * honest there and this returns one.
+ */
+export function wholeNumberInWords(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  const whole = Math.abs(Math.trunc(value));
+  if (whole < 10) return COUNT_WORDS[whole];
+  if (whole < 20) return TEEN_WORDS[whole - 10];
+  if (whole < 100) {
+    const tens = TENS_WORDS[Math.floor(whole / 10)];
+    const units = whole % 10;
+    return units === 0 ? tens : `${tens}-${COUNT_WORDS[units]}`;
+  }
+  if (whole < 1000) {
+    const hundreds = `${COUNT_WORDS[Math.floor(whole / 100)]} hundred`;
+    const rest = whole % 100;
+    return rest === 0 ? hundreds : `${hundreds} and ${wholeNumberInWords(rest)}`;
+  }
+  return String(whole);
+}
+
 /**
  * Money the way the deck prints it — whole dollars, grouped, no cents.
  * $912,500 of cents reads "$9,125".
@@ -378,9 +436,15 @@ function delta(value: number | undefined | null): number {
   return Number.isFinite(value) ? Math.trunc(value as number) : 0;
 }
 
+/**
+ * `W2-n1`. One register, all the way through the clause: this used to hand
+ * over to `countInWords`, which prints figures past twelve, so a thirteen-day
+ * slip and a four-day pull stood in the same sentence as "13 days" and "four
+ * days".
+ */
 function daysInWords(days: number): string {
   const whole = Math.abs(days);
-  return `${countInWords(whole)} ${whole === 1 ? 'day' : 'days'}`;
+  return `${wholeNumberInWords(whole)} ${whole === 1 ? 'day' : 'days'}`;
 }
 
 function costClause(

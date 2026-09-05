@@ -24,6 +24,7 @@ import {
   countInWords,
 } from '@/components/threshold/instruments/standing-sentence';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
+import type { WorkingBudgetVersion } from '@/lib/commercial-documents';
 import { useAuth } from '@/hooks/use-auth';
 import {
   isClientActionableProjectApproval,
@@ -289,6 +290,28 @@ function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
   );
 }
 
+/**
+ * Fail closed: a working budget stands for the edition on the page ONLY when
+ * its id, its version and its evidence fingerprint all match the frozen
+ * artifact. Two readers depend on this — the figures inside the plate, and the
+ * cost baseline the weighing sentence speaks (R11) — so the predicate is one
+ * function and cannot drift between them.
+ */
+export function budgetIsTheEdition(
+  budget: WorkingBudgetVersion | null | undefined,
+  approval: Pick<
+    ProjectApprovalReview,
+    'artifactId' | 'artifactVersion' | 'artifactChecksum'
+  >,
+): budget is WorkingBudgetVersion {
+  return (
+    !!budget &&
+    budget.id === approval.artifactId &&
+    budget.version === approval.artifactVersion &&
+    budget.checkpoint?.evidenceFingerprint === approval.artifactChecksum
+  );
+}
+
 function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
   const workingBudget = useProjectWorkingBudget(approval.projectId);
   const budget = workingBudget.data;
@@ -296,12 +319,7 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
   // behind it. On a phone the breakdown buries the act, so it folds — and only
   // there: at reading width the whole of it stands open with no control at all.
   const [breakdownOpen, setBreakdownOpen] = useState(false);
-  // Fail closed: the figures are shown only when the edition on the page and
-  // the budget the query returned are provably the same document.
-  const matchesArtifact =
-    budget?.id === approval.artifactId &&
-    budget.version === approval.artifactVersion &&
-    budget.checkpoint?.evidenceFingerprint === approval.artifactChecksum;
+  const matchesArtifact = budgetIsTheEdition(budget, approval);
 
   return (
     <div className="mt-4 max-w-[52ch]" data-testid="approval-budget">
@@ -391,6 +409,7 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
 function Discussion({
   decisionId,
   artifactTitle,
+  artifactVersion,
   readOnly = false,
   designerGivenName,
   studioName,
@@ -404,6 +423,14 @@ function Discussion({
    * The edition's own title is what makes this one itself.
    */
   artifactTitle?: string | null;
+  /**
+   * `W3-04`. The title alone is not enough: a returned edition and the
+   * edition that replaced it stand on the same doorstep under the same title,
+   * so two landmarks read identically and axe's `landmark-unique` fails on the
+   * pair. The edition number is what tells them apart — and where there is no
+   * title at all, the decision's own id does.
+   */
+  artifactVersion?: number | null;
   readOnly?: boolean;
   designerGivenName?: string | null;
   studioName?: string | null;
@@ -423,7 +450,11 @@ function Discussion({
   // the accessible name. `aria-label` wins over `aria-labelledby`, which is
   // why the heading keeps its id for the eye and gives up naming the landmark.
   const named = artifactTitle?.trim();
-  const landmarkName = named ? `Discussion about ${named}` : 'The discussion';
+  const landmarkName = named
+    ? typeof artifactVersion === 'number'
+      ? `Discussion about ${named} · Edition ${artifactVersion}`
+      : `Discussion about ${named}`
+    : `Discussion about approval ${decisionId}`;
   const written = (comments.data ?? []) as DecisionComment[];
 
   function post() {
@@ -613,6 +644,7 @@ export function ApprovalReceipt({
           <Discussion
             decisionId={approval.decisionId}
             artifactTitle={approval.artifactTitle}
+            artifactVersion={approval.artifactVersion}
             readOnly
             designerGivenName={designerGivenName}
             studioName={studioName}
@@ -793,6 +825,35 @@ export function ApprovalAsk({
   // with the wrong date is not.
   const stampedAt = parseSourceDate(approval.respondedAt) ?? justAnswered?.at ?? null;
   const chosenAct = OUTCOME_ACTS.find((act) => act.outcome === chosen) ?? null;
+
+  /**
+   * R11's baseline, PRODUCED rather than read off a field no migration
+   * writes. It used to arrive through a cast at `costBaselineCents`, which no
+   * projection has ever carried, so the sentence R11 rules for — "$46,880
+   * becomes $48,120", the figure the delta moves FROM — never once printed.
+   *
+   * Where the artifact IS the budget, the edition's own total is a fact the
+   * surface already holds (the same fail-closed match the plate's figures
+   * stand on), and the total minus the delta the approval declares is the
+   * figure it moved from. Nothing else on the projection can produce one, so
+   * every other artifact kind keeps the delta-only sentence, which is the
+   * honest fallback and not a degraded one.
+   *
+   * Silent at a zero delta: "$48,120 becomes $48,120" is a sentence that says
+   * a thing did not happen twice.
+   */
+  const isBudgetEdition = approval.artifactKind === 'budget_version';
+  const editionBudget = useProjectWorkingBudget(
+    // Disabled for every other kind: the plate does not read a budget for
+    // them either, and a query that cannot produce a baseline should not run.
+    isBudgetEdition ? approval.projectId : '',
+  );
+  const baselineCents =
+    isBudgetEdition &&
+    approval.costCentsDelta !== 0 &&
+    budgetIsTheEdition(editionBudget.data, approval)
+      ? editionBudget.data.targetTotalCents - approval.costCentsDelta
+      : null;
   /** The designer, named where the copy has room for a name. */
   const designer = designerGivenName?.trim() || null;
   /** His one line about this edition, frozen with it, when the row carries one. */
@@ -911,19 +972,11 @@ export function ApprovalAsk({
   // What the edition weighs, spoken once and then printed as figures. The
   // three deltas stand side by side and are never summed (R11), and a delta of
   // zero is said in words rather than left out — she is agreeing to all three.
-  //
-  // The baseline is read through a cast on purpose. `why` and `viewerRole` are
-  // now real fields because 00569 projects them; no migration projects a cost
-  // baseline, so typing one on ProjectApprovalReview would promise a field the
-  // mapper could only ever set to null. A cost delta beside the figure it moves
-  // from is a fact where the delta alone is a fragment, so the composer takes
-  // one the moment a projection carries it — and the cast goes with it.
   const weighing = approvalWeighing({
     costCentsDelta: approval.costCentsDelta,
     scheduleDaysDelta: approval.scheduleDaysDelta,
     leadTimeDaysDelta: approval.leadTimeDaysDelta,
-    costBaselineCents:
-      (approval as { costBaselineCents?: number | null }).costBaselineCents ?? null,
+    costBaselineCents: baselineCents,
   });
 
   // `data-never-dim` is spared the Since-Yesterday dim only while something is
@@ -1291,6 +1344,7 @@ export function ApprovalAsk({
       <Discussion
         decisionId={approval.decisionId}
         artifactTitle={approval.artifactTitle}
+        artifactVersion={approval.artifactVersion}
         designerGivenName={designerGivenName}
         studioName={studioName}
         composerRef={setComposer}

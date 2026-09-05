@@ -7,6 +7,7 @@ import {
   standingSentence,
   standingSubline,
   todayInWords,
+  wholeNumberInWords,
   type StandingSentenceInput,
 } from '../standing-sentence';
 
@@ -277,6 +278,34 @@ describe('moneyInWords', () => {
   });
 });
 
+describe('wholeNumberInWords', () => {
+  it('spells every register the weighing sentence can reach', () => {
+    expect(wholeNumberInWords(0)).toBe('zero');
+    expect(wholeNumberInWords(9)).toBe('nine');
+    expect(wholeNumberInWords(13)).toBe('thirteen');
+    expect(wholeNumberInWords(20)).toBe('twenty');
+    expect(wholeNumberInWords(47)).toBe('forty-seven');
+    expect(wholeNumberInWords(90)).toBe('ninety');
+    expect(wholeNumberInWords(100)).toBe('one hundred');
+    expect(wholeNumberInWords(365)).toBe('three hundred and sixty-five');
+  });
+
+  it('reads a sign or a fraction as the whole count it stands for', () => {
+    expect(wholeNumberInWords(-4)).toBe('four');
+    expect(wholeNumberInWords(4.8)).toBe('four');
+  });
+
+  it('hands back a figure only where the words would stop being a phrase', () => {
+    expect(wholeNumberInWords(1000)).toBe('1000');
+    expect(wholeNumberInWords(Number.NaN)).toBe('0');
+  });
+
+  it('leaves countInWords alone — the standing sentence still turns at twelve', () => {
+    expect(countInWords(12)).toBe('twelve');
+    expect(countInWords(13)).toBe('13');
+  });
+});
+
 describe('approvalWeighing', () => {
   const nothing = { costCentsDelta: 0, scheduleDaysDelta: 0, leadTimeDaysDelta: 0 };
 
@@ -332,16 +361,32 @@ describe('approvalWeighing', () => {
     );
   });
 
-  it('counts one day as a day, and past twelve in figures', () => {
+  it('counts one day as a day, and keeps ONE register past twelve (W2-n1)', () => {
     expect(approvalWeighing({ ...nothing, scheduleDaysDelta: 1 }).sentence).toContain(
       'the schedule moves out by one day',
     );
+    // The sentence used to hand over to figures here, so a thirteen-day slip
+    // and a four-day pull stood in one breath as "13 days" and "four days".
     expect(approvalWeighing({ ...nothing, scheduleDaysDelta: 20 }).sentence).toContain(
-      'the schedule moves out by 20 days',
+      'the schedule moves out by twenty days',
     );
     expect(approvalWeighing({ ...nothing, scheduleDaysDelta: 1 }).ledger).toContain(
       'Schedule +1 day',
     );
+  });
+
+  it('writes no figure into the spoken sentence, whatever the two deltas are', () => {
+    const weighing = approvalWeighing({
+      costCentsDelta: 0,
+      scheduleDaysDelta: 13,
+      leadTimeDaysDelta: -47,
+    });
+    expect(weighing.sentence).toBe(
+      'The cost does not change, the schedule moves out by thirteen days, and the lead time '
+        + 'shortens by forty-seven days.',
+    );
+    // The ledger is the figures' own line and keeps them; the sentence may not.
+    expect(weighing.ledger).toBe('Cost $0 · Schedule +13 days · Lead time −47 days');
   });
 
   it('spends no pigment on a direction', () => {

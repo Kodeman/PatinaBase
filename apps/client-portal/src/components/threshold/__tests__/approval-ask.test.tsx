@@ -251,23 +251,139 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(variants.size).toBe(1);
   });
 
-  it('names the figure the cost moves from when the edition carries a baseline', () => {
+  /**
+   * R11's baseline. It used to be read off `costBaselineCents`, a field no
+   * projection has ever carried, so the sentence never once printed. It is now
+   * PRODUCED: the edition's own budget total, minus the delta the approval
+   * declares, is the figure the cost moves from.
+   */
+  it('names the figure the cost moves from, from the edition’s own budget', () => {
+    budgetHook.mockReturnValue({
+      data: {
+        id: 'budget-9',
+        projectId: 'proj-1',
+        version: 3,
+        state: 'published' as const,
+        currency: 'USD',
+        lowTotalCents: 4_000_000,
+        targetTotalCents: 4_812_000,
+        highTotalCents: 6_000_000,
+        lines: [],
+        checkpoint: {
+          id: 'cp-1',
+          state: 'published' as const,
+          publishedAt: '2026-08-02T12:00:00Z',
+          acknowledgedAt: null,
+          overrideReason: null,
+          evidenceFingerprint: 'a'.repeat(64),
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
     render(
       <ApprovalAsk
-        approval={
-          {
-            ...APPROVAL,
-            costCentsDelta: 124_000,
-            scheduleDaysDelta: 0,
-            leadTimeDaysDelta: 0,
-            costBaselineCents: 4_688_000,
-          } as ProjectApprovalReview
-        }
+        approval={{
+          ...APPROVAL,
+          artifactKind: 'budget_version',
+          artifactId: 'budget-9',
+          costCentsDelta: 124_000,
+          scheduleDaysDelta: 0,
+          leadTimeDaysDelta: 0,
+        }}
       />,
     );
 
     expect(screen.getByTestId('approval-impact-sentence')).toHaveTextContent(
       '$46,880 becomes $48,120',
+    );
+  });
+
+  it('falls back to the delta alone when the budget in hand is not this edition', () => {
+    budgetHook.mockReturnValue({
+      data: {
+        id: 'budget-9',
+        projectId: 'proj-1',
+        // A later working budget than the one the edition froze.
+        version: 4,
+        state: 'published' as const,
+        currency: 'USD',
+        lowTotalCents: 4_000_000,
+        targetTotalCents: 4_812_000,
+        highTotalCents: 6_000_000,
+        lines: [],
+        checkpoint: {
+          id: 'cp-1',
+          state: 'published' as const,
+          publishedAt: '2026-08-02T12:00:00Z',
+          acknowledgedAt: null,
+          overrideReason: null,
+          evidenceFingerprint: 'a'.repeat(64),
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          artifactKind: 'budget_version',
+          artifactId: 'budget-9',
+          costCentsDelta: 124_000,
+          scheduleDaysDelta: 0,
+          leadTimeDaysDelta: 0,
+        }}
+      />,
+    );
+
+    const sentence = screen.getByTestId('approval-impact-sentence');
+    expect(sentence).toHaveTextContent('The cost rises by $1,240');
+    expect(sentence).not.toHaveTextContent('becomes');
+  });
+
+  it('speaks no baseline over a cost that did not move', () => {
+    budgetHook.mockReturnValue({
+      data: {
+        id: 'budget-9',
+        projectId: 'proj-1',
+        version: 3,
+        state: 'published' as const,
+        currency: 'USD',
+        lowTotalCents: 4_000_000,
+        targetTotalCents: 4_812_000,
+        highTotalCents: 6_000_000,
+        lines: [],
+        checkpoint: {
+          id: 'cp-1',
+          state: 'published' as const,
+          publishedAt: '2026-08-02T12:00:00Z',
+          acknowledgedAt: null,
+          overrideReason: null,
+          evidenceFingerprint: 'a'.repeat(64),
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          artifactKind: 'budget_version',
+          artifactId: 'budget-9',
+          costCentsDelta: 0,
+          scheduleDaysDelta: 4,
+          leadTimeDaysDelta: 0,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('approval-impact-sentence')).toHaveTextContent(
+      'The cost does not change',
     );
   });
 
@@ -806,7 +922,12 @@ describe('ApprovalAsk — a budget edition', () => {
   it('reads no budget at all for an edition that is not a budget', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
     expect(screen.queryByTestId('approval-budget')).not.toBeInTheDocument();
-    expect(budgetHook).not.toHaveBeenCalled();
+    // The ask itself asks for the edition's budget to produce R11's baseline,
+    // and hands the read an empty project id on every other kind — which is
+    // how `useProjectWorkingBudget` stays disabled. The plate's own read is
+    // never mounted at all.
+    expect(budgetHook).toHaveBeenCalledWith('');
+    expect(budgetHook).not.toHaveBeenCalledWith('proj-1');
   });
 });
 
@@ -981,13 +1102,50 @@ describe('ApprovalReceipt', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
     const thread = screen.getByTestId('approval-discussion');
-    expect(thread).toHaveAttribute('aria-label', 'Discussion about Library elevations');
+    expect(thread).toHaveAttribute(
+      'aria-label',
+      'Discussion about Library elevations · Edition 3',
+    );
     expect(thread).not.toHaveAttribute('aria-labelledby');
     expect(
-      screen.getByRole('region', { name: 'Discussion about Library elevations' }),
+      screen.getByRole('region', {
+        name: 'Discussion about Library elevations · Edition 3',
+      }),
     ).toBeInTheDocument();
     // The heading a reader sees is unchanged.
     expect(thread).toHaveTextContent('The discussion');
+  });
+
+  /**
+   * `W3-04`. The title alone was not enough. A returned edition and the
+   * edition that replaced it stand on the same doorstep under the same
+   * artifact title, so two landmarks read identically and `landmark-unique`
+   * fails on the pair. The edition number tells them apart.
+   */
+  it('tells two editions of one artifact apart', () => {
+    const { unmount } = render(
+      <ApprovalAsk approval={{ ...APPROVAL, artifactVersion: 2 }} />,
+    );
+    const second = screen
+      .getByTestId('approval-discussion')
+      .getAttribute('aria-label');
+    unmount();
+
+    render(<ApprovalAsk approval={{ ...APPROVAL, artifactVersion: 3 }} />);
+    const third = screen.getByTestId('approval-discussion').getAttribute('aria-label');
+
+    expect(second).toBe('Discussion about Library elevations · Edition 2');
+    expect(third).toBe('Discussion about Library elevations · Edition 3');
+    expect(second).not.toBe(third);
+  });
+
+  it('falls back to the decision id when the edition has no title to name', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, artifactTitle: '' }} />);
+
+    expect(screen.getByTestId('approval-discussion')).toHaveAttribute(
+      'aria-label',
+      'Discussion about approval dec-1',
+    );
   });
 
   it('says nothing about an approval that is still open', () => {
