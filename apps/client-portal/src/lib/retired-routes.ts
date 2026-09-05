@@ -16,14 +16,14 @@
  *    `?invoice=` (the letterbox's contract, shared with
  *    `create-checkout-session`, read by `Letterbox`), `?review=` (the
  *    selection edition `SelectionEditionAsk` opens on), `?proposal=` (read by
- *    `Threshold` to give the `#door` anchor to the paper the mail named);
- *    `?order=` already rides the original query. A decision needs no param:
- *    the ask carries its own element id, so `/decisions/<id>` folds straight
- *    onto `#approval-<id>`.
- *  - `?invoice=` and `?proposal=` also decide WHICH house `/` opens: the
- *    front door resolves the instrument's own project before it falls back to
- *    the house that moved last (`lib/data/active-project.ts`), so mail about
- *    money or a signature cannot land in another house's room.
+ *    `Threshold` to give the `#door` anchor to the paper the mail named),
+ *    `?decision=` (which house the ask belongs to); `?order=` already rides
+ *    the original query.
+ *  - `?invoice=`, `?proposal=` and `?decision=` also decide WHICH house `/`
+ *    opens: the front door resolves the instrument's own project before it
+ *    falls back to the house that moved last (`lib/data/active-project.ts`),
+ *    so mail about money, a signature or an approval cannot land in another
+ *    house's room.
  */
 
 export type ThresholdAnchor =
@@ -106,11 +106,15 @@ export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null 
     // `/decisions/<id>` — the decision is answered on the doorstep, and the
     // ask itself is the anchor: a client with three standing asks must be put
     // in front of the one the mail was about, not at the head of the list.
+    // `?decision=` names WHICH house holds it, for the same reason `?proposal=`
+    // does: `/` on its own opens the house that moved last, which for a
+    // multi-house client is a doorstep the approval is not standing on.
     case 'decisions':
       if (segments.length !== 2) return null;
       return {
         path: '/',
         anchor: ID_SEGMENT.test(second) ? `approval-${second}` : 'doorstep',
+        ...(ID_SEGMENT.test(second) ? { params: { decision: second } } : {}),
       };
 
     // `/proposals/<id>` and `/proposals/<id>/sign` — signing happens at the

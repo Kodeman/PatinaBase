@@ -6,7 +6,7 @@ import { createServerClient } from '@patina/supabase/server';
 
 import { env } from '@/lib/env';
 
-import { resolveActiveHouse } from '../active-project';
+import { resolveActiveHouse, resolveHouseForInstrument } from '../active-project';
 
 jest.mock('server-only', () => ({}), { virtual: true });
 
@@ -185,6 +185,96 @@ describe('resolveActiveHouse — several houses', () => {
     mockEnv.useProjectFixtures = true;
 
     await expect(resolveActiveHouse(['p1', 'p2'])).resolves.toBe('p1');
+    expect(mockCreateServerClient).not.toHaveBeenCalled();
+  });
+});
+
+
+/* ── The house an approval belongs to ───────────────────────────────────────
+   `/decisions/<id>` folds to `/` carrying `?decision=`. `/` on its own opens
+   the house that moved last, so a client with two houses was sent to the wrong
+   doorstep for an approval standing on the other one. A Stage-2 approval is
+   outside the client read model, so its house comes from the sanitized list
+   the doorstep itself is built from; a legacy option choice is an ordinary
+   readable row. ─────────────────────────────────────────────────────────── */
+
+function decisionClient(options: {
+  reviews?: { data: unknown; error?: unknown };
+  legacy?: { data: unknown; error?: unknown };
+}) {
+  const rpc = jest.fn(async () => options.reviews ?? { data: [], error: null });
+  const maybeSingle = jest.fn(async () => options.legacy ?? { data: null, error: null });
+  const from = jest.fn(() => {
+    const chain: Record<string, unknown> = {};
+    chain.select = jest.fn(() => chain);
+    chain.eq = jest.fn(() => chain);
+    chain.in = jest.fn(() => chain);
+    chain.maybeSingle = maybeSingle;
+    return chain;
+  });
+  return { rpc, from, maybeSingle };
+}
+
+describe('resolveHouseForInstrument — the approval names its house', () => {
+  it('reads a Stage-2 approval house from the sanitized list', async () => {
+    const client = decisionClient({
+      reviews: {
+        data: [
+          { decisionId: 'dec-1', projectId: 'p1' },
+          { decisionId: 'dec-9', projectId: 'p2' },
+        ],
+        error: null,
+      },
+    });
+    mockCreateServerClient.mockResolvedValue(client);
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { decisionId: 'dec-9' }),
+    ).resolves.toBe('p2');
+    expect(client.rpc).toHaveBeenCalledWith('list_my_project_decision_reviews');
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it('falls through to the legacy row when the sanitized list does not hold it', async () => {
+    const client = decisionClient({
+      reviews: { data: [], error: null },
+      legacy: { data: { project_id: 'p2' }, error: null },
+    });
+    mockCreateServerClient.mockResolvedValue(client);
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { decisionId: 'dec-9' }),
+    ).resolves.toBe('p2');
+    expect(client.from).toHaveBeenCalledWith('client_decisions');
+  });
+
+  it('never names a house outside the client\'s own list', async () => {
+    const client = decisionClient({
+      reviews: { data: [{ decisionId: 'dec-9', projectId: 'p7' }], error: null },
+    });
+    mockCreateServerClient.mockResolvedValue(client);
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { decisionId: 'dec-9' }),
+    ).resolves.toBeNull();
+  });
+
+  it('leaves the active house standing when nothing resolves the approval', async () => {
+    const client = decisionClient({
+      reviews: { data: [], error: null },
+      legacy: { data: null, error: null },
+    });
+    mockCreateServerClient.mockResolvedValue(client);
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { decisionId: 'dec-9' }),
+    ).resolves.toBeNull();
+  });
+
+  it('reads nothing at all for a client with one house', async () => {
+    await expect(
+      resolveHouseForInstrument(['p1'], { decisionId: 'dec-9' }),
+    ).resolves.toBeNull();
     expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
 });

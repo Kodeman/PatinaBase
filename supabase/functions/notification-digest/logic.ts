@@ -100,6 +100,11 @@ export function decisionDigestTitle(kind: string, title: string): string {
  * door carries (F12). Mail wrote the Universal Link `/decisions/<id>` while the
  * digest hand-wrote a Threshold anchor, so one approval had two addresses in
  * the same inbox — and only one of them opens the iOS app. One builder now.
+ *
+ * The anchor the digest gave up also named the project; the fold recovers that,
+ * carrying `?decision=` so the front door resolves the approval's own house
+ * (`retired-routes.ts`, `lib/data/active-project.ts`) rather than opening the
+ * house that merely moved last.
  */
 export function decisionDigestLink(
   baseUrl: string,

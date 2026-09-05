@@ -164,6 +164,28 @@ describe('the front door', () => {
     expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p2');
   });
 
+  it('opens the house the approval on the address stands on', async () => {
+    // `/decisions/<id>` folds here carrying `?decision=`. A client with two
+    // houses answered the approval standing on the other doorstep otherwise.
+    mockProjects.mockResolvedValue([
+      listItem('p1', 'The Vale Residence'),
+      listItem('p2', 'The Linden house'),
+    ]);
+    mockActiveHouse.mockResolvedValue('p1');
+    mockInstrumentHouse.mockResolvedValue('p2');
+    mockProjectView.mockImplementation(async (id: string) => view(id));
+
+    render(await HomePage({ searchParams: Promise.resolve({ decision: 'dec-9' }) }));
+
+    expect(mockInstrumentHouse).toHaveBeenCalledWith(['p1', 'p2'], {
+      invoiceId: undefined,
+      proposalId: undefined,
+      decisionId: 'dec-9',
+    });
+    expect(mockActiveHouse).not.toHaveBeenCalled();
+    expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p2');
+  });
+
   it('falls back to the active house when the address names no instrument', async () => {
     mockProjects.mockResolvedValue([listItem('p1', 'The Vale Residence')]);
     mockActiveHouse.mockResolvedValue('p1');
