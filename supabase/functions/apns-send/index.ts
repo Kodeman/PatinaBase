@@ -8,7 +8,10 @@
 //
 // Input:  { user_id?, tokens?, title, body, entity_type?, entity_id?,
 //           notification_log_id? }
-// Reads device_push_tokens for user_id unless explicit tokens are passed.
+// Reads device_push_tokens for user_id unless explicit tokens are passed, and
+// — when a user_id is given — counts that user's unread in_app notification_log
+// rows into aps.badge, so the springboard number moves while the app is
+// backgrounded (R5, ruled at the Wave 1 close).
 // Per token: POST to api.push.apple.com or api.sandbox.push.apple.com — host
 // chosen PER TOKEN from its registered environment column (I66: never inferred
 // from build config). Provider auth: ES256 JWT via jose (importPKCS8 + kid
@@ -29,6 +32,7 @@
 // APNS_TEAM_ID, APNS_TOPIC.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { importPKCS8, SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import {
   apnsDeviceUrl,
@@ -40,6 +44,39 @@ import {
   type ResolvedToken,
   resolveTokens,
 } from "./core.ts";
+
+/**
+ * The springboard number (R5): how many in-app notifications this person has
+ * not opened. `notification_log` holds one in_app row and one push row per
+ * event (00534's notify_client_attention writes the pair), so the count is
+ * taken over the in_app leg alone — the same leg the bell reads — or the icon
+ * would say twice what the app does.
+ *
+ * Returns undefined on any failure, and the payload then omits `aps.badge`
+ * rather than sending 0 and clearing a number that is still true.
+ */
+async function unreadInAppBadge(
+  supabase: SupabaseClient,
+  userId: string | null | undefined,
+): Promise<number | undefined> {
+  if (!userId) return undefined;
+  try {
+    const { count, error } = await supabase
+      .from("notification_log")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("channel", "in_app")
+      .is("opened_at", null);
+    if (error || typeof count !== "number") {
+      console.warn("[apns-send] badge count unavailable", error ?? null);
+      return undefined;
+    }
+    return count;
+  } catch (err) {
+    console.warn("[apns-send] badge count threw", err);
+    return undefined;
+  }
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -157,7 +194,8 @@ Deno.serve(async (req) => {
     }
 
     const jwt = await providerJwt(authKey, keyId, teamId);
-    const payload = JSON.stringify(buildApnsPayload(input));
+    const badge = await unreadInAppBadge(supabase, input.user_id);
+    const payload = JSON.stringify(buildApnsPayload(input, badge));
 
     let successes = 0;
     let providerId: string | undefined;

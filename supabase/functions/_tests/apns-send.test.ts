@@ -182,3 +182,46 @@ Deno.test("normalizePkcs8Pem: full PEM with literal \\n escapes (single-line sec
   const singleLineEscaped = FAKE_PEM.split("\n").join("\\n");
   assertEquals(normalizePkcs8Pem(singleLineEscaped), FAKE_PEM);
 });
+
+// ── R5: the springboard number ──────────────────────────────────────────────
+// The home-screen badge is the recipient's unread in-app count, resolved by
+// index.ts and handed to the payload builder. An unreadable count omits the key
+// rather than sending 0 and clearing a number that is still true.
+
+Deno.test("buildApnsPayload carries aps.badge when a count is known (R5)", () => {
+  const payload = buildApnsPayload({
+    title: "An approval is waiting",
+    body: "Leah sent the kitchen plan set.",
+    entity_type: "decision",
+    entity_id: "decision-1",
+  }, 3);
+  assertEquals(payload, {
+    aps: {
+      alert: {
+        title: "An approval is waiting",
+        body: "Leah sent the kitchen plan set.",
+      },
+      sound: "default",
+      badge: 3,
+    },
+    entity_type: "decision",
+    entity_id: "decision-1",
+    notification_log_id: null,
+  });
+});
+
+Deno.test("buildApnsPayload omits aps.badge when the count is unknown (R5)", () => {
+  for (const badge of [undefined, Number.NaN, -1]) {
+    const aps = (buildApnsPayload({ title: "t", body: "b" }, badge) as {
+      aps: Record<string, unknown>;
+    }).aps;
+    assert(!("badge" in aps), `badge should be absent for ${String(badge)}`);
+  }
+});
+
+Deno.test("buildApnsPayload sends a true zero, which clears the badge", () => {
+  const aps = (buildApnsPayload({ title: "t", body: "b" }, 0) as {
+    aps: Record<string, unknown>;
+  }).aps;
+  assertEquals(aps.badge, 0);
+});

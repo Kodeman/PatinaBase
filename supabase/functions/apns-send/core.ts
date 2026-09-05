@@ -56,16 +56,29 @@ export function apnsDeviceUrl(t: ResolvedToken): string {
   return `${apnsHostFor(t.environment)}/3/device/${t.token}`;
 }
 
-/** The push payload: a standard alert + the routing refs the iOS
- *  NotificationRouter expects (mirrors notification_log metadata keys). */
+/**
+ * The push payload: a standard alert + the routing refs the iOS
+ * NotificationRouter expects (mirrors notification_log metadata keys).
+ *
+ * `badge` is the springboard number iOS paints on the app icon while the app is
+ * backgrounded (R5): the recipient's unread in-app count, resolved by the
+ * caller. It is OMITTED, never zeroed, when that count could not be read — an
+ * absent key leaves the badge as it stands, where a 0 would silently clear a
+ * number that is still true.
+ */
 export function buildApnsPayload(
   input: ApnsSendInput,
+  badge?: number,
 ): Record<string, unknown> {
+  const aps: Record<string, unknown> = {
+    alert: { title: input.title, body: input.body },
+    sound: "default",
+  };
+  if (typeof badge === "number" && Number.isFinite(badge) && badge >= 0) {
+    aps.badge = Math.trunc(badge);
+  }
   return {
-    aps: {
-      alert: { title: input.title, body: input.body },
-      sound: "default",
-    },
+    aps,
     entity_type: input.entity_type ?? null,
     entity_id: input.entity_id ?? null,
     notification_log_id: input.notification_log_id ?? null,
