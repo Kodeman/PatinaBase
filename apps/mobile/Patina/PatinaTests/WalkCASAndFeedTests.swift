@@ -205,30 +205,31 @@ struct ApprovalFeedGuardTests {
     /// working copy. It was reaching Today, the Studio hub and the bell as an
     /// ask carrying a DUE DATE — a question that had not been asked, dated.
     ///
-    /// The row itself stays. `needsReviewConfirmation` is the whole of what an
-    /// unpublished row can hold, and a feed row is the only door the phone has
-    /// to it (`AppRoute.decisionDetail` is pushed from a feed row and nowhere
-    /// else; 00534 writes a bell row only on the transition into `pending`) —
-    /// so a published-only feed would take P-09's review confirmation back to
-    /// web-only. What goes is the date and the word "approval".
-    @Test("an unsent draft keeps its row and loses its date")
+    /// Ruled at the Wave 1 close: drafts are excluded from every
+    /// homeowner-facing merge. 00467's projection carries no viewer role, so
+    /// the row a studio co-member was shown as waiting on her was her own
+    /// studio's unissued edition. The cost is that P-09's review confirmation
+    /// is web-only for Wave 1 — `AppRoute.decisionDetail` is pushed from a
+    /// feed row and nowhere else — and the viewer-role field that would let
+    /// the phone carry it is a Wave 2 migration item.
+    @Test("an unsent draft is not a row on any homeowner feed")
     func anUnsentDraftIsNotADatedAsk() throws {
         let unsent = try ProjectApprovalFixture.review(
             lifecycleStatus: "draft", completed: 0, required: 1, sentAt: NSNull()
         )
         #expect(unsent.isPublished == false)
-        #expect(unsent.awaitsClient, "the reading is hers")
+        #expect(unsent.awaitsClient, "the act is hers; the studio has not asked it")
         #expect(unsent.awaitsReadingOnly)
-        let draftRow = try #require(BadgeCountService.mergedDecisions(
+        #expect(unsent.awaitsClientInFeed == false)
+        #expect(BadgeCountService.mergedDecisions(
             pending: [], approvals: [unsent], previous: []
-        )?.first)
-        #expect(draftRow.due_date == nil, "the studio's own plan is not her deadline")
-        #expect(draftRow.isUnissuedApproval)
+        )?.isEmpty == true)
 
         // The published one is untouched: it is an ask, and it keeps its date.
         let published = try ProjectApprovalFixture.review()
         #expect(published.isPublished)
         #expect(published.awaitsReadingOnly == false)
+        #expect(published.awaitsClientInFeed)
         let sentRow = try #require(BadgeCountService.mergedDecisions(
             pending: [], approvals: [published], previous: []
         )?.first)
@@ -236,9 +237,23 @@ struct ApprovalFeedGuardTests {
         #expect(sentRow.isUnissuedApproval == false)
     }
 
+    /// A row this app cached under the build that DID carry drafts arrives
+    /// through `previous` when the projection read fails. It is dropped there
+    /// too, so an upgrade cannot leave one standing on the feed.
+    @Test("a cached unissued row does not survive a failed projection read")
+    func aCachedDraftDoesNotSurviveTheFallback() throws {
+        let cached = try ProjectApprovalFixture.decision(status: "draft")
+        #expect(cached.isUnissuedApproval)
+        let merged = try #require(BadgeCountService.mergedDecisions(
+            pending: [], approvals: nil, previous: [cached]
+        ))
+        #expect(merged.isEmpty)
+    }
+
     /// The two homeowner merges read the same predicate, so they cannot
-    /// disagree about which approvals are hers.
-    @Test("both feeds read one predicate, and it is not the published gate")
+    /// disagree about which approvals are hers — and that predicate carries
+    /// the published gate.
+    @Test("both feeds read one predicate, and it carries the published gate")
     func bothFeedsReadOnePredicate() throws {
         let list = try SourcePin.readCode(
             "Patina/Features/Decisions/ViewModels/DecisionsListViewModel.swift"
@@ -247,10 +262,46 @@ struct ApprovalFeedGuardTests {
             "Patina/Services/Badges/BadgeCountService+Decisions.swift"
         )
         for feed in [list, badges] {
-            #expect(feed.contains("filter(\\.awaitsClient)"))
-            #expect(!feed.contains("isPublished"),
-                    "a feed is back to subtracting the review leg")
+            #expect(feed.contains("filter(\\.awaitsClientInFeed)"))
+            #expect(!feed.contains("filter(\\.awaitsClient)"),
+                    "a feed is back to drawing editions nobody has issued")
         }
+        let client = try SourcePin.readCode(
+            "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
+        )
+        #expect(client.contains("var awaitsClientInFeed: Bool { awaitsClient && isPublished }"))
+    }
+
+    /// `W1R2-M2`: the Studio hub's aggregate names its rows "approvals are
+    /// waiting on you". An unissued edition holds a reading, not an approval,
+    /// so it may not be counted or named there — including the one that
+    /// reaches the builder from an earlier build's cache.
+    @Test("an unissued edition is not counted as an approval waiting on you")
+    func anUnissuedEditionIsNotCountedAsAnApproval() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-09-15T16:00:00Z"))
+        let issued = try ProjectApprovalFixture.review().asWaitingDecision()
+        let unissued = try ProjectApprovalFixture.decision(
+            status: "draft", id: "a0000000-0000-0000-0000-0000000009e3"
+        )
+        let snapshot = StudioQueueBuilder.build(StudioQueueInput(
+            projects: [], decisions: [issued, unissued], proposals: [], invoices: [],
+            documents: [], threads: [], notifications: [],
+            currentUserId: "client", now: now
+        ))
+        let row = try #require(snapshot.section(.awaitingYou).rows
+            .first { $0.id == "awaiting.decisions" })
+        #expect(row.title == "Decision")
+        #expect(row.detail == "Approve the kitchen millwork as drawn?")
+        #expect(!row.detail.contains("Two approvals"))
+
+        // With nothing but the unissued edition there is no aggregate at all.
+        let unissuedOnly = StudioQueueBuilder.build(StudioQueueInput(
+            projects: [], decisions: [unissued], proposals: [], invoices: [],
+            documents: [], threads: [], notifications: [],
+            currentUserId: "client", now: now
+        ))
+        #expect(!unissuedOnly.section(.awaitingYou).rows
+            .contains { $0.id == "awaiting.decisions" })
     }
 
     /// The half of M3 the date alone does not answer: the Record's copy said

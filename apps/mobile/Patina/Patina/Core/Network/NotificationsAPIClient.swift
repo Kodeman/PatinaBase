@@ -45,6 +45,17 @@ public actor NotificationsAPIClient {
     /// event is read once, on both legs (ruled, 2026-09-05).
     static let openedWriteChannelFilter = "in.(in_app,push)"
 
+    /// `W1R2-M3`. The widened write reaches the `push` leg, and the push leg
+    /// is the one that carries DELIVERY state: `notify_client_attention`
+    /// inserts it `queued` (00534:192) and `apns-send` stamps it `delivered`
+    /// or `failed` with an error string. Nothing in 00562's policy stops a
+    /// mark-all from rewriting `failed` to `opened`, which would have the
+    /// record say she read a notice that never arrived — and would hide the
+    /// row from the retry sweep P-28 brings in Wave 3. So the write reaches
+    /// only rows still in flight or delivered; a terminal failure keeps its
+    /// state.
+    static let openedWriteStatusFilter = "in.(queued,sending,delivered,unconfirmed)"
+
     private let baseURL = APIConfiguration.apiURL
     private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
@@ -111,12 +122,14 @@ public actor NotificationsAPIClient {
     /// We don't have a bulk RPC — perform a single PATCH against every unread
     /// row for the user on either delivery leg (`openedWriteChannelFilter`), so
     /// mark-all can neither leave behind a row the list would have shown nor
-    /// leave its push twin unread behind it.
+    /// leave its push twin unread behind it. `openedWriteStatusFilter` keeps
+    /// that widening off a push row whose delivery already failed.
     public func markAllOpened() async throws {
         let url = baseURL.appendingPathComponent("/rest/v1/notification_log")
             .appending(queryItems: [
                 URLQueryItem(name: "opened_at", value: "is.null"),
                 URLQueryItem(name: "channel", value: Self.openedWriteChannelFilter),
+                URLQueryItem(name: "status", value: Self.openedWriteStatusFilter),
             ])
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"

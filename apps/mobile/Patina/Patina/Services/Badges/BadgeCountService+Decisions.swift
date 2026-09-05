@@ -30,10 +30,14 @@ extension BadgeCountService {
     /// rather than blanking a feed the other half answered for. Both failing
     /// is the only nil out, which is what leaves the whole floor standing.
     ///
-    /// `W1R2-M3`, as re-ruled at the close: an UNSENT draft still becomes a
-    /// row — the reading it holds is hers, and a feed row is her only door to
-    /// it — but `asWaitingDecision` withholds the date, so it is no longer
-    /// drawn as an ask the studio has not made.
+    /// `W1R2-M3`, as ruled at the close: an UNSENT draft is not a row here at
+    /// all. It is the studio's own working copy, 00467's projection carries no
+    /// viewer role, and a studio co-member was being shown her own studio's
+    /// unissued editions as things waiting on her. `awaitsClientInFeed` is the
+    /// one predicate both homeowner-facing merges read.
+    ///
+    /// A row this app cached under an earlier build can still arrive through
+    /// `previous`, so that leg drops unissued approvals too.
     ///
     /// `W1R2-M2`: `projects` is what puts the designer's name on the row, so
     /// R8's sentence can say "Leah asked on Sep 4." instead of degrading to
@@ -49,9 +53,9 @@ extension BadgeCountService {
     ) -> [RemoteClientDecision]? {
         guard pending != nil || approvals != nil else { return nil }
         let legacy = pending ?? previous.filter { !$0.isProjectArtifactApproval }
-        let stage2 = approvals?.filter(\.awaitsClient)
+        let stage2 = approvals?.filter(\.awaitsClientInFeed)
             .map { $0.asWaitingDecision(from: projects) }
-            ?? previous.filter(\.isProjectArtifactApproval)
+            ?? previous.filter { $0.isProjectArtifactApproval && !$0.isUnissuedApproval }
         // 00467 hides a Stage-2 row from the homeowner, not from a studio
         // co-member — for whom BOTH reads return it, and a feed carrying one
         // obligation twice draws it twice under one id.

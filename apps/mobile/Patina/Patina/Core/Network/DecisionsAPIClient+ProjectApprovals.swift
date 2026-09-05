@@ -162,17 +162,26 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// hold — `canRespond` demands `pending`, and `publish_client_decision`
     /// sets `status = 'pending'` and `sent_at` in one statement (00464:998,
     /// 1061), so a `pending` row is always sent and a `draft` one never is.
-    /// That equality is why the feed cannot filter on `isPublished`: doing so
-    /// subtracts exactly this leg, and this leg has no other door on the
-    /// phone. `AppRoute.decisionDetail` is pushed from a feed row and from
-    /// nowhere else, and 00534 writes a bell row only on the transition into
-    /// `pending` — so a published-only feed makes P-09's review confirmation
-    /// web-only again, which is the thing P-09 exists to end.
-    ///
-    /// `W1R2-M3` was that this row was drawn as an ask WITH A DUE DATE. That
-    /// is answered where it is drawn — see `asWaitingDecision` — and not by
-    /// dropping the row.
     public var awaitsReadingOnly: Bool { !isPublished && needsReviewConfirmation }
+
+    /// What a homeowner-facing feed carries: an act of hers on an edition the
+    /// studio has actually ISSUED.
+    ///
+    /// `W1R2-M3`, as ruled at the Wave 1 close (`rulings-2026-09-04.md`,
+    /// "Studio co-member in the client app"): drafts are excluded from every
+    /// homeowner-facing merge. An unsent row is the studio's own working copy
+    /// — nothing has been asked of anybody yet — and 00467's projection
+    /// carries no viewer role, so a studio co-member reading her own client
+    /// app was being shown editions her studio had not issued.
+    ///
+    /// The cost is recorded rather than argued away: because
+    /// `awaitsReadingOnly` and `!isPublished` are the same set, this
+    /// subtracts exactly the review-confirmation leg, and
+    /// `AppRoute.decisionDetail` is pushed from a feed row and nowhere else.
+    /// P-09's review confirmation is therefore WEB-ONLY for Wave 1; the
+    /// viewer-role field that would let the phone carry it is a Wave 2
+    /// migration item.
+    public var awaitsClientInFeed: Bool { awaitsClient && isPublished }
 
     /// This approval as a row for the feeds that carry every waiting
     /// obligation: `BadgeCountService.pendingDecisions` (the NEEDS YOU

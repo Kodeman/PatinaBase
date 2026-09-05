@@ -240,7 +240,15 @@ private struct StudioQueueContext {
     init(_ input: StudioQueueInput) {
         let userId = input.currentUserId ?? ThreadListViewModel.currentUserId()
         self.input = input
-        self.pendingDecisions = input.decisions.filter { !$0.isResolved }
+        // `W1R2-M2`: this aggregate names its rows "approvals are waiting on
+        // you". An edition the studio has FROZEN but not issued holds a
+        // reading, not an approval, so counting it here claimed an ask nobody
+        // had made. The feeds exclude it (`awaitsClientInFeed`); a row cached
+        // under an earlier build can still reach this builder, and the noun
+        // has to be right for it too.
+        self.pendingDecisions = input.decisions.filter {
+            !$0.isResolved && !$0.isUnissuedApproval
+        }
         self.pendingProposals = input.proposals.filter {
             $0.isAwaitingSignature(now: input.now)
         }
