@@ -50,6 +50,16 @@ enum BudgetMath {
         return BudgetSummary(billedCents: billed, paidCents: paid, outstandingCents: outstanding)
     }
 
+    /// The screen's headline totals, scoped to exactly what its sections show.
+    /// S11 (studio-invoices program): a studio invoice (`project_id == nil`)
+    /// has no section here yet (see `buildSections`), so it must not count
+    /// toward the headline either — otherwise "Billed $500" appears above
+    /// sections that only add up to $100, with the remaining $400 shown
+    /// nowhere on the screen.
+    static func projectScopedRollup(_ invoices: [RemoteInvoice]) -> BudgetSummary {
+        rollup(invoices.filter { $0.project_id != nil })
+    }
+
     /// Per-milestone display amount: the stored `amount_cents` when positive,
     /// else a percentage of the proposal total (portal fallback).
     static func milestoneAmountCents(_ milestone: RemoteProposalMilestone, totalCents: Int) -> Int {
@@ -218,7 +228,7 @@ final class BudgetViewModel {
 
         let visibleInvoices = (invoices ?? []).filter(BudgetMath.isVisible)
 
-        self.summary = BudgetMath.rollup(invoices ?? [])
+        self.summary = BudgetMath.projectScopedRollup(invoices ?? [])
         self.sections = BudgetMath.buildSections(
             projects: projects ?? [],
             acceptedProposals: acceptedProposals,

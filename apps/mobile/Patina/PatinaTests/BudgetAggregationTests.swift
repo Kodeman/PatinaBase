@@ -233,6 +233,35 @@ struct BudgetAggregationTests {
         #expect(sections.isEmpty)
     }
 
+    /// Round 2: the headline must count exactly what the sections show. A
+    /// studio invoice contributes to neither — the summary card can't display
+    /// money that appears in no section below it.
+    @Test("the headline (projectScopedRollup) equals the sum of the section rollups when a studio invoice is present")
+    func headlineExcludesStudioInvoicesLikeSectionsDo() throws {
+        let projects = [try project(#"{"id":"P1","name":"Loft"}"#)]
+        let visibleInvoices = [
+            try invoice(#"{"id":"invP","project_id":"P1","status":"sent","total_cents":10000,"amount_paid_cents":0}"#),
+            try invoice(#"""
+            {"id":"invS1","project_id":null,"status":"sent","total_cents":40000,"amount_paid_cents":0,
+             "title":"Kitchen consult — ad hoc"}
+            """#)
+        ]
+        let sections = BudgetMath.buildSections(
+            projects: projects,
+            acceptedProposals: [],
+            milestonesByProposal: [:],
+            visibleInvoices: visibleInvoices
+        )
+        let summary = BudgetMath.projectScopedRollup(visibleInvoices)
+        let sectionsTotalBilled = sections.reduce(0) { $0 + $1.rollup.billedCents }
+        #expect(sections.map(\.id) == ["P1"])
+        #expect(summary.billedCents == 10_000)
+        #expect(summary.billedCents == sectionsTotalBilled)
+        // The full 50,000 across both invoices is NOT what the headline shows —
+        // that would be counting money the studio invoice's own section doesn't exist to show.
+        #expect(summary.billedCents != BudgetMath.rollup(visibleInvoices).billedCents)
+    }
+
     // MARK: - Payment terms display
 
     @Test
