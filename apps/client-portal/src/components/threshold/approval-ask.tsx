@@ -13,7 +13,11 @@ import {
   type ProjectApprovalReview,
 } from '@patina/supabase';
 
-import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { HoldAction, ScoredAction } from '@/components/threshold/instruments/scored-action';
+import {
+  SignatureLine,
+  signatureIsComplete,
+} from '@/components/threshold/instruments/signature-line';
 import { Stamp, stampStateForApproval } from '@/components/threshold/instruments/stamp';
 import {
   approvalWeighing,
@@ -675,6 +679,10 @@ export function ApprovalAsk({
   // the web's own asymmetry, and iOS's encouraged composer is the other half.
   const changeNoteComment = useCreateDecisionComment();
   const [changeNote, setChangeNote] = useState('');
+  // The name she signs the outcome with (R1). The RPC keeps the same
+  // two-character floor the signing route does, and refuses a signature that
+  // arrives without a consent method — so the two travel together or not at all.
+  const [signature, setSignature] = useState('');
   const [justAnswered, setJustAnswered] = useState<{
     outcome: ProjectApprovalOutcome;
     at: Date;
@@ -777,6 +785,8 @@ export function ApprovalAsk({
     if (inFlight.current || !canRespond || !chosen) return;
     const note = changeNote.trim();
     if (chosen === 'changes_requested' && note.length === 0) return;
+    const signedByName = signature.trim();
+    if (!signatureIsComplete(signedByName)) return;
     inFlight.current = true;
     setError(null);
     setNotice(null);
@@ -799,6 +809,11 @@ export function ApprovalAsk({
         outcome: chosen,
         expectedUpdatedAt: approval.updatedAt,
         idempotencyKey: crypto.randomUUID(),
+        // 00570 carries the pair through the wrapper into the columns 00117
+        // added. The two travel together: a signature with no method is a
+        // check_violation, by design.
+        clientSignature: signedByName,
+        clientConsentMethod: 'electronic_signature',
       });
       setJustAnswered({ outcome: chosen, at: new Date() });
       onAnswered?.(approval.decisionId);
@@ -945,17 +960,21 @@ export function ApprovalAsk({
 
         {canConfirm && (
           <div className="mt-2.5">
-            <ScoredAction
+            {/* Held, not tapped (R1). The review METHOD is unchanged —
+                `portal_clickthrough`, because a hold is still a click-through
+                — so no migration rides with this one. */}
+            <HoldAction
               actionKey="confirm_project_approval_review"
               regionKey="doorstep"
               surfaceKey="the_threshold"
               variant="primary"
+              verb="confirm this exact edition"
               loading={confirmReview.isPending}
               loadingLabel="Confirming"
-              onClick={confirmExactEdition}
+              onHold={confirmExactEdition}
             >
               Review exact edition
-            </ScoredAction>
+            </HoldAction>
           </div>
         )}
 
@@ -1060,22 +1079,36 @@ export function ApprovalAsk({
                   </p>
                 </div>
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-x-6">
-                <ScoredAction
+              {/* The name, on a rule, dated. An outcome against a frozen
+                  edition is a terminal act, and R1 asks every one of them for
+                  the same two things: a typed legal name and a held gesture. */}
+              <div className="mt-3">
+                <SignatureLine
+                  id={`approval-signature-${approval.decisionId}`}
+                  testId="approval-signature"
+                  value={signature}
+                  onChange={setSignature}
+                  disabled={respond.isPending}
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-6">
+                <HoldAction
                   actionKey={chosenAct.writeKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
                   variant="primary"
+                  verb={chosenAct.label.toLowerCase()}
                   loading={respond.isPending || changeNoteComment.isPending}
                   loadingLabel="Recording response"
                   disabled={
-                    chosenAct.outcome === 'changes_requested' &&
-                    changeNote.trim().length === 0
+                    !signatureIsComplete(signature) ||
+                    (chosenAct.outcome === 'changes_requested' &&
+                      changeNote.trim().length === 0)
                   }
-                  onClick={submitResponse}
+                  onHold={submitResponse}
                 >
                   Submit response
-                </ScoredAction>
+                </HoldAction>
                 <ScoredAction
                   actionKey="cancel_project_approval_response"
                   regionKey="doorstep"

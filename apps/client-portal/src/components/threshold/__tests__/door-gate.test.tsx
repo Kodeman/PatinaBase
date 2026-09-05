@@ -6,6 +6,7 @@ import type { CommercialDocumentKind } from '@patina/types';
 import type { NoteModel, ThresholdMark } from '@/lib/threshold/derive';
 
 import { consentLineFor, signLabelFor } from '../consent-copy';
+import { HOLD_MS } from '../instruments/scored-action';
 
 // ── Boundaries ──────────────────────────────────────────────────────────────
 // The leaf reads one bundle (the paper's own line items) and posts to the
@@ -183,6 +184,26 @@ function signWith(name = 'Harper Vale') {
 
 const signAction = () => screen.getByRole('button', { name: /^Sign/ });
 
+/**
+ * The act is held now, not tapped (P-18): press, wait the hold out, release.
+ * Fake time covers the hold itself and is handed back before the signature
+ * request's promises are flushed, so the swing timers stay real.
+ */
+async function holdSign({ faked = false } = {}) {
+  const target = signAction();
+  if (!faked) jest.useFakeTimers();
+  fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+  act(() => {
+    jest.advanceTimersByTime(HOLD_MS);
+  });
+  // A test that installed its own fake clock keeps it: the swing and the
+  // receipt's crossfade are what it came to measure.
+  if (!faked) jest.useRealTimers();
+  await act(async () => {
+    fireEvent.pointerUp(target);
+  });
+}
+
 describe('DoorGate', () => {
   beforeEach(() => {
     bundleMock.mockReturnValue(bundleFor('furnishings_authorization'));
@@ -276,14 +297,77 @@ describe('DoorGate', () => {
     expect(screen.getByTestId('door-hint')).toHaveTextContent('could not be drawn');
   });
 
+  it('signs on a ruled line with the date beside it, and says so once', () => {
+    renderGate();
+
+    const rule = screen.getByTestId('door-sign-name');
+    expect(rule).toHaveAttribute('autocomplete', 'name');
+    expect(screen.getByLabelText('Type your full name')).toBe(rule);
+    expect(screen.getByTestId('door-sign-name-date')).toHaveClass('font-mono');
+
+    // The electronic-signature sentence lives on the rule now. It is printed
+    // ONCE on the paper: the hint below the act no longer repeats it.
+    const notice = screen.getAllByText(
+      'Your typed name acts as your electronic signature.',
+    );
+    expect(notice).toHaveLength(1);
+    expect(notice[0]).toBe(screen.getByTestId('door-sign-name-notice'));
+    expect(screen.getByTestId('door-hint')).toHaveTextContent(
+      'Type your full name and tick the line to sign.',
+    );
+  });
+
+  it('takes the signature on a hold, never on a tap', async () => {
+    renderGate();
+    signWith();
+
+    fireEvent.click(signAction());
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    // Released before the hold is out: nothing is signed, and nothing is said.
+    jest.useFakeTimers();
+    fireEvent.pointerDown(signAction(), { clientX: 4, clientY: 4 });
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS - 1);
+    });
+    fireEvent.pointerUp(signAction());
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS * 2);
+    });
+    jest.useRealTimers();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await holdSign();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the gesture, and docks the act on a narrow viewport', () => {
+    const { container } = renderGate();
+
+    const said = signAction().getAttribute('aria-describedby');
+    expect(said).toBeTruthy();
+    expect(container.textContent).toContain('Press and hold to sign.');
+
+    // The primary act docks. (The clearance the other four answers are given
+    // at the same width is pinned in door-acts.test.tsx, which renders the
+    // real component rather than this file's stub.)
+    const dock = container.querySelector('[data-hold-dock]');
+    expect(dock).toHaveClass('max-[600px]:sticky');
+    expect(dock).toHaveClass('max-[600px]:bottom-0');
+    // It sits on the leaf, not inside the gate — sticky needs room to travel.
+    expect(screen.getByTestId('spine-gate-act')).not.toContainElement(
+      dock as HTMLElement,
+    );
+    expect(screen.getByTestId('door-leaf')).toContainElement(dock as HTMLElement);
+  });
+
   it('replaces the leaf with a one-line lintel receipt on signing (reduced motion)', async () => {
     const onSigned = jest.fn();
     renderGate({ onSigned });
 
     signWith();
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign();
 
     await waitFor(() => {
       expect(screen.queryByTestId('door-leaf')).not.toBeInTheDocument();
@@ -319,9 +403,7 @@ describe('DoorGate', () => {
   it('takes the acts away with the leaf once it opens on her name', async () => {
     renderGate();
     signWith();
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign();
     await waitFor(() => {
       expect(screen.queryByTestId('door-acts-stub')).not.toBeInTheDocument();
     });
@@ -373,9 +455,7 @@ describe('DoorGate', () => {
   it('stops claiming never-dim once it has been signed', async () => {
     const { container } = renderGate();
     signWith();
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign();
     await waitFor(() => {
       expect(container.querySelector('section')).not.toHaveAttribute('data-never-dim');
     });
@@ -394,9 +474,7 @@ describe('DoorGate', () => {
     // Shut: no ceiling at all, so nothing clips the leaf at rest.
     expect(screen.getByTestId('door-way').style.maxHeight).toBe('');
 
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign({ faked: true });
 
     // Pinned to the measured height, and the leaf is mid-swing.
     expect(screen.getByTestId('door-way').style.maxHeight).toBe('480px');
@@ -427,9 +505,7 @@ describe('DoorGate', () => {
     renderGate();
     signWith();
 
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign({ faked: true });
     expect(screen.getByTestId('door-receipt')).toHaveStyle({ opacity: '0' });
 
     act(() => {
@@ -450,9 +526,7 @@ describe('DoorGate', () => {
     renderGate();
 
     signWith();
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign();
 
     expect(screen.getByTestId('door-delivery-pending')).toHaveTextContent(
       'Your signature remains recorded, but confirmation delivery is still pending. You can retry safely.',
@@ -471,9 +545,7 @@ describe('DoorGate', () => {
   it('says nothing about delivery when it was delivered', async () => {
     renderGate();
     signWith();
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign();
     expect(screen.queryByTestId('door-delivery-pending')).not.toBeInTheDocument();
   });
 
@@ -489,9 +561,7 @@ describe('DoorGate', () => {
     renderGate();
 
     signWith();
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign();
 
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent(fragment);
@@ -506,9 +576,7 @@ describe('DoorGate', () => {
     renderGate();
 
     signWith();
-    await act(async () => {
-      fireEvent.click(signAction());
-    });
+    await holdSign();
 
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByTestId('door-leaf')).toBeInTheDocument();

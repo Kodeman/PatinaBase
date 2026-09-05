@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 
@@ -31,12 +37,30 @@ import {
 } from "@patina/supabase";
 import { useAuth } from "@/hooks/use-auth";
 
+import { HOLD_MS } from "../instruments/scored-action";
 import {
   MyScopeChangeRequestsAsk,
   PendingScopeChangeAsk,
   RequestChangeAct,
   ResolvedScopeChangesPrevious,
 } from "../scope-change-ask";
+
+/**
+ * Approving a change is held, not tapped (P-18). Fake time covers the hold and
+ * is handed back before the mutation's callbacks are flushed.
+ */
+async function holdApprove() {
+  const target = screen.getByTestId("scope-change-approve");
+  jest.useFakeTimers();
+  fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+  act(() => {
+    jest.advanceTimersByTime(HOLD_MS);
+  });
+  jest.useRealTimers();
+  await act(async () => {
+    fireEvent.pointerUp(target);
+  });
+}
 
 const scopeMock = useScopeChangeRequests as jest.Mock;
 const approveMock = useApproveScopeChange as jest.Mock;
@@ -207,17 +231,17 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
     );
     expect(screen.getByTestId("scope-change-approve")).toBeEnabled();
 
-    await userEvent.click(screen.getByTestId("scope-change-approve"));
+    await holdApprove();
     expect(mutate).toHaveBeenCalledWith(
       { requestId: "sc-1", projectId: PROJECT_ID, approvedByName: "Whit Vale" },
       expect.any(Object),
     );
   });
 
-  it("sends one approval however fast the two clicks land", () => {
-    // Approve binds a signature and a budget change. `ScoredAction`'s own
-    // `unavailable` only takes effect on the NEXT render, so two clicks in one
-    // tick both read it false.
+  it("sends one approval however fast the second hold lands", () => {
+    // Approve binds a signature and a budget change. `HoldAction`'s own
+    // `unavailable` only takes effect on the NEXT render, so a second hold
+    // begun before the first has settled still reads it false.
     const mutate = jest.fn();
     approveMock.mockReturnValue({ mutate, isPending: false });
     scopeMock.mockReturnValue({ data: [STUDIO_CHANGE], isLoading: false });
@@ -227,8 +251,15 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
       target: { value: "Whit Vale" },
     });
     const approve = screen.getByTestId("scope-change-approve");
-    fireEvent.click(approve);
-    fireEvent.click(approve);
+    jest.useFakeTimers();
+    for (const _pass of [0, 1]) {
+      fireEvent.pointerDown(approve, { clientX: 4, clientY: 4 });
+      act(() => {
+        jest.advanceTimersByTime(HOLD_MS);
+      });
+      fireEvent.pointerUp(approve);
+    }
+    jest.useRealTimers();
 
     expect(mutate).toHaveBeenCalledTimes(1);
   });
@@ -243,12 +274,42 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
       screen.getByTestId("scope-change-sign-name"),
       "Whit Vale",
     );
-    await userEvent.click(screen.getByTestId("scope-change-approve"));
+    await holdApprove();
 
     await waitFor(() =>
       expect(screen.getByTestId("scope-change-resolved")).toBeInTheDocument(),
     );
     expect(screen.getByText(/^Approved /)).toBeInTheDocument();
+  });
+
+  it("signs the change on a ruled line, dated, and holds the act (P-18)", async () => {
+    const mutate = jest.fn();
+    approveMock.mockReturnValue({ mutate, isPending: false });
+    scopeMock.mockReturnValue({ data: [STUDIO_CHANGE], isLoading: false });
+    wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
+
+    const rule = screen.getByTestId("scope-change-sign-name");
+    expect(rule).toHaveAttribute("autocomplete", "name");
+    expect(screen.getByLabelText("Type your full name")).toBe(rule);
+    expect(screen.getByTestId("scope-change-sign-name-date")).toHaveClass("font-mono");
+    expect(screen.getByTestId("scope-change-sign-name-notice")).toHaveTextContent(
+      "Your typed name acts as your electronic signature.",
+    );
+
+    // One character is not a name; the act stays unarmed on it.
+    fireEvent.change(rule, { target: { value: "W" } });
+    expect(screen.getByTestId("scope-change-approve")).toBeDisabled();
+
+    fireEvent.change(rule, { target: { value: "Whit Vale" } });
+    const target = screen.getByTestId("scope-change-approve");
+    expect(target).toBeEnabled();
+
+    // A tap is not the act.
+    fireEvent.click(target);
+    expect(mutate).not.toHaveBeenCalled();
+
+    await holdApprove();
+    expect(mutate).toHaveBeenCalledTimes(1);
   });
 
   it("declines with an optional reason", async () => {

@@ -54,6 +54,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
 
+import { HOLD_MS } from '../instruments/scored-action';
 import {
   ApprovalAsk,
   ApprovalReceipt,
@@ -107,19 +108,51 @@ const APPROVAL: ProjectApprovalReview = {
   updatedAt: '2026-08-12T12:00:00Z',
 };
 
-/** Choose an outcome, then submit it — the two beats an outcome now takes. */
-async function answer(name: RegExp) {
-  fireEvent.click(screen.getByRole('button', { name }));
-  fireEvent.click(await screen.findByRole('button', { name: /submit response/i }));
+/**
+ * A terminal act is HELD, not tapped (P-18). Fake time covers the hold itself
+ * and is handed back before the act's own promises are flushed, so the
+ * mutations settle on the real clock the rest of the file waits on.
+ */
+async function hold(target: HTMLElement) {
+  jest.useFakeTimers();
+  fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+  act(() => {
+    jest.advanceTimersByTime(HOLD_MS);
+  });
+  jest.useRealTimers();
+  await act(async () => {
+    fireEvent.pointerUp(target);
+  });
 }
 
-/** Returning takes a third beat: the note the designer needs (R10). */
+/** The typed legal name every outcome now carries (R1). */
+function sign(name = 'Harper Vale') {
+  fireEvent.change(screen.getByTestId('approval-signature'), {
+    target: { value: name },
+  });
+}
+
+/** Choose an outcome, sign it, hold the submit — the beats an outcome takes. */
+async function answer(name: RegExp) {
+  fireEvent.click(screen.getByRole('button', { name }));
+  await screen.findByTestId('approval-signature');
+  sign();
+  await hold(screen.getByRole('button', { name: /submit response/i }));
+}
+
+/** Returning takes one more beat: the note the designer needs (R10). */
 async function returnEdition(note = 'The runner is too dark for the stair hall.') {
   fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
   fireEvent.change(await screen.findByTestId('approval-change-note'), {
     target: { value: note },
   });
-  fireEvent.click(screen.getByRole('button', { name: /submit response/i }));
+  sign();
+  await hold(screen.getByRole('button', { name: /submit response/i }));
+}
+
+/** Re-submitting after a refusal: the note and the name are already there. */
+async function submitAgain() {
+  await hold(screen.getByRole('button', { name: /submit response/i }));
 }
 
 // jsdom's Crypto has no `randomUUID`, so it is lent for the test and handed
@@ -273,19 +306,24 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(respondMutate).not.toHaveBeenCalled();
   });
 
-  it('approves with the payload the old detail page sent, then stamps in place', async () => {
+  it('approves with the payload the old detail page sent, plus her name, then stamps in place', async () => {
     const onAnswered = jest.fn();
     render(<ApprovalAsk approval={APPROVAL} onAnswered={onAnswered} />);
 
     await answer(/^approve$/i);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+    // The old page's payload exactly, with the typed legal name and its
+    // consent method beside it (R1). `respond_project_approval` carries the
+    // pair from 00570 onward and writes the 00117 consent columns with it.
     expect(respondMutate).toHaveBeenCalledWith({
       projectId: 'proj-1',
       decisionId: 'dec-1',
       outcome: 'approved',
       expectedUpdatedAt: '2026-08-12T12:00:00Z',
       idempotencyKey: 'request-key-1',
+      clientSignature: 'Harper Vale',
+      clientConsentMethod: 'electronic_signature',
     });
 
     const stamp = await screen.findByTestId('approval-stamp');
@@ -369,7 +407,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
       'Your approval · read the edition first',
     );
-    fireEvent.click(screen.getByRole('button', { name: /review exact edition/i }));
+    await hold(screen.getByRole('button', { name: /review exact edition/i }));
 
     await waitFor(() => expect(confirmMutate).toHaveBeenCalledTimes(1));
     expect(confirmMutate).toHaveBeenCalledWith({
@@ -395,7 +433,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /review exact edition/i }));
+    await hold(screen.getByRole('button', { name: /review exact edition/i }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
@@ -1028,13 +1066,14 @@ describe('the ask in the house’s vocabulary', () => {
     expect(screen.getByLabelText('Tell your designer what to change.')).toBeInTheDocument();
   });
 
-  it('records nothing while the note is only whitespace', () => {
+  it('records nothing while the note is only whitespace', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
     fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
     fireEvent.change(screen.getByTestId('approval-change-note'), { target: { value: '   ' } });
 
+    sign();
     expect(screen.getByRole('button', { name: /submit response/i })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: /submit response/i }));
+    await hold(screen.getByRole('button', { name: /submit response/i }));
     expect(respondMutate).not.toHaveBeenCalled();
     expect(commentMutateAsync).not.toHaveBeenCalled();
   });
@@ -1078,7 +1117,7 @@ describe('the ask in the house’s vocabulary', () => {
     );
     expect(commentMutateAsync).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /submit response/i }));
+    await submitAgain();
 
     // The note reached the thread on the first press. The retry records the
     // outcome and leaves the thread alone — the designer reads it once.
@@ -1096,7 +1135,7 @@ describe('the ask in the house’s vocabulary', () => {
     fireEvent.change(screen.getByTestId('approval-change-note'), {
       target: { value: 'The runner is too dark, and the sconces sit low.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /submit response/i }));
+    await submitAgain();
 
     await waitFor(() => expect(commentMutateAsync).toHaveBeenCalledTimes(2));
     expect(commentMutateAsync.mock.calls[1][0]).toEqual({
@@ -1110,11 +1149,13 @@ describe('the ask in the house’s vocabulary', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
     expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
+    sign();
     expect(screen.getByRole('button', { name: /submit response/i })).not.toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: /choose another outcome/i }));
     fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
     expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
+    sign();
     expect(screen.getByRole('button', { name: /submit response/i })).not.toBeDisabled();
   });
 
@@ -1285,5 +1326,95 @@ describe('who is speaking, and who answers', () => {
   it('says it only where an answer is hers to give', () => {
     render(<ApprovalAsk approval={AWAITING} />);
     expect(screen.queryByTestId('approval-who-answers')).not.toBeInTheDocument();
+  });
+});
+
+describe('the outcome is signed and held (P-18)', () => {
+  it('draws the ruled line, dated, once an outcome is chosen', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+
+    const rule = screen.getByTestId('approval-signature');
+    expect(rule).toHaveAttribute('autocomplete', 'name');
+    expect(screen.getByLabelText('Type your full name')).toBe(rule);
+    expect(screen.getByTestId('approval-signature-notice')).toHaveTextContent(
+      'Your typed name acts as your electronic signature.',
+    );
+    expect(screen.getByTestId('approval-signature-date')).toHaveClass('font-mono');
+  });
+
+  it('leaves the submit unheld until there is a name to hold it with', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+
+    const submit = screen.getByRole('button', { name: /submit response/i });
+    expect(submit).toBeDisabled();
+
+    sign('H');
+    expect(submit).toBeDisabled();
+
+    sign('  ');
+    expect(submit).toBeDisabled();
+    await hold(submit);
+    expect(respondMutate).not.toHaveBeenCalled();
+
+    sign('Harper Vale');
+    expect(submit).not.toBeDisabled();
+  });
+
+  it('records nothing on a tap, and only on a hold held to its length', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    sign();
+
+    const submit = screen.getByRole('button', { name: /submit response/i });
+    fireEvent.click(submit);
+    expect(respondMutate).not.toHaveBeenCalled();
+
+    jest.useFakeTimers();
+    fireEvent.pointerDown(submit, { clientX: 4, clientY: 4 });
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS - 1);
+    });
+    fireEvent.pointerUp(submit);
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS * 2);
+    });
+    jest.useRealTimers();
+    expect(respondMutate).not.toHaveBeenCalled();
+
+    await hold(submit);
+    await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+  });
+
+  it('carries her name on a return as well as on an approval', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    await returnEdition('The runner is too dark for the stair hall.');
+
+    await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+    expect(respondMutate.mock.calls[0][0]).toMatchObject({
+      outcome: 'changes_requested',
+      clientSignature: 'Harper Vale',
+      clientConsentMethod: 'electronic_signature',
+    });
+  });
+
+  it('names the gesture on both held acts, and asks no signature of the review', async () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 }} />);
+
+    const confirm = screen.getByRole('button', { name: /review exact edition/i });
+    const said = confirm.getAttribute('aria-describedby');
+    expect(document.getElementById(said as string)).toHaveTextContent(
+      'Press and hold to confirm this exact edition.',
+    );
+    // R1: a hold is still a click-through, so nothing is signed here.
+    expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
+
+    await hold(confirm);
+    await waitFor(() => expect(confirmMutate).toHaveBeenCalledTimes(1));
+    expect(confirmMutate.mock.calls[0][0]).not.toHaveProperty('clientSignature');
   });
 });
