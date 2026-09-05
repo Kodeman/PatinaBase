@@ -250,7 +250,7 @@ export function buildInvoiceOverdueNoticeEmail(
       ) +
       reminderFacts(params) +
       paragraph(
-        `When you have a moment, please settle the balance so the project can keep moving without interruption.`,
+        `When you have a moment, please settle the balance so the work can carry on without interruption.`,
       ) +
       muted(
         `<em>If payment is already on its way, thank you — no further action is needed.</em>`,
@@ -321,7 +321,7 @@ export function buildInvoiceFinalNoticeEmail(
       paragraph(
         `Immediate payment is required. The outstanding balance has been flagged for direct follow-up by ${escapeHtml(
           params.designerName,
-        )}, and continued non-payment may pause work on the project.`,
+        )}, and continued non-payment may pause work already under way.`,
       ),
     params.portalUrl,
     "Pay invoice immediately",

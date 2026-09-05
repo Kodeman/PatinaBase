@@ -152,3 +152,25 @@ Deno.test("studio invoice: a title with markup in it is escaped, never rendered"
   assertStringIncludes(html, "&lt;b&gt;Retainer&lt;/b&gt;");
   assert(!html.includes("<b>Retainer</b>"), "the title was rendered as markup");
 });
+
+Deno.test("studio invoice: no rung of the reminder ladder invents a house", () => {
+  const params: InvoiceReminderEmailParams = { ...PARAMS, projectName: STUDIO_TITLE };
+  const ladder: Array<[string, { subject: string; html: string }]> = [
+    ["upcoming", buildInvoiceUpcomingReminderEmail(params)],
+    ["still open", buildInvoiceOverdueNoticeEmail(params)],
+    ["second notice", buildInvoiceSecondNoticeEmail(params)],
+    ["final notice", buildInvoiceFinalNoticeEmail(params)],
+  ];
+  for (const [name, { subject, html }] of ladder) {
+    // The shell's client footer carries a "Your project" nav link on every
+    // letter Patina sends; it is chrome, not this letter's prose, and changing
+    // it would rewrite every client email in the repo.
+    const prose = `${subject}\n${html}`
+      .replace(/Your project<\/a>/g, "")
+      .toLowerCase();
+    assert(
+      !prose.includes("project"),
+      `the ${name} letter tells a studio-invoice reader about a project`,
+    );
+  }
+});

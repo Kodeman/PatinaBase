@@ -87,9 +87,9 @@ Deno.test("studioDisplayName: falls back when the resolver name is null/blank", 
 
 // ── The studio arm: an invoice with no house ────────────────────────────────
 // A studio invoice carries no project, so the only letterhead it can brand with
-// is its own studio's. The RPC gained p_studio_id for exactly that, and it must
-// be named ONLY when the caller has one — a two-argument call is what every
-// project-bound caller has always sent.
+// is its own studio's. The RPC gained p_studio_id for exactly that, and every
+// call names it — null included — so the call binds one signature and can never
+// be answered with 42725 "function is not unique".
 
 /** Captures the exact argument object handed to the RPC. */
 function rpcSpy(row: Record<string, unknown> | null) {
@@ -128,7 +128,7 @@ Deno.test("resolveStudioIdentity: a studio invoice brands by its own studio", as
   assertEquals(identity?.source, "studio");
 });
 
-Deno.test("resolveStudioIdentity: no studio given → the two-argument call is unchanged", async () => {
+Deno.test("resolveStudioIdentity: no studio given → p_studio_id is still named, null", async () => {
   const { client, calls } = rpcSpy(STUDIO_ROW);
   await resolveStudioIdentity(
     client as unknown as Parameters<typeof resolveStudioIdentity>[0],
@@ -138,7 +138,64 @@ Deno.test("resolveStudioIdentity: no studio given → the two-argument call is u
     name: "resolve_studio_identity",
     p_project_id: "p1",
     p_designer_id: "d1",
+    p_studio_id: null,
   }]);
+});
+
+/** Answers the first call with PostgREST's "no such function", then succeeds. */
+function rpcSpyMissingFirst(row: Record<string, unknown>) {
+  const calls: Array<Record<string, unknown>> = [];
+  const client = {
+    rpc: (name: string, args: Record<string, unknown>) => {
+      calls.push({ name, ...args });
+      if (calls.length === 1) {
+        return Promise.resolve({
+          data: null,
+          error: {
+            code: "PGRST202",
+            message:
+              "Could not find the function public.resolve_studio_identity(p_designer_id, p_project_id, p_studio_id) in the schema cache",
+          },
+        });
+      }
+      return Promise.resolve({ data: [row], error: null });
+    },
+  };
+  return { client, calls };
+}
+
+Deno.test("resolveStudioIdentity: a project caller still brands against the pre-00570 RPC", async () => {
+  const { client, calls } = rpcSpyMissingFirst(STUDIO_ROW);
+  const identity = await resolveStudioIdentity(
+    client as unknown as Parameters<typeof resolveStudioIdentity>[0],
+    { projectId: "p1", designerId: "d1" },
+  );
+  assertEquals(calls, [
+    {
+      name: "resolve_studio_identity",
+      p_project_id: "p1",
+      p_designer_id: "d1",
+      p_studio_id: null,
+    },
+    {
+      name: "resolve_studio_identity",
+      p_project_id: "p1",
+      p_designer_id: "d1",
+    },
+  ]);
+  assertEquals(identity?.name, "Middle West Studio");
+});
+
+Deno.test("resolveStudioIdentity: a studio caller does NOT retry two-argument", async () => {
+  const { client, calls } = rpcSpyMissingFirst(STUDIO_ROW);
+  const identity = await resolveStudioIdentity(
+    client as unknown as Parameters<typeof resolveStudioIdentity>[0],
+    { projectId: null, designerId: "d1", studioId: "s1" },
+  );
+  // The two-argument RPC would answer with the designer's primary studio, which
+  // is the wrong letterhead for a two-studio designer — better no brand at all.
+  assertEquals(calls.length, 1);
+  assertEquals(identity, null);
 });
 
 Deno.test("resolveStudioIdentity: studio alone is anchor enough", async () => {
@@ -147,7 +204,12 @@ Deno.test("resolveStudioIdentity: studio alone is anchor enough", async () => {
     client as unknown as Parameters<typeof resolveStudioIdentity>[0],
     { studioId: "s1" },
   );
-  assertEquals(calls.length, 1);
+  assertEquals(calls, [{
+    name: "resolve_studio_identity",
+    p_project_id: null,
+    p_designer_id: null,
+    p_studio_id: "s1",
+  }]);
   assertEquals(identity?.name, "Middle West Studio");
 });
 

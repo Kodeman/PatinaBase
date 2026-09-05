@@ -52,13 +52,22 @@ export async function resolveStudioIdentity(
     const args: Record<string, string | null> = {
       p_project_id: projectId,
       p_designer_id: designerId,
+      p_studio_id: studioId,
     };
-    // p_studio_id is named ONLY when the caller holds one. PostgREST resolves an
-    // RPC by the argument names it is sent, and the third argument is DEFAULT
-    // NULL — so a two-argument call keeps resolving exactly as it did before the
-    // studio arm existed.
-    if (studioId) args.p_studio_id = studioId;
-    const { data, error } = await admin.rpc("resolve_studio_identity", args);
+    // p_studio_id is ALWAYS named, so the call binds exactly one signature by
+    // argument name. A two-argument call would match BOTH the pre-00570
+    // function and the three-argument one if a deploy ever left them side by
+    // side, and Postgres answers that with 42725 — an error this wrapper
+    // swallows as "no brand", i.e. silent letterhead loss.
+    let { data, error } = await admin.rpc("resolve_studio_identity", args);
+    if (
+      error && (error as { code?: string }).code === "PGRST202" && !studioId
+    ) {
+      // Deployed ahead of 00570 the RPC still takes two arguments; a caller
+      // with no studio to name gets the same row from either signature.
+      delete args.p_studio_id;
+      ({ data, error } = await admin.rpc("resolve_studio_identity", args));
+    }
     if (error) {
       console.error("resolveStudioIdentity: rpc error", error.message);
       return null;
