@@ -195,11 +195,14 @@ function parseInvoiceCheckoutReceipt(value: unknown): InvoiceCheckoutReceipt {
 
 export interface Invoice {
   id: string;
-  project_id: string;
+  /** NULL on a studio invoice — the invoice with no house (00570, ruling S1). */
+  project_id: string | null;
   studio_id: string;
   designer_id: string;
   client_id: string | null;
   invoice_number: string | null;
+  /** The regarding line of a studio invoice (S12); NULL on a project invoice. */
+  title: string | null;
   status: InvoiceStatus;
   issue_date: string | null;
   due_date: string | null;
@@ -264,6 +267,20 @@ export interface CreateDraftInvoiceInput {
   paymentTermsDays?: number;
   memo?: string;
   internalNotes?: string;
+  lines: DraftLineInput[];
+}
+
+export interface CreateDraftStudioInvoiceInput {
+  /** The household the studio is billing: a profiles.id on a studio member's roster. */
+  clientId: string;
+  /** The studio drawing the invoice — named, never derived (ruling S8). */
+  studioId: string;
+  /** The regarding line, required (ruling S12). */
+  title: string;
+  taxRate?: number;
+  paymentTermsDays?: number;
+  memo?: string;
+  /** Ad-hoc lines only (ruling S6); the RPC refuses every other kind. */
   lines: DraftLineInput[];
 }
 
@@ -468,6 +485,27 @@ export function useProjectInvoices(projectId: string | null | undefined) {
       return (data ?? []) as Invoice[];
     },
     enabled: !!projectId,
+  });
+}
+
+/**
+ * Every invoice the signed-in household may read, project-bound and studio
+ * alike. Unscoped on purpose: RLS decides (00178's project-keyed client
+ * policies plus 00570's household policies), so a studio invoice — which has
+ * no project to filter on — arrives here and nowhere else. Drafts never do.
+ */
+export function useClientInvoices() {
+  return useQuery({
+    queryKey: ['invoices', 'client'],
+    queryFn: async () => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*, line_items:invoice_line_items(*)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Invoice[];
+    },
   });
 }
 
@@ -721,6 +759,65 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (invoice) => {
       invalidateInvoiceEffects(queryClient, invoice.project_id);
+    },
+  });
+}
+
+/**
+ * Creates a draft studio invoice — the invoice with no house (00570). Same
+ * atomic boundary as useCreateDraftInvoice, minus the project: the RPC
+ * resolves the household on a studio member's designer_clients roster, stamps
+ * that member as the invoice designer, and refuses anything but ad-hoc lines.
+ *
+ * `{ errorSurface: 'inline' }` — see useSendInvoice (R83).
+ */
+export function useCreateDraftStudioInvoice(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async (input: CreateDraftStudioInvoiceInput): Promise<string> => {
+      const supabase = getSupabase() as any;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const lines = input.lines.map((line, index) => {
+        const row = buildLineRow('', line, index);
+        return {
+          kind: 'adhoc',
+          description: row.description,
+          quantity: row.quantity,
+          unit_amount_cents: row.unit_amount_cents,
+          metadata: row.metadata,
+          sort_order: row.sort_order,
+        };
+      });
+
+      const { data: invoiceId, error } = await supabase.rpc(
+        'create_draft_studio_invoice',
+        {
+          p_client_id: input.clientId,
+          p_studio_id: input.studioId,
+          p_title: input.title,
+          p_tax_rate: input.taxRate ?? 0,
+          p_payment_terms_days: input.paymentTermsDays ?? 15,
+          p_memo: input.memo ?? null,
+          p_lines: lines,
+        }
+      );
+      if (error) {
+        throw new Error(
+          `Failed to create draft studio invoice: ${error.message ?? String(error)}`
+        );
+      }
+
+      return invoiceId as string;
+    },
+    onSuccess: () => {
+      invalidateInvoiceEffects(queryClient, null);
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
     },
   });
 }

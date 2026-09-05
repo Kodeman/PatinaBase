@@ -30,6 +30,8 @@ import {
   useFfeInvoiceCoverage,
   buildLineRow,
   useCreateDraftInvoice,
+  useCreateDraftStudioInvoice,
+  useClientInvoices,
   useUpdateDraftInvoice,
   useUpsertLineItems,
   useDeleteLineItem,
@@ -40,6 +42,7 @@ import {
   useRecordPayment,
   useVoidInvoice,
   type CreateDraftInvoiceInput,
+  type CreateDraftStudioInvoiceInput,
   type DraftLineInput,
   type FfeInvoiceCoverageMap,
   InvoiceCheckoutError,
@@ -480,6 +483,143 @@ describe('useCreateDraftInvoice', () => {
         ],
       })
     );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useCreateDraftStudioInvoice + useClientInvoices — the invoice with no house
+// (migration 00570)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useCreateDraftStudioInvoice', () => {
+  type StudioCreateConfig = {
+    mutationFn: (input: CreateDraftStudioInvoiceInput) => Promise<unknown>;
+  };
+
+  const input: CreateDraftStudioInvoiceInput = {
+    clientId: 'household-a',
+    studioId: 'studio-a',
+    title: 'Design consultation, September',
+    lines: [
+      { description: 'Consultation', quantity: 2, unitAmountCents: 25000 },
+    ],
+  };
+
+  beforeEach(() => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'member-a' } },
+    });
+  });
+
+  it('names the studio and the household directly and sends only ad-hoc lines', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: 'studio-invoice-a', error: null });
+
+    const config = useCreateDraftStudioInvoice() as unknown as StudioCreateConfig;
+    const id = await config.mutationFn(input);
+
+    expect(id).toBe('studio-invoice-a');
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('create_draft_studio_invoice', {
+      p_client_id: 'household-a',
+      p_studio_id: 'studio-a',
+      p_title: 'Design consultation, September',
+      p_tax_rate: 0,
+      p_payment_terms_days: 15,
+      p_memo: null,
+      p_lines: [
+        {
+          kind: 'adhoc',
+          description: 'Consultation',
+          quantity: 2,
+          unit_amount_cents: 25000,
+          metadata: {},
+          sort_order: 0,
+        },
+      ],
+    });
+  });
+
+  it('forces kind adhoc even when the caller names another kind', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: 'studio-invoice-b', error: null });
+
+    const config = useCreateDraftStudioInvoice() as unknown as StudioCreateConfig;
+    await config.mutationFn({
+      ...input,
+      lines: [
+        {
+          kind: 'milestone',
+          milestoneId: 'milestone-a',
+          description: 'Deposit',
+          quantity: 1,
+          unitAmountCents: 25000,
+        },
+      ],
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith(
+      'create_draft_studio_invoice',
+      expect.objectContaining({
+        p_lines: [
+          {
+            kind: 'adhoc',
+            description: 'Deposit',
+            quantity: 1,
+            unit_amount_cents: 25000,
+            metadata: {},
+            sort_order: 0,
+          },
+        ],
+      })
+    );
+  });
+
+  it('surfaces the RPC failure verbatim', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: null,
+      error: { message: 'invalid studio invoice payload' },
+    });
+
+    const config = useCreateDraftStudioInvoice() as unknown as StudioCreateConfig;
+    await expect(config.mutationFn(input)).rejects.toThrow(
+      'Failed to create draft studio invoice: invalid studio invoice payload'
+    );
+  });
+
+  it('invalidates the invoice lists and the document state, with no project key', () => {
+    const config = useCreateDraftStudioInvoice() as unknown as {
+      onSuccess: () => void;
+    };
+    config.onSuccess();
+
+    const keys = invalidatedKeys();
+    expect(keys).toContainEqual(['invoices']);
+    expect(keys).toContainEqual(['document-state']);
+    expect(keys).toContainEqual(['ffe-invoice-coverage']);
+    expect(keys.every((key) => key[0] !== 'projects')).toBe(true);
+  });
+});
+
+describe('useClientInvoices', () => {
+  it('reads every invoice RLS lets the household see, unscoped by project', async () => {
+    const order = vi.fn().mockResolvedValue({
+      data: [{ id: 'studio-invoice-a', project_id: null, title: 'Consultation' }],
+      error: null,
+    });
+    const select = vi.fn(() => ({ order }));
+    supabaseClient.from.mockReturnValue({ select });
+
+    const config = useClientInvoices() as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown>;
+    };
+    expect(config.queryKey).toEqual(['invoices', 'client']);
+
+    const rows = await config.queryFn();
+    expect(supabaseClient.from).toHaveBeenCalledWith('invoices');
+    expect(select).toHaveBeenCalledWith('*, line_items:invoice_line_items(*)');
+    expect(rows).toEqual([
+      { id: 'studio-invoice-a', project_id: null, title: 'Consultation' },
+    ]);
   });
 });
 
