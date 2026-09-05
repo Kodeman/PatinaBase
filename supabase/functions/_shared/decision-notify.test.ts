@@ -9,7 +9,10 @@ import {
   type DecisionContext,
   decisionLogKey,
   decisionNotificationMetadata,
+  decisionReleaseSentence,
+  receiptOutcomeWord,
   renderDecisionEmail,
+  renderDecisionReceiptEmail,
 } from "./decision-notify.ts";
 
 // The letters below assert the addresses a homeowner actually reads, so the
@@ -595,4 +598,171 @@ Deno.test("the client letters carry no Patina tagline under the studio's name (F
   // The designer's own letter is untouched.
   const resolved = renderDecisionEmail("decision_resolved", "Leah", STAGE2);
   assertStringIncludes(resolved.html, "A workshop for interior designers");
+});
+
+// ── P-13. The designer's one-line why ──────────────────────────────────────
+
+const WHY = "The island moved a foot; everything else is as we drew it.";
+const WITH_WHY: DecisionContext = {
+  ...STAGE2,
+  artifact: { ...STAGE2.artifact!, why: WHY },
+};
+
+Deno.test("the why rides the first notice, the reminder and the overdue letter (P-13)", () => {
+  const letters = [
+    renderDecisionEmail("decision_required", "Anne", {
+      ...WITH_WHY,
+      notice: "first",
+    }, STUDIO),
+    renderDecisionEmail("decision_required", "Anne", {
+      ...WITH_WHY,
+      notice: "reminder",
+    }, STUDIO),
+    renderDecisionEmail("decision_overdue", "Anne", WITH_WHY, STUDIO),
+  ];
+  for (const letter of letters) {
+    assertStringIncludes(letter.html, WHY);
+    // The note's own attribution, not the studio signature at the foot: the
+    // sign-off reads "— Leah, Middle West Studio" and would match a looser pin.
+    assertStringIncludes(letter.html, ">&mdash; Leah</p>");
+  }
+});
+
+Deno.test("the why is attributed to a person, or to nobody — never to 'Your designer'", () => {
+  const studioOnly = renderDecisionEmail("decision_required", "Anne", {
+    ...WITH_WHY,
+    notice: "first",
+  }, { studioName: "Middle West Studio" });
+  assertStringIncludes(studioOnly.html, ">&mdash; Middle West Studio</p>");
+
+  const anonymous = renderDecisionEmail("decision_required", "Anne", {
+    ...WITH_WHY,
+    notice: "first",
+  }, {});
+  assertStringIncludes(anonymous.html, WHY);
+  assert(
+    !anonymous.html.includes("&mdash;"),
+    "an unattributed note is signed by nobody, not by a placeholder",
+  );
+});
+
+Deno.test("an approval with no why carries no note and no dangling attribution", () => {
+  for (
+    const decision of [
+      { ...STAGE2, notice: "first" as const },
+      { ...STAGE2, notice: "reminder" as const },
+    ]
+  ) {
+    const rendered = renderDecisionEmail(
+      "decision_required",
+      "Anne",
+      decision,
+      STUDIO,
+    );
+    assert(!rendered.html.includes(">&mdash; Leah</p>"));
+    assert(!rendered.html.includes("&ldquo;"), "no empty quotation is drawn");
+  }
+  const overdue = renderDecisionEmail("decision_overdue", "Anne", STAGE2, STUDIO);
+  assert(!overdue.html.includes(">&mdash; Leah</p>"));
+  assert(!overdue.html.includes("&ldquo;"));
+});
+
+Deno.test("the why is escaped, never injected", () => {
+  const rendered = renderDecisionEmail("decision_required", "Anne", {
+    ...STAGE2,
+    notice: "first",
+    artifact: { ...STAGE2.artifact!, why: "<b>not</b> markup" },
+  }, STUDIO);
+  assertStringIncludes(rendered.html, "&lt;b&gt;not&lt;/b&gt; markup");
+  assert(!rendered.html.includes("<b>not</b> markup"));
+});
+
+// ── P-20. The approval receipt ─────────────────────────────────────────────
+
+const RECEIPT_BASE = {
+  ...STAGE2,
+  outcome: "approved",
+};
+
+Deno.test("changes_requested is RETURNED, never Declined (P-16 vocabulary)", () => {
+  assertEquals(receiptOutcomeWord("approved"), "approved");
+  assertEquals(receiptOutcomeWord("changes_requested"), "returned");
+  assertEquals(receiptOutcomeWord("needs_discussion"), "held");
+  assertEquals(receiptOutcomeWord("declined"), null);
+  assertEquals(receiptOutcomeWord(null), null);
+});
+
+Deno.test("the receipt names what the answer released (R9)", () => {
+  const rendered = renderDecisionReceiptEmail("Anne", {
+    ...RECEIPT_BASE,
+    releasedItems: ["the cabinet order"],
+  }, STUDIO);
+  assertEquals(rendered.subject, 'You approved "Client <issued> set".');
+  assertStringIncludes(rendered.html, "It releases the cabinet order.");
+  assertStringIncludes(rendered.html, "https://client.patina.cloud/decisions/decision-1");
+  assert(!rendered.html.includes("Approve"), "the act is never re-offered");
+  assert(!rendered.html.includes("Sign"));
+});
+
+Deno.test("the receipt claims no consequence when there is none (R9)", () => {
+  for (
+    const decision of [
+      { ...RECEIPT_BASE, releasedItems: [] },
+      { ...RECEIPT_BASE, outcome: "changes_requested", releasedItems: [] },
+      { ...RECEIPT_BASE, outcome: "needs_discussion" },
+    ]
+  ) {
+    const rendered = renderDecisionReceiptEmail("Anne", decision, STUDIO);
+    assertStringIncludes(rendered.html, "Your answer is on the record.");
+    assert(!rendered.html.includes("It releases"));
+  }
+  assertEquals(
+    renderDecisionReceiptEmail("Anne", {
+      ...RECEIPT_BASE,
+      outcome: "changes_requested",
+    }, STUDIO).subject,
+    'You returned "Client <issued> set".',
+  );
+  assertEquals(
+    renderDecisionReceiptEmail("Anne", {
+      ...RECEIPT_BASE,
+      outcome: "needs_discussion",
+    }, STUDIO).subject,
+    'You held "Client <issued> set".',
+  );
+});
+
+Deno.test("the release sentence names one or two pieces and counts the rest in words", () => {
+  assertEquals(decisionReleaseSentence([]), "Your answer is on the record.");
+  assertEquals(decisionReleaseSentence(["the cabinet order"]), "It releases the cabinet order.");
+  assertEquals(
+    decisionReleaseSentence(["the cabinet order", "the island stone"]),
+    "It releases the cabinet order and the island stone.",
+  );
+  assertEquals(
+    decisionReleaseSentence(["a", "b", "c"]),
+    "It releases three pieces that were waiting on it.",
+  );
+  assertEquals(
+    decisionReleaseSentence(Array.from({ length: 20 }, (_, i) => `p${i}`)),
+    "It releases twenty pieces that were waiting on it.",
+  );
+  assertEquals(
+    decisionReleaseSentence(Array.from({ length: 21 }, (_, i) => `p${i}`)),
+    "It releases the pieces that were waiting on it.",
+  );
+  // Blank names are not pieces.
+  assertEquals(decisionReleaseSentence(["  ", ""]), "Your answer is on the record.");
+});
+
+Deno.test("the receipt is signed by the studio and escapes the title", () => {
+  const rendered = renderDecisionReceiptEmail("Anne", RECEIPT_BASE, STUDIO);
+  assertStringIncludes(rendered.html, "Leah");
+  assertStringIncludes(rendered.html, "Middle West Studio");
+  assertStringIncludes(rendered.html, "Client &lt;issued&gt; set");
+  assert(!rendered.html.includes("<strong style=\"color:#1F1B16; font-weight:600;\">Client <issued>"));
+  assert(
+    !rendered.html.includes("A workshop for interior designers"),
+    "the studio signs the homeowner's receipt; Patina does not pitch under it",
+  );
 });

@@ -122,6 +122,68 @@ export function collapsedBadgeCount(rows: BadgeRow[]): number {
 }
 
 /**
+ * The notification category the lock screen looks up for its actions (P-22).
+ * Derived from the entity the row already names — no producer passes it, and
+ * none needs to. An entity the app has no category for gets none: iOS then
+ * draws the plain banner, which is exactly the graceful degradation the
+ * proposal asks for.
+ */
+const ENTITY_CATEGORY: Record<string, string> = {
+  decision: "PATINA_DECISION",
+  proposal: "PATINA_PROPOSAL",
+  invoice: "PATINA_INVOICE",
+};
+
+export function apnsCategoryFor(
+  entityType: string | null | undefined,
+): string | null {
+  if (typeof entityType !== "string") return null;
+  return ENTITY_CATEGORY[entityType] ?? null;
+}
+
+/**
+ * One thread per thing (P-22): `decision-<id>`, `proposal-<id>`,
+ * `invoice-<id>`. iOS groups a thread's notifications together, and the same
+ * string is sent as `apns-collapse-id` so a reminder REPLACES the notice it
+ * repeats instead of stacking a second copy of the same ask on the lock
+ * screen.
+ *
+ * APNs caps `apns-collapse-id` at 64 bytes and rejects the request outright
+ * past it, so an over-long id yields no thread rather than a failed push. An
+ * entity with no id has nothing to thread on.
+ */
+export function apnsThreadId(input: ApnsSendInput): string | null {
+  const entityType = input.entity_type;
+  const entityId = input.entity_id;
+  if (typeof entityType !== "string" || !entityType) return null;
+  if (typeof entityId !== "string" || !entityId) return null;
+  const id = `${entityType}-${entityId}`;
+  return new TextEncoder().encode(id).length <= 64 ? id : null;
+}
+
+/**
+ * The request headers for one device send. `apns-collapse-id` is the thread id
+ * (P-22) and is omitted when there is none — an empty collapse id is not the
+ * same as no collapse id, and APNs treats "" as a real (shared) bucket.
+ */
+export function buildApnsHeaders(
+  input: ApnsSendInput,
+  topic: string,
+  jwt: string,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    authorization: `bearer ${jwt}`,
+    "apns-topic": topic,
+    "apns-push-type": "alert",
+    "apns-priority": "10",
+    "content-type": "application/json",
+  };
+  const thread = apnsThreadId(input);
+  if (thread) headers["apns-collapse-id"] = thread;
+  return headers;
+}
+
+/**
  * The push payload: a standard alert + the routing refs the iOS
  * NotificationRouter expects (mirrors notification_log metadata keys).
  *
@@ -130,6 +192,17 @@ export function collapsedBadgeCount(rows: BadgeRow[]): number {
  * entity key, resolved by the caller. It is OMITTED, never zeroed, when that
  * count could not be read — an absent key leaves the badge as it stands, where
  * a 0 would silently clear a number that is still true.
+ *
+ * P-22 adds three keys, all derived from what the row already carries:
+ *  - `category` — which action set the lock screen offers (Open / Ask a
+ *    question; never Approve or Sign).
+ *  - `thread-id` — one thread per thing, matching `apns-collapse-id`.
+ *  - `interruption-level: "active"` — the notice wakes the screen and is
+ *    never `time-sensitive`. A homeowner's approval is not an emergency, and
+ *    time-sensitive would break through a Focus the studio was not invited into.
+ *
+ * The Notification Service Extension is deferred by ruling, so there is no
+ * `mutable-content` and no attachment key here.
  */
 export function buildApnsPayload(
   input: ApnsSendInput,
@@ -138,10 +211,15 @@ export function buildApnsPayload(
   const aps: Record<string, unknown> = {
     alert: { title: input.title, body: input.body },
     sound: "default",
+    "interruption-level": "active",
   };
   if (typeof badge === "number" && Number.isFinite(badge) && badge >= 0) {
     aps.badge = Math.trunc(badge);
   }
+  const category = apnsCategoryFor(input.entity_type);
+  if (category) aps.category = category;
+  const thread = apnsThreadId(input);
+  if (thread) aps["thread-id"] = thread;
   return {
     aps,
     entity_type: input.entity_type ?? null,

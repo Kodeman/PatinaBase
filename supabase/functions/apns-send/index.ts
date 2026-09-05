@@ -41,6 +41,7 @@ import {
   type ApnsSendInput,
   type BadgeRow,
   bearerRole,
+  buildApnsHeaders,
   buildApnsPayload,
   collapsedBadgeCount,
   isDeadTokenResponse,
@@ -235,13 +236,7 @@ Deno.serve(async (req) => {
       try {
         const res = await fetch(apnsDeviceUrl(target), {
           method: "POST",
-          headers: {
-            authorization: `bearer ${jwt}`,
-            "apns-topic": topic,
-            "apns-push-type": "alert",
-            "apns-priority": "10",
-            "content-type": "application/json",
-          },
+          headers: buildApnsHeaders(input, topic, jwt),
           body: payload,
         });
 

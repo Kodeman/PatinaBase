@@ -21,6 +21,8 @@ Deno.test("Stage-2 evidence resolves the immutable artifact citation", () => {
       checksum: CHECKSUM,
       title: "Issued construction set",
       issuedAt: "2026-09-28T14:00:00Z",
+      // P-13 (00569). An artifact composed without a why carries none.
+      why: null,
     },
   );
 });
@@ -39,6 +41,7 @@ Deno.test("an edition with no issue stamp cites no date", () => {
       checksum: CHECKSUM,
       title: "Issued construction set",
       issuedAt: null,
+      why: null,
     },
   );
 });
@@ -83,6 +86,30 @@ Deno.test("frozen lead evidence fails closed on profile mismatch", () => {
         email: "other@example.test",
       },
     }),
+    null,
+  );
+});
+
+Deno.test("the designer's one-line why rides the citation, blank-trimmed (P-13)", () => {
+  assertEquals(
+    resolveApprovalArtifactCitation({
+      source_kind: "plan_issue",
+      source_version: 7,
+      artifact_hash: CHECKSUM,
+      artifact_title: "Issued construction set",
+      created_at: "2026-09-28T14:00:00Z",
+      why: "The island moved a foot.",
+    })?.why,
+    "The island moved a foot.",
+  );
+  assertEquals(
+    resolveApprovalArtifactCitation({
+      source_kind: "plan_issue",
+      source_version: 7,
+      artifact_hash: CHECKSUM,
+      artifact_title: "Issued construction set",
+      why: "   ",
+    })?.why,
     null,
   );
 });

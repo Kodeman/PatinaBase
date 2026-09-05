@@ -9,6 +9,8 @@ export interface EmbeddedApprovalArtifact {
   artifact_hash: string | null;
   artifact_title: string | null;
   created_at?: string | null;
+  /** P-13: the designer's frozen one-line why (00569). */
+  why?: string | null;
 }
 
 export interface EmbeddedAuthoritySnapshot {
@@ -58,6 +60,7 @@ export function resolveApprovalArtifactCitation(
     checksum: artifact.artifact_hash,
     title: artifact.artifact_title,
     issuedAt: artifact.created_at ?? null,
+    why: artifact.why?.trim() ? artifact.why : null,
   };
 }
 

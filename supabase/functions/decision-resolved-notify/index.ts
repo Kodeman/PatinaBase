@@ -23,10 +23,16 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { deliverDecisionNotification } from "../_shared/decision-notify.ts";
+import {
+  deliverDecisionNotification,
+  deliverDecisionReceipt,
+  resolveDecisionSignature,
+} from "../_shared/decision-notify.ts";
 import {
   type EmbeddedApprovalArtifact,
+  type EmbeddedAuthoritySnapshot,
   resolveApprovalArtifactCitation,
+  resolveFrozenLeadRecipient,
 } from "../_shared/project-approval-notification.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -37,10 +43,16 @@ interface ResolvedDecision {
   title: string;
   due_date: string | null;
   designer_id: string | null;
+  project_id: string | null;
+  answer: string | null;
   approval_contract: string | null;
   approval_artifact:
     | EmbeddedApprovalArtifact
     | EmbeddedApprovalArtifact[]
+    | null;
+  authority_snapshot:
+    | EmbeddedAuthoritySnapshot
+    | EmbeddedAuthoritySnapshot[]
     | null;
   designer: {
     id: string | null;
@@ -72,9 +84,13 @@ Deno.serve(async (req: Request) => {
   const { data, error } = await supabase
     .from("client_decisions")
     .select(`
-      id, title, due_date, designer_id, approval_contract,
+      id, title, due_date, designer_id, project_id, answer, approval_contract,
       approval_artifact:project_approval_artifacts(
-        source_kind, source_version, artifact_hash, artifact_title, created_at
+        source_kind, source_version, artifact_hash, artifact_title, created_at, why
+      ),
+      authority_snapshot:project_decision_authority_snapshots(
+        decision_lead_id,
+        decision_lead:profiles!decision_lead_id(id, full_name, email)
       ),
       designer:profiles!designer_id(id, full_name, email)
     `)
@@ -130,6 +146,71 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // ── P-20. The client's receipt ─────────────────────────────────────────
+  //
+  // The bell row and the push envelope are already written, synchronously,
+  // inside _respond_project_approval_checked (00569). This is the email leg,
+  // and it exists only for a Stage-2 approval: a legacy option choice has no
+  // frozen lead to address and no released work to name.
+  //
+  // The consequence clause reads the names the response froze into its own
+  // immutable `responded` receipt — the update that released those pieces
+  // cleared the link they could otherwise be found through.
+  let receipt: { sent: boolean; skipped: boolean; reason: string | null } = {
+    sent: false,
+    skipped: true,
+    reason: "not_stage2",
+  };
+  const frozenRecipient = artifact
+    ? resolveFrozenLeadRecipient(decision.authority_snapshot)
+    : null;
+  if (artifact && frozenRecipient) {
+    const { data: actionReceipt } = await supabase
+      .from("project_approval_action_receipts")
+      .select("result")
+      .eq("decision_id", decision.id)
+      .eq("action_kind", "responded")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const frozen = (actionReceipt?.result ?? {}) as Record<string, unknown>;
+    const releasedItems = Array.isArray(frozen.releasedItemNames)
+      ? (frozen.releasedItemNames as unknown[]).filter(
+        (name): name is string => typeof name === "string",
+      )
+      : [];
+
+    const clientSignature = await resolveDecisionSignature(supabase, {
+      projectId: decision.project_id,
+      designerId: decision.designer_id,
+    });
+    const receiptResult = await deliverDecisionReceipt(
+      supabase,
+      {
+        id: decision.id,
+        title: decision.title,
+        dueDate: decision.due_date,
+        artifact,
+        outcome: decision.answer,
+        releasedItems,
+      },
+      frozenRecipient,
+      clientSignature,
+    );
+    receipt = {
+      sent: receiptResult.emailSent,
+      skipped: receiptResult.emailSkipped,
+      reason: receiptResult.reason ?? null,
+    };
+    if (receipt.skipped && receipt.reason && receipt.reason !== "already_sent") {
+      console.warn(
+        "decision-resolved-notify: receipt skipped",
+        decision.id,
+        receipt.reason,
+      );
+    }
+  }
+
   return new Response(
     JSON.stringify({
       decision_id: decision.id,
@@ -137,6 +218,9 @@ Deno.serve(async (req: Request) => {
       email_sent: result.emailSent,
       email_skipped: result.emailSkipped,
       reason: result.reason ?? null,
+      receipt_sent: receipt.sent,
+      receipt_skipped: receipt.skipped,
+      receipt_reason: receipt.reason,
     }),
     { headers: { "Content-Type": "application/json" } },
   );
