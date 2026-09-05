@@ -592,3 +592,209 @@ nothing": disabled with no name, still disabled on one character, armed on "Harp
 - `pnpm --filter @patina/client-portal type-check` → `tsc --noEmit`, no output, exit 0.
 - `pnpm --filter @patina/client-portal test` → **Test Suites: 119 passed, 119 total; Tests: 1654
   passed, 1654 total** (1650 before the pass; +4 net — five added, one replaced in place).
+
+---
+
+# Fix pass, round 2 (stage B) — 2026-09-05
+
+Continuation after the usage-limit stop. Worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-web`, branch `approvals/w2-web`,
+stage boundary `2530ca4e3` (stage B's round-2 review commit). Nothing was left over from an
+interrupted attempt: `git status --short` reported only the sandbox's `.env*` "Operation not
+permitted" read denials, no stash, no staged work.
+
+Four findings dispatched — two blockers, two majors.
+
+## W2B-R2-01 (blocker) — the duplicate `why` that turned integration red · FIXED, and proved
+
+The two lanes edited the same file at different insertion points, so git merged both silently.
+The fix is not to drop a field but to make the web lane's insertion **byte-identical to the
+designer lane's, at the designer lane's own position** — two identical additions in the same
+hunk merge to one copy, and the wider declaration (which carries `whyAuthorName`, required by
+the mid-Wave-2 ruling) is the one that survives.
+
+- `ProjectApprovalReview`: web's own required `why: string | null` (and its comment) deleted from
+  after `context`; the designer lane's `why?: string | null` + `whyAuthorName?: string | null`
+  block spliced in verbatim between `question` and `context`. Extracted straight out of
+  `git show approvals/w2-designer:…` rather than retyped, so the bytes cannot drift.
+- `parseProjectApprovalReview`: same treatment — `why:` and `whyAuthorName:` now sit after
+  `question:`, exactly as the designer lane writes them. `viewerRole` keeps its own slot after
+  `context` and keeps a comment of its own (the old two-line comment covered both fields).
+- Optionality settled in one hand: **optional**, as the designer lane declares it. Nothing in
+  the web surface required it, and a required field would have broken any caller building a
+  `ProjectApprovalReview` literal without one — including `threshold.test.tsx`'s deliberately
+  partial fixture.
+
+Proof, the reviewer's own two commands:
+
+```
+$ git merge-tree --write-tree approvals/w2-web approvals/w2-designer
+39b20cee1758e065c9ef15d315194e8a3adcaaba          # exit 0, clean
+
+$ git show 39b20cee1:packages/supabase/src/hooks/use-project-approvals.ts | grep -n 'why'
+66:  why?: string | null;                                   # ONE declaration
+76:  whyAuthorName?: string | null;
+118:  why?: string | null;                                  # ProjectApprovalCreatePayload —
+                                                           # a different interface, designer's
+344:    why: nullableString(row, 'why'),                     # ONE parse entry
+345:    whyAuthorName: nullableString(row, 'whyAuthorName'),
+
+$ ./node_modules/.bin/tsc --noEmit --skipLibCheck --target es2020 --moduleResolution node <merged file>
+  → no TS2300, no TS2687, no TS1117.      (was: five errors)
+```
+
+All four lanes now merge clean against this branch: designer `39b20cee1`, backend `006f21f3a`,
+iosc `aea6f5941`, iosd `fd35aa17e`.
+
+## W2B-R2-02 (blocker) — the assistive-click guard was inverted · FIXED
+
+The reviewer's reading is right, and it is the reading the platform documents: a screen reader,
+Voice Control or switch access activates through the accessibility API (AXPress / kDoDefault /
+IAccessible2 `doAction`) and the **browser itself** then dispatches the click — trusted, which is
+exactly why AT activation counts as user activation (it may open a window, enter fullscreen,
+start media). `if (event.isTrusted) return;` therefore refused every real assistive activation
+and admitted only a scripted `element.click()` — the one case the lane's own green test
+dispatched. All four terminal acts were shut to AT.
+
+The test is deleted. The pointer tail is now the whole guard, and it needs no guess about trust:
+
+```ts
+onClick={(event) => {
+  event.preventDefault();
+  if (unavailable || running.current) return;
+  if (Date.now() - pointerAt.current < POINTER_TAIL_MS) return;
+  take();
+}}
+```
+
+A hand always leaves a `pointerdown`/`pointerup` on this control within `POINTER_TAIL_MS` before
+its click, so a real tap is still refused; a physical-keyboard hold produces no click at all
+(both `keydown` and `keyup` are prevented); an activation with no pointer history behind it is
+not a hand, trusted or not. The long comment on the handler now records WHY `isTrusted` is not
+consulted, so nobody reinstates it.
+
+New test — `takes an activation that arrives long after a pointer gesture`: a gesture released
+early (and refused for it), then 2 000 ms on fake timers, then `target.click()` → the act is
+taken once. It pins that the only thing standing between a click and the act is recent pointer
+history. jsdom marks every dispatched event untrusted, so the trust flag itself still cannot be
+asserted either way in this repo — the test comment says so rather than pretending otherwise.
+
+**Still owed before ship (not buildable here):** one desktop screen-reader walk (NVDA or
+VoiceOver) and one macOS Voice Control walk ("click Sign") across the four acts — door sign,
+wall accept, scope approve, approval outcome submit.
+
+**Accepted cost, unchanged (was W2B-R2-15):** any scripted `element.click()` with no pointer
+history on the control takes the act. That is inherent to having an assistive path at all — the
+same door that admits AXPress admits a script — and it does not narrow under any variant of the
+guard. Recorded, not fixed.
+
+## W2B-R2-03 (major) — the why is signed by its author · FIXED, and the chain is now complete
+
+The review recorded this as unmet on all three legs. Two have since closed:
+
+- **Projection (backend lane, landed after the review was written):**
+  `approvals/w2-backend:00569` now carries the column `why_author_name` (:83), its CHECK (:96 —
+  ≤120 chars, and NULL whenever `why` is NULL), the composer argument `p_why_author_name` (:168),
+  supersession inheritance (:770-771), and the projection key itself at **:954** —
+  `'whyAuthorName', CASE WHEN artifact.why IS NOT NULL THEN artifact.why_author_name …`. The
+  review's "grep returns nothing" is no longer true of that branch.
+- **Type (this pass):** carried by W2B-R2-01's byte-identical adoption above.
+- **Render (this pass):** `approval-ask.tsx` now draws the attribution from a new `whyAuthorOf()`
+  — trim, blank is no name — and never from `designerGivenName`. `designer` survives only where
+  it was always right: "Ask {designer} about this", "Tell {designer} what to change", and the
+  studio-issue line, all of which address the live designer on purpose.
+
+The old behaviour drew `— {designer}` whether or not a why existed, signing an immutable
+client-facing sentence with whoever holds the project today. Now: no author, no signature.
+
+Tests: the pull-quote test signs `— Leah Quist` from `whyAuthorName` while `designerGivenName`
+is a *different* name; a dedicated case renders a why with `designerGivenName="Nora"` and asserts
+**no** attribution element at all; four table cases (`undefined`, `null`, `'   '`, `12`) assert
+the same. Parser side: `whyAuthorName` carried through, read as null when absent, and never
+substituted.
+
+## W2B-R2-04 (major) — `viewerRole` had no consumer · FIXED
+
+`respond_project_approval` accepts the frozen decision lead alone, and
+`confirm_project_decision_review` raises `actor is not a reviewer in the frozen authority
+snapshot` for anyone else (`00463:1578-1585`; `required_coapprover_id` is always NULL under R3).
+So a studio co-member in the client app was told "your answer is needed", offered four doors, and
+could hold any of them 900 ms into an RPC refusal.
+
+One predicate, `viewerAnswers`, hoisted above its readers, and stated **negatively** on purpose:
+
+```ts
+const viewerAnswers =
+  approval.viewerRole !== 'studio' && approval.viewerRole !== 'household';
+```
+
+Only a chair the projection NAMES as somebody else's withholds the acts. Null, absent, or a word
+this build does not know behaves exactly as it did before the field existed — the round-1 form
+(`=== 'lead' || === null`) failed *closed* and stripped the doors from `threshold.test.tsx`'s
+partial fixture, which is precisely the shape a pre-00569 projection has in the field. Failing
+open toward the status quo is the safer direction for a field this new.
+
+What it gates:
+
+| Place | Before | After, for a studio/household reader |
+|---|---|---|
+| eyebrow | "Your approval · your answer is needed" | "This approval · yours to read" (and "· answered" once recorded) |
+| `canRespond` | three doors | none |
+| `canConfirm` | "Review exact edition" | none |
+| `confirmationUnavailable` | "temporarily unavailable" alert | none — she was never offered the act |
+| `reviewStanding` | "Your review is confirmed." | "The review is confirmed." |
+| studio-issue line | "You've confirmed edition 3 … Nothing is waiting on you." | "Edition 3 is confirmed. Nora issues it next." |
+| `data-never-dim` | always set while open | not set — nothing is owed on it |
+
+Beyond the two the finding named (`canRespond`, the eyebrow) I gated the confirm act, its
+refusal sentence, and the three second-person sentences. Not scope creep: each is the same defect
+— a reader who cannot act told in the second person that the act is hers — and leaving "Your
+review is still needed." beside "This one is answered by the person it was sent to." would have
+been a new finding on the same screen.
+
+Per P-11 ("one standing line naming who answers"), a read-only ask is not a screen whose acts
+merely went missing: `approval-answered-by-another` reads **"This one is answered by the person
+it was sent to."** No name is invented — the projection carries none, and the same rule that
+governs the why governs this: an unsigned sentence is honest, a wrongly signed one is not. The
+ask, the plate, the why, the impact and the discussion are all still read.
+
+Tests: a new `who this approval waits on` block — three doors for a lead; three doors for null /
+absent / unrecognised; no doors, no dim, third-person prose and the standing line for both
+`studio` and `household`; no confirm act and no unavailable sentence for a studio reader on a
+draft; the studio-issue line stripped of its first-person claim; and a recorded outcome still
+shown to a reader who did not answer.
+
+## What was NOT dispatched
+
+The fifteen minors and nits (W2B-R2-05 … W2B-R2-19) stand. Two are now partly answered as a side
+effect: W2B-R2-15 is recorded above as the accepted cost of the assistive path, and W2B-R2-14's
+two unreachable refusal sentences are unchanged (still correct backstops, still untested). The
+`isTrusted` half of W2B-R2-07's browser walk folds into the same NVDA/VoiceOver pass owed above.
+`00570` is left in place per the ruling — the steward folds it into 00569 and deletes it.
+
+## Gates (from the worktree, after the pass)
+
+```
+pnpm --dir <wt> --filter @patina/client-portal type-check     exit 0
+  > tsc --noEmit          (no output)
+
+pnpm --dir <wt> --filter @patina/client-portal test           exit 0
+  Test Suites: 119 passed, 119 total
+  Tests:       1669 passed, 1669 total          (1654 before this pass; +15)
+
+pnpm --dir <wt> --filter @patina/supabase test                exit 0
+  Test Files  84 passed (84)
+  Tests  998 passed | 12 skipped (1010)         (997 before this pass; +1)
+```
+
+Refusal grep over every added line in this pass
+(`gate|task|overdue|dashboard|AI|Declined|badge|shadow|checkmark|confetti|red-|green-|✓`): the
+only hits are the substring `red-` inside `approval-answered-by-another` and the filename
+`scored-action.tsx`. No new homeowner-visible string carries a refused word, a number where a
+word would do, a colour, a fill or a stamp.
+
+Commits: `07ff972a5`, `f15894922`, `c60d78b7c` — explicit pathspecs, Conventional subjects, no
+bodies, no trailers, nothing pushed, no production mutation, no stack reset. The pre-commit
+formatter warns on all four touched files; it is the repo-wide single-vs-double-quote drift the
+ad-hoc `npx prettier` reports on files it has no workspace config for, is advisory locally, and
+running `--write` would have destroyed the byte-identity W2B-R2-01's fix depends on.
