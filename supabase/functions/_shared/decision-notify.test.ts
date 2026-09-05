@@ -48,7 +48,11 @@ const STUDIO = {
 };
 
 Deno.test("the designer's resolved notice keeps the immutable evidence", () => {
-  const rendered = renderDecisionEmail("decision_resolved", "Recipient", STAGE2);
+  const rendered = renderDecisionEmail(
+    "decision_resolved",
+    "Recipient",
+    STAGE2,
+  );
   assertStringIncludes(rendered.html, "plan_issue");
   assertStringIncludes(rendered.html, "version 4");
   assertStringIncludes(rendered.html, CHECKSUM);
@@ -59,10 +63,16 @@ Deno.test("the designer's resolved notice keeps the immutable evidence", () => {
 for (const kind of ["decision_required", "decision_overdue"] as const) {
   Deno.test(`${kind} cites the edition, not the checksum (R6)`, () => {
     const rendered = renderDecisionEmail(kind, "Anne", STAGE2, STUDIO);
-    assertStringIncludes(rendered.html, "Edition 4 &middot; issued September 28");
+    assertStringIncludes(
+      rendered.html,
+      "Edition 4 &middot; issued September 28",
+    );
     assert(!rendered.html.includes(CHECKSUM), "the hash stays in the record");
     assert(!rendered.html.includes("SHA-256"));
-    assert(!rendered.html.includes("plan_issue"), "the enum spelling is not her word");
+    assert(
+      !rendered.html.includes("plan_issue"),
+      "the enum spelling is not her word",
+    );
     assertStringIncludes(rendered.html, "Client &lt;issued&gt; set");
     assert(!rendered.html.includes("Client <issued> set"));
   });
@@ -75,7 +85,7 @@ for (const kind of ["decision_required", "decision_overdue"] as const) {
     );
     assertStringIncludes(
       rendered.html,
-      "Or open it directly: <a href=\"https://client.patina.cloud/decisions/decision-1\"",
+      'Or open it directly: <a href="https://client.patina.cloud/decisions/decision-1"',
     );
     assertStringIncludes(rendered.html, "Review the plan set");
     assert(!rendered.html.includes("Open your Patina dashboard"));
@@ -83,7 +93,10 @@ for (const kind of ["decision_required", "decision_overdue"] as const) {
 
   Deno.test(`${kind} is signed by the studio, never by Patina (R7)`, () => {
     const rendered = renderDecisionEmail(kind, "Anne", STAGE2, STUDIO);
-    assertStringIncludes(rendered.html, "&mdash; Leah, Middle West Studio<br>Madison");
+    assertStringIncludes(
+      rendered.html,
+      "&mdash; Leah, Middle West Studio<br>Madison",
+    );
     assert(!rendered.html.includes("— Patina"));
   });
 
@@ -103,7 +116,10 @@ for (const kind of ["decision_required", "decision_overdue"] as const) {
 
   Deno.test(`${kind} addresses the client portal in its footer (P-03b)`, () => {
     const rendered = renderDecisionEmail(kind, "Anne", STAGE2, STUDIO);
-    assertStringIncludes(rendered.html, 'href="https://client.patina.cloud/preferences"');
+    assertStringIncludes(
+      rendered.html,
+      'href="https://client.patina.cloud/preferences"',
+    );
     assert(!rendered.html.includes("app.patina.cloud"));
     assert(!rendered.html.includes(">Dashboard</a>"));
   });
@@ -241,7 +257,10 @@ Deno.test("the overdue notice is quiet: no 'overdue', no guilt (P-04)", () => {
     STUDIO,
   );
   assertEquals(rendered.subject, 'Still open: "Client <issued> set"');
-  assertStringIncludes(rendered.html, "Still open, Leah asked on September 28.");
+  assertStringIncludes(
+    rendered.html,
+    "Still open, Leah asked on September 28.",
+  );
   const lowered = rendered.html.toLowerCase();
   assert(!lowered.includes("overdue"));
   assert(!lowered.includes("passed its due date"));
@@ -426,7 +445,12 @@ Deno.test("an unmapped artifact kind never renders the word 'undefined' (F4)", (
       kind: "project_document" as ApprovalArtifactCitation["kind"],
     },
   };
-  const rendered = renderDecisionEmail("decision_required", "Anne", odd, STUDIO);
+  const rendered = renderDecisionEmail(
+    "decision_required",
+    "Anne",
+    odd,
+    STUDIO,
+  );
   assert(!rendered.html.includes("undefined"));
   assert(!rendered.subject.includes("undefined"));
   assertStringIncludes(rendered.html, "is ready for your answer.");
@@ -449,14 +473,14 @@ Deno.test("every letter quotes the stored title, subject and body alike (F5)", (
     'Leah sent "approve the issued set" for your approval',
   );
   assertStringIncludes(first.html, '"<strong');
-  assertStringIncludes(first.html, "approve the issued set</strong>\"");
+  assertStringIncludes(first.html, 'approve the issued set</strong>"');
 
   const reminder = renderDecisionEmail("decision_required", "Anne", {
     ...lowercase,
     notice: "reminder",
   }, STUDIO);
   assertEquals(reminder.subject, 'Thursday: "approve the issued set"');
-  assertStringIncludes(reminder.html, "approve the issued set</strong>\"");
+  assertStringIncludes(reminder.html, 'approve the issued set</strong>"');
 
   const overdue = renderDecisionEmail(
     "decision_overdue",
@@ -465,7 +489,7 @@ Deno.test("every letter quotes the stored title, subject and body alike (F5)", (
     STUDIO,
   );
   assertEquals(overdue.subject, 'Still open: "approve the issued set"');
-  assertStringIncludes(overdue.html, "approve the issued set</strong>\"");
+  assertStringIncludes(overdue.html, 'approve the issued set</strong>"');
 });
 
 Deno.test("the unnamed designer is lowercase mid-sentence, capitalised at its head (F6)", () => {
@@ -524,7 +548,10 @@ Deno.test("'nothing has changed' is claimed only of an edition that has not (F8)
     ...STAGE2,
     notice: "reminder",
   }, STUDIO);
-  assertStringIncludes(unchanged.html, "Nothing has changed since it was sent.");
+  assertStringIncludes(
+    unchanged.html,
+    "Nothing has changed since it was sent.",
+  );
 
   // A newer edition landed after the ask went out — the letter says nothing.
   const reissued = renderDecisionEmail("decision_required", "Anne", {
@@ -646,6 +673,60 @@ Deno.test("the why is attributed to a person, or to nobody — never to 'Your de
   );
 });
 
+Deno.test("the frozen author signs the note, not the project's designer of record", () => {
+  // Any studio co-member may compose an ask, and a designer may be renamed
+  // between the first notice and the overdue letter. The cobrand signature is
+  // resolved live from the project's designer_id, so on both counts it can name
+  // someone who did not write the sentence — while the projection renders the
+  // frozen name. One line, one author, every surface.
+  const byPeer: DecisionContext = {
+    ...STAGE2,
+    artifact: { ...STAGE2.artifact!, why: WHY, whyAuthorName: "Peer" },
+  };
+  for (
+    const letter of [
+      renderDecisionEmail("decision_required", "Anne", {
+        ...byPeer,
+        notice: "first",
+      }, STUDIO),
+      renderDecisionEmail("decision_required", "Anne", {
+        ...byPeer,
+        notice: "reminder",
+      }, STUDIO),
+      renderDecisionEmail("decision_overdue", "Anne", byPeer, STUDIO),
+    ]
+  ) {
+    assertStringIncludes(letter.html, ">&mdash; Peer</p>");
+    assert(
+      !letter.html.includes(">&mdash; Leah</p>"),
+      "the note is signed by its author, never by the project's designer",
+    );
+  }
+  // The sign-off at the foot is the STUDIO's, and it still speaks for the
+  // studio — only the quoted line changes hands.
+  assertStringIncludes(
+    renderDecisionEmail("decision_overdue", "Anne", byPeer, STUDIO).html,
+    "Leah",
+  );
+});
+
+Deno.test("a frozen author that resolved to nothing falls back, and is escaped", () => {
+  const blank = renderDecisionEmail("decision_required", "Anne", {
+    ...STAGE2,
+    notice: "first",
+    artifact: { ...STAGE2.artifact!, why: WHY, whyAuthorName: "   " },
+  }, STUDIO);
+  assertStringIncludes(blank.html, ">&mdash; Leah</p>");
+
+  const injected = renderDecisionEmail("decision_required", "Anne", {
+    ...STAGE2,
+    notice: "first",
+    artifact: { ...STAGE2.artifact!, why: WHY, whyAuthorName: "<b>Peer</b>" },
+  }, STUDIO);
+  assertStringIncludes(injected.html, "&lt;b&gt;Peer&lt;/b&gt;");
+  assert(!injected.html.includes("<b>Peer</b>"));
+});
+
 Deno.test("an approval with no why carries no note and no dangling attribution", () => {
   for (
     const decision of [
@@ -662,7 +743,12 @@ Deno.test("an approval with no why carries no note and no dangling attribution",
     assert(!rendered.html.includes(">&mdash; Leah</p>"));
     assert(!rendered.html.includes("&ldquo;"), "no empty quotation is drawn");
   }
-  const overdue = renderDecisionEmail("decision_overdue", "Anne", STAGE2, STUDIO);
+  const overdue = renderDecisionEmail(
+    "decision_overdue",
+    "Anne",
+    STAGE2,
+    STUDIO,
+  );
   assert(!overdue.html.includes(">&mdash; Leah</p>"));
   assert(!overdue.html.includes("&ldquo;"));
 });
@@ -699,7 +785,10 @@ Deno.test("the receipt names what the answer released (R9)", () => {
   }, STUDIO);
   assertEquals(rendered.subject, 'You approved "Client <issued> set".');
   assertStringIncludes(rendered.html, "It releases the cabinet order.");
-  assertStringIncludes(rendered.html, "https://client.patina.cloud/decisions/decision-1");
+  assertStringIncludes(
+    rendered.html,
+    "https://client.patina.cloud/decisions/decision-1",
+  );
   assert(!rendered.html.includes("Approve"), "the act is never re-offered");
   assert(!rendered.html.includes("Sign"));
 });
@@ -732,12 +821,15 @@ Deno.test("the receipt claims no consequence when there is none (R9)", () => {
   );
 });
 
-Deno.test("the release sentence names one or two pieces and counts the rest in words", () => {
+Deno.test("the release sentence names a lone piece and counts every other case in words", () => {
   assertEquals(decisionReleaseSentence([]), "Your answer is on the record.");
-  assertEquals(decisionReleaseSentence(["the cabinet order"]), "It releases the cabinet order.");
+  assertEquals(
+    decisionReleaseSentence(["the cabinet order"]),
+    "It releases the cabinet order.",
+  );
   assertEquals(
     decisionReleaseSentence(["the cabinet order", "the island stone"]),
-    "It releases the cabinet order and the island stone.",
+    "It releases two pieces that were waiting on it.",
   );
   assertEquals(
     decisionReleaseSentence(["a", "b", "c"]),
@@ -752,7 +844,31 @@ Deno.test("the release sentence names one or two pieces and counts the rest in w
     "It releases the pieces that were waiting on it.",
   );
   // Blank names are not pieces.
-  assertEquals(decisionReleaseSentence(["  ", ""]), "Your answer is on the record.");
+  assertEquals(
+    decisionReleaseSentence(["  ", ""]),
+    "Your answer is on the record.",
+  );
+});
+
+Deno.test("a catalogue name with a comma is counted, never read as a list", () => {
+  // project_ffe_items.name is text the studio typed. "Built-in shelving, north
+  // wall" named alongside a second piece read as three things.
+  assertEquals(
+    decisionReleaseSentence(["Built-in shelving, north wall"]),
+    "It releases one piece that was waiting on it.",
+  );
+  assertEquals(
+    decisionReleaseSentence([
+      "Built-in shelving, north wall",
+      "Built-in Window Banquette",
+    ]),
+    "It releases two pieces that were waiting on it.",
+  );
+  // The comma has to be in the surviving name, not in a blank the filter drops.
+  assertEquals(
+    decisionReleaseSentence(["  ", "the cabinet order"]),
+    "It releases the cabinet order.",
+  );
 });
 
 Deno.test("the receipt is signed by the studio and escapes the title", () => {
@@ -760,7 +876,11 @@ Deno.test("the receipt is signed by the studio and escapes the title", () => {
   assertStringIncludes(rendered.html, "Leah");
   assertStringIncludes(rendered.html, "Middle West Studio");
   assertStringIncludes(rendered.html, "Client &lt;issued&gt; set");
-  assert(!rendered.html.includes("<strong style=\"color:#1F1B16; font-weight:600;\">Client <issued>"));
+  assert(
+    !rendered.html.includes(
+      '<strong style="color:#1F1B16; font-weight:600;">Client <issued>',
+    ),
+  );
   assert(
     !rendered.html.includes("A workshop for interior designers"),
     "the studio signs the homeowner's receipt; Patina does not pitch under it",

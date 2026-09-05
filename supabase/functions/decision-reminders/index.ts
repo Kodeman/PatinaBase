@@ -86,7 +86,8 @@ Deno.serve(async (_req: Request) => {
         client:profiles!client_id(id, full_name, email)
       ),
       approval_artifact:project_approval_artifacts(
-        source_kind, source_version, artifact_hash, artifact_title, created_at, why
+        source_kind, source_version, artifact_hash, artifact_title, created_at, why,
+        why_author_name
       ),
       authority_snapshot:project_decision_authority_snapshots(
         decision_lead_id,

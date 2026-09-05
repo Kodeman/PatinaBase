@@ -118,6 +118,14 @@ export interface ApprovalArtifactCitation {
    * the field empty — the letter then simply does not carry a note.
    */
   why?: string | null;
+  /**
+   * P-13. Who wrote that line, frozen beside it at compose time
+   * (`project_approval_artifacts.why_author_name`, 00569). Any studio
+   * co-member may compose an ask, so the project's designer of record is the
+   * wrong signature and a later rename would rewrite a sentence she already
+   * read. NULL whenever the why is.
+   */
+  whyAuthorName?: string | null;
 }
 
 // What a homeowner calls each artifact kind. The enum spelling is a database
@@ -431,7 +439,10 @@ export async function resolveDecisionSignature(
 const DEFAULT_TIME_ZONE = "America/New_York";
 
 /** "Thursday" in the recipient's zone, or null when there is no date. */
-function weekday(iso: string | null | undefined, timeZone: string): string | null {
+function weekday(
+  iso: string | null | undefined,
+  timeZone: string,
+): string | null {
   if (!iso) return null;
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return null;
@@ -489,14 +500,22 @@ function renderArtifactEvidence(
  * The attribution is dropped rather than invented when no name resolved. "—
  * Your designer" under a first-person sentence reads as a system speaking in
  * someone's place, which is the one thing this line exists to avoid.
+ *
+ * The frozen author wins over the cobrand signature. `cobrand.designerGivenName`
+ * is the project's designer of record resolved live at send time; a studio
+ * co-member may compose the ask, and a designer may be renamed between the
+ * first notice and the overdue letter. Either way the letter would sign a
+ * first-person sentence with someone who did not write it, and disagree with
+ * the projection, which renders the frozen name.
  */
 function renderDesignerNote(
-  why: string | null | undefined,
+  artifact: ApprovalArtifactCitation | null | undefined,
   cobrand: DecisionCobrand,
 ): string {
-  const note = (why ?? "").trim();
+  const note = (artifact?.why ?? "").trim();
   if (!note) return "";
-  const named = (cobrand.designerGivenName ?? "").trim() ||
+  const named = (artifact?.whyAuthorName ?? "").trim() ||
+    (cobrand.designerGivenName ?? "").trim() ||
     (cobrand.studioName ?? "").trim();
   return [
     paragraph(`&ldquo;${escapeHtml(note)}&rdquo;`),
@@ -632,7 +651,7 @@ export function renderDecisionEmail(
   }
 
   const editionLine = renderEditionLine(decision.artifact, timeZone);
-  const designerNote = renderDesignerNote(decision.artifact?.why, cobrand);
+  const designerNote = renderDesignerNote(decision.artifact, cobrand);
   const door = renderDoor(decision.id, `Review the ${kindLabel}`);
   const dueWeekday = weekday(decision.dueDate, timeZone);
   const dueDay = calendarDay(decision.dueDate, timeZone);
@@ -776,6 +795,8 @@ export function receiptOutcomeWord(
 }
 
 const RELEASED_COUNT_WORD: readonly string[] = [
+  "one",
+  "two",
   "three",
   "four",
   "five",
@@ -801,9 +822,15 @@ const RELEASED_COUNT_WORD: readonly string[] = [
  *
  * Mirrors `public._project_approval_release_sentence` (00569), which writes the
  * identical line into the bell and the push, so the three surfaces say the same
- * thing about the same answer. One or two pieces are named; up to twenty are
- * counted in words; past that the count stops being worth reading and the
- * sentence states the fact without it. Nothing released ⇒ nothing claimed.
+ * thing about the same answer. Nothing released ⇒ nothing claimed.
+ *
+ * A piece is NAMED only when it is the only one and its name carries no comma.
+ * `project_ffe_items.name` is catalogue text the studio typed — "Built-in
+ * shelving, north wall" is an ordinary one — so joining two of them with "and"
+ * produced "It releases Built-in shelving, north wall and Built-in Window
+ * Banquette", which reads as a list of three things. Everything else is counted
+ * in words, up to twenty; past that the count stops being worth reading and the
+ * sentence states the fact without it.
  */
 export function decisionReleaseSentence(
   releasedItems: readonly string[] = [],
@@ -812,10 +839,14 @@ export function decisionReleaseSentence(
     .map((name) => (name ?? "").trim())
     .filter((name) => name.length > 0);
   if (names.length === 0) return "Your answer is on the record.";
-  if (names.length === 1) return `It releases ${names[0]}.`;
-  if (names.length === 2) return `It releases ${names[0]} and ${names[1]}.`;
-  const word = RELEASED_COUNT_WORD[names.length - 3] ?? "the";
-  return `It releases ${word} pieces that were waiting on it.`;
+  if (names.length === 1 && !names[0].includes(",")) {
+    return `It releases ${names[0]}.`;
+  }
+  const word = RELEASED_COUNT_WORD[names.length - 1] ?? "the";
+  const piece = names.length === 1
+    ? "piece that was waiting on it"
+    : "pieces that were waiting on it";
+  return `It releases ${word} ${piece}.`;
 }
 
 export interface DecisionReceiptContext extends DecisionContext {

@@ -486,10 +486,14 @@ Deno.test("a push with nothing to thread on carries no collapse id at all", () =
 });
 
 Deno.test("the payload carries category, thread and an active interruption level (P-22)", () => {
-  const aps = (buildApnsPayload(DECISION_PUSH, 3) as { aps: Record<string, unknown> })
-    .aps;
+  const aps =
+    (buildApnsPayload(DECISION_PUSH, 3) as { aps: Record<string, unknown> })
+      .aps;
   assertEquals(aps.category, "PATINA_DECISION");
-  assertEquals(aps["thread-id"], "decision-11111111-2222-4333-8444-555555555555");
+  assertEquals(
+    aps["thread-id"],
+    "decision-11111111-2222-4333-8444-555555555555",
+  );
   assertEquals(aps["interruption-level"], "active");
   // R5's springboard number survives P-22.
   assertEquals(aps.badge, 3);

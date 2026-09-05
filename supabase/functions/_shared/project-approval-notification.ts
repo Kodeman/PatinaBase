@@ -11,6 +11,8 @@ export interface EmbeddedApprovalArtifact {
   created_at?: string | null;
   /** P-13: the designer's frozen one-line why (00569). */
   why?: string | null;
+  /** P-13: who wrote it, frozen beside it at compose time (00569). */
+  why_author_name?: string | null;
 }
 
 export interface EmbeddedAuthoritySnapshot {
@@ -54,13 +56,20 @@ export function resolveApprovalArtifactCitation(
   }
   if (!artifact.artifact_hash?.match(/^[0-9a-f]{64}$/)) return null;
   if (!artifact.artifact_title?.trim()) return null;
+  const why = artifact.why?.trim() ? artifact.why : null;
   return {
     kind: artifact.source_kind,
     version: artifact.source_version as number,
     checksum: artifact.artifact_hash,
     title: artifact.artifact_title,
     issuedAt: artifact.created_at ?? null,
-    why: artifact.why?.trim() ? artifact.why : null,
+    why,
+    // A name under no line attributes nothing. 00569's CHECK says the same in
+    // the table; the resolver does not depend on it holding for rows written
+    // before it existed.
+    whyAuthorName: why && artifact.why_author_name?.trim()
+      ? artifact.why_author_name.trim()
+      : null,
   };
 }
 

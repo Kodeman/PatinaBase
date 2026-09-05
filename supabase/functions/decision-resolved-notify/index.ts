@@ -86,7 +86,8 @@ Deno.serve(async (req: Request) => {
     .select(`
       id, title, due_date, designer_id, project_id, answer, approval_contract,
       approval_artifact:project_approval_artifacts(
-        source_kind, source_version, artifact_hash, artifact_title, created_at, why
+        source_kind, source_version, artifact_hash, artifact_title, created_at, why,
+        why_author_name
       ),
       authority_snapshot:project_decision_authority_snapshots(
         decision_lead_id,
@@ -202,7 +203,9 @@ Deno.serve(async (req: Request) => {
       skipped: receiptResult.emailSkipped,
       reason: receiptResult.reason ?? null,
     };
-    if (receipt.skipped && receipt.reason && receipt.reason !== "already_sent") {
+    if (
+      receipt.skipped && receipt.reason && receipt.reason !== "already_sent"
+    ) {
       console.warn(
         "decision-resolved-notify: receipt skipped",
         decision.id,
