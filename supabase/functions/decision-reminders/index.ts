@@ -15,13 +15,21 @@
 // idempotent in-app RPC + a notification_log lookup) so a same-day re-run does
 // not double-send even before the stamp lands.
 //
+// P-02: this is the RETURNING letter. The announcing one is decision-first-
+// notice, fired at publish by the trigger in 00568. Both are decision_required;
+// the log dedupe keys on the register, so this letter still lands after that
+// one.
+//
 // SMS escalation (PRD line 120 final clause) is intentionally deferred
 // pending Twilio integration.
 
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { deliverDecisionNotification } from "../_shared/decision-notify.ts";
+import {
+  deliverDecisionNotification,
+  firstNoticeAlreadySent,
+} from "../_shared/decision-notify.ts";
 import { reminderStampDisposition } from "./logic.ts";
 import {
   type EmbeddedApprovalArtifact,
@@ -140,6 +148,20 @@ Deno.serve(async (_req: Request) => {
       designerId: d.designer_id,
     });
 
+    // This cron fires 48 hours before the due date, which is days or weeks
+    // after the studio pressed send: it returns to an approval already made
+    // and never announces one (P-02). The one exception is a homeowner the
+    // publish-time producer never reached — quiet hours at the moment of
+    // sending, a preference that has since changed, a decision published
+    // before decision-first-notice existed. Then this IS her first letter and
+    // says so. Unknowable for a recipient with no auth user (nothing is logged
+    // against her), and there the register that claims nothing wins.
+    const announced = await firstNoticeAlreadySent(
+      supabase,
+      recipient!.userId,
+      d.id,
+    );
+
     const result = await deliverDecisionNotification(
       supabase,
       "decision_required",
@@ -149,10 +171,7 @@ Deno.serve(async (_req: Request) => {
         dueDate: d.due_date,
         artifact,
         sentAt: d.sent_at,
-        // This cron fires 48 hours before the due date, which is days or weeks
-        // after the studio pressed send. It returns to an approval already
-        // made; it never announces one (P-02).
-        notice: "reminder",
+        notice: announced ? "reminder" : "first",
       },
       recipient!,
       signature,

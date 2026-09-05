@@ -6,6 +6,7 @@ import {
 import {
   classifyExistingDecisionEmailLogStatuses,
   type DecisionContext,
+  decisionLogKey,
   decisionNotificationMetadata,
   renderDecisionEmail,
 } from "./decision-notify.ts";
@@ -260,6 +261,7 @@ Deno.test("notification metadata carries traceability without reviewer IDs", () 
   assertEquals(metadata, {
     decisionId: "decision-1",
     kind: "decision_required",
+    notice: "reminder",
     artifactKind: "plan_issue",
     artifactVersion: 4,
     artifactChecksum: CHECKSUM,
@@ -326,4 +328,80 @@ Deno.test("notification log status classification preserves delivery state", () 
     classifyExistingDecisionEmailLogStatuses(["queued", "complained"]),
     "complained",
   );
+});
+
+// ── P-02: two letters, one kind ─────────────────────────────────────────────
+// The first notice is produced at publish (decision-first-notice, trigger
+// 00568); the reminder 48 hours before the due date (decision-reminders).
+// Neither may deduplicate the other.
+
+Deno.test("metadata records which register the letter spoke in", () => {
+  assertEquals(
+    decisionNotificationMetadata("decision_required", {
+      ...STAGE2,
+      notice: "first",
+    }).notice,
+    "first",
+  );
+  assertEquals(
+    decisionNotificationMetadata("decision_required", {
+      ...STAGE2,
+      notice: "reminder",
+    }).notice,
+    "reminder",
+  );
+  // The other kinds are one letter each and carry no register.
+  assertEquals(
+    decisionNotificationMetadata("decision_overdue", STAGE2).notice,
+    undefined,
+  );
+  assertEquals(
+    decisionNotificationMetadata("decision_resolved", STAGE2).notice,
+    undefined,
+  );
+});
+
+Deno.test("the email dedupe key separates the first notice from the reminder", () => {
+  assertEquals(
+    decisionLogKey("decision_required", { ...STAGE2, notice: "first" }),
+    { decisionId: "decision-1", notice: "first" },
+  );
+  assertEquals(
+    decisionLogKey("decision_required", { ...STAGE2, notice: "reminder" }),
+    { decisionId: "decision-1", notice: "reminder" },
+  );
+  // An undeclared register is the returning letter, matching the render default.
+  assertEquals(
+    decisionLogKey("decision_required", STAGE2),
+    { decisionId: "decision-1", notice: "reminder" },
+  );
+});
+
+Deno.test("overdue and resolved keep the one-letter dedupe key", () => {
+  assertEquals(decisionLogKey("decision_overdue", STAGE2), {
+    decisionId: "decision-1",
+  });
+  assertEquals(decisionLogKey("decision_resolved", STAGE2), {
+    decisionId: "decision-1",
+  });
+});
+
+Deno.test("the first notice announces the send, the reminder returns to it", () => {
+  const first = renderDecisionEmail(
+    "decision_required",
+    "Dana",
+    { ...STAGE2, notice: "first" },
+    STUDIO,
+  );
+  assertEquals(first.subject, "Leah sent Client <issued> set for your approval.");
+  assert(!first.html.includes("Nothing has changed since it was sent"));
+
+  const reminder = renderDecisionEmail(
+    "decision_required",
+    "Dana",
+    { ...STAGE2, notice: "reminder" },
+    STUDIO,
+  );
+  assertEquals(reminder.subject, "Thursday: Client <issued> set.");
+  assertStringIncludes(reminder.html, "Nothing has changed since it was sent");
 });

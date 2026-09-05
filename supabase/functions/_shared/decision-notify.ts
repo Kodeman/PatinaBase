@@ -18,9 +18,11 @@
 //      notification_log) with category "operational".
 //
 // Email idempotency is enforced two ways: the in-app RPC dedupes the in-app
-// row, and an explicit notification_log lookup (one email per decision per
-// kind) dedupes the email — so re-running decision-reminders / expire-decisions
-// for the same decision will not double-send.
+// row, and an explicit notification_log lookup dedupes the email — so
+// re-running decision-first-notice / decision-reminders / expire-decisions for
+// the same decision will not double-send. The lookup keys on the decision AND,
+// for decision_required, on the register: a first notice and a reminder are two
+// letters in one cadence, and neither may swallow the other.
 
 // deno-lint-ignore-file no-explicit-any
 
@@ -143,12 +145,13 @@ export interface DecisionContext {
   sentAt?: string | null;
   /**
    * Which register a decision_required letter speaks in. The producer declares
-   * it, because no state on the row can be read backwards into it: the only
-   * live producer is decision-reminders, whose notice arrives 48 hours before
-   * the due date and therefore long after the studio pressed send. It says
-   * "reminder", and so does the default — a letter that claims the studio just
-   * sent something is a lie unless its producer runs at the moment of sending.
-   * A publish-time producer, when one exists, says "first".
+   * it, because no state on the row can be read backwards into it. The
+   * publish-time producer (decision-first-notice, fired by the trigger in
+   * 00568 as the decision enters the client's court) says "first";
+   * decision-reminders, whose notice arrives 48 hours before the due date and
+   * therefore long after the studio pressed send, says "reminder" — and so
+   * does the default, because a letter claiming the studio just sent something
+   * is a lie unless its producer runs at the moment of sending.
    */
   notice?: "first" | "reminder";
 }
@@ -297,13 +300,57 @@ export function classifyExistingDecisionEmailLogStatuses(
 }
 
 /**
+ * The metadata a prior email for this letter would carry. decision_required is
+ * TWO letters — the first notice and the reminder — so its key carries the
+ * register; one may not deduplicate the other. The other kinds are one letter
+ * each and key on the decision alone, exactly as before.
+ */
+export function decisionLogKey(
+  kind: DecisionNotificationKind,
+  decision: DecisionContext,
+): Record<string, unknown> {
+  if (kind !== "decision_required") return { decisionId: decision.id };
+  return { decisionId: decision.id, notice: decisionNotice(decision) };
+}
+
+/** The declared register, defaulted. */
+function decisionNotice(decision: DecisionContext): "first" | "reminder" {
+  return decision.notice === "first" ? "first" : "reminder";
+}
+
+/**
+ * Has this recipient already been sent the first notice for this approval?
+ * Read by decision-reminders so its letter never announces a send the
+ * homeowner was already told about — and never withholds the announcement
+ * from someone the publish-time producer failed to reach.
+ *
+ * Only answerable for a signed-up client: notification_log.user_id is NOT NULL,
+ * so a direct-contact recipient leaves no evidence either way. She gets the
+ * register that claims nothing about timing.
+ */
+export async function firstNoticeAlreadySent(
+  supabase: SupabaseClient,
+  userId: string | null,
+  decisionId: string,
+): Promise<boolean> {
+  if (!userId) return true;
+  const status = await existingEmailLogStatus(
+    supabase,
+    userId,
+    { id: decisionId, title: null, dueDate: null, notice: "first" },
+    "decision_required",
+  );
+  return status !== null;
+}
+
+/**
  * Return the prior non-retryable email state for this (decision, kind). This
  * keeps delivery idempotent without collapsing in-flight and terminal states.
  */
 async function existingEmailLogStatus(
   supabase: SupabaseClient,
   userId: string | null,
-  decisionId: string,
+  decision: DecisionContext,
   kind: DecisionNotificationKind,
 ): Promise<DecisionEmailLogStatus | null> {
   const query = supabase
@@ -312,7 +359,7 @@ async function existingEmailLogStatus(
     .eq("type", KIND_TO_LOG_TYPE[kind])
     .eq("channel", "email")
     .neq("status", "failed")
-    .contains("metadata", { decisionId });
+    .contains("metadata", decisionLogKey(kind, decision));
   if (userId) query.eq("user_id", userId);
   const { data, error } = await query;
   if (error) {
@@ -432,6 +479,7 @@ export function decisionNotificationMetadata(
     decisionId: decision.id,
     kind,
   };
+  if (kind === "decision_required") metadata.notice = decisionNotice(decision);
   if (decision.artifact) {
     metadata.artifactKind = decision.artifact.kind;
     metadata.artifactVersion = decision.artifact.version;
@@ -704,7 +752,7 @@ export async function deliverDecisionNotification(
   const existingLogStatus = await existingEmailLogStatus(
     supabase,
     recipient.userId,
-    decision.id,
+    decision,
     kind,
   );
   if (existingLogStatus) {
