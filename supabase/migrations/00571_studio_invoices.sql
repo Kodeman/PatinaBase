@@ -11,7 +11,8 @@
 --       roster (R73 invite-on-send), never an email-only recipient
 --       ................................................. PART 2, PART 3
 --   S5  the client pays in the letterbox, so the household needs a read
---       path that does not run through projects ................... PART 5
+--       path that does not run through projects (and an index behind
+--       it) ...................................................... PART 5
 --   S6  ad-hoc lines only; milestone/time/ffe are project-bound .... PART 3
 --   S7  studio invoices earn design_fee earnings .................. PART 4
 --   S8  a two-studio designer draws off the chosen studio, never the
@@ -25,7 +26,7 @@
 -- which RAISEs on every NULL-project row on both the INSERT and the UPDATE
 -- arm, before its service_role early return. PART 2 adds a studio branch to
 -- both arms; every project-path line is byte-identical to 00511's body (the
--- branch is 171 inserted lines across the two arms, zero removed). Its body
+-- branch is 187 inserted lines across the two arms, zero removed). Its body
 -- SHA-256 is re-pinned in
 -- supabase/tests/edge_api/public_sd_hardening_contract_test.sql.
 --
@@ -149,14 +150,24 @@ BEGIN
              AND studio_actor.status = 'active'
              AND studio_actor.role <> 'guest'
          )
-         -- The roster and designer-domain law S4 and S7 ask for is the
-         -- INSERT arm's, exactly as the project path judges its lead there
-         -- and not here: project_id, designer_id, client_id and studio_id are
-         -- immutable above, so a row reaching this arm was already judged
-         -- against them. Re-asking here would only strand an outstanding
-         -- invoice the day the studio drops the household from a roster or a
-         -- designer's role is revoked - issue_invoice and void_invoice reach
-         -- this arm as the owner and would start raising.
+         -- S4 is the row's law on both arms: the household must sit on the
+         -- designer_clients roster of an active non-guest member of this
+         -- studio, the same rule create_draft_studio_invoice resolves the
+         -- household through. The read is RLS-safe for every actor this
+         -- branch admits (designer_clients_studio_rw, 00316:39, is
+         -- studio-wide) and takes no lock. The designer-domain law S7 asks
+         -- for stays the INSERT arm's, exactly as the project path judges its
+         -- lead there and not here: designer_id is immutable above.
+         OR NOT EXISTS (
+           SELECT 1
+           FROM public.designer_clients AS studio_roster
+           JOIN public.organization_members AS roster_membership
+             ON roster_membership.organization_id = NEW.studio_id
+            AND roster_membership.user_id = studio_roster.designer_id
+           WHERE studio_roster.client_id = NEW.client_id
+             AND roster_membership.status = 'active'
+             AND roster_membership.role <> 'guest'
+         )
       THEN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
       END IF;
@@ -258,11 +269,13 @@ BEGIN
              AND studio_actor.role <> 'guest'
          )
          -- S4 is the row's law, not only the composer's: the household must
-         -- sit on the stamped member's own designer_clients roster, and that
-         -- member must hold a designer-domain role. Without both, a member
-         -- could address a studio invoice to any profile in the database, or
-         -- route its design_fee earning to a co-member who designs nothing.
-         -- The roster read is RLS-safe for every actor this branch admits:
+         -- sit on the designer_clients roster of an active non-guest member
+         -- of this studio - the rule create_draft_studio_invoice resolves the
+         -- household through - and the stamped member must hold a
+         -- designer-domain role. Without both, a member could address a
+         -- studio invoice to any profile in the database, or route its
+         -- design_fee earning to a co-member who designs nothing. The roster
+         -- read is RLS-safe for every actor this branch admits:
          -- designer_clients_studio_rw (00316:39) shows a co-member the whole
          -- studio's roster, and the SECURITY DEFINER billing RPCs arrive as
          -- the table owner. Neither read takes a lock, so the canonical
@@ -271,8 +284,12 @@ BEGIN
          OR NOT EXISTS (
            SELECT 1
            FROM public.designer_clients AS studio_roster
-           WHERE studio_roster.designer_id = NEW.designer_id
-             AND studio_roster.client_id = NEW.client_id
+           JOIN public.organization_members AS roster_membership
+             ON roster_membership.organization_id = NEW.studio_id
+            AND roster_membership.user_id = studio_roster.designer_id
+           WHERE studio_roster.client_id = NEW.client_id
+             AND roster_membership.status = 'active'
+             AND roster_membership.role <> 'guest'
          )
          OR NOT public.has_designer_domain_role(NEW.designer_id)
       THEN
@@ -688,7 +705,24 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.set_invoice_studio_id() IS
-  'Invoker trigger authorizes project discovery before locking or deriving a missing invoice designer/client/studio from its canonical project. App/service inserts bind the current active non-guest project lead with a live designer-domain role, exact client, and active design studio; UPDATE cannot change invoice identity or its project/client/designer/studio tuple. Direct authenticated DML is limited to clean drafts by an exact-studio actor. Immutable machine updates require current-lead or previous_lead provenance. Authenticated owner cores require an exact-studio actor or exact client capability; service may reconcile exact historical tuples. A true postgres/no-SET-ROLE fixture or owner-maintenance session returns only after best-effort derivation and UPDATE immutability checks. 00571: a project-less studio invoice is authorized on both arms by its own studio instead - an active design studio, an active non-guest member as designer, a named household, and an actor that is an active non-guest member or a machine role - and takes no lock.';
+  'Invoker trigger authorizes project discovery before locking or deriving a missing invoice designer/client/studio from its canonical project. App/service inserts bind the current active non-guest project lead with a live designer-domain role, exact client, and active design studio; UPDATE cannot change invoice identity or its project/client/designer/studio tuple. Direct authenticated DML is limited to clean drafts by an exact-studio actor. Immutable machine updates require current-lead or previous_lead provenance. Authenticated owner cores require an exact-studio actor or exact client capability; service may reconcile exact historical tuples. A true postgres/no-SET-ROLE fixture or owner-maintenance session returns only after best-effort derivation and UPDATE immutability checks. 00571: a project-less studio invoice is authorized on both arms by its own studio instead - an active design studio, an active non-guest member as designer, a household on the designer_clients roster of an active non-guest member of that studio, and an actor that is an active non-guest member or a machine role - and takes no lock. The stamped member must additionally hold a designer-domain role on insert, where identity is settled.';
+
+-- The trigger's UPDATE OF list gains `title`: 00511's list predates the column,
+-- so without it a direct UPDATE that touches only the regarding line never
+-- fires the gate and could rewrite an issued studio invoice's title. The list
+-- is 00511:3076-3083 verbatim with `title` appended; the normalized definition
+-- is re-pinned in supabase/tests/edge_api/public_sd_hardening_contract_test.sql.
+DROP TRIGGER IF EXISTS set_invoice_studio_id ON public.invoices;
+CREATE TRIGGER set_invoice_studio_id
+  BEFORE INSERT OR UPDATE OF
+    id, studio_id, designer_id, client_id, project_id, status, invoice_number,
+    issue_date, due_date, payment_terms_days, currency, subtotal_cents,
+    tax_rate, tax_cents, total_cents, amount_paid_cents, memo, internal_notes,
+    sent_at, paid_at, voided_at, void_reason, stripe_checkout_session_id,
+    reminder_count, last_reminder_at, ar_flagged_at, ar_last_chased_at,
+    created_at, updated_at, title
+  ON public.invoices
+  FOR EACH ROW EXECUTE FUNCTION public.set_invoice_studio_id();
 
 -- ─── PART 3: create_draft_studio_invoice — the composer boundary ────────────
 --
@@ -1202,6 +1236,12 @@ COMMENT ON FUNCTION public.apply_invoice_payment_effects(UUID) IS
 -- homeowner through invoices.client_id, which is the only anchor a studio
 -- invoice has. Drafts stay invisible on both paths.
 
+-- The household read path filters invoices.client_id and nothing else, so it
+-- gets its own index; every project-keyed read still uses idx_invoices_project.
+CREATE INDEX IF NOT EXISTS idx_invoices_client
+  ON public.invoices (client_id)
+  WHERE client_id IS NOT NULL;
+
 CREATE POLICY invoices_household_select
   ON public.invoices FOR SELECT
   TO authenticated
@@ -1244,7 +1284,8 @@ COMMENT ON POLICY invoices_household_select ON public.invoices IS
 -- Head 00320:27. With no project the two-argument form falls to
 -- _primary_studio_for(designer), which brands a two-studio designer's studio
 -- invoice with the wrong letterhead (S8). The studio is named directly
--- instead. Two overloads would make the PostgREST rpc call ambiguous, so this
+-- instead - but only an active design studio short-circuits, so the resolver
+-- stays a brand resolver and never becomes an anon organization-name lookup. Two overloads would make the PostgREST rpc call ambiguous, so this
 -- is DROP + CREATE, not an added overload; plpgsql bodies carry no dependency
 -- on the old signature and every in-repo caller passes two positional or two
 -- named arguments, which still resolve against the default third.
@@ -1273,9 +1314,16 @@ DECLARE
 BEGIN
   -- 0. Named studio precedence (00571): a studio invoice carries its own
   -- studio_id, so neither the project nor the designer's primary studio is
-  -- consulted. Skips straight to the organizations read below.
+  -- consulted. Only an active design studio short-circuits; anything else -
+  -- a dead id, a manufacturer organization, an archived studio - falls
+  -- through to the project and designer derivations below rather than
+  -- lending this anon-granted resolver as an organization name lookup.
   IF p_studio_id IS NOT NULL THEN
-    v_studio_id := p_studio_id;
+    SELECT o.id INTO v_studio_id
+    FROM organizations o
+    WHERE o.id = p_studio_id
+      AND o.type = 'design_studio'
+      AND o.status = 'active';
   END IF;
 
   -- 1. Project precedence: its studio_id, and its designer as the fallback owner.
@@ -1343,6 +1391,6 @@ REVOKE ALL ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) FROM PUB
 GRANT EXECUTE ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) TO anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) IS
-  'Canonical studio brand resolver (plan D2): named studio→org (00571, so a studio invoice brands off its own studio_id rather than the designer''s primary studio), else project→studio→org, else designer→primary studio→org, else profile business_name/full_name (gated on is_designer so anon can''t enumerate non-designer names). Returns exactly one row, brand columns only. anon-granted (brand-only, same posture as open_design_requests).';
+  'Canonical studio brand resolver (plan D2): named studio→org when that id is an active design studio (00571, so a studio invoice brands off its own studio_id rather than the designer''s primary studio; anything else falls through rather than lending this anon-granted resolver as an organization name lookup), else project→studio→org, else designer→primary studio→org, else profile business_name/full_name (gated on is_designer so anon can''t enumerate non-designer names). Returns exactly one row, brand columns only. anon-granted (brand-only, same posture as open_design_requests).';
 
 COMMIT;
