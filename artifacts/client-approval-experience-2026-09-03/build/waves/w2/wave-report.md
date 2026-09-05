@@ -304,3 +304,160 @@ None of these blocked the pass.
 7. **Not done here, by rule:** nothing was pushed, no production mutation was run, and
    `stack-reset-notice.md` was appended before the reset (mirrored into the main checkout so the
    other lanes see it).
+
+---
+
+## 8 · Carry fixes (integration, 2026-09-05)
+
+The seven cross-lane items that only made sense once every lane was on one tree. Four commits on
+`approvals/w2-integration`, each with explicit pathspecs, none pushed.
+
+| # | Item | Commit | State |
+|---|---|---|---|
+| 1 | P-13's why on iOS | `c8f1edce4` | FIXED |
+| 2 | `IOSC-R2-07` — the acts ask who is reading | `c8f1edce4` | FIXED |
+| 3 | `iosd4-M1` / R15 — the afterglow off the widget | `d1eeb7aaf` | FIXED |
+| 4 | `iosd4-M2` / `M3` / `M4`, `iosd3-M1` carry | `f0b7c0486` | FIXED |
+| 4 | `IOSC-R2-01`, `IOSC-R2-02` | — | ALREADY CLOSED in the lane (`14a6cf857`, `476b0c50b`); re-verified, no change |
+| 5 | `H-01` (client mirror's answered mark) | — | ALREADY CLOSED in the lane (`223d144de`); re-verified, no change |
+| 5 | `W2B-R2-02` — the assistive path | `aa5fbbe72` | CONFIRMED NOT INVERTED; three jsdom tests added |
+| 6 | `B1` — the why signed by its frozen author | — | ALREADY CLOSED in the lane (`459de403b`); Deno tests exist and pass |
+
+### 1 · The frozen why now reaches the phone — and **H-14 is a false alarm**
+
+The item allowed for widening 00569 if only `get_project_decision_reviews` emitted the two keys.
+**It did not need widening, and 00569 is untouched.** Both client-facing reads delegate their
+serialization to the plural projection that 00569 redefines:
+
+- `list_my_project_decision_reviews()` (00467:135) is a `CROSS JOIN LATERAL
+  jsonb_array_elements(public.get_project_decision_reviews(authorized_project.project_id))`;
+- `get_project_decision_review(uuid)` (00467:101) → `app_private.project_decision_review_for_actor`
+  (00467:44), which selects the matching element out of the same call.
+
+Neither is redefined by any migration after 00467 (`grep -rn` over `supabase/migrations`: one hit
+each, plus a comment in 00569), so 00569's `why` / `whyAuthorName` / `viewerRole` reach all three
+reads. Confirmed against the running local Postgres as well —
+`position('get_project_decision_reviews' in pg_get_functiondef(oid)) > 0` is true for
+`list_my_project_decision_reviews` and for `app_private.project_decision_review_for_actor`.
+**H-14 (designer r4/r5) can be closed as read-through rather than carried into Wave 3**, and the
+wave report's "P-13 lands on web + designer only" line is superseded: it lands on iOS too.
+
+What changed is the phone. `RemoteProjectApprovalReview` decodes `why` and `whyAuthorName`
+(optional, so an approval composed before 00569 decodes as before) and exposes `designerWhy` /
+`designerWhyAuthor`, which trim and withhold a name that has no sentence over it —
+`approval-ask.tsx`'s `whyOf` / `whyAuthorOf` reading, ported. `ProjectApprovalBlock` draws
+`ApprovalWhyLine` between the question and the edition line: the web's own order, `— {name}` in
+`ProjectApprovalCopy.whyAttribution` (em dash, muted), with the identifiers
+`decisionDetail.approval.why` and `.whyAuthor` for the walk.
+
+### 2 · `IOSC-R2-07` — four legs, not two
+
+`respond_project_approval` and `confirm_project_decision_review` accept the frozen decision lead
+and nobody else, so every act leg now reads `review.viewerAnswers` beside its own condition: the
+three doors, the review hold, the review-unavailable line (it says "your designer has to send it
+again" to somebody who IS the designer), and the immutability sentence — whose own comment already
+ruled it "exactly `outcomeLeg`'s guard", and which otherwise would have told a studio co-member she
+was approving edition 3. `viewerAnswers` default-INCLUDES an absent or unknown role, so no
+homeowner loses her doors to a projection this build cannot read.
+
+Two existing source pins named the old conditions verbatim (`HoldToActTests`,
+`WalkCASAndFeedTests`); both were updated to the new ones rather than loosened.
+
+### 3 · `iosd4-M1` — R15 holds
+
+`WidgetSnapshot.init(record:…)` drops `row.kind.isOwnAct` before it maps a route, so
+`decisionAnswered` and `proposalSigned` never reach the payload. The subtraction is the kind's own
+predicate, not a list of ids, so a later own-act kind is off the widget the day it is added. Three
+tests: the mixed record, the record that is nothing but her own acts (projects empty), and the
+predicate itself.
+
+### 4 · The four M-items and the carry
+
+- **`iosd4-M2`** — `studioHint`'s three rungs print `StudioAttentionSummary.hint`'s own sentences,
+  in words: "One new conversation", "Three projects are moving". A real-value test (three projects
+  → "Three projects are moving") plus a source pin that neither `\(unreadMessageCount)` nor
+  `\(activeProjectCount)` survives.
+- **`iosd4-M3`** — Today's move reads "Review a project approval" / "One approval is waiting on
+  you." and carries **no mark at all**: `symbol` is empty and `TodayNextMoveCard` draws no tile
+  rather than an empty one holding its place. (`PatinaStamp` has no SF Symbol and the awaiting
+  outline is a bordered word, which does not fit a 54 pt tile — so the ruling's second option was
+  taken.) The two strings are now inside `ApprovalVocabularySweepTests.noRefusedWords`, the digit
+  and refused-word sweep that never reached them.
+- **`iosd4-M4`** — the afterglow row carries `stamp`, the raw word of the `PatinaStamp.State` that
+  `ProjectApprovalCopy.stamp(for:)` gives its outcome (`.signed` for a proposal she signed here),
+  and `HouseRecordRowView` draws the mark beside the sentence — stacked, because a mark, a date and
+  a full sentence do not share a 375 pt line. It is a string on the row so a snapshot written by a
+  later build draws no mark rather than costing the record a row; the field round-trips through
+  `Codable`, `markingNew` and `asStandingCondition`, all pinned.
+- **`iosd3-M1` carry** — `DecisionsListViewModel.eyebrow` is the constant "Waiting on you". The
+  list holds approvals AND option choices, so it is titled for what it is doing; `groupNoun` still
+  titles the Studio hub row, which names one group. The mixed-list case that used to read
+  DECISIONS now reads "Waiting on you" too.
+- **`IOSC-R2-01`** re-verified: `ApprovalDiscussionBlock` mounts `ApprovalDiscussion`, which SELECTs
+  `decision_comments` for the decision, oldest first, and attributes her own note "You · {date}".
+  **`IOSC-R2-02`** re-verified: `PatinaStamp.Pigment.muted`'s ink is `4E4339` (the portals'
+  `--text-muted`), not the old `8B7355`; `ContrastTests` measures it on both grounds in both
+  appearances. Neither needed a change.
+
+### 5 · Web
+
+`H-01` re-verified: `client-mirror.tsx:154` draws the answered mark in `var(--color-mocha)` and the
+file carries no sage. No change.
+
+`W2B-R2-02` — the guard is **not** inverted. `scored-action.tsx:585-589` is
+`preventDefault → unavailable/running → pointer tail → take()`, with no `isTrusted` anywhere. Three
+tests added to `hold-action.test.tsx`: an activation with no pointer behind it is taken (the screen
+reader / Voice Control / switch path, which the browser dispatches TRUSTED off the accessibility
+API), an instant click in a pointer gesture's tail is refused (a sighted hand's click, also
+trusted), and a third that reads the click handler and pins that it consults `POINTER_TAIL_MS` and
+never the trust flag. **jsdom cannot forge `isTrusted`** — it is an unforgeable own property,
+`configurable: false`, and `Object.defineProperty` throws (verified directly against the repo's
+jsdom) — so the trusted half of the pair is pinned in the code rather than in a dispatch, and the
+test says so.
+
+### 6 · Email
+
+`B1` was fixed in the lane and is verified here, not re-fixed: `renderDesignerNote`
+(`_shared/decision-notify.ts:517`) prefers `artifact.whyAuthorName` over `cobrand.designerGivenName`
+and the studio name, `project-approval-notification.ts:70` carries `why_author_name` onto the
+payload only beside a why, and `decision-notify.test.ts` pins the frozen author against the live
+signature across the first notice, the reminder and the overdue letter, plus the blank-name
+fallback and HTML escaping. `deno test --allow-all --config supabase/functions/deno.json
+supabase/functions/_shared` → **204 passed, 0 failed**; no `deno.lock` appeared.
+
+### 7 · Gates re-run
+
+| Gate | Result |
+|---|---|
+| `IOS_GATE_UDID=B6AD…CCAE apps/mobile/Patina/scripts/ios-gate.sh all` | **PASS** — `** BUILD SUCCEEDED **`, `Test run with 2630 tests in 284 suites passed … with 2 known issues` (the two pre-existing ones: `BrandVoiceLintTests` "curated_mix", `RoomLifecycleTests.theTodayRailFollowsALocalDelete`), `✓ lint-delta: no new warnings in touched files` |
+| `pnpm --filter @patina/client-portal type-check` | **PASS** (`tsc --noEmit`, no output) |
+| `pnpm --filter @patina/client-portal test` | **PASS** — 119 suites, 1672 tests |
+| `deno test --allow-all --config supabase/functions/deno.json supabase/functions/_shared` | **PASS** — 204 tests |
+| SQL suite | **NOT RUN, and not owed**: 00569 was not changed (see §1), so nothing was applied and the shared stack was not reset |
+| designer-portal | **NOT RUN, and not owed**: no designer-portal file was touched — H-01 was already fixed on the branch |
+
+The signed walk app was rebuilt from this worktree after the last iOS change —
+`xcodebuild build -scheme Patina -configuration Debug -destination 'generic/platform=iOS Simulator'
+-derivedDataPath …/.build/DerivedDataWalk` → `** BUILD SUCCEEDED **`; `codesign -dv` reads
+`Identifier=cloud.patina.app`, `Signature=adhoc`. **walkAppPath**:
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-integration/apps/mobile/Patina/.build/DerivedDataWalk/Build/Products/Debug-iphonesimulator/Patina.app`
+
+### Carry advisories
+
+1. **The shared local stack is not ours any more.** Its ledger tail reads `00571, 00568, 00567` —
+   no 00569, no 00570 — so a peer program reset it from its own branch after the steward's pass.
+   Nothing here needed it (no migration changed), but **the walkers must re-seed against a stack
+   carrying our 00569, or reset from this worktree first** — and `00571` on another branch is worth
+   a look before Wave 3 mints.
+2. **H-14 should be closed, not carried** (§1). The wave report's line "P-13 lands on web +
+   designer only this wave" is superseded by the delegation evidence.
+3. **`ProjectApprovalBlock` is at `type_body_length` again.** The why is drawn by a file-scope
+   `ApprovalWhyLine` view for that reason; the next addition to that screen needs its own file, as
+   `ApprovalDiscussionBlock` did.
+4. **Prettier was not run**, per the report's own advisory 5: `npx prettier --write` on
+   `hold-action.test.tsx` produced a 71/68 whole-file requote against a single-quoted file, so it
+   was reverted and the commit carries the hook's advisory drift line instead. No `--no-verify` was
+   needed on any commit this pass; the secret scanner did not trip.
+5. **`TodayNextMove.symbol` can now be empty**, and exactly one move uses that. A future move that
+   forgets to set a symbol will silently draw no tile rather than crash — worth a default in the
+   type if more such moves appear.
