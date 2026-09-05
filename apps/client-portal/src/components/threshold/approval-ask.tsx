@@ -55,49 +55,60 @@ const LETTER_DATE = new Intl.DateTimeFormat('en-GB', {
 const CONFIRM_REFUSED =
   'The artifact changed or the review could not be confirmed. Refresh and review it again.';
 const RESPOND_REFUSED = 'This approval changed while it was open. Refresh before responding.';
+/**
+ * The note IS the return: an edition sent back with nothing said about it is
+ * a designer's dead end. So a note that does not land stops the outcome, and
+ * says so without blaming her for it.
+ */
+const NOTE_REFUSED =
+  'The note could not be sent, so the edition was not returned. Your note is still here; try again.';
 
 /**
- * Codex's three outcomes, in the house's words. The values are load-bearing,
- * and each consequence line is the old page's own description — kept verbatim
- * but for the word "gate", which no homeowner reads on this surface.
+ * Three doors, one weight. The three outcomes are peers — a house that ranks
+ * them has already answered for her — so they carry ONE variant between them;
+ * the old primary / secondary / tertiary ranking is retired here (P-16).
+ *
+ * Each label is a verb and each consequence says what the verb does, so the
+ * act is legible before it is taken. The telemetry keys are unchanged and
+ * deliberately so: they are the same events the retired detail page emitted,
+ * and renaming them would break the series, not the copy.
  */
+const OUTCOME_VARIANT = 'secondary' as const;
+
 const OUTCOME_ACTS: Array<{
   outcome: ProjectApprovalOutcome;
   /**
    * The act that WRITES the outcome. Choosing one records nothing, so the
-   * outcome's own event belongs on the submit — a client who considers Decline
-   * and then approves must not have emitted `decline_project_approval`.
+   * outcome's own event belongs on the submit — a client who considers
+   * returning an edition and then approves it must not have emitted
+   * `decline_project_approval`.
    */
   writeKey: string;
   /** Choosing an outcome to read its consequence: a selection, not a record. */
   selectKey: string;
   label: string;
   consequence: string;
-  variant: 'primary' | 'secondary' | 'tertiary';
 }> = [
   {
     outcome: 'approved',
     writeKey: 'approve_project_approval',
     selectKey: 'consider_approve_project_approval',
     label: 'Approve',
-    consequence: 'Accept this exact artifact and its stated impacts.',
-    variant: 'primary',
-  },
-  {
-    outcome: 'needs_discussion',
-    writeKey: 'question_project_approval',
-    selectKey: 'consider_question_project_approval',
-    label: 'Ask a question',
-    consequence: 'Hold the approval while you and your designer talk it through.',
-    variant: 'secondary',
+    consequence: 'Accept this exact edition and its stated impacts.',
   },
   {
     outcome: 'changes_requested',
     writeKey: 'decline_project_approval',
     selectKey: 'consider_decline_project_approval',
-    label: 'Decline',
-    consequence: 'Return this edition for revision and a new approval request.',
-    variant: 'tertiary',
+    label: 'Return',
+    consequence: 'Send this edition back for revision and a new approval request.',
+  },
+  {
+    outcome: 'needs_discussion',
+    writeKey: 'question_project_approval',
+    selectKey: 'consider_question_project_approval',
+    label: 'Hold',
+    consequence: 'Keep this open while you and your designer talk it through.',
   },
 ];
 
@@ -577,6 +588,11 @@ export function ApprovalAsk({
 }: ApprovalAskProps) {
   const confirmReview = useConfirmProjectApprovalReview();
   const respond = useRespondProjectApproval();
+  // A returned edition carries its reason into the thread the studio already
+  // reads. R10 rules the requirement out of the database on purpose: this is
+  // the web's own asymmetry, and iOS's encouraged composer is the other half.
+  const changeNoteComment = useCreateDecisionComment();
+  const [changeNote, setChangeNote] = useState('');
   const [justAnswered, setJustAnswered] = useState<{
     outcome: ProjectApprovalOutcome;
     at: Date;
@@ -670,10 +686,22 @@ export function ApprovalAsk({
 
   async function submitResponse() {
     if (inFlight.current || !canRespond || !chosen) return;
+    const note = changeNote.trim();
+    if (chosen === 'changes_requested' && note.length === 0) return;
     inFlight.current = true;
     setError(null);
     setNotice(null);
     try {
+      // The note lands FIRST. An outcome recorded against a note that never
+      // arrived would send the edition back saying nothing.
+      if (chosen === 'changes_requested') {
+        try {
+          await changeNoteComment.mutateAsync({ decisionId: approval.decisionId, body: note });
+        } catch (cause) {
+          setError(refusalSentence(cause, NOTE_REFUSED));
+          return;
+        }
+      }
       await respond.mutateAsync({
         projectId: approval.projectId,
         decisionId: approval.decisionId,
@@ -869,7 +897,7 @@ export function ApprovalAsk({
                   actionKey={act.selectKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
-                  variant={act.variant}
+                  variant={OUTCOME_VARIANT}
                   onClick={() => setChosen(act.outcome)}
                 >
                   {act.label}
@@ -884,14 +912,46 @@ export function ApprovalAsk({
               >
                 {`${chosenAct.label} · ${chosenAct.consequence}`}
               </p>
+              {/* The change note, required here and nowhere else (R10). It asks
+                  for the thing the designer needs rather than reporting that a
+                  field is empty: no error state, no red, no "required" — the
+                  submit simply is not ready until she has said something. */}
+              {chosenAct.outcome === 'changes_requested' && (
+                <div className="mt-3 max-w-[52ch]">
+                  <label
+                    className="block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
+                    htmlFor={`approval-change-note-${approval.decisionId}`}
+                  >
+                    {`Tell ${designer ?? 'your designer'} what to change.`}
+                  </label>
+                  <textarea
+                    id={`approval-change-note-${approval.decisionId}`}
+                    data-testid="approval-change-note"
+                    value={changeNote}
+                    onChange={(event) => setChangeNote(event.target.value)}
+                    rows={3}
+                    className="mt-1.5 w-full resize-none border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.05rem] text-[var(--text-primary)]"
+                  />
+                  <p
+                    data-testid="approval-change-note-help"
+                    className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]"
+                  >
+                    It goes into the discussion below with your answer.
+                  </p>
+                </div>
+              )}
               <div className="mt-2 flex flex-wrap items-center gap-x-6">
                 <ScoredAction
                   actionKey={chosenAct.writeKey}
                   regionKey="doorstep"
                   surfaceKey="the_threshold"
                   variant="primary"
-                  loading={respond.isPending}
+                  loading={respond.isPending || changeNoteComment.isPending}
                   loadingLabel="Recording response"
+                  disabled={
+                    chosenAct.outcome === 'changes_requested' &&
+                    changeNote.trim().length === 0
+                  }
                   onClick={submitResponse}
                 >
                   Submit response

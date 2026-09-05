@@ -64,6 +64,7 @@ const budgetHook = useProjectWorkingBudget as jest.Mock;
 const respondMutate = jest.fn();
 const confirmMutate = jest.fn();
 const commentMutate = jest.fn();
+const commentMutateAsync = jest.fn();
 
 const APPROVAL: ProjectApprovalReview = {
   decisionId: 'dec-1',
@@ -102,6 +103,15 @@ async function answer(name: RegExp) {
   fireEvent.click(await screen.findByRole('button', { name: /submit response/i }));
 }
 
+/** Returning takes a third beat: the note the designer needs (R10). */
+async function returnEdition(note = 'The runner is too dark for the stair hall.') {
+  fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+  fireEvent.change(await screen.findByTestId('approval-change-note'), {
+    target: { value: note },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /submit response/i }));
+}
+
 // jsdom's Crypto has no `randomUUID`, so it is lent for the test and handed
 // back afterwards. The rest of the global — `getRandomValues` above all — is
 // left where it is; replacing the whole object takes it away from every test
@@ -117,7 +127,12 @@ beforeEach(() => {
   confirmHook.mockReturnValue({ mutateAsync: confirmMutate, isPending: false });
   respondHook.mockReturnValue({ mutateAsync: respondMutate, isPending: false });
   commentsHook.mockReturnValue({ data: [], isLoading: false, isError: false });
-  createCommentHook.mockReturnValue({ mutate: commentMutate, isPending: false });
+  commentMutateAsync.mockReset().mockResolvedValue({});
+  createCommentHook.mockReturnValue({
+    mutate: commentMutate,
+    mutateAsync: commentMutateAsync,
+    isPending: false,
+  });
   realtimeHook.mockReturnValue(undefined);
   budgetHook.mockReturnValue({ data: null, isLoading: false, isError: false });
   authHook.mockReturnValue({ user: { id: 'user-1', name: 'Harper Vale' } });
@@ -173,9 +188,13 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     // A delta of nothing is not a fact worth a row.
     expect(impact).not.toHaveTextContent('Schedule');
 
-    expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /ask a question/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^decline$/i })).toBeInTheDocument();
+    // Three doors, one weight: same variant, verb labels, no ranking.
+    const doors = ['approve', 'return', 'hold'].map((label) =>
+      screen.getByRole('button', { name: new RegExp(`^${label}$`, 'i') }),
+    );
+    expect(doors).toHaveLength(3);
+    const variants = new Set(doors.map((door) => door.className.match(/da-\w+/g)?.join(' ')));
+    expect(variants.size).toBe(1);
   });
 
   it('states an edition that changes nothing rather than showing a blank', () => {
@@ -204,14 +223,14 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     // Nothing is recorded on the first click.
     expect(respondMutate).not.toHaveBeenCalled();
     expect(screen.getByTestId('approval-consequence')).toHaveTextContent(
-      'Approve · Accept this exact artifact and its stated impacts.',
+      'Approve · Accept this exact edition and its stated impacts.',
     );
     // The other two acts are gone while one is chosen, so no second act can fire.
-    expect(screen.queryByRole('button', { name: /^decline$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /ask a question/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^return$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^hold$/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /choose another outcome/i }));
-    expect(screen.getByRole('button', { name: /^decline$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^return$/i })).toBeInTheDocument();
     expect(respondMutate).not.toHaveBeenCalled();
   });
 
@@ -239,7 +258,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
   it('returns the edition as changes_requested and reads back as RETURNED', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    await answer(/^decline$/i);
+    await returnEdition();
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(respondMutate.mock.calls[0][0]).toMatchObject({
@@ -252,7 +271,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
   it('holds the approval when the client asks a question', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    await answer(/ask a question/i);
+    await answer(/^hold$/i);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(respondMutate.mock.calls[0][0]).toMatchObject({ outcome: 'needs_discussion' });
@@ -842,12 +861,86 @@ describe('the ask in the house’s vocabulary', () => {
     expect(receipt.textContent).not.toMatch(/gate/i);
   });
 
-  it('holds the approval, not the gate, when the client considers a question', () => {
+  it('asks for the change in the designer’s own name, and will not send an empty return', () => {
+    render(<ApprovalAsk approval={APPROVAL} designerGivenName="Leah" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+
+    expect(screen.getByLabelText('Tell Leah what to change.')).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: /submit response/i });
+    expect(submit).toBeDisabled();
+
+    // Instruction, never validation: nothing on the page reports a failure,
+    // and no refusal ink is spent on a note she has not written yet.
+    const acts = screen.getByTestId('approval-acts');
+    expect(acts.textContent).not.toMatch(/required|invalid|must|error/i);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('names the designer generically when the house has no name for him', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
-    fireEvent.click(screen.getByRole('button', { name: /ask a question/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+    expect(screen.getByLabelText('Tell your designer what to change.')).toBeInTheDocument();
+  });
+
+  it('records nothing while the note is only whitespace', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+    fireEvent.change(screen.getByTestId('approval-change-note'), { target: { value: '   ' } });
+
+    expect(screen.getByRole('button', { name: /submit response/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /submit response/i }));
+    expect(respondMutate).not.toHaveBeenCalled();
+    expect(commentMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('sends the note into the discussion before it records the return', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    await returnEdition('The runner is too dark for the stair hall.');
+
+    await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+    expect(commentMutateAsync).toHaveBeenCalledWith({
+      decisionId: 'dec-1',
+      body: 'The runner is too dark for the stair hall.',
+    });
+    expect(commentMutateAsync.mock.invocationCallOrder[0]).toBeLessThan(
+      respondMutate.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not return the edition when the note itself is refused', async () => {
+    commentMutateAsync.mockRejectedValue(new Error('decision_comment refused: 42501'));
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    await returnEdition();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The note could not be sent, so the edition was not returned. Your note is still here; try again.',
+    );
+    expect(respondMutate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('approval-stamp')).not.toBeInTheDocument();
+  });
+
+  it('asks for no note on the two outcomes that are not a return', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /submit response/i })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /choose another outcome/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
+    expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /submit response/i })).not.toBeDisabled();
+  });
+
+  it('holds the approval, not the gate, when the client keeps it open', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
 
     expect(screen.getByTestId('approval-consequence')).toHaveTextContent(
-      'Ask a question · Hold the approval while you and your designer talk it through.',
+      'Hold · Keep this open while you and your designer talk it through.',
     );
   });
 });
