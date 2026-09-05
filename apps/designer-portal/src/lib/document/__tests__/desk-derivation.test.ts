@@ -362,6 +362,10 @@ describe('deriveNeed', () => {
     expect(need!.kind).toBe('proposal_signed');
     expect(need!.stamp.label).toBe('SIGNED');
     expect(need!.text).toMatch(/open the project/i);
+    // P-17 / R13 — one pigment for SIGNED across the table: the Desk's need
+    // line reads mocha, exactly as the proposal watch's seal does.
+    expect(need!.stamp.color).toBe('var(--color-mocha)');
+    expect(need!.stamp.color).not.toBe('var(--color-sage)');
   });
 
   it('declined proposal → need with DECLINED stamp', () => {
