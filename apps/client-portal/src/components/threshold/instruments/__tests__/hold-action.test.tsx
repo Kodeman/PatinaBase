@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('@/lib/analytics/events', () => ({
@@ -181,6 +184,57 @@ describe('HoldAction — the act, held', () => {
     jest.useRealTimers();
 
     expect(onHold).toHaveBeenCalledTimes(1);
+  });
+
+  /* W2B-R2-02, the carry. The guard on an activation click is the POINTER TAIL
+     and nothing else, in both directions:
+
+       • an activation with no pointer behind it is taken — a screen reader,
+         Voice Control or switch access has no hold to give, and the browser
+         dispatches that click ITSELF, trusted, off the platform accessibility
+         API (AXPress / kDoDefault / doAction);
+       • an activation moments after a pointer gesture on this control is
+         refused — it is that gesture's own tail, and the gesture was already
+         answered by refusing it. A sighted hand's click is trusted too.
+
+     Trust therefore separates nothing, and a guard that tested `isTrusted`
+     would refuse every real assistive activation while admitting only a
+     scripted one — the inversion this finding named. jsdom cannot forge the
+     flag (it is an unforgeable own property on the event, non-configurable —
+     `Object.defineProperty` throws), so the two halves below pin the pointer
+     history, and the third pins that the handler never reads trust at all. */
+  function activationClick(target: HTMLElement) {
+    act(() => {
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+  }
+
+  it('takes an activation that no pointer preceded — the assistive path', () => {
+    draw();
+    activationClick(actWord());
+    expect(onHold).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an instant click in a pointer gesture’s tail — the sighted hand', () => {
+    draw();
+    const target = actWord();
+
+    fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+    fireEvent.pointerUp(target);
+    activationClick(target);
+
+    expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it('never consults the trust flag, in either direction', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../scored-action.tsx'),
+      'utf8',
+    );
+    const handler = source.slice(source.indexOf('onClick={(event) => {'));
+    const body = handler.slice(0, handler.indexOf('}}'));
+    expect(body).toContain('POINTER_TAIL_MS');
+    expect(body).not.toContain('isTrusted');
   });
 
   it('an unavailable act is not taken by an assistive click either', () => {
