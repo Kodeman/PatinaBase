@@ -268,10 +268,11 @@ struct HouseRecordCardTests {
         #expect(halfBody.contains("if hasMore {"))
         #expect(halfBody.contains("seeAll(half)"))
 
-        // Each half is asked about its OWN overflow, never the card's.
+        // Each half reads its OWN overflow, never the card's larger one.
         let code = SourceScan.code(in: source)
-        #expect(code.contains("hasMore: record.hasMoreNeedsYou"))
-        #expect(code.contains("hasMore: record.hasMoreMoved"))
+        #expect(code.contains(
+            "let hasMore = half == .needsYou ? record.hasMoreNeedsYou : record.hasMoreMoved"
+        ))
         #expect(!code.contains("record.hasMoreNeedsYou ? .needsYou : .moved"))
         #expect(!code.contains("record.hasMoreNeedsYou || record.hasMoreMoved"))
     }

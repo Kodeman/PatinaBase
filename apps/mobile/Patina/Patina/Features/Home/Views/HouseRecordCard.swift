@@ -21,6 +21,12 @@
 //     upward. At guest and discovering the caller does not mount the card at
 //     all (`HomeComposition.recordDraws`).
 //
+// P-04 and P-12 pushed this past the 500-line floor. The file is the
+// Record's presentation contract end to end — the row model, the dates,
+// the card and the row — and the honesty rules above are read against all
+// four together; splitting it to satisfy a line count would scatter them.
+// Same disable, and the same reason, as `HouseRecord.swift` beside it.
+// swiftlint:disable file_length
 
 import SwiftUI
 
@@ -280,8 +286,7 @@ struct HouseRecordCard: View {
                 eyebrow: "NEEDS YOU",
                 rows: record.needsYou,
                 empty: HouseRecordDates.needsYouEmpty,
-                isFirst: true,
-                hasMore: record.hasMoreNeedsYou
+                isFirst: true
             )
 
             half(
@@ -289,8 +294,7 @@ struct HouseRecordCard: View {
                 eyebrow: "MOVED",
                 rows: record.moved,
                 empty: HouseRecordDates.movedEmpty(lastSeenAt: record.lastSeenAt),
-                isFirst: record.needsYou.isEmpty && !drawsEmpties,
-                hasMore: record.hasMoreMoved
+                isFirst: record.needsYou.isEmpty && !drawsEmpties
             )
         }
         .padding(.horizontal, PatinaSpacing.md)
@@ -356,9 +360,12 @@ struct HouseRecordCard: View {
         eyebrow: String,
         rows: [HouseRecordRow],
         empty: String,
-        isFirst: Bool,
-        hasMore: Bool
+        isFirst: Bool
     ) -> some View {
+        // Each half asks about its OWN overflow. Read here rather than passed
+        // in so a call site cannot hand one half the other's answer — which is
+        // the defect P-12 is about, in miniature.
+        let hasMore = half == .needsYou ? record.hasMoreNeedsYou : record.hasMoreMoved
         if !rows.isEmpty || drawsEmpties {
             VStack(alignment: .leading, spacing: 0) {
                 if !isFirst {
