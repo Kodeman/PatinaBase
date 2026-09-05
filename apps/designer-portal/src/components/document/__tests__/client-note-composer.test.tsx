@@ -104,6 +104,11 @@ function openTheComposer() {
 }
 
 beforeEach(() => {
+  // The retired receipt reads `new Date()` (client-note-composer.tsx:326), so
+  // "Taken down Sep 4" is only true on Sep 4 unless the clock is held. The
+  // suite is entirely synchronous — no waitFor/findBy — so faking timers costs
+  // nothing else.
+  jest.useFakeTimers().setSystemTime(new Date("2026-09-04T12:00:00.000Z"));
   mockFlag = { value: true, isLoading: false };
   mockNotes = [];
   mockNotesLoading = false;
@@ -129,6 +134,10 @@ beforeEach(() => {
   retireMutate.mockReset();
   sendPending = false;
   retirePending = false;
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 describe("ClientNoteComposer — flag gate", () => {
