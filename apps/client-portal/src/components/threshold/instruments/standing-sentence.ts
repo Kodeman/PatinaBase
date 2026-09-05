@@ -333,3 +333,135 @@ export function standingSubline(input: StandingSentenceInput): string[] {
 
   return segments;
 }
+
+/* ── The weighing ────────────────────────────────────────────────────────────
+   What an edition costs her, in the same voice as the sentence above: one
+   spoken line, then a mono ledger of the figures underneath.
+
+   The three deltas are INDEPENDENT and stand side by side (R11) — they are
+   never summed into one number, because cost, schedule and lead time are not
+   the same quantity and a total of them is not a fact. A delta of zero is
+   still stated, in words, whenever any of the three moved: silence about the
+   schedule reads as "we didn't check", and she is agreeing to all three.
+
+   A baseline turns a delta into a fact: "$46,880 becomes $48,120" says what
+   the figure IS, where "+$1,200" only says what it moved by. So the baseline
+   is spoken whenever the edition carries one, and the delta alone is the
+   fallback, never the preference.
+
+   Neither the sentence nor the ledger carries a pigment: a rise is not
+   terracotta and a saving is not sage, on a page where an outcome is the only
+   thing allowed to be a colour.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export interface ApprovalWeighingInput {
+  costCentsDelta: number;
+  scheduleDaysDelta: number;
+  leadTimeDaysDelta: number;
+  /** What the cost stood at before this edition, when the row carries it. */
+  costBaselineCents?: number | null;
+  currency?: string;
+}
+
+export interface ApprovalWeighing {
+  /** The spoken line. Never empty. */
+  sentence: string;
+  /** The figures beneath it, in mono. EMPTY when nothing moved. */
+  ledger: string;
+}
+
+/** The sentence the surface has printed since the edition first carried none. */
+const NOTHING_MOVED = 'No cost, schedule or lead-time change.';
+
+/** A delta the composer can trust: a real number, rounded to a whole unit. */
+function delta(value: number | undefined | null): number {
+  return Number.isFinite(value) ? Math.trunc(value as number) : 0;
+}
+
+function daysInWords(days: number): string {
+  const whole = Math.abs(days);
+  return `${countInWords(whole)} ${whole === 1 ? 'day' : 'days'}`;
+}
+
+function costClause(
+  cents: number,
+  baseline: number | null,
+  currency: string,
+): string {
+  if (baseline !== null) {
+    return `${moneyInWords(baseline, currency)} becomes ${moneyInWords(
+      baseline + cents,
+      currency,
+    )}`;
+  }
+  if (cents === 0) return 'the cost does not change';
+  return cents > 0
+    ? `the cost rises by ${moneyInWords(cents, currency)}`
+    : `the cost falls by ${moneyInWords(Math.abs(cents), currency)}`;
+}
+
+function scheduleClause(days: number): string {
+  if (days === 0) return 'the schedule does not change';
+  return days > 0
+    ? `the schedule moves out by ${daysInWords(days)}`
+    : `the schedule pulls in by ${daysInWords(days)}`;
+}
+
+function leadTimeClause(days: number): string {
+  if (days === 0) return 'the lead time does not change';
+  return days > 0
+    ? `the lead time grows by ${daysInWords(days)}`
+    : `the lead time shortens by ${daysInWords(days)}`;
+}
+
+/** Figures, with the sign the ledger prints and the minus a typesetter uses. */
+function signedMoney(cents: number, currency: string): string {
+  if (cents === 0) return moneyInWords(0, currency);
+  return `${cents > 0 ? '+' : '−'}${moneyInWords(Math.abs(cents), currency)}`;
+}
+
+function signedDays(days: number): string {
+  const whole = Math.abs(days);
+  const noun = whole === 1 ? 'day' : 'days';
+  if (days === 0) return `0 ${noun}`;
+  return `${days > 0 ? '+' : '−'}${whole} ${noun}`;
+}
+
+/**
+ * One edition's weight: the spoken line, and the figures under it.
+ *
+ *   "$46,880 becomes $48,120, the schedule does not change, and the lead time
+ *    shortens by four days."
+ *   "Cost +$1,240 · Schedule 0 days · Lead time −4 days"
+ */
+export function approvalWeighing(input: ApprovalWeighingInput): ApprovalWeighing {
+  const currency = input.currency ?? 'USD';
+  const cost = delta(input.costCentsDelta);
+  const schedule = delta(input.scheduleDaysDelta);
+  const leadTime = delta(input.leadTimeDaysDelta);
+  const baseline =
+    typeof input.costBaselineCents === 'number' && Number.isFinite(input.costBaselineCents)
+      ? Math.trunc(input.costBaselineCents)
+      : null;
+
+  if (cost === 0 && schedule === 0 && leadTime === 0 && baseline === null) {
+    return { sentence: NOTHING_MOVED, ledger: '' };
+  }
+
+  const sentence = `${capitalize(
+    joinClauses([
+      costClause(cost, baseline, currency),
+      scheduleClause(schedule),
+      leadTimeClause(leadTime),
+    ]),
+  )}.`;
+
+  return {
+    sentence,
+    ledger: [
+      `Cost ${signedMoney(cost, currency)}`,
+      `Schedule ${signedDays(schedule)}`,
+      `Lead time ${signedDays(leadTime)}`,
+    ].join(' · '),
+  };
+}

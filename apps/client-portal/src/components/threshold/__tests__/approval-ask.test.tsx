@@ -180,13 +180,15 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       'Your review is confirmed.',
     );
 
-    const impact = screen.getByTestId('approval-impact');
-    expect(impact).toHaveTextContent('Cost');
-    expect(impact).toHaveTextContent('+$1,200');
-    expect(impact).toHaveTextContent('Lead time');
-    expect(impact).toHaveTextContent('−4 days');
-    // A delta of nothing is not a fact worth a row.
-    expect(impact).not.toHaveTextContent('Schedule');
+    // One spoken sentence, then the figures. The schedule moved by nothing and
+    // is said so anyway — she is agreeing to all three (R11).
+    expect(screen.getByTestId('approval-impact-sentence')).toHaveTextContent(
+      'The cost rises by $1,200, the schedule does not change, and the lead time shortens by four days.',
+    );
+    expect(screen.getByTestId('approval-impact-ledger')).toHaveTextContent(
+      'Cost +$1,200 · Schedule 0 days · Lead time −4 days',
+    );
+    expect(screen.getByTestId('approval-impact')).not.toHaveTextContent('Cost Schedule');
 
     // Three doors, one weight: same variant, verb labels, no ranking.
     const doors = ['approve', 'return', 'hold'].map((label) =>
@@ -195,6 +197,26 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(doors).toHaveLength(3);
     const variants = new Set(doors.map((door) => door.className.match(/da-\w+/g)?.join(' ')));
     expect(variants.size).toBe(1);
+  });
+
+  it('names the figure the cost moves from when the edition carries a baseline', () => {
+    render(
+      <ApprovalAsk
+        approval={
+          {
+            ...APPROVAL,
+            costCentsDelta: 124_000,
+            scheduleDaysDelta: 0,
+            leadTimeDaysDelta: 0,
+            costBaselineCents: 4_688_000,
+          } as ProjectApprovalReview
+        }
+      />,
+    );
+
+    expect(screen.getByTestId('approval-impact-sentence')).toHaveTextContent(
+      '$46,880 becomes $48,120',
+    );
   });
 
   it('states an edition that changes nothing rather than showing a blank', () => {
@@ -209,10 +231,12 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       />,
     );
 
-    expect(screen.queryByTestId('approval-impact')).not.toBeInTheDocument();
-    expect(screen.getByTestId('approval-no-impact')).toHaveTextContent(
+    expect(screen.getByTestId('approval-impact-sentence')).toHaveTextContent(
       'No cost, schedule or lead-time change.',
     );
+    // Nothing moved, so the ledger says nothing: the same negation twice, once
+    // in prose and once in mono, reads as a stutter.
+    expect(screen.queryByTestId('approval-impact-ledger')).not.toBeInTheDocument();
   });
 
   it('names the consequence and takes a second beat before recording an outcome', () => {

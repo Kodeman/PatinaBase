@@ -16,6 +16,7 @@ import {
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { Stamp, stampStateForApproval } from '@/components/threshold/instruments/stamp';
 import {
+  approvalWeighing,
   countInWords,
   moneyInWords,
 } from '@/components/threshold/instruments/standing-sentence';
@@ -137,10 +138,6 @@ function upperFirst(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-function moneyDelta(cents: number): string {
-  return `${cents > 0 ? '+' : '−'}${moneyInWords(Math.abs(cents))}`;
-}
-
 /**
  * The artifact's own figures, to the cent — `formatMoney` from the retired
  * `/decisions/[id]` page, verbatim. The house's prose rounds to whole dollars
@@ -149,11 +146,6 @@ function moneyDelta(cents: number): string {
  */
 function moneyExact(cents: number, currency: string): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
-}
-
-function dayDelta(days: number): string {
-  const whole = Math.abs(days);
-  return `${days > 0 ? '+' : '−'}${whole} ${whole === 1 ? 'day' : 'days'}`;
 }
 
 /**
@@ -718,16 +710,20 @@ export function ApprovalAsk({
     }
   }
 
-  // Absence is silence: a delta of nothing is not a fact worth a row — but an
-  // edition that changes nothing at all is a fact the client is agreeing to,
-  // and it says so in one line rather than showing a blank.
-  const impact: Array<{ label: string; value: string }> = [];
-  if (approval.costCentsDelta)
-    impact.push({ label: 'Cost', value: moneyDelta(approval.costCentsDelta) });
-  if (approval.scheduleDaysDelta)
-    impact.push({ label: 'Schedule', value: dayDelta(approval.scheduleDaysDelta) });
-  if (approval.leadTimeDaysDelta)
-    impact.push({ label: 'Lead time', value: dayDelta(approval.leadTimeDaysDelta) });
+  // What the edition weighs, spoken once and then printed as figures. The
+  // three deltas stand side by side and are never summed (R11), and a delta of
+  // zero is said in words rather than left out — she is agreeing to all three.
+  //
+  // The baseline is read defensively: the projection does not carry one today,
+  // and a cost delta beside the figure it moves from is a fact where the delta
+  // alone is a fragment, so the composer takes it the moment the row has it.
+  const weighing = approvalWeighing({
+    costCentsDelta: approval.costCentsDelta,
+    scheduleDaysDelta: approval.scheduleDaysDelta,
+    leadTimeDaysDelta: approval.leadTimeDaysDelta,
+    costBaselineCents:
+      (approval as { costBaselineCents?: number | null }).costBaselineCents ?? null,
+  });
 
   // `data-never-dim` is spared the Since-Yesterday dim only while something is
   // actually owed on it: a gate she has reviewed and that now waits on the
@@ -778,26 +774,22 @@ export function ApprovalAsk({
 
       {approval.artifactKind === 'budget_version' && <BudgetInEdition approval={approval} />}
 
-      {impact.length > 0 ? (
-        <dl
-          data-testid="approval-impact"
-          className="mt-4 flex max-w-[52ch] flex-wrap gap-x-10 gap-y-2"
-        >
-          {impact.map((row) => (
-            <div key={row.label}>
-              <dt className={EYEBROW_CLASS}>{row.label}</dt>
-              <dd className="mt-0.5 text-[15px] leading-normal">{row.value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
+      <div data-testid="approval-impact" className="mt-4 max-w-[52ch]">
         <p
-          data-testid="approval-no-impact"
-          className="mt-4 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+          data-testid="approval-impact-sentence"
+          className="text-[15px] leading-[1.62] text-[var(--text-body)]"
         >
-          No cost, schedule or lead-time change.
+          {weighing.sentence}
         </p>
-      )}
+        {weighing.ledger && (
+          <p
+            data-testid="approval-impact-ledger"
+            className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
+          >
+            {weighing.ledger}
+          </p>
+        )}
+      </div>
 
       {recordedOutcome && (
         <p className="mt-4">
