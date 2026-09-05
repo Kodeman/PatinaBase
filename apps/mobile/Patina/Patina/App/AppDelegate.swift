@@ -114,7 +114,8 @@ final class PatinaAppDelegate: NSObject, UIApplicationDelegate {
     private func handleNotificationPayload(
         _ userInfo: [AnyHashable: Any],
         source: String,
-        actionIdentifier: String = UNNotificationDefaultActionIdentifier
+        actionIdentifier: String = UNNotificationDefaultActionIdentifier,
+        threadIdentifier: String? = nil
     ) {
         // A dismissal cleared the letter; it did not read it. Nothing opens,
         // and nothing is marked opened — telling the studio she has seen a
@@ -126,7 +127,8 @@ final class PatinaAppDelegate: NSObject, UIApplicationDelegate {
         // conversation, everything else opens the thing itself. The fall-back
         // is unchanged: a tap never silently no-ops.
         let resolved = NotificationCategories.route(
-            forActionIdentifier: actionIdentifier, apnsUserInfo: userInfo
+            forActionIdentifier: actionIdentifier, apnsUserInfo: userInfo,
+            threadIdentifier: threadIdentifier
         ) ?? .notifications
 
         #if DEBUG
@@ -181,7 +183,10 @@ extension PatinaAppDelegate: UNUserNotificationCenterDelegate {
     ) {
         let userInfo = response.notification.request.content.userInfo
         handleNotificationPayload(
-            userInfo, source: "tap", actionIdentifier: response.actionIdentifier
+            userInfo, source: "tap", actionIdentifier: response.actionIdentifier,
+            // P-22: the backend groups a reminder onto the letter it repeats
+            // with `decision-<id>`. Honoured as a last resort for the entity.
+            threadIdentifier: response.notification.request.content.threadIdentifier
         )
         // C.1 / R29: a tapped push usually means new studio activity —
         // re-poll the Studio-rail badge counts + design-request status.

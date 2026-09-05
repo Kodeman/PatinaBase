@@ -166,13 +166,30 @@ public enum NotificationCategories {
     /// is a dismissal (do nothing) or an unknown entity (open the feed).
     public static func route(
         forActionIdentifier actionIdentifier: String,
-        apnsUserInfo userInfo: [AnyHashable: Any]
+        apnsUserInfo userInfo: [AnyHashable: Any],
+        threadIdentifier: String? = nil
     ) -> AppRoute? {
         if actionIdentifier == UNNotificationDismissActionIdentifier { return nil }
         if PatinaNotificationAction(rawValue: actionIdentifier) == .askQuestion {
             return conversationRoute(apnsUserInfo: userInfo)
         }
         return NotificationRouter.resolve(apnsUserInfo: userInfo).route
+            ?? route(forThreadIdentifier: threadIdentifier)
+    }
+
+    /// The sender's own grouping key, read as a destination.
+    ///
+    /// `decision-<id>` says both which rail and which row, so it is the last
+    /// thing that can name the entity when the envelope that reached this
+    /// device carried neither a pair nor a link — a reminder that collapsed
+    /// onto an earlier letter, say. Nil for any identifier that is not ours.
+    static func route(forThreadIdentifier identifier: String?) -> AppRoute? {
+        guard let identifier,
+              let read = PatinaNotificationCategory.entity(fromThreadIdentifier: identifier)
+        else { return nil }
+        return NotificationRouter.route(
+            forEntityType: read.category.entityType, entityId: read.entityId
+        )
     }
 
     /// The thread this letter belongs to, or the inbox.

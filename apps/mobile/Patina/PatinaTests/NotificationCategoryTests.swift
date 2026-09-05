@@ -211,6 +211,45 @@ struct NotificationCategoryTests {
         )
     }
 
+    /// The sender's grouping key is the last thing that can name the entity.
+    @Test("Open falls back to the thread identifier when nothing else names the entity")
+    func openFollowsTheThreadIdentifier() {
+        #expect(
+            NotificationCategories.route(
+                forActionIdentifier: PatinaNotificationAction.open.rawValue,
+                apnsUserInfo: [:],
+                threadIdentifier: "decision-d-7"
+            ) == .decisionDetail(decisionId: "d-7")
+        )
+        #expect(
+            NotificationCategories.route(
+                forActionIdentifier: UNNotificationDefaultActionIdentifier,
+                apnsUserInfo: [:],
+                threadIdentifier: "proposal-p-7"
+            ) == .proposalDetail(proposalId: "p-7")
+        )
+        // An identifier that is not ours names nothing, and the delegate's own
+        // fall-back (the feed) takes over.
+        #expect(
+            NotificationCategories.route(
+                forActionIdentifier: PatinaNotificationAction.open.rawValue,
+                apnsUserInfo: [:],
+                threadIdentifier: "room-abc"
+            ) == nil
+        )
+    }
+
+    @Test("the envelope still wins over the thread identifier beside it")
+    func theEnvelopeBeatsTheThreadIdentifier() {
+        #expect(
+            NotificationCategories.route(
+                forActionIdentifier: PatinaNotificationAction.open.rawValue,
+                apnsUserInfo: ["entity_type": "invoice", "entity_id": "i-3"],
+                threadIdentifier: "decision-d-7"
+            ) == .invoiceDetail(invoiceId: "i-3")
+        )
+    }
+
     // MARK: - The delegate is wired
 
     /// The stub's own header names the wiring this pins: the delegate calls
@@ -229,6 +268,7 @@ struct NotificationCategoryTests {
         #expect(source.contains("DecisionPushHandler.handle(apnsUserInfo: userInfo)"))
         #expect(source.contains("NotificationCategories.route("))
         #expect(source.contains("response.actionIdentifier"))
+        #expect(source.contains("response.notification.request.content.threadIdentifier"))
         // P-08's seam: a route that arrives before the app can show it is held.
         #expect(source.contains("DeepLinkHandler.shared.navigate(to: resolved)"))
     }

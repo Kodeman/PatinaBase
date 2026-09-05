@@ -149,6 +149,15 @@ a message — and inventing a thread that does not exist is worse than landing h
 where she writes to the studio. **Owed: ask the backend lane to put `thread_id`
 in the `PATINA_*` envelopes; the client reads it the moment it appears.**
 
+**The sender's thread identifier is honoured as a routing fall-back.** The
+categories name the shape once (`PatinaNotificationCategory.threadIdentifier(entityId:)`
+and its reader), and `didReceive response` passes
+`response.notification.request.content.threadIdentifier` down: when an envelope
+reaches the device carrying neither an entity pair nor a `deep_link` — a
+reminder that collapsed onto an earlier letter — `decision-<id>` still says
+which rail and which row. The envelope wins where it has one; an identifier
+that is not ours names nothing and the feed fall-back takes over.
+
 **The NSE is not built**, per the ruling. No `mutable-content`, no attachment
 target.
 
