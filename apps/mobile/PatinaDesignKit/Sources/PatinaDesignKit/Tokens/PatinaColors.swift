@@ -59,6 +59,17 @@ public enum PatinaColors {
     /// AR light slider, highlights
     public static let goldenHour = Color(hex: "E8C547")
 
+    /// Golden hour dark enough to be a MARK rather than a wash — the stamp
+    /// grammar's `held` border (P-17 / R13). `goldenHour` was added for one
+    /// caller and is 1.66:1 on the light canvas; this is the same hue at
+    /// 5.45:1 on paper, byte-identical to the portals' `--color-golden-hour-ink`.
+    public static let goldenHourInk = Color(hex: "79651E")
+
+    /// Terracotta dark enough to carry a word — the stamp grammar's `declined`
+    /// border and ink, and the one warm exception in a palette that refuses a
+    /// red/green pair. `--color-terracotta-ink` in the portals.
+    public static let terracottaInk = Color(hex: "9C5340")
+
     // MARK: - Status Colors
 
     /// Success, match badges
@@ -228,6 +239,43 @@ public enum PatinaColors {
         public static let active = Color.patinaDynamic(
             light: charcoal, dark: DarkPalette.textPrimary
         )
+    }
+
+    /// The client stamp grammar's four pigments (P-17 / R13).
+    ///
+    /// Four dials, no fills, no shadows: border weight, border pigment, word
+    /// ink, rotation. The light values are the portals' own `-ink` tokens, all
+    /// measured at or above 4.5:1 on paper; each carries a dark companion for
+    /// the same reason every other ink here does — a stamp drawn in `mocha` on
+    /// the warm-graphite canvas is 1.6:1 and is not a mark at all.
+    ///
+    /// `sage` is deliberately absent. R13 moves SIGNED to mocha and leaves
+    /// terracotta standing alone as Declined, so no traffic-light reading is
+    /// available anywhere in the system.
+    public enum Stamp {
+        /// Approved, Signed, Signed on paper. The ink of a signed hand.
+        public static let mocha = Color.patinaDynamic(
+            light: PatinaColors.mocha, dark: DarkPalette.textSecondary
+        )
+        /// Held, and the un-stamped Awaiting-you outline.
+        public static let goldenHour = Color.patinaDynamic(
+            light: goldenHourInk, dark: PatinaColors.goldenHour
+        )
+        /// Returned — a single rule, because it is not terminal.
+        public static let clay = Color.patinaDynamic(
+            light: clayInk, dark: PatinaColors.clay
+        )
+        /// Declined, once, with no counterpart.
+        public static let terracotta = Color.patinaDynamic(
+            light: terracottaInk, dark: DarkPalette.textError
+        )
+        /// Withdrawn, Superseded, Expired, Reviewed — the muted grammar.
+        public static let mutedInk = PatinaColors.Text.muted
+        /// …and the rule those four are drawn in.
+        public static let mutedRule = PatinaColors.Border.strong
+        /// The word inside a held, returned or declined stamp: legibility
+        /// never degrades, so the word is always the page's own primary ink.
+        public static let word = PatinaColors.Text.primary
     }
 
     // MARK: - Strata Mark Colors

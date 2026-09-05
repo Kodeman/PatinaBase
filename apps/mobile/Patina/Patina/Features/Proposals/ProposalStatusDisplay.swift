@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import PatinaDesignKit
 
 enum ProposalStatusDisplay {
 
@@ -30,6 +31,29 @@ enum ProposalStatusDisplay {
         case "expired": return "Expired"
         default: return proposal.status?.capitalized ?? "Proposal"
         }
+    }
+
+    /// `P-17`. The mark beside that line, in the eleven-state stamp grammar
+    /// — replacing the green `checkmark.seal.fill` / `checkmark.circle` pair
+    /// and the two filled `PatinaStatusBadge`s beneath them. Pure, so the
+    /// mark and the words it sits beside cannot drift apart.
+    ///
+    /// `nil` is a real answer and the important one: an `accepted` proposal
+    /// with no signature record is a designer-side accept, and SP-04 is the
+    /// whole reason this file exists — the app may not stamp SIGNED, or SIGNED
+    /// ON PAPER, over a signature nobody can produce. The word "Accepted"
+    /// stands alone, unmarked, which is exactly what it is.
+    ///
+    /// The branch order is `ProposalDetailView.statusRow`'s own, so the mark
+    /// cannot appear in a branch the view does not draw.
+    static func stampState(
+        for proposal: RemoteProposal, justSigned: Bool
+    ) -> PatinaStamp.State? {
+        if proposal.hasSignatureRecord || justSigned { return .signed }
+        if proposal.isSigned { return nil }
+        if proposal.status == "declined" { return .declined }
+        if proposal.status == "expired" || !proposal.isSignable { return .expired }
+        return nil
     }
 
     /// The detail header's resolved line. `justSigned` is the client's own
