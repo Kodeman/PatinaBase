@@ -394,4 +394,19 @@ describe('DoorActs', () => {
     );
     expect(document.activeElement).not.toBe(document.body);
   });
+
+  it('clears the door’s docked act on a narrow viewport (P-18)', () => {
+    renderActs();
+
+    // The door’s primary act sticks to the bottom edge at this width, and a
+    // stuck act paints over whatever scrolls under it. These three answers are
+    // the last thing on the leaf, so they are given the dock’s height back:
+    // Ask a question, Request a change and Decline stay reachable rather than
+    // being read through the act they are alternatives to.
+    const acts = screen.getByTestId('door-acts');
+    expect(acts).toHaveClass('max-[600px]:pb-16');
+    for (const label of ['Ask a question', 'Request a change', 'Decline']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+  });
 });
