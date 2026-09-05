@@ -37,16 +37,21 @@ public enum DecisionPushType: String, Sendable, CaseIterable {
     /// A decision was resolved (selection applied / designer override).
     case resolved = "decision_resolved"
 
-    /// SF Symbol for the in-app feed / banner.
+    /// SF Symbol for the in-app feed.
     ///
     /// P-04 / R8: a passed date is a clock, not a warning triangle. The
     /// studio is checking in on a question it asked; the app does not get to
     /// escalate that on the studio's behalf.
+    ///
+    /// `AppNotification.init(from:)` draws this over the bucket glyph, which
+    /// is one mark for all three types — so this is what a homeowner sees, and
+    /// none of the three may be a checkmark: a check beside a row IS a status
+    /// mark, which the refusals name.
     public var icon: String {
         switch self {
-        case .required: return "checklist"
+        case .required: return "hand.raised"
         case .overdue: return "clock"
-        case .resolved: return "checkmark.seal.fill"
+        case .resolved: return "seal"
         }
     }
 

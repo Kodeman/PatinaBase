@@ -151,7 +151,13 @@ extension AppNotification {
         // "New pieces for you" bucket with a sparkles icon.
         let type = AppNotificationType(entityType: entityType)
             ?? AppNotificationType(serverType: remote.type)
-        let title = remote.metadata?["title"]?.value as? String ?? type.defaultTitle
+        // P-04: the three decision push types each carry their own glyph and
+        // their own default title. Without this the bucket answered for all
+        // three and a passed date drew the same mark as a fresh ask.
+        let pushType = DecisionPushType(rawValue: remote.type)
+        let title = remote.metadata?["title"]?.value as? String
+            ?? pushType?.defaultTitle
+            ?? type.defaultTitle
         let body = remote.metadata?["body"]?.value as? String
             ?? remote.metadata?["preview"]?.value as? String
             ?? ""
@@ -164,7 +170,8 @@ extension AppNotification {
             timestamp: createdDate,
             isRead: remote.opened_at != nil || remote.status == "opened" || remote.status == "clicked",
             entityType: entityType,
-            entityId: entityId
+            entityId: entityId,
+            iconOverride: pushType?.icon
         )
     }
 }
