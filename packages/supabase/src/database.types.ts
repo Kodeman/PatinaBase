@@ -13242,6 +13242,7 @@ export type Database = {
           source_snapshot: Json
           source_version: number
           why: string | null
+          why_author_name: string | null
         }
         Insert: {
           artifact_hash: string
@@ -13262,6 +13263,7 @@ export type Database = {
           source_snapshot: Json
           source_version: number
           why?: string | null
+          why_author_name?: string | null
         }
         Update: {
           artifact_hash?: string
@@ -13282,6 +13284,7 @@ export type Database = {
           source_snapshot?: Json
           source_version?: number
           why?: string | null
+          why_author_name?: string | null
         }
         Relationships: [
           {
@@ -28326,6 +28329,7 @@ export type Database = {
           p_predecessor_decision_id: string
           p_project_id: string
           p_why?: string
+          p_why_author_name?: string
         }
         Returns: Json
       }

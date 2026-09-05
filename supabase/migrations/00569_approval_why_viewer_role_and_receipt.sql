@@ -14,7 +14,9 @@
 --      enforced by CHECK on the column AND by the creating RPC, so a direct
 --      writer and an RPC caller are refused by the same rule. Supersession
 --      carries it too: a revision either re-asks the why or inherits the
---      predecessor's, and never loses it.
+--      predecessor's, and never loses it. `why_author_name` freezes WHO wrote
+--      the line beside the line itself, so a later rename cannot rewrite what
+--      the homeowner already read.
 --
 --   2. iosb3-M2 — `viewerRole` on the sanitized projection. Wave 1 shipped
 --      `list_my_project_decision_reviews` returning every Stage-2 approval in
@@ -36,6 +38,13 @@
 --      receipt, so the letter can name the real consequence (R9) instead of
 --      inventing one. The receipt email rides `decision-resolved-notify`,
 --      which 00174's trigger already fires on this exact transition.
+--
+--   4. P-18/R1 — the public `respond_project_approval` wrapper accepts
+--      `clientConsentMethod` + `clientSignature` and passes them to the
+--      checked responder, which has taken and validated the pair since 00464
+--      but could never be handed it from a client surface. Folded in from the
+--      web lane's 00570 by the mid-Wave-2 ruling that Wave 2 mints exactly one
+--      migration; that file is deleted at integration.
 --
 -- No new notification kind is minted: notify_client_attention derives
 -- notification_log.type from the entity and dedupes the bell row on
@@ -71,15 +80,35 @@ ALTER TABLE public.project_approval_artifacts
   ADD COLUMN IF NOT EXISTS why text;
 
 ALTER TABLE public.project_approval_artifacts
+  ADD COLUMN IF NOT EXISTS why_author_name text;
+
+ALTER TABLE public.project_approval_artifacts
   DROP CONSTRAINT IF EXISTS project_approval_artifacts_why_check,
   ADD CONSTRAINT project_approval_artifacts_why_check CHECK (
     why IS NULL OR char_length(btrim(why)) BETWEEN 1 AND 200
+  );
+
+-- The attribution is frozen WITH the sentence and never without it: a name
+-- under no line attributes nothing, and would render as a bare "— Leah".
+ALTER TABLE public.project_approval_artifacts
+  DROP CONSTRAINT IF EXISTS project_approval_artifacts_why_author_check,
+  ADD CONSTRAINT project_approval_artifacts_why_author_check CHECK (
+    (why_author_name IS NULL OR char_length(btrim(why_author_name)) BETWEEN 1 AND 120)
+    AND (why IS NOT NULL OR why_author_name IS NULL)
   );
 
 COMMENT ON COLUMN public.project_approval_artifacts.why IS
   'P-13: the designer''s one-line why, composed as the first field of the ask '
   'and frozen here with the rest of the evidence. NULL on every artifact '
   'created before 00569 and on every ask whose author left it empty.';
+
+COMMENT ON COLUMN public.project_approval_artifacts.why_author_name IS
+  'P-13: who wrote the why, frozen beside it at compose time — the composing '
+  'designer''s given name (profiles.full_name''s first word, else '
+  'display_name), taken from the caller. Frozen rather than joined so a later '
+  'rename does not rewrite what the homeowner already read; NULL whenever the '
+  'why is NULL, and NULL when the author had no name on file (an attribution '
+  'is dropped, never invented).';
 
 -- ── P-20. One sentence for what an answer let go ───────────────────────────
 --
@@ -126,12 +155,17 @@ DROP FUNCTION IF EXISTS public._create_project_approval_decision_checked(
   uuid, jsonb, text, uuid
 );
 
+-- `p_why_author_name` is private, defaulted, and passed by exactly one caller:
+-- `supersede_project_approval_decision`, when the successor INHERITS its
+-- predecessor's line. Everyone else leaves it absent and the author resolves
+-- from the caller, which is the same person who just typed the sentence.
 CREATE OR REPLACE FUNCTION public._create_project_approval_decision_checked(
   p_project_id uuid,
   p_payload jsonb,
   p_idempotency_key text,
   p_predecessor_decision_id uuid,
-  p_why text DEFAULT NULL
+  p_why text DEFAULT NULL,
+  p_why_author_name text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -150,6 +184,7 @@ DECLARE
   v_question text;
   v_context text;
   v_why text := NULLIF(btrim(COALESCE(p_why, '')), '');
+  v_why_author_name text := NULLIF(btrim(COALESCE(p_why_author_name, '')), '');
   v_due_at timestamptz;
   v_phase_id uuid;
   v_section_key text;
@@ -215,6 +250,33 @@ BEGIN
     RAISE EXCEPTION 'approval why must contain at most 200 characters'
       USING ERRCODE = 'check_violation';
   END IF;
+
+  -- P-13: who said it, frozen with what was said. Resolved from the caller's
+  -- own profile unless a predecessor's attribution was handed in with an
+  -- inherited line. A name long enough to break the column is TRUNCATED, never
+  -- raised on: a person's name is not a reason to refuse an approval.
+  IF v_why IS NULL THEN
+    v_why_author_name := NULL;
+  ELSIF v_why_author_name IS NULL THEN
+    -- The same rule `_shared/branded-email.ts`'s givenName() applies to the
+    -- sign-off: the first whitespace-separated token, everything after it
+    -- being the studio's business rather than the greeting's.
+    SELECT COALESCE(
+             NULLIF(
+               split_part(
+                 regexp_replace(btrim(COALESCE(author.full_name, '')),
+                                '\s+', ' ', 'g'),
+                 ' ', 1
+               ), ''
+             ),
+             NULLIF(btrim(COALESCE(author.display_name, '')), '')
+           )
+    INTO v_why_author_name
+    FROM public.profiles AS author
+    WHERE author.id = v_actor;
+  END IF;
+  v_why_author_name := NULLIF(btrim(left(COALESCE(v_why_author_name, ''), 120)), '');
+
   IF NOT (p_payload ? 'dueAt')
      OR NULLIF(p_payload->>'dueAt', '') IS NULL
   THEN
@@ -415,13 +477,14 @@ BEGIN
 
   INSERT INTO public.project_approval_artifacts (
     id, decision_id, project_id, source_kind, source_id, source_version,
-    artifact_hash, artifact_title, question, context, why, due_at, phase_id,
+    artifact_hash, artifact_title, question, context, why, why_author_name,
+    due_at, phase_id,
     cost_cents_delta, schedule_days_delta, lead_time_days_delta,
     source_snapshot
   ) VALUES (
     v_artifact_id, v_decision_id, p_project_id, v_source_kind, v_source_id,
     v_source.source_version, v_source.artifact_hash, v_source.artifact_title,
-    v_question, v_context, v_why, v_due_at, v_phase_id,
+    v_question, v_context, v_why, v_why_author_name, v_due_at, v_phase_id,
     v_cost_delta, v_schedule_delta, v_lead_delta, v_source.safe_snapshot
   );
 
@@ -468,7 +531,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public._create_project_approval_decision_checked(
-  uuid, jsonb, text, uuid, text
+  uuid, jsonb, text, uuid, text, text
 )
   FROM PUBLIC, anon, authenticated, service_role;
 
@@ -498,7 +561,8 @@ COMMENT ON FUNCTION public.create_project_approval_decision(uuid, jsonb, text, t
   'immutable artifact, three canonical outcomes with one explicit signed '
   'impact triplet, and one idempotency receipt. The public entry point always '
   'creates an original request with no predecessor. p_why freezes the '
-  'designer''s one-line note into the immutable artifact row (P-13).';
+  'designer''s one-line note into the immutable artifact row, alongside the '
+  'caller''s own given name as why_author_name (P-13).';
 
 
 -- ── P-13. The revision keeps the why (r1-B2) ───────────────────────────────
@@ -549,6 +613,7 @@ DECLARE
   v_source_id uuid;
   v_why_given text := NULLIF(btrim(COALESCE(p_why, '')), '');
   v_why text;
+  v_why_author_name text;
   v_core_payload jsonb;
   v_create_result jsonb;
   v_successor_id uuid;
@@ -700,12 +765,19 @@ BEGIN
   -- p_why is the designer re-asking in the composer; silence carries the
   -- predecessor's frozen why forward rather than dropping it on the floor.
   v_why := COALESCE(v_why_given, v_old_artifact.why);
+  -- An inherited line keeps the name of whoever wrote it; a re-asked line is
+  -- the reissuing designer's, so the creator resolves the author afresh.
+  v_why_author_name := CASE
+    WHEN v_why_given IS NULL THEN v_old_artifact.why_author_name
+    ELSE NULL
+  END;
   v_create_result := public._create_project_approval_decision_checked(
     v_project_id,
     v_core_payload,
     'supersede-create:' || v_key,
     p_decision_id,
-    v_why
+    v_why,
+    v_why_author_name
   );
   v_successor_id := (v_create_result->>'decisionId')::uuid;
 
@@ -803,8 +875,9 @@ COMMENT ON FUNCTION public.supersede_project_approval_decision(
   'Replaces one Stage-2 leaf with a genuinely new immutable artifact, under '
   'the caller''s expected updated_at and one idempotency receipt. p_why '
   'freezes the designer''s one-line note onto the successor (P-13); when it '
-  'is absent the predecessor''s why carries forward, so a revision never '
-  'silently drops the line that explained the ask.';
+  'is absent the predecessor''s why carries forward — with its author''s '
+  'name, so an inherited line is never re-attributed to whoever reissued it — '
+  'and a revision never silently drops the line that explained the ask.';
 
 
 -- ── iosb3-M2 + P-13. The sanitized projection ──────────────────────────────
@@ -872,6 +945,15 @@ BEGIN
              -- P-13: the designer's one-line why, frozen into the artifact at
              -- compose time. NULL for every approval created before 00569.
              'why', artifact.why,
+             -- P-13, ruled mid-Wave-2: the why is attributed to its author.
+             -- The name was frozen beside the sentence at compose time, so a
+             -- rename does not rewrite what she already read. Emitted only
+             -- with a why — a name under no line attributes nothing — which
+             -- the column CHECK guarantees and this CASE states at the read
+             -- site so no future writer has to go and find the constraint.
+             'whyAuthorName', CASE
+               WHEN artifact.why IS NOT NULL THEN artifact.why_author_name
+             END,
              -- Wave-1 carry (iosb3-M2): which chair the CALLER is sitting in
              -- for THIS row. A studio co-member reading the client app used to
              -- receive every approval in the studio with nothing on the row to
@@ -983,9 +1065,10 @@ COMMENT ON FUNCTION public.get_project_decision_reviews(uuid) IS
   'frozen decision lead. Returns authority revision, immutable artifact/version/'
   'hash/question, explicit impacts, lifecycle/outcome/disposition, aggregate '
   'review counts, lineage, overdue metadata, and timestamps without reviewer '
-  'identities. Since 00569 it also carries the frozen one-line why (P-13) and '
-  'viewerRole — lead | studio | household — so a caller can tell a row it '
-  'answers from a row it only watches.';
+  'identities. Since 00569 it also carries the frozen one-line why and the '
+  'name of whoever wrote it (P-13), and viewerRole — lead | studio | '
+  'household — so a caller can tell a row it answers from a row it only '
+  'watches.';
 
 
 -- ── P-20. The response writes the household its receipt ────────────────────
@@ -1373,6 +1456,33 @@ REVOKE ALL ON FUNCTION public._respond_project_approval_checked(
   uuid, text, uuid, timestamptz, text, text, text
 ) FROM PUBLIC, anon, authenticated, service_role;
 
+-- ── P-18/R1. The typed name reaches the response it was typed for ──────────
+--
+-- Folded in from the web lane's 00570 by the mid-Wave-2 ruling "one migration
+-- for Wave 2": the same wrapper is redefined twice here otherwise.
+--
+-- R1 rules that Approve carries a typed legal name on every surface, and the
+-- reasoning ran "the response RPC already writes client_signature and
+-- client_consent_method, so the field drops in without a migration". Half of
+-- that is true. `_respond_project_approval_checked` does take the pair,
+-- validates it — a method must be 'electronic_signature' or 'click_through',
+-- an electronic signature must be at least two characters, a signature with no
+-- method is refused — and writes all three 00117 consent columns. The PUBLIC
+-- wrapper allowlisted exactly 'outcome' and 'optionId' and then passed
+-- NULL, NULL, so a signature could not reach it and a caller that tried was
+-- refused outright.
+--
+-- Blast radius: the allowlist grows by two keys and the two nulls become the
+-- values read out of the payload. Both stay optional, so `{"outcome":
+-- "approved"}` produces exactly the call it produced before and every existing
+-- response row keeps its NULL consent — which is what Return and Hold keep
+-- sending, since a name to say "needs discussion" is theatre (mid-Wave-2
+-- ruling: signature only on Approve). No rule is added or relaxed here; all
+-- validation stays in the checked function.
+--
+-- Not touched: the review-confirmation leg. `confirm_project_decision_review`
+-- keeps reviewMethod 'portal_clickthrough' — a press and hold is still a
+-- click-through (R1) — and asks for no signature.
 CREATE OR REPLACE FUNCTION public.respond_project_approval(
   p_decision_id uuid,
   p_payload jsonb,
@@ -1388,12 +1498,16 @@ DECLARE
   v_unknown jsonb;
   v_outcome text;
   v_option_id uuid;
+  v_consent_method text;
+  v_signature text;
 BEGIN
   IF p_payload IS NULL OR jsonb_typeof(p_payload) <> 'object' THEN
     RAISE EXCEPTION 'p_payload must be a JSON object'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
-  v_unknown := p_payload - ARRAY['outcome', 'optionId'];
+  v_unknown := p_payload - ARRAY[
+    'outcome', 'optionId', 'clientConsentMethod', 'clientSignature'
+  ];
   IF v_unknown <> '{}'::jsonb THEN
     RAISE EXCEPTION 'unsupported project response payload keys: %', v_unknown
       USING ERRCODE = 'invalid_parameter_value';
@@ -1404,9 +1518,13 @@ BEGIN
     RAISE EXCEPTION 'supply exactly one canonical outcome or optionId'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
+  v_consent_method := NULLIF(
+    btrim(COALESCE(p_payload->>'clientConsentMethod', '')), ''
+  );
+  v_signature := NULLIF(btrim(COALESCE(p_payload->>'clientSignature', '')), '');
   RETURN public._respond_project_approval_checked(
     p_decision_id, v_outcome, v_option_id,
-    p_expected_updated_at, p_idempotency_key, NULL, NULL
+    p_expected_updated_at, p_idempotency_key, v_consent_method, v_signature
   );
 END;
 $$;

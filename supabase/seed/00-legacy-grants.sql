@@ -12958,7 +12958,7 @@ END $g$;
 
 -- 00569_approval_why_viewer_role_and_receipt.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._create_project_approval_decision_checked( uuid, jsonb, text, uuid, text ) FROM PUBLIC, anon, authenticated, service_role;
+  REVOKE ALL ON FUNCTION public._create_project_approval_decision_checked( uuid, jsonb, text, uuid, text, text ) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

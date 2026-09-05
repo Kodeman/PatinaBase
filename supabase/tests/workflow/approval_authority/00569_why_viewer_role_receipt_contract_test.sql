@@ -23,6 +23,13 @@
 --      receipt, because the same statement that names them clears the link.
 --   6. P-06 — a proposal and an invoice attention row carry /proposals/<id>
 --      and /invoices/<id>.
+--   7. whyAuthorName — the why reaches the homeowner attributed to whoever
+--      composed it, frozen with the artifact: an inherited line keeps its
+--      author across a reissue, a re-asked line takes the reissuer's name,
+--      and a why-less approval carries no name at all.
+--   8. P-18/R1 (folded in from the web lane's 00570) — clientConsentMethod +
+--      clientSignature reach the response columns; a response sent without
+--      them keeps the unsigned click-through posture it always had.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -45,6 +52,10 @@ DECLARE
     'public._respond_project_approval_checked(uuid,text,uuid,timestamptz,text,text,text)'::regprocedure
   );
   v_why_check text;
+  v_why_author_check text;
+  v_respond_public text := pg_get_functiondef(
+    'public.respond_project_approval(uuid,jsonb,timestamptz,text)'::regprocedure
+  );
 BEGIN
   ASSERT EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -62,6 +73,24 @@ BEGIN
   ASSERT v_why_check LIKE '%200%',
     'the why column carries no 200-character ceiling';
 
+  -- P-13: who said it, frozen beside what was said, and never without it.
+  ASSERT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'project_approval_artifacts'
+      AND column_name = 'why_author_name'
+      AND is_nullable = 'YES'
+      AND data_type = 'text'
+  ), 'project_approval_artifacts.why_author_name is missing or not nullable text';
+
+  SELECT pg_get_constraintdef(oid) INTO v_why_author_check
+  FROM pg_constraint
+  WHERE conrelid = 'public.project_approval_artifacts'::regclass
+    AND conname = 'project_approval_artifacts_why_author_check';
+  ASSERT v_why_author_check IS NOT NULL
+     AND v_why_author_check LIKE '%why_author_name IS NULL%',
+    'nothing stops a name being frozen under no line';
+
   -- The widened creating RPCs, and no ambiguous leftovers.
   ASSERT to_regprocedure(
     'public.create_project_approval_decision(uuid,jsonb,text,text)'
@@ -71,11 +100,21 @@ BEGIN
   ) IS NULL,
     'the 3-argument create signature still stands — a 3-arg call is ambiguous';
   ASSERT to_regprocedure(
-    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)'
-  ) IS NOT NULL, 'the checked creator did not learn p_why';
+    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text,text)'
+  ) IS NOT NULL,
+    'the checked creator did not learn p_why / p_why_author_name';
   ASSERT to_regprocedure(
     'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid)'
   ) IS NULL, 'the 4-argument checked signature still stands';
+
+  -- P-18/R1, folded in from the web lane's 00570: the public wrapper takes the
+  -- typed name and hands it to the checked responder, which has validated the
+  -- pair since 00464 but could never be given it.
+  ASSERT v_respond_public LIKE '%clientConsentMethod%'
+     AND v_respond_public LIKE '%clientSignature%',
+    'the response wrapper still refuses the name it asks the homeowner to type';
+  ASSERT v_respond_public NOT LIKE '%p_idempotency_key, NULL, NULL%',
+    'the response wrapper still hard-codes a NULL consent pair';
 
   ASSERT has_function_privilege(
     'authenticated',
@@ -88,7 +127,7 @@ BEGIN
   ), 'anon may call the create RPC';
   ASSERT NOT has_function_privilege(
     'authenticated',
-    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)',
+    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text,text)',
     'EXECUTE'
   ), 'the private checked creator is reachable by authenticated';
   ASSERT NOT has_function_privilege(
@@ -98,6 +137,9 @@ BEGIN
 
   ASSERT v_reviews LIKE '%''why'', artifact.why%',
     'the sanitized projection does not carry the why';
+  ASSERT v_reviews LIKE '%''whyAuthorName''%'
+     AND v_reviews LIKE '%artifact.why_author_name%',
+    'the sanitized projection does not attribute the why to its author';
   ASSERT v_reviews LIKE '%''viewerRole''%'
      AND v_reviews LIKE '%''lead''%'
      AND v_reviews LIKE '%''studio''%'
@@ -170,7 +212,7 @@ INSERT INTO public.profiles (id, email, full_name, is_designer)
 VALUES
   ('a5690000-0000-4000-8000-000000000001', 'w2-designer@test.invalid', 'W2 Designer', true),
   ('a5690000-0000-4000-8000-000000000002', 'w2-lead@test.invalid', 'W2 Lead', false),
-  ('a5690000-0000-4000-8000-000000000003', 'w2-peer@test.invalid', 'W2 Peer', true)
+  ('a5690000-0000-4000-8000-000000000003', 'w2-peer@test.invalid', 'Peer Ashford', true)
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
@@ -414,6 +456,12 @@ BEGIN
   ASSERT v_row->>'why'
     = 'The island moved a foot; everything else is as we drew it.',
     'the frozen why did not survive into the client projection';
+  -- The composing designer's given name, frozen at compose time: 'W2 Designer'
+  -- reaches the homeowner as 'W2', the same first-token rule the email
+  -- sign-off applies.
+  ASSERT v_row->>'whyAuthorName' = 'W2',
+    'the why reached the homeowner unattributed: '
+    || COALESCE(v_row->>'whyAuthorName', '<null>');
   ASSERT v_row->>'viewerRole' = 'lead',
     'the frozen decision lead is not told she is the lead';
 
@@ -430,6 +478,12 @@ BEGIN
     SELECT 1 FROM jsonb_array_elements(v_list) AS item(value)
     WHERE item.value->>'why' IS NULL
   ), 'an approval composed without a why should carry none';
+  -- No line, no name: an attribution under nothing attributes nothing.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_list) AS item(value)
+    WHERE item.value->>'why' IS NULL
+      AND item.value->>'whyAuthorName' IS NOT NULL
+  ), 'a why-less approval carries an author name anyway';
 END
 $lead_read$;
 RESET ROLE;
@@ -624,6 +678,14 @@ CROSS JOIN LATERAL public.publish_client_decision(
 WHERE create_row.label IN ('revise-carry-create', 'revise-ask-create')
 ORDER BY create_row.label;
 
+-- Both reissues are made by the OTHER studio member, whose given name is
+-- 'Peer' and not 'W2'. That is what makes the attribution assertions below
+-- mean anything: an inherited line must keep the name of whoever wrote it,
+-- and a re-asked line must take the name of whoever reissued it.
+RESET ROLE;
+SELECT pg_temp.assume_actor('a5690000-0000-4000-8000-000000000003');
+SET LOCAL ROLE authenticated;
+
 -- Silence: the predecessor's frozen line carries forward.
 INSERT INTO w2_results(label, payload)
 SELECT 'revise-carry-supersede', public.supersede_project_approval_decision(
@@ -670,9 +732,12 @@ RESET ROLE;
 DO $revision_why$
 DECLARE
   v_carried text;
+  v_carried_author text;
   v_reasked text;
+  v_reasked_author text;
 BEGIN
-  SELECT artifact.why INTO v_carried
+  SELECT artifact.why, artifact.why_author_name
+    INTO v_carried, v_carried_author
   FROM w2_results AS row_carry
   JOIN public.project_approval_artifacts AS artifact
     ON artifact.decision_id = (row_carry.payload->>'successorDecisionId')::uuid
@@ -680,8 +745,12 @@ BEGIN
   ASSERT v_carried = 'The island moved a foot; the rest is as we drew it.',
     'the revision dropped the line that explained the ask: '
     || COALESCE(v_carried, '<null>');
+  ASSERT v_carried_author = 'W2',
+    'an inherited line was re-attributed to whoever reissued it: '
+    || COALESCE(v_carried_author, '<null>');
 
-  SELECT artifact.why INTO v_reasked
+  SELECT artifact.why, artifact.why_author_name
+    INTO v_reasked, v_reasked_author
   FROM w2_results AS row_ask
   JOIN public.project_approval_artifacts AS artifact
     ON artifact.decision_id = (row_ask.payload->>'successorDecisionId')::uuid
@@ -689,6 +758,9 @@ BEGIN
   ASSERT v_reasked = 'You asked us to hold the island where it was.',
     'the composer could not re-ask the why on a revision: '
     || COALESCE(v_reasked, '<null>');
+  ASSERT v_reasked_author = 'Peer',
+    'a re-asked line kept the predecessor''s name: '
+    || COALESCE(v_reasked_author, '<null>');
 
   -- The 200-character ceiling is not re-implemented here: supersession hands
   -- the value straight to the creating core, which already refuses an
@@ -729,5 +801,119 @@ BEGIN
   ), 'an invoice push row does not carry /invoices/<id>';
 END
 $deep_links$;
+
+-- ── P-18/R1. The typed name reaches the response it was typed for ──────────
+--
+-- Folded in from the web lane's 00570. Approve carries a typed legal name;
+-- Return and Hold are press-and-hold only and send neither key, so their rows
+-- keep the click-through posture they have always had — no signature, no
+-- consent method, no consented-at — while the review confirmation that
+-- preceded them stays 'portal_clickthrough' (R1: a press and hold is still a
+-- click-through).
+
+INSERT INTO public.plan_issues (
+  id, project_id, issue_number, name, idempotency_key, request_hash,
+  set_checksum, sheet_count, created_by
+)
+VALUES (
+  'a5694000-0000-4000-8000-000000000008',
+  'a5693000-0000-4000-8000-000000000001',
+  8, 'W2 issued set 8', 'w2-plan-8',
+  encode(extensions.digest('w2-request-8'::bytea, 'sha256'), 'hex'),
+  encode(extensions.digest('w2-artifact-8'::bytea, 'sha256'), 'hex'),
+  12, 'a5690000-0000-4000-8000-000000000001'
+);
+
+SELECT pg_temp.assume_actor('a5690000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.create_w2_approval('signed', 8, NULL);
+RESET ROLE;
+
+SELECT pg_temp.assume_actor('a5690000-0000-4000-8000-000000000002');
+SET LOCAL ROLE authenticated;
+INSERT INTO w2_results(label, payload)
+SELECT 'signed-confirm',
+       public.confirm_project_decision_review(
+         (create_row.payload->>'decisionId')::uuid,
+         jsonb_build_object(
+           'authorityRevision', (create_row.payload->>'authorityRevision')::integer,
+           'artifactHash', create_row.payload->>'artifactHash',
+           'reviewMethod', 'portal_clickthrough'
+         ),
+         'w2-confirm-signed'
+       )
+FROM w2_results AS create_row WHERE create_row.label = 'signed-create';
+RESET ROLE;
+
+SELECT pg_temp.assume_actor('a5690000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+INSERT INTO w2_tokens(label, decision_id, updated_at)
+SELECT 'signed', published.id, published.updated_at
+FROM w2_results AS create_row
+CROSS JOIN LATERAL public.publish_client_decision(
+  (create_row.payload->>'decisionId')::uuid
+) AS published
+WHERE create_row.label = 'signed-create';
+RESET ROLE;
+
+SELECT pg_temp.assume_actor('a5690000-0000-4000-8000-000000000002');
+SET LOCAL ROLE authenticated;
+INSERT INTO w2_results(label, payload)
+SELECT 'signed-response', public.respond_project_approval(
+  token.decision_id,
+  jsonb_build_object(
+    'outcome', 'approved',
+    'clientConsentMethod', 'electronic_signature',
+    'clientSignature', 'Harper Vale'
+  ),
+  token.updated_at, 'w2-respond-signed'
+)
+FROM w2_tokens AS token WHERE token.label = 'signed';
+RESET ROLE;
+
+DO $signature$
+DECLARE
+  v_signed uuid := (SELECT decision_id FROM w2_tokens WHERE label = 'signed');
+  v_unsigned uuid := (SELECT decision_id FROM w2_tokens WHERE label = 'released');
+  v_row public.client_decisions%ROWTYPE;
+  v_refused boolean := false;
+BEGIN
+  -- 1. The two keys reach the columns 00464 has always written.
+  SELECT * INTO v_row FROM public.client_decisions WHERE id = v_signed;
+  ASSERT v_row.client_consent_method = 'electronic_signature',
+    'the typed name did not record a consent method: '
+    || COALESCE(v_row.client_consent_method, '<null>');
+  ASSERT v_row.client_signature = 'Harper Vale',
+    'the response dropped the signature: '
+    || COALESCE(v_row.client_signature, '<null>');
+  ASSERT v_row.client_consented_at IS NOT NULL,
+    'a recorded signature carries no consented-at';
+
+  -- 2. Without them, the row is exactly what it was before this migration:
+  --    a click-through, unsigned. ('released' was answered with
+  --    {"outcome":"approved"} and nothing else.)
+  SELECT * INTO v_row FROM public.client_decisions WHERE id = v_unsigned;
+  ASSERT v_row.client_consent_method IS NULL
+     AND v_row.client_signature IS NULL
+     AND v_row.client_consented_at IS NULL,
+    'a response with no name invented consent for the homeowner';
+  ASSERT EXISTS (
+    SELECT 1 FROM public.project_decision_review_confirmations
+    WHERE decision_id = v_unsigned AND review_method = 'portal_clickthrough'
+  ), 'the review leg stopped reading as a click-through';
+
+  -- 3. The wrapper still refuses a key it does not know, and still refuses a
+  --    signature with no method — the checked function's rule, reached now
+  --    that the pair can travel.
+  BEGIN
+    PERFORM public.respond_project_approval(
+      v_signed, '{"outcome":"approved","signedBy":"Harper Vale"}'::jsonb,
+      now(), 'w2-respond-unknown-key'
+    );
+  EXCEPTION WHEN invalid_parameter_value THEN v_refused := true;
+  END;
+  ASSERT v_refused, 'the response wrapper accepted an unknown payload key';
+END
+$signature$;
 
 ROLLBACK;

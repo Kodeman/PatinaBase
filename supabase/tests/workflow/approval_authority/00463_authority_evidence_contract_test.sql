@@ -27,7 +27,7 @@ BEGIN
     ('function create_project_approval_decision(uuid,jsonb,text,text)',
       to_regprocedure('public.create_project_approval_decision(uuid,jsonb,text,text)') IS NOT NULL),
     ('private checked creation core',
-      to_regprocedure('public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)') IS NOT NULL),
+      to_regprocedure('public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text,text)') IS NOT NULL),
     ('function confirm_project_decision_review(uuid,jsonb,text)',
       to_regprocedure('public.confirm_project_decision_review(uuid,jsonb,text)') IS NOT NULL),
     ('column client_decisions.approval_contract', EXISTS (
@@ -229,7 +229,7 @@ BEGIN
   ), 'approval evidence foreign keys must use ON DELETE RESTRICT';
 
   SELECT pg_get_functiondef(
-    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)'::regprocedure
+    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text,text)'::regprocedure
   ) INTO v_create;
   SELECT pg_get_functiondef(
     'public.confirm_project_decision_review(uuid,jsonb,text)'::regprocedure
@@ -270,11 +270,11 @@ BEGIN
   ), 'atomic Stage 2 creation RPC must be authenticated';
   ASSERT NOT has_function_privilege(
     'authenticated',
-    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)',
+    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text,text)',
     'EXECUTE'
   ) AND NOT has_function_privilege(
     'service_role',
-    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)',
+    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text,text)',
     'EXECUTE'
   ), 'predecessor-aware creation core must remain private';
   ASSERT has_function_privilege(
