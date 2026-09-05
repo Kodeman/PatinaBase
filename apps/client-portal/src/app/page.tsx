@@ -1,4 +1,5 @@
 import { Threshold } from '@/components/threshold/threshold';
+import { LetterboxDoor } from '@/components/threshold/letterbox-door';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
 import {
   resolveActiveHouse,
@@ -59,11 +60,18 @@ export default async function HomePage(props?: {
   // No house at all, or not one of them opens (a deletion mid-request, an RLS
   // skew between the two selects): the front door is not the place for a 404.
   // `/projects/<id>` still answers one.
+  //
+  // A household with NO house may still have been sent money — a studio
+  // invoice belongs to the relationship, not to a project (ruling S1). The
+  // letterbox stands as the whole front door for her, and it is also the only
+  // thing that reads a `?checkout=` return, so the empty state would strand
+  // her twice. `LetterboxDoor` falls back to the empty state itself when no
+  // letter is waiting.
   if (!projectView) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)]">
         <main className="mx-auto flex w-full max-w-6xl flex-col px-6 py-12">
-          <ProjectsEmptyState />
+          {projects.length === 0 ? <LetterboxDoor /> : <ProjectsEmptyState />}
         </main>
       </div>
     );
