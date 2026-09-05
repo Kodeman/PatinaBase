@@ -166,12 +166,10 @@ struct NotificationCategoryTests {
         )
     }
 
-    /// No `PATINA_*` envelope carries a thread today — `buildApnsPayload`
-    /// (`apns-send/core.ts`) writes `aps`, `entity_type`, `entity_id` and
-    /// `notification_log_id` and nothing else — so this is the leg that
-    /// actually runs. The act belongs to the document: it lands on the
-    /// document's own screen, where "Ask a question" is an act she can take,
-    /// not in a general inbox with the approval's identity thrown away.
+    /// The ruled fall-back: a project with no single `comms_threads` row of
+    /// kind `project` gets no `thread_id` (`pickProjectThreadId` omits it,
+    /// never blanks it), and the act then lands on the document's own screen,
+    /// which keeps the letter's identity. Never the inbox as a dead end.
     @Test("Ask a question opens the document itself when the envelope names no thread")
     func askOpensTheDocumentItself() {
         let expected: [String: AppRoute] = [
@@ -190,9 +188,9 @@ struct NotificationCategoryTests {
         }
     }
 
-    /// The real payload, byte for byte, as `buildApnsPayload` assembles it for
-    /// a Stage-2 approval: an `aps` block with the category, the entity pair,
-    /// the log id — and no `thread_id`.
+    /// The real payload as `buildApnsPayload` assembles it for a Stage-2
+    /// approval whose project has no single thread: an `aps` block with the
+    /// category, the entity pair, the log id — and `thread_id` omitted.
     @Test("Ask a question on the real decision envelope reaches the approval")
     func askOnTheRealEnvelopeReachesTheApproval() {
         let userInfo: [AnyHashable: Any] = [
@@ -244,6 +242,54 @@ struct NotificationCategoryTests {
                 apnsUserInfo: ["notification_log_id": "n-1"]
             ) == .threadList
         )
+    }
+
+    /// The envelope the backend actually sends since `apns-send` learned to
+    /// resolve the conversation (`resolveProjectThreadId`): the same `aps`
+    /// block, the same entity pair, plus `thread_id` — the project thread the
+    /// ruling names. This is the live leg on all three rails, which is what
+    /// keeps a proposal or an invoice banner from carrying her to a screen
+    /// that offers no way to ask anything.
+    @Test("Ask a question on a resolved envelope opens the project thread, every rail")
+    func askOnAResolvedEnvelopeOpensTheProjectThread() {
+        for entity in ["decision", "proposal", "invoice"] {
+            let userInfo: [AnyHashable: Any] = [
+                "aps": [
+                    "alert": ["title": "An approval needs you", "body": "Kitchen millwork spec"],
+                    "category": "PATINA_\(entity.uppercased())",
+                    "thread-id": "\(entity)-e-1",
+                    "interruption-level": "active"
+                ],
+                "entity_type": entity,
+                "entity_id": "e-1",
+                "notification_log_id": "n-1",
+                "thread_id": "th-4"
+            ]
+            #expect(
+                NotificationCategories.route(
+                    forActionIdentifier: PatinaNotificationAction.askQuestion.rawValue,
+                    apnsUserInfo: userInfo
+                ) == .threadDetail(threadId: "th-4"),
+                "\(entity)"
+            )
+        }
+    }
+
+    /// The lock screen and the approval screen speak two vocabularies on
+    /// purpose. `ProjectApprovalCopy.acts` is Approve / Return / Hold — three
+    /// OUTCOMES — and no banner act may share a word with one of them, because
+    /// a banner may never carry an outcome. "Ask a question" belongs only
+    /// here, and it writes nothing.
+    @Test("no lock-screen act wears the word of an outcome door")
+    func theBannerAndTheDoorsShareNoWord() {
+        let doors = ProjectApprovalCopy.acts.map { $0.label.lowercased() }
+        #expect(doors == ["approve", "return", "hold"])
+        for act in PatinaNotificationAction.allCases {
+            #expect(
+                !doors.contains(act.title.lowercased()),
+                "the banner act \"\(act.title)\" wears an outcome door's word"
+            )
+        }
     }
 
     @Test("a dismissal opens nothing and is not an opening")

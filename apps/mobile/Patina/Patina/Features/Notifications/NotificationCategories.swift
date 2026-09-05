@@ -158,9 +158,8 @@ public enum NotificationCategories {
     ///   exactly as they did before this file existed: the entity pair, then
     ///   the portal deep link (P-06).
     /// - `Ask a question` opens the conversation about THIS document: the
-    ///   thread the envelope names, else the document's own screen, where the
-    ///   act of the same name lives. The inbox is the last resort, for a
-    ///   letter that names nothing.
+    ///   thread the envelope names, else the document's own screen. The inbox
+    ///   is the last resort, for a letter that names nothing.
     /// - A dismissal opens nothing.
     ///
     /// Nil means "this act does not navigate"; the caller decides whether that
@@ -196,19 +195,28 @@ public enum NotificationCategories {
     /// The thread this letter belongs to; failing that, the document it is
     /// about; failing that, the inbox.
     ///
-    /// `thread_id` is read first; `entity_type: "thread"` is the same fact in
-    /// the envelope's own vocabulary, and is what a message push already
-    /// carries. Neither is on a `PATINA_*` envelope today —
-    /// `apns-send/core.ts`'s `buildApnsPayload` writes `aps`, `entity_type`,
-    /// `entity_id` and `notification_log_id` and nothing else — so the second
-    /// leg is the one that actually runs, and it is the important one:
+    /// Ruled mid-Wave 2: *the `PATINA_*` envelope carries `thread_id` when the
+    /// entity's project has a thread; the action opens that thread, else the
+    /// entity's own screen. Never the inbox as a dead end.*
     ///
-    /// **the act belongs to the document.** "Ask a question" is the same act
-    /// on the lock screen as it is inside the app (`ProjectApprovalCopy.acts`
-    /// — the honest non-answer, which the deck puts on the banner precisely so
-    /// it is "as reachable as the answer"). Landing on the inbox threw the
-    /// approval's identity away and dropped her somewhere the act does not
-    /// exist. Her own screen is where it does.
+    /// **`thread_id` is on the wire, and the first leg is the live one.**
+    /// `apns-send/index.ts`'s `resolveProjectThreadId` walks the entity to its
+    /// project (`client_decisions` / `proposals` / `invoices`) and the project
+    /// to its single `comms_threads` row of kind `project`, and
+    /// `buildApnsPayload` writes it as `thread_id` — omitted, never blank,
+    /// where there is no single thread to open. `entity_type: "thread"` is the
+    /// same fact in the envelope's own vocabulary, which a message push
+    /// already carries.
+    ///
+    /// The document's own screen is the ruled fall-back for a project with no
+    /// thread: it keeps the letter's identity, where the inbox threw it away.
+    ///
+    /// **This act is not one of the three doors.** `ProjectApprovalCopy.acts`
+    /// is Approve / Return / Hold (`P-16`) — three OUTCOMES, and a banner may
+    /// never carry an outcome (see the file header). "Ask a question" writes
+    /// nothing: it is the way to reach the studio about the document, which is
+    /// why it keeps a word none of the doors uses and why it lands on a
+    /// conversation rather than on an answer.
     ///
     /// The inbox stays the last resort, for an envelope that names no entity
     /// at all: it is where she writes to the studio, and it is never a dead
