@@ -855,7 +855,7 @@ extension HouseRecordBuilder {
 /// day it was given.
 extension HouseRecordBuilder {
 
-    /// "You approved this edition." — the Stage-2 approval she answered.
+    /// "You approved the budget." — the Stage-2 approval she answered.
     ///
     /// Four rules, all of them the ones the rest of this file already keeps:
     ///
@@ -887,9 +887,16 @@ extension HouseRecordBuilder {
             return HouseRecordRow(
                 id: "approval-answered:\(approval.decisionId)",
                 kind: .decisionAnswered,
-                title: ProjectApprovalCopy.recorded(outcome),
-                // The headline is the act, so the second line names the thing
-                // — the same division the open approval row already draws.
+                // The act AND the thing, in one sentence, from the wire's
+                // common noun (`artifactKind`) rather than its proper-ish
+                // title — see `ProjectApprovalCopy.recorded(_:thing:)`. The
+                // title still names WHICH one on the second line, because two
+                // budgets in a week are two rows.
+                title: ProjectApprovalCopy.recorded(
+                    outcome,
+                    thing: ProjectApprovalCopy.artifactNoun(kind: approval.artifactKind)
+                        ?? ProjectApprovalCopy.unnamedEdition
+                ),
                 detail: approval.artifactTitle,
                 date: answered,
                 state: .none,

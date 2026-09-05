@@ -207,7 +207,10 @@ struct ProjectApprovalActTests {
         #expect(acts[0].consequence == "Accept this exact edition and its stated impacts.")
         #expect(acts[1].label == "Ask a question")
         #expect(acts[1].consequence == "Hold this while you and your designer talk it through.")
-        #expect(acts[2].label == "Decline")
+        // RETURNED everywhere for `changes_requested` (rulings-2026-09-04,
+        // P-16). "Declined" belongs to a commercial document that was
+        // declined, and to nothing on this rail.
+        #expect(acts[2].label == "Return")
         #expect(acts[2].consequence == "Return this edition for revision and a new approval request.")
     }
 

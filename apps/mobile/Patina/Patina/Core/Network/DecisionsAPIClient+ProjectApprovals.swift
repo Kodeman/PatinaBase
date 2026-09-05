@@ -66,9 +66,17 @@ public enum ProjectApprovalViewerRole: Sendable, Equatable {
         "decisionlead", "lead", "client", "recipient", "owner", "clientlead"
     ]
     /// Roles that only WATCH.
+    ///
+    /// `household` is the projection's third real value (00569:884-888:
+    /// `lead` → `studio` → `household`) and it WATCHES: the migration's own
+    /// comment calls it "the project's client on a row whose frozen lead is
+    /// somebody else", reachable after a lead reassignment. Only the frozen
+    /// lead answers — `respond_project_approval` accepts nobody else — so a
+    /// household reader who is not the lead may neither be asked nor be told
+    /// she approved something the lead approved.
     static let observing: Set<String> = [
         "studiocomember", "comember", "studiomember", "studio", "designer",
-        "teammate", "observer", "viewer", "watcher"
+        "teammate", "observer", "viewer", "watcher", "household"
     ]
 
     public init(raw: String?) {
@@ -95,6 +103,12 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     public let decisionId: String
     public let projectId: String
     public let artifactId: String
+    /// `project_approval_artifacts.source_kind` — `plan_issue`,
+    /// `spec_book_artifact` or `budget_version` (00463:134-135), served as
+    /// `artifactKind` (00569:865). Optional so a projection written before
+    /// this key existed decodes rather than throwing; the copy that reads it
+    /// falls back to the unnamed edition.
+    public let artifactKind: String?
     public let artifactVersion: Int
     public let artifactChecksum: String
     public let artifactTitle: String

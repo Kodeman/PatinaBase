@@ -136,10 +136,16 @@ struct ApprovalVocabularySweepTests {
             ProjectApprovalCopy.bellRecorded,
             ProjectApprovalCopy.bellClosed
         ])
+        // The outcome buttons themselves. Excluded once, which is exactly how
+        // "Decline" survived on `changes_requested` — the one string on this
+        // rail a homeowner presses.
+        strings.append(contentsOf: ProjectApprovalCopy.acts.map(\.label))
+        strings.append(contentsOf: ProjectApprovalCopy.acts.map(\.consequence))
 
         for string in strings {
             let lowered = string.lowercased()
-            for word in ["overdue", "gate", "task", "dashboard", "declined", "late"] {
+            // "decline", not only "declined": the button was a verb.
+            for word in ["overdue", "gate", "task", "dashboard", "decline", "late"] {
                 #expect(!lowered.contains(word), "\"\(string)\" carries the refused word \"\(word)\"")
             }
             #expect(!Self.printsAFigure(string), "\"\(string)\" prints a figure")

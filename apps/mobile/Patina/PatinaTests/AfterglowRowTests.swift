@@ -56,7 +56,7 @@ struct AfterglowRowTests {
         #expect(rows.count == 1)
         let row = try #require(rows.first)
         #expect(row.kind == .decisionAnswered)
-        #expect(row.title == "You approved this edition.")
+        #expect(row.title == "You approved the spec book.")
         #expect(row.detail == "Kitchen millwork spec")
         #expect(row.date == ISO8601DateFormatter().date(from: "2026-09-03T09:30:00Z"))
         #expect(row.route == .decisionDetail(decisionId: ProjectApprovalFixture.decisionId))
@@ -180,15 +180,99 @@ struct AfterglowRowTests {
         #expect(try ProjectApprovalFixture.review(viewerRole: "something_new").awaitsClientInFeed)
     }
 
+    /// The three strings the migration ACTUALLY emits, pinned literally.
+    /// 00569:884-888 is `CASE WHEN snapshot.decision_lead_id = v_actor THEN
+    /// 'lead' WHEN v_is_studio THEN 'studio' ELSE 'household' END`, and the
+    /// function comment advertises the same three. Only the frozen lead
+    /// answers.
+    @Test("the three values the projection emits are read as the migration means them")
+    func theProjectionsOwnVocabularyIsRead() {
+        #expect(ProjectApprovalViewerRole(raw: "lead") == .answers)
+        #expect(ProjectApprovalViewerRole(raw: "studio") == .observes)
+        #expect(ProjectApprovalViewerRole(raw: "household") == .observes)
+    }
+
+    /// A household reader who is not the frozen lead cannot answer — the RPC
+    /// refuses her — so she is neither asked nor told she answered.
+    @Test("a household reader who is not the lead is never asked and never credited")
+    func aHouseholdWatcherIsNeitherAskedNorCredited() throws {
+        let watched = try ProjectApprovalFixture.review(viewerRole: "household")
+        #expect(!watched.viewerAnswers)
+        #expect(!watched.awaitsClientInFeed)
+
+        let answered = try ProjectApprovalFixture.review(
+            lifecycleStatus: "responded",
+            outcome: "approved",
+            respondedAt: "2026-09-03T09:30:00+00:00",
+            viewerRole: "household"
+        )
+        #expect(HouseRecordBuilder.answeredApprovalRows([answered]).isEmpty)
+    }
+
     /// Spelling is normalised, not matched byte-for-byte: the migration may
     /// land any of these and none of them may change what she sees.
     @Test("the role vocabulary is read past its punctuation and its casing")
     func theRoleVocabularyIsNormalised() {
-        for raw in ["studio_comember", "studio-coMember", "STUDIO_COMEMBER", "co member"] {
+        for raw in ["studio_comember", "studio-coMember", "STUDIO_COMEMBER", "co member", "HOUSEHOLD"] {
             #expect(ProjectApprovalViewerRole(raw: raw) == .observes, "\(raw)")
         }
         for raw in ["decision_lead", "decisionLead", "LEAD", "client"] {
             #expect(ProjectApprovalViewerRole(raw: raw) == .answers, "\(raw)")
+        }
+    }
+
+    // MARK: - The thing the sentence names
+
+    /// The deck's row is "You approved the dining room budget." — the act and
+    /// the thing in ONE sentence. The common noun comes from `artifactKind`;
+    /// the proper-ish `artifactTitle` stays on the second line, where it does
+    /// not put a capital mid-sentence.
+    @Test("each artifact kind names itself in the sentence, in lower case")
+    func eachKindNamesItselfInTheSentence() throws {
+        let expected = [
+            "budget_version": "You approved the budget.",
+            "plan_issue": "You approved the plan set.",
+            "spec_book_artifact": "You approved the spec book."
+        ]
+        for (kind, sentence) in expected {
+            let row = try #require(HouseRecordBuilder.answeredApprovalRows([
+                try ProjectApprovalFixture.review(
+                    lifecycleStatus: "responded", outcome: "approved",
+                    respondedAt: "2026-09-03T09:30:00+00:00", artifactKind: kind
+                )
+            ]).first)
+            #expect(row.title == sentence, "\(kind)")
+            #expect(row.detail == "Kitchen millwork spec")
+        }
+    }
+
+    /// Three answers in one week are three DIFFERENT headlines where the kinds
+    /// differ — MOVED shows three rows at most and they may not all read alike.
+    @Test("three answered approvals of different kinds print three sentences")
+    func mixedKindsDoNotRepeatOneHeadline() throws {
+        let rows = HouseRecordBuilder.answeredApprovalRows(
+            try ["budget_version", "plan_issue", "spec_book_artifact"].map { kind in
+                try ProjectApprovalFixture.review(
+                    lifecycleStatus: "responded", outcome: "approved",
+                    respondedAt: "2026-09-03T09:30:00+00:00", artifactKind: kind
+                )
+            }
+        )
+        #expect(Set(rows.map(\.title)).count == 3)
+    }
+
+    /// An absent or unknown kind degrades to the sentence this row printed
+    /// before `artifactKind` was read — never to a guess.
+    @Test("an unnamed or unknown kind falls back to the edition")
+    func anUnknownKindFallsBackToTheEdition() throws {
+        for kind: Any in [NSNull(), "site_photo_set"] {
+            let row = try #require(HouseRecordBuilder.answeredApprovalRows([
+                try ProjectApprovalFixture.review(
+                    lifecycleStatus: "responded", outcome: "changes_requested",
+                    respondedAt: "2026-09-03T09:30:00+00:00", artifactKind: kind
+                )
+            ]).first)
+            #expect(row.title == "You returned this edition for revision.")
         }
     }
 
