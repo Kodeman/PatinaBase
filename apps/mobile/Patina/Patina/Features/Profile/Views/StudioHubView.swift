@@ -254,9 +254,7 @@ struct StudioHubView: View {
     }
 
     private func sectionBadgeLabel(_ section: StudioQueueSection) -> String {
-        section.kind == .awaitingYou
-            ? "\(PatinaCount.inWords(sectionBadgeCount(section))) things awaiting you"
-            : "\(PatinaCount.inWords(section.rows.count)) categories"
+        section.kind.badgeLabel(count: sectionBadgeCount(section))
     }
 
     @ViewBuilder

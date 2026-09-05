@@ -68,7 +68,7 @@ struct MoneyAndStudioCopyTests {
     func dueLineIsOneStringForEverySurface() throws {
         let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
         #expect(DateDisplay.due("2026-08-22", now: now)
-                == DateDisplay.DueLine(text: "Overdue \u{00B7} Aug 22", isPastDue: true))
+                == DateDisplay.DueLine(text: "Past due \u{00B7} Aug 22", isPastDue: true))
         #expect(DateDisplay.due("2026-08-27", now: now)
                 == DateDisplay.DueLine(text: "Due today", isPastDue: false))
         #expect(DateDisplay.due("2026-09-01", now: now)
@@ -153,7 +153,7 @@ struct MoneyAndStudioCopyTests {
     }
 
     /// B-1: the invoice list formatted its own "Due Aug 22, 2026" in muted
-    /// grey while the detail one tap later read "Overdue · Aug 22" in red.
+    /// grey while the detail one tap later read a different line entirely.
     /// Every list row that prints a date now reads the shared helper, and
     /// colours on its `isPastDue`.
     @Test("no money list formats a date of its own")
@@ -164,10 +164,12 @@ struct MoneyAndStudioCopyTests {
         )
         #expect(invoices.contains("DateDisplay.due(invoice.due_date)"))
         #expect(!invoices.contains("\"Due \\("))
-        // A-73: the past-due ink moved from `PatinaColors.error` (3.03:1 on
-        // the light canvas) to `PatinaColors.Text.error`. The rule this test
-        // pins is unchanged — a list row colours on `isPastDue`.
-        #expect(invoices.contains("due.isPastDue ? PatinaColors.Text.error"))
+        // R3-02: the past-due ink left the error ramp altogether. "Overdue"
+        // in red is refused on every surface a homeowner reads, money
+        // included; the line is "Past due · Aug 22" in body ink. The rule this
+        // test pins is unchanged — a list row colours on `isPastDue`.
+        #expect(invoices.contains("due.isPastDue ? PatinaColors.Text.primary"))
+        #expect(!invoices.contains("due.isPastDue ? PatinaColors.Text.error"))
 
         let proposals = try String(
             contentsOf: Self.sourceURL("Patina/Features/Proposals/Views/ProposalListView.swift"),

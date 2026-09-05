@@ -110,6 +110,21 @@ enum ProjectApprovalCopy {
         }
     }
 
+    // MARK: - The bell (W1R2-n4)
+
+    /// `00534:324` freezes "A sign-off needs you" into the notification row at
+    /// raise time. Two words are wrong with it by the time a homeowner reads
+    /// it: "sign-off" is not the ask's name (Vocabulary — "approval" is), and
+    /// the row goes on saying "needs you" after she has answered.
+    static let retiredBellTitle = "A sign-off needs you"
+    static let bellOpen = "An approval needs you"
+    /// The answer landed but the projection did not name which one — the fact
+    /// alone, which is all that can honestly be said.
+    static let bellRecorded = "Your approval was recorded"
+    /// Withdrawn or superseded. Neither open nor answered, and the row may not
+    /// go on asking.
+    static let bellClosed = "This approval is closed"
+
     // MARK: - Impact (R11)
 
     /// One impact row: the label and the delta, stated independently.

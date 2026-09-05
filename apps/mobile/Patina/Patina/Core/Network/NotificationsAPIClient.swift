@@ -38,6 +38,13 @@ public actor NotificationsAPIClient {
     /// row is a delivery receipt for a banner that has its own surface.
     static let attentionChannelFilter = "eq.in_app"
 
+    /// `W1R2-m1`. The READ narrows to `in_app`; the opened WRITE may not.
+    /// 00534 writes two rows for one event, and marking only the in-app leg
+    /// left its `push` twin `opened_at IS NULL` forever — a row the springboard
+    /// badge and every "unread" count computed server-side still sees. One
+    /// event is read once, on both legs (ruled, 2026-09-05).
+    static let openedWriteChannelFilter = "in.(in_app,push)"
+
     private let baseURL = APIConfiguration.apiURL
     private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
@@ -101,15 +108,15 @@ public actor NotificationsAPIClient {
     }
 
     /// Mark all currently-unread notifications for the user as opened.
-    /// We don't have a bulk RPC — perform a single PATCH against all rows
-    /// for the user where opened_at IS NULL and the channel is the one the
-    /// feed reads. Same filter as `list`, so mark-all cannot leave behind a
-    /// row the list would have shown.
+    /// We don't have a bulk RPC — perform a single PATCH against every unread
+    /// row for the user on either delivery leg (`openedWriteChannelFilter`), so
+    /// mark-all can neither leave behind a row the list would have shown nor
+    /// leave its push twin unread behind it.
     public func markAllOpened() async throws {
         let url = baseURL.appendingPathComponent("/rest/v1/notification_log")
             .appending(queryItems: [
                 URLQueryItem(name: "opened_at", value: "is.null"),
-                URLQueryItem(name: "channel", value: Self.attentionChannelFilter),
+                URLQueryItem(name: "channel", value: Self.openedWriteChannelFilter),
             ])
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"

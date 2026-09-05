@@ -16,6 +16,19 @@ enum StudioQueueSectionKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// `W1R2-m2`: what VoiceOver reads on the section badge. The count is
+    /// spoken in words (P-24), so the noun after it has to agree with the word
+    /// — it read "one categories" on every section holding a single kind of
+    /// thing. It lives with the section rather than with the view because the
+    /// noun belongs to the section, and because a ruled string is a fact a
+    /// test can hold.
+    func badgeLabel(count: Int) -> String {
+        let word = PatinaCount.inWords(count)
+        return self == .awaitingYou
+            ? "\(word) \(count == 1 ? "thing" : "things") awaiting you"
+            : "\(word) \(count == 1 ? "category" : "categories")"
+    }
+
     var title: String {
         switch self {
         case .awaitingYou: return "Awaiting you"

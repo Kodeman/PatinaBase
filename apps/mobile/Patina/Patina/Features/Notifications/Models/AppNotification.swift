@@ -14,7 +14,11 @@ struct AppNotification: Identifiable {
     /// from the backend. `nil` for preview-only entries.
     let remoteId: String?
     let type: AppNotificationType
-    let title: String
+    /// `var` because a Stage-2 approval's title is frozen into
+    /// `notification_log.metadata.title` when the approval is raised and never
+    /// rewritten, so the feed retitles it from what the approval is now
+    /// (`NotificationsViewModel.retitleApprovals`, `W1R2-n4`).
+    var title: String
     let body: String
     let timestamp: Date
     var isRead: Bool

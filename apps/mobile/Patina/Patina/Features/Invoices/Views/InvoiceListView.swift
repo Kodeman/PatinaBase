@@ -179,7 +179,9 @@ private struct InvoiceRowCard: View {
                 } else if let due = dueLine {
                     Text(due.text)
                         .font(PatinaTypography.captionSmall)
-                        .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.muted)
+                        // R3-02: a passed date is a fact, not an alarm.
+                        // Body ink over muted, never the error ramp.
+                        .foregroundStyle(due.isPastDue ? PatinaColors.Text.primary : PatinaColors.Text.muted)
                 }
             }
         }

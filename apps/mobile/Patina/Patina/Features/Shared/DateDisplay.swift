@@ -50,9 +50,17 @@ enum DateDisplay {
         let isPastDue: Bool
     }
 
-    /// "Overdue · Aug 22" / "Due today" / "Due Sep 1". Day precision — a
+    /// "Past due · Aug 22" / "Due today" / "Due Sep 1". Day precision — a
     /// Postgres `date` carries no time, and the ISO8601 formatters reject it
     /// outright (the trap `isAwaitingSignature` documents).
+    ///
+    /// `iosa R3-02`: "Overdue" is refused on every surface a homeowner reads,
+    /// money included, and this line printed it in the error ramp on the
+    /// invoice list, the invoice detail and the Studio's money row. The fact —
+    /// the date has passed — is what a debt gets to state; the register it
+    /// states it in is body ink, the same as everywhere else (ruled,
+    /// 2026-09-05). `isPastDue` survives: the ordering and the payable filters
+    /// read it, and it is no longer a colour.
     static func due(_ raw: String?, now: Date = Date()) -> DueLine? {
         guard let date = parsed(raw) else { return nil }
         return due(date, now: now)
@@ -62,7 +70,7 @@ enum DateDisplay {
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: date)
         let today = calendar.startOfDay(for: now)
-        if day < today { return DueLine(text: "Overdue · \(short(date))", isPastDue: true) }
+        if day < today { return DueLine(text: "Past due · \(short(date))", isPastDue: true) }
         if day == today { return DueLine(text: "Due today", isPastDue: false) }
         return DueLine(text: "Due \(short(date))", isPastDue: false)
     }
@@ -115,7 +123,15 @@ enum DateDisplay {
         // The sentence names the day the studio asked, never the day that
         // passed. With no asked-on date on the wire it says only what it
         // knows and invents nothing.
-        guard let askedAt else { return ApprovalLine(text: "Still open.", isStillOpen: true) }
+        //
+        // `W1R2-n1`: and an asked-on date that is not BEFORE the day it was
+        // wanted by cannot be read as one — "Still open, Leah asked on Sep 4."
+        // under a date of Sep 4 says the studio asked and ran out of time in
+        // the same breath. Where the two dates do not tell a story, the clause
+        // goes and the sentence says only that it is open.
+        guard let askedAt,
+              calendar.startOfDay(for: askedAt) < calendar.startOfDay(for: dueDate)
+        else { return ApprovalLine(text: "Still open.", isStillOpen: true) }
         return ApprovalLine(
             text: stillOpen(designer: designer, askedOn: short(askedAt)),
             isStillOpen: true

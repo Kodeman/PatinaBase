@@ -42,17 +42,37 @@ struct NotificationsAPIClientContractTests {
         #expect(!NotificationsAPIClient.attentionChannelFilter.contains("push"))
     }
 
-    /// Both filter sites read the one constant — the list and the mark-all
-    /// PATCH, which must never disagree about which rows the feed is about.
-    @Test("both channel filters are the one constant, and the pair is gone")
-    func bothChannelSitesUseTheConstant() throws {
+    // MARK: - W1R2-m1 · the read narrows, the write does not
+
+    /// 00534 writes an `in_app` row AND a `push` row for one event. Marking
+    /// only the in-app leg opened left its twin `opened_at IS NULL` forever —
+    /// a row every server-side unread count, the springboard badge included,
+    /// still sees. One event is read once, on both legs (ruled, 2026-09-05).
+    @Test("the opened write marks both delivery legs")
+    func theOpenedWriteMarksBothLegs() {
+        #expect(NotificationsAPIClient.openedWriteChannelFilter == "in.(in_app,push)")
+        #expect(NotificationsAPIClient.openedWriteChannelFilter.contains("in_app"))
+        #expect(NotificationsAPIClient.openedWriteChannelFilter.contains("push"))
+        // …and the read is still the one channel the feed is about.
+        #expect(NotificationsAPIClient.attentionChannelFilter == "eq.in_app")
+    }
+
+    /// Each site reads its own constant, and neither reads the other's: the
+    /// list may never admit the push leg, and mark-all may never leave it.
+    @Test("the read site and the write site read their own constants")
+    func eachChannelSiteReadsItsOwnConstant() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Core/Network/NotificationsAPIClient.swift")
         )
-        #expect(!code.contains("in.(in_app,push)"), "the double-reading filter is back")
-        let uses = code.components(
+        let reads = code.components(
             separatedBy: "URLQueryItem(name: \"channel\", value: Self.attentionChannelFilter)"
         ).count - 1
-        #expect(uses == 2, "expected the list and the mark-all site, found \(uses)")
+        #expect(reads == 1, "expected the list site alone, found \(reads)")
+        let writes = code.components(
+            separatedBy: "URLQueryItem(name: \"channel\", value: Self.openedWriteChannelFilter)"
+        ).count - 1
+        #expect(writes == 1, "expected the mark-all site alone, found \(writes)")
+        #expect(!code.contains("value: \"in.(in_app,push)\""),
+                "the filter is typed at a call site instead of read from the constant")
     }
 }

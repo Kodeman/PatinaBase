@@ -429,4 +429,22 @@ extension AttentionCountTests {
         )
         #expect(header.contains("unreadCountIsKnown"))
     }
+
+    // MARK: - W1R2-m2 · the count is a word, so the noun agrees with it
+
+    /// The section badge is spoken in words (P-24), and VoiceOver read
+    /// "one categories" on every section holding a single kind of thing.
+    @Test("the section badge's noun agrees with the word before it")
+    func sectionBadgeGrammarAgrees() {
+        #expect(StudioQueueSectionKind.inProgress.badgeLabel(count: 1)
+                == "one category")
+        #expect(StudioQueueSectionKind.inProgress.badgeLabel(count: 3)
+                == "three categories")
+        #expect(StudioQueueSectionKind.inProgress.badgeLabel(count: 0)
+                == "zero categories")
+        #expect(StudioQueueSectionKind.awaitingYou.badgeLabel(count: 1)
+                == "one thing awaiting you")
+        #expect(StudioQueueSectionKind.awaitingYou.badgeLabel(count: 5)
+                == "five things awaiting you")
+    }
 }
