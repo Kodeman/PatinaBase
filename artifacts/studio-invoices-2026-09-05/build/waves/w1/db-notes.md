@@ -796,3 +796,113 @@ studio. Wider than the designer-keyed version would have been, so the stranding
 window is narrower, but it is not zero.
 
 `deploySet = ['migration 00571_studio_invoices.sql']`
+
+---
+
+## Fix round 1 (W1-close db lane) — C-1
+
+**Finding C-1 (major, pre-existing from W1, not from the close round).** On the
+UPDATE arm of `public.set_invoice_studio_id()`, the studio branch's
+membership/studio-active `EXISTS` sat ABOVE the `service_role` / postgres early
+return. So once the stamped designer was suspended or removed from the studio —
+or the studio itself deactivated — every machine write to an outstanding studio
+invoice raised `P0001 studio_id_not_designer_studio`: money captured at Stripe,
+`invoice_payments` never flipped, invoice stranded at `sent`. The project path
+has never behaved that way; its machine UPDATE checks only the project tuple and
+`previous_lead`, never live membership status.
+
+### The change
+
+`supabase/migrations/00571_studio_invoices.sql`, UPDATE arm only:
+
+- the `studio_id / designer_id / client_id IS NOT NULL` checks stay above the
+  early return (they are cheap and they are the row's shape, not its authority);
+- `IF v_active_role = 'service_role' OR v_postgres_migration THEN RETURN NEW`
+  now comes next;
+- the `organization_members` × `organizations` `EXISTS` (active non-guest member
+  stamped as designer, of an active `design_studio`) moved BELOW it, into its own
+  `IF NOT EXISTS ... RAISE` block.
+
+The INSERT arm is untouched: live authority is still judged in full before the
+row exists. The roster (`designer_clients`) check on the UPDATE arm was already
+below the early return, inside the authenticated-actor block, so it did not move.
+Every project-path line stays byte-identical to 00511's body; the branch is now
+199 inserted lines across the two arms, zero removed (header count updated from
+187).
+
+Nothing can be reparented by the replay: `project_id`, `designer_id`,
+`client_id` and `studio_id` are compared against `OLD` at the top of the arm and
+raise on any drift, before this branch is reached.
+
+### Re-pin
+
+`supabase/tests/edge_api/public_sd_hardening_contract_test.sql`:
+
+```
+f39043a2f3d9f70f5bb8d97c23f436a1f159085a49dc961d928ca25723ee94a6   (before)
+b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89   (after)
+```
+
+read back from the reset stack with
+
+```
+SELECT encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex')
+FROM pg_proc WHERE oid = to_regprocedure('public.set_invoice_studio_id()');
+-> b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89
+```
+
+### Test
+
+`supabase/tests/billing/studio_invoice_test.sql`, new final section "A settle
+replays after the stamped designer has left the studio": a fresh studio invoice
+is drafted and issued by member A; co-member B is promoted to owner so the studio
+is never ownerless; A's own membership goes `suspended`; then as `service_role`
+the Checkout rail runs claim -> finalize -> settle and the row must reach
+`paid` / `amount_paid_cents = 40000` / `paid_at IS NOT NULL`.
+
+**Negative control** (the test is not vacuous). The pre-fix function body
+(`git show HEAD:supabase/migrations/00571_studio_invoices.sql`) was loaded into a
+scratch transaction and the same suite replayed:
+
+```
+psql -v ON_ERROR_STOP=1 -f negctl.sql   EXIT=3
+psql:supabase/tests/billing/studio_invoice_test.sql:905: ERROR:  studio_id_not_designer_studio
+  PL/pgSQL function apply_invoice_payment_effects(uuid) line 42 at SQL statement
+  SQL statement "SELECT public.apply_invoice_payment_effects(NEW.invoice_id)"
+  PL/pgSQL function trg_invoice_payments_apply_effects() line 3 at PERFORM
+  PL/pgSQL function claim_invoice_checkout_attempt(uuid,uuid,text,boolean,text) line 178
+```
+
+so the old ordering strands the money as early as the claim's rollup, and the fix
+is what carries it.
+
+### Gates (fix round 1)
+
+```
+supabase --workdir .codex/worktrees/agent-si-db db reset
+  -> "Finished supabase db reset on branch main." / {"target":"local","message":"Reset local database."}
+
+bash scripts/run-sql-tests.sh
+  total:             157
+  green:             136
+  expected-fail:      21  (documented in supabase/tests/KNOWN_FAILURES.md)
+  unexpected-fail:     0
+  effective-green:   157 / 157
+  billing/studio_invoice_test.sql                     PASS
+  billing/invoice_checkout_integrity_test.sql         PASS
+  edge_api/public_sd_hardening_contract_test.sql      PASS
+
+pnpm --filter @patina/supabase type-check             clean (tsc --noEmit)
+pnpm --filter @patina/designer-portal type-check      clean (tsc --noEmit)
+```
+
+### Advisory now standing
+
+The UPDATE arm no longer refuses a machine write when the stamped designer has
+left, but an **authenticated** actor still cannot touch an outstanding studio
+invoice once the household has left every member's roster of that studio —
+`issue_invoice` / `void_invoice` reach that arm as the actor. That stranding
+window (unchanged by this fix) is the one recorded in the close-round advisory
+above.
+
+`deploySet = ['migration 00571_studio_invoices.sql']`
