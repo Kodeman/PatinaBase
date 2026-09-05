@@ -1,0 +1,33 @@
+import { open, signIn, openHouse, t, holdPress } from './lib.mjs';
+const SH = '/Users/kody/Code/patina-merged/artifacts/client-approval-experience-2026-09-03/build/waves/w2/web-walk-shots-r1';
+const { browser, page } = await open({ width: 1280, height: 1100 });
+await signIn(page);
+await openHouse(page);
+const dw = page.locator('[data-testid="door-way"]').first();
+await dw.scrollIntoViewIfNeeded(); await page.waitForTimeout(400);
+const sign = dw.getByRole('button', { name: /sign and authorize/i }).first();
+console.log('sign disabled, nothing done      :', await sign.isDisabled());
+await dw.locator('input[type=text]').first().fill('Client User');
+await page.waitForTimeout(200);
+console.log('sign disabled, name only         :', await sign.isDisabled());
+await dw.locator('input[type=checkbox]').first().check();
+await page.waitForTimeout(200);
+console.log('sign disabled, name + consent    :', await sign.isDisabled());
+await dw.screenshot({ path: `${SH}/16-door-armed.png` });
+
+const leafBefore = await dw.locator('[data-testid="door-leaf"]').first().boundingBox();
+console.log('leaf height before:', leafBefore && Math.round(leafBefore.height));
+await holdPress(page, sign, 1400);
+await page.waitForTimeout(900);
+const leafMid = await dw.locator('[data-testid="door-leaf"]').first().boundingBox().catch(() => null);
+console.log('leaf height ~900ms after:', leafMid && Math.round(leafMid.height));
+await page.screenshot({ path: `${SH}/17-door-swinging.png` });
+await page.waitForTimeout(3000);
+const way = page.locator('[data-testid="door-way"]').first();
+console.log('door-way after   :', await way.count());
+const rec = page.locator('[data-testid="door-receipt"]').first();
+console.log('door-receipt     :', await rec.count(), t(await rec.textContent().catch(() => '')));
+await page.screenshot({ path: `${SH}/18-door-signed.png`, fullPage: false });
+// stamp
+for (const s of await page.locator('[data-testid="previously-state"]').all()) console.log('  previously-state:', t(await s.innerText()));
+await browser.close();
