@@ -253,3 +253,72 @@ all above the configured floor (70/60/70/70).
 this agent's cwd resets between commands and a bare `cd` does not persist. `pnpm --dir <worktree>`
 is the form that works; the first attempt without it type-checked main and failed on a pre-existing
 `.next/types/app/page.ts` error that has nothing to do with this branch.
+
+## Round 3 — the fix pass (W2B-01)
+
+### W2B-01 — the why reached the mapper and stopped there
+
+Confirmed exactly as reported, and it is the same truncation the round-2 note predicted at the end
+of W2A-02: `parseProjectApprovalReview` builds its result field by field, so a column the
+projection emits but the literal does not name is dropped before any surface sees it. 00569
+projects two such fields — `why` (P-13) and `viewerRole` (iosb3-M2, `lead | studio | household`) —
+and neither was in the literal.
+
+Fixed at the boundary that owns the shape, `packages/supabase/src/hooks/use-project-approvals.ts`:
+
+- new exported `ProjectApprovalViewerRole = 'lead' | 'studio' | 'household'`, re-exported from
+  `hooks/index.ts` so `@patina/supabase` consumers can name the chair;
+- `ProjectApprovalReview` gains `why: string | null` and `viewerRole: ProjectApprovalViewerRole | null`;
+- the parser gains `why: nullableString(row, 'why')` and
+  `viewerRole: isViewerRole(row.viewerRole) ? row.viewerRole : null`.
+
+Both are **null-on-absence, never thrown**: every approval created before 00569 has a null `why`,
+and every projection minted before 00569 carries no `viewerRole` at all. A strict read here would
+have turned an old row into an error page. An unrecognised role string is read as null rather than
+trusted — the client never guesses which chair it is sitting in.
+
+`whyOf()` in `approval-ask.tsx` now reads `approval.why` directly; the cast is gone. The
+`data-testid="approval-why"` line renders on a real typed field.
+
+### The cast that stays, deliberately
+
+The reviewer's fix also asked for `costBaselineCents` to lose its cast. It cannot: **nothing emits
+it.** `git grep costBaselineCents` across this branch and `approvals/w2-backend` finds only the
+single defensive read in `approval-ask.tsx` — no migration, no projection, no other lane. Typing it
+on `ProjectApprovalReview` would promise a field the mapper could only ever set to `null`, which is
+a worse lie than the cast. The comment at the read now says exactly that, and names what would
+retire it: a projection that actually carries a baseline. P-15's baseline leg stays covered by its
+own composer unit tests, which do not depend on the projection.
+
+### Fixtures widened (two required fields, so every typed literal had to learn them)
+
+- `apps/client-portal/.../__tests__/approval-ask.test.tsx` — base `APPROVAL` gains `why: null`,
+  `viewerRole: 'lead'`; the why-renders test drops its now-needless cast; the "draws no note"
+  table gains an explicit `null` case and asserts its two type-forbidden shapes through `unknown`,
+  because a pre-00569 row can still hand the surface an absent or non-string why.
+- `apps/designer-portal/.../approvals-region-head.test.tsx` and `project-approval-document.test.tsx`
+  — both `satisfies ProjectApprovalReview` base fixtures gain the two fields.
+- `packages/supabase/.../__tests__/use-project-approvals.test.ts` — `REVIEW` now carries a real why
+  and a chair, plus four new cases: both fields carried through; each of the three chairs kept
+  verbatim; absence read as null on both; an unrecognised role read as null.
+
+### Gates, this pass
+
+- `pnpm --dir <wt> --filter @patina/client-portal type-check` → clean.
+- `pnpm --dir <wt> --filter @patina/client-portal test` → **117 suites / 1616 tests, all passing**
+  (1615 before; +1 for the added null-why case).
+- same with `--coverage` → statements 71.99 / branches 67.02 / functions 71.88 / lines 74.06, all
+  above the 70/60/70/70 floor.
+- `pnpm --dir <wt> --filter @patina/supabase test` → **84 files / 995 passing, 12 skipped**;
+  `use-project-approvals.test.ts` 21 tests (17 before).
+- `pnpm --dir <wt> --filter @patina/designer-portal type-check` → clean (it consumes the widened
+  type, so it is gated here even though it is not this lane's surface).
+- `pnpm --dir <wt> --filter @patina/designer-portal test -- --testPathPattern "document/approvals"`
+  → 3 suites / 45 tests passing.
+
+### For the steward
+
+`packages/supabase/src/hooks/use-project-approvals.ts` is not owned by any Wave-2 lane, and this
+pass edits it. If the backend lane also touched it the two changes must be merged by hand — check
+before taking either side whole. Nothing here reads `viewerRole` yet on web; it is carried so the
+client app and the iOS lanes can, which was the point of the finding.
