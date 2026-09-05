@@ -31,7 +31,15 @@ struct DecisionDetailView: View {
                 if let decision = viewModel.decision {
                     header(decision)
                     submitFailureBanner(decision)
-                    if viewModel.hasNoRenderableOptions {
+                    if viewModel.isStage2Approval {
+                        // P-09: a `project_artifact_v1` decision carries one
+                        // option row per canonical outcome, so without this
+                        // branch first the screen drew three unlabelled option
+                        // cards over an act (`apply_client_decision`) that
+                        // refuses the contract. It is decided on the DECISION,
+                        // not on the projection having loaded.
+                        projectApproval
+                    } else if viewModel.hasNoRenderableOptions {
                         // SP-17: never a stack of blank, untappable cards.
                         Text(DecisionOptionCopy.allUnavailableLine)
                             .font(PatinaTypography.bodySmall)
@@ -160,6 +168,11 @@ struct DecisionDetailView: View {
         )
     }
 
+    /// `P-09`: the Stage-2 ceremony, in its own file.
+    private var projectApproval: some View {
+        ProjectApprovalBlock(viewModel: viewModel)
+    }
+
     /// `W1-B-03`: one line saying whose the decision is, and the act.
     private var signoffAction: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -184,19 +197,26 @@ struct DecisionDetailView: View {
 
     private func header(_ decision: RemoteClientDecision) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            MonoLabel(text: "DECISION")
+            // P-09: "Approval" is the ask. A Stage-2 row is not a choice
+            // between named alternatives, so it is not called a decision.
+            MonoLabel(text: viewModel.isStage2Approval ? ProjectApprovalCopy.eyebrow : "DECISION")
                 .tracking(2)
             Text(decision.title ?? "Decision")
                 .font(PatinaTypography.h2)
                 .foregroundStyle(PatinaColors.Text.primary)
-            if let description = decision.description, !description.isEmpty {
+            // The Stage-2 block prints the designer's context under the
+            // question it belongs to — `client_decisions.context` and
+            // `project_approval_artifacts.context` are the same string (00463).
+            if !viewModel.isStage2Approval,
+               let description = decision.description, !description.isEmpty {
                 Text(description)
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
             }
             // SP-15: "Overdue · Aug 22" reached the Studio hub and stopped
             // there; the decision itself never said it was late.
-            if !viewModel.isResolved, let due = DateDisplay.due(decision.due_date) {
+            if !viewModel.isResolved, !viewModel.isStage2Approval,
+               let due = DateDisplay.due(decision.due_date) {
                 Text(due.text)
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)

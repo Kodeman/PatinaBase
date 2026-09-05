@@ -139,6 +139,15 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
         status == "responded" || responded_at != nil
     }
 
+    /// `P-09`: a Stage-2 project-artifact approval. It is answered through
+    /// `respond_project_approval` with one of three canonical outcomes, and it
+    /// is read through `list_my_project_decision_reviews` — the row alone
+    /// carries neither the edition it binds nor its impacts, so the screen must
+    /// know which ceremony it is drawing before it draws anything.
+    public var isProjectArtifactApproval: Bool {
+        approval_contract == "project_artifact_v1"
+    }
+
     /// A sign-off the addressed client is the one to give — exactly the shape
     /// `approve_client_signoff` (00564) accepts, so the screen never draws an
     /// act the server will refuse.
@@ -232,9 +241,12 @@ public struct RemoteDecisionOption: Codable, Sendable, Identifiable {
 public actor DecisionsAPIClient {
     public static let shared = DecisionsAPIClient()
 
-    private let baseURL = APIConfiguration.apiURL
-    private let session = PatinaURLSession.shared
-    private let decoder = JSONDecoder()
+    // Not `private`: the Stage-2 RPCs live in `DecisionsAPIClient+ProjectApprovals
+    // .swift` because this file is already at SwiftLint's `file_length` warning,
+    // and an extension in another file cannot reach a `private` member.
+    let baseURL = APIConfiguration.apiURL
+    let session = PatinaURLSession.shared
+    let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     /// Decision columns selected with PostgREST aliases so the wire JSON
@@ -268,7 +280,7 @@ public actor DecisionsAPIClient {
         try? await SupabaseClientManager.shared.client.auth.session.accessToken
     }
 
-    private func applyHeaders(to request: inout URLRequest, prefer: String? = nil) async {
+    func applyHeaders(to request: inout URLRequest, prefer: String? = nil) async {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(APIConfiguration.anonKey, forHTTPHeaderField: "apikey")

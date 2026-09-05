@@ -57,6 +57,35 @@ final class DecisionDetailViewModel {
     /// instead of dropping her back into the list of options.
     var lastAttemptedOptionId: String?
 
+    // MARK: - P-09 · the Stage-2 approval
+
+    /// The client-safe projection for a `project_artifact_v1` decision, read
+    /// from `list_my_project_decision_reviews`. Nil for every other decision,
+    /// and nil for a Stage-2 decision whose fetch failed — which is a state
+    /// the screen names, never one it falls back to option cards from.
+    var approvalReview: RemoteProjectApprovalReview?
+
+    /// The outcome the client has picked but not yet submitted. An outcome is
+    /// terminal, so it takes two beats: the act names its consequence, and the
+    /// client submits it.
+    var chosenOutcome: ProjectApprovalOutcome?
+
+    /// Said once the review of the exact edition has been recorded.
+    var reviewConfirmed: Bool = false
+
+    /// Whichever ceremony this decision belongs to is decided by the DECISION,
+    /// not by the review having loaded: a failed fetch must never let a
+    /// Stage-2 row fall through to the option cards, whose act
+    /// (`apply_client_decision`) refuses it.
+    var isStage2Approval: Bool {
+        decision?.isProjectArtifactApproval == true
+    }
+
+    /// The approval is a Stage-2 one and its projection did not arrive.
+    var approvalUnavailable: Bool {
+        isStage2Approval && !isLoading && approvalReview == nil
+    }
+
     // MARK: - SP-17 · deferral
 
     /// The deferral the client tapped — drives the note sheet.
@@ -168,6 +197,7 @@ final class DecisionDetailViewModel {
         self.decision = d ?? nil
         self.options = o
         await resolveDiscussThread()
+        await loadApprovalReview(decisionId: decisionId)
         // Seed local selection from whatever the server already has, so a
         // re-open of a resolved decision shows the choice without re-asking.
         self.selectedOptionId = o.first(where: { $0.selected == true })?.id
@@ -227,6 +257,7 @@ final class DecisionDetailViewModel {
     /// given, or the status says so). Used to hide the per-option choose CTAs.
     var isResolved: Bool {
         decision?.isResolved == true || selectedOptionId != nil || hasSignedOff
+            || hasAnsweredApproval
     }
 
     /// `W1-B-03`: the sign-off landed in this session. The server row is
@@ -279,6 +310,13 @@ final class DecisionDetailViewModel {
     /// sign-off itself, which carries no option to remember.
     func retrySelection() {
         guard !isSubmitting, !isResolved else { return }
+        // P-09: the chosen outcome survives a failed submit, so the retry is
+        // the banner going away and Submit becoming live again — there is no
+        // consent step on this path to re-open.
+        if isStage2Approval {
+            submitFailure = nil
+            return
+        }
         if awaitsClientSignoff {
             submitFailure = nil
             isApprovingSignoff = true
@@ -342,6 +380,45 @@ final class DecisionDetailViewModel {
         }
         isSubmitting = false
     }
+
+    // MARK: - P-09 · the Stage-2 acts, behind their seams
+
+    /// The read, behind a seam. Same reason as `approveSignoff`: the singleton
+    /// actor's network call is not reachable from a test.
+    @ObservationIgnored
+    var fetchApprovalReviews: () async throws -> [RemoteProjectApprovalReview] = {
+        try await DecisionsAPIClient.shared.listProjectApprovalReviews()
+    }
+
+    /// `confirm_project_decision_review`, behind a seam.
+    /// Arguments: decision id, frozen authority revision, artifact checksum,
+    /// idempotency key.
+    @ObservationIgnored
+    var confirmApprovalReview: (String, Int, String, String) async throws -> Void = { decisionId, revision, checksum, key in
+        try await DecisionsAPIClient.shared.confirmProjectApprovalReview(
+            decisionId: decisionId,
+            authorityRevision: revision,
+            artifactChecksum: checksum,
+            idempotencyKey: key
+        )
+    }
+
+    /// `respond_project_approval`, behind a seam.
+    /// Arguments: decision id, outcome, expected `updatedAt`, idempotency key.
+    @ObservationIgnored
+    var respondToApproval: (String, ProjectApprovalOutcome, String, String) async throws -> Void = { decisionId, outcome, expectedUpdatedAt, key in
+        try await DecisionsAPIClient.shared.respondToProjectApproval(
+            decisionId: decisionId,
+            outcome: outcome,
+            expectedUpdatedAt: expectedUpdatedAt,
+            idempotencyKey: key
+        )
+    }
+
+    /// The outcome landed in this session. The server row is `responded` and
+    /// the next load will say so; until then this is what stops the screen
+    /// offering the three acts a second time.
+    var hasAnsweredApproval: Bool = false
 
     /// Look up the project's comms thread for the "Discuss this" action.
     /// Non-fatal: any failure (no project, no thread, RLS, network) just
