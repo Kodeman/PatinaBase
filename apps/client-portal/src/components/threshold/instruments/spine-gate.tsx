@@ -33,8 +33,8 @@ export type SpineGateVariant = 'signature' | 'acceptance';
 
 /** The mono kind line — the deck's `.db-gk`, uppercased by `.type-meta-small`. */
 const KIND_LINE: Record<SpineGateVariant, string> = {
-  signature: 'A gate · the line stops until you sign',
-  acceptance: 'A gate · the line stops until you accept',
+  signature: 'Your name is needed before the line continues.',
+  acceptance: 'Your acceptance is needed before the line continues.',
 };
 
 /** The act itself, uppercased by the scored-ink grammar. */

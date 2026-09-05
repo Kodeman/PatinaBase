@@ -883,11 +883,44 @@ describe('Threshold — the doorstep’s own asks', () => {
     ]);
 
     expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
-      'your review is required',
+      'Your approval · read the edition first',
     );
     expect(
       screen.getByRole('button', { name: /review exact edition/i }),
     ).toBeInTheDocument();
+  });
+
+  it('hands the ask the lead designer’s given name and the studio’s own', () => {
+    (useDecisionComments as jest.Mock).mockReturnValue({
+      data: [
+        {
+          id: 'c1',
+          decision_id: 'dec-1',
+          author_id: 'designer-9',
+          body: 'I will bring both finishes on Thursday.',
+          created_at: '2026-08-13T15:00:00Z',
+          updated_at: '2026-08-13T15:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    renderWithApprovals([
+      {
+        ...PHASE_APPROVAL,
+        lifecycleStatus: 'draft',
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+      } as ProjectApprovalReview,
+    ]);
+
+    expect(screen.getByTestId('approval-awaiting-studio-issue')).toHaveTextContent(
+      "You've confirmed edition 3. Nora issues it next. Nothing is waiting on you.",
+    );
+    expect(screen.getByRole('button', { name: /ask nora about this/i })).toBeInTheDocument();
+    expect(screen.getByTestId('approval-discussion')).toHaveTextContent(
+      'Nora · Quist Interiors',
+    );
   });
 
   it('keeps the record of an approval answered on an earlier visit', () => {
