@@ -43,13 +43,18 @@ struct ProposalDetailView: View {
         // ten-second cap, the retry a reader now reaches in ten seconds
         // instead of three minutes.
         .refreshable { await viewModel.load(proposalId: proposalId) }
-        .sheet(isPresented: $viewModel.showSignSheet) {
-            ProposalSignSheet(
+        // `P-19`: full screen, both of them. A contract's terms, a consent
+        // line, a name and the act do not fit half a phone, and a medium
+        // detent is dismissed by a flick over a document still half-visible
+        // behind it.
+        .fullScreenCover(isPresented: $viewModel.showSignSheet) {
+            SignActView(
                 proposalTitle: viewModel.proposal?.title ?? "this proposal",
                 terms: ProposalSignTerms.make(
                     proposal: viewModel.proposal,
                     milestones: viewModel.milestones
                 ),
+                editionLine: viewModel.editionLine,
                 isSigning: viewModel.isSigning,
                 errorMessage: viewModel.signError,
                 onSign: { name in
@@ -57,7 +62,13 @@ struct ProposalDetailView: View {
                 },
                 onCancel: { viewModel.cancelSigning() }
             )
-            .presentationDetents([.medium, .large])
+        }
+        .fullScreenCover(isPresented: $viewModel.showSealMoment) {
+            SealMomentView(
+                studioName: viewModel.countersigningStudio,
+                signedName: viewModel.signedName,
+                onDone: { viewModel.showSealMoment = false }
+            )
         }
     }
 

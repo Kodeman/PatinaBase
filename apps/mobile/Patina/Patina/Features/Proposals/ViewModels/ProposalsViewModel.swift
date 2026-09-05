@@ -75,6 +75,34 @@ final class ProposalDetailViewModel {
     /// server has already flipped the proposal to 'accepted').
     private(set) var didSign: Bool = false
 
+    /// `P-19`. The seal, full screen, after the act — and only after one that
+    /// landed in THIS session. A revisit shows the signed header, never the
+    /// ceremony again: a mark that re-settles on every open is a badge
+    /// pretending to be paper.
+    var showSealMoment: Bool = false
+
+    /// The name she typed, for the line beneath the mark. The server's
+    /// `signed_by_name` arrives on the next load; this is what the seal has.
+    private(set) var signedName: String?
+
+    /// `P-19`. The edition line above the restated terms, from the two fields
+    /// `get_client_proposal_bundle` already returns (00407:366). Nil where the
+    /// bundle carried neither — the line is absent rather than invented.
+    var editionLine: String? {
+        ProposalSignActCopy.edition(
+            version: proposal?.version, issuedAt: proposal?.sent_at
+        )
+    }
+
+    /// Who countersigns. Resolved from the project the app already holds,
+    /// matched on the proposal's own `project_id` — the bundle carries no
+    /// designer embed, and a studio name is never invented (`W1R2-M2`'s rule).
+    var countersigningStudio: String? {
+        guard let projectId = proposal?.project_id else { return nil }
+        let project = BadgeCountService.shared.projects.first { $0.id == projectId }
+        return project?.designerStudioName ?? project?.designer?.displayName
+    }
+
     /// Signed either server-side or just now.
     var isSigned: Bool {
         didSign || proposal?.isSigned == true
@@ -193,7 +221,9 @@ final class ProposalDetailViewModel {
         do {
             try await ProposalsAPIClient.shared.signProposal(proposalId: proposalId, signedName: name)
             self.didSign = true
+            self.signedName = name
             self.showSignSheet = false
+            self.showSealMoment = true
         } catch {
             // SP-15 / C5: Patina's words, never the server's.
             MoneyFailureCopy.log("sign", error)

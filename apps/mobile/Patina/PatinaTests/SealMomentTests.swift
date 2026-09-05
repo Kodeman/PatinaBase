@@ -1,0 +1,201 @@
+//
+//  SealMomentTests.swift
+//  PatinaTests
+//
+//  `P-19`. The seal and the act, full screen: the restated terms carried over
+//  unchanged, the edition line above them, and one settle that never becomes
+//  a celebration.
+//
+
+import Testing
+import Foundation
+@testable import Patina
+
+@MainActor
+struct SealMomentTests {
+
+    // MARK: - The terms are carried, not rewritten
+
+    /// The sheet's trustworthiness was `ProposalSignTerms`' contract:
+    /// "Nothing here is invented. Every line is a value the RPC sent or it is
+    /// absent." The full-screen act inherits it by using the same composer,
+    /// not by re-composing the rows.
+    @Test("the restated terms are byte-identical to the sheet's")
+    func theTermsAreUnchanged() throws {
+        let terms = ProposalSignTerms(
+            projectName: "Aspen Loft Refresh",
+            total: "$100,000.00",
+            depositLabel: "Retainer",
+            deposit: "$25,000.00",
+            terms: "Net 30",
+            expiry: "Expires Sep 8"
+        )
+        #expect(terms.lines.map(\.label) == ["Project", "Total", "Retainer", "Terms", "Expiry"])
+        #expect(terms.lines.map(\.value) == [
+            "Aspen Loft Refresh", "$100,000.00", "$25,000.00", "Net 30", "Expires Sep 8"
+        ])
+        // An absent field draws nothing — the row is not invented as a blank.
+        #expect(ProposalSignTerms.empty.lines.isEmpty)
+
+        let composer = try SourcePin.read("Patina/Features/Proposals/ProposalSignTerms.swift")
+        #expect(composer.contains("Nothing here is invented. Every line is a value the RPC"))
+
+        // The act reads the composer; it does not carry a second copy. The
+        // preview is excluded — a `#Preview` builds sample data by hand, which
+        // is what a preview is for.
+        let whole = try SourcePin.readCode("Patina/Features/Proposals/Views/SignActView.swift")
+        let act = String(whole[..<(whole.range(of: "#Preview")?.lowerBound ?? whole.endIndex)])
+        #expect(act.contains("let lines = terms.lines"))
+        #expect(!act.contains("ProposalSignTerms("), "the act composes its own terms")
+    }
+
+    // MARK: - The edition line
+
+    /// From `version` and `sent_at`, which `get_client_proposal_bundle`
+    /// already returns (00407:366). Neither is invented, and a bundle carrying
+    /// neither draws no line at all.
+    @Test("the edition line uses what the bundle sent, or says nothing")
+    func theEditionLineIsNeverInvented() {
+        // The day is the device's, so the expectation composes it the same way
+        // rather than pinning a literal that moves with the simulator's zone.
+        let issued = "2026-09-02T12:00:00Z"
+        let day = DateDisplay.fromTimestamp(issued)
+        #expect(
+            ProposalSignActCopy.edition(version: 3, issuedAt: issued)
+                == "Edition 3 · Issued \(day)"
+        )
+        #expect(ProposalSignActCopy.edition(version: 3, issuedAt: nil) == "Edition 3")
+        #expect(
+            ProposalSignActCopy.edition(version: nil, issuedAt: issued) == "Issued \(day)"
+        )
+        #expect(ProposalSignActCopy.edition(version: nil, issuedAt: nil) == nil)
+    }
+
+    // MARK: - The act
+
+    /// Parity with the web: the consent is ticked and the name is typed, and
+    /// the whole thing is a full-screen cover rather than a medium detent over
+    /// a document the reader can still half-see.
+    @Test("the act is full screen, consented and signed")
+    func theActIsFullScreenConsentedAndSigned() throws {
+        let detail = try SourcePin.readCode(
+            "Patina/Features/Proposals/Views/ProposalDetailView.swift"
+        )
+        #expect(detail.contains(".fullScreenCover(isPresented: $viewModel.showSignSheet)"))
+        #expect(detail.contains(".fullScreenCover(isPresented: $viewModel.showSealMoment)"))
+        #expect(!detail.contains(".presentationDetents"), "the detent survived")
+
+        let act = try SourcePin.readCode("Patina/Features/Proposals/Views/SignActView.swift")
+        #expect(act.contains("hasConsented && trimmedName.count >= ProposalSignActCopy.signatureFloor"))
+        #expect(act.contains("HoldToActButton("))
+        #expect(act.contains("ProposalSignActCopy.signatureNotice"))
+        #expect(act.contains("DateDisplay.long(Date())"))
+    }
+
+    /// The consent sentence is `consentLineFor`'s fallback branch, verbatim: a
+    /// `proposals` row carries no commercial-document kind, so it is the only
+    /// branch it may claim, and the stronger ones assert countersignatures and
+    /// deposit terms this paper has not got.
+    @Test("the consent line is the portals' own fallback branch")
+    func theConsentLineIsThePortalsOwn() {
+        #expect(
+            ProposalSignActCopy.consentLine
+                == "I agree to the scope and investment in this proposal."
+        )
+        #expect(
+            ProposalSignActCopy.signatureNotice
+                == "Your typed name acts as your electronic signature."
+        )
+    }
+
+    // MARK: - The seal
+
+    @Test("the seal is SIGNED, in mocha, and it says so out loud")
+    func theSealStatesItsWord() {
+        let seal = PatinaStamp.State.signed
+        #expect(seal.word == "SIGNED")
+        #expect(seal.borderPigment == .mocha)
+        #expect(seal.wordPigment == .mocha)
+        #expect(seal.weight == .doubled)
+        #expect(ProposalSignActCopy.sealHeading == "Signed")
+    }
+
+    /// What happens next, and nothing else. The studio is named where the app
+    /// already holds a name for it and never invented; no timing is stated,
+    /// because none is known.
+    @Test("the seal says what happens next without inventing a name or a date")
+    func theSealSaysWhatHappensNext() {
+        #expect(
+            ProposalSignActCopy.whatHappensNext(studio: "Quist Interiors")
+                == "Quist Interiors countersigns. You’ll have a copy."
+        )
+        #expect(
+            ProposalSignActCopy.whatHappensNext(studio: nil)
+                == "Your designer countersigns. You’ll have a copy."
+        )
+        #expect(
+            ProposalSignActCopy.whatHappensNext(studio: "")
+                == "Your designer countersigns. You’ll have a copy."
+        )
+        for line in [ProposalSignActCopy.whatHappensNext(studio: "Quist Interiors"),
+                     ProposalSignActCopy.whatHappensNext(studio: nil)] {
+            for invented in ["soon", "shortly", "within", "hours", "days"] {
+                #expect(!line.lowercased().contains(invented), "\(line) invents timing")
+            }
+        }
+    }
+
+    /// One settle, 420 ms, and then the mark stops moving forever. Reduced
+    /// motion cross-fades: no scale, no rotation, and the haptic still fires,
+    /// because for that reader the haptic IS the confirmation.
+    @Test("the settle is one curve, and reduced motion drops the transform")
+    func theSettleIsOneCurveAndReducedMotionDropsIt() throws {
+        #expect(ProposalSignActCopy.settleDuration == 0.42)
+        #expect(ProposalSignActCopy.settleFromScale == 1.06)
+
+        let source = try SourcePin.readCode(
+            "Patina/Features/Shared/Views/SealMomentView.swift"
+        )
+        #expect(source.contains("guard !reduceMotion else { return 1 }"))
+        #expect(source.contains("guard !reduceMotion else { return 0 }"))
+        #expect(source.contains(".easeOut(duration: ProposalSignActCopy.settleDuration)"))
+        // The haptic is outside every motion branch.
+        let settle = try #require(source.range(of: "private func settle()"))
+        let body = String(source[settle.lowerBound...].prefix(260))
+        #expect(body.contains("HapticManager.shared.notification(.success)"))
+        #expect(!body.contains("reduceMotion"), "the haptic was gated on the motion setting")
+    }
+
+    /// The stamp is the reward. No party, no noise — she may be reading this
+    /// in bed at eleven at night.
+    @Test("there is no celebration anywhere in the seal")
+    func thereIsNoCelebration() throws {
+        // Comments stripped: the file's own header names the refusals it
+        // keeps, and a pin that fires on its own documentation measures the
+        // file rather than the code.
+        let source = try SourcePin.readCode(
+            "Patina/Features/Shared/Views/SealMomentView.swift"
+        )
+        for banned in ["confetti", "AudioServices", "AVAudio", "SystemSoundID",
+                       "repeatForever", "celebrat"] {
+            #expect(!source.lowercased().contains(banned.lowercased()),
+                    "the seal draws \(banned)")
+        }
+    }
+
+    /// It plays once, in the session the signature landed — never on a
+    /// revisit. A mark that re-settles on every open is a badge pretending to
+    /// be paper.
+    @Test("the seal opens only on a signature given in this session")
+    func theSealOpensOnceOnly() throws {
+        let source = try SourcePin.readCode(
+            "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift"
+        )
+        let sign = try #require(source.range(of: "func sign(proposalId: String, name: String)"))
+        let body = String(source[sign.lowerBound...].prefix(700))
+        #expect(body.contains("self.showSealMoment = true"))
+        #expect(body.contains("self.signedName = name"))
+        // Nothing else opens it, and `load` in particular does not.
+        #expect(source.components(separatedBy: "showSealMoment = true").count - 1 == 1)
+    }
+}

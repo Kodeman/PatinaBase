@@ -55,7 +55,7 @@ struct TopBandFoldTests {
         }
         for file in [
             "Patina/Features/Decisions/Views/DecisionDeferSheet.swift",
-            "Patina/Features/Proposals/Views/ProposalSignSheet.swift",
+            "Patina/Features/Proposals/Views/SignActView.swift",
             "Patina/Features/Decisions/Views/DecisionDetailView.swift"
         ] {
             #expect(try SourcePin.read(file).contains(".patinaTopBand()"),
