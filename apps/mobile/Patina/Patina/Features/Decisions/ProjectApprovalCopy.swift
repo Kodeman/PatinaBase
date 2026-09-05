@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import PatinaDesignKit
 
 /// One outcome act: the verb, then what it does.
 struct ProjectApprovalAct: Identifiable, Equatable {
@@ -24,7 +25,17 @@ struct ProjectApprovalAct: Identifiable, Equatable {
 
 enum ProjectApprovalCopy {
 
-    /// The three acts, in the order the client meets them.
+    /// The three doors, in the order the client meets them: Approve, Return,
+    /// Hold. Verb, then consequence, and no verb is louder than another —
+    /// `P-16` gives all three equal weight, so the screen does not lean on a
+    /// homeowner to say yes.
+    ///
+    /// "Decline" is gone. `changes_requested` is RETURNED on the stamp and
+    /// "Returned" in prose, on every surface — the two words the rail used to
+    /// carry ("Declined" on the day, "Changes requested" the next visit) said
+    /// two different things about one row. "Declined" survives in this product
+    /// only as a commercial document a client refused, which is a different
+    /// act on a different paper.
     static let acts: [ProjectApprovalAct] = [
         ProjectApprovalAct(
             outcome: .approved,
@@ -32,16 +43,28 @@ enum ProjectApprovalCopy {
             consequence: "Accept this exact edition and its stated impacts."
         ),
         ProjectApprovalAct(
-            outcome: .needsDiscussion,
-            label: "Ask a question",
-            consequence: "Hold this while you and your designer talk it through."
+            outcome: .changesRequested,
+            label: "Return",
+            consequence: "Send this edition back for revision and a new approval request."
         ),
         ProjectApprovalAct(
-            outcome: .changesRequested,
-            label: "Decline",
-            consequence: "Return this edition for revision and a new approval request."
+            outcome: .needsDiscussion,
+            label: "Hold",
+            consequence: "Keep this open while you and your designer talk it through."
         )
     ]
+
+    /// `P-16` / `P-17`: the mark each outcome leaves. RETURNED is the whole
+    /// point of the row — "changes requested" was plain text with no mark at
+    /// all, so the one outcome that asks the studio for work looked like
+    /// nothing had happened.
+    static func stamp(for outcome: ProjectApprovalOutcome) -> PatinaStamp.State {
+        switch outcome {
+        case .approved: return .approved
+        case .changesRequested: return .returned
+        case .needsDiscussion: return .held
+        }
+    }
 
     static let eyebrow = "APPROVAL"
 
@@ -83,6 +106,90 @@ enum ProjectApprovalCopy {
     /// retry instruction: the same branch catches a caller the projection will
     /// never open for, and telling her to pull again would be untrue.
     static let unavailable = "We couldn’t open this approval."
+
+    // MARK: - The signature (P-18 / R1)
+
+    /// The typed legal name, on a ruled line with the date beside it. R1:
+    /// typed name plus a scored press-and-hold on every surface — a tap is
+    /// the same gesture as scrolling past, and this is where the phone records
+    /// a legal act.
+    static let signatureLabel = "YOUR NAME"
+
+    /// `SIGNATURE_NOTICE` in the portals (`consent-copy.ts`), verbatim, so
+    /// the sentence under the rule is the same one on both surfaces.
+    static let signatureNotice = "Your typed name acts as your electronic signature."
+
+    static let signaturePlaceholder = "Type your full name"
+
+    /// `_respond_project_approval_checked` raises `check_violation` under two
+    /// characters (00464:557-561). The act is not offered where the server
+    /// would refuse it.
+    static let signatureFloor = 2
+
+    // MARK: - The change note (R10)
+
+    /// `R10`, and the asymmetry is deliberate: the web REQUIRES a note on a
+    /// return, with instructional copy; the phone pre-opens the composer and
+    /// encourages one. A homeowner on a phone at eleven at night has a
+    /// keyboard over half the screen and a designer she can text tomorrow, and
+    /// a blocked submit there would cost the studio the answer, not gain it
+    /// the note. There is no database constraint on either side, so neither
+    /// surface is lying to the other.
+    ///
+    /// Do not "fix" this into parity without re-reading R10.
+    static let noteLabel = "What should change?"
+
+    /// The composer's placeholder, in the designer's name where the app holds
+    /// one and never in an invented one.
+    static func notePlaceholder(designer: String?) -> String {
+        let who = designer.flatMap { $0.isEmpty ? nil : $0 } ?? "your designer"
+        return "Tell \(who) what to change."
+    }
+
+    /// Instructional, not validating: what the note does, and that the return
+    /// stands without it.
+    ///
+    /// `IOSC-02`: the note lands ON the approval (`decision_comments`, the row
+    /// the web writes to), so the sentence no longer sends her to the project
+    /// conversation to look for it.
+    static let noteHelp =
+        "Optional. Your note goes to your designer with this returned edition."
+
+    /// The outcome landed and the note did not. Said plainly, beside the
+    /// answer, because the answer is recorded and only the courtesy is not.
+    static let noteUnsent =
+        "Your note didn’t send. You can write to your designer in this project’s conversation."
+
+    // MARK: - The notes already on this approval (IOSC-R2-01)
+
+    /// The eyebrow over the notes. The web's own heading, so a homeowner who
+    /// reads the approval on her laptop and answers it on her phone meets one
+    /// word for one thing.
+    static let discussionLabel = "The discussion"
+
+    /// The read failed. It is said only where notes might exist to be missed,
+    /// and it names the one true consequence — that what is here was not
+    /// read — with no apology and no invented timing.
+    static let discussionUnreadable =
+        "These notes couldn’t be read just now."
+
+    /// Who wrote a note, and when. "You" for her own hand; otherwise the
+    /// studio, in the shape `P-11` (reduced) rules for a studio comment —
+    /// `{Designer given name} · {Studio}`, never an internal reviewer's
+    /// identity — falling back to "The studio" where either half is missing.
+    /// This is `approval-ask.tsx`'s `studioHand`, ported unchanged.
+    static func noteAttribution(
+        isMine: Bool, designer: String?, studio: String?, date: String
+    ) -> String {
+        "\(isMine ? "You" : studioHand(designer: designer, studio: studio)) · \(date)"
+    }
+
+    static func studioHand(designer: String?, studio: String?) -> String {
+        let who = designer?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let house = studio?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let who, !who.isEmpty, let house, !house.isEmpty else { return "The studio" }
+        return "\(who) · \(house)"
+    }
 
     // MARK: - The approval that is neither open nor hers to answer
 

@@ -56,6 +56,17 @@ final class DecisionDetailViewModel {
     /// Said once the review of the exact edition has been recorded.
     var reviewConfirmed: Bool = false
 
+    /// `P-16` / `R10`: the change note, encouraged and never enforced. It
+    /// lands on the approval as a `decision_comments` row, where the web's
+    /// note lands — `respond_project_approval` carries no note field, and the
+    /// project conversation is only the fallback. `noteFailure` is kept apart
+    /// from `submitFailure` on purpose: a recorded answer may never be drawn
+    /// as a failed one. `typedSignature` is `P-18` / `R1`, the legal name the
+    /// outcome is signed with.
+    var changeNote: String = ""
+    var noteFailure: String?
+    var typedSignature: String = ""
+
     /// Whichever ceremony this decision belongs to.
     ///
     /// The PROJECTION comes first, and has to: 00467:18-38 cut
@@ -421,18 +432,24 @@ final class DecisionDetailViewModel {
         )
     }
 
-    /// `respond_project_approval`, behind a seam.
-    /// Arguments: decision id, outcome, expected `updatedAt`, idempotency key.
+    /// `respond_project_approval`, behind a seam. Arguments: decision id,
+    /// outcome, the typed legal name (`P-18`), expected `updatedAt`, key.
     @ObservationIgnored
-    var respondToApproval: (String, ProjectApprovalOutcome, String, String) async throws -> Void = { decisionId, outcome, expectedUpdatedAt, key in
+    var respondToApproval: (String, ProjectApprovalOutcome, String, String, String) async throws -> Void = { decisionId, outcome, signature, expectedUpdatedAt, key in
         try await DecisionsAPIClient.shared.respondToProjectApproval(
-            decisionId: decisionId,
-            outcome: outcome,
-            expectedUpdatedAt: expectedUpdatedAt,
-            idempotencyKey: key
+            decisionId: decisionId, outcome: outcome, clientSignature: signature,
+            expectedUpdatedAt: expectedUpdatedAt, idempotencyKey: key
         )
     }
 
+    /// `P-16`. The note, behind a seam. It lands where the web's lands —
+    /// `decision_comments`, on the approval itself — and reaches the project
+    /// conversation only when that write cannot happen. Arguments: the
+    /// decision id, the fallback route, the note. See `ApprovalNoteWriter`.
+    @ObservationIgnored
+    var sendApprovalNote: (String?, MessageRoute?, String) async throws -> String? = {
+        try await ApprovalNoteWriter.send(decisionId: $0, route: $1, body: $2)
+    }
     /// The outcome recorded in this session. The server row is `responded` and
     /// the next load will carry the word itself; until then this is what stops
     /// the screen offering the three acts a second time, and what lets it name

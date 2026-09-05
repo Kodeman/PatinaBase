@@ -43,21 +43,40 @@ struct ProposalDetailView: View {
         // ten-second cap, the retry a reader now reaches in ten seconds
         // instead of three minutes.
         .refreshable { await viewModel.load(proposalId: proposalId) }
-        .sheet(isPresented: $viewModel.showSignSheet) {
-            ProposalSignSheet(
-                proposalTitle: viewModel.proposal?.title ?? "this proposal",
-                terms: ProposalSignTerms.make(
-                    proposal: viewModel.proposal,
-                    milestones: viewModel.milestones
-                ),
-                isSigning: viewModel.isSigning,
-                errorMessage: viewModel.signError,
-                onSign: { name in
-                    Task { await viewModel.sign(proposalId: proposalId, name: name) }
-                },
-                onCancel: { viewModel.cancelSigning() }
+        // `P-19`: full screen, both of them. A contract's terms, a consent
+        // line, a name and the act do not fit half a phone, and a medium
+        // detent is dismissed by a flick over a document still half-visible
+        // behind it.
+        // `IOSC-05`: the seal is presented from the sign cover's `onDismiss`,
+        // never in the same mutation that dismisses it — a present issued
+        // while a dismissal is in flight is dropped, and the dropped one is
+        // the whole payoff of the ceremony.
+        .fullScreenCover(
+            isPresented: $viewModel.showSignSheet,
+            onDismiss: { viewModel.signCoverDismissed() },
+            content: {
+                SignActView(
+                    proposalTitle: viewModel.proposal?.title ?? "this proposal",
+                    terms: ProposalSignTerms.make(
+                        proposal: viewModel.proposal,
+                        milestones: viewModel.milestones
+                    ),
+                    editionLine: viewModel.editionLine,
+                    isSigning: viewModel.isSigning,
+                    errorMessage: viewModel.signError,
+                    onSign: { name in
+                        Task { await viewModel.sign(proposalId: proposalId, name: name) }
+                    },
+                    onCancel: { viewModel.cancelSigning() }
+                )
+            }
+        )
+        .fullScreenCover(isPresented: $viewModel.showSealMoment) {
+            SealMomentView(
+                studioName: viewModel.countersigningStudio,
+                signedName: viewModel.signedName,
+                onDone: { viewModel.showSealMoment = false }
             )
-            .presentationDetents([.medium, .large])
         }
     }
 
@@ -142,37 +161,47 @@ struct ProposalDetailView: View {
         .padding(.horizontal, 24)
     }
 
-    /// `checkmark.seal.fill` claims a signature; `viewModel.isSigned` (true
-    /// for every `status == "accepted"` proposal, signed or not) is too
-    /// broad a gate for the icon alone. accepted-but-unsigned shows the
-    /// plain circle instead (rulings-fable.md #6). Exposed for pinning
-    /// (`ProposalDetailStatusIconTests.swift`) — the text this pairs with,
-    /// `ProposalStatusDisplay.detailStatusLine`, already gets this right.
-    static func statusIcon(for proposal: RemoteProposal, justSigned: Bool) -> String {
-        (proposal.hasSignatureRecord || justSigned) ? "checkmark.seal.fill" : "checkmark.circle"
-    }
-
+    /// `P-17`. Three marks retire together here, and they were the same
+    /// mistake three times: the green `checkmark.seal.fill` / `checkmark.circle`
+    /// pair over the signed line, and the two filled `PatinaStatusBadge`s
+    /// (warning-tinted "Expired", error-tinted "Declined") under the
+    /// unsignable ones. A glyph standing in for a state, and a fill standing
+    /// in for a mark, are both what the stamp grammar replaces —
+    /// `SIGNED` is mocha, `DECLINED` is the palette's one terracotta, and
+    /// neither has a counterpart it could be read against.
+    ///
+    /// The words are unchanged and still carry the meaning, so the stamp is
+    /// hidden from VoiceOver (`PatinaStamp` does that itself).
     @ViewBuilder
     private func statusRow(_ proposal: RemoteProposal) -> some View {
+        let stamp = ProposalStatusDisplay.stampState(
+            for: proposal, justSigned: viewModel.didSign
+        )
         if viewModel.isSigned {
-            HStack(spacing: 6) {
-                Image(systemName: Self.statusIcon(for: proposal, justSigned: viewModel.didSign))
-                    .foregroundStyle(PatinaColors.sage)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if let stamp {
+                    PatinaStamp(
+                        state: stamp,
+                        recordedAt: proposal.signed_at.flatMap(ISO8601DateParsing.date(from:))
+                    )
+                }
                 // SP-04: "Signed" only where a signature record exists.
                 Text(ProposalStatusDisplay.detailStatusLine(
                     proposal,
                     justSigned: viewModel.didSign
                 ))
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.sage)
+                .foregroundStyle(PatinaColors.Text.secondary)
             }
-            .padding(.top, 4)
-        } else if proposal.status == "expired" || (!proposal.isSignable && proposal.status != "declined") {
-            PatinaStatusBadge(state: .warning, text: "Expired")
-                .padding(.top, 4)
-        } else if proposal.status == "declined" {
-            PatinaStatusBadge(state: .error, text: "Declined")
-                .padding(.top, 4)
+            .padding(.top, 8)
+        } else if let stamp {
+            // No sentence beside this one — the badge it replaces carried its
+            // own word — so the mark speaks rather than hiding.
+            PatinaStamp(
+                state: stamp,
+                accessibilityLabel: ProposalStatusDisplay.rowLabel(proposal)
+            )
+            .padding(.top, 8)
         }
     }
 

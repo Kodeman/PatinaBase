@@ -31,6 +31,12 @@ struct ProjectApprovalBlock: View {
                 reviewLeg(review)
                 closureLeg(review)
                 outcomeLeg(review)
+                ApprovalDiscussionBlock(
+                    decisionId: viewModel.approvalDecisionId,
+                    readKey: viewModel.approvalDiscussionKey,
+                    designerGivenName: designerGivenName,
+                    studioName: studioName
+                )
             } else if viewModel.isLoading {
                 PatinaLoadingState()
             } else {
@@ -128,11 +134,12 @@ struct ProjectApprovalBlock: View {
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                PatinaButton(
-                    ProjectApprovalCopy.reviewAction,
-                    style: .primary,
-                    isLoading: viewModel.isSubmitting,
-                    isEnabled: !viewModel.isSubmitting
+                // `P-18` / `R1`: held, not tapped. The review leg keeps
+                // `review_method: 'portal_clickthrough'` — a press-and-hold
+                // IS a click-through, so no migration follows this.
+                HoldToActButton(
+                    title: ProjectApprovalCopy.reviewAction,
+                    isBusy: viewModel.isSubmitting
                 ) {
                     Task { await viewModel.confirmExactEdition() }
                 }
@@ -165,20 +172,44 @@ struct ProjectApprovalBlock: View {
     @ViewBuilder
     private func closureLeg(_ review: RemoteProjectApprovalReview) -> some View {
         if review.isWithdrawn {
-            closureLine(ProjectApprovalCopy.withdrawn, id: "withdrawn")
+            closureLine(ProjectApprovalCopy.withdrawn, stamp: .withdrawn, id: "withdrawn")
         } else if review.isSuperseded {
-            closureLine(ProjectApprovalCopy.superseded, id: "superseded")
+            closureLine(ProjectApprovalCopy.superseded, stamp: .superseded, id: "superseded")
         } else if let answered = viewModel.answeredOutcome ?? review.recordedOutcome {
-            closureLine(ProjectApprovalCopy.recorded(answered), id: "recorded")
+            closureLine(
+                ProjectApprovalCopy.recorded(answered),
+                stamp: ProjectApprovalCopy.stamp(for: answered),
+                id: "recorded"
+            )
+            if let noteFailure = viewModel.noteFailure {
+                Text(noteFailure)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("decisionDetail.approval.noteFailure")
+            }
         }
     }
 
-    private func closureLine(_ text: String, id: String) -> some View {
-        Text(text)
-            .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.Text.primary)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("decisionDetail.approval.\(id)")
+    /// `P-16` / `P-17`: the sentence, and the mark it earned. RETURNED is the
+    /// row this closes — "changes requested" left no mark at all, so the one
+    /// outcome that asks the studio for work read as though nothing had
+    /// happened. The stamp is hidden from VoiceOver; the sentence says it.
+    private func closureLine(
+        _ text: String, stamp: PatinaStamp.State, id: String
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            PatinaStamp(
+                state: stamp,
+                recordedAt: viewModel.approvalReview?.respondedAt
+                    .flatMap(ISO8601DateParsing.date(from:))
+            )
+            Text(text)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityIdentifier("decisionDetail.approval.\(id)")
     }
 
     // MARK: - The three answers
@@ -186,18 +217,26 @@ struct ProjectApprovalBlock: View {
     @ViewBuilder
     private func outcomeLeg(_ review: RemoteProjectApprovalReview) -> some View {
         if review.canRespond, !viewModel.hasAnsweredApproval {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
                 if let chosen = chosenAct {
                     Text("\(chosen.label) · \(chosen.consequence)")
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("decisionDetail.approval.consequence")
-                    PatinaButton(
-                        ProjectApprovalCopy.submitAction,
-                        style: .primary,
-                        isLoading: viewModel.isSubmitting,
-                        isEnabled: !viewModel.isSubmitting
+                    // RULED: the rule and the name belong to the one act that
+                    // agrees to something. Return gets the composer instead;
+                    // Hold gets neither, and both are still held.
+                    if viewModel.approvalNeedsSignature {
+                        signatureLine
+                    }
+                    if chosen.outcome == .changesRequested {
+                        changeNoteComposer
+                    }
+                    HoldToActButton(
+                        title: ProjectApprovalCopy.submitAction,
+                        isEnabled: viewModel.canSubmitApproval,
+                        isBusy: viewModel.isSubmitting
                     ) {
                         Task { await viewModel.submitApprovalResponse() }
                     }
@@ -225,15 +264,137 @@ struct ProjectApprovalBlock: View {
 
     /// One outcome, stacked full width. The consequence is not printed beside
     /// the verb here — choosing is the beat that prints it.
+    ///
+    /// `P-16`: all three take the SAME style. Approve was `.primary` — a
+    /// filled commitment button — against two hairline ones, which is the
+    /// screen leaning on a homeowner to say yes to a document she is being
+    /// asked to weigh. Three doors, one weight.
     private func outcomeAct(_ act: ProjectApprovalAct) -> some View {
         PatinaButton(
             act.label,
-            style: act.outcome == .approved ? .primary : .secondary,
+            style: .secondary,
             isEnabled: !viewModel.isSubmitting
         ) {
             viewModel.chooseOutcome(act.outcome)
         }
         .accessibilityIdentifier("decisionDetail.approval.outcome.\(act.outcome.rawValue)")
+    }
+
+    /// `P-18` / `R1`. The typed legal name on a ruled line, with the date
+    /// beside it, under a chosen Approve — so a homeowner signs the agreement
+    /// rather than tapping it. RULED 2026-09-05: it is drawn for Approve and
+    /// for nothing else (`approvalNeedsSignature`); a name asked for in order
+    /// to say "needs discussion" is theatre in front of the two doors she is
+    /// least likely to take.
+    ///
+    /// The date is today's, formatted in the device calendar, and it is the
+    /// day she is signing on. The server stamps `client_consented_at` itself;
+    /// this is the line she reads while she types, not the record.
+    private var signatureLine: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                MonoLabel(text: ProjectApprovalCopy.signatureLabel)
+                Spacer(minLength: 12)
+                MonoLabel(text: DateDisplay.long(Date()))
+                    .accessibilityIdentifier("decisionDetail.approval.signatureDate")
+            }
+            TextField(
+                ProjectApprovalCopy.signaturePlaceholder,
+                text: Binding(
+                    get: { viewModel.typedSignature },
+                    set: { viewModel.typedSignature = $0 }
+                )
+            )
+            .font(PatinaTypography.h5)
+            .foregroundStyle(PatinaColors.Text.primary)
+            .textFieldStyle(.plain)
+            .textContentType(.name)
+            .textInputAutocapitalization(.words)
+            .autocorrectionDisabled()
+            .padding(.bottom, 6)
+            .accessibilityIdentifier("decisionDetail.approval.signature")
+            Rectangle()
+                .fill(PatinaColors.Border.strong)
+                .frame(height: 1)
+            Text(ProjectApprovalCopy.signatureNotice)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// `R10`. Pre-opened the moment Return is chosen, encouraged by its
+    /// placeholder and its help line, and enforced by nothing: the submit
+    /// stays live over an empty note. The web requires one; the asymmetry is
+    /// deliberate and documented in `ProjectApprovalCopy.noteLabel`.
+    private var changeNoteComposer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            MonoLabel(text: ProjectApprovalCopy.noteLabel)
+            TextField(
+                ProjectApprovalCopy.notePlaceholder(designer: designerGivenName),
+                text: Binding(
+                    get: { viewModel.changeNote },
+                    set: { viewModel.changeNote = $0 }
+                ),
+                axis: .vertical
+            )
+            .lineLimit(3...6)
+            .font(PatinaTypography.bodySmall)
+            .foregroundStyle(PatinaColors.Text.primary)
+            .textFieldStyle(.plain)
+            .padding(12)
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(PatinaColors.Border.strong, lineWidth: 1)
+            }
+            .accessibilityIdentifier("decisionDetail.approval.note")
+            Text(ProjectApprovalCopy.noteHelp)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Who the note is addressed to, where the app already holds a name.
+    ///
+    /// `IOSC-03`. The embedded row is the wrong place to look on its own:
+    /// 00467:18-38 cut Stage-2 out of every raw `client_decisions` SELECT
+    /// policy a homeowner can reach, so for the very person being asked
+    /// `viewModel.decision` is nil — and with it the project embed and its
+    /// designer. `RemoteProjectApprovalReview`, the projection that IS
+    /// present, carries no designer field at all. The name that survives is
+    /// the one on the project the app already holds, matched on the
+    /// projection's own `projectId` — the same resolution the seal makes in
+    /// `countersigningStudio`.
+    private var designerGivenName: String? {
+        Self.designerGivenName(
+            embedded: viewModel.decision?.project?.designer?.askedByName,
+            projectId: viewModel.approvalReview?.projectId ?? viewModel.decision?.project_id,
+            projects: BadgeCountService.shared.projects
+        )
+    }
+
+    /// The resolution itself, as a value: the embed when it arrived, the held
+    /// project when it did not, and nobody rather than an invented name — the
+    /// placeholder's own fallback is "your designer".
+    static func designerGivenName(
+        embedded: String?,
+        projectId: String?,
+        projects: [RemoteProject]
+    ) -> String? {
+        if let embedded, !embedded.isEmpty { return embedded }
+        guard let projectId, !projectId.isEmpty else { return nil }
+        return projects.first { $0.id == projectId }?.designer?.askedByName
+    }
+
+    /// The house a studio note on this approval is signed by, resolved the same way the seal
+    /// resolves it (`ProposalsViewModel.countersigningStudio`) — from the
+    /// project the app already holds, never invented.
+    private var studioName: String? {
+        guard let projectId = viewModel.approvalReview?.projectId
+            ?? viewModel.decision?.project_id else { return nil }
+        let project = BadgeCountService.shared.projects.first { $0.id == projectId }
+        return project?.designerStudioName ?? project?.designer?.displayName
     }
 
     private var chosenAct: ProjectApprovalAct? {

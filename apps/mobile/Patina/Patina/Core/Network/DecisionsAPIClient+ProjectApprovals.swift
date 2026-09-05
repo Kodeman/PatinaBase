@@ -45,6 +45,15 @@ public enum ProjectApprovalOutcome: String, Codable, Sendable, CaseIterable {
     case needsDiscussion = "needs_discussion"
 }
 
+/// How the client consented. `client_decisions.client_consent_method` admits
+/// exactly two values (00464:549-553), and R2 closed drawn signatures
+/// permanently, so a typed name held under a press is the only act iOS has.
+public enum ProjectApprovalConsent {
+    /// `nonisolated`: the actor reads it, and the module's default isolation
+    /// would otherwise make a constant string a main-actor property.
+    nonisolated public static let electronicSignature = "electronic_signature"
+}
+
 /// One Stage-2 approval, as the client-safe projection returns it.
 ///
 /// Every field is the RPC's own key — the projection is already camelCase, so
@@ -302,18 +311,43 @@ extension DecisionsAPIClient {
     }
 
     /// Record one of the three canonical outcomes against the edition the
-    /// client was reading. `expectedUpdatedAt` is the row's own `updatedAt`,
-    /// echoed back: the RPC answers `serialization_failure` if the approval
-    /// moved while the screen was open.
+    /// client was reading, signed with the typed legal name.
+    ///
+    /// `expectedUpdatedAt` is the row's own `updatedAt`, echoed back: the RPC
+    /// answers `serialization_failure` if the approval moved while the screen
+    /// was open.
+    ///
+    /// `P-18` / `R1`. `_respond_project_approval_checked` has carried
+    /// `p_client_consent_method` / `p_client_signature` since 00464 — it
+    /// validates them, writes the three 00117 consent columns, and hashes them
+    /// into the action receipt (`00464:630-636`, `:736-740`). What it did not
+    /// have was a way in: the public wrapper rejected every payload key but
+    /// `outcome`/`optionId` and passed `NULL, NULL` down. **Wave 2's single
+    /// migration, 00569, opens exactly those two keys** — the backend lane's
+    /// file, which redefines this wrapper anyway — and the names here are the
+    /// receipt's own. iOS ships no migration for this, and must not ship
+    /// ahead of one: before 00569 the pair is rejected as
+    /// `invalid_parameter_value`.
+    ///
+    /// A consent method without a signature, or the reverse, is a
+    /// `check_violation` server-side; the pair is therefore sent together or
+    /// not at all, and the caller gates on the two-character floor.
     public func respondToProjectApproval(
         decisionId: String,
         outcome: ProjectApprovalOutcome,
+        clientSignature: String,
         expectedUpdatedAt: String,
         idempotencyKey: String
     ) async throws {
+        var payload: [String: Any] = ["outcome": outcome.rawValue]
+        let signature = clientSignature.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !signature.isEmpty {
+            payload["clientSignature"] = signature
+            payload["clientConsentMethod"] = ProjectApprovalConsent.electronicSignature
+        }
         _ = try await callRPC("respond_project_approval", body: [
             "p_decision_id": decisionId,
-            "p_payload": ["outcome": outcome.rawValue],
+            "p_payload": payload,
             "p_expected_updated_at": expectedUpdatedAt,
             "p_idempotency_key": idempotencyKey
         ])

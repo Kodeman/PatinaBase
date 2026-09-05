@@ -167,8 +167,11 @@ struct DecisionListView: View {
     /// that actually unblocks it — track an in-flight request if one
     /// exists, otherwise start one.
     private var emptyView: some View {
+        // `P-17`: no glyph. A check mark over "Nothing waiting on you" is a
+        // check mark used as status, which the stamp grammar replaces
+        // everywhere else on this rail and refuses outright here — there is
+        // no state to mark when there is nothing to mark.
         PatinaEmptyState(
-            icon: "checkmark.circle",
             title: "Nothing waiting on you",
             message: "When your designer needs a call from you, it lands here.",
             ctaTitle: studioCTATitle,
