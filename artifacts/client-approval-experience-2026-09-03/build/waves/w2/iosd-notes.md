@@ -494,3 +494,156 @@ tree with no change to it or to the Companion. Nothing in this pass touches
 - **The lock screen was not seen.** The acts still cannot be exercised without
   a real APNs push; the routing is pinned by the reconstructed envelope, not by
   a banner.
+
+---
+
+# Round 2 fixes — 2026-09-05
+
+Two majors, both cross-lane, both settled by `rulings-2026-09-04.md`'s
+"Rulings made mid-Wave 2" section rather than by a lane preference. Tree was
+clean at start (`git status --short` prints only the eight
+`.env.example: Operation not permitted` lines the sandbox's read denials
+produce — not modifications). No leftovers from the usage-limit stop.
+
+## iosd2-M1 — "Ask a question" on a proposal or an invoice
+
+**The reviewer's premise was true when he wrote it and is not true now.**
+Two things changed underneath the finding:
+
+1. **The ruling settles the destination, and it is not `.threadList`.**
+   `rulings-2026-09-04.md`, "Rulings made mid-Wave 2": *"Lock-screen 'Ask a
+   question.' The PATINA_* envelope carries `thread_id` when the entity's
+   project has a thread; the action opens that thread, else the entity's own
+   screen. **Never the inbox as a dead end.**"* The reviewer's proposed
+   three-line revert — proposal and invoice back to `.threadList` — is the one
+   shape the ruling names and refuses. It is not taken.
+
+2. **The backend lane landed `thread_id`, so the primary leg is live.**
+   `approvals/w2-backend` `6d2316922` ("fix(edge): the lock screen knows which
+   conversation to open") adds `resolveProjectThreadId` to
+   `apns-send/index.ts:126`: entity → its project (`client_decisions` /
+   `proposals` / `invoices`, `projectTableFor`, `core.ts:168-179`) → the
+   project's single `comms_threads` row of kind `project`
+   (`pickProjectThreadId`, `core.ts:189-195`), written onto the envelope by
+   `buildApnsPayload` as `thread_id` (`core.ts:286-288`). **All three rails**,
+   not only the decision one. So on a project with a conversation — the normal
+   case — every banner's "Ask a question" now opens that conversation, which is
+   where she writes to the studio, with the letter's identity kept.
+
+   That is the leg `conversationRoute` already reads first. The client needed no
+   routing change; it needed the wire, and the wire arrived.
+
+**What actually needed fixing was the source, which had gone stale.** The
+`conversationRoute` doc comment asserted *"Neither is on a `PATINA_*` envelope
+today … so the second leg is the one that actually runs"* — a false statement
+about shipped behaviour the moment `6d2316922` merges. Rewritten to name the
+resolver, its two hops, the omission rule, and the ruling it implements. Two
+test doc comments carried the same dead premise and are rewritten with it.
+
+**New pin:** `askOnAResolvedEnvelopeOpensTheProjectThread` reconstructs the
+envelope as `buildApnsPayload` now assembles it — `aps` (alert, category,
+`thread-id`, `interruption-level`) plus the entity pair, the log id and
+`thread_id` — and asserts `.threadDetail` on **all three** categories. The older
+`askOnTheRealEnvelopeReachesTheApproval` keeps its subject and is re-labelled
+for what it now describes: a project with no single thread.
+
+**The residual, stated plainly rather than closed.** Where a project has zero
+project threads (or somehow two), the act lands on `ProposalDetailView` /
+`InvoiceDetailView`, and neither screen carries a way to write to the studio —
+`InvoiceDetailView.swift:287`'s "Message your designer" sits inside the
+payment-failure branch. The ruling chose that over the inbox, and the document's
+identity is worth more than a generic list; but it is a screen with no door.
+**Advisory for the orchestrator:** the honest close is a "Message your designer"
+line on both detail screens — `ProjectMessageDesignerLink` already exists and
+already says "Ask a question about this project" — not a routing change. Out of
+this lane's items.
+
+## iosd2-M2 — the acts array, and a rationale that was about to become false
+
+**Confirmed exactly as reported.** `approvals/w2-iosc` ships P-16's shape —
+`[approved, changesRequested ("Return"), needsDiscussion ("Hold")]` — and this
+lane carried `[approved, needsDiscussion ("Ask a question"), changesRequested
+("Return")]`. Taking either, as the round-1 merge note advised, would have
+reverted P-16's ordering and its rewritten consequence lines half the time.
+
+**Ruled: iOS-C's array wins, verbatim.** P-16 owns it and P-16 is the ruling's
+shape. `ProjectApprovalCopy.acts` and its doc comment are now **byte-identical**
+to `approvals/w2-iosc:…/ProjectApprovalCopy.swift` (verified by extracting the
+block from both trees and comparing), so that hunk resolves to one text whichever
+side the merge takes. `ProjectApprovalActTests.theActsReadVerbThenConsequence` is
+likewise taken verbatim from iOS-C, including its
+`#expect(!acts.contains { $0.label == "Decline" })`.
+
+Not taken: iOS-C's `stamp(for:)` and its `import PatinaDesignKit`. `PatinaStamp`
+is P-17 and does not exist on this branch — copying it would not compile here and
+would be this lane inventing P-17.
+
+Kept: this lane's `recorded(_:thing:)` / `artifactNoun(kind:)` (the iosd1-M4 fix)
+and `ApprovalVocabularySweepTests.noRefusedWords`' sweep over `acts` labels AND
+consequences — the pin that caught "Decline" in the first place. It is written
+against the array, not against an index, so the reorder costs it nothing; it
+passes over iOS-C's three strings unchanged.
+
+**The lock-screen act keeps its own word — and the comment now says why.** After
+P-16 there is no "Ask a question" BUTTON in the app, so the old rationale ("the
+same act on the lock screen as it is inside the app") was going to be a false
+statement in shipped source. The answer is not to rename the banner act: the
+mid-Wave-2 ruling names it "Ask a question" in its own text, and the two things
+are genuinely different acts. The three doors are OUTCOMES (Approve / Return /
+Hold) and a banner may never carry an outcome — that refusal is why
+`NotificationCategories.swift` exists at all. "Ask a question" writes nothing; it
+opens the conversation. It keeps a word none of the doors uses **because** none
+of the doors may appear there.
+
+**New pin:** `theBannerAndTheDoorsShareNoWord` asserts the doors read
+`approve / return / hold` and that no `PatinaNotificationAction.title` collides
+with any of them. If a later hand renames a door to a banner word, or adds a
+banner act wearing a door's, the suite goes red rather than the two vocabularies
+quietly merging again.
+
+**Merge note for the steward, superseding round 1's.** Do NOT "take either" on
+`ProjectApprovalCopy.swift`. Take iOS-C's file for the acts block, the signature
+copy, the note copy and `stamp(for:)`; take iOS-D's file for `recorded(_:thing:)`,
+`unnamedEdition` and `artifactNoun(kind:)`. The acts hunk itself is identical on
+both sides, so only the surrounding additions need combining. Same rule on
+`ProjectApprovalActTests.swift`: the `theActsReadVerbThenConsequence` body is now
+identical on both sides; iOS-C's `theRefusedWordsAreAbsent` adds four note
+strings this branch does not have, so take iOS-C's there.
+
+## Not addressed this round, and why
+
+The round-2 review's minors (`R2-m1` the `DecisionPushHandler` guard, `R2-m2` the
+bell/screen noun) and every round-1 minor and nit it re-recorded are untouched:
+the brief for this round is "every blocker and major; minors only when trivial",
+and none of these is a one-liner whose fix is obvious without a second ruling.
+They stand in `iosd-review-r2.md` for the steward.
+
+## What this pass could NOT verify
+
+- **Still no live round trip and still no banner.** `thread_id` is read from
+  `apns-send`'s source on `approvals/w2-backend`, not from a push. The lock-screen
+  acts cannot be exercised without real APNs; the routing is pinned by the
+  reconstructed envelope, both with and without `thread_id`.
+- **iOS-C's array is read from its branch, not from a merged tree.** If iOS-C
+  changes `acts` again before integration, the byte-identity claim above expires
+  and the hunk must be re-compared.
+
+Run from this worktree, unsandboxed, against `cae-w1-iosb`
+(`IOS_GATE_UDID=493547C8-D84B-478B-8673-3FF6ACAA05C6`), one `ios-gate.sh all`
+invocation, `GATE_EXIT=0`.
+
+| gate | result |
+|---|---|
+| `build` | **PASS** — `** BUILD SUCCEEDED **` |
+| `unit` | **PASS** — `Test run with 2535 tests in 276 suites passed after 9.049 seconds with 2 known issues`; `** TEST SUCCEEDED **` |
+| `lint-delta main` | **PASS** — `✓ lint-delta: no new warnings in touched files` |
+
+2533 → **2535 tests**, +2 for this pass
+(`askOnAResolvedEnvelopeOpensTheProjectThread`,
+`theBannerAndTheDoorsShareNoWord`). The two known issues are the same
+pre-existing pair both iOS lanes report — `BrandVoiceLintTests` on "curated_mix"
+(`BrandVoiceLintTests.swift:168`) and
+`RoomLifecycleTests.theTodayRailFollowsALocalDelete`
+(`RoomLifecycleTests.swift:297`) — neither touched here. **No transient this
+round:** `CompanionCoachingModelTests` did not flake, and no tier needed a
+re-run.
