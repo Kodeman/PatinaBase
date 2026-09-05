@@ -298,3 +298,58 @@ Deno.test('the attached-scan line also appears on a paper trade-scope-accepted n
   assertStringIncludes(withScan.html, 'scanned copy of the signed paper original');
   assert(!withoutScan.html.includes('scanned copy'));
 });
+
+Deno.test('the studio signs the client copy; Patina still signs the studio copy (R7)', () => {
+  const clientCopy = renderCommercialEmail({
+    transition: 'executed',
+    audience: 'client',
+    documentTitle: 'Lake House Design Services',
+    documentKind: 'design_services',
+    recipientName: 'Jamie Client',
+    counterpartyName: 'Morgan Studio',
+    portalUrl: 'https://client.patina.cloud/proposals/agreement-1',
+    signature: {
+      designerGivenName: 'Morgan',
+      studioName: 'Morgan Studio',
+      city: 'Madison',
+    },
+  });
+  assertStringIncludes(clientCopy.html, '&mdash; Morgan, Morgan Studio<br>Madison');
+  assert(!clientCopy.html.includes('— Patina'));
+
+  const studioCopy = renderCommercialEmail({
+    transition: 'executed',
+    audience: 'studio',
+    documentTitle: 'Lake House Design Services',
+    documentKind: 'design_services',
+    recipientName: 'Morgan Designer',
+    portalUrl: 'https://app.patina.cloud/doc/agreement-1',
+  });
+  assertStringIncludes(studioCopy.html, '— Patina');
+});
+
+Deno.test('a client-addressed commercial letter resolves the client portal (P-03b)', () => {
+  const clientCopy = renderCommercialEmail({
+    transition: 'executed',
+    audience: 'client',
+    documentTitle: 'Lake House Design Services',
+    documentKind: 'design_services',
+    recipientName: 'Jamie Client',
+    portalUrl: 'https://client.patina.cloud/proposals/agreement-1',
+  });
+  assert(!clientCopy.html.includes('>Dashboard</a>'));
+  assertStringIncludes(clientCopy.html, '>Your project</a>');
+  // With no signature to render, the letter goes unsigned rather than
+  // signed "Patina".
+  assert(!clientCopy.html.includes('&mdash; '));
+
+  const studioCopy = renderCommercialEmail({
+    transition: 'executed',
+    audience: 'studio',
+    documentTitle: 'Lake House Design Services',
+    documentKind: 'design_services',
+    recipientName: 'Morgan Designer',
+    portalUrl: 'https://app.patina.cloud/doc/agreement-1',
+  });
+  assertStringIncludes(studioCopy.html, '>Dashboard</a>');
+});

@@ -19,6 +19,7 @@ import {
   type NotificationChannel,
 } from './lib.ts';
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
+import { resolveStudioSignature } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -365,6 +366,13 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
 
   const audiences = resolveCommercialNotificationAudiences(transition, derivedChannel);
+  // Who signs the client's copy (R7) — resolved once, outside the loop.
+  const signature = audiences.includes('client')
+    ? await resolveStudioSignature(admin, {
+      projectId: proposal.project_id ?? null,
+      designerId: proposal.designer_id ?? null,
+    })
+    : undefined;
   const results: Record<string, unknown> = {};
 
   for (const audience of audiences) {
@@ -401,6 +409,7 @@ Deno.serve(async (req: Request) => {
       retainerCents: (serviceTerms as any)?.retainer_amount_cents ?? null,
       channel: derivedChannel ?? undefined,
       hasScan: derivedHasScan,
+      signature: audience === 'client' ? signature : undefined,
     });
     const sendResult = await sendCompliantEmail(admin, {
       to: recipient.email,

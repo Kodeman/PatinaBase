@@ -20,6 +20,7 @@
 import {
   callout,
   ctaButton,
+  type EmailAudience,
   muted,
   paragraph,
   renderBrandedShell,
@@ -100,10 +101,19 @@ function wrap(
   inner: string,
   portalUrl: string,
   cta: string,
-  opts: { eyebrow?: string; title?: string; studioName?: string; studioLogoUrl?: string } = {},
+  opts: {
+    eyebrow?: string;
+    title?: string;
+    studioName?: string;
+    studioLogoUrl?: string;
+    /** Which portal the footer resolves. Client-addressed builders say
+     * "client"; the studio's own notices keep the designer default. */
+    audience?: EmailAudience;
+  } = {},
 ): string {
   return renderBrandedShell({
     title: opts.title ?? "Patina",
+    audience: opts.audience,
     eyebrow: opts.eyebrow ?? "Invoice",
     studioName: opts.studioName,
     studioLogoUrl: opts.studioLogoUrl,
@@ -148,6 +158,7 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
     params.portalUrl,
     "View invoice",
     {
+      audience: "client",
       eyebrow: "Invoice",
       title: subject,
       studioName: params.studioName,
@@ -214,6 +225,7 @@ export function buildInvoiceUpcomingReminderEmail(
     params.portalUrl,
     "View & pay invoice",
     {
+      audience: "client",
       eyebrow: "Payment due",
       title: subject,
       studioName: params.studioName,
@@ -246,6 +258,7 @@ export function buildInvoiceOverdueNoticeEmail(
     params.portalUrl,
     "Pay invoice",
     {
+      audience: "client",
       eyebrow: "Overdue",
       title: subject,
       studioName: params.studioName,
@@ -279,6 +292,7 @@ export function buildInvoiceSecondNoticeEmail(
     params.portalUrl,
     "Pay invoice now",
     {
+      audience: "client",
       eyebrow: "Overdue",
       title: subject,
       studioName: params.studioName,
@@ -312,6 +326,7 @@ export function buildInvoiceFinalNoticeEmail(
     params.portalUrl,
     "Pay invoice immediately",
     {
+      audience: "client",
       eyebrow: "Overdue",
       title: subject,
       studioName: params.studioName,
@@ -428,6 +443,7 @@ export function buildPaymentReceiptEmail(
     params.portalUrl,
     "View receipt",
     {
+      audience: "client",
       eyebrow: "Receipt",
       title: subject,
       studioName: params.studioName,
@@ -486,7 +502,7 @@ export function buildDirectOrderReceiptEmail(
       muted(`<em>We&rsquo;ll be in touch about delivery.</em>`),
     params.portalUrl,
     "View order",
-    { eyebrow: "Receipt", title: subject },
+    { audience: "client", eyebrow: "Receipt", title: subject },
   );
 
   return { subject, html };
@@ -538,7 +554,7 @@ export function buildDirectOrderPaymentFailedEmail(
       ),
     params.portalUrl,
     "Retry payment",
-    { eyebrow: "Payment failed", title: subject },
+    { audience: "client", eyebrow: "Payment failed", title: subject },
   );
 
   return { subject, html };
@@ -656,6 +672,7 @@ export function buildPaymentFailedEmail(
     params.portalUrl,
     "Try payment again",
     {
+      audience: "client",
       eyebrow: "Payment failed",
       title: subject,
       studioName: params.studioName,

@@ -17,6 +17,8 @@ import {
   ctaButton,
   spacer,
   escapeHtml,
+  givenName,
+  signOff,
 } from '../_shared/branded-email.ts';
 import {
   resolveStudioIdentity,
@@ -81,7 +83,7 @@ async function handleSend(req: Request): Promise<Response> {
   // Resolve designer name for the email body.
   const { data: designer } = await admin
     .from('profiles')
-    .select('full_name, business_name, email')
+    .select('full_name, business_name, email, city')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -132,6 +134,7 @@ async function handleSend(req: Request): Promise<Response> {
   const subject = `${senderName} invited you to Patina`;
   const html = renderBrandedShell({
     title: subject,
+    audience: 'client',
     preview: `${senderName} would like to collaborate with you on Patina.`,
     eyebrow: 'Invitation',
     studioName: cobrand.studioName,
@@ -147,7 +150,13 @@ async function handleSend(req: Request): Promise<Response> {
       muted(
         `This invitation expires in 7 days. If the button doesn&rsquo;t work, copy this link:<br><a href="${link}" style="color:#4E7A66; text-decoration:underline; word-break:break-all;">${link}</a>`,
       ),
-      paragraph('— Patina'),
+      signOff({
+        designerGivenName: givenName(
+          (designer as { full_name?: string | null } | null)?.full_name,
+        ),
+        studioName: cobrand.studioName,
+        city: (designer as { city?: string | null } | null)?.city ?? null,
+      }),
     ].join(''),
   });
 

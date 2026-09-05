@@ -1,4 +1,4 @@
-import { assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { renderProposalEmail, type ProposalSendSnapshot } from './handler.ts';
 
 const base: ProposalSendSnapshot = {
@@ -59,4 +59,16 @@ Deno.test('legacy proposal send copy is unchanged', () => {
   assertStringIncludes(rendered.subject, 'sent you a proposal');
   assertStringIncludes(rendered.html, 'Your proposal is ready');
   assertStringIncludes(rendered.html, 'Review proposal');
+});
+
+Deno.test('the studio signs the proposal letter and it opens her own door (R7, P-03b)', () => {
+  const rendered = renderProposalEmail(
+    { ...base, documentKind: 'legacy', studioName: 'Morgan Studio' },
+    'https://client.patina.cloud',
+  );
+
+  assertStringIncludes(rendered.html, '&mdash; Morgan, Morgan Studio');
+  assert(!rendered.html.includes('— Patina'));
+  assert(!rendered.html.includes('>Dashboard</a>'));
+  assertStringIncludes(rendered.html, '>Your project</a>');
 });

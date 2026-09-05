@@ -18,6 +18,8 @@ import {
   ctaButton,
   spacer,
   escapeHtml,
+  givenName,
+  signOff,
 } from '../_shared/branded-email.ts';
 import {
   resolveStudioIdentity,
@@ -45,7 +47,7 @@ interface ProposalRow {
   client_id: string | null;
   designer_id: string | null;
   project_id: string | null;
-  designer: { full_name: string | null; email: string | null } | null;
+  designer: { full_name: string | null; email: string | null; city: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
 }
 
@@ -91,7 +93,7 @@ Deno.serve(async (req: Request) => {
       `
       id, title, status, cc_email, valid_until, client_id,
       designer_id, project_id,
-      designer:profiles!designer_id(full_name, email),
+      designer:profiles!designer_id(full_name, email, city),
       client:profiles!client_id(full_name, email)
     `
     )
@@ -196,6 +198,7 @@ Deno.serve(async (req: Request) => {
     : `A gentle reminder about your proposal: "${proposal.title}"`;
   const html = renderBrandedShell({
     title: subject,
+    audience: 'client',
     preview: `${designerName}'s proposal is still waiting for your review.`,
     eyebrow: 'Reminder',
     studioName: cobrand.studioName,
@@ -213,7 +216,11 @@ Deno.serve(async (req: Request) => {
       ctaButton(link, 'Review proposal', 'ink'),
       spacer(),
       muted(`If the button doesn&rsquo;t work, copy this link:<br>${link}`),
-      muted('— Patina'),
+      signOff({
+        designerGivenName: givenName(proposal.designer?.full_name),
+        studioName: cobrand.studioName,
+        city: proposal.designer?.city ?? null,
+      }),
     ].join(''),
   });
 
