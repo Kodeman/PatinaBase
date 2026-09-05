@@ -366,3 +366,189 @@ xcodebuild build -scheme Patina -configuration Debug \
   checkmark left on this rail — worth a look in W2.
 - Everything the integration report already carried (backend R3-01/03/04 and F4–F12, web's
   minors, iosa's minors) is unchanged.
+
+---
+
+## Close-out (2026-09-05)
+
+Steward run from
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w1-integration`
+(`git rev-parse --show-toplevel` returns exactly that), branch `approvals/w1-integration`.
+Close-out head **`6f10a26aeedfaefb641860623f62cc56d7e77ec9`**.
+
+### Merges
+
+| # | merged | from | into | result |
+|---|---|---|---|---|
+| 1 | `approvals/w1-backend` close-out (`b8dd6794d` … `9bb2422ff`, 14 commits) | lane head `9bb2422ff` | integration head `6c2f769af` | `6f10a26ae` `chore(approvals): merge w1-backend close-out` — **no conflicts**, 27 files, +2221 / −179 |
+| 2 | `origin/main` | — | — | **not needed.** `git fetch origin main` → `origin/main` = `6600cc069986ba6e948d7201e2dd2d0978f5b0ef`, byte-identical to the base every lane branched from. Main has not moved. |
+
+The iOS lane had advanced one commit past the head the brief named
+(`09ac03adc` → `6c2f769af`, `docs(approvals): adversarial review of the W1 close-out iOS lane,
+round three`); that commit is docs only and is included.
+
+`git diff --shortstat 6600cc069...HEAD` → **117 files changed, 12127 insertions(+),
+623 deletions(-)**.
+
+### Migrations — no renumber
+
+```
+$ ls supabase/migrations | tail -5
+00565_the_client_page.sql
+00566_commercial_signature_studio_resolution.sql
+00567_scope_vocabulary_full_house_custom.sql
+00568_decision_first_notice_dispatch.sql
+_pending
+```
+
+`git log --all --diff-filter=A -- 'supabase/migrations/0056[6-9]*' 'supabase/migrations/0057*'`
+returns exactly three adds — `00566`, `00567` (both from main at `6600cc069`) and our own
+`00568` (`1e1cbedd2`). No competing `00568` on any ref. **No renumbering was needed and none
+was done.**
+
+### Gates — all green
+
+Run after `pnpm install --frozen-lockfile` (Done in 9.3s) and
+`pnpm turbo build --filter=@patina/client-portal^...` (**8 successful, 8 total**, FULL TURBO).
+
+| # | gate | result |
+|---|---|---|
+| a | `pnpm --filter @patina/client-portal type-check` | **PASS** — `tsc --noEmit`, exit 0, no output |
+| b | `pnpm --filter @patina/client-portal test` | **PASS** — Test Suites: **116 passed, 116 total**; Tests: **1546 passed, 1546 total**; 10.707 s (was 115/1533 at the last pass — the backend lane's `retired-routes` suite plus new cases in `page` and `active-project`) |
+| c | `pnpm --filter @patina/supabase type-check` | **PASS** — exit 0 |
+| c | `pnpm --filter @patina/designer-portal type-check` | **PASS** — exit 0 |
+| d | `deno test --allow-all --config supabase/functions/deno.json supabase/functions/_shared/` | **PASS** — `ok \| 190 passed \| 0 failed (1s)` (was 175 — the close-out's `branded-email`, `decision-notify`, `studio-identity` cases) |
+| d | `deno test` per changed function dir with tests | **PASS** — commercial-document-notify **37**, proposal-send **23**, notification-digest **11**, decision-reminders **6** = **77 passed, 0 failed**. Nine changed dirs ship no test module (`apns-send`, `client-invite`, `decision-first-notice`, `decision-resolved-notify`, `expire-decisions`, `proposal-nudge`, `proposal-sign-confirmation`, `review-requests`) — `apns-send`'s tests live in `_tests/`. |
+| d | `deno test supabase/functions/_tests/apns-send.test.ts` (the close-out's new suite) | **PASS** — `ok \| 25 passed \| 0 failed (23ms)` |
+| d | `deno test supabase/functions/_tests/` minus the pre-existing red | **PASS** — `235 passed, 1 failed`; the single failure is `stripe-rail.test.ts`, `error: supabaseKey is required` at `:34` — a live-stack test needing env, **untouched by this wave** (`git diff --name-only 6600cc069...HEAD -- …/stripe-rail.test.ts` is empty) |
+| d | `deno test supabase/functions/_tests/` (whole dir) | **RED — pre-existing, not ours.** `TS2345` at `fulfillment-po/core.ts:314` (`encodeBase64(Uint8Array)`). Both `fulfillment-po/core.ts` and `_tests/fulfillment-po.test.ts` are byte-identical to `6600cc069` (`git diff --stat` over both paths is empty), and running that one test file alone reproduces the same failure. Same class as the noted `campaign-dispatch`/`digest-dispatcher` errors: recorded, not fixed. |
+| d | `deno check` on all **15** changed function sources (`index.ts` / `core.ts` / `handler.ts` / `logic.ts`) + `proposal-send/index.ts` | **PASS** — exit 0 on all sixteen |
+| d | `deno.lock` sweep | clean — none at the repo root, none in the worktree, none under `supabase/functions` |
+| e | `supabase db reset` (announced in `stack-reset-notice.md` first) | **PASS** — all migrations replayed through `00568`, all seeds applied, `{"message":"Reset local database."}` |
+| e | `bash scripts/run-sql-tests.sh` | **PASS** — total **156**, green **135**, expected-fail **21** (KNOWN_FAILURES.md), unexpected-fail **0**, effective-green **156 / 156** |
+| e | types regen + `git diff --exit-code packages/supabase/src/database.types.ts` | **CLEAN** — exit 0 after `SUPABASE_DB_URL=…54322 pnpm --filter @patina/supabase generate`. `00568` adds a trigger and a function, no table shape; no regen commit needed |
+| f | `IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE apps/mobile/Patina/scripts/ios-gate.sh all` | **PASS** — exit 0; `** BUILD SUCCEEDED **`; `Test run with **2467 tests in 271 suites** passed after 8.577 seconds with 2 known issues`; `** TEST SUCCEEDED **`; `✓ lint-delta: no new warnings in touched files` |
+
+2436 tests in 265 suites at the walk-fix pass, **2467 in 271** now. The two known issues are
+the same pre-existing pair: a `BrandVoiceLint` expectation on "curated_mix" and
+`RoomLifecycleTests.theTodayRailFollowsALocalDelete`. No cold-cache transient this run —
+the gate returned exit 0 on its first invocation.
+
+### The walk app is rebuilt, signed
+
+```
+xcodebuild build -scheme Patina -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath …/apps/mobile/Patina/.build/DerivedDataWalk
+  ** BUILD SUCCEEDED **
+```
+
+Signing left **ON** (no `CODE_SIGNING_ALLOWED=NO`). `codesign -dv` on the rebuilt bundle:
+
+```
+Identifier=cloud.patina.app
+Format=app bundle with Mach-O universal (x86_64 arm64)
+CodeDirectory v=20400 size=425 flags=0x2(adhoc) hashes=3+7 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+Sealed Resources version=2 rules=10 files=61
+```
+
+Binary stamped `2026-09-05 06:37:43`, after the close-out head's commit time
+(`06:19:52`) — the bundle is this tree.
+
+**walkAppPath** (unchanged path, ready to re-install on `cae-w1-walk`
+`29E64516-9C2F-4D77-95D8-55D7B61E017B`):
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w1-integration/apps/mobile/Patina/.build/DerivedDataWalk/Build/Products/Debug-iphonesimulator/Patina.app`
+
+### Deploy set — recomputed over the whole diff `6600cc069...HEAD`
+
+**Migrations above 00567** (apply first):
+
+- `supabase/migrations/00568_decision_first_notice_dispatch.sql`
+
+**Edge functions — 28.** Six `_shared` modules changed (`branded-email.ts`,
+`client-portal-links.ts`, `decision-notify.ts`, `invoice-emails.ts`,
+`project-approval-notification.ts`, `studio-identity.ts`); four more are dragged in by the
+transitive closure inside `_shared` (`fulfillment-templates.ts`, `po-emails.ts`,
+`quote-request-emails.ts`, `trade-rfq-emails.ts`). Every function importing one of those ten,
+union every function dir whose own code changed. All 28 carry an `index.ts` and are real deploy
+targets.
+
+```
+apns-send                   campaign-dispatch           client-invite
+commercial-document-notify  comms-notification-dispatch create-checkout-session
+decision-first-notice       decision-reminders          decision-resolved-notify
+digest-dispatcher           expire-decisions            fulfillment-notify
+invoice-check-intent        invoice-reminders           invoice-send
+morning-brief               notification-digest         notification-dispatch
+po-send                     proposal-nudge              proposal-send
+proposal-sign-confirmation  quote-request-send          review-requests
+spec-pdf                    stripe-webhook              trade-rfq-send
+waitlist-notify
+```
+
+This is the 27 of the first integration report **plus `apns-send`**, whose own `core.ts` and
+`index.ts` now carry R5's `aps.badge`. `_shared` and `_tests` are excluded — neither is a
+deployable function.
+
+**Portals: `client` only.** `git diff --name-only 6600cc069...HEAD` touches
+`apps/client-portal` (15 files), `apps/mobile` (60), `supabase/functions` (30), one migration,
+one seed, one SQL test and ten program docs. **Zero files under `packages/` and zero under
+`apps/designer-portal`** — the designer portal needs no redeploy for this wave.
+
+**iOS:** changed (60 files under `apps/mobile/Patina`). Lands on main build-green and
+sim-verified; no TestFlight cut in this wave.
+
+**Ordering** (unchanged): `00568` first, then all 28 functions — every one bundles a copy of an
+edited `_shared` module, so a partial redeploy leaves mixed copy in the mail — then the client
+portal.
+
+### Open findings carried onto the branch, by id
+
+Nothing below blocks the merge. All of it ships with the branch.
+
+**backend close-out (`backend-close-review-r3.md`, verdict *fix*, no blocker)** — one major
+(the notification digest's own copy, which the lane names as unruled residue and which this
+branch deploys), five minors, seven nits. The reviewer's own gate table is reproduced in that
+file; its deploy-set recount matched this report's 28 name for name.
+
+**iOS close-out (`ios-close-review-r3.md`, verdict *fix*, no blocker)** — three majors stand:
+
+- **R3-01** — the record's central trade-off rests on a false invariant.
+- **R3-02** — item 4's edition exclusion does not reach the Today surface.
+- **R3-03** — item 9's settled title is still absent on a cold bell (third round carried).
+- Minors/nits open: R3-04 (badge comment's last sentence untrue), R3-05 (two files disagree on
+  what the badge counts), R3-06 (`bellClosed` is a third vocabulary), R3-07 (the opened write is
+  narrower than the read it was matched to), R3-08 (W1R2-M2's name depends on a second read
+  landing), R3-09 through R3-14 (source-text pins, notes misattribution, stale red comments,
+  three "sign-off" strings on the legacy client-court path, the "one sentence, two surfaces"
+  guarantee covering decisions only, the `State.overdue(due:)` Codable break costing a widget
+  tap).
+
+**Still open from earlier rounds, unchanged:**
+
+- **iosb3-M2** — `list_my_project_decision_reviews` (00467:135) is project-scoped and the
+  projection carries no viewer-role field, so a studio co-member signed into the client app
+  gains studio-wide approvals as "waiting on you". Ruled at close: **drafts excluded now, the
+  viewer-role field is a Wave 2 migration item.** The homeowner path is unaffected.
+- **iosa R3-02** — the retired word on the invoice list, the invoice detail and the Studio money
+  row. Ruled at close: `DateDisplay.due` reads "Past due · {date}" in body ink, never red.
+- **backend R3-01 / R3-03 / R3-04** and **F4–F12** — R3-01 (the 48-hour cron announcing to the
+  back catalogue) and F4–F12 are **closed by this close-out merge** (`61da87110`, `7fc0c5941`,
+  `fd13b9ebb`); R3-03 (the first notice is a one-shot with no retry) is ruled **accepted for
+  Wave 1, retry rides with P-28 in Wave 3**; R3-04's city is now resolved profile → org address
+  → omitted (`f932a6533`), with `proposal-send` ruled cityless until its dispatch snapshot is
+  widened.
+- **web** — W1W-02, W1W-06, W1W-07, W1W-08, F-01, F-02, F-05, all minors, all unchanged.
+- `DecisionListView.emptyView` still draws `checkmark.circle` beside "Nothing waiting on you" —
+  the last checkmark on this rail, worth a look in W2.
+
+### Advisories
+
+- **Two pre-existing Deno reds in `_tests/`** — `fulfillment-po` (a `TS2345` on
+  `encodeBase64(Uint8Array)`) and `stripe-rail` (needs a live `SUPABASE_SERVICE_ROLE_KEY`).
+  Both files are byte-identical to `6600cc069`. Neither is in this wave's deploy set.
+- **`apns-send` is new to the deploy set** and it is the function that makes R5's springboard
+  badge real. Deploying `00568` without it, or the portal without it, leaves the badge frozen
+  exactly as the walk found it.
