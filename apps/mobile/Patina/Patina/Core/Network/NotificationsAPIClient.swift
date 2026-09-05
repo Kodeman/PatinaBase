@@ -32,6 +32,12 @@ public actor NotificationsAPIClient {
     public static let shared = NotificationsAPIClient()
     static let visibleStatusFilter = "in.(queued,sending,delivered,unconfirmed,opened,clicked)"
 
+    /// `notify_client_attention()` (00534) writes TWO rows for one event — an
+    /// `in_app` row and a `push` row — so a filter admitting both counts every
+    /// attention twice. The in-app row is the one the feed is about; the push
+    /// row is a delivery receipt for a banner that has its own surface.
+    static let attentionChannelFilter = "eq.in_app"
+
     private let baseURL = APIConfiguration.apiURL
     private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
@@ -54,15 +60,15 @@ public actor NotificationsAPIClient {
         }
     }
 
-    /// List the user's most-recent in-app + push notifications. Filters to
-    /// the channels that actually surface in the feed (in_app, push) and
-    /// excludes failed/suppressed states so the UI never shows them.
+    /// List the user's most-recent in-app notifications. Filters to the one
+    /// channel the feed is about (see `attentionChannelFilter`) and excludes
+    /// failed/suppressed states so the UI never shows them.
     public func list(limit: Int = 50) async throws -> [RemoteNotification] {
         let url = baseURL.appendingPathComponent("/rest/v1/notification_log")
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "order", value: "created_at.desc"),
-                URLQueryItem(name: "channel", value: "in.(in_app,push)"),
+                URLQueryItem(name: "channel", value: Self.attentionChannelFilter),
                 URLQueryItem(name: "status", value: Self.visibleStatusFilter),
                 URLQueryItem(name: "limit", value: String(limit)),
             ])
@@ -96,13 +102,14 @@ public actor NotificationsAPIClient {
 
     /// Mark all currently-unread notifications for the user as opened.
     /// We don't have a bulk RPC — perform a single PATCH against all rows
-    /// for the user where opened_at IS NULL and channel is in the surfaced
-    /// set.
+    /// for the user where opened_at IS NULL and the channel is the one the
+    /// feed reads. Same filter as `list`, so mark-all cannot leave behind a
+    /// row the list would have shown.
     public func markAllOpened() async throws {
         let url = baseURL.appendingPathComponent("/rest/v1/notification_log")
             .appending(queryItems: [
                 URLQueryItem(name: "opened_at", value: "is.null"),
-                URLQueryItem(name: "channel", value: "in.(in_app,push)"),
+                URLQueryItem(name: "channel", value: Self.attentionChannelFilter),
             ])
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
