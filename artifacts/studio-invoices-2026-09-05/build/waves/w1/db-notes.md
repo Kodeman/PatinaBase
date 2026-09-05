@@ -529,3 +529,125 @@ Still deferred, unchanged: the Deno case in
 `supabase/functions/_tests/stripe-rail.test.ts` needs the integration runtime
 and did not run in this lane. The advisories listed under "Left as advisories"
 above (F3–F8) are untouched — none were on this round's fix list.
+
+---
+
+## Fix round 3 (dispatched on review round 3 — findings R3-1, R3-2)
+
+Both findings were one hole with two halves: `set_invoice_studio_id()`'s studio
+branch judged the studio and the actor but never the pair the money hangs off —
+the household and the member stamped to carry it. Closed in the INSERT arm of
+the branch, which is where the project path judges the same things.
+
+### R3-1 (blocker) — a studio invoice could be addressed to any profile
+
+`00571:PART 2`, INSERT arm. Added, after the actor-membership `EXISTS`:
+
+```sql
+OR NOT EXISTS (
+  SELECT 1
+  FROM public.designer_clients AS studio_roster
+  WHERE studio_roster.designer_id = NEW.designer_id
+    AND studio_roster.client_id = NEW.client_id
+)
+```
+
+S4 is now the row's law, not only the composer RPC's. The roster read is
+RLS-safe for every actor the branch admits: `designer_clients_studio_rw`
+(00316:39) is `USING (is_studio_comember(designer_id))`, so a co-member sees
+the whole studio's roster, and the SECURITY DEFINER billing RPCs arrive as the
+table owner. It takes no lock, so the pinned
+`root -> user_roles -> memberships -> organization` order is untouched.
+
+### R3-2 (major) — earnings could be routed to a non-designer
+
+Same block: `OR NOT public.has_designer_domain_role(NEW.designer_id)`, and the
+same requirement in `create_draft_studio_invoice` — on the roster-resolution
+`SELECT` (`AND public.has_designer_domain_role(relationship.designer_id)`) and
+on the post-lock re-validation. A household reachable only through a member who
+holds no designer-domain role now raises `42501` from the RPC instead of
+resolving to that member. PART 3's header comment, which used to say no
+designer-domain role is required, was corrected.
+
+### Where the two predicates are NOT applied, and why (evidence)
+
+The UPDATE arm's studio branch carries a comment instead of the predicates.
+`project_id`, `designer_id`, `client_id` and `studio_id` are immutable at the
+top of that arm, so every row reaching it was already judged on insert — the
+project path likewise judges its lead only on the insert path
+(`has_designer_domain_role` at 00571:432/:514 sits under `IF NOT
+v_immutable_update`). Re-asking on UPDATE is not free: with the predicates in
+both arms, deleting the roster row while an invoice was outstanding stranded
+it, because `issue_invoice`/`void_invoice` reach that arm as the owner.
+
+```
+PROBE issued: sent
+PROBE void after roster deletion: accepted=f state=P0001 status=sent   <- both arms
+PROBE void after roster deletion: accepted=t state=<NULL> status=void  <- INSERT arm only
+```
+
+Machine roles (`service_role`, a bare-postgres migration) still return before
+this block, exactly as they did before this round — unchanged scope.
+
+### The reviewer's probes, re-run against the fix
+
+```
+R3-1 P1 stranger household accepted=f state=P0001 rows=0
+R3-2 P6 non-designer stamped accepted=f state=P0001 rows=0
+CONTROL roster household   rows=1
+```
+
+### Hash re-pinned
+
+`public.set_invoice_studio_id()` in
+`supabase/tests/edge_api/public_sd_hardening_contract_test.sql`:
+
+- was `99100c8e3832adf7d7a27a22eab3651f3154d28be28dfeabe8d1dbd3f7ed2878`
+- now `03db693656dbaf6b747709b9514543bfabd19873b3f812d9054ec8d0371b7307`
+
+Recomputed against the deployed body after `db reset`:
+`encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex')`. The
+banner's inserted-line count moved 145 -> 171 (still zero project-path lines
+removed). `create_draft_studio_invoice` is not pinned by the manifest (F4
+stands), so no second hash moved.
+
+### Tests added — `supabase/tests/billing/studio_invoice_test.sql`
+
+Fixtures: member A now holds a `studio_designer` (designer-domain) role and
+co-member B deliberately holds none; a second household (`…0006`) sits on B's
+roster only, so it is roster-reachable and designer-unreachable.
+
+- RPC: a household held only by a non-designer -> `42501`.
+- Direct DML as A: a household on nobody's roster -> `P0001`, no row.
+- Direct DML as A: stamping co-member B (roster satisfied, no designer role)
+  -> `P0001`, no row.
+- Direct DML as A: the roster household stamped to A still writes a clean
+  draft — the predicates refuse only what they mean to.
+- **Co-member edit as B** — the regression the RLS analysis predicted: B owns
+  no roster row, so if the trigger's roster read were owner-only the co-member
+  draft edit would break. It passes, proving the studio-wide policy.
+
+`packages/supabase/src/database.types.ts` did not move (`pnpm db:generate`
+produced no diff — neither function's signature changed), and no TypeScript was
+touched this round.
+
+### Gates
+
+```
+supabase db reset                     clean (tip 00571)
+scripts/run-sql-tests.sh              total 157 | green 136 | expected-fail 21 | unexpected-fail 0
+  billing/studio_invoice_test.sql               PASS
+  billing/invoice_checkout_integrity_test.sql   PASS
+  edge_api/public_sd_hardening_contract_test    PASS
+  commercial/multi_studio_signature_test.sql    PASS
+  rls/00563_proposal_signing_multi_studio       PASS
+@patina/supabase type-check           clean
+@patina/supabase test use-invoices    48 passed (48)
+@patina/designer-portal type-check    clean
+@patina/client-portal type-check      clean
+@patina/designer-portal test accounts desk-receivables   3 suites, 12 passed
+```
+
+### Advisories still standing
+
+F3, F4, F5, F7, F8 from round 1 are unchanged. **F6 is now closed** by R3-2.
