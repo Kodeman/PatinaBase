@@ -4,6 +4,7 @@ import {
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  type ApprovalArtifactCitation,
   classifyExistingDecisionEmailLogStatuses,
   type DecisionContext,
   decisionLogKey,
@@ -116,7 +117,7 @@ Deno.test("a first notice reads like one, not like a reminder (P-02)", () => {
   );
   assertEquals(
     rendered.subject,
-    "Leah sent Client <issued> set for your approval.",
+    'Leah sent "Client <issued> set" for your approval',
   );
   assert(!rendered.subject.startsWith("Reminder:"));
   assertStringIncludes(rendered.html, "is ready, exactly as drawn.");
@@ -130,7 +131,7 @@ Deno.test("a first notice names the studio when no person is known", () => {
   });
   assertEquals(
     rendered.subject,
-    "Middle West Studio sent Client <issued> set for your approval.",
+    'Middle West Studio sent "Client <issued> set" for your approval',
   );
 });
 
@@ -138,7 +139,7 @@ Deno.test("a first notice falls back to a plain asker with no identity at all", 
   const rendered = renderDecisionEmail("decision_required", "Anne", FIRST, {});
   assertEquals(
     rendered.subject,
-    "Your designer sent Client <issued> set for your approval.",
+    'Your designer sent "Client <issued> set" for your approval',
   );
 });
 
@@ -149,7 +150,7 @@ Deno.test("a reminder is subject-lined by the day it is due (P-02)", () => {
     { ...STAGE2, notice: "reminder" },
     STUDIO,
   );
-  assertEquals(rendered.subject, "Thursday: Client <issued> set.");
+  assertEquals(rendered.subject, 'Thursday: "Client <issued> set"');
   assertStringIncludes(rendered.html, "is still open and due Thursday.");
   assertStringIncludes(rendered.html, "Nothing has changed since it was sent.");
 });
@@ -164,7 +165,7 @@ Deno.test("an undeclared decision_required letter speaks as a reminder (P-02)", 
     STAGE2,
     STUDIO,
   );
-  assertEquals(rendered.subject, "Thursday: Client <issued> set.");
+  assertEquals(rendered.subject, 'Thursday: "Client <issued> set"');
   assert(!rendered.subject.includes("sent"));
   assertStringIncludes(rendered.html, "Nothing has changed since it was sent.");
 });
@@ -206,7 +207,7 @@ Deno.test("a reminder with no due date says so without inventing one", () => {
     { ...STAGE2, dueDate: null, notice: "reminder" },
     STUDIO,
   );
-  assertEquals(rendered.subject, "Still waiting: Client <issued> set.");
+  assertEquals(rendered.subject, 'Still waiting: "Client <issued> set"');
   assert(!rendered.html.includes("due"));
 });
 
@@ -219,13 +220,13 @@ Deno.test("the weekday is printed in the recipient's own zone", () => {
   };
   assertEquals(
     renderDecisionEmail("decision_required", "Anne", decision, STUDIO).subject,
-    "Thursday: Client <issued> set.",
+    'Thursday: "Client <issued> set"',
   );
   assertEquals(
     renderDecisionEmail("decision_required", "Anne", decision, STUDIO, {
       timeZone: "UTC",
     }).subject,
-    "Friday: Client <issued> set.",
+    'Friday: "Client <issued> set"',
   );
 });
 
@@ -236,7 +237,7 @@ Deno.test("the overdue notice is quiet: no 'overdue', no guilt (P-04)", () => {
     STAGE2,
     STUDIO,
   );
-  assertEquals(rendered.subject, "Still open: Client <issued> set");
+  assertEquals(rendered.subject, 'Still open: "Client <issued> set"');
   assertStringIncludes(rendered.html, "Still open, Leah asked on September 28.");
   const lowered = rendered.html.toLowerCase();
   assert(!lowered.includes("overdue"));
@@ -282,7 +283,7 @@ Deno.test("legacy notification rendering remains artifact-optional", () => {
   assertStringIncludes(rendered.html, "Choose a finish");
   assert(!rendered.html.includes("SHA-256"));
   assert(!rendered.html.includes("Edition"));
-  assertStringIncludes(rendered.html, "Review the approval");
+  assertStringIncludes(rendered.html, "Review the decision");
   assertStringIncludes(
     rendered.html,
     'href="https://client.patina.cloud/decisions/legacy-1"',
@@ -393,7 +394,10 @@ Deno.test("the first notice announces the send, the reminder returns to it", () 
     { ...STAGE2, notice: "first" },
     STUDIO,
   );
-  assertEquals(first.subject, "Leah sent Client <issued> set for your approval.");
+  assertEquals(
+    first.subject,
+    'Leah sent "Client <issued> set" for your approval',
+  );
   assert(!first.html.includes("Nothing has changed since it was sent"));
 
   const reminder = renderDecisionEmail(
@@ -402,6 +406,193 @@ Deno.test("the first notice announces the send, the reminder returns to it", () 
     { ...STAGE2, notice: "reminder" },
     STUDIO,
   );
-  assertEquals(reminder.subject, "Thursday: Client <issued> set.");
+  assertEquals(reminder.subject, 'Thursday: "Client <issued> set"');
   assertStringIncludes(reminder.html, "Nothing has changed since it was sent");
+});
+
+// ── Carried copy defects from the lane's first two review rounds ────────────
+
+Deno.test("an unmapped artifact kind never renders the word 'undefined' (F4)", () => {
+  const odd: DecisionContext = {
+    ...STAGE2,
+    notice: "first",
+    artifact: {
+      ...STAGE2.artifact!,
+      // ux/03 §9 ruling 5 contemplates project documents becoming approvable;
+      // the CHECK pins three kinds today, so this is the shape of tomorrow.
+      kind: "project_document" as ApprovalArtifactCitation["kind"],
+    },
+  };
+  const rendered = renderDecisionEmail("decision_required", "Anne", odd, STUDIO);
+  assert(!rendered.html.includes("undefined"));
+  assert(!rendered.subject.includes("undefined"));
+  assertStringIncludes(rendered.html, "is ready for your answer.");
+  // Still an approval — the button says so rather than naming a kind nobody
+  // wrote a word for.
+  assertStringIncludes(rendered.html, "Review the approval");
+});
+
+Deno.test("every letter quotes the stored title, subject and body alike (F5)", () => {
+  const lowercase: DecisionContext = {
+    ...STAGE2,
+    artifact: { ...STAGE2.artifact!, title: "approve the issued set" },
+  };
+  const first = renderDecisionEmail("decision_required", "Anne", {
+    ...lowercase,
+    notice: "first",
+  }, STUDIO);
+  assertEquals(
+    first.subject,
+    'Leah sent "approve the issued set" for your approval',
+  );
+  assertStringIncludes(first.html, '"<strong');
+  assertStringIncludes(first.html, "approve the issued set</strong>\"");
+
+  const reminder = renderDecisionEmail("decision_required", "Anne", {
+    ...lowercase,
+    notice: "reminder",
+  }, STUDIO);
+  assertEquals(reminder.subject, 'Thursday: "approve the issued set"');
+  assertStringIncludes(reminder.html, "approve the issued set</strong>\"");
+
+  const overdue = renderDecisionEmail(
+    "decision_overdue",
+    "Anne",
+    lowercase,
+    STUDIO,
+  );
+  assertEquals(overdue.subject, 'Still open: "approve the issued set"');
+  assertStringIncludes(overdue.html, "approve the issued set</strong>\"");
+});
+
+Deno.test("the unnamed designer is lowercase mid-sentence, capitalised at its head (F6)", () => {
+  const overdue = renderDecisionEmail("decision_overdue", "Anne", STAGE2, {});
+  assertStringIncludes(
+    overdue.html,
+    "Still open, your designer asked on September 28.",
+  );
+  assert(!overdue.html.includes("Still open, Your designer"));
+
+  // A real name keeps its capitals wherever it falls.
+  const named = renderDecisionEmail("decision_overdue", "Anne", STAGE2, STUDIO);
+  assertStringIncludes(named.html, "Still open, Leah asked on September 28.");
+
+  // Sentence-initial, the fallback keeps its capital.
+  const first = renderDecisionEmail("decision_required", "Anne", {
+    ...STAGE2,
+    notice: "first",
+  }, {});
+  assert(first.subject.startsWith("Your designer sent "));
+});
+
+Deno.test("an option choice is a decision; only a frozen edition is an approval (F7)", () => {
+  const legacy: DecisionContext = {
+    id: "legacy-3",
+    title: "Rug color — Natural vs Sand",
+    dueDate: null,
+    notice: "first",
+  };
+  const rendered = renderDecisionEmail(
+    "decision_required",
+    "Anne",
+    legacy,
+    STUDIO,
+  );
+  assertEquals(
+    rendered.subject,
+    'Leah sent "Rug color — Natural vs Sand" for your decision',
+  );
+  assertStringIncludes(rendered.html, "Review the decision");
+  assertStringIncludes(rendered.html, ">Decision</td>");
+  assert(!rendered.html.includes("Review the approval"));
+
+  // A Stage-2 row keeps the word the ask actually is.
+  const stage2 = renderDecisionEmail("decision_required", "Anne", {
+    ...STAGE2,
+    notice: "first",
+  }, STUDIO);
+  assertStringIncludes(stage2.subject, "for your approval");
+  assertStringIncludes(stage2.html, ">Approval</td>");
+});
+
+Deno.test("'nothing has changed' is claimed only of an edition that has not (F8)", () => {
+  // The edition she was sent is the edition in front of her.
+  const unchanged = renderDecisionEmail("decision_required", "Anne", {
+    ...STAGE2,
+    notice: "reminder",
+  }, STUDIO);
+  assertStringIncludes(unchanged.html, "Nothing has changed since it was sent.");
+
+  // A newer edition landed after the ask went out — the letter says nothing.
+  const reissued = renderDecisionEmail("decision_required", "Anne", {
+    ...STAGE2,
+    notice: "reminder",
+    artifact: { ...STAGE2.artifact!, issuedAt: "2026-10-01T14:00:00Z" },
+  }, STUDIO);
+  assert(!reissued.html.includes("Nothing has changed"));
+
+  // A legacy option choice — the row extend_and_reopen moves the date on and
+  // wipes the answer from — carries no edition and claims nothing.
+  const legacy = renderDecisionEmail("decision_required", "Anne", {
+    id: "legacy-4",
+    title: "Choose a finish",
+    dueDate: "2026-10-08T18:00:00Z",
+    sentAt: "2026-09-28T14:00:00Z",
+    notice: "reminder",
+  }, STUDIO);
+  assert(!legacy.html.includes("Nothing has changed"));
+});
+
+Deno.test("one subject rule across the three letters: quoted title, no trailing period (F11)", () => {
+  const subjects = [
+    renderDecisionEmail("decision_required", "Anne", {
+      ...STAGE2,
+      notice: "first",
+    }, STUDIO).subject,
+    renderDecisionEmail("decision_required", "Anne", {
+      ...STAGE2,
+      notice: "reminder",
+    }, STUDIO).subject,
+    renderDecisionEmail("decision_overdue", "Anne", STAGE2, STUDIO).subject,
+    renderDecisionEmail("decision_required", "Anne", {
+      ...STAGE2,
+      dueDate: null,
+      notice: "reminder",
+    }, STUDIO).subject,
+  ];
+  for (const subject of subjects) {
+    assert(!subject.endsWith("."), `trailing period on: ${subject}`);
+    assertStringIncludes(subject, '"Client <issued> set"');
+  }
+});
+
+Deno.test("the client letters carry no Patina tagline under the studio's name (F9)", () => {
+  for (
+    const decision of [
+      { ...STAGE2, notice: "first" as const },
+      { ...STAGE2, notice: "reminder" as const },
+    ]
+  ) {
+    const rendered = renderDecisionEmail(
+      "decision_required",
+      "Anne",
+      decision,
+      STUDIO,
+    );
+    assert(
+      !rendered.html.includes("A workshop for interior designers"),
+      "the studio signs this letter; Patina does not pitch under the signature",
+    );
+  }
+  const overdue = renderDecisionEmail(
+    "decision_overdue",
+    "Anne",
+    STAGE2,
+    STUDIO,
+  );
+  assert(!overdue.html.includes("A workshop for interior designers"));
+
+  // The designer's own letter is untouched.
+  const resolved = renderDecisionEmail("decision_resolved", "Leah", STAGE2);
+  assertStringIncludes(resolved.html, "A workshop for interior designers");
 });

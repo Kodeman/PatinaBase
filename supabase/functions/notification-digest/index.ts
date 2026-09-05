@@ -27,6 +27,7 @@ import { sendCompliantEmail } from "../_shared/send-email.ts";
 import {
   artifactCitationsForDigest,
   buildReminderDigestEmail,
+  decisionDigestLink,
   decisionDigestTitle,
   isReminderDigestDue,
   type ReminderDigestItem,
@@ -36,7 +37,6 @@ import {
   resolveApprovalArtifactCitation,
   toOne,
 } from "../_shared/project-approval-notification.ts";
-import { clientProjectLink } from "../_shared/client-portal-links.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -145,14 +145,10 @@ async function collectItems(
     items.push({
       category: "decision",
       title: decisionDigestTitle(row.kind, title),
-      // /decisions is retired; a decision is answered on the doorstep of the
-      // project it belongs to, at the ask's own anchor so a client with
-      // several standing asks is put in front of the one this line names.
-      link: clientProjectLink(
-        CLIENT_PORTAL_URL,
-        dec?.project_id ?? null,
-        dec?.id ? `approval-${dec.id}` : "doorstep",
-      ),
+      // The same address the decision letter's own door carries: the iOS app
+      // claims /decisions/*, and the portal middleware 308s everyone else onto
+      // the ask's anchor. One approval, one address across the whole inbox.
+      link: decisionDigestLink(CLIENT_PORTAL_URL, dec?.id),
       decisionId: dec?.id,
       artifact,
     });

@@ -10,6 +10,7 @@ import {
   spacer,
 } from "../_shared/branded-email.ts";
 import type { ApprovalArtifactCitation } from "../_shared/decision-notify.ts";
+import { clientDecisionLink } from "../_shared/client-portal-links.ts";
 
 const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
 const SANS =
@@ -92,6 +93,19 @@ export function artifactCitationsForDigest(
  */
 export function decisionDigestTitle(kind: string, title: string): string {
   return kind === "decision_overdue" ? `Still open: ${title}` : title;
+}
+
+/**
+ * Where a digest line sends her: the same address the decision letter's own
+ * door carries (F12). Mail wrote the Universal Link `/decisions/<id>` while the
+ * digest hand-wrote a Threshold anchor, so one approval had two addresses in
+ * the same inbox — and only one of them opens the iOS app. One builder now.
+ */
+export function decisionDigestLink(
+  baseUrl: string,
+  decisionId: string | null | undefined,
+): string {
+  return clientDecisionLink(baseUrl, decisionId);
 }
 
 /** "October 8" in the recipient's zone, or null when there is no date. */

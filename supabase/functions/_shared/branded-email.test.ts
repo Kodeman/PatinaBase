@@ -174,6 +174,41 @@ Deno.test("a designer shell's default footer is unchanged", () => {
   );
 });
 
+Deno.test("a client shell carries no Patina tagline under the signature (F9)", () => {
+  const html = renderBrandedShell({
+    title: "Client",
+    audience: "client",
+    body: paragraph("Hello."),
+  });
+  assert(!html.includes("A workshop for interior designers"));
+  // The wordmark stays — it is the sender's own footer, not a second signature.
+  assertStringIncludes(html, ">Patina</div>");
+  // The band under the shell keeps the name and drops the dangling separator.
+  assert(!html.includes("Patina &nbsp;·&nbsp; "));
+});
+
+Deno.test("a client shell still prints an explicit businessAddress (F9)", () => {
+  const html = renderBrandedShell({
+    title: "Client",
+    audience: "client",
+    body: paragraph("Hello."),
+    businessAddress: "Middle West Studio · 12 Mill St, Kansas City MO",
+  });
+  assertStringIncludes(
+    html,
+    "Patina &nbsp;·&nbsp; Middle West Studio · 12 Mill St, Kansas City MO",
+  );
+});
+
+Deno.test("a designer shell keeps the tagline in both places (F9)", () => {
+  const html = renderBrandedShell({ title: "Designer", body: paragraph("Hello.") });
+  assertStringIncludes(html, "A workshop for interior designers<br>and the makers they trust.");
+  assertStringIncludes(
+    html,
+    "Patina &nbsp;·&nbsp; A workshop for interior designers and the makers they trust.",
+  );
+});
+
 Deno.test("the sign-off names the person, the studio, then the city (R7)", () => {
   assertStringIncludes(
     signOff({
