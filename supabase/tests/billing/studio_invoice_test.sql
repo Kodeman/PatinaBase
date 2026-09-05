@@ -11,8 +11,9 @@
 -- at the row (S4, S7) whether or not the composer RPC wrote it, the
 -- clean-draft bound it puts on direct PostgREST DML, and a two-studio
 -- designer drawing off the studio they named rather than their primary one.
--- Also: the trigger watches title, the household read path has an index, and
--- the brand resolver only short-circuits on an active design studio.
+-- Also: the trigger watches title, the household read path has an index, the
+-- brand resolver only short-circuits on an active design studio, and a settle
+-- still lands after the stamped designer has been suspended from the studio.
 
 BEGIN;
 
@@ -834,6 +835,72 @@ BEGIN
      AND v_studio = '5f110000-0000-4000-8000-000000000002'
      AND v_name = 'Studio Invoice Two',
     'an active design studio still brands the letter it is named on';
+END;
+$$;
+
+-- ── A settle replays after the stamped designer has left the studio. ──
+--
+-- Money captured at Stripe must land on the row whatever has happened to the
+-- studio's roster since. The UPDATE arm's machine early return therefore sits
+-- above its live-authority reads, exactly as the project path's does: the
+-- anchor tuple is immutable there, so nothing can be reparented by the replay.
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_studio_actor('5f100000-0000-4000-8000-000000000001');
+DO $$
+DECLARE v_id uuid;
+BEGIN
+  v_id := public.create_draft_studio_invoice(
+    '5f100000-0000-4000-8000-000000000003',
+    '5f110000-0000-4000-8000-000000000001',
+    'Consultation billed before the leaving', 0, 15, NULL,
+    '[{"kind":"adhoc","description":"Consultation","quantity":1,
+       "unit_amount_cents":40000,"sort_order":0}]'::jsonb
+  );
+  INSERT INTO studio_invoice_ids VALUES ('leaver', v_id);
+  PERFORM public.issue_invoice(v_id, NULL);
+END;
+$$;
+
+RESET ROLE;
+-- Co-member B is promoted so the studio is never ownerless, then the stamped
+-- designer A is suspended from it.
+UPDATE public.organization_members SET role = 'owner'
+WHERE id = '5f120000-0000-4000-8000-000000000002';
+UPDATE public.organization_members SET status = 'suspended'
+WHERE id = '5f120000-0000-4000-8000-000000000001';
+
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_id uuid;
+  v_claim jsonb;
+  v_settled jsonb;
+  v_payment uuid;
+BEGIN
+  SELECT id INTO v_id FROM studio_invoice_ids WHERE label = 'leaver';
+
+  v_claim := public.claim_invoice_checkout_attempt(
+    v_id, '5f100000-0000-4000-8000-000000000003',
+    'cus_studio_invoice_household', false, 'card'
+  );
+  v_payment := (v_claim->>'payment_id')::uuid;
+
+  PERFORM public.finalize_invoice_checkout_attempt(
+    (v_claim->>'attempt_id')::uuid,
+    '5f100000-0000-4000-8000-000000000003',
+    'cus_studio_invoice_household', 'cs_studio_invoice_2'
+  );
+
+  v_settled := public.settle_invoice_checkout_payment(
+    v_payment, 'evt_studio_invoice_2', 'pi_studio_invoice_2', 41200, 'card'
+  );
+  ASSERT v_settled->>'outcome' = 'succeeded',
+    'the webhook settles after the stamped designer was suspended';
+  ASSERT (SELECT status = 'paid' AND amount_paid_cents = 40000
+                 AND paid_at IS NOT NULL
+          FROM public.invoices WHERE id = v_id),
+    'the captured money lands on the row even with the lead off the roster';
 END;
 $$;
 
