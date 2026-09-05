@@ -675,3 +675,108 @@ re-run.
   `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` as the only
   non-known failure. Proven pre-existing: it passes alone (21 tests, exit 0) and it fails
   identically with all five of this lane's suites skipped (2468 tests in 271 suites, exit 65).
+
+---
+
+# Round 3 — fixes (2026-09-05)
+
+Tree was clean at start (`git status --short` printed nothing unsandboxed; the eight
+`.env.example: Operation not permitted` lines the review saw are the sandbox's read denials,
+not changes). No leftovers from the usage-limit stop to finish or discard.
+
+One finding was handed to this round: `iosd3-M1`, the only major. Ten minors and nine nits
+stand as the review left them — several of them explicitly want a steward ruling, not a lane
+fix, and the brief's triage is blockers and majors.
+
+## `iosd3-M1` — the hub row said Approvals, the screen it opened said DECISIONS · FIXED
+
+The review was right and the defect was mine: round 1's sweep renamed the Studio row
+(`StudioQueueBuilder.pendingDecisionRow`) with a predicate and left the screen that row opens
+titled by a literal. Two words for one thing on consecutive frames, which is exactly what
+P-16's re-ruling and the binding vocabulary exist to end.
+
+Took the review's fix (a) — name the screen for what it holds — rather than (b), reverting the
+row, because (b) gives back the vocabulary ground round 1 won.
+
+**The rule now has one definition, and both frames read it.**
+`Collection where Element == RemoteClientDecision` gains `groupNoun`
+(`Features/Decisions/ViewModels/DecisionsListViewModel.swift`), which returns
+`("Approval", "Approvals")` when every row is an approval — `isProjectArtifactApproval ||
+isClientSignoff`, the same predicate the row used inline — and `("Decision", "Decisions")`
+otherwise. A mixed group keeps the older word, which is true of at least one of its rows.
+
+- `StudioQueueBuilder.pendingDecisionRow` (`:329-337`) drops its inline `allApprovals` and
+  reads `decisions.groupNoun`; its title is unchanged for every population, which the two
+  pre-existing sweep tests still pin.
+- `DecisionsListViewModel.eyebrow` is `decisions.groupNoun.plural`, and
+  `DecisionListView.header` (`:33`) draws `MonoLabel(text: viewModel.eyebrow)` in place of
+  the literal `"DECISIONS"`. `MonoLabel` uppercases by default
+  (`PatinaDesignKit/Components/MonoLabel.swift:37`), so the frame reads APPROVALS / DECISIONS
+  exactly as before, on the right word.
+
+**Why the empty list is titled APPROVALS.** `allSatisfy` is true of nothing, so an empty list
+takes the approval noun. That is the right default, not an accident of the operator: a list
+holding nothing is not holding a choice between named alternatives, and "Approval" is the ask.
+The screen is only reachable with rows from the hub (the row is `guard`ed on a non-empty
+`pendingDecisions`), so the empty case is a direct-navigation and post-answer frame.
+
+**`Coordinator.displayName` for `.decisionList` is deliberately left as "Decisions".** It is
+not drawn to a homeowner — its three product call sites are all logs (`AppDelegate.swift:135`,
+`DecisionPushHandler.swift:137`, `FirstLaunchCoordinator.swift:241`); the companion's own copy
+comes from `CompanionContext`'s switch, not from it. It also feeds `analyticsScreenName`
+(`Coordinator.swift:206`, the `default:` leg), which `RouteAnalyticsParityTests
+.stableRouteScreenNamesAreUnchanged` pins as the PostHog name `"Decisions"`. Renaming it would
+be a silent dashboard regression for zero homeowner benefit — the same trade `.table`,
+`.roomSavedItems` and `.crossRoom` already resolved the other way (rename `displayName` for
+copy, pin the analytics name). If a later round wants the route renamed anyway, the precedent
+is one added `case .decisionList: return "Decisions"` in `analyticsScreenName`.
+
+## Tests
+
+Three added to `ApprovalVocabularySweepTests`, all on the frame pair rather than on the
+helper, so a future divergence between the two surfaces fails rather than passing on a
+green unit:
+
+- `theRowAndItsScreenAgree` — two approvals: the hub row reads `"Approvals"`, the list's
+  eyebrow reads `"Approvals"`, and the eyebrow carries no "decision".
+- `theRowAndItsScreenAgreeOnARealChoice` — one approval plus a real option choice: both
+  frames read `"Decisions"`.
+- `theEmptyListIsNamedForTheAsk` — an empty list is titled for the ask.
+
+## Observed, not fixed (one nit for the record)
+
+`DecisionListView`'s per-card fallback is the bare literal `"Decision"`
+(`:128`, and `:153` in the VoiceOver label) where a row carries no title of its own. It is
+pre-existing — on `main` before this lane, unchanged by it — and the Studio's equivalent rows
+already have the right stand-ins (`StudioQueueBuilder.untitledApprovalTitle` /
+`untitledDecisionTitle`, `:60-64`). Left alone as outside the listed item; it would be two
+lines against those two constants if a later round wants it.
+
+## Gates — re-run from this worktree, unsandboxed, `IOS_GATE_UDID=493547C8-D84B-478B-8673-3FF6ACAA05C6`
+
+| gate | command | result |
+|---|---|---|
+| `build` | `ios-gate.sh build` | **PASS** — `** BUILD SUCCEEDED **` |
+| `unit` | `ios-gate.sh unit` | **PASS** — `Test run with 2538 tests in 276 suites passed after 8.096 seconds with 2 known issues.` `** TEST SUCCEEDED **`, exit 0 |
+| `lint-delta main` | `ios-gate.sh lint-delta main` | **PASS** — `✓ lint-delta: no new warnings in touched files` |
+
+2538 = the round-3 reviewer's 2535 plus the three tests above. The two known issues are the
+pre-existing pair both iOS lanes report (`BrandVoiceLintTests.swift:168`,
+`RoomLifecycleTests.theTodayRailFollowsALocalDelete`).
+`CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` — the reviewer's red
+on both round-3 runs, and proven pre-existing there by a run with all five of this lane's
+suites skipped — did **not** recur on this run. That confirms the reviewer's own reading: it
+is a load/ordering flake, and the integration gate should re-run it in isolation rather than
+read a first red as a lane regression.
+
+## Files touched this round
+
+- `apps/mobile/Patina/Patina/Features/Decisions/ViewModels/DecisionsListViewModel.swift`
+  (`groupNoun`, `eyebrow`)
+- `apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionListView.swift` (`:33`)
+- `apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift` (`:329-337`)
+- `apps/mobile/Patina/PatinaTests/ApprovalVocabularySweepTests.swift` (three tests)
+
+No migration, no edge function, no production mutation, no `.env`/hook/settings file read or
+written. No cross-lane file touched this round — `ProjectApprovalCopy.swift` is untouched, so
+the byte-identical merge with `approvals/w2-iosc` that round 2 arranged still holds.
