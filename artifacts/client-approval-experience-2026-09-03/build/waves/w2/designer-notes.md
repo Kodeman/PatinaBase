@@ -272,3 +272,125 @@ reachable from that component. It is a W1 file with a date-frozen assertion that
 fail every day. **Left untouched deliberately** (not in this lane's brief, and a W1 surface
 another lane may hold); flagged for the integration steward, who should freeze the clock in
 that suite rather than re-hardcode tomorrow's date.
+
+---
+
+# Fix pass 2 — round-2 review (F-01, F-02)
+
+Two majors were handed back. Both are addressed below; the minors (F-03 aria-live,
+F-04 newline collapse, F-05 supersede comment, F-07 two SIGNED grammars, F-10..F-12)
+were not in this pass's list and are left where the reviewer put them.
+
+## F-02 — the Document's Record still stamped Signed and Approved in sage. FIXED.
+
+`apps/designer-portal/src/app/(document)/doc/[id]/page.tsx` (the settled-bar stamp in
+`PreviousWork`) painted both marks with `--color-sage` / `--color-sage-ink`. Both now read
+`var(--color-mocha)` for border and word alike, matching `STAMP.mocha` in
+`desk-derivation.ts` and `SIGNED_STAMP_INK` in `signed-stamp.tsx`.
+
+Sweep after this pass — `grep -n "color-sage" 'apps/designer-portal/src/app/(document)/doc/[id]/page.tsx'`
+returns **nothing**. The six-row table the reviewer built is now mocha in all six places:
+`proposal-watch.tsx`, `proposal-watch-derivation.ts`, `desk-derivation.ts`,
+`red-letter-zone.tsx`, and the two stamps in `doc/[id]/page.tsx`.
+
+The earlier claim that the fix pass closed "both places that paint it" was wrong; it closed
+two of four. Recorded here rather than edited out of the earlier section.
+
+### Tests
+
+`doc/[id]/page.test.tsx` gains `describe('the settled stamps in the Record (P-17, R13)')`
+with two cases — the Proposal's `Signed · {date}` and a gate-settled section's
+`Approved · {date}`, each asserted `toHaveStyle({ borderColor: 'var(--color-mocha)',
+color: 'var(--color-mocha)' })`. Two notes for whoever reads these next:
+
+- the record's bodies only mount at density `full`, so the suite drives the supported
+  `__setDensityForTest('full')` hook and presses **Open the record**; jsdom has no scrolling
+  for the lens's observer to answer.
+- `expect(el.style.borderColor)` reads back `""` for a `var()` value under jsdom's CSSOM —
+  `toHaveStyle` is the assertion that works (the same shape `authorization-stamp.test.tsx`
+  already uses).
+- the file's `@/hooks/use-section-work` mock was frozen at `data: []` / `gateState:
+  jest.fn()`. It is now driven by `mockSectionGates` and `mockGateState`, both reset in the
+  outer `beforeEach` to the values that reproduce the old behaviour exactly (no gates,
+  `'requested'`), so no existing case changes.
+
+## F-01 — the attribution key no producer emits. DEFERRED, explicitly.
+
+`GateWhy attribution={givenName(review.whyAuthorName)}` and the parser's
+`whyAuthorName: nullableString(row, 'whyAuthorName')` are correct and forward-compatible,
+and they are also **unobservable**: nothing emits the key.
+
+```
+$ grep -rn "whyAuthorName\|why_author\|whyAuthor" \
+    /Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-backend/supabase \
+    /Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-backend/packages
+(no matches — re-run at 2026-09-05, unchanged from the reviewer's run)
+```
+
+`get_project_decision_reviews` as rewritten in the backend lane's
+`00569_approval_why_viewer_role_and_receipt.sql` builds its row with `'why', artifact.why`
+and `'viewerRole', …` and carries **no author of any kind** — not a name, not even the
+creating actor's id, so there is nothing the portal could join client-side either.
+
+This lane cannot fix it: the producer is a migration in another lane's worktree, and the
+repo rules confine this agent to its own. So, per the finding's own second remedy, it is
+recorded as **deferred** and the code is made to stop claiming otherwise:
+
+- `packages/supabase/src/hooks/use-project-approvals.ts` — the `whyAuthorName` doc comment
+  now says NOT YET PRODUCED, names 00569 as the projection that omits it, and states that
+  P-13's attribution half is deferred until some projection emits that exact key.
+- `project-approval-document.tsx` — the render-site comment says the same at the point of
+  use: every row today renders unsigned, and this branch is the landing site, not evidence
+  that it lands.
+
+Behaviour is unchanged and was already covered both ways (`project-approval-document.test.tsx`
+— signed with the author's given name, unsigned with none; `use-project-approvals.test.ts` —
+parses a name, stays null without one). **What the orchestrator needs to rule:** either the
+backend lane adds one line to 00569's `jsonb_build_object` under exactly the key
+`whyAuthorName` (the composing designer's display name, resolved at insert onto
+`project_approval_artifacts` or joined from the decision's creator), or P-13 ships with its
+sentence unsigned and the wave report says so.
+
+## Correction to this log (the reviewer's F-06)
+
+The P-17 section above claims a zero-hit grep for `CheckCircle|<Check|checkmark|✓|✔` across
+`components/document/`. That claim is false — the tree holds 35 such hits (e.g.
+`spec-books/spec-book-workspace.tsx:1361`, `work-block.tsx:310`). What was actually
+established, and all that was: **none of the 35 is a signed/approved status mark on a
+proposal or approval surface this lane touched**, so nothing needed retiring under P-17's
+"retire any green check used as a signed status". The zero claim is withdrawn.
+
+## Gates (fix pass 2)
+
+Issued as `pnpm --dir <worktree> --filter …` — this agent's cwd resets between calls.
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `pnpm --filter @patina/designer-portal type-check` | **PASS** — `tsc --noEmit`, `TC_EXIT=0` |
+| 2 | `pnpm --filter @patina/designer-portal lint` | **EXIT 1 — `✖ 205 problems (2 errors, 203 warnings)`**, the identical count and the identical two errors the round-2 review recorded: `piece-room-save-gate.test.tsx:159` (`import/first` rule not found) and `use-commercial-documents.test.ts:930` (`rules-of-hooks`). Neither file is touched by this branch. |
+| 3 | `pnpm --filter @patina/designer-portal test -- <8 suites>` | **PASS** — `Test Suites: 8 passed, 8 total · Tests: 280 passed, 280 total` (the 7 from the last pass plus `doc/[id]/page.test.tsx`) |
+| 4 | `pnpm --filter @patina/supabase type-check` | **PASS** — `TC_EXIT=0` |
+| 5 | `pnpm --filter @patina/supabase test -- src/hooks/__tests__/use-project-approvals.test.ts` | **PASS** — `Tests 19 passed (19)` |
+| 6 | `pnpm --filter @patina/admin-portal build` | **PASS** — `BUILD_EXIT=0`, `✓ Compiled successfully in 19.6s`, full route table |
+
+The five `not wrapped in act(…)` warnings in `page.test.tsx` are pre-existing: running the
+suite filtered to the new describe (`-t "settled stamps in the Record"`) emits **0**.
+
+## Files (fix pass 2)
+
+- `apps/designer-portal/src/app/(document)/doc/[id]/page.tsx`
+- `apps/designer-portal/src/app/(document)/doc/[id]/page.test.tsx`
+- `apps/designer-portal/src/components/document/approvals/project-approval-document.tsx` (comment)
+- `packages/supabase/src/hooks/use-project-approvals.ts` (comment)
+
+## Advisories carried forward
+
+- **`client-mirror.tsx:151`** still marks an answered decision `answered · {date}` in
+  `--color-sage-ink`. The reviewer named it "one step further out"; F-02's fix directive
+  named only the two `doc/[id]/page.tsx` stamps, so it was left alone. It is a lifecycle
+  word in running text rather than an outcome stamp, but it is the last sage thing near
+  this family on the designer's ground — a ruling would close the sweep.
+- The W1 `client-note-composer.test.tsx` date-frozen failure recorded in the previous pass
+  is unchanged and still owed to the integration steward.
+- A rendered check is still owed at integration. No migration minted, no production
+  mutation run.
