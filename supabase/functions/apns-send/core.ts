@@ -56,16 +56,94 @@ export function apnsDeviceUrl(t: ResolvedToken): string {
   return `${apnsHostFor(t.environment)}/3/device/${t.token}`;
 }
 
-/** The push payload: a standard alert + the routing refs the iOS
- *  NotificationRouter expects (mirrors notification_log metadata keys). */
+/** One recent in_app row, as the badge counter reads it. */
+export interface BadgeRow {
+  metadata?: Record<string, unknown> | null;
+  opened_at?: string | null;
+  status?: string | null;
+}
+
+/**
+ * Read, as the BELL decides read: `opened_at` set, or a status the app treats
+ * as read on its own (`NotificationsAPIClient.swift`'s
+ * `opened_at != nil || status == "opened" || status == "clicked"`). Keying on
+ * `opened_at` alone made the icon disagree with the app over a clicked row.
+ */
+export function badgeRowIsRead(row: BadgeRow): boolean {
+  const openedAt = row?.opened_at ?? null;
+  if (openedAt !== null) return true;
+  return row?.status === "opened" || row?.status === "clicked";
+}
+
+/**
+ * The springboard number (R5), counted the way the BELL counts it.
+ *
+ * The bell collapses its rows on `entity_type|entity_id`
+ * (`NotificationsViewModel.collapseDuplicates`) because more than one row can
+ * name one thing: 00534's `notify_client_attention` de-dups its own bell row,
+ * but 00289's design-request triggers do not, so two status changes on one lead
+ * leave two in_app rows for one entity. A raw count therefore painted a
+ * home-screen number the app itself would never draw — and the app only
+ * rewrites the badge when the feed loads, so the wrong number would stand for
+ * as long as the app stayed closed, which is the whole point of the badge.
+ *
+ * Collapsing alone was not enough: the bell's tie-break is that a read twin
+ * marks the survivor read (`collapseDuplicates`' `else if row.isRead` branch,
+ * pinned by `BellQueueFallbackTests` "a read twin marks the surviving row
+ * read"), so ONE entity counts only while NONE of its rows is read. Counting an
+ * entity as unread because some row of it was unread left the icon saying 1
+ * where the bell said 0 — she taps a row, `markOpened` stamps that row, the
+ * older twin stays unstamped. Hence: rows arrive unfiltered by read state and
+ * an entity is dropped as soon as any of its rows reads as read.
+ *
+ * Rows with no entity key are counted individually, exactly as the bell keeps
+ * them: they name nothing to collapse onto.
+ */
+export function collapsedBadgeCount(rows: BadgeRow[]): number {
+  let count = 0;
+  const unreadByEntity = new Map<string, boolean>();
+  for (const row of rows) {
+    const read = badgeRowIsRead(row);
+    const metadata = row?.metadata ?? null;
+    const entityType = metadata?.entity_type;
+    const entityId = metadata?.entity_id;
+    if (typeof entityType !== "string" || typeof entityId !== "string") {
+      if (!read) count++;
+      continue;
+    }
+    const key = `${entityType}|${entityId}`;
+    const stillUnread = unreadByEntity.get(key) ?? true;
+    unreadByEntity.set(key, stillUnread && !read);
+  }
+  for (const unread of unreadByEntity.values()) {
+    if (unread) count++;
+  }
+  return count;
+}
+
+/**
+ * The push payload: a standard alert + the routing refs the iOS
+ * NotificationRouter expects (mirrors notification_log metadata keys).
+ *
+ * `badge` is the springboard number iOS paints on the app icon while the app is
+ * backgrounded (R5): the recipient's unread in-app count collapsed on the
+ * entity key, resolved by the caller. It is OMITTED, never zeroed, when that
+ * count could not be read — an absent key leaves the badge as it stands, where
+ * a 0 would silently clear a number that is still true.
+ */
 export function buildApnsPayload(
   input: ApnsSendInput,
+  badge?: number,
 ): Record<string, unknown> {
+  const aps: Record<string, unknown> = {
+    alert: { title: input.title, body: input.body },
+    sound: "default",
+  };
+  if (typeof badge === "number" && Number.isFinite(badge) && badge >= 0) {
+    aps.badge = Math.trunc(badge);
+  }
   return {
-    aps: {
-      alert: { title: input.title, body: input.body },
-      sound: "default",
-    },
+    aps,
     entity_type: input.entity_type ?? null,
     entity_id: input.entity_id ?? null,
     notification_log_id: input.notification_log_id ?? null,

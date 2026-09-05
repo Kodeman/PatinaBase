@@ -9,10 +9,12 @@ import {
 import {
   artifactCitationsForDigest,
   buildReminderDigestEmail,
+  decisionDigestLink,
   decisionDigestTitle,
   isReminderDigestDue,
   type ReminderDigestItem,
 } from "./logic.ts";
+import { clientDecisionLink } from "../_shared/client-portal-links.ts";
 
 const NOW = new Date("2026-07-07T15:00:00Z");
 
@@ -159,4 +161,19 @@ Deno.test("Stage-2 digest item cites the edition, not the checksum (R6)", () => 
   assert(!serialized.includes("reviewer"));
   assert(!serialized.includes("approver"));
   assert(!serialized.includes("leadid"));
+});
+
+Deno.test("the digest addresses an approval exactly as the letter does (F12)", () => {
+  const base = "https://client.patina.cloud";
+  assertEquals(
+    decisionDigestLink(base, "decision-1"),
+    clientDecisionLink(base, "decision-1"),
+  );
+  assertEquals(
+    decisionDigestLink(base, "decision-1"),
+    "https://client.patina.cloud/decisions/decision-1",
+  );
+  // A missing or forged id lands on the doorstep, never an interpolated path.
+  assertEquals(decisionDigestLink(base, null), `${base}/#doorstep`);
+  assertEquals(decisionDigestLink(base, "../evil"), `${base}/#doorstep`);
 });

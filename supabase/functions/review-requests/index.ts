@@ -26,6 +26,7 @@ import {
   resolveStudioIdentity,
   studioCobrand,
   studioDisplayName,
+  studioSignatureCity,
 } from '../_shared/studio-identity.ts';
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
 
@@ -258,10 +259,17 @@ Deno.serve(async (_req: Request) => {
       senderName,
       studioName: cobrand.studioName,
       studioLogoUrl: cobrand.studioLogoUrl,
+      // R3-04: `profiles.city` first, then the studio org's address — the
+      // same precedence the approval letter signs with, so one studio's mail
+      // does not sign from two different places in one inbox.
       signature: {
         designerGivenName: givenName(designerName),
         studioName: cobrand.studioName,
-        city: designerProfile?.city ?? null,
+        city: await studioSignatureCity(
+          supabase,
+          identity,
+          designerProfile?.city,
+        ) ?? null,
       },
     });
 

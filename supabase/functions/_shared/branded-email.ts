@@ -210,6 +210,12 @@ export interface BrandedShellOpts {
 export function renderBrandedShell(opts: BrandedShellOpts): string {
   const audience = opts.audience ?? "designer";
   const base = portalBaseFor(audience);
+  // R7/F9: a homeowner's letter is signed by her studio, and Patina's own
+  // pitch line ("a workshop for interior designers…") is studio-facing copy
+  // that read as a second, competing signature directly under it — twice, once
+  // in the footer block and once in the band below. Client mail keeps the
+  // wordmark and drops the tagline; designer mail is untouched.
+  const isClient = audience === "client";
   const links = opts.footerLinks ?? (audience === "client"
     ? [
       { label: "Your project", href: base },
@@ -223,6 +229,10 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
         href: `${base}/desk?account=notifications`,
       },
     ]);
+  // The band under the shell: an explicit businessAddress always wins; absent
+  // one, only designer mail falls back to the tagline.
+  const legalLine = opts.businessAddress ??
+    (isClient ? "" : "A workshop for interior designers and the makers they trust.");
   const preheader = opts.preview
     ? `<div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all; color:transparent;">${escapeHtml(opts.preview)}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>`
     : "";
@@ -301,7 +311,7 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;"><tr>
             <td align="left" valign="top">
               <div class="ink2" style="font-family:${F.serif}; font-size:15px; color:${C.ink2}; margin-bottom:5px;">Patina</div>
-              <div class="ink3" style="font-family:${F.sans}; font-size:13px; line-height:1.5; color:${C.ink3};">A workshop for interior designers<br>and the makers they trust.</div>
+              ${isClient ? "" : `<div class="ink3" style="font-family:${F.sans}; font-size:13px; line-height:1.5; color:${C.ink3};">A workshop for interior designers<br>and the makers they trust.</div>`}
             </td>
             <td align="right" valign="top" class="ink3" style="font-family:${F.sans}; font-size:13px; line-height:1.95; color:${C.ink3};">${footerNav}</td>
           </tr></table>
@@ -310,7 +320,7 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
       <!--[if mso]></td></tr></table><![endif]-->
       <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px;">
         <tr><td class="px" align="center" style="padding:18px 40px 10px; font-family:${F.mono}; font-size:11px; line-height:1.8; letter-spacing:0.03em; color:${C.ink3};">
-          Patina &nbsp;·&nbsp; ${escapeHtml(opts.businessAddress ?? "A workshop for interior designers and the makers they trust.")}
+          Patina${legalLine ? ` &nbsp;·&nbsp; ${escapeHtml(legalLine)}` : ""}
         </td></tr>
       </table>
     </td></tr>

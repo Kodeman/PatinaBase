@@ -136,6 +136,51 @@ const ARTIFACT_KIND_PREDICATE: Record<
   budget_version: "exactly as priced",
 };
 
+/**
+ * What the button calls the thing she is opening. A kind the map does not know
+ * (ux/03 §9 ruling 5 contemplates project documents becoming approvable) is
+ * still an approval — never the word "undefined".
+ */
+function artifactKindLabel(kind: string): string {
+  return ARTIFACT_KIND_LABEL[kind as ApprovalArtifactCitation["kind"]] ??
+    "approval";
+}
+
+/**
+ * The promise the letter makes about the attached edition. An unmapped kind
+ * gets the neutral clause rather than a predicate nobody wrote for it.
+ */
+function artifactReadyClause(artifact: ApprovalArtifactCitation): string {
+  const predicate =
+    ARTIFACT_KIND_PREDICATE[artifact.kind as ApprovalArtifactCitation["kind"]];
+  return predicate ? `is ready, ${predicate}.` : "is ready for your answer.";
+}
+
+/**
+ * Titles are stored as the studio typed them — "approve the issued set" is a
+ * real one — so every letter quotes the title instead of letting it open a
+ * sentence. One rule, subject and body alike (F5).
+ */
+function quoted(text: string): string {
+  return `"${text}"`;
+}
+
+/**
+ * True when the edition attached to this ask is the one that was sent: the
+ * artifact was issued no later than the day the studio asked. A legacy option
+ * choice carries no edition and so claims nothing — which is exactly the row
+ * `extend_and_reopen_client_decision` moves the date on and wipes the answer
+ * from (00399:3595), where "nothing has changed" would be false (F8).
+ */
+function editionUnchangedSinceSent(decision: DecisionContext): boolean {
+  const issued = decision.artifact?.issuedAt;
+  if (!issued || !decision.sentAt) return false;
+  const issuedAt = new Date(issued).getTime();
+  const sentAt = new Date(decision.sentAt).getTime();
+  if (Number.isNaN(issuedAt) || Number.isNaN(sentAt)) return false;
+  return issuedAt <= sentAt;
+}
+
 export interface DecisionContext {
   id: string;
   title: string | null;
@@ -319,31 +364,6 @@ function decisionNotice(decision: DecisionContext): "first" | "reminder" {
 }
 
 /**
- * Has this recipient already been sent the first notice for this approval?
- * Read by decision-reminders so its letter never announces a send the
- * homeowner was already told about — and never withholds the announcement
- * from someone the publish-time producer failed to reach.
- *
- * Only answerable for a signed-up client: notification_log.user_id is NOT NULL,
- * so a direct-contact recipient leaves no evidence either way. She gets the
- * register that claims nothing about timing.
- */
-export async function firstNoticeAlreadySent(
-  supabase: SupabaseClient,
-  userId: string | null,
-  decisionId: string,
-): Promise<boolean> {
-  if (!userId) return true;
-  const status = await existingEmailLogStatus(
-    supabase,
-    userId,
-    { id: decisionId, title: null, dueDate: null, notice: "first" },
-    "decision_required",
-  );
-  return status !== null;
-}
-
-/**
  * Return the prior non-retryable email state for this (decision, kind). This
  * keeps delivery idempotent without collapsing in-flight and terminal states.
  */
@@ -511,6 +531,13 @@ function renderDoor(decisionId: string, label: string): string {
   ].join("");
 }
 
+/**
+ * Subject rule, one across all three letters (F11): no trailing period, and the
+ * stored title in quotation marks.
+ *   first     Leah sent "Kitchen plan set" for your approval
+ *   reminder  Thursday: "Kitchen plan set"
+ *   overdue   Still open: "Kitchen plan set"
+ */
 export function renderDecisionEmail(
   kind: DecisionNotificationKind,
   recipientName: string,
@@ -524,13 +551,28 @@ export function renderDecisionEmail(
   // What she was actually sent, in her words: the artifact's own title when
   // there is one, the decision's title otherwise.
   const title = decision.artifact?.title || decisionTitle;
+  // A Stage-2 row carries a frozen edition and is an APPROVAL; a legacy row is
+  // a choice between named alternatives, which the vocabulary ruling calls a
+  // DECISION. Only the artifact tells them apart here — the Stage-2 producers
+  // resolve one or refuse to send (F7).
+  const isApproval = Boolean(decision.artifact);
+  const askWord = isApproval ? "approval" : "decision";
   const kindLabel = decision.artifact
-    ? ARTIFACT_KIND_LABEL[decision.artifact.kind]
-    : "approval";
+    ? artifactKindLabel(decision.artifact.kind)
+    : "decision";
+  const eyebrow = isApproval ? "Approval" : "Decision";
+  const titleHtml = quoted(
+    `<strong style="color:#1F1B16; font-weight:600;">${
+      escapeHtml(title)
+    }</strong>`,
+  );
   const studioSignature = signOff(cobrand);
-  const asker = (cobrand.designerGivenName ?? "").trim() ||
-    (cobrand.studioName ?? "").trim() ||
-    "Your designer";
+  const named = (cobrand.designerGivenName ?? "").trim() ||
+    (cobrand.studioName ?? "").trim();
+  // Sentence-initial and mid-sentence forms of the same person. The fallback
+  // is the only one that changes case; a real name keeps its capitals (F6).
+  const asker = named || "Your designer";
+  const askerMidSentence = named || "your designer";
 
   if (kind === "decision_resolved") {
     // Designer-facing — never co-branded (the designer IS the studio), and the
@@ -566,17 +608,19 @@ export function renderDecisionEmail(
   if (kind === "decision_overdue") {
     // P-04. No "overdue", no passed-its-date, no gentle nudge: the word she
     // reads is the state she is in, and the studio carries the rest.
-    const subject = `Still open: ${title}`;
+    const subject = `Still open: ${quoted(title)}`;
     const askedOn = calendarDay(decision.sentAt, timeZone);
     const opening = askedOn
-      ? `Still open, ${escapeHtml(asker)} asked on ${escapeHtml(askedOn)}.`
+      ? `Still open, ${escapeHtml(askerMidSentence)} asked on ${
+        escapeHtml(askedOn)
+      }.`
       : "Still open.";
     return {
       subject,
       html: renderBrandedShell({
         title: subject,
         preview: "Still open.",
-        eyebrow: "Approval",
+        eyebrow,
         audience: "client",
         studioName: cobrand.studioName,
         studioLogoUrl: cobrand.studioLogoUrl,
@@ -584,9 +628,7 @@ export function renderDecisionEmail(
           paragraph(`Hi ${escapeHtml(name)},`),
           paragraph(opening),
           paragraph(
-            `<strong style="color:#1F1B16; font-weight:600;">${
-              escapeHtml(title)
-            }</strong> is waiting for your answer, exactly as it was sent.`,
+            `${titleHtml} is waiting for your answer, exactly as it was sent.`,
           ),
           editionLine,
           door,
@@ -599,7 +641,7 @@ export function renderDecisionEmail(
   // decision_required. Two letters, one kind: a first notice announces, a
   // reminder returns. The producer says which; absent that, the letter returns.
   if (decision.notice === "first") {
-    const subject = `${asker} sent ${title} for your approval.`;
+    const subject = `${asker} sent ${quoted(title)} for your ${askWord}`;
     const preview = decision.artifact
       ? (dueWeekday
         ? `Edition ${decision.artifact.version}, due ${dueWeekday}.`
@@ -610,18 +652,16 @@ export function renderDecisionEmail(
       html: renderBrandedShell({
         title: subject,
         preview,
-        eyebrow: "Approval",
+        eyebrow,
         audience: "client",
         studioName: cobrand.studioName,
         studioLogoUrl: cobrand.studioLogoUrl,
         body: [
           paragraph(`Hi ${escapeHtml(name)},`),
           paragraph(
-            `<strong style="color:#1F1B16; font-weight:600;">${
-              escapeHtml(title)
-            }</strong> ${
+            `${titleHtml} ${
               decision.artifact
-                ? `is ready, ${ARTIFACT_KIND_PREDICATE[decision.artifact.kind]}.`
+                ? artifactReadyClause(decision.artifact)
                 : "is ready for your answer."
             }`,
           ),
@@ -636,24 +676,28 @@ export function renderDecisionEmail(
     };
   }
 
-  const subject = dueWeekday ? `${dueWeekday}: ${title}.` : `Still waiting: ${title}.`;
+  const subject = dueWeekday
+    ? `${dueWeekday}: ${quoted(title)}`
+    : `Still waiting: ${quoted(title)}`;
   return {
     subject,
     html: renderBrandedShell({
       title: subject,
       preview: dueWeekday ? `Still open. Due ${dueWeekday}.` : "Still open.",
-      eyebrow: "Approval",
+      eyebrow,
       audience: "client",
       studioName: cobrand.studioName,
       studioLogoUrl: cobrand.studioLogoUrl,
       body: [
         paragraph(`Hi ${escapeHtml(name)},`),
         paragraph(
-          `<strong style="color:#1F1B16; font-weight:600;">${
-            escapeHtml(title)
-          }</strong> is still open${
+          `${titleHtml} is still open${
             dueWeekday ? ` and due ${escapeHtml(dueWeekday)}` : ""
-          }. Nothing has changed since it was sent.`,
+          }.${
+            editionUnchangedSinceSent(decision)
+              ? " Nothing has changed since it was sent."
+              : ""
+          }`,
         ),
         editionLine,
         door,
