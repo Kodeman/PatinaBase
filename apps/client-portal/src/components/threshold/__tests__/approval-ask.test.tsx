@@ -125,18 +125,22 @@ async function hold(target: HTMLElement) {
   });
 }
 
-/** The typed legal name every outcome now carries (R1). */
+/** The typed legal name the approval carries (R1) — and only the approval. */
 function sign(name = 'Harper Vale') {
   fireEvent.change(screen.getByTestId('approval-signature'), {
     target: { value: name },
   });
 }
 
+/** Sign if this outcome asks for a name; Return and Hold do not (ux/02:308). */
+function signIfAsked() {
+  if (screen.queryByTestId('approval-signature')) sign();
+}
+
 /** Choose an outcome, sign it, hold the submit — the beats an outcome takes. */
 async function answer(name: RegExp) {
   fireEvent.click(screen.getByRole('button', { name }));
-  await screen.findByTestId('approval-signature');
-  sign();
+  signIfAsked();
   await hold(screen.getByRole('button', { name: /submit response/i }));
 }
 
@@ -146,7 +150,6 @@ async function returnEdition(note = 'The runner is too dark for the stair hall.'
   fireEvent.change(await screen.findByTestId('approval-change-note'), {
     target: { value: note },
   });
-  sign();
   await hold(screen.getByRole('button', { name: /submit response/i }));
 }
 
@@ -1071,7 +1074,6 @@ describe('the ask in the house’s vocabulary', () => {
     fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
     fireEvent.change(screen.getByTestId('approval-change-note'), { target: { value: '   ' } });
 
-    sign();
     expect(screen.getByRole('button', { name: /submit response/i })).toBeDisabled();
     await hold(screen.getByRole('button', { name: /submit response/i }));
     expect(respondMutate).not.toHaveBeenCalled();
@@ -1155,7 +1157,6 @@ describe('the ask in the house’s vocabulary', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose another outcome/i }));
     fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
     expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
-    sign();
     expect(screen.getByRole('button', { name: /submit response/i })).not.toBeDisabled();
   });
 
@@ -1370,6 +1371,9 @@ describe('the outcome is signed and held (P-18)', () => {
     sign();
 
     const submit = screen.getByRole('button', { name: /submit response/i });
+    // A tap is a pointer press and the click that trails it; neither records.
+    fireEvent.pointerDown(submit, { clientX: 4, clientY: 4 });
+    fireEvent.pointerUp(submit);
     fireEvent.click(submit);
     expect(respondMutate).not.toHaveBeenCalled();
 
@@ -1389,16 +1393,43 @@ describe('the outcome is signed and held (P-18)', () => {
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
   });
 
-  it('carries her name on a return as well as on an approval', async () => {
+  it('asks no name of a return or a hold, and records no consent for them', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    await returnEdition('The runner is too dark for the stair hall.');
+    // Returning consents to nothing, so there is no rule to sign on: the
+    // choice is the act and the hold is the commitment (ux/02:308).
+    fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
+    expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('approval-change-note'), {
+      target: { value: 'The runner is too dark for the stair hall.' },
+    });
+    await hold(screen.getByRole('button', { name: /submit response/i }));
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(respondMutate.mock.calls[0][0]).toMatchObject({
       outcome: 'changes_requested',
-      clientSignature: 'Harper Vale',
-      clientConsentMethod: 'electronic_signature',
+      clientSignature: undefined,
+      clientConsentMethod: undefined,
+    });
+
+  });
+
+  it('asks no name of a hold either', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
+    expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
+    // Nothing to type, so the act is armed the moment it is chosen.
+    const submit = screen.getByRole('button', { name: /submit response/i });
+    expect(submit).not.toBeDisabled();
+    await hold(submit);
+
+    await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+    expect(respondMutate.mock.calls[0][0]).toMatchObject({
+      outcome: 'needs_discussion',
+      clientSignature: undefined,
+      clientConsentMethod: undefined,
     });
   });
 

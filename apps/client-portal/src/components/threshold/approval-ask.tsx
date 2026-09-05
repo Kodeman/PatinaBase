@@ -785,8 +785,13 @@ export function ApprovalAsk({
     if (inFlight.current || !canRespond || !chosen) return;
     const note = changeNote.trim();
     if (chosen === 'changes_requested' && note.length === 0) return;
+    // Only an approval is signed. Asking a homeowner to type her legal name to
+    // say "let's talk" or "here is what to change" would record an electronic
+    // signature against a consent she never gave (ux/02:308): on those two the
+    // choice is the act and the hold is the commitment.
+    const signing = chosen === 'approved';
     const signedByName = signature.trim();
-    if (!signatureIsComplete(signedByName)) return;
+    if (signing && !signatureIsComplete(signedByName)) return;
     inFlight.current = true;
     setError(null);
     setNotice(null);
@@ -811,9 +816,11 @@ export function ApprovalAsk({
         idempotencyKey: crypto.randomUUID(),
         // 00570 carries the pair through the wrapper into the columns 00117
         // added. The two travel together: a signature with no method is a
-        // check_violation, by design.
-        clientSignature: signedByName,
-        clientConsentMethod: 'electronic_signature',
+        // check_violation, by design. An unsigned outcome sends neither, and
+        // the hook then sends the outcome alone — the payload every wrapper
+        // before 00570 already accepts.
+        clientSignature: signing ? signedByName : undefined,
+        clientConsentMethod: signing ? 'electronic_signature' : undefined,
       });
       setJustAnswered({ outcome: chosen, at: new Date() });
       onAnswered?.(approval.decisionId);
@@ -1079,18 +1086,22 @@ export function ApprovalAsk({
                   </p>
                 </div>
               )}
-              {/* The name, on a rule, dated. An outcome against a frozen
-                  edition is a terminal act, and R1 asks every one of them for
-                  the same two things: a typed legal name and a held gesture. */}
-              <div className="mt-3">
-                <SignatureLine
-                  id={`approval-signature-${approval.decisionId}`}
-                  testId="approval-signature"
-                  value={signature}
-                  onChange={setSignature}
-                  disabled={respond.isPending}
-                />
-              </div>
+              {/* The name, on a rule, dated — on the approval and on nothing
+                  else. R1 asks every terminal act for a held gesture; only the
+                  act that consents to the edition is also signed. Returning it
+                  and holding it consent to nothing, so they take no signature
+                  (ux/02:308). */}
+              {chosenAct.outcome === 'approved' && (
+                <div className="mt-3">
+                  <SignatureLine
+                    id={`approval-signature-${approval.decisionId}`}
+                    testId="approval-signature"
+                    value={signature}
+                    onChange={setSignature}
+                    disabled={respond.isPending}
+                  />
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-x-6">
                 <HoldAction
                   actionKey={chosenAct.writeKey}
@@ -1101,7 +1112,8 @@ export function ApprovalAsk({
                   loading={respond.isPending || changeNoteComment.isPending}
                   loadingLabel="Recording response"
                   disabled={
-                    !signatureIsComplete(signature) ||
+                    (chosenAct.outcome === 'approved' &&
+                      !signatureIsComplete(signature)) ||
                     (chosenAct.outcome === 'changes_requested' &&
                       changeNote.trim().length === 0)
                   }
