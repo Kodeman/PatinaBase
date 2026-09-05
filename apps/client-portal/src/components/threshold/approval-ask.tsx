@@ -252,9 +252,17 @@ function whyAuthorOf(approval: ProjectApprovalReview): string | null {
  * provenance — not a compliance string, and never presented as something she
  * is meant to check.
  */
+/**
+ * RULED 2026-09-05, at the Wave 2 walks: **the maker's mark leaves the
+ * doorstep.** R6 keeps the twelve-character checksum for the printed Record of
+ * Decision only (Wave 3, P-26), so it is not drawn here. It was also the last
+ * serious contrast failure on this surface — `--text-muted` at `opacity-60`
+ * composites to #938B83 on the page ground, 3.13:1 against a 4.5:1 floor —
+ * and it was `aria-hidden`, which made it a string a sighted reader could see
+ * and a screen reader could not. The frame stays: the plate is still a plate.
+ */
 function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
   const issued = parseSourceDate(approval.sentAt) ?? parseSourceDate(approval.createdAt);
-  const makersMark = approval.artifactChecksum.slice(0, 12);
 
   return (
     <figure
@@ -277,14 +285,6 @@ function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
           {issued ? ` · Issued ${LONG_MONTH_DAY.format(issued)}` : ''}
         </p>
       </figcaption>
-
-      <span
-        data-testid="approval-makers-mark"
-        aria-hidden="true"
-        className="absolute bottom-1.5 right-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] opacity-60"
-      >
-        {makersMark}
-      </span>
     </figure>
   );
 }
@@ -390,12 +390,20 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
  */
 function Discussion({
   decisionId,
+  artifactTitle,
   readOnly = false,
   designerGivenName,
   studioName,
   composerRef,
 }: {
   decisionId: string;
+  /**
+   * `W2-05`. Thirteen approvals stand on one doorstep, each with a section
+   * headed "The discussion", and a landmark that cannot be told from its
+   * twelve neighbours is a landmark a screen-reader user cannot navigate by.
+   * The edition's own title is what makes this one itself.
+   */
+  artifactTitle?: string | null;
   readOnly?: boolean;
   designerGivenName?: string | null;
   studioName?: string | null;
@@ -411,6 +419,11 @@ function Discussion({
 
   const fieldId = useId().replace(/:/g, '');
   const headingId = `approval-discussion-${decisionId}`;
+  // The heading reads "The discussion" on every one of them, so it cannot be
+  // the accessible name. `aria-label` wins over `aria-labelledby`, which is
+  // why the heading keeps its id for the eye and gives up naming the landmark.
+  const named = artifactTitle?.trim();
+  const landmarkName = named ? `Discussion about ${named}` : 'The discussion';
   const written = (comments.data ?? []) as DecisionComment[];
 
   function post() {
@@ -430,7 +443,7 @@ function Discussion({
   }
 
   return (
-    <section className="mt-6" aria-labelledby={headingId} data-testid="approval-discussion">
+    <section className="mt-6" aria-label={landmarkName} data-testid="approval-discussion">
       <h3 id={headingId} className={`${EYEBROW_CLASS} leading-[1.5]`}>
         The discussion
       </h3>
@@ -599,6 +612,7 @@ export function ApprovalReceipt({
         <div id={threadId}>
           <Discussion
             decisionId={approval.decisionId}
+            artifactTitle={approval.artifactTitle}
             readOnly
             designerGivenName={designerGivenName}
             studioName={studioName}
@@ -870,13 +884,20 @@ export function ApprovalAsk({
         outcome: chosen,
         expectedUpdatedAt: approval.updatedAt,
         idempotencyKey: crypto.randomUUID(),
-        // 00570 carries the pair through the wrapper into the columns 00117
-        // added. The two travel together: a signature with no method is a
-        // check_violation, by design. An unsigned outcome sends neither, and
-        // the hook then sends the outcome alone — the payload every wrapper
-        // before 00570 already accepts.
+        // 00569 carries the pair through the wrapper into the columns 00117
+        // added. A signature with no method is a check_violation by design, so
+        // the name rides only with the method that claims one.
+        //
+        // RULED 2026-09-05: Return and Hold record a consent method too —
+        // never NULL. A press and hold is a click-through, and the record of
+        // an answer should say how it was given whatever the answer was. The
+        // token is the schema's own word for it: `client_decisions`'
+        // check constraint and `_respond_project_approval_checked` both
+        // allowlist `click_through`, which is what the ruling's
+        // "portal_clickthrough" names on this column (that spelling belongs to
+        // the review leg, `confirm_project_decision_review`).
         clientSignature: signing ? signedByName : undefined,
-        clientConsentMethod: signing ? 'electronic_signature' : undefined,
+        clientConsentMethod: signing ? 'electronic_signature' : 'click_through',
       });
       setJustAnswered({ outcome: chosen, at: new Date() });
       onAnswered?.(approval.decisionId);
@@ -1269,6 +1290,7 @@ export function ApprovalAsk({
 
       <Discussion
         decisionId={approval.decisionId}
+        artifactTitle={approval.artifactTitle}
         designerGivenName={designerGivenName}
         studioName={studioName}
         composerRef={setComposer}

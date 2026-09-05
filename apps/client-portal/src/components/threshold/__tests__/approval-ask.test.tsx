@@ -584,7 +584,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
 });
 
 describe('the artifact, shown', () => {
-  it('names and dates the edition on a plate, and marks it at the frame', () => {
+  it('names and dates the edition on a plate, and carries no checksum on it', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
     const plate = screen.getByTestId('approval-plate');
@@ -592,12 +592,12 @@ describe('the artifact, shown', () => {
       'Library elevations',
     );
     expect(plate).toHaveTextContent(/Edition 3 · Issued August \d+/);
-    // Provenance, not a compliance string: twelve characters of the checksum,
-    // and never the whole sixty-four.
-    const makersMark = within(plate).getByTestId('approval-makers-mark');
-    expect(makersMark).toHaveTextContent('a'.repeat(12));
-    expect(makersMark.textContent).toHaveLength(12);
-    expect(plate).not.toHaveTextContent('a'.repeat(13));
+    // RULED 2026-09-05, at the Wave 2 walks: the maker's mark leaves the
+    // doorstep. R6 keeps the twelve characters for the printed Record of
+    // Decision only — and on screen they were a 3.13:1 string hidden from
+    // assistive technology, which is the worst of both. The frame stays.
+    expect(within(plate).queryByTestId('approval-makers-mark')).not.toBeInTheDocument();
+    expect(plate).not.toHaveTextContent('a'.repeat(12));
     expect(plate.textContent).not.toMatch(/checksum|sha|fingerprint|verify/i);
   });
 
@@ -969,6 +969,25 @@ describe('ApprovalReceipt', () => {
 
     expect(screen.getByTestId('approval-discussion')).toBeInTheDocument();
     expect(screen.queryByTestId('approval-comment-field')).not.toBeInTheDocument();
+  });
+
+  /**
+   * `W2-05`. Thirteen approvals stood on one doorstep in the round-2 walk,
+   * each with a section headed "The discussion", and axe filed the landmark as
+   * indistinguishable — `aria-labelledby` pointed at a heading whose words are
+   * identical on every one of them. The edition names its own.
+   */
+  it('names the discussion landmark for the approval it belongs to', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    const thread = screen.getByTestId('approval-discussion');
+    expect(thread).toHaveAttribute('aria-label', 'Discussion about Library elevations');
+    expect(thread).not.toHaveAttribute('aria-labelledby');
+    expect(
+      screen.getByRole('region', { name: 'Discussion about Library elevations' }),
+    ).toBeInTheDocument();
+    // The heading a reader sees is unchanged.
+    expect(thread).toHaveTextContent('The discussion');
   });
 
   it('says nothing about an approval that is still open', () => {
@@ -1604,7 +1623,7 @@ describe('the outcome is signed and held (P-18)', () => {
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
   });
 
-  it('asks no name of a return or a hold, and records no consent for them', async () => {
+  it('asks no name of a return or a hold, and records a click-through for them', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
     // Returning consents to nothing, so there is no rule to sign on: the
@@ -1618,10 +1637,12 @@ describe('the outcome is signed and held (P-18)', () => {
     await hold(screen.getByRole('button', { name: /submit response/i }));
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+    // RULED 2026-09-05: never NULL. A press and hold is a click-through, and
+    // the record of an answer says how it was given whatever the answer was.
     expect(respondMutate.mock.calls[0][0]).toMatchObject({
       outcome: 'changes_requested',
       clientSignature: undefined,
-      clientConsentMethod: undefined,
+      clientConsentMethod: 'click_through',
     });
 
   });
@@ -1640,7 +1661,7 @@ describe('the outcome is signed and held (P-18)', () => {
     expect(respondMutate.mock.calls[0][0]).toMatchObject({
       outcome: 'needs_discussion',
       clientSignature: undefined,
-      clientConsentMethod: undefined,
+      clientConsentMethod: 'click_through',
     });
   });
 
