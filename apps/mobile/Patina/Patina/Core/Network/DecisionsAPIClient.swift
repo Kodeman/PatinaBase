@@ -76,6 +76,17 @@ public struct RemoteDesignerRef: Codable, Sendable {
         guard let business_name, !business_name.isEmpty else { return nil }
         return business_name
     }
+
+    /// P-04 / R8: the name the still-open sentence puts in `{Designer}` — a
+    /// person by their given name, a studio by its whole name, and nobody
+    /// when the embed carried nobody. The same rule
+    /// `HouseRecordBuilder.askedByName(for:)` applies to the flattened row,
+    /// so the Record and the decision screens cannot name one designer two
+    /// ways.
+    public var askedByName: String? {
+        guard let person = personName else { return studioName }
+        return person.split(separator: " ").first.map(String.init) ?? person
+    }
 }
 
 /// Embedded `projects(name)` row on a decision — gives list rows their

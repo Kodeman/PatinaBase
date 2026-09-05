@@ -371,3 +371,79 @@ struct MoneyAndStudioCopyTests {
         #expect(decision.components(separatedBy: ".patinaScreen(").count - 1 == 1)
     }
 }
+
+/// P-04 / R8 · the name in the sentence.
+///
+/// Its own suite because `MoneyAndStudioCopyTests` sits on SwiftLint's
+/// 300-line type-body floor.
+struct ApprovalNamingCopyTests {
+
+    private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
+        try JSONDecoder().decode(T.self, from: Data(json.utf8))
+    }
+
+    /// R8 fills `{Designer}` from the embed the decision select already
+    /// carries. Every approval surface passes it, or the sentence quietly
+    /// falls back to "your designer" on all three at once.
+    @Test("every approval surface hands the sentence the designer it has")
+    func approvalSurfacesFillTheDesignerName() throws {
+        let filled = [
+            "Patina/Features/Decisions/Views/DecisionListView.swift":
+                "designer: d.project?.designer?.askedByName",
+            "Patina/Features/Decisions/Views/DecisionDetailView.swift":
+                "designer: decision.project?.designer?.askedByName",
+            "Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift":
+                "designer: askedBy"
+        ]
+        for (file, expected) in filled {
+            let source = try String(contentsOf: MoneyAndStudioCopyTests.sourceURL(file), encoding: .utf8)
+            #expect(source.contains(expected), "\(file) leaves R8's name unfilled")
+        }
+    }
+
+    /// The name R8 puts in the sentence: a person by their given name, a
+    /// studio whole, nobody when the embed brought nobody.
+    @Test("the designer embed names a person by their given name and a studio whole")
+    func designerRefNamesByTheTitleRule() throws {
+        let person = try decode(RemoteDesignerRef.self, """
+        { "id": "u1", "display_name": "Leah Hartwell", "business_name": "Hartwell Studio" }
+        """)
+        #expect(person.askedByName == "Leah")
+        let studio = try decode(RemoteDesignerRef.self, """
+        { "id": "u2", "business_name": "Hartwell Studio" }
+        """)
+        #expect(studio.askedByName == "Hartwell Studio")
+        let nobody = try decode(RemoteDesignerRef.self, """
+        { "id": "u3" }
+        """)
+        #expect(nobody.askedByName == nil)
+    }
+
+    /// The rulings' ban on invented timing: the hub row took the
+    /// earliest due date from one decision and the earliest asked date from
+    /// another, printing a day that belonged to neither approval. One
+    /// decision — the soonest-due one — answers the whole line now.
+    @Test("the Studio hub's approval row reads one decision, and names its designer")
+    @MainActor
+    func studioApprovalRowReadsASingleDecision() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
+        let decisions = try decode([RemoteClientDecision].self, """
+        [{ "id": "d-past", "title": "Rug color", "status": "pending",
+           "due_date": "2026-08-22T00:00:00Z", "created_at": "2026-08-20T12:00:00Z",
+           "project": { "name": "Aspen Loft Refresh",
+             "designer": { "id": "u1", "display_name": "Leah Hartwell",
+                           "business_name": "Hartwell Studio" } } },
+         { "id": "d-future", "title": "Sconces", "status": "pending",
+           "due_date": "2026-09-30T00:00:00Z", "created_at": "2026-08-01T12:00:00Z" }]
+        """)
+        let snapshot = StudioQueueBuilder.build(StudioQueueInput(
+            projects: [], decisions: decisions, proposals: [], invoices: [],
+            documents: [], threads: [], notifications: [],
+            currentUserId: "client", now: now
+        ))
+        // Aug 20 is d-past's own asked day. Aug 1 is d-future's, and d-future
+        // is not past its date at all.
+        #expect(snapshot.section(.awaitingYou).rows.first?.meta
+                == "Still open, Leah asked on Aug 20.")
+    }
+}

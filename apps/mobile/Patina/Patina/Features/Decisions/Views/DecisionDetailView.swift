@@ -197,7 +197,7 @@ struct DecisionDetailView: View {
             // SP-15: the date reached the Studio hub and stopped there; the
             // decision itself never said where it stood. P-04 / R8: past its
             // date it is the ruled sentence in body ink, never red.
-            if !viewModel.isResolved, let standing = DateDisplay.approval(dueDate: decision.due_date, askedAt: decision.created_at) {
+            if !viewModel.isResolved, let standing = DateDisplay.approval(dueDate: decision.due_date, askedAt: decision.created_at, designer: decision.project?.designer?.askedByName) {
                 Text(standing.text)
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(standing.isStillOpen ? PatinaColors.Text.primary : PatinaColors.Text.secondary)
