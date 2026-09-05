@@ -24,6 +24,14 @@ export type ProjectApprovalOutcome =
   | 'changes_requested'
   | 'needs_discussion';
 export type ProjectApprovalDisposition = 'active' | 'withdrawn' | 'superseded';
+/**
+ * Which chair the caller is sitting in for one projected row (00569).
+ * `lead` is the frozen decision lead — the only person respond_project_approval
+ * accepts; `studio` is a design-studio co-member reading over her shoulder;
+ * `household` is the project's client on a row whose frozen lead is somebody
+ * else. Null for a projection minted before 00569.
+ */
+export type ProjectApprovalViewerRole = 'lead' | 'studio' | 'household';
 
 /** Studio-safe immutable artifact identity returned by the 00438 candidate RPC. */
 export interface ProjectApprovalArtifactCandidate {
@@ -49,6 +57,13 @@ export interface ProjectApprovalReview {
   artifactTitle: string;
   question: string;
   context: string | null;
+  /**
+   * The designer's one-line why, frozen into the artifact when the ask was
+   * composed (00569, P-13). Null on every approval created before it.
+   */
+  why: string | null;
+  /** Null when the projection predates 00569 — never guessed from the client. */
+  viewerRole: ProjectApprovalViewerRole | null;
   dueAt: string;
   costCentsDelta: number;
   scheduleDaysDelta: number;
@@ -270,6 +285,10 @@ function isDisposition(value: unknown): value is ProjectApprovalDisposition {
   return value === 'active' || value === 'withdrawn' || value === 'superseded';
 }
 
+function isViewerRole(value: unknown): value is ProjectApprovalViewerRole {
+  return value === 'lead' || value === 'studio' || value === 'household';
+}
+
 export function parseProjectApprovalReview(
   value: unknown,
 ): ProjectApprovalReview {
@@ -308,6 +327,10 @@ export function parseProjectApprovalReview(
     artifactTitle: stringValue(row, 'artifactTitle', label),
     question: stringValue(row, 'question', label),
     context: nullableString(row, 'context'),
+    // Both arrived with 00569 and are absent from every older projection, so
+    // neither may be required here: absence is null, not a thrown row.
+    why: nullableString(row, 'why'),
+    viewerRole: isViewerRole(row.viewerRole) ? row.viewerRole : null,
     dueAt,
     costCentsDelta: numberValue(row, 'costCentsDelta', label),
     scheduleDaysDelta: numberValue(row, 'scheduleDaysDelta', label),

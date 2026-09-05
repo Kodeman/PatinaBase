@@ -207,9 +207,12 @@ function recordedAtOf(approval: ProjectApprovalReview): string {
   return approval.respondedAt ?? approval.updatedAt ?? approval.createdAt ?? '';
 }
 
-/** The designer's one-line why, when the row carries one (P-13, backend lane). */
+/**
+ * The designer's one-line why, when the row carries one (P-13). Null on every
+ * approval composed before 00569, and a whitespace-only why is no why at all.
+ */
 function whyOf(approval: ProjectApprovalReview): string | null {
-  const why = (approval as { why?: unknown }).why;
+  const why = approval.why;
   return typeof why === 'string' && why.trim().length > 0 ? why.trim() : null;
 }
 
@@ -810,9 +813,12 @@ export function ApprovalAsk({
   // three deltas stand side by side and are never summed (R11), and a delta of
   // zero is said in words rather than left out — she is agreeing to all three.
   //
-  // The baseline is read defensively: the projection does not carry one today,
-  // and a cost delta beside the figure it moves from is a fact where the delta
-  // alone is a fragment, so the composer takes it the moment the row has it.
+  // The baseline is read through a cast on purpose. `why` and `viewerRole` are
+  // now real fields because 00569 projects them; no migration projects a cost
+  // baseline, so typing one on ProjectApprovalReview would promise a field the
+  // mapper could only ever set to null. A cost delta beside the figure it moves
+  // from is a fact where the delta alone is a fragment, so the composer takes
+  // one the moment a projection carries it — and the cast goes with it.
   const weighing = approvalWeighing({
     costCentsDelta: approval.costCentsDelta,
     scheduleDaysDelta: approval.scheduleDaysDelta,

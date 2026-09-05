@@ -86,6 +86,8 @@ const APPROVAL: ProjectApprovalReview = {
   artifactTitle: 'Library elevations',
   question: 'Do the library elevations read right to you?',
   context: 'This releases the joinery package for pricing. It does not order anything.',
+  why: null,
+  viewerRole: 'lead',
   dueAt: '2026-08-20',
   costCentsDelta: 120000,
   scheduleDaysDelta: 0,
@@ -553,9 +555,7 @@ describe('the artifact, shown', () => {
   it('carries the designer’s own line about the edition under the question', () => {
     render(
       <ApprovalAsk
-        approval={
-          { ...APPROVAL, why: 'The stair-hall sconces move up two inches.' } as ProjectApprovalReview
-        }
+        approval={{ ...APPROVAL, why: 'The stair-hall sconces move up two inches.' }}
         designerGivenName="Leah"
       />,
     );
@@ -564,12 +564,17 @@ describe('the artifact, shown', () => {
       .toHaveTextContent('The stair-hall sconces move up two inches.');
   });
 
-  it.each([
+  // The last two cases are shapes the type forbids and a pre-00569 projection
+  // can still hand us, so they are asserted through `unknown` on purpose.
+  it.each<[string, unknown]>([
     ['no why at all', undefined],
+    ['a why the projection left null', null],
     ['a why that is blank', '   '],
     ['a why that is not a string', 12],
   ])('draws no note for %s', (_case, why) => {
-    render(<ApprovalAsk approval={{ ...APPROVAL, why } as ProjectApprovalReview} />);
+    render(
+      <ApprovalAsk approval={{ ...APPROVAL, why } as unknown as ProjectApprovalReview} />,
+    );
     expect(screen.queryByTestId('approval-why')).not.toBeInTheDocument();
   });
 });

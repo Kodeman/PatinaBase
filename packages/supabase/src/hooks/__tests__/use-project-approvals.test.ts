@@ -61,6 +61,8 @@ const REVIEW = {
   artifactTitle: 'Budget checkpoint 03',
   question: 'Approve this exact budget checkpoint?',
   context: null,
+  why: 'The stone slab we chose is no longer quarried.',
+  viewerRole: 'lead',
   dueAt: '2026-09-01T12:00:00.000Z',
   costCentsDelta: 0,
   scheduleDaysDelta: 0,
@@ -245,6 +247,40 @@ describe('project approval sanitized reads', () => {
     expect(() =>
       parseProjectApprovalReview({ ...REVIEW, isOverdue: undefined }),
     ).toThrow('Project approval review is missing isOverdue');
+  });
+
+  it('carries the frozen why and the viewer’s chair through to the surface', () => {
+    expect(parseProjectApprovalReview(REVIEW)).toEqual(
+      expect.objectContaining({
+        why: 'The stone slab we chose is no longer quarried.',
+        viewerRole: 'lead',
+      }),
+    );
+  });
+
+  it.each(['lead', 'studio', 'household'])(
+    'keeps the %s chair exactly as the projection stated it',
+    (viewerRole) => {
+      expect(parseProjectApprovalReview({ ...REVIEW, viewerRole })).toEqual(
+        expect.objectContaining({ viewerRole }),
+      );
+    },
+  );
+
+  it('reads a why and a chair as absent rather than throwing a pre-00569 row away', () => {
+    expect(
+      parseProjectApprovalReview({
+        ...REVIEW,
+        why: undefined,
+        viewerRole: undefined,
+      }),
+    ).toEqual(expect.objectContaining({ why: null, viewerRole: null }));
+  });
+
+  it('never guesses a chair from a role it does not recognise', () => {
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, viewerRole: 'owner' }),
+    ).toEqual(expect.objectContaining({ viewerRole: null }));
   });
 });
 

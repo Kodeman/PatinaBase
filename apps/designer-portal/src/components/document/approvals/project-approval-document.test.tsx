@@ -107,6 +107,8 @@ const baseReview = {
   artifactTitle: 'Issued drawing set 02',
   question: 'Approve this exact drawing set?',
   context: null,
+  why: null,
+  viewerRole: 'lead',
   dueAt: '2099-09-01T12:00:00.000Z',
   costCentsDelta: 0,
   scheduleDaysDelta: -2,
