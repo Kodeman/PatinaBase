@@ -125,26 +125,16 @@ enum BudgetMath {
                 rollup: BudgetMath.rollup(invoices),
                 designerBudgetCents: budgetByProject[pid]
             )
-        } + studioSection(visibleInvoices: visibleInvoices)
-    }
-
-    /// Invoices with no project ("the studio · no house") don't belong to any
-    /// project section — group them into one extra section, placed last,
-    /// instead of dropping them (the studio invoice has no project to attach
-    /// to, but it's still money the client owes/paid).
-    private static func studioSection(visibleInvoices: [RemoteInvoice]) -> [BudgetProjectSection] {
-        let studioInvoices = visibleInvoices.filter { $0.project_id == nil }
-        guard !studioInvoices.isEmpty else { return [] }
-        return [
-            BudgetProjectSection(
-                id: "studio",
-                name: "From the studio",
-                proposals: [],
-                invoices: studioInvoices,
-                rollup: BudgetMath.rollup(studioInvoices),
-                designerBudgetCents: nil
-            )
-        ]
+        }
+        // Studio invoices (project_id nil, "the studio · no house") have no
+        // project to attach to and are omitted here by construction — the
+        // orderedIds walk above only collects non-nil project ids
+        // (`compactMap(\.project_id)`). S11 (studio-invoices program, adopted
+        // as recommended): iOS v1 is null-safety only — the money-rail types
+        // already decode a nil `project_id`/`project` cleanly (no crash, no
+        // decode failure); full placement of studio invoices in this screen
+        // is explicitly deferred to a later wave, after the Daily Return /
+        // approvals program settles.
     }
 }
 
