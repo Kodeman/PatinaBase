@@ -310,3 +310,187 @@ returned exit 0 with `** BUILD SUCCEEDED **`.
   `AfterglowRowTests`, `RecordSnapshotCompatibilityTests`,
   `ApprovalVocabularySweepTests`, plus `ProjectApprovalFixtures` (a `viewerRole`
   parameter, absent by default).
+
+---
+
+# Round 1 fixes — 2026-09-05
+
+Five findings, all addressed. Tree was clean at start (`git status --short`
+empty unsandboxed; the eight `.env.example: Operation not permitted` lines a
+sandboxed `git status` prints are the harness's read denials, not leftovers).
+No leftovers from an interrupted attempt.
+
+## iosd1-M1 — `household` read as answering
+
+**Confirmed against the migration, not against a guess.** 00569 on
+`approvals/w2-backend` (`00569_approval_why_viewer_role_and_receipt.sql`) emits
+exactly three values at :884-888:
+
+```sql
+'viewerRole', CASE
+  WHEN snapshot.decision_lead_id = v_actor THEN 'lead'
+  WHEN v_is_studio THEN 'studio'
+  ELSE 'household'
+END,
+```
+
+and the function COMMENT (:987) advertises `lead | studio | household`.
+`household` was in neither the answering nor the observing set, so it
+normalised to `.unspecified`, and `viewerAnswers` (`!= .observes`) read TRUE —
+a NEEDS YOU row she cannot answer, and, after the lead answered, "You approved
+the budget." over an act she did not take.
+
+**Ruled: `household` WATCHES.** The migration's own comment (:880-883) calls it
+"the project's client on a row whose frozen lead is somebody else (reachable
+only after a lead reassignment)", and `respond_project_approval` accepts nobody
+but the frozen lead (00569:1102 — "only the frozen household decision lead may
+respond"). A reader the RPC will refuse may not be asked, and may not be told
+she answered. Added to `observing`.
+
+The lane's earlier guessed spellings were kept (they cost nothing and a
+re-spelling of the same word must not change what she sees), but the three
+strings the projection ACTUALLY emits are now pinned literally in
+`AfterglowRowTests.theProjectionsOwnVocabularyIsRead`, plus a behaviour test
+(`aHouseholdWatcherIsNeitherAskedNorCredited`) over both feeds.
+
+The reviewer's reachability caveat is confirmed and stands: the row filter at
+00569:969 is `AND (v_is_studio OR snapshot.decision_lead_id = v_actor)`, so a
+non-lead non-studio row is not serialized at all today. The mismap was latent.
+It is closed anyway — the field's declared vocabulary is the contract.
+
+## iosd1-M2 — "Ask a question" could not reach the document
+
+**Confirmed.** `buildApnsPayload` (`supabase/functions/apns-send/core.ts`,
+identical on base and on the backend branch) returns `{ aps, entity_type,
+entity_id, notification_log_id }` — no `thread_id` — and `apnsCategoryFor`
+never assigns a `PATINA_*` category to a thread. So `conversationRoute`'s two
+thread legs could not fire on any envelope that exists, and every "Ask a
+question" tap landed on `.threadList` with the approval's identity discarded.
+
+**Ruled: land the act on the document, keep the deck's words.** The reviewer
+offered three fixes; the first is the one the deck supports. `proposal.html`
+:1109 is explicit — "The honest non-answer, **Ask a question**, is the second
+action instead, because it needs to be as reachable as the answer" — so the
+lock-screen act is MEANT to be the same act as `ProjectApprovalCopy.acts[1]`,
+not a different one wearing its words. The collision the review named is not
+two meanings for two words; it is one act that could not reach its own surface.
+Renaming it would have broken the deck's intent to fix a routing bug.
+
+`conversationRoute` now reads, in order: the named thread (`thread_id`, then
+`entity_type: "thread"`) → `NotificationRouter.resolve` (the entity pair, then
+the Threshold deep link) → the sender's thread identifier (`decision-<id>`) →
+`.threadList`. `NotificationRouter.resolve` never answers a LIST route — it
+names a specific entity or nil — so the fall-through cannot drop her on a
+generic list by accident.
+
+Four tests, including one over a byte-for-byte reconstruction of the real
+`PATINA_DECISION` envelope (`aps.category`, `aps["thread-id"]`,
+`interruption-level`, the entity pair, the log id, and no `thread_id`):
+`askOpensTheDocumentItself`, `askOnTheRealEnvelopeReachesTheApproval`,
+`askFollowsTheLinkThenTheGroupingKey`, `askFallsBackToTheInbox`.
+
+**Still owed from the backend (unchanged, now non-blocking):** `thread_id` on
+the `PATINA_*` envelope. The client reads it first the moment it appears, and
+the fall-back is no longer a dead end in the meantime.
+
+## iosd1-M3 — the previous account's approval
+
+**Confirmed.** `resetForSessionChange()` cleared eleven fields and not
+`projectApprovals`, which `HouseRecord.swift:629` now reads in the FIRST
+person. Fixed beside `signedProposals`. Two tests: a behavioural one through
+the existing `applyProjectApprovalsForTesting` DEBUG seam
+(`theAnsweredApprovalsAreClearedToo` — it asserts the ROW disappears, not only
+the array), and the source pin `theResetBodyNamesEveryField` widened with
+`signedProposals` and `projectApprovals`. That pin exists for exactly this
+defect class and had not been updated when P-21 added its arrays; both are
+named now.
+
+## iosd1-M4 — the afterglow sentence
+
+**Ruled: name the thing, from the wire's COMMON noun.** The lane's original
+objection to interpolating `artifactTitle` stands and is not overturned — it is
+a proper-ish name ("Budget checkpoint BC-3"), and putting it mid-sentence
+reproduces the capital-mid-sentence defect the backend ledgered as F6. But the
+reviewer is right that three identical headlines under a three-row MOVED cap is
+not the deck's row either.
+
+The projection carries a second name for the same thing that the lane had not
+read: **`artifactKind`** (00569:865, `artifact.source_kind`), whose values are
+fixed by a CHECK constraint at 00463:134-135 — `plan_issue`,
+`spec_book_artifact`, `budget_version`. Those are common nouns. Added
+`RemoteProjectApprovalReview.artifactKind` (optional — an older projection
+decodes as nil) and `ProjectApprovalCopy.artifactNoun(kind:)`:
+
+| kind | sentence |
+|---|---|
+| `budget_version` | You approved the budget. |
+| `plan_issue` | You returned the plan set for revision. |
+| `spec_book_artifact` | You held the spec book to talk it through with your designer. |
+| absent / unknown | You approved this edition. *(the previous copy, unchanged)* |
+
+That is the deck's shape — the act and the thing in one sentence — minus the
+room qualifier, which only `artifactTitle` carries and only in capitals. The
+title stays on the second line, so two budgets in one week are still two
+distinguishable rows.
+
+`recorded(_:)` keeps its one-argument form and its exact three strings, so the
+approval screen (`ProjectApprovalBlock`), the bell
+(`NotificationsViewModel.approvalTitle`), `WalkCopyFixTests` and
+`RecordSnapshotCompatibilityTests` are untouched — the new noun is the ROW's,
+where the second line is not available to carry it. Three tests, including
+`mixedKindsDoNotRepeatOneHeadline`, which asserts three distinct titles.
+
+**No backend change requested.** The field was already there.
+
+## iosd1-carry1 — "Decline" on `changes_requested`
+
+**Fixed here.** `ProjectApprovalCopy.acts[2].label` is now **"Return"**. The
+lane had left it for iosc to avoid a merge conflict; iosc's head still carries
+"Decline", so it was going to ship. `rulings-2026-09-04.md` is flat about it and
+P-16 reconciles the day's word to the next visit's — which `recorded(_:)` has
+always printed as "returned". The consequence line already said "Return this
+edition for revision"; the button was the last place the wrong word lived.
+
+`ApprovalVocabularySweepTests.noRefusedWords` now sweeps
+`ProjectApprovalCopy.acts` (labels AND consequences) and refuses the stem
+"decline", not only "declined". The array excluding itself from its own sweep
+is exactly how the word survived Wave 1 and the lane's own pass.
+
+⚠ **Merge note for the steward:** this touches
+`Features/Decisions/ProjectApprovalCopy.swift` and
+`PatinaTests/ProjectApprovalActTests.swift`, which P-16/iosc also owns. If iosc
+relabels it too, take either — they must both read "Return".
+
+## Gates (re-run after the fixes, all from this worktree, unsandboxed)
+
+| gate | result |
+|---|---|
+| `build` | **PASS** — `** BUILD SUCCEEDED **`, exit 0 |
+| `unit` | **PASS** — `Test run with 2533 tests in 276 suites passed after 8.052 seconds with 2 known issues`, exit 0 |
+| `lint-delta main` | **PASS** — `✓ lint-delta: no new warnings in touched files` |
+
+2524 → **2533 tests**, +9 for this pass (5 afterglow, 3 lock-screen, 1 session
+isolation). The two known issues are the same pre-existing pair both iOS lanes
+report (`BrandVoiceLintTests` "curated_mix", `RoomLifecycleTests`
+`theTodayRailFollowsALocalDelete`), neither touched here.
+
+**One transient, recorded rather than hidden.** The first `unit` run after the
+edits reported 1 failure —
+`CompanionCoachingModelTests/introGate_freshUser_pollsUntilTourResolves()`,
+`Expectation failed: (result → false) == true`, 2530 passed. That is the same
+50 ms `Task.sleep` poll this lane already logged above as "failed once on a
+loaded machine, then passed on a clean re-run of the same tree"; the machine
+was running two gates at once. It passed on the immediate re-run of the same
+tree with no change to it or to the Companion. Nothing in this pass touches
+`CompanionCoachingModel`.
+
+## What this pass could NOT verify
+
+- **No live round trip, still.** The `viewerRole` and `artifactKind` key names
+  are read from 00569's own `jsonb_build_object` on `approvals/w2-backend`, not
+  from a response. If the merged migration renames either, both degrade
+  silently to nil and the app behaves as it did before this pass — a duller
+  row, not a wrong one. Worth one probe at integration.
+- **The lock screen was not seen.** The acts still cannot be exercised without
+  a real APNs push; the routing is pinned by the reconstructed envelope, not by
+  a banner.
