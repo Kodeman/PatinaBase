@@ -170,3 +170,105 @@ mention `why` or `ProjectApprovalReview`** — the optional-field decision above
 - `apps/designer-portal/src/lib/document/__tests__/proposal-watch-derivation.test.ts`
 
 No migration was minted by this lane. No production mutation was run.
+
+---
+
+# Round 1 fix pass — 2026-09-05
+
+Two majors from the adversarial review (D1, D2). Both closed. No other change.
+
+## D1 — the frozen why was signed by its reader, not its author
+
+`project-approval-document.tsx:520` read `givenName(user?.name)` off `useAuth()` — the
+**viewer**. A studio co-member opening a peer's approval saw her own given name under
+someone else's sentence, on an immutable, client-facing record. The lane's first pass knew
+this and shipped it anyway with a comment; that was the wrong call.
+
+**Decision.** The attribution now comes off the record, never off the reader:
+
+- `ProjectApprovalReview` gains `whyAuthorName?: string | null` (the display name of the
+  hand that wrote the why), parsed by `parseProjectApprovalReview` as
+  `nullableString(row, 'whyAuthorName')` — null on every projection that does not carry it.
+- The render site is `<GateWhy attribution={givenName(review.whyAuthorName)}>`. With no
+  author on the record, `givenName(null)` is `null` and `GateWhy` prints the sentence
+  **unsigned**. Unsigned is honest; wrongly signed is not.
+- `useAuth` is no longer imported by this component, and the suite's `@/hooks/use-auth`
+  mock is gone with it.
+
+**Why not edit 00569.** The other option the review offered was adding an author name to
+the backend lane's `jsonb_build_object` beside `'why'`. That migration is in the *backend*
+lane's worktree and is not in this branch (`supabase/migrations` here ends at 00568), so
+editing it from here would either be lost or collide at integration. The read side is now
+in place and inert: the day the projection emits `whyAuthorName`, the signature lights up
+with no portal change. **⚠ Owed at integration:** the backend lane (or a follow-up) must
+project the author's display name under exactly the key `whyAuthorName`. Any other key
+leaves the sentence unsigned — safe, but unsigned.
+
+## D2 — SIGNED was mocha on the watch and still sage on the Desk
+
+R13 is unqualified. The first pass moved the proposal-watch seal to mocha and left the
+Desk's need line green, which is precisely the "two pigments for one meaning across the
+table" that ux/02 §5 exists to close. Fixed, in both places that paint it:
+
+- `desk-derivation.ts` — new `STAMP.mocha` (`color`/`ink` both `var(--color-mocha)`; there
+  is no `--color-mocha-ink` token, and the word is the pigment at full strength, matching
+  `proposal-watch-derivation.ts:137`). The `proposal_signed` need now spreads `STAMP.mocha`.
+  Only the SIGNED label moved — `DELIVERED` and `PULSE` keep sage, which stays a material
+  hue rather than an approval one.
+- `red-letter-zone.tsx` — the `proposal_signed` folio dot follows to `var(--color-mocha)`.
+  That map is a hand-copy of the STAMP palette by design (SP-20), and the existing
+  palette-membership test reads the STAMP block out of source, so it still holds.
+
+## Gates (fix pass)
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `pnpm --filter @patina/supabase type-check` | **PASS** — `tsc --noEmit`, no output |
+| 2 | `pnpm --filter @patina/designer-portal type-check` | **PASS** — `tsc --noEmit`, no output |
+| 3 | `pnpm --filter @patina/designer-portal lint` | **2 errors, unchanged and pre-existing** — `piece-room-save-gate.test.tsx:159` (`import/first` rule not found) and `use-commercial-documents.test.ts:930` (`rules-of-hooks`). Neither file is touched by this branch (`git diff --name-only 107549568 HEAD`) nor by this pass. |
+| 4 | `pnpm --filter @patina/designer-portal test -- <7 suites>` | **PASS** — `Test Suites: 7 passed, 7 total · Tests: 179 passed, 179 total` |
+| 5 | `pnpm --filter @patina/designer-portal test -- src/lib/document/__tests__/ src/components/document/__tests__/folder-card` | **PASS** — `99 passed, 99 total · 2017 tests` (the whole desk-derivation neighbourhood, to prove the pigment swap broke nothing downstream) |
+| 6 | `pnpm --filter @patina/supabase test -- src/hooks/__tests__/use-project-approvals.test.ts` | **PASS** — `19 passed (19)` |
+| 7 | `pnpm --filter @patina/admin-portal build` | **PASS** — `✓ Compiled successfully in 25.2s`, 137 static pages, full route table |
+
+## Tests added or changed in this pass
+
+- `use-project-approvals.test.ts` — the parser reads `whyAuthorName` and stays null without it.
+- `project-approval-document.test.tsx` — the why is signed with its **author's** given name;
+  a new case proves it stands unsigned (no em dash at all) when the record names no author.
+- `desk-derivation.test.ts` — the SIGNED need stamps `var(--color-mocha)`, and not sage.
+- `red-letter-zone.test.tsx` — the signed folio dot renders `data-stamp-color` mocha.
+
+## Files (fix pass)
+
+- `packages/supabase/src/hooks/use-project-approvals.ts`
+- `packages/supabase/src/hooks/__tests__/use-project-approvals.test.ts`
+- `apps/designer-portal/src/components/document/approvals/project-approval-document.tsx`
+- `apps/designer-portal/src/components/document/approvals/project-approval-document.test.tsx`
+- `apps/designer-portal/src/lib/document/desk-derivation.ts`
+- `apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts`
+- `apps/designer-portal/src/components/document/red-letter-zone.tsx`
+- `apps/designer-portal/src/components/document/__tests__/red-letter-zone.test.tsx`
+
+A rendered check is still owed at integration — no dev server runs in a worktree.
+No migration minted. No production mutation run.
+
+## Advisory — a W1 suite that started failing at midnight, not from this pass
+
+Running the whole document neighbourhood (`src/lib/document/__tests__/` +
+`src/components/document/__tests__/`, 144 suites / 2425 tests) leaves **one** failure:
+
+```
+FAIL src/components/document/__tests__/client-note-composer.test.tsx
+  ● ClientNoteComposer — standing note › retire calls the retire mutation …
+    Unable to find an element with the text: Taken down Sep 4. It moves to Previously.
+    …rendered: Taken down Sep 5. It moves to Previously.
+```
+
+The suite hardcodes `Sep 4` at lines 454 and 479 against a live clock, and the session
+crossed midnight into 2026-09-05. `git log 107549568..HEAD -- <that file>` is **empty** —
+neither this lane nor this pass has ever opened it, and nothing this branch changes is
+reachable from that component. It is a W1 file with a date-frozen assertion that will now
+fail every day. **Left untouched deliberately** (not in this lane's brief, and a W1 surface
+another lane may hold); flagged for the integration steward, who should freeze the clock in
+that suite rather than re-hardcode tomorrow's date.
