@@ -1028,3 +1028,86 @@ stripe-webhook · trade-rfq-send
 ```
 
 Migration 00571 still goes strictly before them.
+
+---
+
+## Fix round 2 — E-1 (major, carry-over)
+
+**Finding.** The letter's name chain was pinned at the *argument* of
+`invoiceSubjectName` only. Two one-line call-site mutations put the ruled-out
+homeowner copy back with every gate green:
+
+- **M1** `invoice-send/index.ts:251` → `const projectName = invoiceSubjectName(invoice, null) ?? 'your studio';`
+- **M9** `invoice-send/index.ts:252` → `const forClause = projectName ? \` for ${projectName}\` : ' for your project';`
+
+Both survived because the composition — the `for …` clause and the desk line —
+was written inline in each `index.ts`, where nothing can reach it, and because
+the source pins matched only inside the call parens.
+
+**Fix.** Two moves, per the reviewer's recommendation ("and/or" — both taken):
+
+1. The composition moved into `_shared/invoice-subject.ts`, where a unit test
+   can execute it:
+   - `invoiceForClause(invoice)` → `" for <house|title>"`, else `""` (W5-6: the
+     sentence closes rather than naming a stand-in).
+   - `invoiceDeskName(invoice)` → house → title → `"Studio invoice"` (the
+     designer's own line must lead with something).
+   Call sites now read `const forClause = invoiceForClause(invoice);` /
+   `const deskName = invoiceDeskName(invoice);` — 6 sites across 4 senders
+   (invoice-send ×1, invoice-reminders ×2, stripe-webhook ×3, invoice-check-intent ×1).
+2. Two source pins in `_shared/invoice-subject.test.ts` that reach the whole
+   file, not just the call parens:
+   - **no stand-in phrase in any string a sender can print** — a quote-aware
+     scanner lifts every string literal (comments excluded, because these files
+     legitimately *quote* the banned phrases in prose explaining the ban) and
+     rejects `/your studio/i`, `/your project/i`, `/your home/i`. The scanner
+     itself has a unit test.
+   - **no sender re-composes the name, clause or desk line** — every
+     `projectName =` / `forClause =` / `deskName =` assignment must read exactly
+     the shared derivation, and no `??`/`||` may follow an `invoiceSubjectName(…)`
+     call.
+
+### Mutation proof (both of the reviewer's mutations now fail)
+
+```
+M1  invoice-send/index.ts:255 -> const projectName = invoiceSubjectName(invoice, null) ?? 'your studio';
+$ deno test --allow-all --config …/deno.json …/_shared/
+FAILED | 246 passed | 2 failed (11s)
+  no invoice sender carries a stand-in phrase in any string it can print
+  no sender re-composes the name, the clause or the desk line itself
+
+M9  invoice-send/index.ts:256 -> const forClause = projectName ? ` for ${projectName}` : ' for your project';
+$ deno test --allow-all --config …/deno.json …/_shared/
+FAILED | 246 passed | 2 failed (9s)
+  no invoice sender carries a stand-in phrase in any string it can print
+  no sender re-composes the name, the clause or the desk line itself
+```
+
+Both mutations reverted; `git status --short -- supabase` shows only the six
+intended files.
+
+### Gates (clean tree)
+
+```
+$ deno test --allow-all --config …/supabase/functions/deno.json …/_shared/
+ok | 248 passed | 0 failed (1s)          (241 before; +7 new tests)
+
+$ deno test --allow-all --config …/deno.json …/_shared/invoice-subject.test.ts
+ok | 22 passed | 0 failed (265ms)
+
+$ deno test --allow-all --config …/deno.json …/create-checkout-session/
+ok | 17 passed | 0 failed (23ms)
+$ deno test --allow-all --config …/deno.json …/stripe-webhook/
+ok | 18 passed | 0 failed (22ms)
+(invoice-send, invoice-reminders, invoice-check-intent still carry no test file)
+
+$ deno check --config …/deno.json  (the five index.ts)
+Check create-checkout-session/index.ts    Check invoice-send/index.ts
+Check invoice-reminders/index.ts          Check stripe-webhook/index.ts
+Check invoice-check-intent/index.ts       (exit 0, all clean)
+
+$ ls deno.lock supabase/functions/deno.lock   →  No such file or directory (both)
+```
+
+Deploy set unchanged (20 functions, listed above); migration 00571 still goes
+strictly first.

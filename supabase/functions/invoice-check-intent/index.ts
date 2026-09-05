@@ -36,7 +36,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { buildCheckIntentEmail } from '../_shared/invoice-emails.ts';
-import { invoiceSubjectName } from '../_shared/invoice-subject.ts';
+import { invoiceDeskName, invoiceSubjectName } from '../_shared/invoice-subject.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -171,7 +171,7 @@ Deno.serve(async (req: Request) => {
   const projectName = invoiceSubjectName(invoice, null);
   // The designer's own line must lead with something; her letter's "for …"
   // clause simply closes early when the invoice names nothing.
-  const deskName = projectName ?? 'Studio invoice';
+  const deskName = invoiceDeskName(invoice);
   const clientName = invoice.client?.full_name?.trim() || 'Your client';
   const designerName =
     invoice.designer?.full_name?.trim() || invoice.designer?.business_name?.trim() || null;

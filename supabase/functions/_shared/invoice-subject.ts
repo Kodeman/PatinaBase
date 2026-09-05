@@ -55,3 +55,27 @@ export function invoiceBrandingRef(
     studioId: invoice.studio_id ?? null,
   };
 }
+
+/**
+ * The letter's "for …" clause, composed here so no sender can compose its own.
+ *
+ * An invoice that names nothing yields the empty string: the sentence closes
+ * after the invoice number rather than offering the reader a stand-in house
+ * (ruling W5-6). Written inline in an `index.ts` this composition was
+ * unprovable — a one-line edit put "for your project" back with every gate
+ * green (2026-09-05 review, E-1).
+ */
+export function invoiceForClause(invoice: InvoiceSubjectRow): string {
+  const name = invoiceSubjectName(invoice, null);
+  return name ? ` for ${name}` : '';
+}
+
+/**
+ * What the designer's own desk line leads with.
+ *
+ * Her line, unlike the client's letter, cannot start with nothing, so this is
+ * the one place the feature's own word stands in for a missing house.
+ */
+export function invoiceDeskName(invoice: InvoiceSubjectRow): string {
+  return invoiceSubjectName(invoice, 'Studio invoice');
+}
