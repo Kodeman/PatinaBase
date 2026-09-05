@@ -75,3 +75,30 @@ Two **major** findings came back from an independent review of this lane (`ios-r
 ### Gates re-run after the fix
 
 See the StructuredOutput report for this fix round for the exact command output; summary: `ios-gate.sh build` → BUILD SUCCEEDED, `ios-gate.sh unit` → full `PatinaTests` suite green except the pre-existing, pre-documented `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` flake (confirmed by isolated rerun), with the two new/updated Budget tests and the two unchanged Invoices tests all passing by name in the raw log.
+
+---
+
+## Fix round 2 (2026-09-05)
+
+Checked first: `git -C <wt> status --short` was clean — no leftover edits from an interrupted attempt. `git log` on `BudgetViewModel.swift` confirmed the tree already reflects Fix round 1 above (commit `6176ea4b2`): `buildSections` groups only by non-nil `project_id`; a studio invoice contributes no section.
+
+**Finding fixed — `ios-r2-1` (major):** the Budget screen's headline (Billed/Paid/Outstanding) was rolled over *every* invoice — `self.summary = BudgetMath.rollup(invoices ?? [])` in `BudgetViewModel.load()` — while `buildSections` (per the round-1 revert above) groups only invoices with a non-nil `project_id`. Once the client-side RLS policy (`invoices_household_select`, 00571) makes a studio invoice (`project_id == nil`) reachable, its money counted in the headline card but appeared in no section beneath it — e.g. "Billed $500" over a screen whose only section totals $100, with the remaining $400 shown nowhere. This was reachable only after the round-1 revert too (before it, the "From the studio" section at least *displayed* what the headline counted).
+
+**Fix applied:** added `BudgetMath.projectScopedRollup(_:)` — `rollup` restricted to invoices with a non-nil `project_id`, i.e. exactly the set `buildSections` sections over. `BudgetViewModel.load()` now calls `self.summary = BudgetMath.projectScopedRollup(invoices ?? [])` instead of `BudgetMath.rollup(invoices ?? [])`. Kept as a pure `BudgetMath` static function (not inlined in the `@MainActor` view model) so it stays directly unit-testable, per the file's own "pure, unit-tested seam" architecture note at the top.
+
+**Test added** — `PatinaTests/BudgetAggregationTests.swift`: `headlineExcludesStudioInvoicesLikeSectionsDo()`. Builds one project invoice (10,000¢) + one studio invoice (40,000¢, `project_id: null`), asserts `BudgetMath.projectScopedRollup(...).billedCents == 10_000` (equal to the sum of `sections.map(\.rollup.billedCents)`), and asserts that figure is *not* equal to the old, unscoped `BudgetMath.rollup(...)` result (50,000¢) — pinning the exact bug the finding described so a regression back to the old call site fails the suite.
+
+**Files touched:**
+- `apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift` — added `BudgetMath.projectScopedRollup`, changed one call site in `load()`. Committed at `85800f20b`.
+- `apps/mobile/Patina/PatinaTests/BudgetAggregationTests.swift` — added `headlineExcludesStudioInvoicesLikeSectionsDo()`. Same commit.
+
+**Gates (this worktree, fresh sim `si-ios-r2`):**
+- Simulator created for this round: `xcrun simctl create si-ios-r2 "iPhone 16" com.apple.CoreSimulator.SimRuntime.iOS-26-5` → UDID `7941F58F-0B13-420B-A523-7B3AECE1CC03`. Deleted at end of run.
+- `IOS_GATE_UDID=7941F58F-0B13-420B-A523-7B3AECE1CC03 scripts/ios-gate.sh build` → `** BUILD SUCCEEDED **` (first attempt, no cold-build noise this time).
+- `IOS_GATE_UDID=7941F58F-0B13-420B-A523-7B3AECE1CC03 scripts/ios-gate.sh unit` → `Test run with 2472 tests in 271 suites failed after 10.814 seconds with 3 issues (including 2 known issues)`, single failing test `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves()` — the exact pre-documented load flake named in the brief, unrelated to Budget/Invoices. Verified via `xcresulttool get test-results tests --compact` on the run's `.xcresult`: every other leaf test (2497 of 2498 non-container results) reported `Passed`, including all 20 `BudgetAggregationTests` cases (the new `headlineExcludesStudioInvoicesLikeSectionsDo()` among them) and both `InvoicesMoneyRailTests` studio-invoice cases.
+- Reran the flake alone: `-only-testing:"PatinaTests/CompanionCoachingModelTests/introGate_freshUser_pollsUntilTourResolves()"` → `** TEST SUCCEEDED **` in 0.061s.
+- Simulator `si-ios-r2` deleted after the run (`xcrun simctl delete 7941F58F-0B13-420B-A523-7B3AECE1CC03`).
+
+**Housekeeping note (repeat of round 1's own w2-ios-2 lesson):** this file was first drafted, mid-round, to the main checkout's path (`/Users/kody/Code/patina-merged/artifacts/...`) rather than this worktree's copy — the exact mistake round 1 already flagged and fixed once. Caught before finishing this report; the round-2 section above is committed here, at the correct worktree-relative path, with `git add -f`. The stray main-checkout copy was left as found (it is untracked/gitignored there and outside this worktree — not this lane's repo to clean up).
+
+**Scope:** exactly the one listed finding (`ios-r2-1`). No other files touched this round.
