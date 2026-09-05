@@ -70,6 +70,14 @@ public enum PatinaColors {
     /// red/green pair. `--color-terracotta-ink` in the portals.
     public static let terracottaInk = Color(hex: "9C5340")
 
+    /// The portals' `--text-subtle` (`globals.css:81`), byte-identical: the
+    /// pigment the stamp table specifies for a CLOSED mark's rule. `IOSC-04`:
+    /// the muted rule was `Border.strong`, a hairline separator token that
+    /// composited to 1.54:1 on paper at the stamp's own border opacity — a
+    /// floating word with nothing drawn round it on every expired, withdrawn,
+    /// superseded and reviewed approval.
+    public static let subtleInk = Color(hex: "5A4E43")
+
     // MARK: - Status Colors
 
     /// Success, match badges
@@ -271,8 +279,13 @@ public enum PatinaColors {
         )
         /// Withdrawn, Superseded, Expired, Reviewed — the muted grammar.
         public static let mutedInk = PatinaColors.Text.muted
-        /// …and the rule those four are drawn in.
-        public static let mutedRule = PatinaColors.Border.strong
+        /// …and the rule those four are drawn in. NOT `Border.strong`: that
+        /// is the page's field-outline hairline, and a stamp is a mark, which
+        /// owes the 3:1 bar a non-text mark takes. `ContrastTests` measures
+        /// all five rules at both aging opacities so the number cannot drift.
+        public static let mutedRule = Color.patinaDynamic(
+            light: subtleInk, dark: DarkPalette.textMuted
+        )
         /// The word inside a held, returned or declined stamp: legibility
         /// never degrades, so the word is always the page's own primary ink.
         public static let word = PatinaColors.Text.primary

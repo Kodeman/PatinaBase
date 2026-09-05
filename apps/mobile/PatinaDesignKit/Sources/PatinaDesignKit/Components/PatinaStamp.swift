@@ -186,9 +186,11 @@ public struct PatinaStamp: View {
             }
         }
 
-        /// The measured light-appearance value of the RULE.
+        /// The measured light-appearance value of the RULE. `muted` is the
+        /// one pigment whose rule and ink differ: the mark is drawn in the
+        /// page's subtle ink and written in its muted ink.
         public var lightRuleHex: String {
-            self == .muted ? "C8C3BB" : lightInkHex
+            self == .muted ? "5A4E43" : lightInkHex
         }
     }
 

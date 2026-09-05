@@ -206,6 +206,55 @@ struct ContrastTests {
         )
     }
 
+    /// `IOSC-04`. A stamp's rule is the mark: the word floats without it, and
+    /// four of the eleven states — REVIEWED, WITHDRAWN, SUPERSEDED, EXPIRED —
+    /// were drawn in `Border.strong`, the page's field-outline hairline. At
+    /// the component's own border opacity that composited to **1.54:1** on
+    /// paper, worse in light than in dark.
+    ///
+    /// A rule is a non-text mark, so it takes the 3:1 bar — at BOTH aging
+    /// opacities, because a mark that ages out of legibility has aged into
+    /// nothing, and on both grounds, because an approval's stamp is drawn on
+    /// the page and inside a card.
+    @Test("every stamp rule stays a mark at both aging opacities")
+    func everyStampRuleClearsTheMarkBar() {
+        let opacities: [(String, Double)] = [
+            ("fresh", PatinaStamp.borderOpacity),
+            ("aged", PatinaStamp.agedBorderOpacity)
+        ]
+        for style in PatinaContrast.appearances {
+            for pigment in PatinaStamp.Pigment.allCases where pigment != .word {
+                for (groundName, ground) in Self.grounds {
+                    for (age, opacity) in opacities {
+                        let measured = PatinaContrast.ratio(
+                            pigment.rule, opacity: opacity, on: ground, style
+                        )
+                        #expect(
+                            measured >= 3.0,
+                            "the \(pigment.rawValue) stamp rule, \(age), on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below the 3:1 mark bar"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// The counterfactual, so "the separator token was fine" is met with the
+    /// number rather than an opinion.
+    @Test("the hairline separator still cannot carry a stamp's rule")
+    func theSeparatorTokenStillCannotCarryTheRule() {
+        let measured = PatinaContrast.ratio(
+            PatinaColors.Border.strong,
+            opacity: PatinaStamp.borderOpacity,
+            on: PatinaColors.Background.primary,
+            .light
+        )
+        #expect(
+            measured < 3.0,
+            "Border.strong at the stamp's border opacity is now \(PatinaContrast.rounded(measured)):1 — if this passes, IOSC-04's premise changed"
+        )
+    }
+
     /// `C3-05`. The tier badge is a 10 pt uppercase numeral on a filled pill —
     /// the exact shape the finding measured at 2.33:1.
     @Test("the tier pill’s label clears AA on its own fill")
