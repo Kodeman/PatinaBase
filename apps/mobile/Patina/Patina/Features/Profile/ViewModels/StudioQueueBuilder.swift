@@ -327,14 +327,14 @@ private extension StudioQueueBuilder {
         // case now that Stage-2 and the client sign-off both come through here
         // — the group is named for what it holds. A mixed group keeps the
         // older word, which is true of at least one of its rows.
-        let allApprovals = decisions.allSatisfy {
-            $0.isProjectArtifactApproval || $0.isClientSignoff
-        }
+        //
+        // `groupNoun` is the one definition of that rule; `DecisionListView`,
+        // the screen this row opens, reads the same one so the two frames
+        // cannot say two words for one thing.
+        let noun = decisions.groupNoun
         return StudioQueueRow(
             id: "awaiting.decisions",
-            title: allApprovals
-                ? countLabel(decisions.count, singular: "Approval", plural: "Approvals")
-                : countLabel(decisions.count, singular: "Decision", plural: "Decisions"),
+            title: countLabel(decisions.count, singular: noun.singular, plural: noun.plural),
             detail: detail,
             meta: DateDisplay.approval(
                 due: dueDate, askedAt: askedAt, designer: askedBy,

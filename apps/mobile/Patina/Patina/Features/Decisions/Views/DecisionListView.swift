@@ -30,7 +30,10 @@ struct DecisionListView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            MonoLabel(text: "DECISIONS")
+            // The Studio row a homeowner taps is titled by `groupNoun`; this
+            // eyebrow is the very next frame and reads the same rule off the
+            // same rows. `MonoLabel` sets the case.
+            MonoLabel(text: viewModel.eyebrow)
                 .tracking(2)
             // U22: kept static — the empty case names itself in
             // `emptyView`'s PatinaEmptyState below; repeating that exact

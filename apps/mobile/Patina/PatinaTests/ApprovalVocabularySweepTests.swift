@@ -82,6 +82,53 @@ struct ApprovalVocabularySweepTests {
         #expect(!row.systemImage.contains("checkmark"))
     }
 
+    // MARK: - The screen that row opens
+
+    /// `iosd3-M1`: the row was renamed to Approvals and the screen it opens
+    /// still said DECISIONS — two words for one thing, on consecutive frames.
+    /// Both now read `groupNoun` off the same rows.
+    @Test("the hub row and the screen it opens are named by one word")
+    func theRowAndItsScreenAgree() throws {
+        let approvals = [
+            try ProjectApprovalFixture.decision(id: "d-1"),
+            try ProjectApprovalFixture.decision(id: "d-2")
+        ]
+        let snapshot = StudioQueueBuilder.build(input(decisions: approvals))
+        let row = try #require(
+            snapshot.sections.flatMap(\.rows).first { $0.id == "awaiting.decisions" }
+        )
+        let list = DecisionsListViewModel()
+        list.decisions = approvals
+
+        #expect(row.title == "Approvals")
+        #expect(list.eyebrow == "Approvals")
+        #expect(!list.eyebrow.lowercased().contains("decision"))
+    }
+
+    @Test("a group holding a real choice keeps the older word on both frames")
+    func theRowAndItsScreenAgreeOnARealChoice() throws {
+        let mixed = [
+            try ProjectApprovalFixture.decision(id: "d-1"),
+            try Self.optionChoice(id: "d-2")
+        ]
+        let snapshot = StudioQueueBuilder.build(input(decisions: mixed))
+        let row = try #require(
+            snapshot.sections.flatMap(\.rows).first { $0.id == "awaiting.decisions" }
+        )
+        let list = DecisionsListViewModel()
+        list.decisions = mixed
+
+        #expect(row.title == "Decisions")
+        #expect(list.eyebrow == "Decisions")
+    }
+
+    /// A list holding nothing is not holding a choice between named
+    /// alternatives, so the empty screen is titled for the ask.
+    @Test("an empty list is titled for the ask")
+    func theEmptyListIsNamedForTheAsk() {
+        #expect(DecisionsListViewModel().eyebrow == "Approvals")
+    }
+
     // MARK: - The bell
 
     @Test("the bell says what an approval IS now, in the ruled words")
