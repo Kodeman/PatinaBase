@@ -289,7 +289,7 @@ struct ProjectApprovalDoorTests {
 
     @Test("an approval still holding an act of hers becomes a waiting row")
     func anOpenApprovalIsAWaitingRow() throws {
-        let row = try ProjectApprovalFixture.review().asWaitingDecision
+        let row = try ProjectApprovalFixture.review().asWaitingDecision()
         #expect(row.id == ProjectApprovalFixture.decisionId)
         #expect(row.title == "Approve the kitchen millwork as drawn?")
         #expect(row.due_date == "2026-09-11T00:00:00+00:00")
@@ -364,7 +364,7 @@ struct ProjectApprovalDoorTests {
     func aFailedHalfDoesNotBlankTheFeed() throws {
         let standing = [
             try ProjectApprovalFixture.decision(contract: nil, id: Self.otherDecisionId),
-            try ProjectApprovalFixture.review().asWaitingDecision
+            try ProjectApprovalFixture.review().asWaitingDecision()
         ]
         #expect(BadgeCountService.mergedDecisions(
             pending: nil, approvals: nil, previous: standing
@@ -402,10 +402,10 @@ struct ProjectApprovalDoorTests {
         #expect(client.contains("func fetchProjectApprovalReviews()"))
 
         let list = try SourcePin.readCode(
-            "Patina/Features/Decisions/ViewModels/DecisionsViewModel.swift"
+            "Patina/Features/Decisions/ViewModels/DecisionsListViewModel.swift"
         )
         #expect(list.contains("fetchProjectApprovalReviews()"))
-        #expect(list.contains("map(\\.asWaitingDecision)"))
+        #expect(list.contains("asWaitingDecision(from: projects)"))
 
         let badges = try SourcePin.readCode("Patina/Services/Badges/BadgeCountService.swift")
         #expect(badges.contains("fetchProjectApprovalReviews()"))

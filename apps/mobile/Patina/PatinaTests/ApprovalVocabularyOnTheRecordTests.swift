@@ -33,7 +33,7 @@ struct ApprovalVocabularyOnTheRecordTests {
 
     @Test("a Stage-2 approval reaches the Record as an approval")
     func aStage2ApprovalIsMarkedAnApproval() throws {
-        let item = itemizedRow(try ProjectApprovalFixture.review().asWaitingDecision)
+        let item = itemizedRow(try ProjectApprovalFixture.review().asWaitingDecision())
         #expect(item.isApproval)
         #expect(HouseRecordBuilder.title(for: item) == "Leah asked for your approval.")
         #expect(HouseRecordBuilder.detail(for: item)
@@ -70,7 +70,7 @@ struct ApprovalVocabularyOnTheRecordTests {
     @Test("no approval row ever says choose, and no title doubles its punctuation")
     func noApprovalRowSaysChoose() throws {
         for decision in [
-            try ProjectApprovalFixture.review().asWaitingDecision,
+            try ProjectApprovalFixture.review().asWaitingDecision(),
             try ProjectApprovalFixture.decision(contract: nil)
         ] {
             let title = HouseRecordBuilder.title(for: itemizedRow(decision))

@@ -2,51 +2,17 @@
 //  DecisionsViewModel.swift
 //  Patina
 //
-//  Client-side decision workflow: list pending decisions, view options,
-//  select one, and capture consent. Designer-side sees the same data
-//  read-only via DesignerHome.
+//  Client-side decision workflow: one decision, its options, the act that
+//  resolves it, and the consent that act carries. Designer-side sees the same
+//  data read-only via DesignerHome.
+//
+//  The LIST half lives in `DecisionsListViewModel.swift`: this file is at
+//  SwiftLint's 500-line `file_length`, the same reason
+//  `DecisionsAPIClient+ProjectApprovals.swift` and
+//  `BadgeCountService+Decisions.swift` are their own files.
 //
 
 import SwiftUI
-
-@Observable
-@MainActor
-final class DecisionsListViewModel {
-    var decisions: [RemoteClientDecision] = []
-    var isLoading: Bool = false
-    var error: String?
-
-    /// The list every decision reaches the client through — and, since
-    /// `iosb-B1`, the Stage-2 approvals too.
-    ///
-    /// Two reads, because there is no one read that returns both: 00467:18-38
-    /// hides a `project_artifact_v1` row from the very person being asked, so
-    /// `listPending` returns everything EXCEPT her approvals and the projection
-    /// returns only those. A failed projection leaves the ordinary decisions
-    /// standing; it does not empty the list.
-    func load() async {
-        isLoading = true
-        error = nil
-        async let approvalsFetch = try? DecisionsAPIClient.shared
-            .fetchProjectApprovalReviews()
-        do {
-            let pending = try await DecisionsAPIClient.shared.listPending()
-            let approvals = await approvalsFetch ?? []
-            // A studio co-member is the one caller both reads answer for, and
-            // one obligation must not draw twice under one id.
-            let carried = Set(pending.map(\.id))
-            self.decisions = pending
-                + approvals.filter(\.awaitsClient).map(\.asWaitingDecision)
-                    .filter { !carried.contains($0.id) }
-        } catch {
-            self.error = "Couldn’t load decisions"
-            #if DEBUG
-            PatinaLog.ui.error("[Decisions] list failed: \(error.localizedDescription)")
-            #endif
-        }
-        isLoading = false
-    }
-}
 
 @Observable
 @MainActor
@@ -220,6 +186,15 @@ final class DecisionDetailViewModel {
         let (d, o) = await (decisionTask, optionsTask)
         self.decision = d ?? nil
         self.options = o
+        // `W1R2-B1`: the stamp BEFORE the projection, and the order is
+        // load-bearing. `mark_client_decision_viewed` (00464:2211-2222) writes
+        // `viewed_at = now(), updated_at = now()` — and `updated_at` is the
+        // exact CAS value `respond_project_approval` demands and the projection
+        // echoes back as `updatedAt`. Read first and stamp after, and the
+        // screen held an `updatedAt` its own stamp had just invalidated, so the
+        // FIRST "Submit response" on every published Stage-2 approval lost the
+        // CAS and read "We couldn't record your response."
+        await markViewed(decisionId: decisionId)
         await loadApprovalReview(decisionId: decisionId)
         await resolveDiscussThread()
         // Seed local selection from whatever the server already has, so a
@@ -232,9 +207,6 @@ final class DecisionDetailViewModel {
         if self.decision == nil, self.approvalReview == nil {
             self.error = "Couldn’t load this decision"
         }
-        // Fire-and-forget "seen" stamp. Failure here is non-fatal — it only
-        // affects the designer's read receipt, never the client's flow.
-        await markViewed(decisionId: decisionId)
     }
 
     /// Whether a given option is the committed choice (local or server).
@@ -482,11 +454,21 @@ final class DecisionDetailViewModel {
             .findProjectThread(projectId: projectId)) ?? nil
     }
 
+    /// The "seen" stamp, behind a seam — the same reason as the acts above,
+    /// plus one of its own: `W1R2-B1` is an ORDERING defect, and an order is
+    /// only pinnable where a test can watch both calls arrive.
+    @ObservationIgnored
+    var markDecisionViewed: (String) async throws -> Void = { decisionId in
+        try await DecisionsAPIClient.shared.markViewed(decisionId: decisionId)
+    }
+
     private func markViewed(decisionId: String) async {
-        // Only stamp once, and only when the server hasn't already.
+        // Only stamp once, and only when the server hasn't already. Failure is
+        // non-fatal — it costs the designer a read receipt, never the client
+        // her flow.
         guard decision?.viewed_at == nil else { return }
         do {
-            try await DecisionsAPIClient.shared.markViewed(decisionId: decisionId)
+            try await markDecisionViewed(decisionId)
         } catch {
             #if DEBUG
             PatinaLog.ui.debug("[Decisions] markViewed failed: \(error.localizedDescription)")

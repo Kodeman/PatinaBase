@@ -27,6 +27,9 @@ enum ProjectApprovalFixture {
         completed: Int = 1,
         required: Int = 1,
         authorityRevision: Any = 3,
+        sentAt: Any = "2026-09-02T00:00:00+00:00",
+        respondedAt: Any = NSNull(),
+        updatedAt: String = "2026-09-04T10:15:00+00:00",
         costCentsDelta: Int = 0,
         scheduleDaysDelta: Int = 0,
         leadTimeDaysDelta: Int = 0,
@@ -58,9 +61,9 @@ enum ProjectApprovalFixture {
             "predecessorDecisionId": NSNull(),
             "successorDecisionId": NSNull(),
             "createdAt": "2026-09-01T00:00:00+00:00",
-            "sentAt": "2026-09-02T00:00:00+00:00",
-            "respondedAt": NSNull(),
-            "updatedAt": "2026-09-04T10:15:00+00:00"
+            "sentAt": sentAt,
+            "respondedAt": respondedAt,
+            "updatedAt": updatedAt
         ]
         return try JSONDecoder().decode(
             RemoteProjectApprovalReview.self,

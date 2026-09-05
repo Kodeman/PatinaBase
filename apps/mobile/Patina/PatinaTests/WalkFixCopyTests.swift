@@ -89,7 +89,7 @@ struct ApprovalAskCopyTests {
         #expect(signoff.isApprovalAsk)
 
         let stage2 = DecisionDetailViewModel()
-        stage2.decision = try ProjectApprovalFixture.review().asWaitingDecision
+        stage2.decision = try ProjectApprovalFixture.review().asWaitingDecision()
         #expect(stage2.isApprovalAsk)
 
         let choice = DecisionDetailViewModel()

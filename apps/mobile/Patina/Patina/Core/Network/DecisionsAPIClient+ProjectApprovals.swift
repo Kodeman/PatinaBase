@@ -79,6 +79,10 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// offered rather than guessed at.
     public let authorityRevision: Int?
     public let createdAt: String
+    /// `client_decisions.sent_at` — stamped by `publish_client_decision`
+    /// (00464:998,1061) and by nothing else, so it is the one field that says
+    /// whether the studio has actually issued this edition.
+    public let sentAt: String?
     public let respondedAt: String?
     /// The CAS value `respond_project_approval` demands, echoed back verbatim.
     public let updatedAt: String
@@ -146,6 +150,21 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
         needsReviewConfirmation || canRespond
     }
 
+    /// The studio has issued this edition. `sent_at` is stamped only by
+    /// `publish_client_decision`, so an unsent row is the studio's own working
+    /// copy — nothing has been asked of anybody yet.
+    public var isPublished: Bool { sentAt != nil }
+
+    /// `W1R2-M3`: the row a homeowner-facing feed may carry.
+    ///
+    /// `awaitsClient` alone let an UNSENT draft onto Today, the Studio hub and
+    /// the bell, drawn as an ask with a due date — a question the studio had
+    /// not asked yet, dated. A feed says what is waiting on her; an edition
+    /// nobody has sent is not. The review leg on a draft is still reachable by
+    /// its own route (the detail screen reads `get_project_decision_review`
+    /// directly), which is where a pre-publish act belongs.
+    public var awaitsClientInFeed: Bool { isPublished && awaitsClient }
+
     /// This approval as a row for the feeds that carry every waiting
     /// obligation: `BadgeCountService.pendingDecisions` (the NEEDS YOU
     /// eyebrow, the Studio's "Awaiting you") and the decision list.
@@ -162,13 +181,23 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// `lifecycleStatus` is carried unchanged rather than flattened to
     /// `pending` — `draft` and `pending` both read as unresolved downstream,
     /// so there is nothing to gain by saying the row is further along than it
-    /// is. The projection carries no project name and no designer, so the row
-    /// names neither rather than inventing them.
-    var asWaitingDecision: RemoteClientDecision {
-        RemoteClientDecision(
+    /// is.
+    ///
+    /// `W1R2-M2`: the projection carries no project name and no designer, and
+    /// a row without one degraded R8's sentence to "Still open, your designer
+    /// asked on Sep 4." on every Stage-2 row while the Record two screens away
+    /// said "Leah asked for your approval." The name is not invented here — it
+    /// is taken from the project the caller already holds, matched on the
+    /// projection's own `projectId`, and stays nil when that project is not in
+    /// hand.
+    func asWaitingDecision(from projects: [RemoteProject] = []) -> RemoteClientDecision {
+        let project = projects.first { $0.id == projectId }
+        return RemoteClientDecision(
             id: decisionId,
             project_id: projectId,
-            project: nil,
+            project: project.map {
+                RemoteDecisionProjectRef(name: $0.name, designer: $0.designer)
+            },
             title: question,
             description: context,
             status: lifecycleStatus,

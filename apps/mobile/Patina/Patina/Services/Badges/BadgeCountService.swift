@@ -55,6 +55,27 @@ final class BadgeCountService {
     /// Publish the feed's own rows into the one count every surface reads.
     /// Called by `NotificationsViewModel` on load and after each mark-read, so
     /// the bell can never disagree with the list behind it.
+    ///
+    /// ### The one definition of the badge number
+    ///
+    /// **Unread `in_app` rows in `notification_log` for this user, one per
+    /// entity**: `channel = 'in_app'` (never the `push` leg — 00534 writes both
+    /// for one event), `opened_at IS NULL`, a status in
+    /// `NotificationsAPIClient.visibleStatusFilter`, collapsed on
+    /// `metadata.entity_type|entity_id`. Studio-composed rows are excluded —
+    /// never delivered, so no arrival and no read state (`C5`).
+    ///
+    /// `apns-send`'s `aps.badge` (R5, second pass — the backend lane's) must
+    /// count that same set or the springboard drifts from the bell while the
+    /// app is backgrounded. They already agree on user, channel and
+    /// `opened_at IS NULL`; two clauses are this side's alone, and both are
+    /// bounded. The collapse can differ only where one entity holds two unread
+    /// `in_app` rows, which `notify_client_attention`'s own de-dup
+    /// (00534:163-178 — one unopened row per user and entity, updated rather
+    /// than re-inserted) is what prevents. The status filter drops
+    /// `failed`/`suppressed` rows a raw count keeps, so a server count that
+    /// wants to agree exactly carries that predicate too. `markAllOpened` marks
+    /// BOTH legs (`W1R2-m1`), so a read cannot part them either.
     func applyNotificationRows(_ rows: [AppNotification]) {
         unreadNotificationCount = rows.filter { !$0.isStudioFallback && !$0.isRead }.count
         writeSpringboardBadge(unreadNotificationCount)
@@ -86,6 +107,12 @@ final class BadgeCountService {
     /// the same queries again. Each array is the one the matching count was
     /// computed from, so a row list and its count can never disagree.
     private(set) var pendingDecisions: [RemoteClientDecision] = []
+    /// Every Stage-2 approval the projection returned — answered and closed
+    /// ones included, unlike `pendingDecisions`, which carries only the rows
+    /// still holding an act of hers. The bell reads this to say what an
+    /// approval row IS now rather than what it was titled when it was raised
+    /// (`W1R2-n4`).
+    private(set) var projectApprovals: [RemoteProjectApprovalReview] = []
     private(set) var pendingProposals: [RemoteProposal] = []
     private(set) var payableInvoices: [RemoteInvoice] = []
     private(set) var threadSummaries: [RemoteCommsThreadSummary] = []
@@ -316,6 +343,7 @@ final class BadgeCountService {
             payableInvoiceCount = 0
             projectCount = 0
             pendingDecisions = []
+            projectApprovals = []
             pendingProposals = []
             payableInvoices = []
             threadSummaries = []
@@ -344,8 +372,10 @@ final class BadgeCountService {
         // previous account's rows and there is nothing here to write them to.
         guard token == refreshToken else { return }
 
+        if let approvals { projectApprovals = approvals }
         let merged = Self.mergedDecisions(
-            pending: decisions, approvals: approvals, previous: pendingDecisions
+            pending: decisions, approvals: approvals, previous: pendingDecisions,
+            projects: fetchedProjects ?? projects
         )
         apply(
             decisions: merged, summaries: summaries, proposals: proposals,

@@ -29,16 +29,27 @@ extension BadgeCountService {
     /// gets its rows from — a nil answer keeps that half's last-known rows
     /// rather than blanking a feed the other half answered for. Both failing
     /// is the only nil out, which is what leaves the whole floor standing.
+    ///
+    /// `W1R2-M3`: only PUBLISHED approvals become rows. An unsent draft is the
+    /// studio's own working copy, and it was being drawn on Today as an ask
+    /// with a due date.
+    ///
+    /// `W1R2-M2`: `projects` is what puts the designer's name on the row, so
+    /// R8's sentence can say "Leah asked on Sep 4." instead of degrading to
+    /// "your designer". Empty is the honest degrade, not a guess.
+    ///
     /// Static so it can be exercised without the singleton this service is
     /// only ever reached through.
     static func mergedDecisions(
         pending: [RemoteClientDecision]?,
         approvals: [RemoteProjectApprovalReview]?,
-        previous: [RemoteClientDecision]
+        previous: [RemoteClientDecision],
+        projects: [RemoteProject] = []
     ) -> [RemoteClientDecision]? {
         guard pending != nil || approvals != nil else { return nil }
         let legacy = pending ?? previous.filter { !$0.isProjectArtifactApproval }
-        let stage2 = approvals?.filter(\.awaitsClient).map(\.asWaitingDecision)
+        let stage2 = approvals?.filter(\.awaitsClientInFeed)
+            .map { $0.asWaitingDecision(from: projects) }
             ?? previous.filter(\.isProjectArtifactApproval)
         // 00467 hides a Stage-2 row from the homeowner, not from a studio
         // co-member — for whom BOTH reads return it, and a feed carrying one

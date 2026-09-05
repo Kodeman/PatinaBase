@@ -64,15 +64,23 @@ struct ProjectApprovalBlock: View {
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("decisionDetail.approval.edition")
 
-            // The sentence is present-tense and belongs only where the act is
-            // still hers to take; over an answered approval it would describe
-            // something that already happened. `canRespond` is the projection's
-            // word and the projection is not refetched after a submit, so the
-            // answer given in THIS session has to be asked about too — without
-            // it the screen printed "You are approving edition 3" directly
-            // above "You approved this edition." (`iosb2-M2`).
-            if !viewModel.hasAnsweredApproval,
-               review.needsReviewConfirmation || review.canRespond {
+            // The sentence is present-tense and belongs above the three
+            // outcomes, while an answer is still open — nowhere else.
+            //
+            // Over an answered approval it describes something that already
+            // happened: `canRespond` is the projection's word and the
+            // projection is not refetched after a submit, so the answer given
+            // in THIS session has to be asked about too, or the screen prints
+            // "You are approving edition 3" directly above "You approved this
+            // edition." (`iosb2-M2`).
+            //
+            // `W1R2-M1`: `needsReviewConfirmation` put it on the review screen
+            // as well, where the act on offer is READING the edition and
+            // nothing is being approved yet — and it survived the confirmation,
+            // because the projection in hand still says the review is
+            // outstanding. The guard is now exactly `outcomeLeg`'s, so the
+            // sentence lives and dies with the acts it introduces.
+            if !viewModel.hasAnsweredApproval, review.canRespond {
                 Text(ProjectApprovalCopy.immutability(edition: review.artifactVersion))
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)

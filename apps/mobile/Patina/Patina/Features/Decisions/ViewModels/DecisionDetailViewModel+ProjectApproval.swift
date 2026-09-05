@@ -65,6 +65,15 @@ extension DecisionDetailViewModel {
     }
 
     /// Record the chosen outcome against the edition she was reading.
+    ///
+    /// `W1R2-B1`, second half. `respond_project_approval` is CAS on
+    /// `updated_at`, and the only thing this screen can be wrong about is the
+    /// value it is holding — anything that touches the row (the "seen" stamp, a
+    /// reminder, the studio) moves it. So a failure buys exactly one re-read
+    /// before the sentence is shown, and the re-read has three answers: the
+    /// outcome is already recorded (the first call landed and only its reply
+    /// was lost), the row moved and the retry carries the value it moved to,
+    /// or nothing changed and the failure was not a CAS miss at all.
     func submitApprovalResponse() async {
         guard !isSubmitting,
               let review = approvalReview,
@@ -72,16 +81,43 @@ extension DecisionDetailViewModel {
               let outcome = chosenOutcome else { return }
         isSubmitting = true
         submitFailure = nil
+        defer { isSubmitting = false }
         do {
             try await respondToApproval(
                 review.decisionId, outcome, review.updatedAt, UUID().uuidString
             )
-            self.answeredOutcome = outcome
-            self.chosenOutcome = nil
+            record(outcome)
+            return
         } catch {
             MoneyFailureCopy.log("project approval response", error)
-            self.submitFailure = MoneyFailureCopy.approvalResponse
         }
-        isSubmitting = false
+        guard let fresh = try? await fetchApprovalReview(review.decisionId) else {
+            submitFailure = MoneyFailureCopy.approvalResponse
+            return
+        }
+        approvalReview = fresh
+        if let recorded = fresh.recordedOutcome {
+            record(recorded)
+            return
+        }
+        guard fresh.canRespond, fresh.updatedAt != review.updatedAt else {
+            submitFailure = MoneyFailureCopy.approvalResponse
+            return
+        }
+        do {
+            try await respondToApproval(
+                fresh.decisionId, outcome, fresh.updatedAt, UUID().uuidString
+            )
+            record(outcome)
+        } catch {
+            MoneyFailureCopy.log("project approval response retry", error)
+            submitFailure = MoneyFailureCopy.approvalResponse
+        }
+    }
+
+    private func record(_ outcome: ProjectApprovalOutcome) {
+        answeredOutcome = outcome
+        chosenOutcome = nil
+        submitFailure = nil
     }
 }
