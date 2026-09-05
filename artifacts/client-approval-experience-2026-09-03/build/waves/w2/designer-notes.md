@@ -523,3 +523,150 @@ failure is still the integration steward's, per the ruling.
 whatever arrives, verbatim, per the ruling — so whichever it is, the email, the
 Threshold and the iOS row must render the same string, and the ruling's "verbatim"
 only holds if all four read the one key without reshaping it.
+
+---
+
+# Fix pass 4 — R4's three findings (2026-09-05)
+
+Round 4 handed back one item on this lane's own ground (H-01) and two that sit at
+the wave seam (H-02, H-03). Scope was exactly those three; the eleven minors and
+nits R4 carried forward from R3 were explicitly out of it and are re-listed at the
+bottom unchanged.
+
+## H-01 — the client mirror's answered mark, sage → mocha · FIXED
+
+The 2026-09-05 "Designer Desk pigments" ruling names three surfaces: *"SIGNED /
+APPROVED / answered marks on the Desk, the Record page **and the client mirror**
+move to mocha ink; DELIVERED/PULSE material states keep sage."* Passes 1–3 moved
+the Desk (`desk-derivation.ts:472`) and the Record page (`doc/[id]/page.tsx:3102-3109`)
+and left the mirror behind.
+
+`apps/designer-portal/src/components/document/client-mirror.tsx:154` — the
+`answered{ · date}` span moves from `text-[var(--color-sage-ink)]` to
+`text-[var(--color-mocha)]`, with a three-line comment saying why sage may not
+carry an answer. It is the mirror of what the client sees, so it was the one place
+the same meaning still wore two pigments across the table.
+
+`grep -rn "color-sage" apps/designer-portal/src/components/document/client-mirror.tsx`
+→ no hits. The Desk file's remaining sage is `DELIVERED` and `PULSE` only, which
+the ruling keeps.
+
+### The test R4 asked for
+
+There was no component test for this file — only `src/lib/document/__tests__/client-mirror-contract.test.ts`,
+which holds the *query* contract (R26: what the mirror may read), not its pigment.
+New: `apps/designer-portal/src/components/document/__tests__/client-mirror.test.tsx`,
+four cases, mocking `@tanstack/react-query`'s `useQuery` and `@patina/supabase`'s
+`createBrowserClient` so the component renders off a fixed `responded` decision:
+
+1. the mark's class carries `text-[var(--color-mocha)]` and no `sage`;
+2. the section that carries the mark contains no `color-sage` anywhere;
+3. the mark reads `answered · Sep 2` — a word and a date, asserted free of `✓`/`✔`,
+   so no checkmark can be substituted for the word later (refusal list);
+4. a source scan of `client-mirror.tsx` finds no `color-sage` token at all, so the
+   pigment cannot creep back on a neighbouring line the render test never reaches.
+
+**Red-first, confirmed rather than assumed.** With the span reverted to
+`--color-sage-ink` the suite reports `Tests: 3 failed, 1 passed` (case 3 is
+colour-independent and correctly stays green); restored, `4 passed`.
+
+## H-02 — nothing emits `whyAuthorName` · CLOSED by the backend lane, no change here
+
+R4 ran its grep against backend head `0b18be341` and found nothing. The backend
+lane has since advanced to `4f23ae0c1`, and the emitter is there:
+
+- `supabase/migrations/00569_approval_why_viewer_role_and_receipt.sql:83` —
+  `project_approval_artifacts ADD COLUMN IF NOT EXISTS why_author_name text`, with
+  a CHECK at `:94-97` bounding it to 1–120 characters and forbidding a name under
+  no line;
+- `:954` — `get_project_decision_reviews` emits `'whyAuthorName', CASE WHEN
+  artifact.why IS NOT NULL THEN artifact.why_author_name END`, exactly the key
+  this lane parses at `use-project-approvals.ts:331` and renders at
+  `project-approval-document.tsx:1092`;
+- `:260-278` — the author resolves server-side from the caller's own profile;
+  `p_why_author_name` is private and defaulted, passed only by
+  `supersede_project_approval_decision` when a successor inherits its
+  predecessor's line, which is the carry-forward this lane's hook already relies on.
+
+So fix pass 3 was right to delete the deferral comments: the contract now has a
+producer, and the half-build R4 feared does not exist. **The shape question this
+lane flagged after pass 3 is also answered: it is a GIVEN NAME**, not a full
+display name — `:265-273` applies the same first-whitespace-token rule as
+`_shared/branded-email.ts`'s `givenName()`, falling back to `display_name`, then
+truncating at 120. `whyAttribution()` here trims and returns it verbatim,
+shortening nothing, which is correct against that. Every other surface (email,
+Threshold, iOS row) must render the same key verbatim too.
+
+The public entry is still `create_project_approval_decision(uuid, jsonb, text, text)`
+— four arguments, `p_why` last — which is exactly what `useCreateProjectApproval`
+calls, so no portal-side change follows from the emitter landing.
+
+## H-03 — the shared hook collides with the web lane · recorded, steward's call
+
+Not fixable inside this worktree without reaching into another lane's design, and
+R4 addresses the fix to the integration steward. Restating it so it cannot be lost
+in a merge:
+
+- `packages/supabase/src/hooks/use-project-approvals.ts` — this lane adds
+  `why?: string | null` and `whyAuthorName?: string | null` (both optional) to the
+  review interface and parses both in `parseProjectApprovalReview`; the web lane
+  adds `why: string | null` (**required**) and `viewerRole` at the same lines.
+  **Take the union: `why`, `whyAuthorName` and `viewerRole` all `string | null` /
+  `ProjectApprovalViewerRole | null`, required.** 00569 emits all three
+  unconditionally, so required is the honest shape.
+- Keep **both** fixture hunks in
+  `packages/supabase/src/hooks/__tests__/use-project-approvals.test.ts` and in this
+  lane's two designer-portal fixtures
+  (`approvals/approvals-region-head.test.tsx`, `approvals/project-approval-document.test.tsx`).
+  This lane's `baseReview` carries no `viewerRole`; if the web lane's required
+  field lands without its own fixture hunk, `@patina/designer-portal type-check`
+  goes red on `satisfies ProjectApprovalReview`.
+- **Do not let conflict resolution drop** `whyAuthorName` from the parser, or
+  `oneLineWhy()` from `useCreateProjectApproval` / `useSupersedeProjectApproval` —
+  the newline normalization is the last gate before an immutable artifact freezes.
+- Re-run `@patina/designer-portal type-check` and both hook suites after resolving.
+
+`client-mirror.tsx` and its new test are this lane's alone — `git diff main...approvals/w2-web
+--stat -- apps/designer-portal` names neither — so H-01's fix carries no merge risk.
+
+## Gates, fix pass 4
+
+Each command in its own call, from the lane worktree
+(`git rev-parse --show-toplevel` → `/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-designer`).
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `pnpm --filter @patina/designer-portal type-check` | **PASS** — `TC_EXIT=0`, `tsc --noEmit` silent |
+| 2 | `pnpm --filter @patina/designer-portal lint` | **EXIT 1, unchanged** — `✖ 205 problems (2 errors, 203 warnings)`; the two errors are still `piece-room-save-gate.test.tsx:159` (`import/first` rule not found) and `use-commercial-documents.test.ts:930` (`rules-of-hooks`), both pre-existing on `main`, neither file in this diff. No lint finding names `client-mirror`. |
+| 3 | `pnpm --filter @patina/designer-portal test -- src/components/document/approvals/ …red-letter-zone… …signed-stamp… …client-mirror… …desk-derivation… …proposal-watch-derivation…` | **PASS** — `Test Suites: 8 passed, 8 total · Tests: 186 passed, 186 total` (182 + the four added here) |
+| 4 | `pnpm --filter @patina/designer-portal test -- 'src/app/\(document\)/doc/\[id\]/page.test.tsx'` | **PASS** — `1 suite · 101 tests` |
+| 5 | `pnpm --filter @patina/supabase type-check` | **PASS** — `SB_TC_EXIT=0` |
+| 6 | `pnpm --filter @patina/supabase test -- src/hooks/__tests__/use-project-approvals.test.ts` | **PASS** — `Test Files 1 passed (1) · Tests 21 passed (21)` |
+| 7 | *(wide)* `pnpm --filter @patina/designer-portal test -- src/lib/document/__tests__/ src/components/document/` | **1 failed, 358 passed / 359 suites · 1 failed, 4476 passed / 4477 tests** — the single failure is the W1 clock-bound `client-note-composer.test.tsx` (`Unable to find … "Taken down Sep 4"`, the clock now reading Sep 5), ruled to the integration steward. `git diff main...HEAD --name-only | grep client-note-composer` → no match. Suite and test counts are up by exactly the new file's 1 suite / 4 tests. |
+
+## Files (fix pass 4)
+
+- `apps/designer-portal/src/components/document/client-mirror.tsx` (one span's ink + comment)
+- `apps/designer-portal/src/components/document/__tests__/client-mirror.test.tsx` (new)
+
+No migration minted, no production mutation, nothing pushed, no `git add -A`.
+
+## Still open after pass 4
+
+Unchanged and not in this pass's scope — R4's minors and nits, for the wave report
+or a steward call: **H-04** (helper sentence and live count share one `aria-live`),
+**H-05** (four SIGNED geometries across the two portals), **H-06** (`p_why` on
+supersede has no field to reach it — a re-ask cannot be re-worded this wave),
+**H-07** (the controlled textarea jumps the caret when it collapses whitespace),
+**H-08** (Enter is preventDefaulted without an `isComposing` guard — hostile to
+IME), **H-09** (nothing says the why is optional), **H-10** (−1.1° and no aging
+against a source doc that says −2° and ages), **H-11** (a 200-unit slice can split
+a surrogate pair), **H-12** ("Changes requested" / "Needs discussion" survive on
+the designer's own reading view), **H-13** (the sage `approved` safety tone in
+`configuration-snapshot-card.tsx`, outside the ruling's three surfaces),
+**H-14** (P-13 reaches web + designer only; `get_project_decision_review` and
+`list_my_project_decision_reviews` carry no `why`), **H-15** (the composer's label
+hard-codes the client's gender). Plus the standing **G-08** line owed in the wave
+report: a designer who writes a why calls a `p_why` signature that does not exist
+until 00569 lands, and 00569 DROPs the pre-`p_why` signatures first — **migrations
+must precede the designer portal**.
