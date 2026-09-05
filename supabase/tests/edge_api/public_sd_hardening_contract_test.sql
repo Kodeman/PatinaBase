@@ -1710,10 +1710,13 @@ VALUES
     -- unlocked read), so a houseless invoice can no more be addressed to a
     -- stranger than a project one can. The designer-domain check stays on the
     -- INSERT arm, exactly as the project path judges its lead only on insert:
-    -- the four identity columns are immutable on UPDATE.
+    -- the four identity columns are immutable on UPDATE, and for the same
+    -- reason the UPDATE arm's live-authority reads sit BELOW its
+    -- service_role/postgres early return, as the project path's do, so a
+    -- settle or a void still replays once the stamped designer has left.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'f39043a2f3d9f70f5bb8d97c23f436a1f159085a49dc961d928ca25723ee94a6',
+    'b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89',
     ARRAY[]::text[]
   ),
   (

@@ -26,7 +26,7 @@
 -- which RAISEs on every NULL-project row on both the INSERT and the UPDATE
 -- arm, before its service_role early return. PART 2 adds a studio branch to
 -- both arms; every project-path line is byte-identical to 00511's body (the
--- branch is 187 inserted lines across the two arms, zero removed). Its body
+-- branch is 199 inserted lines across the two arms, zero removed). Its body
 -- SHA-256 is re-pinned in
 -- supabase/tests/edge_api/public_sd_hardening_contract_test.sql.
 --
@@ -119,7 +119,23 @@ BEGIN
       IF NEW.studio_id IS NULL
          OR NEW.designer_id IS NULL
          OR NEW.client_id IS NULL
-         OR NOT EXISTS (
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      -- The machine early return sits above the live-authority reads on this
+      -- arm, exactly as the project path's does below: a settle, a void or a
+      -- reminder replays long after the stamped designer may have been
+      -- suspended or the studio deactivated, and money already captured at
+      -- Stripe must still land on the row. The anchor tuple (project_id,
+      -- designer_id, client_id, studio_id) is immutable above, so no replay
+      -- can reparent the invoice; the INSERT arm still judges live authority
+      -- before the row exists.
+      IF v_active_role = 'service_role' OR v_postgres_migration THEN
+        RETURN NEW;
+      END IF;
+
+      IF NOT EXISTS (
            SELECT 1
            FROM public.organization_members AS studio_lead
            JOIN public.organizations AS anchor_studio
@@ -133,10 +149,6 @@ BEGIN
          )
       THEN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
-      END IF;
-
-      IF v_active_role = 'service_role' OR v_postgres_migration THEN
-        RETURN NEW;
       END IF;
 
       IF v_active_role <> 'authenticated'
