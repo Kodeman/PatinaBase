@@ -513,7 +513,10 @@ describe('the artifact, shown', () => {
     expect(plate.textContent).not.toMatch(/checksum|sha|fingerprint|verify/i);
   });
 
-  it('frames the edition itself when the frozen snapshot carries a cover', () => {
+  it('draws no picture of a plan issue, whatever a snapshot claims to carry', () => {
+    // The frozen snapshot cannot reach this surface — `parseProjectApprovalReview`
+    // builds its object field by field — and a plan_issue snapshot carries no
+    // cover key in the first place. The plate names the edition instead.
     render(
       <ApprovalAsk
         approval={
@@ -525,23 +528,11 @@ describe('the artifact, shown', () => {
       />,
     );
 
-    const cover = screen.getByTestId('approval-plate-cover');
-    expect(cover).toHaveAttribute('src', 'https://plans.example/cover.png');
-    expect(cover).toHaveAttribute('alt', 'Library elevations, edition 3');
-  });
-
-  it.each([
-    ['a snapshot that is not an object', 'nope'],
-    ['a snapshot with no cover at all', {}],
-    ['a cover that is not a string', { coverImageUrl: 42 }],
-    ['a cover that is not an address', { coverImageUrl: 'javascript:alert(1)' }],
-  ])('draws no picture for %s', (_case, sourceSnapshot) => {
-    render(
-      <ApprovalAsk approval={{ ...APPROVAL, sourceSnapshot } as ProjectApprovalReview} />,
+    const plate = screen.getByTestId('approval-plate');
+    expect(within(plate).queryByRole('img')).not.toBeInTheDocument();
+    expect(within(plate).getByTestId('approval-plate-title')).toHaveTextContent(
+      'Library elevations',
     );
-
-    expect(screen.queryByTestId('approval-plate-cover')).not.toBeInTheDocument();
-    expect(screen.getByTestId('approval-plate-title')).toHaveTextContent('Library elevations');
   });
 
   it('sets the ask as a pull-quote and signs it in the designer’s name', () => {
@@ -1069,6 +1060,44 @@ describe('the ask in the house’s vocabulary', () => {
     );
     expect(respondMutate).not.toHaveBeenCalled();
     expect(screen.queryByTestId('approval-stamp')).not.toBeInTheDocument();
+  });
+
+  it('says the note once when a refused outcome is submitted again', async () => {
+    respondMutate.mockRejectedValueOnce(new Error('approval_conflict'));
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    await returnEdition('The runner is too dark for the stair hall.');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This approval changed while it was open. Refresh before responding.',
+    );
+    expect(commentMutateAsync).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /submit response/i }));
+
+    // The note reached the thread on the first press. The retry records the
+    // outcome and leaves the thread alone — the designer reads it once.
+    await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(2));
+    expect(commentMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the note again when she changes what she wants to say', async () => {
+    respondMutate.mockRejectedValueOnce(new Error('approval_conflict'));
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    await returnEdition('The runner is too dark.');
+    await screen.findByRole('alert');
+
+    fireEvent.change(screen.getByTestId('approval-change-note'), {
+      target: { value: 'The runner is too dark, and the sconces sit low.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /submit response/i }));
+
+    await waitFor(() => expect(commentMutateAsync).toHaveBeenCalledTimes(2));
+    expect(commentMutateAsync.mock.calls[1][0]).toEqual({
+      decisionId: 'dec-1',
+      body: 'The runner is too dark, and the sconces sit low.',
+    });
   });
 
   it('asks for no note on the two outcomes that are not a return', () => {

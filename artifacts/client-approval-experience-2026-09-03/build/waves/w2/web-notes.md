@@ -176,3 +176,80 @@ NaN/Infinity input).
   `prettier --write`, because reformatting files stage B is editing would guarantee conflicts.
 - **`pnpm lint`** was not run: only designer-portal has a working ESLint config
   (CLAUDE.md/patina-verification), and the brief names type-check and test as the gates.
+
+---
+
+## Round 1 fixes — 2026-09-05
+
+Both round-1 findings closed in the worktree. Tree was clean at the start of the pass
+(`git status --short` → empty), so nothing was left over from an interrupted attempt.
+
+### W2A-01 — a retried Return said the note twice
+
+Confirmed as reported: `submitResponse()` wrote the change note unconditionally before every
+`respond` attempt, so a refused outcome left the note posted, `RESPOND_REFUSED` invited her to
+press Submit again, and the second press put the identical sentence in the designer's thread a
+second time.
+
+Fixed with a latch rather than by reordering the two writes — the lane's original reason for
+sending the note first still holds (an edition returned saying nothing is a dead end for the
+designer, and the outcome must not be recorded against a note that never arrived).
+`notePosted = useRef<string | null>(null)` holds the text that actually reached the thread; the
+comment write is skipped when the pending note is byte-identical to it, and the latch is set only
+after `mutateAsync` resolves. A refused note therefore still blocks the outcome and still retries.
+
+Editing the note before retrying makes it a different thing to say, so it is sent — that is
+deliberate, and has its own test.
+
+Two tests in `approval-ask.test.tsx`, in the doors-and-note block that already covers this code:
+
+- *says the note once when a refused outcome is submitted again* — `respondMutate` rejects once;
+  after the retry `respondMutate` has two calls and `commentMutateAsync` still has one.
+- *sends the note again when she changes what she wants to say* — the second call carries the
+  edited body.
+
+### W2A-02 — the cover-image plate could never fire
+
+Confirmed, and worse than reported: the key is unreachable at two layers, not one.
+
+1. The snapshot shape is fixed. `_resolve_project_approval_artifact` (00463) builds a `plan_issue`
+   snapshot as exactly kind/id/version/checksum/title/issuedAt/sheetCount and a `budget_version`
+   snapshot as kind/id/version/checksum/title/checkpointCode/publishedAt/low-target-high totals.
+   The immutability guard rejects any artifact row whose `source_snapshot` differs from that
+   function's output, so no cover key can appear without a migration.
+2. Even a widened snapshot would not arrive. `parseProjectApprovalReview`
+   (`packages/supabase/src/hooks/use-project-approvals.ts:299-333`) returns an object **literal**,
+   field by field — `sourceSnapshot` is not among the fields, so it is dropped before the surface
+   ever sees the row.
+
+Taken the first branch of the reviewer's fix: the titled plate is Wave 2's shipped behaviour, and
+the invented keys are gone. Deleted `coverImageOf()`, the `<img>` leg of `ArtifactPlate`, and the
+five tests that pinned a shape that does not exist. The plate now draws the budget table for a
+`budget_version` and the edition named and dated for everything else. The reason is recorded in
+the component's own doc comment so the next reader does not re-invent the branch.
+
+**Did not** add a sheet-count line from `sheetCount`. It is a real snapshot field, but it is
+unreachable through the same mapper, and a bare count is the sort of number the vision asks us to
+spend words on. A plan-issue preview is a two-part change — widen the snapshot in a migration and
+widen the projection + mapper — and belongs to a lane that owns those files, not to this one.
+
+`whyOf()` and the `costBaselineCents` read are left in place: they are the same defensive shape,
+but the backend lane is adding `why` under P-13, and both were briefed as defensive reads. Note
+that they are subject to the same mapper truncation — a `why` column will need
+`parseProjectApprovalReview` widened too, or the line will never render.
+
+### Gates, re-run from the worktree
+
+`pnpm --dir /Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-web --filter
+@patina/client-portal type-check` → clean, no output past the tsc banner.
+
+`… --filter @patina/client-portal test` → **117 suites / 1615 tests, all passing** (1617 before
+this pass: five cover-shape tests removed, three added).
+
+Same run with `--coverage`: statements 71.99%, branches 67.02%, functions 71.88%, lines 74.06% —
+all above the configured floor (70/60/70/70).
+
+⚠ `pnpm --filter …` run from anywhere but the worktree resolves to the **main checkout**, because
+this agent's cwd resets between commands and a bare `cd` does not persist. `pnpm --dir <worktree>`
+is the form that works; the first attempt without it type-checked main and failed on a pre-existing
+`.next/types/app/page.ts` error that has nothing to do with this branch.

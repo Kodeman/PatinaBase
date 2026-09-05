@@ -207,26 +207,6 @@ function recordedAtOf(approval: ProjectApprovalReview): string {
   return approval.respondedAt ?? approval.updatedAt ?? approval.createdAt ?? '';
 }
 
-/**
- * The frozen edition's own snapshot, read defensively.
- *
- * `source_snapshot` is a jsonb column: it may be absent from the projection
- * altogether, may be a shape this surface has never seen, and is never trusted
- * to be a URL because it said so. Only an http(s) or same-origin path is drawn;
- * anything else is treated as no preview at all, and the plate falls back to
- * naming the edition.
- */
-function coverImageOf(approval: ProjectApprovalReview): string | null {
-  const snapshot = (approval as { sourceSnapshot?: unknown }).sourceSnapshot;
-  if (!snapshot || typeof snapshot !== 'object') return null;
-  const candidate =
-    (snapshot as { coverImageUrl?: unknown }).coverImageUrl ??
-    (snapshot as { cover_image_url?: unknown }).cover_image_url;
-  if (typeof candidate !== 'string') return null;
-  const url = candidate.trim();
-  return /^(https?:\/\/|\/)/.test(url) ? url : null;
-}
-
 /** The designer's one-line why, when the row carries one (P-13, backend lane). */
 function whyOf(approval: ProjectApprovalReview): string | null {
   const why = (approval as { why?: unknown }).why;
@@ -236,10 +216,17 @@ function whyOf(approval: ProjectApprovalReview): string | null {
 /**
  * The artifact, shown.
  *
- * A plate with a frame around it: the edition as a picture where the frozen
- * snapshot carries one, the budget itself where the artifact IS a budget, and
- * otherwise the edition named and dated — never an empty box pretending to be
- * a document.
+ * A plate with a frame around it: the budget itself where the artifact IS a
+ * budget, and otherwise the edition named and dated — never an empty box
+ * pretending to be a document.
+ *
+ * There is no picture of a plan issue here, and there cannot be one yet:
+ * `_resolve_project_approval_artifact` freezes a plan_issue snapshot as exactly
+ * kind/id/version/checksum/title/issuedAt/sheetCount (00463), the immutability
+ * guard rejects any artifact row whose snapshot differs from that, and
+ * `parseProjectApprovalReview` builds its object field by field so no snapshot
+ * reaches this surface at all. A cover preview needs both a widened snapshot
+ * and a widened projection; naming the edition is the honest plate until then.
  *
  * The checksum is a maker's mark at the frame's edge: twelve characters, in
  * mono, quiet. It is provenance, the way a stamp on the back of a chair is
@@ -247,7 +234,6 @@ function whyOf(approval: ProjectApprovalReview): string | null {
  * is meant to check.
  */
 function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
-  const cover = coverImageOf(approval);
   const issued = parseSourceDate(approval.sentAt) ?? parseSourceDate(approval.createdAt);
   const makersMark = approval.artifactChecksum.slice(0, 12);
 
@@ -256,17 +242,7 @@ function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
       data-testid="approval-plate"
       className="relative mt-3 max-w-[52ch] border border-[var(--border-default)] p-3"
     >
-      {cover ? (
-        // The cover is an arbitrary remote URL out of the plan pipeline, not a
-        // configured image host — the reading `RoomCapture` takes.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          data-testid="approval-plate-cover"
-          src={cover}
-          alt={`${approval.artifactTitle}, edition ${approval.artifactVersion}`}
-          className="block max-h-[360px] w-full object-contain"
-        />
-      ) : approval.artifactKind === 'budget_version' ? (
+      {approval.artifactKind === 'budget_version' ? (
         <BudgetInEdition approval={approval} />
       ) : null}
 
@@ -711,6 +687,11 @@ export function ApprovalAsk({
   const [composer, setComposer] = useState<HTMLTextAreaElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  // The note that already reached the thread. A refused outcome leaves the note
+  // posted and invites her to press Submit again; without this latch the second
+  // press says the same thing twice in the designer's thread. Editing the note
+  // before retrying makes it a different thing to say, so it is sent.
+  const notePosted = useRef<string | null>(null);
 
   const due = parseSourceDate(approval.dueAt);
   const reviewComplete = approval.completedReviewCount >= approval.requiredReviewCount;
@@ -798,10 +779,12 @@ export function ApprovalAsk({
     setNotice(null);
     try {
       // The note lands FIRST. An outcome recorded against a note that never
-      // arrived would send the edition back saying nothing.
-      if (chosen === 'changes_requested') {
+      // arrived would send the edition back saying nothing — and a note that
+      // already landed is not sent twice when the outcome is retried.
+      if (chosen === 'changes_requested' && notePosted.current !== note) {
         try {
           await changeNoteComment.mutateAsync({ decisionId: approval.decisionId, body: note });
+          notePosted.current = note;
         } catch (cause) {
           setError(refusalSentence(cause, NOTE_REFUSED));
           return;
