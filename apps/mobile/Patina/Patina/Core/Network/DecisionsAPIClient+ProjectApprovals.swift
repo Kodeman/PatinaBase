@@ -215,6 +215,21 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// approval reads as superseded even when it also carries an answer.
     public var isClosedByDisposition: Bool { isWithdrawn || isSuperseded }
 
+    /// The ask ran out of time with nothing recorded on it.
+    ///
+    /// `W2R1-B1`. `client_decisions.status` is CHECK-constrained to
+    /// `draft | pending | responded | expired`, and a lapsed row is the fourth
+    /// way an approval closes — the one the ceremony had no branch for. It
+    /// satisfies neither disposition, it carries no outcome to name, and
+    /// `canRespond` is false, so the screen drew the question, the edition and
+    /// the impacts and then simply stopped: no mark, no sentence, no doors.
+    ///
+    /// An expired row that DOES carry an outcome is an answered approval —
+    /// the answer is the fact worth stating — so the outcome is read first.
+    public var isLapsed: Bool {
+        lifecycleStatus == "expired" && !isClosedByDisposition && outcome == nil
+    }
+
     /// Every reviewer the frozen snapshot requires has confirmed this exact
     /// edition. Counted, not drawn — the numbers never reach the screen (R5).
     public var isReviewComplete: Bool {

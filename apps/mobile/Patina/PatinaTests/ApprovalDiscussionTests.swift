@@ -57,6 +57,18 @@ struct ApprovalDiscussionTests {
         #expect(view.contains("discussion.load(decisionId: decisionId)"))
         // Read-only: the one composer on this surface is the change note.
         #expect(!view.contains("TextField("))
+
+        // `W2R1-B2`: and the read is attached to a container that is always
+        // in the tree. Hung off `content` — a ViewBuilder whose only branches
+        // are "there are comments" and "the read failed" — it was a modifier
+        // on an unrendered empty view on first mount, so it never ran and the
+        // comments could never become non-empty. The whole feature was inert.
+        let body = try #require(view.range(of: "var body: some View {"))
+        let task = try #require(view.range(of: ".task(id: readKey)"))
+        #expect(
+            String(view[body.upperBound..<task.lowerBound]).contains("VStack"),
+            "the discussion read hangs off a view that may not be in the tree"
+        )
     }
 
     // MARK: - Loading

@@ -41,10 +41,20 @@ struct ApprovalDiscussionBlock: View {
     @State private var discussion = ApprovalDiscussion()
 
     var body: some View {
-        content
-            .task(id: readKey) {
-                await discussion.load(decisionId: decisionId)
-            }
+        // `W2R1-B2`: the read hangs off a container that is ALWAYS in the
+        // tree, never off `content`. `content` is an unrendered empty view on
+        // first mount — there are no comments yet and nothing has failed yet,
+        // so neither branch is taken — and a modifier on an empty view is
+        // never applied, so the load that would have filled it could not run.
+        // The read was therefore unreachable in every state that mattered:
+        // her own returned note was written and never read back, on the
+        // submit, on re-entry, and on a cold deep-link launch alike.
+        VStack(alignment: .leading, spacing: 0) {
+            content
+        }
+        .task(id: readKey) {
+            await discussion.load(decisionId: decisionId)
+        }
     }
 
     @ViewBuilder

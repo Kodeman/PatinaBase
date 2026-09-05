@@ -267,6 +267,7 @@ struct ProjectApprovalActTests {
             ProjectApprovalCopy.noImpact,
             ProjectApprovalCopy.withdrawn,
             ProjectApprovalCopy.superseded,
+            ProjectApprovalCopy.expired,
             ProjectApprovalCopy.immutability(edition: 2),
             ProjectApprovalCopy.noteLabel,
             ProjectApprovalCopy.noteHelp,
@@ -329,6 +330,7 @@ struct ProjectApprovalActTests {
         var strings = [
             ProjectApprovalCopy.withdrawn,
             ProjectApprovalCopy.superseded,
+            ProjectApprovalCopy.expired,
             ProjectApprovalCopy.unavailable,
             ProjectApprovalCopy.reviewUnavailable
         ]

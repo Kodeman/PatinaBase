@@ -176,13 +176,16 @@ struct ProjectApprovalBlock: View {
 
     // MARK: - The approval that is closed, or already answered
 
-    /// Why there are no acts. An approval can be closed three ways, and each
+    /// Why there are no acts. An approval can be closed four ways, and each
     /// of them left the screen silent: withdrawn and superseded stood ahead of
-    /// everything with nothing to say, and an answered approval never named
-    /// the answer she had given it.
+    /// everything with nothing to say, an answered approval never named the
+    /// answer she had given it, and a lapsed one — `W2R1-B1` — matched no
+    /// branch at all while `outcomeLeg` withheld the doors, so the ceremony
+    /// ended mid-sentence under the impact rows.
     ///
     /// The order is the house's own (`client-attention.ts:55-71`): the
-    /// disposition first, then the outcome.
+    /// disposition first, then the outcome, and the clock last — an expired
+    /// row that carries an answer is an answered approval.
     @ViewBuilder
     private func closureLeg(_ review: RemoteProjectApprovalReview) -> some View {
         if review.isWithdrawn {
@@ -202,6 +205,8 @@ struct ProjectApprovalBlock: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("decisionDetail.approval.noteFailure")
             }
+        } else if review.isLapsed {
+            closureLine(ProjectApprovalCopy.expired, stamp: .expired, id: "expired")
         }
     }
 

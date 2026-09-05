@@ -209,6 +209,14 @@ enum ProjectApprovalCopy {
     static let superseded =
         "A later edition has replaced this one. This edition is closed."
 
+    /// `W2R1-B1`. The fourth way an approval closes: the time on it ran out
+    /// with no answer recorded. Stated as a fact about the paper and never
+    /// about her — R8 keeps lateness out of the client's register, so there is
+    /// no "overdue", no lapse blamed on the reader, and the next move is
+    /// named because there is a real one.
+    static let expired =
+        "This approval closed before it was answered. Your designer can send it again."
+
     // MARK: - The answer already given
 
     /// One flat line naming what she answered, on a return visit. The stamp
