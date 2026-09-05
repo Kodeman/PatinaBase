@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import UserNotifications
 
 // W1b integration: the plank work grew this past the SwiftLint size floor.
 // Scoped so lint-delta still catches every other class of regression here;
@@ -36,14 +35,14 @@ struct SettingsView: View {
     /// Wave 3 dark-mode: appearance override (System / Light / Dark).
     /// PatinaApp reads the same key and applies `.preferredColorScheme`.
     @AppStorage(AppearanceSetting.storageKey) private var appearanceRaw = AppearanceSetting.system.rawValue
-    /// `W1-C-08`: whether iOS itself will deliver a notification for Patina.
-    /// The Notifications row used to bind a local `AppSettings` bool alone, so
-    /// on the very launch where `PushPrimerView` had just said "Notifications
-    /// are off for Patina" this screen showed the switch ON. Read from
-    /// `UNUserNotificationCenter` on appear, the way `C2-09`'s primer now
-    /// does; `nil` until that read lands, so the row never asserts either
-    /// answer before it has one.
-    @State private var systemNotificationsDenied: Bool?
+    /// `W1-C-08` / `P-07`: whether iOS itself will deliver a notification for
+    /// Patina. The Notifications row used to bind a local `AppSettings` bool
+    /// alone, so on the very launch where `PushPrimerView` had just said
+    /// "Notifications are off for Patina" this screen showed the switch ON.
+    /// The model reads `UNUserNotificationCenter` on appear and holds `nil`
+    /// until that read lands, so the row never asserts either answer before
+    /// it has one.
+    @State private var notificationsAuthorization = NotificationsRowModel()
 
     var body: some View {
         // PT-0-5: this is the real settings sheet (was previously
@@ -208,9 +207,7 @@ struct SettingsView: View {
             await settings.load()
             // C2-09's rule — read the status, do not assume it — applied to
             // the row that asserts it (`W1-C-08`).
-            let status = await UNUserNotificationCenter.current()
-                .notificationSettings().authorizationStatus
-            systemNotificationsDenied = PushTokenService.outcome(for: status) == .denied
+            await notificationsAuthorization.refresh()
         }
         .alert("Forget recent context?", isPresented: $showingForgetContextConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -433,17 +430,19 @@ struct SettingsView: View {
         }
     }
 
-    /// `W1-C-08`. With iOS authorization denied the app's own preference is not
-    /// the truth about whether anything arrives, and a switch reading ON over a
-    /// denied authorization is a straightforward lie. There the row stops being
-    /// a switch and becomes the one door that works — `PushPrimerView`'s shape.
+    /// `W1-C-08` / `P-07`. With iOS authorization denied the app's own
+    /// preference is not the truth about whether anything arrives, and a
+    /// switch reading ON over a denied authorization is a straightforward lie.
+    /// There the row stops being a switch and becomes the one door that works.
+    /// Undecided, the switch is the door: turning it on asks iOS, and the
+    /// preference is written only if something was granted.
     @ViewBuilder
     private var notificationsRow: some View {
-        if systemNotificationsDenied == true {
+        if notificationsAuthorization.state == .denied {
             settingsButtonRow(
                 icon: "bell.slash",
                 iconColor: PatinaColors.terracotta,
-                label: "Notifications are off in iOS Settings"
+                label: Self.turnOnInSettingsLabel
             ) {
                 if let url = PushTokenService.settingsURL { openURL(url) }
             }
@@ -454,12 +453,26 @@ struct SettingsView: View {
                 iconColor: PatinaColors.terracotta,
                 label: "Notifications",
                 isOn: Binding(
-                    get: { settings.notificationsEnabled },
-                    set: { settings.setNotificationsEnabled($0) }
+                    get: {
+                        // Undecided means iOS has never been asked, so nothing
+                        // arrives whatever the stored preference says.
+                        notificationsAuthorization.state == .undecided
+                            ? false
+                            : settings.notificationsEnabled
+                    },
+                    set: { enabled in
+                        Task {
+                            await notificationsAuthorization.setEnabled(enabled, settings: settings)
+                        }
+                    }
                 )
             )
+            .accessibilityIdentifier("SettingsView.NotificationsToggle")
         }
     }
+
+    /// The denied row's own sentence — a door, not a diagnosis.
+    static let turnOnInSettingsLabel = "Turn on in iOS Settings"
 
     private func settingsToggleRow(icon: String, iconColor: Color, label: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: PatinaSpacing.xsm) {

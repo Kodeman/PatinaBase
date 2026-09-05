@@ -176,15 +176,24 @@ struct WalkFixTwoTests {
 
     // MARK: - W1-C-08 · the Settings notifications row
 
+    /// `P-07` moved the read into `NotificationsRowModel`, which the row now
+    /// asks — the pin follows it there rather than going green on a row that
+    /// binds a local bool again.
     @Test("the Settings notifications row reads iOS authorization")
     func settingsReadsNotificationAuthorization() throws {
+        let model = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Settings/NotificationsRowModel.swift")
+        )
+        #expect(model.contains("notificationSettings().authorizationStatus"),
+                "the row still binds a local bool alone (W1-C-08)")
+        #expect(model.contains("PushTokenService.outcome(for: status)"),
+                "the denied rule must be the one C2-09's primer uses")
+
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
         )
-        #expect(code.contains("notificationSettings().authorizationStatus"),
-                "the row still binds a local bool alone (W1-C-08)")
-        #expect(code.contains("PushTokenService.outcome(for: status) == .denied"),
-                "the denied rule must be the one C2-09's primer uses")
+        #expect(code.contains("notificationsAuthorization.refresh()"))
+        #expect(code.contains("notificationsAuthorization.state == .denied"))
         #expect(code.contains("SettingsView.NotificationsDenied"))
     }
 
