@@ -61,7 +61,10 @@ interface InvoiceRow {
   id: string;
   designer_id: string;
   client_id: string | null;
-  project_id: string;
+  // NULL on a studio invoice — an invoice drawn for a household with no house.
+  project_id: string | null;
+  studio_id: string | null;
+  title: string | null;
   invoice_number: string | null;
   status: string;
   total_cents: number;
@@ -146,7 +149,7 @@ Deno.serve(async (req: Request) => {
     .from('invoices')
     .select(
       `
-      id, designer_id, client_id, project_id, invoice_number, status,
+      id, designer_id, client_id, project_id, studio_id, title, invoice_number, status,
       total_cents, amount_paid_cents, currency, due_date, sent_at,
       project:projects!invoices_project_id_fkey(id, name, client_id),
       client:profiles!invoices_client_id_fkey(id, full_name, email),
@@ -235,16 +238,20 @@ Deno.serve(async (req: Request) => {
     invoice.designer?.full_name?.trim() ||
     invoice.designer?.business_name?.trim() ||
     'Your designer';
-  // Studio co-brand (Designer Studios): the invoice's project resolves the
-  // studio brand. Subject/in-app lead with the studio; email prose stays the
-  // individual designer's name.
+  // Studio co-brand (Designer Studios): the invoice's own studio resolves the
+  // brand — a studio invoice has no project to read it from, and a two-studio
+  // designer's primary studio would be the wrong letterhead. Subject/in-app lead
+  // with the studio; email prose stays the individual designer's name.
   const identity = await resolveStudioIdentity(admin, {
     projectId: invoice.project_id,
     designerId: invoice.designer_id,
+    studioId: invoice.studio_id,
   });
   const senderName = studioDisplayName(identity, designerName);
   const cobrand = studioCobrand(identity);
-  const projectName = invoice.project?.name ?? 'your project';
+  // What the letter is *for*: the house, else the studio invoice's own regarding
+  // line, else a plain word for the studio's own book.
+  const projectName = invoice.project?.name ?? invoice.title ?? 'your studio';
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
 

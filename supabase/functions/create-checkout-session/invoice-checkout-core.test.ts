@@ -4,6 +4,7 @@ import {
   type InvoiceCheckoutGateway,
   InvoiceCheckoutIntegrityError,
   type InvoiceCheckoutSession,
+  invoiceCheckoutReturnAddress,
   invoiceCheckoutReturnUrl,
   reconcileInvoiceCheckoutSession,
   runInvoiceCheckout,
@@ -60,6 +61,45 @@ function sessionFor(
     ...overrides,
   };
 }
+
+Deno.test('invoice Checkout: a project invoice returns to its own house', () => {
+  assertEquals(
+    invoiceCheckoutReturnAddress('https://client.test', 'proj-1', 'inv-1', 'success'),
+    'https://client.test/projects/proj-1?invoice=inv-1&checkout=success&session_id={CHECKOUT_SESSION_ID}#letterbox'
+  );
+  assertEquals(
+    invoiceCheckoutReturnAddress('https://client.test', 'proj-1', 'inv-1', 'cancelled'),
+    'https://client.test/projects/proj-1?invoice=inv-1&checkout=cancelled#letterbox'
+  );
+});
+
+Deno.test('invoice Checkout: a studio invoice has no house and returns to the front door', () => {
+  assertEquals(
+    invoiceCheckoutReturnAddress('https://client.test', null, 'inv-1', 'success'),
+    'https://client.test/?invoice=inv-1&checkout=success&session_id={CHECKOUT_SESSION_ID}#letterbox'
+  );
+  assertEquals(
+    invoiceCheckoutReturnAddress('https://client.test', null, 'inv-1', 'cancelled'),
+    'https://client.test/?invoice=inv-1&checkout=cancelled#letterbox'
+  );
+});
+
+Deno.test("invoice Checkout: Stripe's session template reaches it un-encoded", () => {
+  // Stripe substitutes {CHECKOUT_SESSION_ID} by literal match. Percent-encoded
+  // braces are handed to the client verbatim instead, so the splice must land
+  // after the params are encoded, and before the fragment.
+  for (const projectId of ['proj-1', null]) {
+    const url = invoiceCheckoutReturnAddress(
+      'https://client.test/',
+      projectId,
+      'inv-1',
+      'success'
+    );
+    assertEquals(url.includes('session_id={CHECKOUT_SESSION_ID}'), true);
+    assertEquals(url.includes('%7B'), false);
+    assertEquals(url.endsWith('#letterbox'), true);
+  }
+});
 
 Deno.test('invoice Checkout: both return paths carry exact local attempt evidence', () => {
   const claimed = attempt({ attemptId: 'attempt / one', paymentId: 'payment?one' });

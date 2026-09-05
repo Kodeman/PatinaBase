@@ -62,7 +62,10 @@ interface InvoiceRow {
   id: string;
   designer_id: string;
   client_id: string | null;
-  project_id: string;
+  // NULL on a studio invoice — an invoice drawn for a household with no house.
+  project_id: string | null;
+  studio_id: string | null;
+  title: string | null;
   invoice_number: string | null;
   status: string;
   currency: string;
@@ -119,7 +122,7 @@ Deno.serve(async (req: Request) => {
     .from('invoices')
     .select(
       `
-      id, designer_id, client_id, project_id, invoice_number, status,
+      id, designer_id, client_id, project_id, studio_id, title, invoice_number, status,
       currency, total_cents, amount_paid_cents,
       project:projects!invoices_project_id_fkey(id, name, client_id),
       client:profiles!invoices_client_id_fkey(id, full_name, email),
@@ -164,7 +167,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-  const projectName = invoice.project?.name ?? 'your project';
+  // What the notice is *for*: the house, else the studio invoice's own regarding
+  // line, else a plain word for the studio's own book.
+  const projectName = invoice.project?.name ?? invoice.title ?? 'your studio';
   const clientName = invoice.client?.full_name?.trim() || 'Your client';
   const designerName =
     invoice.designer?.full_name?.trim() || invoice.designer?.business_name?.trim() || null;

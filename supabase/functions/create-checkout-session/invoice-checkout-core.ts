@@ -7,6 +7,8 @@
  * persistence entirely with deterministic fakes.
  */
 
+import { clientProjectLink } from '../_shared/client-portal-links.ts';
+
 /** The two online rails a client may be steered onto. NULL = legacy (both). */
 export type InvoiceCheckoutPaymentMethod = 'card' | 'us_bank_account';
 
@@ -117,6 +119,38 @@ export function invoiceCheckoutReturnUrl(
     `${address}${separator}checkout_attempt_id=${encodeURIComponent(attempt.attemptId)}` +
     `&payment_id=${encodeURIComponent(attempt.paymentId)}${fragment}`
   );
+}
+
+/**
+ * Where Checkout hands an invoice payer back.
+ *
+ * A project invoice returns to its own house; a studio invoice — one drawn for a
+ * household with no house — returns to the front door, which resolves the house
+ * the letter was filed on. `clientProjectLink` already answers both, so the
+ * address is written in one place rather than interpolated per branch.
+ *
+ * On the success leg Stripe substitutes its own `{CHECKOUT_SESSION_ID}`
+ * template by literal match, so the braces are spliced in AFTER the link is
+ * built — percent-encoded ones would reach the client verbatim. The fragment
+ * stays last for the same reason `invoiceCheckoutReturnUrl` keeps it last: the
+ * page reads the section at first paint.
+ */
+export function invoiceCheckoutReturnAddress(
+  clientPortalUrl: string,
+  projectId: string | null,
+  invoiceId: string,
+  checkout: 'success' | 'cancelled'
+): string {
+  const address = clientProjectLink(clientPortalUrl, projectId, 'letterbox', {
+    invoice: invoiceId,
+    checkout,
+  });
+  if (checkout !== 'success') return address;
+  const hashAt = address.indexOf('#');
+  const before = hashAt === -1 ? address : address.slice(0, hashAt);
+  const fragment = hashAt === -1 ? '' : address.slice(hashAt);
+  const separator = before.includes('?') ? '&' : '?';
+  return `${before}${separator}session_id={CHECKOUT_SESSION_ID}${fragment}`;
 }
 
 export function assertInvoiceSessionIdentity(

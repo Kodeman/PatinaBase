@@ -87,7 +87,10 @@ interface InvoiceRow {
   id: string;
   designer_id: string;
   client_id: string | null;
-  project_id: string;
+  // NULL on a studio invoice — an invoice drawn for a household with no house.
+  project_id: string | null;
+  studio_id: string | null;
+  title: string | null;
   invoice_number: string | null;
   status: string;
   total_cents: number;
@@ -104,6 +107,14 @@ interface InvoiceRow {
     business_name: string | null;
     email: string | null;
   } | null;
+}
+
+/**
+ * What the letter is *for*: the house, else the studio invoice's own regarding
+ * line, else a plain word for the studio's own book.
+ */
+function invoiceSubjectName(invoice: InvoiceRow): string {
+  return invoice.project?.name ?? invoice.title ?? 'your studio';
 }
 
 /** Whole days from due_date (DATE) to today, UTC-pinned. Negative = not yet due. */
@@ -173,7 +184,7 @@ async function escalateToDesigner(
   }
 
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-  const projectName = invoice.project?.name ?? 'your project';
+  const projectName = invoiceSubjectName(invoice);
   const balanceCents = Math.max(
     (invoice.total_cents || 0) - (invoice.amount_paid_cents || 0),
     0,
@@ -256,7 +267,7 @@ Deno.serve(async (_req: Request) => {
     .from('invoices')
     .select(
       `
-      id, designer_id, client_id, project_id, invoice_number, status,
+      id, designer_id, client_id, project_id, studio_id, title, invoice_number, status,
       total_cents, amount_paid_cents, currency, due_date,
       reminder_count, last_reminder_at,
       project:projects!invoices_project_id_fkey(id, name, client_id),
@@ -314,7 +325,7 @@ Deno.serve(async (_req: Request) => {
     }
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-    const projectName = invoice.project?.name ?? 'your project';
+    const projectName = invoiceSubjectName(invoice);
     const designerName =
       invoice.designer?.full_name?.trim() ||
       invoice.designer?.business_name?.trim() ||
@@ -324,11 +335,14 @@ Deno.serve(async (_req: Request) => {
       0,
     );
 
-    // Studio co-brand (Designer Studios): the invoice's project resolves the
-    // studio brand for the client-facing reminder shell.
+    // Studio co-brand (Designer Studios): the invoice's own studio resolves the
+    // brand for the client-facing reminder shell — a studio invoice has no
+    // project to read it from, and a two-studio designer's primary studio would
+    // be the wrong letterhead.
     const identity = await resolveStudioIdentity(admin, {
       projectId: invoice.project_id,
       designerId: invoice.designer_id,
+      studioId: invoice.studio_id,
     });
     const cobrand = studioCobrand(identity);
 

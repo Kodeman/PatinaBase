@@ -17,7 +17,9 @@ import {
   buildInvoiceFinalNoticeEmail,
   buildInvoiceOverdueNoticeEmail,
   buildInvoiceSecondNoticeEmail,
+  buildInvoiceSentEmail,
   buildInvoiceUpcomingReminderEmail,
+  buildPaymentReceiptEmail,
   type InvoiceReminderEmailParams,
 } from "./invoice-emails.ts";
 
@@ -92,4 +94,61 @@ Deno.test("A/R escalation is the designer's letter and keeps the accounting word
     arUrl: "https://app.patina.cloud/invoices",
   });
   assertStringIncludes(subject, "overdue");
+});
+
+// ── The studio invoice: a letter with no house ──────────────────────────────
+// An invoice drawn for the studio has no project to name, so its callers pass
+// the invoice's own "regarding" title as projectName. The builders take it as
+// prose, so the only thing to hold is that the title reads where a house name
+// would, escaped, and that nothing invents a house.
+
+const STUDIO_TITLE = "Design consultation · September";
+
+Deno.test("studio invoice: the title reads where the house name would", () => {
+  const { subject, html } = buildInvoiceSentEmail({
+    invoiceNumber: "INV-0031",
+    projectName: STUDIO_TITLE,
+    designerName: "Leah Brandt",
+    senderName: "Middle West Studio",
+    clientName: "Dana Rivera",
+    totalCents: 45000,
+    dueDate: "2026-10-08",
+    portalUrl: "https://client.patina.cloud/invoices/inv-1",
+    studioName: "Middle West Studio",
+  });
+  assertEquals(
+    subject,
+    "Middle West Studio sent you invoice INV-0031 — Design consultation · September",
+  );
+  assertStringIncludes(html, "Design consultation");
+  assert(
+    !subject.toLowerCase().includes("project"),
+    "a studio invoice must never invent a house",
+  );
+});
+
+Deno.test("studio invoice: the reminder ladder names the title too", () => {
+  const params: InvoiceReminderEmailParams = { ...PARAMS, projectName: STUDIO_TITLE };
+  assertEquals(
+    buildInvoiceUpcomingReminderEmail(params).subject,
+    "Reminder: invoice INV-1042 is due soon — Design consultation · September",
+  );
+  assertEquals(
+    buildInvoiceOverdueNoticeEmail(params).subject,
+    "Still open: invoice INV-1042 — Design consultation · September",
+  );
+});
+
+Deno.test("studio invoice: a title with markup in it is escaped, never rendered", () => {
+  const { html } = buildPaymentReceiptEmail({
+    invoiceNumber: "INV-0031",
+    projectName: "<b>Retainer</b>",
+    designerName: "Leah Brandt",
+    clientName: "Dana Rivera",
+    amountPaidCents: 45000,
+    balanceCents: 0,
+    portalUrl: "https://client.patina.cloud/invoices/inv-1",
+  });
+  assertStringIncludes(html, "&lt;b&gt;Retainer&lt;/b&gt;");
+  assert(!html.includes("<b>Retainer</b>"), "the title was rendered as markup");
 });

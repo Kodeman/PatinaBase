@@ -147,7 +147,10 @@ interface InvoiceJoined {
   id: string;
   designer_id: string;
   client_id: string | null;
-  project_id: string;
+  // NULL on a studio invoice — an invoice drawn for a household with no house.
+  project_id: string | null;
+  studio_id: string | null;
+  title: string | null;
   invoice_number: string | null;
   status: string;
   currency: string;
@@ -285,7 +288,7 @@ async function loadInvoiceJoined(
     .from('invoices')
     .select(
       `
-      id, designer_id, client_id, project_id, invoice_number, status,
+      id, designer_id, client_id, project_id, studio_id, title, invoice_number, status,
       currency, total_cents, amount_paid_cents,
       project:projects!invoices_project_id_fkey(id, name, client_id),
       client:profiles!invoices_client_id_fkey(id, full_name, email),
@@ -342,6 +345,15 @@ function designerDisplayName(invoice: InvoiceJoined): string {
   );
 }
 
+/**
+ * What the letter is *for*: the house, else the studio invoice's own regarding
+ * line, else a plain word for the studio's own book. All three invoice letters
+ * this file sends — receipt, failed payment, refund — name it the same way.
+ */
+function invoiceSubjectName(invoice: InvoiceJoined): string {
+  return invoice.project?.name ?? invoice.title ?? 'your studio';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // State flips + side effects
 // ─────────────────────────────────────────────────────────────────────────────
@@ -390,7 +402,7 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     if (!invoice) return;
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-    const projectName = invoice.project?.name ?? 'your project';
+    const projectName = invoiceSubjectName(invoice);
     const designerName = designerDisplayName(invoice);
     const balanceCents = invoice.total_cents - invoice.amount_paid_cents;
     // /invoices/<id> stays: the Patina iOS app claims `/invoices/*` in its
@@ -409,11 +421,14 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     // notification_log row that doubles as their in-app inbox entry).
     const recipient = await resolveRecipient(admin, invoice);
     if (recipient.email) {
-      // Studio co-brand (Designer Studios): the invoice's project resolves brand.
+      // Studio co-brand (Designer Studios): the invoice's own studio resolves the
+      // brand — a studio invoice has no project to read it from, and a
+      // two-studio designer's primary studio would be the wrong letterhead.
       const cobrand = studioCobrand(
         await resolveStudioIdentity(admin, {
           projectId: invoice.project_id,
           designerId: invoice.designer_id,
+          studioId: invoice.studio_id,
         })
       );
       const rendered = buildPaymentReceiptEmail({
@@ -493,18 +508,21 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
     if (!invoice) return;
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-    const projectName = invoice.project?.name ?? 'your project';
+    const projectName = invoiceSubjectName(invoice);
     const designerName = designerDisplayName(invoice);
     const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
     const amountLabel = formatInvoiceCurrency(row.amount_cents, invoice.currency);
 
     const recipient = await resolveRecipient(admin, invoice);
     if (recipient.email) {
-      // Studio co-brand (Designer Studios): the invoice's project resolves brand.
+      // Studio co-brand (Designer Studios): the invoice's own studio resolves the
+      // brand — a studio invoice has no project to read it from, and a
+      // two-studio designer's primary studio would be the wrong letterhead.
       const cobrand = studioCobrand(
         await resolveStudioIdentity(admin, {
           projectId: invoice.project_id,
           designerId: invoice.designer_id,
+          studioId: invoice.studio_id,
         })
       );
       const rendered = buildPaymentFailedEmail({
@@ -1650,7 +1668,7 @@ async function sendInvoiceRefundSideEffects(
     if (!invoice) return;
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-    const projectName = invoice.project?.name ?? 'your project';
+    const projectName = invoiceSubjectName(invoice);
     const designerName = designerDisplayName(invoice);
     const portalUrl = `${DESIGNER_PORTAL_URL}/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`;
     const refundLabel = formatInvoiceCurrency(opts.refundedAmount, invoice.currency);
