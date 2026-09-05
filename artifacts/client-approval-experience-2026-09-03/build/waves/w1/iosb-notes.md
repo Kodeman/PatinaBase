@@ -514,3 +514,137 @@ The two known issues are the pre-existing pair this branch has carried all
 wave: `BrandVoiceLintTests.swift:168` ("curated_mix" contains "curated") and
 `RoomLifecycleTests.theTodayRailFollowsALocalDelete`. The round-two close-out
 adds 78 tests (2380 → 2458) across 12 suites.
+
+---
+
+# Close-out, round two — the review's three majors (2026-09-05)
+
+`ios-close-review-r1.md` returned three majors against the close-out commits.
+All three are fixed below. `m-1`, `m-2`, `m-3` and the four nits were not in the
+fix brief and are untouched — they are listed at the end as what is still owed.
+
+## M-1 — the published gate closed the only in-app door to the review leg
+
+The review is right about the algebra, and the algebra is the whole finding:
+
+- `awaitsClient == needsReviewConfirmation || canRespond`;
+- `canRespond` demands `lifecycleStatus == 'pending'`, and
+  `publish_client_decision` sets `status = 'pending', sent_at = COALESCE(sent_at,
+  now())` in ONE statement (00464:998, 1061) — so a `pending` row always has
+  `sent_at`;
+- `needsReviewConfirmation` demands `draft`, and nothing but publish stamps
+  `sent_at` — so a `draft` row never has it.
+
+`isPublished && awaitsClient` therefore subtracted **exactly** the
+review-confirmation rows. And those rows had no second door: `AppRoute
+.decisionDetail` is pushed from a feed row and from nowhere else
+(`HouseFirstRoot.swift:317`, `ContentView.swift:378`), and 00534 writes a bell
+row only on the transition into `pending`. The comment claiming "reachable by
+its own route" named a door that does not exist; it is retracted.
+
+**Ruled here, and flagged for the orchestrator below:** the row stays, and what
+was wrong with it is fixed where it was wrong — in the drawing.
+
+- `awaitsClientInFeed` is gone. Both merges filter `\.awaitsClient` again
+  (`DecisionsListViewModel.load`, `BadgeCountService.mergedDecisions`), and a
+  source pin now asserts neither reads `isPublished`.
+- `RemoteProjectApprovalReview.awaitsReadingOnly` (`!isPublished &&
+  needsReviewConfirmation`) names the leg, with the equality above written out
+  as the reason a feed cannot filter on publication.
+- **The date goes.** `asWaitingDecision` carries `due_date: awaitsReadingOnly ?
+  nil : dueAt`. `dueAt` on an unissued edition is the studio's plan for an ask
+  it has not made; Today drew it as the deadline of a question nobody had asked.
+  That was W1R2-M3's actual complaint.
+- **The word goes.** `RemoteClientDecision.isUnissuedApproval` (`project_
+  artifact_v1` + `status == 'draft'` — and only the projection bridge can put
+  such a row in front of a homeowner, since `listPending` reads
+  `status=eq.pending`) rides onto `StudioQueueItemRow.awaitsReading`, and
+  `HouseRecordBuilder.title(for:)` gains one branch ahead of the approval one:
+  **"Leah asked you to read this edition."** rather than "asked for your
+  approval". The edition is not yet an ask for her approval and the copy no
+  longer says it is. "Edition" is the ceremony's own word — the detail screen
+  already says "Review exact edition".
+
+Three tests in `ApprovalFeedGuardTests`: the draft keeps its row and loses its
+date, the published one keeps both, and the Record's two titles.
+
+**⚠ For the orchestrator.** The rulings of 2026-09-05 say "Drafts are excluded
+now" under the studio-co-member entry. This fix puts them back on the feed
+(dateless, and called a reading), because the alternative — the review leg
+web-only — fails build-sheet P-09 outright, and walk-r2 recorded that leg
+PASSING, reached from the Studio hub (`walk-shots-r2/37-g1-draft-review.png`).
+The co-member exposure is unchanged in KIND: `list_my_project_decision_reviews`
+already returns published studio-wide rows to a co-member and the projection
+carries no viewer role, which is the Wave 2 migration item. Drafts widen that
+existing hole; they do not open a new one. If you would rather hold the ruling
+than P-09, the revert is one line in each merge plus the `awaitsReadingOnly`
+guard on `due_date`.
+
+## M-2 — Today and the Studio hub now say one thing about one approval
+
+`W1R2-n1`'s guard landed in `DateDisplay.approval`, which the Studio hub and the
+decision list read. The Record composes the same R8 sentence itself, out of
+`DateDisplay.stillOpen` — and `HouseRecordRow.State.overdue` threw the due date
+away, so the card could not have applied the guard even if it read it. An
+approval asked Sep 4, wanted by Sep 4, opened Sep 10 printed "Still open, Leah
+asked on Sep 4." on Today and "Still open." two taps later.
+
+- `DateDisplay.askedOnClauseEarned(askedAt:dueDate:calendar:)` is the guard,
+  once. `approval` reads it; so does the card.
+- `HouseRecordRow.State.overdue` carries `due: Date`. The producer
+  (`HouseRecordBuilder.state`) has the date and now keeps it. A snapshot written
+  before this shape fails to decode and is ignored — one pre-fetch paint, which
+  `RecordSnapshotStore.load` already tolerates by design.
+- The card keeps its own formatter: `HouseRecordDates.short` is fixed to one
+  locale on purpose, and `DateDisplay.short` is not. One rule, two composers —
+  which is what makes the pin worth having.
+
+`RecordAndStudioSaySoTests` builds ONE decision and reads both surfaces:
+same-day drops the clause on both, asked-before-due keeps it on both, and a
+source pin holds the guard to one function. `HouseRecordBuilderTests
+.askedByNameSurvivesTheReturnVisit` needed its own fixture — the shared one is
+asked and wanted on the same day, so under the new guard it would have gone on
+passing with the name it exists to protect no longer drawn.
+
+## M-3 — the last two reds on the money surfaces
+
+The ruling is "'Past due · {date}' in body ink, never red — same refusal, every
+surface", and two sites evaded `MoneyPastDueCopyTests` because neither reads
+`isPastDue`:
+
+- `InvoiceDetailView.swift:91` — `statusHeadline` in `PatinaTypography.h2`,
+  painted from `isOverdue(invoice)`. For a passed invoice that headline is
+  literally "Past due", the largest type on the screen, sitting directly above
+  the due line the close-out had just taken out of the error ramp. Now
+  `PatinaColors.Text.primary` unconditionally. The word stays; the colour goes.
+- `HouseRecordCard.swift` — `lateText`, the passed-money line on Today, in
+  uppercase mono `Text.error`. Now `Text.primary`. It is still told apart from
+  an unpassed line, by ink rather than by alarm: primary against the rail's
+  muted. The spoken label already said "past its date" and is unchanged.
+
+The pin is now the absence of the ramp itself — `noMoneySurfaceDrawsInTheError
+Ramp` over the invoice list, the invoice detail and the Record card, plus
+`HouseRecordRedRefusalTests` on the card's late branch keeping body ink. The
+proposal rail is deliberately NOT in that list: expiry keeps its red by ruling,
+and the ruling named the due line.
+
+## Two moves lint-delta forced
+
+- `HouseRecordRowPresentation.make` went to 52 of 50 lines
+  (`function_body_length`); the `.overdue` branch's composer moved out whole as
+  `stillOpenSentence(row:due:calendar:)`.
+- `HouseRecordCardTests` went to 303 of 300 (`type_body_length`); the new red
+  pin moved to `HouseRecordRedRefusalTests` in the same file.
+
+## Still owed from the review (not in this brief)
+
+`m-1` — the badge comment says `markAllOpened` marks both legs and therefore a
+read cannot part them; `markOpened(id:)`, the common path, still PATCHes the one
+`in_app` row. Either widen it or delete the sentence. `m-2` — `retitleApprovals`
+falls back to an unconditional rename when the projection is empty, so a settled
+approval reads "An approval needs you" on a cold bell. `m-3` — `bellClosed`
+flattens withdrawn and superseded, which the detail screen keeps apart. `n-1` —
+`theStampIsSeamed` asserts nothing about the seam. `n-2` — the names this
+document gave three of its own suites are wrong. `n-3` — three "sign-off"
+strings survive in `DecisionDeferral.swift`. `n-4` — the detail screen's first
+paint now waits on the stamp.
