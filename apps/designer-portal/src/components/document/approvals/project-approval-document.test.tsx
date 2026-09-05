@@ -77,12 +77,6 @@ jest.mock('@patina/supabase', () => ({
   }),
 }));
 
-// P-13 signs the frozen why with the reading designer's given name; the real
-// hook reaches Supabase auth, which this suite replaces wholesale above.
-jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => ({ user: { id: 'designer-1', name: 'Leah Kochaver' } }),
-}));
-
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -434,7 +428,7 @@ describe("P-13 — the designer's one-line why", () => {
     expect(createApproval.mock.calls[0][0].payload.why).toBeNull();
   });
 
-  it('prints the frozen why under the question, signed with a given name', () => {
+  it("prints the frozen why under the question, signed with its author's given name", () => {
     authority = {
       projectId: 'project-1',
       decisionLeadId: 'client-1',
@@ -446,6 +440,7 @@ describe("P-13 — the designer's one-line why", () => {
         ...baseReview,
         lifecycleStatus: 'pending',
         why: 'The walnut is the only piece that holds the room.',
+        whyAuthorName: 'Leah Kochaver',
       },
     ];
     const { container } = renderDocument();
@@ -458,6 +453,34 @@ describe("P-13 — the designer's one-line why", () => {
       'The walnut is the only piece that holds the room.',
     );
     expect(why).toHaveTextContent('\u2014 Leah');
+  });
+
+  // A studio has more than one hand. The sentence is frozen and client-facing,
+  // so with no author on the record it stands unsigned rather than borrowing
+  // the given name of whoever happens to be reading it.
+  it('leaves the why unsigned when the record names no author', () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'pending',
+        why: 'The walnut is the only piece that holds the room.',
+        whyAuthorName: null,
+      },
+    ];
+    const { container } = renderDocument();
+
+    const why = container.querySelector('[data-gate-why]');
+    expect(why).not.toBeNull();
+    expect(why).toHaveTextContent(
+      'The walnut is the only piece that holds the room.',
+    );
+    expect(why?.textContent).not.toContain('\u2014');
   });
 
   it('prints nothing under the question when no why was frozen', () => {

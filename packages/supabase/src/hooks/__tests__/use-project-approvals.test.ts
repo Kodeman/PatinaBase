@@ -257,6 +257,15 @@ describe('project approval sanitized reads', () => {
     );
   });
 
+  it("reads the why's author, and stays null until the projection carries one", () => {
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, whyAuthorName: 'Leah Kochaver' }),
+    ).toEqual(expect.objectContaining({ whyAuthorName: 'Leah Kochaver' }));
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, whyAuthorName: undefined }),
+    ).toEqual(expect.objectContaining({ whyAuthorName: null }));
+  });
+
   it('requires the server-projected overdue condition instead of using a client clock', () => {
     expect(() =>
       parseProjectApprovalReview({ ...REVIEW, isOverdue: undefined }),

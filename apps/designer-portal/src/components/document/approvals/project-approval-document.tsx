@@ -12,7 +12,6 @@ import {
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
-import { useAuth } from '@/hooks/use-auth';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
@@ -215,7 +214,6 @@ export function ProjectApprovalDocument({
    *  destination the band's line 2 presses); null leaves `New approval`. */
   quietLeader?: { label: string; onAct: () => void } | null;
 }) {
-  const { user } = useAuth();
   const approvalsQuery = useProjectApprovals(projectId);
   const candidatesQuery = useProjectApprovalArtifactCandidates(projectId);
   const authorityQuery = useProjectDecisionAuthority(projectId);
@@ -514,10 +512,6 @@ export function ProjectApprovalDocument({
   const composerArtifact = findArtifact(candidates, form.artifactValue);
   // P-13 — the live count, in words, only once the cap is close.
   const whyRemaining = whyRemainingLine(form.why);
-  // The frozen why is signed with the studio hand reading it. There is no
-  // author on the projection yet, so a co-member reading a peer's approval
-  // sees her own given name here; widen when the projection carries one.
-  const designerGivenName = givenName(user?.name);
 
   const decisionLeadId = authority?.decisionLeadId ?? null;
   const decidedCount = approvals.filter(isSealed).length;
@@ -1079,7 +1073,11 @@ export function ProjectApprovalDocument({
                     <GatePartBlock part="question">
                       <GateQuestion>{review.question}</GateQuestion>
                       {review.why && (
-                        <GateWhy attribution={designerGivenName}>
+                        /* P-13 — signed by the hand that wrote it. A studio
+                           has more than one designer, so the given name comes
+                           off the frozen record, never off the reader; with no
+                           author on the record the sentence stands unsigned. */
+                        <GateWhy attribution={givenName(review.whyAuthorName)}>
                           {review.why}
                         </GateWhy>
                       )}

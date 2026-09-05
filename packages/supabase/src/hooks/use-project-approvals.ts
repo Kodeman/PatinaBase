@@ -56,6 +56,14 @@ export interface ProjectApprovalReview {
    * `parseProjectApprovalReview` always sets it, to null when absent.
    */
   why?: string | null;
+  /**
+   * P-13 — the display name of the hand that WROTE the why, carried by the
+   * projection so the sentence is signed by its author rather than by whoever
+   * is reading it: a studio has more than one designer, and the record is
+   * immutable and client-facing. Null until the projection carries the column;
+   * an unsigned sentence is honest, a wrongly signed one is not.
+   */
+  whyAuthorName?: string | null;
   context: string | null;
   dueAt: string;
   costCentsDelta: number;
@@ -318,6 +326,7 @@ export function parseProjectApprovalReview(
     artifactTitle: stringValue(row, 'artifactTitle', label),
     question: stringValue(row, 'question', label),
     why: nullableString(row, 'why'),
+    whyAuthorName: nullableString(row, 'whyAuthorName'),
     context: nullableString(row, 'context'),
     dueAt,
     costCentsDelta: numberValue(row, 'costCentsDelta', label),
