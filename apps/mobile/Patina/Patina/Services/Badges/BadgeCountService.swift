@@ -449,6 +449,12 @@ final class BadgeCountService {
         pendingDecisions = []
         pendingProposals = []
         signedProposals = []
+        // P-21 made this array speak in the first person: `answeredApprovalRows`
+        // draws "You approved the budget." from it. Left behind across a
+        // session change, account B's Today says that over account A's
+        // approval for as long as the next refresh takes — and a refresh can
+        // fail (`lastRefreshFailed`) or never start (offline launch).
+        projectApprovals = []
         payableInvoices = []
         threadSummaries = []
         projects = []
