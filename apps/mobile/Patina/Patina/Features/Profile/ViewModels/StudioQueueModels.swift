@@ -16,6 +16,19 @@ enum StudioQueueSectionKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// `W1R2-m2`: what VoiceOver reads on the section badge. The count is
+    /// spoken in words (P-24), so the noun after it has to agree with the word
+    /// — it read "one categories" on every section holding a single kind of
+    /// thing. It lives with the section rather than with the view because the
+    /// noun belongs to the section, and because a ruled string is a fact a
+    /// test can hold.
+    func badgeLabel(count: Int) -> String {
+        let word = PatinaCount.inWords(count)
+        return self == .awaitingYou
+            ? "\(word) \(count == 1 ? "thing" : "things") awaiting you"
+            : "\(word) \(count == 1 ? "category" : "categories")"
+    }
+
     var title: String {
         switch self {
         case .awaitingYou: return "Awaiting you"
@@ -91,21 +104,28 @@ struct StudioAttentionSummary: Equatable {
 
     /// SP-16: the one attention sentence, so the Studio subhead, the Companion
     /// and the Daily Room cannot phrase the same number three ways.
+    /// P-24: counted in words, not figures — the doorstep's ruled form.
     static func attentionHint(count: Int) -> String? {
-        if count == 1 { return "1 thing needs your eye" }
-        if count > 1 { return "\(count) things need your eye" }
+        if count == 1 { return "One thing needs your eye" }
+        if count > 1 { return "\(PatinaCount.inWordsCapitalized(count)) things need your eye" }
         return nil
     }
 
     /// Short enough to sit beneath the collapsed Companion mark.
     var hint: String? {
         if let attention = Self.attentionHint(count: awaitingCount) { return attention }
-        if unreadConversationCount == 1 { return "1 new conversation" }
-        if unreadConversationCount > 1 { return "\(unreadConversationCount) new conversations" }
-        if unreadUpdateCount == 1 { return "1 new Studio update" }
-        if unreadUpdateCount > 1 { return "\(unreadUpdateCount) new Studio updates" }
-        if activeProjectCount == 1 { return "1 project is moving" }
-        if activeProjectCount > 1 { return "\(activeProjectCount) projects are moving" }
+        if unreadConversationCount == 1 { return "One new conversation" }
+        if unreadConversationCount > 1 {
+            return "\(PatinaCount.inWordsCapitalized(unreadConversationCount)) new conversations"
+        }
+        if unreadUpdateCount == 1 { return "One new Studio update" }
+        if unreadUpdateCount > 1 {
+            return "\(PatinaCount.inWordsCapitalized(unreadUpdateCount)) new Studio updates"
+        }
+        if activeProjectCount == 1 { return "One project is moving" }
+        if activeProjectCount > 1 {
+            return "\(PatinaCount.inWordsCapitalized(activeProjectCount)) projects are moving"
+        }
         return nil
     }
 }

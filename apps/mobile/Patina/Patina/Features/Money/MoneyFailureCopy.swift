@@ -117,6 +117,19 @@ enum MoneyFailureCopy {
         "We couldn’t send your choice. Your designer hasn’t seen it yet."
     )
 
+    /// `P-09`: a Stage-2 approval is an approval of one exact edition, not a
+    /// choice between options — reporting it as one would tell a client who
+    /// approved a drawing set that her "choice" had not gone through.
+    static let approvalResponse = MoneyFailure(
+        "We couldn’t record your response. Your designer hasn’t seen it yet."
+    )
+
+    /// The review leg. It records that she read the edition and changes
+    /// nothing else, so the sentence says exactly that.
+    static let approvalReview = MoneyFailure(
+        "We couldn’t confirm your review of this edition. Nothing has changed."
+    )
+
     /// SP-17: a deferral is a message, not a choice. Reporting it as one told
     /// a client who tapped "Not yet" that her choice had not gone through.
     static let deferral = MoneyFailure(

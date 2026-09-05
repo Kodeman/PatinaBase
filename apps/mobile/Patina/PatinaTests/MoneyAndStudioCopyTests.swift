@@ -68,7 +68,7 @@ struct MoneyAndStudioCopyTests {
     func dueLineIsOneStringForEverySurface() throws {
         let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
         #expect(DateDisplay.due("2026-08-22", now: now)
-                == DateDisplay.DueLine(text: "Overdue \u{00B7} Aug 22", isPastDue: true))
+                == DateDisplay.DueLine(text: "Past due \u{00B7} Aug 22", isPastDue: true))
         #expect(DateDisplay.due("2026-08-27", now: now)
                 == DateDisplay.DueLine(text: "Due today", isPastDue: false))
         #expect(DateDisplay.due("2026-09-01", now: now)
@@ -94,18 +94,66 @@ struct MoneyAndStudioCopyTests {
 
         let decisions = try decode([RemoteClientDecision].self, """
         [{ "id": "d-1", "title": "Rug color", "status": "pending",
-           "due_date": "2026-08-22T00:00:00Z", "created_at": "2026-08-01T00:00:00Z" }]
+           "due_date": "2026-08-22T00:00:00Z", "created_at": "2026-08-01T12:00:00Z" }]
         """)
         let snapshot = StudioQueueBuilder.build(StudioQueueInput(
             projects: [], decisions: decisions, proposals: [], invoices: [],
             documents: [], threads: [], notifications: [],
             currentUserId: "client", now: now
         ))
-        #expect(snapshot.section(.awaitingYou).rows.first?.meta == stamped.text)
+        // P-04 / R8: the approval row is the one that stopped saying it. The
+        // shared helper still parses the same two shapes — `stamped` proves
+        // the timestamptz form reads as past — but the approval rail names
+        // the day the studio asked instead.
+        #expect(snapshot.section(.awaitingYou).rows.first?.meta
+                == "Still open, your designer asked on Aug 1.")
+    }
+
+    // MARK: - P-04 / R8 · the approval surfaces stopped saying it
+
+    @Test("an approval past its date reads as still open, and money keeps its own line")
+    func approvalLineIsTheRuledSentence() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
+        #expect(DateDisplay.approval(
+            dueDate: "2026-08-22T00:00:00Z", askedAt: "2026-08-01T12:00:00Z",
+            designer: "Leah", now: now
+        ) == DateDisplay.ApprovalLine(
+            text: "Still open, Leah asked on Aug 1.", isStillOpen: true
+        ))
+        // Not yet past: the ordinary due line, muted, exactly as before.
+        #expect(DateDisplay.approval(
+            dueDate: "2026-09-01", askedAt: "2026-08-01", now: now
+        ) == DateDisplay.ApprovalLine(text: "Due Sep 1", isStillOpen: false))
+        #expect(DateDisplay.approval(
+            dueDate: "2026-08-27", askedAt: "2026-08-01", now: now
+        ) == DateDisplay.ApprovalLine(text: "Due today", isStillOpen: false))
+        // No asked-on date on the wire: say only what is known, invent nothing.
+        #expect(DateDisplay.approval(dueDate: "2026-08-22", askedAt: nil, now: now)
+                == DateDisplay.ApprovalLine(text: "Still open.", isStillOpen: true))
+        #expect(DateDisplay.approval(dueDate: nil, askedAt: "2026-08-01", now: now) == nil)
+        // Money is untouched — the one place the other word still belongs.
+        #expect(DateDisplay.due("2026-08-22", now: now)?.isPastDue == true)
+    }
+
+    /// The three approval surfaces read the approval helper, never the money
+    /// one, and none of them carries the error ramp for a passed date.
+    @Test("no approval surface prints the retired word or paints a date red")
+    func approvalSurfacesCarryNoRedAndNoRetiredWord() throws {
+        for file in [
+            "Patina/Features/Decisions/Views/DecisionListView.swift",
+            "Patina/Features/Decisions/Views/DecisionDetailView.swift",
+            "Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift"
+        ] {
+            let source = try String(contentsOf: Self.sourceURL(file), encoding: .utf8)
+            #expect(source.contains("DateDisplay.approval("), "\(file) still reads the money line")
+            #expect(!source.contains("DateDisplay.due(d."), "\(file) still reads the money line")
+            #expect(!source.contains("isPastDue ? PatinaColors.Text.error"),
+                    "\(file) still paints a passed date red")
+        }
     }
 
     /// B-1: the invoice list formatted its own "Due Aug 22, 2026" in muted
-    /// grey while the detail one tap later read "Overdue · Aug 22" in red.
+    /// grey while the detail one tap later read a different line entirely.
     /// Every list row that prints a date now reads the shared helper, and
     /// colours on its `isPastDue`.
     @Test("no money list formats a date of its own")
@@ -116,10 +164,12 @@ struct MoneyAndStudioCopyTests {
         )
         #expect(invoices.contains("DateDisplay.due(invoice.due_date)"))
         #expect(!invoices.contains("\"Due \\("))
-        // A-73: the past-due ink moved from `PatinaColors.error` (3.03:1 on
-        // the light canvas) to `PatinaColors.Text.error`. The rule this test
-        // pins is unchanged — a list row colours on `isPastDue`.
-        #expect(invoices.contains("due.isPastDue ? PatinaColors.Text.error"))
+        // R3-02: the past-due ink left the error ramp altogether. "Overdue"
+        // in red is refused on every surface a homeowner reads, money
+        // included; the line is "Past due · Aug 22" in body ink. The rule this
+        // test pins is unchanged — a list row colours on `isPastDue`.
+        #expect(invoices.contains("due.isPastDue ? PatinaColors.Text.primary"))
+        #expect(!invoices.contains("due.isPastDue ? PatinaColors.Text.error"))
 
         let proposals = try String(
             contentsOf: Self.sourceURL("Patina/Features/Proposals/Views/ProposalListView.swift"),
@@ -321,5 +371,81 @@ struct MoneyAndStudioCopyTests {
         )
         #expect(decision.components(separatedBy: ".patinaTopBand()").count - 1 == 1)
         #expect(decision.components(separatedBy: ".patinaScreen(").count - 1 == 1)
+    }
+}
+
+/// P-04 / R8 · the name in the sentence.
+///
+/// Its own suite because `MoneyAndStudioCopyTests` sits on SwiftLint's
+/// 300-line type-body floor.
+struct ApprovalNamingCopyTests {
+
+    private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
+        try JSONDecoder().decode(T.self, from: Data(json.utf8))
+    }
+
+    /// R8 fills `{Designer}` from the embed the decision select already
+    /// carries. Every approval surface passes it, or the sentence quietly
+    /// falls back to "your designer" on all three at once.
+    @Test("every approval surface hands the sentence the designer it has")
+    func approvalSurfacesFillTheDesignerName() throws {
+        let filled = [
+            "Patina/Features/Decisions/Views/DecisionListView.swift":
+                "designer: d.project?.designer?.askedByName",
+            "Patina/Features/Decisions/Views/DecisionDetailView.swift":
+                "designer: decision.project?.designer?.askedByName",
+            "Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift":
+                "designer: askedBy"
+        ]
+        for (file, expected) in filled {
+            let source = try String(contentsOf: MoneyAndStudioCopyTests.sourceURL(file), encoding: .utf8)
+            #expect(source.contains(expected), "\(file) leaves R8's name unfilled")
+        }
+    }
+
+    /// The name R8 puts in the sentence: a person by their given name, a
+    /// studio whole, nobody when the embed brought nobody.
+    @Test("the designer embed names a person by their given name and a studio whole")
+    func designerRefNamesByTheTitleRule() throws {
+        let person = try decode(RemoteDesignerRef.self, """
+        { "id": "u1", "display_name": "Leah Hartwell", "business_name": "Hartwell Studio" }
+        """)
+        #expect(person.askedByName == "Leah")
+        let studio = try decode(RemoteDesignerRef.self, """
+        { "id": "u2", "business_name": "Hartwell Studio" }
+        """)
+        #expect(studio.askedByName == "Hartwell Studio")
+        let nobody = try decode(RemoteDesignerRef.self, """
+        { "id": "u3" }
+        """)
+        #expect(nobody.askedByName == nil)
+    }
+
+    /// The rulings' ban on invented timing: the hub row took the
+    /// earliest due date from one decision and the earliest asked date from
+    /// another, printing a day that belonged to neither approval. One
+    /// decision — the soonest-due one — answers the whole line now.
+    @Test("the Studio hub's approval row reads one decision, and names its designer")
+    @MainActor
+    func studioApprovalRowReadsASingleDecision() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
+        let decisions = try decode([RemoteClientDecision].self, """
+        [{ "id": "d-past", "title": "Rug color", "status": "pending",
+           "due_date": "2026-08-22T00:00:00Z", "created_at": "2026-08-20T12:00:00Z",
+           "project": { "name": "Aspen Loft Refresh",
+             "designer": { "id": "u1", "display_name": "Leah Hartwell",
+                           "business_name": "Hartwell Studio" } } },
+         { "id": "d-future", "title": "Sconces", "status": "pending",
+           "due_date": "2026-09-30T00:00:00Z", "created_at": "2026-08-01T12:00:00Z" }]
+        """)
+        let snapshot = StudioQueueBuilder.build(StudioQueueInput(
+            projects: [], decisions: decisions, proposals: [], invoices: [],
+            documents: [], threads: [], notifications: [],
+            currentUserId: "client", now: now
+        ))
+        // Aug 20 is d-past's own asked day. Aug 1 is d-future's, and d-future
+        // is not past its date at all.
+        #expect(snapshot.section(.awaitingYou).rows.first?.meta
+                == "Still open, Leah asked on Aug 20.")
     }
 }

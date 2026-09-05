@@ -10,6 +10,7 @@ import {
   spacer,
 } from "../_shared/branded-email.ts";
 import type { ApprovalArtifactCitation } from "../_shared/decision-notify.ts";
+import { clientDecisionLink } from "../_shared/client-portal-links.ts";
 
 const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
 const SANS =
@@ -67,6 +68,10 @@ const CATEGORY_LABELS: Record<ReminderDigestCategory, string> = {
 // Stable render order.
 const CATEGORY_ORDER: ReminderDigestCategory[] = ["proposal", "decision"];
 
+// The zone the rest of the notification rail falls back to when a recipient
+// stored none (decision-notify's DEFAULT_TIME_ZONE).
+const DEFAULT_TIME_ZONE = "America/New_York";
+
 export function artifactCitationsForDigest(
   items: ReminderDigestItem[],
 ): Array<Record<string, unknown>> {
@@ -82,19 +87,63 @@ export function artifactCitationsForDigest(
   });
 }
 
+/**
+ * How a decision line is titled in the digest. An approval past its date is
+ * still open, never "overdue": that word does not reach a homeowner (P-04).
+ */
+export function decisionDigestTitle(kind: string, title: string): string {
+  return kind === "decision_overdue" ? `Still open: ${title}` : title;
+}
+
+/**
+ * Where a digest line sends her: the same address the decision letter's own
+ * door carries (F12). Mail wrote the Universal Link `/decisions/<id>` while the
+ * digest hand-wrote a Threshold anchor, so one approval had two addresses in
+ * the same inbox — and only one of them opens the iOS app. One builder now.
+ *
+ * The anchor the digest gave up also named the project; the fold recovers that,
+ * carrying `?decision=` so the front door resolves the approval's own house
+ * (`retired-routes.ts`, `lib/data/active-project.ts`) rather than opening the
+ * house that merely moved last.
+ */
+export function decisionDigestLink(
+  baseUrl: string,
+  decisionId: string | null | undefined,
+): string {
+  return clientDecisionLink(baseUrl, decisionId);
+}
+
+/** "October 8" in the recipient's zone, or null when there is no date. */
+function calendarDay(
+  iso: string | null | undefined,
+  timeZone: string,
+): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "long",
+    day: "numeric",
+  }).format(at);
+}
+
+/**
+ * The homeowner's copy of the citation (R6): which edition, issued when. The
+ * checksum and the enum spelling stay in the record — she was never able to act
+ * on either, and 64 hex characters in a letter read as an error message.
+ */
 function renderArtifactCitation(
   artifact: ApprovalArtifactCitation | null | undefined,
+  timeZone: string,
 ): string {
   if (!artifact) return "";
+  const issued = calendarDay(artifact.issuedAt, timeZone);
+  const line = issued
+    ? `Edition ${artifact.version} · issued ${escapeHtml(issued)}`
+    : `Edition ${artifact.version}`;
   return `<div style="margin:4px 0 0;color:#6D675E;font-family:${SANS};font-size:12px;line-height:1.45;">` +
-    `${escapeHtml(artifact.title)} · ` +
-    `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${
-      escapeHtml(artifact.kind)
-    }</span> ` +
-    `v${artifact.version}<br>` +
-    `SHA-256: <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;">${
-      escapeHtml(artifact.checksum)
-    }</span>` +
+    `${escapeHtml(artifact.title)}<br>${line}` +
     `</div>`;
 }
 
@@ -106,7 +155,11 @@ function renderArtifactCitation(
 export function buildReminderDigestEmail(
   items: ReminderDigestItem[],
   baseUrl: string,
+  /** The recipient's notification_preferences.timezone; the issue dates are
+   * printed in it, and the rail's own fallback stands in when it is unset. */
+  timeZone?: string | null,
 ): RenderedDigest {
+  const zone = timeZone?.trim() || DEFAULT_TIME_ZONE;
   const count = items.length;
   const subject = count === 1
     ? "A reminder from Patina"
@@ -122,7 +175,7 @@ export function buildReminderDigestEmail(
           ? `<a href="${it.link}" style="color:#4E7A66;text-decoration:underline;">${label}</a>`
           : label;
         return `<li style="margin:0 0 8px;color:#4B463E;font-family:${SANS};font-size:15px;line-height:1.5;">${body}${
-          renderArtifactCitation(it.artifact)
+          renderArtifactCitation(it.artifact, zone)
         }</li>`;
       })
       .join("");
@@ -148,6 +201,7 @@ export function buildReminderDigestEmail(
   const html = renderBrandedShell({
     title: "Your daily summary",
     eyebrow: "Reminders",
+    audience: "client",
     body,
   });
 

@@ -84,6 +84,58 @@ struct DeepLinkQueueTests {
         }
     }
 
+    /// `AppPhase` defines four cases and the queue rule is about all four:
+    /// `.main` is the one that must NOT queue, or a link tapped by a
+    /// signed-in homeowner would sit in the queue behind a drain that has
+    /// already run. Pinned beside the three above so the set is complete.
+    @Test("a link arriving at .main opens immediately and queues nothing")
+    func theMainPhaseOpensRatherThanQueues() throws {
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
+        let coordinator = AppCoordinator(houseFirstRoot: true)
+        coordinator.forcePhaseForTesting(.main)
+        handler.configure(coordinator: coordinator)
+
+        let link = try url(Self.decision)
+        #expect(handler.handle(link))
+        #expect(handler.queuedURLs.isEmpty)
+        #expect(coordinator.currentScreen
+                == .decisionDetail(decisionId: "b0000000-0000-0000-0000-0000000000d3"))
+        #expect(coordinator.pendingLinkNotice == nil)
+    }
+
+    /// The signed-out arrival the email path actually produces: tap at the
+    /// auth wall, sign in, land on the artifact — not on Today.
+    @Test("a link tapped signed out opens the artifact once sign-in completes")
+    func aSignedOutTapSurvivesSignIn() throws {
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
+        let coordinator = AppCoordinator(houseFirstRoot: true)
+        coordinator.forcePhaseForTesting(.auth)
+        handler.configure(coordinator: coordinator)
+
+        #expect(handler.handle(try url(Self.decision)))
+        #expect(coordinator.currentScreen == .heroFrame)
+
+        // Onboarding can sit between the wall and the app; the link keeps.
+        coordinator.forcePhaseForTesting(.onboarding)
+        #expect(handler.queuedURLs.count == 1)
+
+        coordinator.forcePhaseForTesting(.main)
+        #expect(handler.queuedURLs.isEmpty)
+        #expect(coordinator.currentScreen
+                == .decisionDetail(decisionId: "b0000000-0000-0000-0000-0000000000d3"))
+    }
+
+    /// The queue condition is the coordinator's phase, not the one phase the
+    /// original defect keyed on.
+    @Test("the queue condition is “not .main”, never “.launching” alone")
+    func theQueueConditionIsEveryNonMainPhase() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/App/DeepLinking/DeepLinkHandler.swift")
+        )
+        #expect(code.contains("coordinator.phase == .main"))
+        #expect(!code.contains("phase == .launching"))
+    }
+
     @Test("the queue holds more than one link and drains in arrival order")
     func theQueueIsAFifo() throws {
         let handler = DeepLinkHandler.makeForTests(queue: queue())

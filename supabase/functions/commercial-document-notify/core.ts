@@ -5,7 +5,9 @@ import {
   muted,
   paragraph,
   renderBrandedShell,
+  signOff,
   spacer,
+  type StudioSignOff,
 } from '../_shared/branded-email.ts';
 
 export type CommercialTransition =
@@ -39,6 +41,9 @@ export interface CommercialEmailInput {
   /** Only meaningful alongside channel:'paper' — true when the recording
    * designer attached a scan of the signed original. */
   hasScan?: boolean;
+  /** Who signs a client-addressed letter (R7). Omitted on the studio's own
+   * copy, which Patina still signs. */
+  signature?: StudioSignOff;
 }
 
 export interface RenderedCommercialEmail {
@@ -216,6 +221,7 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
     message,
     html: renderBrandedShell({
       title: subject,
+      audience: input.audience === 'client' ? 'client' : 'designer',
       preview: message,
       eyebrow,
       body: [
@@ -226,7 +232,9 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
         spacer(10),
         ctaButton(input.portalUrl, cta, 'ink'),
         spacer(),
-        muted('— Patina'),
+        input.audience === 'client'
+          ? signOff(input.signature ?? {})
+          : muted('— Patina'),
       ].join(''),
     }),
   };

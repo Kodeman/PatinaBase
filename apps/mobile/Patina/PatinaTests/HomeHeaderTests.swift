@@ -13,13 +13,35 @@ import Foundation
 @MainActor
 struct HomeHeaderTests {
 
-    @Test("the Studio control says what is waiting, and says nothing at zero")
-    func theStudioControlNamesTheCount() {
+    /// `P-24` / **R5**: the control names the door and counts nothing.
+    ///
+    /// It used to draw a clay capsule with `BadgeCountService.attentionCount`
+    /// in it and speak "4 waiting" to VoiceOver — the app's in-product
+    /// attention badge, which VISION §6 refuses. The springboard badge is kept;
+    /// inside the app the NEEDS YOU eyebrow carries the truth as rows.
+    @Test("the Studio control names the door and carries no count")
+    func theStudioControlCarriesNoCount() throws {
         #expect(StudioControlLabel.title == "Studio")
         #expect(StudioControlLabel.voiceOverName == "Your Studio")
-        #expect(StudioControlLabel.waitingValue(count: 0) == nil)
-        #expect(StudioControlLabel.waitingValue(count: 1) == "1 waiting")
-        #expect(StudioControlLabel.waitingValue(count: 4) == "4 waiting")
+
+        let header = try SourcePin.readCode("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+        #expect(!header.contains("attentionCount"),
+                "the header still reads the attention count")
+        #expect(!header.contains("waitingValue"),
+                "VoiceOver still speaks the retired count")
+        // `iosb2-M3`: R5 retires the tab badge "and any in-product numeric
+        // badge", so the bell's count went too. Clay survives on this header
+        // as the unread DOT's fill — a mark, not a number — which is why the
+        // capsule pin is still scoped to the Studio control's own block.
+        let studio = try #require(header.range(of: "private var studioControl: some View {"))
+        let afterStudio = String(header[studio.lowerBound...].prefix(600))
+        #expect(!afterStudio.contains("PatinaColors.clayInk"),
+                "the count capsule's fill is still drawn on the Studio control")
+        // And nowhere on the header does a number get drawn.
+        #expect(!header.contains("Capsule().fill(PatinaColors.clayInk)"),
+                "an in-product count capsule is still drawn (R5)")
+        #expect(!header.contains("UnreadBadge"),
+                "the bell's numeric badge is still here (R5)")
     }
 
     // `TimeOfDay` lives in PatinaDesignKit, which the unit-test target does not
@@ -42,10 +64,13 @@ struct HomeHeaderTests {
         #expect(!source.contains("monogramAvatar"))
     }
 
-    @Test("the home passes the one attention count into the Studio control")
-    func theHomePassesTheOneCount() throws {
-        let source = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
-        #expect(source.contains("attentionCount: BadgeCountService.shared.attentionCount"))
+    /// `P-24`: the home no longer hands the header a number to badge. The one
+    /// hint the Studio surfaces print (`studioHint`) is untouched — it is a
+    /// sentence, not a badge.
+    @Test("the home hands the header no attention count")
+    func theHomePassesNoCount() throws {
+        let source = try SourcePin.readCode("Patina/Features/Home/Views/DailyRoomView.swift")
+        #expect(!source.contains("attentionCount: BadgeCountService.shared.attentionCount"))
         #expect(source.contains("greeting: TimeOfDay.current.greeting"))
         // SP-16 / AttentionCountTests: this screen still reads the one hint.
         #expect(source.contains("badges.studioHint"))

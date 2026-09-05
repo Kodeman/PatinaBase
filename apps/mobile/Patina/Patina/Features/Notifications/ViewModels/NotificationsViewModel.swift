@@ -48,7 +48,10 @@ final class NotificationsViewModel {
         error = nil
         do {
             let remote = try await NotificationsAPIClient.shared.list()
-            let real = Self.collapseDuplicates(remote.map { AppNotification(from: $0) })
+            let real = Self.retitleApprovals(
+                Self.collapseDuplicates(remote.map { AppNotification(from: $0) }),
+                approvals: BadgeCountService.shared.projectApprovals
+            )
             // SP-08: the bell read "Nothing yet" in the same minute the Studio
             // two screens away listed an overdue decision, a $4,250 invoice and
             // a proposal to review, because invoices and decisions write no
@@ -99,6 +102,58 @@ final class NotificationsViewModel {
             }
         }
         return collapsed
+    }
+
+    /// `W1R2-n4`. The title a decision row carries is the one 00534 froze into
+    /// `metadata.title` when the decision was raised, and no row is ever
+    /// rewritten — so every Stage-2 approval in the bell read "A sign-off needs
+    /// you" for the rest of its life, including the ones already answered, in a
+    /// word this program retired.
+    ///
+    /// The projection is the only thing that knows what an approval is NOW:
+    /// `BadgeCountService.projectApprovals` carries every one the caller can
+    /// reach, answered and closed ones included. The order is the house's own
+    /// (`client-attention.ts:55-71`) — the disposition first, then the answer,
+    /// then the ask.
+    ///
+    /// A row the projection does not cover is left as it was, except for the
+    /// retired word itself: renaming "sign-off" to "approval" changes the ask's
+    /// name and nothing about the claim, which is the one edit that needs no
+    /// knowledge of the row's state.
+    static func retitleApprovals(
+        _ rows: [AppNotification],
+        approvals: [RemoteProjectApprovalReview]
+    ) -> [AppNotification] {
+        let byDecision = Dictionary(
+            approvals.map { ($0.decisionId, $0) }, uniquingKeysWith: { first, _ in first }
+        )
+        return rows.map { row in
+            guard row.entityType == "decision" else { return row }
+            var retitled = row
+            if let known = row.entityId.flatMap({ byDecision[$0] }),
+               let title = Self.approvalTitle(known) {
+                retitled.title = title
+                return retitled
+            }
+            if retitled.title == ProjectApprovalCopy.retiredBellTitle {
+                retitled.title = ProjectApprovalCopy.bellOpen
+            }
+            return retitled
+        }
+    }
+
+    /// What the row should say, or nil where the projection knows the approval
+    /// but not a state the bell has a sentence for — a draft with the studio,
+    /// say, which has no bell row of its own to begin with.
+    private static func approvalTitle(_ approval: RemoteProjectApprovalReview) -> String? {
+        if approval.isClosedByDisposition { return ProjectApprovalCopy.bellClosed }
+        if let recorded = approval.recordedOutcome {
+            return ProjectApprovalCopy.recorded(recorded)
+        }
+        if approval.outcome != nil || approval.respondedAt != nil {
+            return ProjectApprovalCopy.bellRecorded
+        }
+        return approval.awaitsClient ? ProjectApprovalCopy.bellOpen : nil
     }
 
     // MARK: - Studio fallback (SP-08)

@@ -120,7 +120,7 @@ struct DesignerSeatTests {
         let row = HouseRecordRow(
             id: "row-1", kind: .decisionAsked, title: "Leah asked about the rug",
             detail: nil, date: Date(timeIntervalSince1970: 1_787_594_400),
-            state: .overdue, isNew: false, route: route
+            state: .overdue(due: Date(timeIntervalSince1970: 1_787_594_400)), isNew: false, route: route
         )
         return HouseRecord(
             needsYou: [row], moved: [],

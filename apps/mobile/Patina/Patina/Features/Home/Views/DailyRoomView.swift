@@ -286,7 +286,6 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                 DailyGreetingHeader(
                     dateString: viewModel.greetingDate.uppercased(),
                     greeting: TimeOfDay.current.greeting,
-                    attentionCount: BadgeCountService.shared.attentionCount,
                     // Round one: no ios-app/* help articles exist, so the `?`
                     // would open on an empty panel (C5-02). W2 restores it.
                     onHelpTap: nil,

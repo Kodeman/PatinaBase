@@ -13,12 +13,32 @@ Deno.test("Stage-2 evidence resolves the immutable artifact citation", () => {
       source_version: 7,
       artifact_hash: CHECKSUM,
       artifact_title: "Issued construction set",
+      created_at: "2026-09-28T14:00:00Z",
     }),
     {
       kind: "plan_issue",
       version: 7,
       checksum: CHECKSUM,
       title: "Issued construction set",
+      issuedAt: "2026-09-28T14:00:00Z",
+    },
+  );
+});
+
+Deno.test("an edition with no issue stamp cites no date", () => {
+  assertEquals(
+    resolveApprovalArtifactCitation({
+      source_kind: "plan_issue",
+      source_version: 7,
+      artifact_hash: CHECKSUM,
+      artifact_title: "Issued construction set",
+    }),
+    {
+      kind: "plan_issue",
+      version: 7,
+      checksum: CHECKSUM,
+      title: "Issued construction set",
+      issuedAt: null,
     },
   );
 });

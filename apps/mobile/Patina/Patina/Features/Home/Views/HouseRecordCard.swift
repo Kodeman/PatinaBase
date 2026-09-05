@@ -12,12 +12,21 @@
 //     card's own header (r1-notes §9.1);
 //   • `· new` comes from `isNew` and nothing else. `State.new` is never
 //     emitted (r1-notes §9.2) and is drawn as no state at all;
-//   • `error` red is reserved for money that is actually late, plus the one
-//     word `overdue`. Everything else on the right is muted mono;
+//   • nothing on the card is red. An approval that has passed its date says
+//     so in body ink (P-04 / R8), and since R3-02 so does money — red status
+//     is a VISION refusal on every surface a homeowner reads, and the last
+//     `error` on this card was the late invoice line. Everything else on the
+//     right is muted mono;
 //   • the empty halves draw only where they are true answers — from engaged
 //     upward. At guest and discovering the caller does not mount the card at
 //     all (`HomeComposition.recordDraws`).
 //
+// P-04 and P-12 pushed this past the 500-line floor. The file is the
+// Record's presentation contract end to end — the row model, the dates,
+// the card and the row — and the honesty rules above are read against all
+// four together; splitting it to satisfy a line count would scatter them.
+// Same disable, and the same reason, as `HouseRecord.swift` beside it.
+// swiftlint:disable file_length
 
 import SwiftUI
 
@@ -29,8 +38,15 @@ import SwiftUI
 struct HouseRecordRowPresentation: Equatable {
     /// Mono, muted. Nil for a standing condition, which claims no date.
     let leadText: String?
-    /// Mono, `error`. The only red on the card.
+    /// Mono, body ink. Money whose day has passed — the rail's muted grey
+    /// would flatten it into an unpassed date, and R3-02 refuses the red it
+    /// used to carry.
     let lateText: String?
+    /// P-04 / R8. An approval past its date, said in body ink as the whole
+    /// ruled sentence — "Still open, Leah asked on Aug 22." Never red, and
+    /// never the word this program retired. Drawn under the title rather than
+    /// in the rail, because it is a sentence and not a status token.
+    let stillOpenText: String?
     let showsNewTick: Bool
     let accessibilityLabel: String
 
@@ -43,24 +59,25 @@ struct HouseRecordRowPresentation: Equatable {
         // behind. Its copy carries the whole meaning.
         guard !row.isStandingCondition else {
             return HouseRecordRowPresentation(
-                leadText: nil, lateText: nil, showsNewTick: false,
+                leadText: nil, lateText: nil, stillOpenText: nil, showsNewTick: false,
                 accessibilityLabel: spoken(row: row, state: nil, isNew: false)
             )
         }
 
         let tick = row.isNew
         switch row.state {
-        case .overdue:
-            let asked = "asked \(HouseRecordDates.short(row.date, calendar: calendar))"
+        case .overdue(let due):
+            let sentence = stillOpenSentence(row: row, due: due, calendar: calendar)
             return HouseRecordRowPresentation(
-                leadText: asked, lateText: "overdue", showsNewTick: tick,
-                accessibilityLabel: spoken(row: row, state: "\(asked), overdue", isNew: tick)
+                leadText: nil, lateText: nil, stillOpenText: sentence,
+                showsNewTick: tick,
+                accessibilityLabel: spoken(row: row, state: sentence, isNew: tick)
             )
 
         case .due(let due):
             let by = "by \(HouseRecordDates.short(due, calendar: calendar))"
             return HouseRecordRowPresentation(
-                leadText: by, lateText: nil, showsNewTick: tick,
+                leadText: by, lateText: nil, stillOpenText: nil, showsNewTick: tick,
                 accessibilityLabel: spoken(row: row, state: "Due \(by)", isNew: tick)
             )
 
@@ -75,9 +92,12 @@ struct HouseRecordRowPresentation: Equatable {
             return HouseRecordRowPresentation(
                 leadText: late ? nil : text,
                 lateText: late ? text : nil,
+                stillOpenText: nil,
                 showsNewTick: tick,
+                // "past its date" rather than the retired word: this is spoken
+                // copy, and it is the same phrase the web bucket now carries.
                 accessibilityLabel: spoken(
-                    row: row, state: late ? "\(text), overdue" : text, isNew: tick
+                    row: row, state: late ? "\(text), past its date" : text, isNew: tick
                 )
             )
 
@@ -86,10 +106,31 @@ struct HouseRecordRowPresentation: Equatable {
             // second, unearned newness signal beside the tick.
             let date = HouseRecordDates.short(row.date, calendar: calendar)
             return HouseRecordRowPresentation(
-                leadText: date, lateText: nil, showsNewTick: tick,
+                leadText: date, lateText: nil, stillOpenText: nil, showsNewTick: tick,
                 accessibilityLabel: spoken(row: row, state: date, isNew: tick)
             )
         }
+    }
+
+    /// R8's sentence, printed whole. `askedBy` is the same name the title
+    /// uses, so the row cannot name the designer two ways.
+    ///
+    /// `W1R2-n1` / `W1R2-M2`: the asked-on clause goes through the one guard
+    /// `DateDisplay.approval` uses, so the Record and the Studio hub cannot
+    /// say different things about one approval. The date itself is still
+    /// formatted here — the Record's dates are fixed to one locale on purpose
+    /// (`HouseRecordDates`), and that is what makes this a second composer
+    /// rather than a second rule.
+    private static func stillOpenSentence(
+        row: HouseRecordRow, due: Date, calendar: Calendar
+    ) -> String {
+        guard DateDisplay.askedOnClauseEarned(
+            askedAt: row.date, dueDate: due, calendar: calendar
+        ) else { return DateDisplay.stillOpenAlone }
+        return DateDisplay.stillOpen(
+            designer: row.askedBy,
+            askedOn: HouseRecordDates.short(row.date, calendar: calendar)
+        )
     }
 
     private static func spoken(row: HouseRecordRow, state: String?, isNew: Bool) -> String {
@@ -269,8 +310,6 @@ struct HouseRecordCard: View {
                 empty: HouseRecordDates.movedEmpty(lastSeenAt: record.lastSeenAt),
                 isFirst: record.needsYou.isEmpty && !drawsEmpties
             )
-
-            seeAllFooter
         }
         .padding(.horizontal, PatinaSpacing.md)
         .padding(.top, 10)
@@ -304,32 +343,29 @@ struct HouseRecordCard: View {
         ).day
     }
 
-    /// M1 draws ONE `See all →`, under both eyebrow groups, with a rule above
-    /// it. Per half it reads as a divider between NEEDS YOU and MOVED rather
-    /// than as the card's footer. It leads with whichever half has more.
+    /// P-12: each overflowing half draws its OWN `See all →`, under its own
+    /// rows. One footer per card led with whichever half had more, so a card
+    /// with four MOVED rows and four NEEDS YOU rows made an open obligation
+    /// reachable only through a link labelled for the news half. The visible
+    /// word is the same on both; VoiceOver is told which half it opens.
     @ViewBuilder
-    private var seeAllFooter: some View {
-        if record.hasMoreNeedsYou || record.hasMoreMoved {
-            let half: Half = record.hasMoreNeedsYou ? .needsYou : .moved
-            VStack(alignment: .leading, spacing: 0) {
-                Rectangle()
-                    .fill(PatinaColors.Border.hairline)
-                    .frame(height: 1)
-                    .padding(.top, PatinaSpacing.sm)
-                    .accessibilityHidden(true)
-                Button {
-                    onSeeAll(half)
-                } label: {
-                    Text("See all →")
-                        .font(PatinaTypography.uiAction)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("See all")
-            }
+    private func seeAll(_ half: Half) -> some View {
+        Button {
+            onSeeAll(half)
+        } label: {
+            Text("See all →")
+                .font(PatinaTypography.uiAction)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(half == .needsYou ? "See all that needs you" : "See all that moved")
+        .accessibilityIdentifier(
+            half == .needsYou
+                ? "DailyRoomView.RecordSeeAllNeedsYou"
+                : "DailyRoomView.RecordSeeAllMoved"
+        )
     }
 
     @ViewBuilder
@@ -340,6 +376,10 @@ struct HouseRecordCard: View {
         empty: String,
         isFirst: Bool
     ) -> some View {
+        // Each half asks about its OWN overflow. Read here rather than passed
+        // in so a call site cannot hand one half the other's answer — which is
+        // the defect P-12 is about, in miniature.
+        let hasMore = half == .needsYou ? record.hasMoreNeedsYou : record.hasMoreMoved
         if !rows.isEmpty || drawsEmpties {
             VStack(alignment: .leading, spacing: 0) {
                 if !isFirst {
@@ -377,6 +417,14 @@ struct HouseRecordCard: View {
                         }
                         HouseRecordRowView(row: row, now: now) { onRow(row) }
                     }
+                }
+
+                if hasMore {
+                    Rectangle()
+                        .fill(PatinaColors.Border.hairline)
+                        .frame(height: 1)
+                        .accessibilityHidden(true)
+                    seeAll(half)
                 }
             }
         }
@@ -420,14 +468,36 @@ struct HouseRecordRowView: View {
         // contrast; the trait line below still keeps VoiceOver from announcing
         // it as a button.
         .allowsHitTesting(row.route != nil)
+        // P-12: an obligation carries a margin rule and a piece of news does
+        // not. That is the whole differentiator — no second colour, no heavier
+        // type, no count, no badge. Every row is inset by the same gutter so
+        // the titles still line up across the two halves; only the rule itself
+        // appears or does not.
+        .padding(.leading, Self.marginRuleGutter)
+        .overlay(alignment: .leading) {
+            if row.kind.isObligation {
+                Rectangle()
+                    .fill(PatinaColors.clay)
+                    .frame(width: Self.marginRuleWidth)
+                    .accessibilityHidden(true)
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityAddTraits(row.route == nil ? [] : .isButton)
     }
 
+    /// Two points, per the sheet.
+    static let marginRuleWidth: CGFloat = 2
+    /// The gutter the rule sits in, kept on every row so a NEEDS YOU title and
+    /// a MOVED title start at the same x.
+    static let marginRuleGutter = PatinaSpacing.sm
+
     private var rowContent: some View {
         Group {
-            if dynamicTypeSize.isAccessibilitySize {
+            // R8's sentence is a line of prose, not a rail token: it stacks
+            // under the title so it has the row's full width to read on.
+            if dynamicTypeSize.isAccessibilitySize || presentation.stillOpenText != nil {
                 VStack(alignment: .leading, spacing: 4) {
                     title
                     state
@@ -474,7 +544,22 @@ struct HouseRecordRowView: View {
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.Text.error)
+                    // R3-02: body ink, not the error ramp — the same refusal
+                    // the invoice list and detail now hold. The line still
+                    // reads differently from an unpassed one (primary against
+                    // the rail's muted), and the spoken label still says "past
+                    // its date"; what it no longer does is say it in red.
+                    .foregroundStyle(PatinaColors.Text.primary)
+            }
+            if let stillOpen = shown.stillOpenText {
+                // R8's sentence, in body ink and in sentence case: the state
+                // is stated, not flagged (P-04). Never the rail's uppercase
+                // mono, which would turn a sentence back into a status token.
+                Text(stillOpen)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
             }
             if shown.showsNewTick {
                 Text("· new")

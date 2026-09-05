@@ -32,28 +32,69 @@ struct HouseRecordCardTests {
         isNew: Bool = false,
         standing: Bool = false,
         title: String = "Something happened.",
-        detail: String? = nil
+        detail: String? = nil,
+        askedBy: String? = nil
     ) -> HouseRecordRow {
         HouseRecordRow(
             id: "row", kind: kind, title: title, detail: detail, date: date,
-            state: state, isNew: isNew, isStandingCondition: standing, route: nil
+            state: state, isNew: isNew, isStandingCondition: standing,
+            askedBy: askedBy, route: nil
         )
     }
 
     // MARK: - The right-hand side
 
-    @Test("an overdue decision prints the date it was asked and one red word")
-    func overdueDecision() {
+    /// P-04 / R8. The word "overdue" and the red it was painted in are both
+    /// gone: an approval past its date prints R8's sentence whole, in body
+    /// ink, and the money slot (`lateText`) is left empty.
+    @Test("an approval past its date prints R8's sentence, and nothing is red")
+    func pastItsDateDecision() {
         let shown = HouseRecordRowPresentation.make(
-            row: Self.row(kind: .decisionAsked, date: Self.day(8, 22), state: .overdue),
+            row: Self.row(
+                kind: .decisionAsked, date: Self.day(8, 22),
+                state: .overdue(due: Self.day(8, 25)),
+                askedBy: "Leah"
+            ),
             now: Self.day(8, 26), calendar: Self.calendar
         )
-        #expect(shown.leadText == "asked Aug 22")
-        #expect(shown.lateText == "overdue")
+        #expect(shown.stillOpenText == "Still open, Leah asked on Aug 22.")
+        #expect(shown.leadText == nil, "the sentence is the whole state — no rail beside it")
+        #expect(shown.lateText == nil)
         #expect(shown.showsNewTick == false)
+        #expect(!shown.accessibilityLabel.lowercased().contains("overdue"))
+
+        // With no designer on the wire the sentence names none and says so,
+        // rather than inventing one.
+        let unnamed = HouseRecordRowPresentation.make(
+            row: Self.row(
+                kind: .decisionAsked, date: Self.day(8, 22),
+                state: .overdue(due: Self.day(8, 25))
+            ),
+            now: Self.day(8, 26), calendar: Self.calendar
+        )
+        #expect(unnamed.stillOpenText == "Still open, your designer asked on Aug 22.")
     }
 
-    @Test("a proposal prints the date it is wanted by, and nothing red")
+    /// The retired word must not survive anywhere in the two files that draw
+    /// the Record — not as a string, not in a spoken label.
+    @Test("no surface of the Record prints the word this program retired")
+    func theRetiredWordIsGone() throws {
+        for path in [
+            "Patina/Features/Home/Views/HouseRecordCard.swift",
+            "Patina/Features/Home/Models/HouseRecord.swift"
+        ] {
+            let code = SourceScan.code(in: try SourcePin.read(path))
+            #expect(!code.lowercased().contains("\"overdue"),
+                    "\(path) still ships the word as copy")
+        }
+        // The state case keeps its name — it is a state, not a sentence.
+        let model = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Models/HouseRecord.swift")
+        )
+        #expect(model.contains("case overdue"))
+    }
+
+    @Test("a proposal prints the date it is wanted by, and no late line")
     func proposalByDate() {
         let shown = HouseRecordRowPresentation.make(
             row: Self.row(
@@ -65,7 +106,7 @@ struct HouseRecordCardTests {
         #expect(shown.lateText == nil)
     }
 
-    @Test("an invoice prints its figure and its due date, red only once it is late")
+    @Test("an invoice prints its figure and its due date, on its own line once it is late")
     func invoiceMoney() {
         let invoice = Self.row(
             kind: .invoiceDue, date: Self.day(8, 20),
@@ -126,18 +167,38 @@ struct HouseRecordCardTests {
         #expect(shown.showsNewTick == false)
     }
 
+    /// VoiceOver hears exactly what is drawn — R8's sentence included.
     @Test("every row says its state to VoiceOver")
     func voiceOverNamesTheState() {
         let shown = HouseRecordRowPresentation.make(
             row: Self.row(
-                kind: .decisionAsked, date: Self.day(8, 22), state: .overdue,
+                kind: .decisionAsked, date: Self.day(8, 22),
+                state: .overdue(due: Self.day(8, 25)),
                 title: "Leah asked about Rug color - Natural vs Sand.",
-                detail: "Aspen Loft Refresh"
+                detail: "Aspen Loft Refresh", askedBy: "Leah"
             ),
             now: Self.day(8, 26), calendar: Self.calendar
         )
         #expect(shown.accessibilityLabel ==
-                "Leah asked about Rug color - Natural vs Sand. Aspen Loft Refresh. asked Aug 22, overdue.")
+                "Leah asked about Rug color - Natural vs Sand. Aspen Loft Refresh. "
+                + "Still open, Leah asked on Aug 22.")
+    }
+
+    /// Late money loses the retired word with everything else — and, since
+    /// R3-02, its red: what VoiceOver hears is the phrase the web bucket now
+    /// carries.
+    @Test("late money is spoken as past its date")
+    func lateMoneyIsSpokenWithoutTheRetiredWord() {
+        let shown = HouseRecordRowPresentation.make(
+            row: Self.row(
+                kind: .invoiceDue, date: Self.day(8, 20),
+                state: .amount(cents: 425_000, due: Self.day(9, 1)),
+                title: "Your invoice is due."
+            ),
+            now: Self.day(9, 2), calendar: Self.calendar
+        )
+        #expect(shown.accessibilityLabel ==
+                "Your invoice is due. $4,250.00 · due Sep 1, past its date.")
     }
 
     // MARK: - The header and the empties
@@ -194,16 +255,67 @@ struct HouseRecordCardTests {
                 == "Thu, Aug 20")
     }
 
-    @Test("See all is one footer under both halves, not one per half")
-    func theFooterIsSingle() throws {
+    /// P-12 inverts the old rule. One footer per card led with whichever half
+    /// had more, so an obligation could be reachable only through a link
+    /// labelled for the news half. Each half now draws its own, inside itself,
+    /// gated on its own `hasMore`.
+    @Test("See all is drawn per overflowing half, not once per card")
+    func theFooterIsPerHalf() throws {
         let source = try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
-        // Exactly one place draws it, and it is not inside `half(...)`.
+        // One link, one place that composes it, called from inside `half(...)`.
         #expect(source.components(separatedBy: "Text(\"See all →\")").count - 1 == 1)
-        #expect(source.contains("private var seeAllFooter"))
+        #expect(!source.contains("private var seeAllFooter"))
+        #expect(source.contains("private func seeAll(_ half: Half)"))
+
         let half = try #require(source.range(of: "private func half("))
         let body = String(source[half.lowerBound...])
         let end = try #require(body.range(of: "// MARK: - One row"))
-        #expect(!String(body[..<end.lowerBound]).contains("See all"))
+        let halfBody = String(body[..<end.lowerBound])
+        #expect(halfBody.contains("if hasMore {"))
+        #expect(halfBody.contains("seeAll(half)"))
+
+        // Each half reads its OWN overflow, never the card's larger one.
+        let code = SourceScan.code(in: source)
+        #expect(code.contains(
+            "let hasMore = half == .needsYou ? record.hasMoreNeedsYou : record.hasMoreMoved"
+        ))
+        #expect(!code.contains("record.hasMoreNeedsYou ? .needsYou : .moved"))
+        #expect(!code.contains("record.hasMoreNeedsYou || record.hasMoreMoved"))
+    }
+
+    /// P-12's other half: the obligation rows carry a two-point clay rule and
+    /// the news rows do not — and that is the only difference between them.
+    @Test("an obligation carries a margin rule and a piece of news does not")
+    func obligationsCarryTheMarginRule() throws {
+        for kind in [HouseRecordRow.Kind.decisionAsked, .proposalSent, .invoiceDue] {
+            #expect(kind.isObligation, "\(kind) is a NEEDS YOU kind")
+        }
+        for kind in [
+            HouseRecordRow.Kind.messageReceived, .orderMoved, .savedPieceRepriced,
+            .savedPieceWithdrawn, .story, .matchedDesigner
+        ] {
+            #expect(!kind.isObligation, "\(kind) is a MOVED kind")
+        }
+
+        #expect(HouseRecordRowView.marginRuleWidth == 2)
+
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
+        )
+        #expect(code.contains("if row.kind.isObligation {"))
+        #expect(code.contains(".fill(PatinaColors.clay)"))
+        #expect(code.contains(".frame(width: Self.marginRuleWidth)"))
+        // The gutter is unconditional, so the rule is the only thing that
+        // changes between the halves — not the type, not the indent.
+        #expect(code.contains(".padding(.leading, Self.marginRuleGutter)"))
+        #expect(!code.contains("row.kind.isObligation ? "))
+    }
+
+    /// The three-row cap is sound and P-12 does not touch it — only the
+    /// overflow link it produces.
+    @Test("the three-row cap survives the per-half link")
+    func theThreeRowCapIsUnchanged() {
+        #expect(HouseRecordBuilder.maxRowsPerEyebrow == 3)
     }
 
     @Test("the record’s own event carries the gap it is reporting on")
@@ -273,5 +385,27 @@ struct HouseRecordCardTests {
         let today = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
         #expect(today.contains("stalenessLine: RecordStaleness.line("))
         #expect(today.contains("refreshFailed: badges.lastRefreshFailed"))
+    }
+}
+
+/// R3-02, on the Record. Its own suite because `HouseRecordCardTests` sits on
+/// SwiftLint's 300-line `type_body_length` floor.
+@MainActor
+struct HouseRecordRedRefusalTests {
+
+    /// The last red on the Record was the late-money line, and the ruling
+    /// reaches money too — "never red, same refusal, every surface". The card
+    /// draws no error ramp at all now.
+    @Test("nothing on the Record is drawn in the error ramp")
+    func nothingOnTheRecordIsRed() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
+        )
+        #expect(!code.contains("PatinaColors.Text.error"))
+        // …and the passed-money line is still told apart from an unpassed one,
+        // by ink rather than by colour: primary against the rail's muted.
+        let block = try #require(code.range(of: "if let late = shown.lateText {"))
+        let money = String(code[block.lowerBound...].prefix(700))
+        #expect(money.contains("PatinaColors.Text.primary"))
     }
 }

@@ -88,7 +88,12 @@ struct InvoiceDetailView: View {
                 .tracking(2)
             Text(statusHeadline(invoice))
                 .font(PatinaTypography.h2)
-                .foregroundStyle(isOverdue(invoice) ? PatinaColors.Text.error : PatinaColors.Text.primary)
+                // R3-02: "Past due" is the largest type on this screen, and it
+                // sat in the error ramp directly above a due line in body ink
+                // — one screen saying one fact in two registers. Red status is
+                // a VISION refusal on every surface a homeowner reads, money
+                // included; the headline states the fact and nothing else.
+                .foregroundStyle(PatinaColors.Text.primary)
             Text(invoice.invoice_number ?? "Invoice")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.secondary)
@@ -177,13 +182,15 @@ struct InvoiceDetailView: View {
     }
 
     /// SP-15: "Due Sep 1, 2026" printed on the list and vanished here. It now
-    /// sits under the balance, above the pay button, and turns red once past.
+    /// sits under the balance, above the pay button, and reads "Past due · Sep 1"
+    /// in body ink once the day has gone by (R3-02) — never red.
     @ViewBuilder
     private func dueLine(_ invoice: RemoteInvoice) -> some View {
         if let due = DateDisplay.due(invoice.due_date), !invoice.isPaid, !invoice.isVoid {
             Text(due.text)
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
+                // R3-02: body ink once past, never the error ramp.
+                .foregroundStyle(due.isPastDue ? PatinaColors.Text.primary : PatinaColors.Text.secondary)
                 .padding(.horizontal, 24)
                 .accessibilityIdentifier("invoiceDetail.due")
         }

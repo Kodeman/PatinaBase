@@ -32,6 +32,30 @@ public actor NotificationsAPIClient {
     public static let shared = NotificationsAPIClient()
     static let visibleStatusFilter = "in.(queued,sending,delivered,unconfirmed,opened,clicked)"
 
+    /// `notify_client_attention()` (00534) writes TWO rows for one event — an
+    /// `in_app` row and a `push` row — so a filter admitting both counts every
+    /// attention twice. The in-app row is the one the feed is about; the push
+    /// row is a delivery receipt for a banner that has its own surface.
+    static let attentionChannelFilter = "eq.in_app"
+
+    /// `W1R2-m1`. The READ narrows to `in_app`; the opened WRITE may not.
+    /// 00534 writes two rows for one event, and marking only the in-app leg
+    /// left its `push` twin `opened_at IS NULL` forever — a row the springboard
+    /// badge and every "unread" count computed server-side still sees. One
+    /// event is read once, on both legs (ruled, 2026-09-05).
+    static let openedWriteChannelFilter = "in.(in_app,push)"
+
+    /// `W1R2-M3`. The widened write reaches the `push` leg, and the push leg
+    /// is the one that carries DELIVERY state: `notify_client_attention`
+    /// inserts it `queued` (00534:192) and `apns-send` stamps it `delivered`
+    /// or `failed` with an error string. Nothing in 00562's policy stops a
+    /// mark-all from rewriting `failed` to `opened`, which would have the
+    /// record say she read a notice that never arrived — and would hide the
+    /// row from the retry sweep P-28 brings in Wave 3. So the write reaches
+    /// only rows still in flight or delivered; a terminal failure keeps its
+    /// state.
+    static let openedWriteStatusFilter = "in.(queued,sending,delivered,unconfirmed)"
+
     private let baseURL = APIConfiguration.apiURL
     private let session = PatinaURLSession.shared
     private let decoder = JSONDecoder()
@@ -54,15 +78,15 @@ public actor NotificationsAPIClient {
         }
     }
 
-    /// List the user's most-recent in-app + push notifications. Filters to
-    /// the channels that actually surface in the feed (in_app, push) and
-    /// excludes failed/suppressed states so the UI never shows them.
+    /// List the user's most-recent in-app notifications. Filters to the one
+    /// channel the feed is about (see `attentionChannelFilter`) and excludes
+    /// failed/suppressed states so the UI never shows them.
     public func list(limit: Int = 50) async throws -> [RemoteNotification] {
         let url = baseURL.appendingPathComponent("/rest/v1/notification_log")
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "order", value: "created_at.desc"),
-                URLQueryItem(name: "channel", value: "in.(in_app,push)"),
+                URLQueryItem(name: "channel", value: Self.attentionChannelFilter),
                 URLQueryItem(name: "status", value: Self.visibleStatusFilter),
                 URLQueryItem(name: "limit", value: String(limit)),
             ])
@@ -95,14 +119,17 @@ public actor NotificationsAPIClient {
     }
 
     /// Mark all currently-unread notifications for the user as opened.
-    /// We don't have a bulk RPC — perform a single PATCH against all rows
-    /// for the user where opened_at IS NULL and channel is in the surfaced
-    /// set.
+    /// We don't have a bulk RPC — perform a single PATCH against every unread
+    /// row for the user on either delivery leg (`openedWriteChannelFilter`), so
+    /// mark-all can neither leave behind a row the list would have shown nor
+    /// leave its push twin unread behind it. `openedWriteStatusFilter` keeps
+    /// that widening off a push row whose delivery already failed.
     public func markAllOpened() async throws {
         let url = baseURL.appendingPathComponent("/rest/v1/notification_log")
             .appending(queryItems: [
                 URLQueryItem(name: "opened_at", value: "is.null"),
-                URLQueryItem(name: "channel", value: "in.(in_app,push)"),
+                URLQueryItem(name: "channel", value: Self.openedWriteChannelFilter),
+                URLQueryItem(name: "status", value: Self.openedWriteStatusFilter),
             ])
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
@@ -144,7 +171,13 @@ extension AppNotification {
         // "New pieces for you" bucket with a sparkles icon.
         let type = AppNotificationType(entityType: entityType)
             ?? AppNotificationType(serverType: remote.type)
-        let title = remote.metadata?["title"]?.value as? String ?? type.defaultTitle
+        // P-04: the three decision push types each carry their own glyph and
+        // their own default title. Without this the bucket answered for all
+        // three and a passed date drew the same mark as a fresh ask.
+        let pushType = DecisionPushType(rawValue: remote.type)
+        let title = remote.metadata?["title"]?.value as? String
+            ?? pushType?.defaultTitle
+            ?? type.defaultTitle
         let body = remote.metadata?["body"]?.value as? String
             ?? remote.metadata?["preview"]?.value as? String
             ?? ""
@@ -157,7 +190,8 @@ extension AppNotification {
             timestamp: createdDate,
             isRead: remote.opened_at != nil || remote.status == "opened" || remote.status == "clicked",
             entityType: entityType,
-            entityId: entityId
+            entityId: entityId,
+            iconOverride: pushType?.icon
         )
     }
 }

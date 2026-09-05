@@ -45,6 +45,55 @@ struct HouseRecordBuilderTests {
         return service
     }
 
+    /// P-04 / R8: the name the still-open sentence uses, by the same rule
+    /// `title(for:)` follows — a person's given name, a studio's whole name,
+    /// and nothing invented when the wire carried none.
+    @Test("the row is handed the name its own title already uses")
+    func askedByNameFollowsTheTitleRule() {
+        func item(_ name: String?, isPerson: Bool) -> StudioQueueItemRow {
+            StudioQueueItemRow(
+                id: "item", kind: .decision, entityId: "d-1", title: "Rug color",
+                detail: nil, askedAt: now, dueAt: now, amountCents: nil,
+                designerName: name, designerIsPerson: isPerson,
+                route: .decisionDetail(decisionId: "d-1")
+            )
+        }
+        #expect(HouseRecordBuilder.askedByName(for: item("Leah Hartwell", isPerson: true))
+                == "Leah")
+        #expect(HouseRecordBuilder.askedByName(for: item("Hartwell Studio", isPerson: false))
+                == "Hartwell Studio")
+        #expect(HouseRecordBuilder.askedByName(for: item(nil, isPerson: false)) == nil)
+    }
+
+    /// The same rule, all the way through the builder to the drawn sentence.
+    /// `markingNew` rebuilds every NEEDS YOU row against the last visit, so a
+    /// field it forgets is a field that survives the first run and no other:
+    /// the sentence read "Leah asked" on arrival and "your designer asked"
+    /// on every visit after it.
+    @Test("the drawn sentence keeps the designer's name on a return visit")
+    func askedByNameSurvivesTheReturnVisit() throws {
+        // Asked BEFORE the day it was wanted by, so the clause is earned and
+        // the name is actually drawn — `W1R2-n1` drops it otherwise, and the
+        // sentence would hold with the name lost. `waitingFixtures`' own
+        // decision is asked and wanted on one day.
+        let decisions = try decode([RemoteClientDecision].self, """
+        [{ "id": "d1", "title": "Rug color — Natural vs Sand", "status": "pending",
+           "due_date": "2026-08-24", "created_at": "2026-08-22T09:00:00Z",
+           "project": { "name": "Aspen Loft Refresh",
+             "designer": { "id": "u1", "display_name": "Leah Hartwell",
+                           "business_name": "Hartwell Studio" } } }]
+        """)
+        let calendar = Calendar(identifier: .gregorian)
+
+        for lastSeen in [nil, day("2026-08-20T12:00:00Z")] as [Date?] {
+            let record = build(badges: badges(decisions: decisions), lastSeen: lastSeen)
+            let row = try #require(record.needsYou.first)
+            #expect(row.askedBy == "Leah")
+            let shown = HouseRecordRowPresentation.make(row: row, now: now, calendar: calendar)
+            #expect(shown.stillOpenText == "Still open, Leah asked on Aug 22.")
+        }
+    }
+
     /// The seed's three waiting things, as the walk sees them.
     private func waitingFixtures() throws -> ( // swiftlint:disable:this large_tuple
         [RemoteClientDecision], [RemoteProposal], [RemoteInvoice]
@@ -239,7 +288,8 @@ struct HouseRecordBuilderTests {
                            lastSeen: day("2026-08-26T12:00:00Z"))
 
         #expect(record.needsYou.count == 1)
-        #expect(record.needsYou[0].state == .overdue)
+        #expect(record.needsYou[0].state
+                == .overdue(due: try #require(ISO8601DateParsing.dateOrDay(from: "2026-06-01"))))
     }
 
     // MARK: - New
@@ -822,15 +872,54 @@ struct HouseRecordDecisionCopyTests {
         title: String,
         designerName: String?,
         isPerson: Bool = true,
-        project: String? = "Aspen Loft Refresh"
+        project: String? = "Aspen Loft Refresh",
+        isApproval: Bool = false
     ) -> StudioQueueItemRow {
         StudioQueueItemRow(
             id: "decision:d1", kind: .decision, entityId: "d1", title: title,
             detail: project, askedAt: Date(timeIntervalSince1970: 1_755_000_000),
             dueAt: nil, amountCents: nil, designerName: designerName,
             designerIsPerson: isPerson,
+            isApproval: isApproval,
             route: .decisionDetail(decisionId: "d1")
         )
+    }
+
+    // MARK: - An approval is not a choice (W1R1-B1 / iosb3-B1)
+
+    @Test("an approval asks for an approval, and never for a choice")
+    func anApprovalIsNeverCalledAChoice() {
+        let item = row(title: "Approve the kitchen millwork as drawn?",
+                       designerName: "Leah Hartwell", isApproval: true)
+        #expect(HouseRecordBuilder.title(for: item) == "Leah asked for your approval.")
+        // The question is the second line, so its own "?" never runs into a
+        // full stop the grammar appended.
+        #expect(HouseRecordBuilder.detail(for: item)
+                == "Approve the kitchen millwork as drawn?")
+        #expect(!HouseRecordBuilder.title(for: item).contains("choose"))
+        #expect(!HouseRecordBuilder.title(for: item).lowercased().contains("decision"))
+    }
+
+    @Test("an approval with no designer still asks for an approval")
+    func anApprovalWithNoDesigner() {
+        let item = row(title: "Approve the kitchen millwork as drawn?",
+                       designerName: nil, isApproval: true)
+        #expect(HouseRecordBuilder.title(for: item) == "Your designer asked for your approval.")
+    }
+
+    @Test("a studio keeps its whole name on an approval, as it does on a choice")
+    func anApprovalNamesAStudioWhole() {
+        let item = row(title: "Approve the drawing set", designerName: "Hartwell Studio",
+                       isPerson: false, isApproval: true)
+        #expect(HouseRecordBuilder.title(for: item) == "Hartwell Studio asked for your approval.")
+    }
+
+    @Test("an untitled approval falls back to its project, never to the choice line")
+    func anUntitledApprovalFallsBackToTheProject() {
+        let item = row(title: StudioQueueBuilder.untitledApprovalTitle,
+                       designerName: "Leah Hartwell", isApproval: true)
+        #expect(HouseRecordBuilder.title(for: item) == "Leah asked for your approval.")
+        #expect(HouseRecordBuilder.detail(for: item) == "Aspen Loft Refresh")
     }
 
     @Test("a decision with a question names it, with the designer’s first name")

@@ -36,11 +36,17 @@ enum PatinaCurrency {
 
     /// Cents → whole-dollar currency, e.g. 123456 → "$1,235" (no cents). Used
     /// where a rounded figure reads better (proposal scope-room budgets).
+    /// `NumberFormatter` defaults to `.halfEven`, so $2.50 read "$2" here and
+    /// "$3" in the same letter — the web and the email round with
+    /// `Intl.NumberFormat`, whose rounding is half-expand
+    /// (`standing-sentence.ts:150-157`). ICU's half-up is that rule: a tie
+    /// goes away from zero, whichever side of it it falls.
     static func formatWholeDollars(cents: Int, currencyCode: String = "USD") -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode
         formatter.maximumFractionDigits = 0
+        formatter.roundingMode = .halfUp
         let value = Double(cents) / 100.0
         return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
     }

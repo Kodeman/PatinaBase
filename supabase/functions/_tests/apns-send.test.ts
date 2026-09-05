@@ -16,8 +16,10 @@ import {
 import {
   apnsDeviceUrl,
   apnsHostFor,
+  badgeRowIsRead,
   bearerRole,
   buildApnsPayload,
+  collapsedBadgeCount,
   isDeadTokenResponse,
   normalizePkcs8Pem,
   resolveTokens,
@@ -181,4 +183,190 @@ Deno.test("normalizePkcs8Pem: full PEM (already framed) passes through unchanged
 Deno.test("normalizePkcs8Pem: full PEM with literal \\n escapes (single-line secret) gets real newlines", () => {
   const singleLineEscaped = FAKE_PEM.split("\n").join("\\n");
   assertEquals(normalizePkcs8Pem(singleLineEscaped), FAKE_PEM);
+});
+
+// ── R5: the springboard number ──────────────────────────────────────────────
+// The home-screen badge is the recipient's unread in-app count, resolved by
+// index.ts and handed to the payload builder. An unreadable count omits the key
+// rather than sending 0 and clearing a number that is still true.
+
+Deno.test("buildApnsPayload carries aps.badge when a count is known (R5)", () => {
+  const payload = buildApnsPayload({
+    title: "An approval is waiting",
+    body: "Leah sent the kitchen plan set.",
+    entity_type: "decision",
+    entity_id: "decision-1",
+  }, 3);
+  assertEquals(payload, {
+    aps: {
+      alert: {
+        title: "An approval is waiting",
+        body: "Leah sent the kitchen plan set.",
+      },
+      sound: "default",
+      badge: 3,
+    },
+    entity_type: "decision",
+    entity_id: "decision-1",
+    notification_log_id: null,
+  });
+});
+
+Deno.test("buildApnsPayload omits aps.badge when the count is unknown (R5)", () => {
+  for (const badge of [undefined, Number.NaN, -1]) {
+    const aps = (buildApnsPayload({ title: "t", body: "b" }, badge) as {
+      aps: Record<string, unknown>;
+    }).aps;
+    assert(!("badge" in aps), `badge should be absent for ${String(badge)}`);
+  }
+});
+
+Deno.test("buildApnsPayload sends a true zero, which clears the badge", () => {
+  const aps = (buildApnsPayload({ title: "t", body: "b" }, 0) as {
+    aps: Record<string, unknown>;
+  }).aps;
+  assertEquals(aps.badge, 0);
+});
+
+// ── R5, second pass: the badge counts what the bell counts ──────────────────
+// `collapseDuplicates` on iOS folds rows on `entity_type|entity_id`; a raw row
+// count would paint a springboard number the app itself never draws, and it
+// would stand for as long as the app stayed closed.
+
+Deno.test("collapsedBadgeCount folds two rows naming one entity (M1)", () => {
+  const rows = [
+    { metadata: { entity_type: "design_request", entity_id: "dr-1" } },
+    { metadata: { entity_type: "design_request", entity_id: "dr-1" } },
+    { metadata: { entity_type: "decision", entity_id: "dec-9" } },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 2);
+});
+
+Deno.test("collapsedBadgeCount counts entity-less rows individually", () => {
+  const rows = [
+    { metadata: null },
+    { metadata: {} },
+    { metadata: { entity_type: "decision" } },
+    { metadata: { entity_type: "decision", entity_id: "dec-9" } },
+    { metadata: { entity_type: "decision", entity_id: "dec-9" } },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 4);
+});
+
+Deno.test("collapsedBadgeCount is zero for no unread rows", () => {
+  assertEquals(collapsedBadgeCount([]), 0);
+});
+
+Deno.test("collapsedBadgeCount keeps distinct entities of the same kind", () => {
+  const rows = [
+    { metadata: { entity_type: "invoice", entity_id: "inv-1" } },
+    { metadata: { entity_type: "invoice", entity_id: "inv-2" } },
+    { metadata: { entity_type: "proposal", entity_id: "inv-1" } },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 3);
+});
+
+// ── The bell's read rule (r2-M1) ────────────────────────────────────────────
+// The bell collapses two rows naming one entity and lets a READ row mark the
+// survivor read (NotificationsViewModel.collapseDuplicates; pinned by
+// BellQueueFallbackTests "a read twin marks the surviving row read"). The icon
+// must break the tie the same way or it paints a number the app never draws.
+
+Deno.test("badgeRowIsRead follows the bell: opened_at, or an opened/clicked status", () => {
+  assert(badgeRowIsRead({ opened_at: "2026-09-05T10:00:00Z" }));
+  assert(badgeRowIsRead({ opened_at: null, status: "opened" }));
+  assert(badgeRowIsRead({ opened_at: null, status: "clicked" }));
+  assert(!badgeRowIsRead({ opened_at: null, status: "delivered" }));
+  assert(!badgeRowIsRead({}));
+});
+
+Deno.test("collapsedBadgeCount drops an entity as soon as one of its rows is read (r2-M1)", () => {
+  // She taps the newer row in the bell; markOpened stamps that row alone and
+  // the older twin stays unstamped. Bell: 0. The icon must say 0 too.
+  const rows = [
+    {
+      metadata: { entity_type: "design_request", entity_id: "dr-1" },
+      opened_at: "2026-09-05T10:00:00Z",
+      status: "delivered",
+    },
+    {
+      metadata: { entity_type: "design_request", entity_id: "dr-1" },
+      opened_at: null,
+      status: "delivered",
+    },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 0);
+});
+
+Deno.test("collapsedBadgeCount reads an entity read from a clicked twin, whatever the order", () => {
+  const readFirst = [
+    {
+      metadata: { entity_type: "decision", entity_id: "dec-9" },
+      opened_at: null,
+      status: "clicked",
+    },
+    {
+      metadata: { entity_type: "decision", entity_id: "dec-9" },
+      opened_at: null,
+      status: "delivered",
+    },
+  ];
+  const readLast = [readFirst[1], readFirst[0]];
+  assertEquals(collapsedBadgeCount(readFirst), 0);
+  assertEquals(collapsedBadgeCount(readLast), 0);
+});
+
+Deno.test("collapsedBadgeCount still counts an entity whose every row is unread", () => {
+  const rows = [
+    {
+      metadata: { entity_type: "decision", entity_id: "dec-9" },
+      opened_at: null,
+      status: "delivered",
+    },
+    {
+      metadata: { entity_type: "decision", entity_id: "dec-9" },
+      opened_at: null,
+      status: "queued",
+    },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 1);
+});
+
+Deno.test("collapsedBadgeCount skips read rows that name no entity", () => {
+  const rows = [
+    { metadata: null, opened_at: "2026-09-05T10:00:00Z" },
+    { metadata: {}, opened_at: null, status: "opened" },
+    { metadata: { entity_type: "decision" }, opened_at: null },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 1);
+});
+
+Deno.test("collapsedBadgeCount counts a read window as the bell counts it", () => {
+  const rows = [
+    // one invoice, read on its second row → not counted
+    {
+      metadata: { entity_type: "invoice", entity_id: "inv-1" },
+      opened_at: null,
+      status: "delivered",
+    },
+    {
+      metadata: { entity_type: "invoice", entity_id: "inv-1" },
+      opened_at: "2026-09-04T09:00:00Z",
+      status: "opened",
+    },
+    // one proposal, wholly unread → counted once
+    {
+      metadata: { entity_type: "proposal", entity_id: "pr-2" },
+      opened_at: null,
+      status: "delivered",
+    },
+    {
+      metadata: { entity_type: "proposal", entity_id: "pr-2" },
+      opened_at: null,
+      status: "delivered",
+    },
+    // one keyless unread row → counted on its own
+    { metadata: null, opened_at: null, status: "delivered" },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 2);
 });

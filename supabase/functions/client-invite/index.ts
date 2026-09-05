@@ -17,11 +17,14 @@ import {
   ctaButton,
   spacer,
   escapeHtml,
+  givenName,
+  signOff,
 } from '../_shared/branded-email.ts';
 import {
   resolveStudioIdentity,
   studioCobrand,
   studioDisplayName,
+  studioSignatureCity,
 } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -81,7 +84,7 @@ async function handleSend(req: Request): Promise<Response> {
   // Resolve designer name for the email body.
   const { data: designer } = await admin
     .from('profiles')
-    .select('full_name, business_name, email')
+    .select('full_name, business_name, email, city')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -132,6 +135,7 @@ async function handleSend(req: Request): Promise<Response> {
   const subject = `${senderName} invited you to Patina`;
   const html = renderBrandedShell({
     title: subject,
+    audience: 'client',
     preview: `${senderName} would like to collaborate with you on Patina.`,
     eyebrow: 'Invitation',
     studioName: cobrand.studioName,
@@ -147,7 +151,20 @@ async function handleSend(req: Request): Promise<Response> {
       muted(
         `This invitation expires in 7 days. If the button doesn&rsquo;t work, copy this link:<br><a href="${link}" style="color:#4E7A66; text-decoration:underline; word-break:break-all;">${link}</a>`,
       ),
-      paragraph('— Patina'),
+      // R3-04: `profiles.city` first, then the studio org's address — the
+      // same precedence the approval letter signs with, so one studio's mail
+      // does not sign from two different places in one inbox.
+      signOff({
+        designerGivenName: givenName(
+          (designer as { full_name?: string | null } | null)?.full_name,
+        ),
+        studioName: cobrand.studioName,
+        city: await studioSignatureCity(
+          admin,
+          identity,
+          (designer as { city?: string | null } | null)?.city,
+        ) ?? null,
+      }),
     ].join(''),
   });
 

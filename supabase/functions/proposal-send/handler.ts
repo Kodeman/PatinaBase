@@ -2,10 +2,12 @@ import {
   callout,
   ctaButton,
   escapeHtml,
+  givenName,
   heading,
   muted,
   paragraph,
   renderBrandedShell,
+  signOff,
   spacer,
 } from "../_shared/branded-email.ts";
 
@@ -257,6 +259,7 @@ export function renderProposalEmail(
         : `${escapeHtml(dispatch.designerName)} has prepared a design proposal for you: <strong>${escapeHtml(dispatch.proposalTitle)}</strong>.`;
   const html = renderBrandedShell({
     title: subject,
+    audience: 'client',
     preview: `${dispatch.designerName} has prepared a ${documentLabel} for you.`,
     eyebrow: isServices
       ? 'Design services'
@@ -294,7 +297,12 @@ export function renderProposalEmail(
       ),
       spacer(),
       muted(`If the button doesn&rsquo;t work, copy this link:<br>${link}`),
-      muted("— Patina"),
+      // The studio signs the letter (R7). The dispatch snapshot carries no
+      // city, so the sign-off omits it rather than guessing one.
+      signOff({
+        designerGivenName: givenName(dispatch.designerName),
+        studioName: dispatch.studioName,
+      }),
     ].join(""),
   });
   return { subject, html };

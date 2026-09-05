@@ -21,6 +21,7 @@
 //
 
 import Foundation
+import UserNotifications
 
 /// App-wide badge counts for the Studio rail. `@Observable` so the rail
 /// re-renders when a refresh lands.
@@ -54,8 +55,38 @@ final class BadgeCountService {
     /// Publish the feed's own rows into the one count every surface reads.
     /// Called by `NotificationsViewModel` on load and after each mark-read, so
     /// the bell can never disagree with the list behind it.
+    ///
+    /// ### The one definition of the badge number
+    ///
+    /// **Unread `in_app` rows in `notification_log` for this user, one per
+    /// entity**: `channel = 'in_app'` (never the `push` leg — 00534 writes both
+    /// for one event), `opened_at IS NULL`, a status in
+    /// `NotificationsAPIClient.visibleStatusFilter`, collapsed on
+    /// `metadata.entity_type|entity_id`. Studio-composed rows are excluded —
+    /// never delivered, so no arrival and no read state (`C5`).
+    ///
+    /// `apns-send`'s `aps.badge` (R5, second pass — the backend lane's) must
+    /// count that same set or the springboard drifts from the bell while the
+    /// app is backgrounded. They already agree on user, channel and
+    /// `opened_at IS NULL`; two clauses are this side's alone, and both are
+    /// bounded. The collapse can differ only where one entity holds two unread
+    /// `in_app` rows, which `notify_client_attention`'s own de-dup
+    /// (00534:163-178 — one unopened row per user and entity, updated rather
+    /// than re-inserted) is what prevents. The status filter drops
+    /// `failed`/`suppressed` rows a raw count keeps, so a server count that
+    /// wants to agree exactly carries that predicate too. `markAllOpened` marks
+    /// BOTH legs (`W1R2-m1`), so a read cannot part them either.
     func applyNotificationRows(_ rows: [AppNotification]) {
         unreadNotificationCount = rows.filter { !$0.isStudioFallback && !$0.isRead }.count
+        writeSpringboardBadge(unreadNotificationCount)
+    }
+
+    /// R5's home-screen badge, carrying the count above it — P-05 is what makes
+    /// that number true. Injectable: the real center needs a grant tests lack.
+    var writeSpringboardBadge: (Int) -> Void = { count in
+        UNUserNotificationCenter.current().setBadgeCount(count) { error in
+            if let error { PatinaLog.ui.error("[Badge] refused: \(error.localizedDescription)") }
+        }
     }
 
     /// Proposals still awaiting the client's signature (sent/viewed, not
@@ -76,6 +107,12 @@ final class BadgeCountService {
     /// the same queries again. Each array is the one the matching count was
     /// computed from, so a row list and its count can never disagree.
     private(set) var pendingDecisions: [RemoteClientDecision] = []
+    /// Every Stage-2 approval the projection returned — answered and closed
+    /// ones included, unlike `pendingDecisions`, which carries only the rows
+    /// still holding an act of hers. The bell reads this to say what an
+    /// approval row IS now rather than what it was titled when it was raised
+    /// (`W1R2-n4`).
+    private(set) var projectApprovals: [RemoteProjectApprovalReview] = []
     private(set) var pendingProposals: [RemoteProposal] = []
     private(set) var payableInvoices: [RemoteInvoice] = []
     private(set) var threadSummaries: [RemoteCommsThreadSummary] = []
@@ -164,42 +201,6 @@ final class BadgeCountService {
     /// is the whole point of the reset, and the one way joining an in-flight
     /// refresh could reintroduce it.
     private var refreshToken = 0
-
-    /// R-02: what the last successful refresh knew, kept across launches.
-    ///
-    /// Without it a cold launch on a dead network does not degrade, it
-    /// DELETES: the counts start at zero, the pill loses its number and the
-    /// bell tells VoiceOver "No unread notifications" — all of it asserted,
-    /// none of it fetched.
-    private struct PersistedCounts: Codable {
-        let pendingDecisionCount: Int
-        let unreadMessageCount: Int
-        let proposalsAwaitingSignatureCount: Int
-        let payableInvoiceCount: Int
-        let projectCount: Int
-        /// R-02, second half. The counts alone restore the numbers and lose the
-        /// SEAT: `DesignerSeat.make` reads these rows, not `projectCount`, so
-        /// an offline cold launch drew a house with no designer in it — the
-        /// walk's shots 36/37. Decoded as `[]` on a payload written before this
-        /// field existed, which is the same floor the counts already have.
-        /// Optional so a payload written before this field existed still
-        /// decodes — an absent key is `nil`, not a decode failure that would
-        /// throw the whole floor away.
-        let projects: [RemoteProject]?
-        /// `R-02`, the seat's PROJECT. `projects` alone brings the seat back
-        /// but not the one it named: `DesignerSeat.activeProject` resolves the
-        /// urgent NEEDS YOU row against these three collections — the only
-        /// place a row's `project_id` survives — and with them empty it falls
-        /// through to `active.first`, so a cold offline Today seated Leah on
-        /// the most-recently-updated project instead of the one the Record is
-        /// about. Restored for the same reason `projects` is, and under the
-        /// same contract: a floor to draw, never a claim that a fetch
-        /// answered. Optional for the same forward-compatibility reason.
-        let pendingDecisions: [RemoteClientDecision]?
-        let pendingProposals: [RemoteProposal]?
-        let payableInvoices: [RemoteInvoice]?
-        let storedAt: Date
-    }
 
     /// When the restored floor was written — `nil` until one is restored, and
     /// `nil` again the moment the floor is dropped.
@@ -342,6 +343,7 @@ final class BadgeCountService {
             payableInvoiceCount = 0
             projectCount = 0
             pendingDecisions = []
+            projectApprovals = []
             pendingProposals = []
             payableInvoices = []
             threadSummaries = []
@@ -354,6 +356,7 @@ final class BadgeCountService {
         }
 
         async let decisionsFetch = try? DecisionsAPIClient.shared.listPending()
+        async let approvalsFetch = try? DecisionsAPIClient.shared.fetchProjectApprovalReviews()
         async let summariesFetch = try? MessagingAPIClient.shared.listThreadSummaries()
         async let proposalsFetch = try? ProposalsAPIClient.shared.listProposals()
         async let invoicesFetch = try? InvoicesAPIClient.shared.listInvoices()
@@ -362,17 +365,23 @@ final class BadgeCountService {
         let (decisions, summaries, proposals, invoices, fetchedProjects) = await (
             decisionsFetch, summariesFetch, proposalsFetch, invoicesFetch, projectsFetch
         )
+        let approvals = await approvalsFetch
         let fetchedRoster = await rosterFetch
 
         // The account changed while these were in the air: these are the
         // previous account's rows and there is nothing here to write them to.
         guard token == refreshToken else { return }
 
+        if let approvals { projectApprovals = approvals }
+        let merged = Self.mergedDecisions(
+            pending: decisions, approvals: approvals, previous: pendingDecisions,
+            projects: fetchedProjects ?? projects
+        )
         apply(
-            decisions: decisions, summaries: summaries, proposals: proposals,
+            decisions: merged, summaries: summaries, proposals: proposals,
             invoices: invoices, projects: fetchedProjects, roster: fetchedRoster
         )
-        if decisions != nil || summaries != nil || proposals != nil
+        if merged != nil || summaries != nil || proposals != nil
             || invoices != nil || fetchedProjects != nil {
             hasLoaded = true
             lastRefreshFailed = false
@@ -469,10 +478,11 @@ final class BadgeCountService {
         hasLoaded = false
         projectsLoaded = false
         lastRefreshFailed = false
-        // R-02: the floor is the PREVIOUS account's. Without this, account B's
-        // first launch paints account A's numbers.
+        // R-02: the floor is the PREVIOUS account's, home screen included.
+        // Without this, account B's first launch paints account A's numbers.
         defaults.removeObject(forKey: Self.persistedCountsKey)
         floorStoredAt = nil
+        writeSpringboardBadge(0)
     }
 
     /// Debounced refresh for bursty triggers (push receipt can deliver a

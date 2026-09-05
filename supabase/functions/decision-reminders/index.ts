@@ -15,6 +15,11 @@
 // idempotent in-app RPC + a notification_log lookup) so a same-day re-run does
 // not double-send even before the stamp lands.
 //
+// P-02: this is the RETURNING letter. The announcing one is decision-first-
+// notice, fired at publish by the trigger in 00568. Both are decision_required;
+// the log dedupe keys on the register, so this letter still lands after that
+// one.
+//
 // SMS escalation (PRD line 120 final clause) is intentionally deferred
 // pending Twilio integration.
 
@@ -29,10 +34,7 @@ import {
   resolveApprovalArtifactCitation,
   resolveFrozenLeadRecipient,
 } from "../_shared/project-approval-notification.ts";
-import {
-  resolveStudioIdentity,
-  studioCobrand,
-} from "../_shared/studio-identity.ts";
+import { resolveDecisionSignature } from "../_shared/decision-notify.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -55,6 +57,7 @@ interface DecisionWithClient {
       email: string | null;
     } | null;
   } | null;
+  sent_at: string | null;
   approval_artifact:
     | EmbeddedApprovalArtifact
     | EmbeddedApprovalArtifact[]
@@ -74,7 +77,7 @@ Deno.serve(async (_req: Request) => {
   const { data, error } = await supabase
     .from("client_decisions")
     .select(`
-      id, title, due_date, reminder_sent_at, designer_id, project_id,
+      id, title, due_date, reminder_sent_at, sent_at, designer_id, project_id,
       approval_contract,
       designer_client:designer_clients(
         client_id,
@@ -83,7 +86,7 @@ Deno.serve(async (_req: Request) => {
         client:profiles!client_id(id, full_name, email)
       ),
       approval_artifact:project_approval_artifacts(
-        source_kind, source_version, artifact_hash, artifact_title
+        source_kind, source_version, artifact_hash, artifact_title, created_at
       ),
       authority_snapshot:project_decision_authority_snapshots(
         decision_lead_id,
@@ -135,19 +138,32 @@ Deno.serve(async (_req: Request) => {
       continue;
     }
 
-    // Studio co-brand (Designer Studios): prefer a linked project's studio,
-    // else the decision's designer's primary studio.
-    const identity = await resolveStudioIdentity(supabase, {
+    // Who signs the letter (R7): the studio's brand for the byline, the
+    // designer's given name and city for the sign-off.
+    const signature = await resolveDecisionSignature(supabase, {
       projectId: d.project_id,
       designerId: d.designer_id,
     });
 
+    // This cron fires 48 hours before the due date, which is days or weeks
+    // after the studio pressed send: it returns to an approval already made
+    // and never announces one. ALWAYS the reminder register — only the
+    // publish-time producer (decision-first-notice, fired by 00568's trigger)
+    // speaks the announcing one, so an approval already in flight at deploy
+    // never hears "sent" late.
     const result = await deliverDecisionNotification(
       supabase,
       "decision_required",
-      { id: d.id, title: d.title, dueDate: d.due_date, artifact },
+      {
+        id: d.id,
+        title: d.title,
+        dueDate: d.due_date,
+        artifact,
+        sentAt: d.sent_at,
+        notice: "reminder",
+      },
       recipient!,
-      studioCobrand(identity),
+      signature,
     );
 
     const stampDelivery = async () => {

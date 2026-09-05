@@ -74,7 +74,7 @@ Deno.serve(async (req: Request) => {
     .select(`
       id, title, due_date, designer_id, approval_contract,
       approval_artifact:project_approval_artifacts(
-        source_kind, source_version, artifact_hash, artifact_title
+        source_kind, source_version, artifact_hash, artifact_title, created_at
       ),
       designer:profiles!designer_id(id, full_name, email)
     `)

@@ -231,7 +231,9 @@ struct StudioHubView: View {
 
             Spacer(minLength: 8)
 
-            Text("\(sectionBadgeCount(section))")
+            // P-24: the hub counts in words. A figure at the end of a row is
+            // the count chip the refusals name, whatever it is drawn in.
+            Text(PatinaCount.inWords(sectionBadgeCount(section)))
                 .font(PatinaTypography.monoLabel)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .accessibilityLabel(sectionBadgeLabel(section))
@@ -252,9 +254,7 @@ struct StudioHubView: View {
     }
 
     private func sectionBadgeLabel(_ section: StudioQueueSection) -> String {
-        section.kind == .awaitingYou
-            ? "\(sectionBadgeCount(section)) things awaiting you"
-            : "\(section.rows.count) categories"
+        section.kind.badgeLabel(count: sectionBadgeCount(section))
     }
 
     @ViewBuilder

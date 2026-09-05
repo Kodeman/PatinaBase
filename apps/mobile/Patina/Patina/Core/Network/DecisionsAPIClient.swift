@@ -76,6 +76,17 @@ public struct RemoteDesignerRef: Codable, Sendable {
         guard let business_name, !business_name.isEmpty else { return nil }
         return business_name
     }
+
+    /// P-04 / R8: the name the still-open sentence puts in `{Designer}` — a
+    /// person by their given name, a studio by its whole name, and nobody
+    /// when the embed carried nobody. The same rule
+    /// `HouseRecordBuilder.askedByName(for:)` applies to the flattened row,
+    /// so the Record and the decision screens cannot name one designer two
+    /// ways.
+    public var askedByName: String? {
+        guard let person = personName else { return studioName }
+        return person.split(separator: " ").first.map(String.init) ?? person
+    }
 }
 
 /// Embedded `projects(name)` row on a decision — gives list rows their
@@ -137,6 +148,25 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
     /// Convenience: the decision has already been responded to.
     public var isResolved: Bool {
         status == "responded" || responded_at != nil
+    }
+
+    /// `P-09`: a Stage-2 project-artifact approval. It is answered through
+    /// `respond_project_approval` with one of three canonical outcomes, and it
+    /// is read through `list_my_project_decision_reviews` — the row alone
+    /// carries neither the edition it binds nor its impacts, so the screen must
+    /// know which ceremony it is drawing before it draws anything.
+    public var isProjectArtifactApproval: Bool {
+        approval_contract == "project_artifact_v1"
+    }
+
+    /// `W1R2-M3`: a Stage-2 approval the studio has FROZEN but not issued.
+    /// Only the projection bridge (`asWaitingDecision`) can put one in front
+    /// of a homeowner — `listPending` reads `status=eq.pending` — and the act
+    /// it holds is the review leg: read this exact edition, so the studio can
+    /// issue it. It is not yet an ask for her approval, and the copy must not
+    /// call it one.
+    public var isUnissuedApproval: Bool {
+        isProjectArtifactApproval && status == "draft"
     }
 
     /// A sign-off the addressed client is the one to give — exactly the shape
@@ -279,6 +309,25 @@ public actor DecisionsAPIClient {
         if let prefer {
             request.setValue(prefer, forHTTPHeaderField: "Prefer")
         }
+    }
+
+    /// One authenticated POST to an RPC, returning its body.
+    ///
+    /// The Stage-2 RPCs live in `DecisionsAPIClient+ProjectApprovals.swift` —
+    /// this file is at SwiftLint's `file_length` — and an extension in another
+    /// file cannot reach this actor's `private` plumbing, which
+    /// `NetworkRecoveryTests` requires stay private and on `PatinaURLSession`.
+    func callRPC(_ name: String, body: [String: Any]) async throws -> Data {
+        let url = baseURL.appendingPathComponent("/rest/v1/rpc/\(name)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        await applyHeaders(to: &request)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await session.patinaData(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
     }
 
     // MARK: - Reads

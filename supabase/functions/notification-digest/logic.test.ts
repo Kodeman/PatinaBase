@@ -9,9 +9,12 @@ import {
 import {
   artifactCitationsForDigest,
   buildReminderDigestEmail,
+  decisionDigestLink,
+  decisionDigestTitle,
   isReminderDigestDue,
   type ReminderDigestItem,
 } from "./logic.ts";
+import { clientDecisionLink } from "../_shared/client-portal-links.ts";
 
 const NOW = new Date("2026-07-07T15:00:00Z");
 
@@ -90,7 +93,38 @@ Deno.test("buildReminderDigestEmail: escapes HTML in titles", () => {
   assertStringIncludes(html, "&lt;script&gt;");
 });
 
-Deno.test("Stage-2 digest item cites immutable artifact and logs no reviewer IDs", () => {
+Deno.test("the digest never says 'overdue' to a homeowner (P-04)", () => {
+  assertEquals(
+    decisionDigestTitle("decision_overdue", "The kitchen plan set"),
+    "Still open: The kitchen plan set",
+  );
+  assertEquals(
+    decisionDigestTitle("decision_required", "The kitchen plan set"),
+    "The kitchen plan set",
+  );
+  const { html } = buildReminderDigestEmail(
+    [{
+      category: "decision",
+      title: decisionDigestTitle("decision_overdue", "The kitchen plan set"),
+      link: null,
+    }],
+    "https://client.patina.cloud",
+  );
+  assert(!html.toLowerCase().includes("overdue"));
+  assertStringIncludes(html, "Still open: The kitchen plan set");
+});
+
+Deno.test("the digest is addressed to the homeowner's own door (P-03b)", () => {
+  const { html } = buildReminderDigestEmail(
+    [{ category: "proposal", title: "A", link: null }],
+    "https://client.patina.cloud",
+  );
+  assert(!html.includes(">Dashboard</a>"));
+  assert(!html.includes("app.patina.cloud"));
+  assertStringIncludes(html, ">Your project</a>");
+});
+
+Deno.test("Stage-2 digest item cites the edition, not the checksum (R6)", () => {
   const checksum = "c".repeat(64);
   const items: ReminderDigestItem[] = [{
     category: "decision",
@@ -102,15 +136,17 @@ Deno.test("Stage-2 digest item cites immutable artifact and logs no reviewer IDs
       version: 6,
       checksum,
       title: "Client <specification> book",
+      issuedAt: "2026-09-28T14:00:00Z",
     },
   }];
   const { html } = buildReminderDigestEmail(
     items,
     "https://client.patina.cloud",
   );
-  assertStringIncludes(html, "spec_book_artifact");
-  assertStringIncludes(html, "v6");
-  assertStringIncludes(html, checksum);
+  assertStringIncludes(html, "Edition 6 · issued September 28");
+  assert(!html.includes(checksum), "the hash stays in the record");
+  assert(!html.includes("SHA-256"));
+  assert(!html.includes("spec_book_artifact"), "the enum spelling is not her word");
   assertStringIncludes(html, "Client &lt;specification&gt; book");
 
   const citations = artifactCitationsForDigest(items);
@@ -125,4 +161,19 @@ Deno.test("Stage-2 digest item cites immutable artifact and logs no reviewer IDs
   assert(!serialized.includes("reviewer"));
   assert(!serialized.includes("approver"));
   assert(!serialized.includes("leadid"));
+});
+
+Deno.test("the digest addresses an approval exactly as the letter does (F12)", () => {
+  const base = "https://client.patina.cloud";
+  assertEquals(
+    decisionDigestLink(base, "decision-1"),
+    clientDecisionLink(base, "decision-1"),
+  );
+  assertEquals(
+    decisionDigestLink(base, "decision-1"),
+    "https://client.patina.cloud/decisions/decision-1",
+  );
+  // A missing or forged id lands on the doorstep, never an interpolated path.
+  assertEquals(decisionDigestLink(base, null), `${base}/#doorstep`);
+  assertEquals(decisionDigestLink(base, "../evil"), `${base}/#doorstep`);
 });

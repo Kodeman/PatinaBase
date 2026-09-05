@@ -8,7 +8,12 @@
 //
 // Input:  { user_id?, tokens?, title, body, entity_type?, entity_id?,
 //           notification_log_id? }
-// Reads device_push_tokens for user_id unless explicit tokens are passed.
+// Reads device_push_tokens for user_id unless explicit tokens are passed, and
+// — when a user_id is given — counts that user's unopened in_app
+// notification_log rows, collapsed on the entity key the bell collapses on and
+// under the bell's own read rule (one read row reads its whole entity), so
+// the springboard number moves while the app is backgrounded (R5, ruled at the
+// Wave 1 close) and says what the bell behind it says.
 // Per token: POST to api.push.apple.com or api.sandbox.push.apple.com — host
 // chosen PER TOKEN from its registered environment column (I66: never inferred
 // from build config). Provider auth: ES256 JWT via jose (importPKCS8 + kid
@@ -29,17 +34,78 @@
 // APNS_TEAM_ID, APNS_TOPIC.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { importPKCS8, SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import {
   apnsDeviceUrl,
   type ApnsSendInput,
+  type BadgeRow,
   bearerRole,
   buildApnsPayload,
+  collapsedBadgeCount,
   isDeadTokenResponse,
   normalizePkcs8Pem,
   type ResolvedToken,
   resolveTokens,
 } from "./core.ts";
+
+/** The bell's own page size (`NotificationsAPIClient.list(limit: 50)`). */
+const BADGE_WINDOW = 50;
+
+/** The bell's own status filter (`NotificationsAPIClient.visibleStatusFilter`):
+ *  failed and suppressed rows never reach the feed, so they must never reach
+ *  the icon either. */
+const BADGE_VISIBLE_STATUSES = [
+  "queued",
+  "sending",
+  "delivered",
+  "unconfirmed",
+  "opened",
+  "clicked",
+];
+
+/**
+ * The springboard number (R5): how many in-app notifications this person has
+ * not opened. `notification_log` holds one in_app row and one push row per
+ * event (00534's notify_client_attention writes the pair), so the count is
+ * taken over the in_app leg alone — the same leg the bell reads — or the icon
+ * would say twice what the app does.
+ *
+ * The rows themselves are read rather than counted in the database, because the
+ * bell does not count rows either: it collapses them on the entity key
+ * (`collapsedBadgeCount`), and producers other than 00534 leave two in_app rows
+ * on one entity. Read rows come back too, unfiltered: the bell's rule is that
+ * one read row of an entity marks that entity read, so the unread ones alone
+ * cannot answer the question. Window, order and visible statuses match the
+ * bell's own list, so neither surface can see rows the other cannot.
+ *
+ * Returns undefined on any failure, and the payload then omits `aps.badge`
+ * rather than sending 0 and clearing a number that is still true.
+ */
+async function unreadInAppBadge(
+  supabase: SupabaseClient,
+  userId: string | null | undefined,
+): Promise<number | undefined> {
+  if (!userId) return undefined;
+  try {
+    const { data, error } = await supabase
+      .from("notification_log")
+      .select("metadata, opened_at, status")
+      .eq("user_id", userId)
+      .eq("channel", "in_app")
+      .in("status", BADGE_VISIBLE_STATUSES)
+      .order("created_at", { ascending: false })
+      .limit(BADGE_WINDOW);
+    if (error || !Array.isArray(data)) {
+      console.warn("[apns-send] badge count unavailable", error ?? null);
+      return undefined;
+    }
+    return collapsedBadgeCount(data as BadgeRow[]);
+  } catch (err) {
+    console.warn("[apns-send] badge count threw", err);
+    return undefined;
+  }
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -157,7 +223,8 @@ Deno.serve(async (req) => {
     }
 
     const jwt = await providerJwt(authKey, keyId, teamId);
-    const payload = JSON.stringify(buildApnsPayload(input));
+    const badge = await unreadInAppBadge(supabase, input.user_id);
+    const payload = JSON.stringify(buildApnsPayload(input, badge));
 
     let successes = 0;
     let providerId: string | undefined;

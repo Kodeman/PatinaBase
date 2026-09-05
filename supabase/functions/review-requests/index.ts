@@ -18,11 +18,15 @@ import {
   ctaButton,
   spacer,
   escapeHtml,
+  givenName,
+  signOff,
+  type StudioSignOff,
 } from '../_shared/branded-email.ts';
 import {
   resolveStudioIdentity,
   studioCobrand,
   studioDisplayName,
+  studioSignatureCity,
 } from '../_shared/studio-identity.ts';
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
 
@@ -44,6 +48,7 @@ interface Profile {
   id: string;
   full_name: string | null;
   email: string | null;
+  city: string | null;
 }
 
 interface DesignerClient {
@@ -65,6 +70,8 @@ async function sendReviewEmail(opts: {
   /** Studio co-brand byline (Designer Studios). */
   studioName?: string;
   studioLogoUrl?: string;
+  /** Who signs the letter (R7) — the studio, never Patina. */
+  signature: StudioSignOff;
 }): Promise<boolean> {
   const senderDisplay = opts.senderName;
   const greeting = opts.clientName ? `Hi ${escapeHtml(opts.clientName)},` : 'Hi there,';
@@ -76,6 +83,7 @@ async function sendReviewEmail(opts: {
 
   const html = renderBrandedShell({
     title: subject,
+    audience: 'client',
     preview: `Your ${opts.projectName} project is complete — we'd love to hear what you thought.`,
     eyebrow: 'Review request',
     studioName: opts.studioName,
@@ -89,7 +97,7 @@ async function sendReviewEmail(opts: {
       ctaButton(reviewUrl, 'Share Your Experience', 'ink'),
       spacer(10),
       muted(`Can&apos;t click the button? Copy this link into your browser:<br><a href="${reviewUrl}" style="color:#4E7A66; text-decoration:underline; word-break:break-all;">${reviewUrl}</a>`),
-      paragraph('&mdash; Patina'),
+      signOff(opts.signature),
     ].join(''),
   });
 
@@ -171,7 +179,7 @@ Deno.serve(async (_req: Request) => {
 
   const { data: profilesData, error: profilesError } = await supabase
     .from('profiles')
-    .select('id, full_name, email')
+    .select('id, full_name, email, city')
     .in('id', allProfileIds.length > 0 ? allProfileIds : ['00000000-0000-0000-0000-000000000000']);
 
   if (profilesError) {
@@ -251,6 +259,18 @@ Deno.serve(async (_req: Request) => {
       senderName,
       studioName: cobrand.studioName,
       studioLogoUrl: cobrand.studioLogoUrl,
+      // R3-04: `profiles.city` first, then the studio org's address — the
+      // same precedence the approval letter signs with, so one studio's mail
+      // does not sign from two different places in one inbox.
+      signature: {
+        designerGivenName: givenName(designerName),
+        studioName: cobrand.studioName,
+        city: await studioSignatureCity(
+          supabase,
+          identity,
+          designerProfile?.city,
+        ) ?? null,
+      },
     });
 
     if (ok) {

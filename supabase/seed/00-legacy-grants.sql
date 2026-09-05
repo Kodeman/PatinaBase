@@ -12973,3 +12973,9 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00568_decision_first_notice_dispatch.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.decision_dispatch_first_notice() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

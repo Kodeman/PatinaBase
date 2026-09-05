@@ -531,7 +531,7 @@ function ScopeChangeDecideCard({
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
       <p className="pt-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-        A gate · your studio proposed a change
+        A change · your studio proposed it
       </p>
       <h2
         id={`scope-change-title-${request.id}`}

@@ -111,6 +111,41 @@ struct BadgeFreshnessTests {
         #expect(service.unreadNotificationCount == 0)
     }
 
+    // MARK: - R5 · the springboard badge, mirrored from the same count
+
+    /// The icon half of this suite's own ruling ("rendered on the bell and
+    /// mirrored to the app icon") had no writer: nothing in the app or the
+    /// push payload ever set a badge, so R5 kept one that was never set.
+    /// P-05 is what makes the number true — one `in_app` row per update
+    /// instead of an `in_app` and a `push` row for the same one.
+    @Test("the home screen carries the number the bell carries")
+    func theSpringboardBadgeMirrorsTheBell() {
+        let service = BadgeCountService.makeForTests()
+        var written: [Int] = []
+        service.writeSpringboardBadge = { written.append($0) }
+
+        service.applyNotificationRows([
+            delivered(id: "d1", isRead: false),
+            delivered(id: "d2", isRead: false),
+            composed(id: "inv-1")
+        ])
+        #expect(written == [2])
+
+        service.applyNotificationRows([delivered(id: "d1", isRead: true)])
+        #expect(written == [2, 0])
+    }
+
+    @Test("a session change takes the home screen's number with it")
+    func aSessionChangeClearsTheSpringboardBadge() {
+        let service = BadgeCountService.makeForTests()
+        var written: [Int] = []
+        service.applyNotificationRows([delivered(id: "d1", isRead: false)])
+        service.writeSpringboardBadge = { written.append($0) }
+
+        service.resetForSessionChange()
+        #expect(written == [0])
+    }
+
     // MARK: - The writer, and the only one
 
     /// The feed's view model is the one writer, and it publishes on every

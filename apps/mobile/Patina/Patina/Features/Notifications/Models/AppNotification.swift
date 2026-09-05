@@ -14,7 +14,11 @@ struct AppNotification: Identifiable {
     /// from the backend. `nil` for preview-only entries.
     let remoteId: String?
     let type: AppNotificationType
-    let title: String
+    /// `var` because a Stage-2 approval's title is frozen into
+    /// `notification_log.metadata.title` when the approval is raised and never
+    /// rewritten, so the feed retitles it from what the approval is now
+    /// (`NotificationsViewModel.retitleApprovals`, `W1R2-n4`).
+    var title: String
     let body: String
     let timestamp: Date
     var isRead: Bool
@@ -42,6 +46,11 @@ struct AppNotification: Identifiable {
     /// once every one of them has a delivered row of its own; empty for a
     /// delivered row, which speaks for itself.
     let coveredEntityIds: [String]
+    /// P-04. The bucket glyph is one mark for every decision row; the three
+    /// decision push types each have their own (`DecisionPushType.icon`), and
+    /// a passed date has to draw a clock. Set from `notification_log.type`
+    /// where the row is one of them, nil everywhere else.
+    let iconOverride: String?
 
     /// The one route a tap follows, whichever kind of row this is.
     var route: AppRoute? {
@@ -60,7 +69,8 @@ struct AppNotification: Identifiable {
         entityId: String? = nil,
         isStudioFallback: Bool = false,
         fallbackRoute: AppRoute? = nil,
-        coveredEntityIds: [String] = []
+        coveredEntityIds: [String] = [],
+        iconOverride: String? = nil
     ) {
         self.id = id
         self.remoteId = remoteId
@@ -74,10 +84,11 @@ struct AppNotification: Identifiable {
         self.isStudioFallback = isStudioFallback
         self.fallbackRoute = fallbackRoute
         self.coveredEntityIds = coveredEntityIds
+        self.iconOverride = iconOverride
     }
 
     var icon: String {
-        type.icon
+        iconOverride ?? type.icon
     }
 
     var iconColor: Color {

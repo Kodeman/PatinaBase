@@ -26,16 +26,18 @@ export default async function HomePage(props?: {
   const one = (value: string | string[] | undefined) =>
     Array.isArray(value) ? value[0] : value;
 
-  // A fold from `/invoices/<id>` or `/proposals/<id>` names the instrument it
-  // was sent about. Those are the money and signature paths, and the active
-  // house is the wrong answer for a client with more than one: the letterbox
-  // would show a different invoice and the door whatever that house happens to
-  // have pending. Resolve the instrument's own house first; the active-house
-  // clocks decide only when nothing names one.
+  // A fold from `/invoices/<id>`, `/proposals/<id>` or `/decisions/<id>` names
+  // the instrument it was sent about. Those are the money, signature and
+  // approval paths, and the active house is the wrong answer for a client with
+  // more than one: the letterbox would show a different invoice, the door
+  // whatever that house happens to have pending, and the doorstep an approval
+  // the mail was not about. Resolve the instrument's own house first; the
+  // active-house clocks decide only when nothing names one.
   const namedProposalId = one(query.proposal) ?? null;
   const namedProjectId = await resolveHouseForInstrument(projectIds, {
     invoiceId: one(query.invoice),
     proposalId: namedProposalId ?? undefined,
+    decisionId: one(query.decision),
   });
   const activeProjectId =
     namedProjectId ?? (await resolveActiveHouse(projectIds));

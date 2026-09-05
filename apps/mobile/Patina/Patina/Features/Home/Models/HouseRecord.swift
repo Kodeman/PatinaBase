@@ -35,6 +35,21 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         case savedPieceWithdrawn
         case story
         case matchedDesigner
+
+        /// True for the three kinds that are obligations — the NEEDS YOU
+        /// half. P-12 draws these with a margin rule so an obligation stops
+        /// depending on a 10 pt eyebrow to tell it from a piece of news; the
+        /// predicate lives on the kind so the rule and the half it belongs to
+        /// cannot drift apart.
+        var isObligation: Bool {
+            switch self {
+            case .decisionAsked, .proposalSent, .invoiceDue:
+                return true
+            case .messageReceived, .orderMoved, .savedPieceRepriced,
+                 .savedPieceWithdrawn, .story, .matchedDesigner:
+                return false
+            }
+        }
     }
 
     /// What sits on the right of the row. `amount` carries the figure the
@@ -42,7 +57,13 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
     /// actually late), because only it knows `now`.
     enum State: Codable, Equatable, Sendable {
         case none
-        case overdue
+        /// Past the day it was wanted by, carrying that day. `W1R2-M2`: the
+        /// due date used to be thrown away here, so the card could not apply
+        /// `DateDisplay.askedOnClauseEarned` and Today printed a sentence the
+        /// Studio hub, two taps away, no longer printed. A snapshot written
+        /// before this shape fails to decode and is ignored, which costs one
+        /// pre-fetch paint and nothing else (`RecordSnapshotStore.load`).
+        case overdue(due: Date)
         case due(Date)
         case amount(cents: Int, due: Date?)
         case new
@@ -66,16 +87,21 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
     /// the dated group: no window-relative date, and never a "new" tick.
     /// Ordering still uses `date`.
     let isStandingCondition: Bool
+    /// P-04 / R8: who asked, as the sentence an open approval prints names
+    /// them — a person's given name, a studio's whole name, nil when the wire
+    /// carried none. Absent from snapshots written before the sentence
+    /// existed, which decode as nil and fall back to "your designer".
+    let askedBy: String?
     let route: AppRoute?
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, title, detail, date, state, isNew, isStandingCondition, route
+        case id, kind, title, detail, date, state, isNew, isStandingCondition, askedBy, route
     }
 
     init(
         id: String, kind: Kind, title: String, detail: String?,
         date: Date, state: State, isNew: Bool,
-        isStandingCondition: Bool = false, route: AppRoute?
+        isStandingCondition: Bool = false, askedBy: String? = nil, route: AppRoute?
     ) {
         self.id = id
         self.kind = kind
@@ -85,6 +111,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         self.state = state
         self.isNew = isNew
         self.isStandingCondition = isStandingCondition
+        self.askedBy = askedBy
         self.route = route
     }
 
@@ -100,6 +127,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         isStandingCondition = try container.decodeIfPresent(
             Bool.self, forKey: .isStandingCondition
         ) ?? false
+        askedBy = try container.decodeIfPresent(String.self, forKey: .askedBy)
         route = try container.decodeIfPresent(RouteToken.self, forKey: .route)?.route
     }
 
@@ -113,6 +141,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         try container.encode(state, forKey: .state)
         try container.encode(isNew, forKey: .isNew)
         try container.encode(isStandingCondition, forKey: .isStandingCondition)
+        try container.encodeIfPresent(askedBy, forKey: .askedBy)
         try container.encodeIfPresent(route.flatMap(RouteToken.init(_:)), forKey: .route)
     }
 }
@@ -379,6 +408,7 @@ extension HouseRecordBuilder {
                 date: asked,
                 state: state(for: item, now: now),
                 isNew: false,
+                askedBy: askedByName(for: item),
                 route: item.route
             )
         }
@@ -406,9 +436,21 @@ extension HouseRecordBuilder {
     /// produce.
     static func title(for item: StudioQueueItemRow) -> String {
         switch item.kind {
+        // `W1R2-M3`: an edition the studio has frozen and not issued asks her
+        // to READ it, so the studio can issue it. Saying "asked for your
+        // approval" over it claims an ask that has not been made — the same
+        // invention as the due date this row no longer carries.
+        case .decision where item.awaitsReading:
+            return "\(subject(askedByName(for: item))) asked you to read this edition."
+        // An approval is one thing to say yes or no to, so the row asks for
+        // the approval and lets the second line name the thing. The choice
+        // grammar below would call a sign-off a choice, and would run the
+        // question's own "?" straight into a full stop.
+        case .decision where item.isApproval:
+            return "\(subject(askedByName(for: item))) asked for your approval."
         case .decision:
             guard let name = item.designerName, !name.isEmpty,
-                  item.title != StudioQueueBuilder.untitledDecisionTitle
+                  !StudioQueueBuilder.isUntitled(item.title)
             else { return "\(subject(item.designerName)) asked you to choose." }
             return "\(item.designerIsPerson ? firstName(of: name) : name) asked about \(item.title)."
         case .proposal: return "\(subject(item.designerName)) sent a proposal to review."
@@ -424,12 +466,27 @@ extension HouseRecordBuilder {
         name.split(separator: " ").first.map(String.init) ?? name
     }
 
+    /// P-04 / R8: the name the still-open sentence uses. Same rule as
+    /// `title(for:)` — a person is named by their given name, a studio by its
+    /// whole name — so the two sentences on one row cannot name them
+    /// differently. Nil where the wire carried no designer at all, and the
+    /// sentence falls back to "your designer".
+    static func askedByName(for item: StudioQueueItemRow) -> String? {
+        guard let name = item.designerName, !name.isEmpty else { return nil }
+        return item.designerIsPerson ? firstName(of: name) : name
+    }
+
     static func detail(for item: StudioQueueItemRow) -> String? {
         switch item.kind {
+        // The approval's headline is the ask, so its second line names the
+        // thing being approved. With no title of its own it falls back to the
+        // project, the way a choice row does.
+        case .decision where item.isApproval:
+            return StudioQueueBuilder.isUntitled(item.title) ? item.detail : item.title
         case .decision:
             // The question is in the headline now; the second line names the
             // project it belongs to, and nothing when there is none.
-            return item.title == StudioQueueBuilder.untitledDecisionTitle ? item.title : item.detail
+            return StudioQueueBuilder.isUntitled(item.title) ? item.title : item.detail
         case .proposal, .invoice:
             // The subject of the thing — the proposal's own name, the
             // invoice's own number.
@@ -445,7 +502,7 @@ extension HouseRecordBuilder {
             guard let due = item.dueAt else { return .none }
             let calendar = Calendar.current
             if calendar.startOfDay(for: due) < calendar.startOfDay(for: now) {
-                return .overdue
+                return .overdue(due: due)
             }
             return .due(due)
         }
@@ -701,7 +758,7 @@ private extension HouseRecordRow {
         return HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
             state: state, isNew: date > lastSeen,
-            isStandingCondition: isStandingCondition, route: route
+            isStandingCondition: isStandingCondition, askedBy: askedBy, route: route
         )
     }
 
@@ -710,7 +767,8 @@ private extension HouseRecordRow {
     func asStandingCondition() -> HouseRecordRow {
         HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
-            state: state, isNew: false, isStandingCondition: true, route: route
+            state: state, isNew: false, isStandingCondition: true,
+            askedBy: askedBy, route: route
         )
     }
 }

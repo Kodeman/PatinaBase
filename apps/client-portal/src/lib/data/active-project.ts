@@ -68,24 +68,29 @@ export async function resolveActiveHouse(projectIds: string[]): Promise<string |
 }
 
 /* ── The house an instrument names ──────────────────────────────────────────
-   `/invoices/<id>` and `/proposals/<id>` are still emitted on purpose — the
-   Patina iOS app claims both in its `applinks:` entitlement — so they fold to
-   `/` for everyone without the app. `/` on its own opens the house that moved
-   LAST, which for a client with two houses is the wrong letterbox and the
-   wrong door: the money and signature path, landing silently in someone
-   else's room. The fold carries the entity id, and this resolves the house it
-   belongs to before the active-house clocks are consulted.
+   `/invoices/<id>`, `/proposals/<id>` and `/decisions/<id>` are still emitted
+   on purpose — the Patina iOS app claims all three in its `applinks:`
+   entitlement — so they fold to `/` for everyone without the app. `/` on its
+   own opens the house that moved LAST, which for a client with two houses is
+   the wrong letterbox, the wrong door and the wrong doorstep: the money, the
+   signature and the approval path, landing silently in someone else's room.
+   The fold carries the entity id, and this resolves the house it belongs to
+   before the active-house clocks are consulted.
 
    It never guesses: an id that resolves to nothing, or to a project outside
    the client's own list, returns null and the active house stands. ───────── */
 
 export async function resolveHouseForInstrument(
   projectIds: string[],
-  instrument: { invoiceId?: string | null; proposalId?: string | null },
+  instrument: {
+    invoiceId?: string | null;
+    proposalId?: string | null;
+    decisionId?: string | null;
+  },
 ): Promise<string | null> {
-  const { invoiceId, proposalId } = instrument;
+  const { invoiceId, proposalId, decisionId } = instrument;
   if (projectIds.length < 2) return null;
-  if (!invoiceId && !proposalId) return null;
+  if (!invoiceId && !proposalId && !decisionId) return null;
   if (env.useProjectFixtures) return null;
 
   const owns = (projectId: unknown): string | null =>
@@ -109,12 +114,39 @@ export async function resolveHouseForInstrument(
       return null;
     }
 
-    // `list_client_proposals` is the same client-safe read the door itself
-    // runs; there is no client-readable proposals table to select from.
-    const { data, error } = await supabase.rpc('list_client_proposals');
-    if (error || !Array.isArray(data)) return null;
-    const match = data.find((row: any) => row?.id === proposalId);
-    return match ? owns(match.project_id) : null;
+    if (proposalId) {
+      // `list_client_proposals` is the same client-safe read the door itself
+      // runs; there is no client-readable proposals table to select from.
+      const { data, error } = await supabase.rpc('list_client_proposals');
+      if (error || !Array.isArray(data)) return null;
+      const match = data.find((row: any) => row?.id === proposalId);
+      return match ? owns(match.project_id) : null;
+    }
+
+    // An approval reaches the doorstep by one of two paths, and the read has
+    // to try both: a Stage-2 approval is deliberately outside the client read
+    // model (`client_decisions` RLS excludes `project_artifact_v1`), so its
+    // house comes from the same sanitized list the doorstep itself is built
+    // from; a legacy option choice is an ordinary row this client can select.
+    const { data: reviews, error: reviewsError } = await supabase.rpc(
+      'list_my_project_decision_reviews',
+    );
+    if (!reviewsError && Array.isArray(reviews)) {
+      const review = reviews.find((row: any) => row?.decisionId === decisionId);
+      if (review) return owns(review.projectId);
+    }
+
+    // Scoped to the client's own projects as well as by id, for the same
+    // reason the invoice read is: RLS is not the only thing that should stand
+    // between this read and another client's row.
+    const { data, error } = await supabase
+      .from('client_decisions')
+      .select('project_id')
+      .eq('id', decisionId)
+      .in('project_id', projectIds)
+      .maybeSingle();
+    if (!error && data) return owns(data.project_id);
+    return null;
   } catch {
     return null;
   }

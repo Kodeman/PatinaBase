@@ -88,7 +88,7 @@ struct AttentionCountTests {
         #expect(badges.proposalsAwaitingSignatureCount == 1)
         #expect(badges.payableInvoiceCount == 1)
         #expect(badges.attentionCount == 4)
-        #expect(badges.attentionHint == "4 things need your eye")
+        #expect(badges.attentionHint == "Four things need your eye")
     }
 
     @Test("one thing needing the client reads in the singular")
@@ -101,7 +101,7 @@ struct AttentionCountTests {
             projects: rows.projects, roster: []
         )
         #expect(badges.attentionCount == 1)
-        #expect(badges.attentionHint == "1 thing needs your eye")
+        #expect(badges.attentionHint == "One thing needs your eye")
     }
 
     @Test("nothing needing the client prints no count at all")
@@ -130,7 +130,7 @@ struct AttentionCountTests {
         )
 
         let expected = StudioAttentionSummary.attentionHint(count: badges.attentionCount)
-        #expect(expected == "4 things need your eye")
+        #expect(expected == "Four things need your eye")
 
         // The Studio snapshot's own summary carries the same number rather
         // than recomputing it from a different fetch.
@@ -267,15 +267,26 @@ struct AttentionCountTests {
     /// takes to be honest is (a) one derivation for the attention count, and
     /// (b) a card that says out loud when it is showing fewer rows than the
     /// count it sits under.
-    @Test("the bell and the Studio pill count different things, and both say which")
-    func theTwoCountsAreDistinctAndBothAreNamed() throws {
+    /// `P-24` / **R5** answered (a) by deletion, and `iosb2-M3` finished it:
+    /// R5 retires the tab badge "and any in-product numeric badge", which is
+    /// both of them. The Studio pill's capsule went first; the bell's went
+    /// second. Neither number is drawn anywhere on this header now, so there
+    /// is nothing left for the two of them to disagree about.
+    @Test("the header draws no count at all, on either instrument")
+    func theHeaderDrawsNoCount() throws {
         let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
-        // The bell is unread notifications and names itself as such.
+        let code = SourcePin.code(header)
+        // The bell still names itself, and says its state in words.
         #expect(header.contains(#"accessibilityLabel("Notifications")"#))
-        #expect(header.contains(#"\(unreadCount) unread"#))
-        // The Studio control prints THE attention count and names it.
-        #expect(header.contains("StudioControlLabel.waitingValue(count: attentionCount)"))
-        // And it does not recompute either from a fetch of its own.
+        #expect(code.contains(#""Unread notifications""#))
+        #expect(!code.contains(#"\(unreadCount) unread"#),
+                "the bell still speaks a number")
+        // Neither instrument draws one either: no count text, no "9+" cap.
+        #expect(!code.contains(#"Text(count"#))
+        #expect(!code.contains(#""9+""#))
+        // The Studio control carries no number at all.
+        #expect(code.contains("attentionCount") == false)
+        // And it does not recompute anything from a fetch of its own.
         #expect(header.contains("BadgeCountService") == false)
     }
 
@@ -417,5 +428,23 @@ extension AttentionCountTests {
             in: try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         )
         #expect(header.contains("unreadCountIsKnown"))
+    }
+
+    // MARK: - W1R2-m2 · the count is a word, so the noun agrees with it
+
+    /// The section badge is spoken in words (P-24), and VoiceOver read
+    /// "one categories" on every section holding a single kind of thing.
+    @Test("the section badge's noun agrees with the word before it")
+    func sectionBadgeGrammarAgrees() {
+        #expect(StudioQueueSectionKind.inProgress.badgeLabel(count: 1)
+                == "one category")
+        #expect(StudioQueueSectionKind.inProgress.badgeLabel(count: 3)
+                == "three categories")
+        #expect(StudioQueueSectionKind.inProgress.badgeLabel(count: 0)
+                == "zero categories")
+        #expect(StudioQueueSectionKind.awaitingYou.badgeLabel(count: 1)
+                == "one thing awaiting you")
+        #expect(StudioQueueSectionKind.awaitingYou.badgeLabel(count: 5)
+                == "five things awaiting you")
     }
 }

@@ -142,19 +142,24 @@ struct DynamicTypeLayoutTests {
                 "the header never stacks, so its words keep a ~230 pt column (C-06)")
     }
 
-    @Test("the unread badge does not outgrow the bell it marks")
+    @Test("the unread mark does not outgrow the bell it marks")
     func theBadgeStaysAMarkOnItsControl() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         )
-        // The bell is a fixed 17 pt glyph in a 36 pt frame. A badge capped at
-        // `.xxxLarge` is still ~24 pt and covered roughly 85% of it
-        // (shots/w1-review-l1c/10b-bell-badge-crop.png). `large` is the top of
-        // the badge's own ramp: the count is announced by the button's
-        // accessibilityValue, so nothing is lost by not growing it.
-        #expect(code.contains(".dynamicTypeSize(...DynamicTypeSize.large)"),
-                "the badge still grows past the bell (RL1C-04)")
-        #expect(!code.contains(".dynamicTypeSize(...DynamicTypeSize.xxxLarge)"))
+        // The bell is a fixed 17 pt glyph in a 36 pt frame, and the count it
+        // used to carry could not stay inside that: at accessibility-XXXL the
+        // "3" was a ~40 pt disc (shots/w1-l1c/05-today-ax3xl-light.png), and a
+        // cap at `.xxxLarge` was still ~24 pt over 17 pt of glyph
+        // (shots/w1-review-l1c/10b-bell-badge-crop.png). `P-24` / R5 removed
+        // the number, which removes the ramp with it: a dot carries no text,
+        // so there is no text size for it to grow at and no cap to keep
+        // in step.
+        #expect(code.contains("Circle()"))
+        #expect(code.contains(".frame(width: 8, height: 8)"),
+                "the unread mark is no longer a fixed-size dot (RL1C-04)")
+        #expect(!code.contains("dynamicTypeSize(...DynamicTypeSize"),
+                "a mark that draws no text needs no Dynamic Type cap")
     }
 
     @Test("an informational record row is not a disabled control")

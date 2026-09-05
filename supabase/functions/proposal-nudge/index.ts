@@ -1,8 +1,8 @@
 // Supabase Edge Function: proposal-nudge
 //
 // Invoked by useNudgeProposal after nudge_proposal() stamps last_nudged_at.
-// Sends the client a gentle reminder about a proposal that's still in their
-// hands (sent/viewed), with a link to client.patina.cloud/proposals/{id}.
+// Sends the client a reminder about a proposal that's still in their hands
+// (sent/viewed), with a link to client.patina.cloud/proposals/{id}.
 // Mirrors proposal-send (same Resend path, sender, and client-portal link);
 // the copy is a reminder rather than a first delivery. Does NOT mutate proposal
 // state — the RPC already stamped the nudge.
@@ -18,11 +18,14 @@ import {
   ctaButton,
   spacer,
   escapeHtml,
+  givenName,
+  signOff,
 } from '../_shared/branded-email.ts';
 import {
   resolveStudioIdentity,
   studioCobrand,
   studioDisplayName,
+  studioSignatureCity,
 } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -45,7 +48,7 @@ interface ProposalRow {
   client_id: string | null;
   designer_id: string | null;
   project_id: string | null;
-  designer: { full_name: string | null; email: string | null } | null;
+  designer: { full_name: string | null; email: string | null; city: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
 }
 
@@ -91,7 +94,7 @@ Deno.serve(async (req: Request) => {
       `
       id, title, status, cc_email, valid_until, client_id,
       designer_id, project_id,
-      designer:profiles!designer_id(full_name, email),
+      designer:profiles!designer_id(full_name, email, city),
       client:profiles!client_id(full_name, email)
     `
     )
@@ -189,31 +192,43 @@ Deno.serve(async (req: Request) => {
       )
     : '';
 
-  // Lead the subject with the studio/sender when one resolves; otherwise keep
-  // the original generic reminder subject verbatim.
+  // Lead the subject with the studio/sender when one resolves; otherwise the
+  // generic form. Neither apologises for asking (no "gentle", no nudge).
   const subject = identity?.name
     ? `A reminder from ${senderName} about your proposal: "${proposal.title}"`
-    : `A gentle reminder about your proposal: "${proposal.title}"`;
+    : `A reminder about your proposal: "${proposal.title}"`;
   const html = renderBrandedShell({
     title: subject,
+    audience: 'client',
     preview: `${designerName}'s proposal is still waiting for your review.`,
     eyebrow: 'Reminder',
     studioName: cobrand.studioName,
     studioLogoUrl: cobrand.studioLogoUrl,
     body: [
-      heading('A gentle reminder'),
+      heading('Still open'),
       paragraph(`Hi ${escapeHtml(clientName)},`),
       paragraph(
-        `Just a gentle nudge — ${escapeHtml(designerName)}&rsquo;s proposal <strong>${escapeHtml(
+        `${escapeHtml(designerName)}&rsquo;s proposal <strong>${escapeHtml(
           proposal.title
-        )}</strong> is still waiting for you whenever you have a moment to review it.`
+        )}</strong> is still open and waiting for your review.`
       ),
       expiryLine,
       spacer(10),
       ctaButton(link, 'Review proposal', 'ink'),
       spacer(),
       muted(`If the button doesn&rsquo;t work, copy this link:<br>${link}`),
-      muted('— Patina'),
+      // R3-04: `profiles.city` first, then the studio org's address — the
+      // same precedence the approval letter signs with, so one studio's mail
+      // does not sign from two different places in one inbox.
+      signOff({
+        designerGivenName: givenName(proposal.designer?.full_name),
+        studioName: cobrand.studioName,
+        city: await studioSignatureCity(
+          supabase,
+          identity,
+          proposal.designer?.city,
+        ) ?? null,
+      }),
     ].join(''),
   });
 

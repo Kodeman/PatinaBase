@@ -9,9 +9,12 @@
 
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
+  resolveStudioSignature,
+  signatureCity,
   studioCobrand,
   studioDisplayName,
   type StudioIdentity,
+  studioSignatureCity,
 } from "./studio-identity.ts";
 
 const studio: StudioIdentity = {
@@ -79,4 +82,230 @@ Deno.test("studioDisplayName: falls back when the resolver name is null/blank", 
     studioDisplayName({ ...empty, name: "   " }, "Your designer"),
     "Your designer",
   );
+});
+
+// ── R7's third element: the city on the sign-off ────────────────────────────
+// Ruled at the Wave 1 close: profiles.city first, then the studio org's
+// address->>'city' (what the designer portal's branding form writes), then
+// omitted. Only the org leg is populated today, so the fallback is what
+// actually signs the letter.
+
+Deno.test("signatureCity: prefers the designer's own profile city", () => {
+  assertEquals(
+    signatureCity("Chicago", { line1: "12 Mill St", city: "Kansas City" }),
+    "Chicago",
+  );
+});
+
+Deno.test("signatureCity: falls back to the studio org's address city", () => {
+  assertEquals(
+    signatureCity(null, { line1: "12 Mill St", city: "Kansas City" }),
+    "Kansas City",
+  );
+  assertEquals(signatureCity("   ", { city: "Kansas City" }), "Kansas City");
+  assertEquals(signatureCity(undefined, { city: "Kansas City" }), "Kansas City");
+});
+
+Deno.test("signatureCity: undefined when neither knows one (R7 omits it)", () => {
+  assertEquals(signatureCity(null, null), undefined);
+  assertEquals(signatureCity(null, { line1: "12 Mill St" }), undefined);
+  assertEquals(signatureCity("  ", { city: "" }), undefined);
+  // A non-string city on the JSONB is not a city.
+  assertEquals(signatureCity(null, { city: 42 }), undefined);
+});
+
+/** Minimal admin-client stand-in: one RPC row plus two single-row table reads. */
+function fakeAdmin(opts: {
+  identity: Record<string, unknown> | null;
+  organizations?: Record<string, unknown> | null;
+  profiles?: Record<string, unknown> | null;
+}) {
+  const reads: string[] = [];
+  const client = {
+    rpc: (_name: string, _args: unknown) =>
+      Promise.resolve({ data: opts.identity ? [opts.identity] : [], error: null }),
+    from: (table: string) => {
+      reads.push(table);
+      const row = table === "organizations"
+        ? opts.organizations ?? null
+        : opts.profiles ?? null;
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: () => Promise.resolve({ data: row, error: null }),
+      };
+      return chain;
+    },
+  };
+  return { client, reads };
+}
+
+Deno.test("resolveStudioSignature: falls back to the studio org's city", async () => {
+  const { client, reads } = fakeAdmin({
+    identity: {
+      studio_id: "s1",
+      name: "Middle West Studio",
+      logo_url: null,
+      website: null,
+      source: "studio",
+    },
+    organizations: { address: { city: "Kansas City", state: "MO" } },
+    profiles: { full_name: "Leah Brandt", city: null },
+  });
+  const signature = await resolveStudioSignature(
+    client as unknown as Parameters<typeof resolveStudioSignature>[0],
+    { designerId: "d1", projectId: null },
+  );
+  assertEquals(signature.designerGivenName, "Leah");
+  assertEquals(signature.studioName, "Middle West Studio");
+  assertEquals(signature.city, "Kansas City");
+  // The profile is read first and the org second: both legs go through
+  // `studioSignatureCity`, which is what the three sibling letters call.
+  assertEquals(reads, ["profiles", "organizations"]);
+});
+
+Deno.test("resolveStudioSignature: no city anywhere → the letter omits it", async () => {
+  const { client } = fakeAdmin({
+    identity: {
+      studio_id: "s1",
+      name: "Middle West Studio",
+      logo_url: null,
+      website: null,
+      source: "studio",
+    },
+    organizations: { address: null },
+    profiles: { full_name: "Leah Brandt", city: null },
+  });
+  const signature = await resolveStudioSignature(
+    client as unknown as Parameters<typeof resolveStudioSignature>[0],
+    { designerId: "d1", projectId: null },
+  );
+  assertEquals(signature.city, undefined);
+  assertEquals(signature.designerGivenName, "Leah");
+});
+
+Deno.test("resolveStudioSignature: the designer's own city outranks the org's", async () => {
+  const { client } = fakeAdmin({
+    identity: {
+      studio_id: "s1",
+      name: "Middle West Studio",
+      logo_url: null,
+      website: null,
+      source: "studio",
+    },
+    organizations: { address: { city: "Kansas City", state: "MO" } },
+    profiles: { full_name: "Leah Brandt", city: "Chicago" },
+  });
+  const signature = await resolveStudioSignature(
+    client as unknown as Parameters<typeof resolveStudioSignature>[0],
+    { designerId: "d1", projectId: null },
+  );
+  assertEquals(signature.city, "Chicago");
+});
+
+Deno.test("resolveStudioSignature: business_name identity has no org to read", async () => {
+  const { client, reads } = fakeAdmin({
+    identity: {
+      studio_id: null,
+      name: "Jane Doe Interiors",
+      logo_url: null,
+      website: null,
+      source: "business_name",
+    },
+    profiles: { full_name: "Jane Doe", city: "Chicago" },
+  });
+  const signature = await resolveStudioSignature(
+    client as unknown as Parameters<typeof resolveStudioSignature>[0],
+    { designerId: "d1", projectId: null },
+  );
+  assertEquals(reads, ["profiles"]);
+  assertEquals(signature.city, "Chicago");
+  assertEquals(signature.studioName, "Jane Doe Interiors");
+});
+
+// ── M2: the letters that were signing cityless ──────────────────────────────
+// The invitation, the nudge and the review request resolve their own identity
+// and assemble `signOff` by hand. They now ask this helper for the city, so
+// four letters from one studio sign from one place.
+
+Deno.test("studioSignatureCity: reads the org address when the profile has none", async () => {
+  const { client, reads } = fakeAdmin({
+    identity: null,
+    organizations: { address: { city: "Kansas City", state: "MO" } },
+  });
+  const city = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    {
+      studioId: "s1",
+      name: "Middle West Studio",
+      logoUrl: null,
+      website: null,
+      source: "studio",
+    },
+    null,
+  );
+  assertEquals(city, "Kansas City");
+  assertEquals(reads, ["organizations"]);
+});
+
+Deno.test("studioSignatureCity: the designer's own city outranks the org's", async () => {
+  const { client } = fakeAdmin({
+    identity: null,
+    organizations: { address: { city: "Kansas City" } },
+  });
+  const city = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    {
+      studioId: "s1",
+      name: "Middle West Studio",
+      logoUrl: null,
+      website: null,
+      source: "studio",
+    },
+    "Chicago",
+  );
+  assertEquals(city, "Chicago");
+});
+
+Deno.test("studioSignatureCity: no studio to read → the profile's city, or none", async () => {
+  const { client, reads } = fakeAdmin({ identity: null });
+  const withProfile = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    null,
+    "Chicago",
+  );
+  const withNothing = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    null,
+    null,
+  );
+  assertEquals(withProfile, "Chicago");
+  assertEquals(withNothing, undefined);
+  assertEquals(reads, []);
+});
+
+Deno.test("studioSignatureCity: a failed org read signs without a city, never throws", async () => {
+  const client = {
+    from: () => {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: () =>
+          Promise.resolve({ data: null, error: { message: "boom" } }),
+      };
+      return chain;
+    },
+  };
+  const city = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    {
+      studioId: "s1",
+      name: "Middle West Studio",
+      logoUrl: null,
+      website: null,
+      source: "studio",
+    },
+    null,
+  );
+  assertEquals(city, undefined);
 });

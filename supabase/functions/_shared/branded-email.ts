@@ -66,16 +66,31 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function portalBase(): string {
+/**
+ * Who the mail is addressed to. A homeowner's footer link must land on the
+ * client portal, not on the studio's own desk.
+ */
+export type EmailAudience = "client" | "designer";
+
+const PORTAL_ENV: Record<EmailAudience, { key: string; fallback: string }> = {
+  client: { key: "CLIENT_PORTAL_URL", fallback: "https://client.patina.cloud" },
+  designer: {
+    key: "DESIGNER_PORTAL_URL",
+    fallback: "https://app.patina.cloud",
+  },
+};
+
+export function portalBaseFor(audience: EmailAudience = "designer"): string {
+  const { key, fallback } = PORTAL_ENV[audience] ?? PORTAL_ENV.designer;
   // Defensive: env access may be denied (e.g. `deno test` without --allow-env);
   // fall back to the prod URL rather than throwing a permission error.
   let v: string | undefined;
   try {
-    v = Deno.env.get("DESIGNER_PORTAL_URL");
+    v = Deno.env.get(key);
   } catch {
     v = undefined;
   }
-  return (v ?? "https://app.patina.cloud").replace(/\/$/, "");
+  return (v ?? fallback).replace(/\/$/, "");
 }
 
 // ---- Body helpers (compose the inner content) -------------------------------
@@ -112,6 +127,37 @@ export function ctaButton(url: string, label: string, variant: "ink" | "brass" =
   return `<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${bg}" style="border-radius:7px;"><a href="${url}" style="display:inline-block; padding:15px 32px; font-family:${F.sans}; font-size:15px; font-weight:600; line-height:1; letter-spacing:0.01em; background-color:${bg}; color:${C.buttonInkText}; text-decoration:none; border:1px solid ${border}; border-radius:7px;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
+/**
+ * The name a homeowner calls her designer. Everything after the first
+ * whitespace-separated token is the studio's business, not the greeting's.
+ */
+export function givenName(fullName: string | null | undefined): string {
+  return (fullName ?? "").trim().split(/\s+/)[0] ?? "";
+}
+
+export interface StudioSignOff {
+  /** The designer's given name — the person the homeowner knows. */
+  designerGivenName?: string | null;
+  studioName?: string | null;
+  /** Omitted entirely when unknown; never guessed. */
+  city?: string | null;
+}
+
+/**
+ * The studio signs client mail, not Patina (R7): given name and studio name on
+ * one line, the city under it. With neither a person nor a studio to name the
+ * letter goes unsigned — a homeowner never reads "— Patina".
+ */
+export function signOff(sig: StudioSignOff): string {
+  const person = (sig.designerGivenName ?? "").trim();
+  const studio = (sig.studioName ?? "").trim();
+  const city = (sig.city ?? "").trim();
+  const line = [person, studio].filter(Boolean).join(", ");
+  if (!line) return "";
+  const cityLine = city ? `<br>${escapeHtml(city)}` : "";
+  return paragraph(`&mdash; ${escapeHtml(line)}${cityLine}`);
+}
+
 export function spacer(px = 26): string {
   return `<div style="height:${px}px; line-height:${px}px; font-size:0;">&nbsp;</div>`;
 }
@@ -120,6 +166,11 @@ export function spacer(px = 26): string {
 
 export interface BrandedShellOpts {
   title: string;
+  /**
+   * Which portal the default footer links resolve against. Defaults to
+   * "designer" — the shape every existing caller renders.
+   */
+  audience?: EmailAudience;
   /** Inbox preview text. */
   preview?: string;
   /** Top-right mono eyebrow (e.g. "Invoice", "Proposal"). */
@@ -157,12 +208,31 @@ export interface BrandedShellOpts {
 // Healthy clients render identically. Keep in step with the React mirrors:
 // packages/email/src/components/BaseEmailLayout.tsx and src/block-html/skeleton.ts.
 export function renderBrandedShell(opts: BrandedShellOpts): string {
-  const base = portalBase();
-  const links = opts.footerLinks ?? [
-    { label: "Dashboard", href: base },
-    { label: "Help center", href: `${base}/help` },
-    { label: "Email preferences", href: `${base}/desk?account=notifications` },
-  ];
+  const audience = opts.audience ?? "designer";
+  const base = portalBaseFor(audience);
+  // R7/F9: a homeowner's letter is signed by her studio, and Patina's own
+  // pitch line ("a workshop for interior designers…") is studio-facing copy
+  // that read as a second, competing signature directly under it — twice, once
+  // in the footer block and once in the band below. Client mail keeps the
+  // wordmark and drops the tagline; designer mail is untouched.
+  const isClient = audience === "client";
+  const links = opts.footerLinks ?? (audience === "client"
+    ? [
+      { label: "Your project", href: base },
+      { label: "Email preferences", href: `${base}/preferences` },
+    ]
+    : [
+      { label: "Dashboard", href: base },
+      { label: "Help center", href: `${base}/help` },
+      {
+        label: "Email preferences",
+        href: `${base}/desk?account=notifications`,
+      },
+    ]);
+  // The band under the shell: an explicit businessAddress always wins; absent
+  // one, only designer mail falls back to the tagline.
+  const legalLine = opts.businessAddress ??
+    (isClient ? "" : "A workshop for interior designers and the makers they trust.");
   const preheader = opts.preview
     ? `<div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all; color:transparent;">${escapeHtml(opts.preview)}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>`
     : "";
@@ -241,7 +311,7 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;"><tr>
             <td align="left" valign="top">
               <div class="ink2" style="font-family:${F.serif}; font-size:15px; color:${C.ink2}; margin-bottom:5px;">Patina</div>
-              <div class="ink3" style="font-family:${F.sans}; font-size:13px; line-height:1.5; color:${C.ink3};">A workshop for interior designers<br>and the makers they trust.</div>
+              ${isClient ? "" : `<div class="ink3" style="font-family:${F.sans}; font-size:13px; line-height:1.5; color:${C.ink3};">A workshop for interior designers<br>and the makers they trust.</div>`}
             </td>
             <td align="right" valign="top" class="ink3" style="font-family:${F.sans}; font-size:13px; line-height:1.95; color:${C.ink3};">${footerNav}</td>
           </tr></table>
@@ -250,7 +320,7 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
       <!--[if mso]></td></tr></table><![endif]-->
       <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px;">
         <tr><td class="px" align="center" style="padding:18px 40px 10px; font-family:${F.mono}; font-size:11px; line-height:1.8; letter-spacing:0.03em; color:${C.ink3};">
-          Patina &nbsp;·&nbsp; ${escapeHtml(opts.businessAddress ?? "A workshop for interior designers and the makers they trust.")}
+          Patina${legalLine ? ` &nbsp;·&nbsp; ${escapeHtml(legalLine)}` : ""}
         </td></tr>
       </table>
     </td></tr>

@@ -123,7 +123,7 @@ struct RecordSnapshotStoreTests {
                     id: "decision:d1", kind: .decisionAsked,
                     title: "Leah Hartwell asked you to choose.",
                     detail: "Rug color — Natural vs Sand", date: referenceDate,
-                    state: .overdue, isNew: false,
+                    state: .overdue(due: referenceDate), isNew: false,
                     route: .decisionDetail(decisionId: "d1")
                 ),
                 HouseRecordRow(
