@@ -497,7 +497,12 @@ struct HouseRecordRowView: View {
         Group {
             // R8's sentence is a line of prose, not a rail token: it stacks
             // under the title so it has the row's full width to read on.
-            if dynamicTypeSize.isAccessibilitySize || presentation.stillOpenText != nil {
+            // `iosd4-M4`: a stamped row stacks too. The mark and the date
+            // together do not share a 375 pt line with a full sentence, and
+            // the mark belongs BESIDE the sentence it was pressed on — under
+            // it, at its own left edge, not out at the rail.
+            if dynamicTypeSize.isAccessibilitySize || presentation.stillOpenText != nil
+                || row.stampState != nil {
                 VStack(alignment: .leading, spacing: 4) {
                     title
                     state
@@ -527,6 +532,14 @@ struct HouseRecordRowView: View {
     private var state: some View {
         let shown = presentation
         HStack(spacing: 4) {
+            // `P-21` / `iosd4-M4`: her own act carries the mark it earned.
+            // The stamp is hidden from VoiceOver by its own rule — the
+            // sentence above already says "You approved the budget." — and it
+            // is drawn, never filled: an inspection tag, not a badge.
+            if let mark = row.stampState {
+                PatinaStamp(state: mark, recordedAt: row.date, now: now)
+                    .padding(.trailing, 4)
+            }
             if let lead = shown.leadText {
                 Text(lead)
                     .font(PatinaTypography.monoLabel)

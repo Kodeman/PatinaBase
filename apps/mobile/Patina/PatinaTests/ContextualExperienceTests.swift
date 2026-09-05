@@ -302,8 +302,38 @@ struct ContextualExperienceTests {
         #expect(move.kind == .reviewDecisions)
         // SP-16: "needs your eye" is the attention count's sentence, printed
         // by the Companion footer on this same screen. This move speaks for
-        // decisions alone.
-        #expect(move.detail == "1 decision is waiting on you.")
+        // approvals alone.
+        //
+        // `iosd4-M3`: in the ruled words — "approval", never "decision", which
+        // belongs to a choice between named alternatives; and the count as a
+        // word (P-24).
+        #expect(move.detail == "One approval is waiting on you.")
+        #expect(move.title == "Review a project approval")
+    }
+
+    /// `iosd4-M3`, the rest of it: the plural reads in words too, and the move
+    /// carries NO mark. `checkmark.seal` beside an open obligation is a
+    /// checkmark used as a status — the refusal the Studio row already keeps
+    /// by drawing a raised hand instead.
+    @Test("the approval move counts in words and draws no mark")
+    func theApprovalMoveCountsInWordsAndDrawsNoMark() throws {
+        let three = TodayExperience.nextMove(for: TodayPriorityInput(pendingDecisionCount: 3))
+        #expect(three.kind == .reviewDecisions)
+        #expect(three.detail == "Three approvals are waiting on you.")
+
+        for count in [1, 3, 12] {
+            let move = TodayExperience.nextMove(for: TodayPriorityInput(pendingDecisionCount: count))
+            #expect(!move.detail.contains(String(count)), "the move prints a figure: \(move.detail)")
+            #expect(!move.detail.lowercased().contains("decision"))
+            #expect(!move.title.lowercased().contains("decision"))
+            #expect(move.symbol.isEmpty, "the approval move carries a mark")
+            #expect(!move.symbol.contains("checkmark"))
+        }
+
+        // And the card honours an absent mark by drawing no tile, rather than
+        // an empty one holding its place.
+        let card = try SourcePin.readCode("Patina/Features/Home/Views/TodayModules.swift")
+        #expect(card.contains("if !move.symbol.isEmpty {"))
     }
 
     @Test

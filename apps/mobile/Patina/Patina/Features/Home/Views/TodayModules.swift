@@ -61,7 +61,19 @@ struct TodayNextMoveCard: View {
         }
     }
 
+    /// `iosd4-M3`: a move may carry no mark, and then none is drawn — not a
+    /// substitute glyph, and not an empty tile holding its place. The approval
+    /// prompt is the first such move: every symbol that would fit the ask is a
+    /// checkmark or a seal, and a check beside an open obligation reads as a
+    /// status saying it is already done.
+    @ViewBuilder
     private var moveIcon: some View {
+        if !move.symbol.isEmpty {
+            markTile
+        }
+    }
+
+    private var markTile: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(PatinaColors.clay.opacity(0.14))

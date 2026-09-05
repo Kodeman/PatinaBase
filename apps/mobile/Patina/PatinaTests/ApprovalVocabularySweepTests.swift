@@ -84,9 +84,12 @@ struct ApprovalVocabularySweepTests {
 
     // MARK: - The screen that row opens
 
-    /// `iosd3-M1`: the row was renamed to Approvals and the screen it opens
-    /// still said DECISIONS — two words for one thing, on consecutive frames.
-    /// Both now read `groupNoun` off the same rows.
+    /// `iosd3-M1`, and the carry that finished it: the row was renamed to
+    /// Approvals and the screen it opens still said DECISIONS — two words for
+    /// one thing, on consecutive frames. RULED at the Wave-2 close: that
+    /// screen lists approvals AND option choices, so it is titled for what it
+    /// is doing — "Waiting on you" — and never DECISIONS, whatever it happens
+    /// to be holding. The row keeps `groupNoun`, which names one group.
     @Test("the hub row and the screen it opens are named by one word")
     func theRowAndItsScreenAgree() throws {
         let approvals = [
@@ -101,7 +104,7 @@ struct ApprovalVocabularySweepTests {
         list.decisions = approvals
 
         #expect(row.title == "Approvals")
-        #expect(list.eyebrow == "Approvals")
+        #expect(list.eyebrow == "Waiting on you")
         #expect(!list.eyebrow.lowercased().contains("decision"))
     }
 
@@ -119,14 +122,31 @@ struct ApprovalVocabularySweepTests {
         list.decisions = mixed
 
         #expect(row.title == "Decisions")
-        #expect(list.eyebrow == "Decisions")
+        // The screen holding a real choice is still not titled for it: the
+        // title names the act, and the rows name themselves.
+        #expect(list.eyebrow == "Waiting on you")
+        #expect(!list.eyebrow.lowercased().contains("decision"))
     }
 
     /// A list holding nothing is not holding a choice between named
-    /// alternatives, so the empty screen is titled for the ask.
-    @Test("an empty list is titled for the ask")
+    /// alternatives, so the empty row is named for the ask — and the screen,
+    /// like every other state of it, is titled for the act.
+    @Test("an empty list is titled for the act, and its row for the ask")
     func theEmptyListIsNamedForTheAsk() {
-        #expect(DecisionsListViewModel().eyebrow == "Approvals")
+        #expect(([] as [RemoteClientDecision]).groupNoun.plural == "Approvals")
+        #expect(DecisionsListViewModel().eyebrow == "Waiting on you")
+    }
+
+    /// The title is one string on the screen and one string in the test, and
+    /// the frame that draws it reads the model rather than its own literal.
+    @Test("the screen draws the ruled title, and never the retired word")
+    func theScreenDrawsTheRuledTitle() throws {
+        #expect(DecisionsListViewModel.title == "Waiting on you")
+        let screen = try SourcePin.readCode(
+            "Patina/Features/Decisions/Views/DecisionListView.swift"
+        )
+        #expect(screen.contains("MonoLabel(text: viewModel.eyebrow)"))
+        #expect(!screen.lowercased().contains("\"decisions\""))
     }
 
     // MARK: - The bell

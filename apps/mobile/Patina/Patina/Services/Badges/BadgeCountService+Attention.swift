@@ -50,12 +50,22 @@ extension BadgeCountService {
     /// (`notification_log`), which this service does not fetch — consumers
     /// that have a Studio snapshot fall through to `attentionSummary.hint`
     /// for it.
+    /// `P-24` / `iosd4-M2`: counted in WORDS, in the sibling's own sentences.
+    /// `attentionHint` had already been ruled into words while the three rungs
+    /// below still printed figures, so one surface said "One thing needs your
+    /// eye" on Monday and "3 new conversations" on Tuesday. These are
+    /// `StudioAttentionSummary.hint`'s lines verbatim — the same composer, so
+    /// the two cannot drift again.
     var studioHint: String? {
         if let attention = attentionHint { return attention }
-        if unreadMessageCount == 1 { return "1 new conversation" }
-        if unreadMessageCount > 1 { return "\(unreadMessageCount) new conversations" }
-        if activeProjectCount == 1 { return "1 project is moving" }
-        if activeProjectCount > 1 { return "\(activeProjectCount) projects are moving" }
+        if unreadMessageCount == 1 { return "One new conversation" }
+        if unreadMessageCount > 1 {
+            return "\(PatinaCount.inWordsCapitalized(unreadMessageCount)) new conversations"
+        }
+        if activeProjectCount == 1 { return "One project is moving" }
+        if activeProjectCount > 1 {
+            return "\(PatinaCount.inWordsCapitalized(activeProjectCount)) projects are moving"
+        }
         return nil
     }
 }

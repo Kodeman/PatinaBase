@@ -37,9 +37,16 @@ final class DecisionsListViewModel {
     var isLoading: Bool = false
     var error: String?
 
-    /// The screen's own eyebrow — the same rule the Studio hub row is titled
-    /// by, read off the same rows.
-    var eyebrow: String { decisions.groupNoun.plural }
+    /// The screen's own eyebrow. RULED at the Wave-2 close (`iosd3-M1`, the
+    /// carry): this list holds approvals AND option choices, so it is named
+    /// for what it is doing rather than for what it happens to be holding
+    /// today — and it is never titled DECISIONS, which said the narrower word
+    /// over a mixed list and a second word over the Approvals row that opens
+    /// it. `groupNoun` still titles that row, which names one group.
+    var eyebrow: String { Self.title }
+
+    /// The one word the screen is titled by, so a test can hold it.
+    static let title = "Waiting on you"
 
     /// The list every decision reaches the client through — and, since
     /// `iosb-B1`, the Stage-2 approvals too.

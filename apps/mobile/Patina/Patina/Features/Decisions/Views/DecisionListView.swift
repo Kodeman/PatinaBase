@@ -30,9 +30,11 @@ struct DecisionListView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // The Studio row a homeowner taps is titled by `groupNoun`; this
-            // eyebrow is the very next frame and reads the same rule off the
-            // same rows. `MonoLabel` sets the case.
+            // `iosd3-M1`, as carried at the Wave-2 close: this list holds
+            // approvals and option choices together, so it is titled for what
+            // it is doing — never DECISIONS, the narrower word, over a mixed
+            // list and over the Approvals row that opens it. `MonoLabel` sets
+            // the case.
             MonoLabel(text: viewModel.eyebrow)
                 .tracking(2)
             // U22: kept static — the empty case names itself in

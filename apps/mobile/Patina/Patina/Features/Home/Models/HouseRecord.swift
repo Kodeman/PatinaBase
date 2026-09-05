@@ -113,16 +113,33 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
     /// carried none. Absent from snapshots written before the sentence
     /// existed, which decode as nil and fall back to "your designer".
     let askedBy: String?
+    /// `P-21` / `iosd4-M4`: the mark the row's own sentence earned, as
+    /// `PatinaStamp.State`'s raw word. Only the reader's own acts carry one —
+    /// APPROVED, RETURNED, HELD, SIGNED — and the sentence beside it already
+    /// says the state, so the mark is decoration and VoiceOver never reads it
+    /// twice.
+    ///
+    /// Held as a string because the snapshot on disk outlives the build that
+    /// wrote it: a word this build does not know draws no mark, exactly as an
+    /// absent one does, rather than costing the record a row.
+    let stamp: String?
     let route: AppRoute?
 
+    /// That mark, where this build knows the word.
+    var stampState: PatinaStamp.State? {
+        stamp.flatMap(PatinaStamp.State.init(rawValue:))
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case id, kind, title, detail, date, state, isNew, isStandingCondition, askedBy, route
+        case id, kind, title, detail, date, state, isNew, isStandingCondition, askedBy
+        case stamp, route
     }
 
     init(
         id: String, kind: Kind, title: String, detail: String?,
         date: Date, state: State, isNew: Bool,
-        isStandingCondition: Bool = false, askedBy: String? = nil, route: AppRoute?
+        isStandingCondition: Bool = false, askedBy: String? = nil,
+        stamp: String? = nil, route: AppRoute?
     ) {
         self.id = id
         self.kind = kind
@@ -133,6 +150,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         self.isNew = isNew
         self.isStandingCondition = isStandingCondition
         self.askedBy = askedBy
+        self.stamp = stamp
         self.route = route
     }
 
@@ -158,6 +176,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
             Bool.self, forKey: .isStandingCondition
         ) ?? false
         askedBy = try container.decodeIfPresent(String.self, forKey: .askedBy)
+        stamp = try container.decodeIfPresent(String.self, forKey: .stamp)
         route = try container.decodeIfPresent(RouteToken.self, forKey: .route)?.route
     }
 
@@ -172,6 +191,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         try container.encode(isNew, forKey: .isNew)
         try container.encode(isStandingCondition, forKey: .isStandingCondition)
         try container.encodeIfPresent(askedBy, forKey: .askedBy)
+        try container.encodeIfPresent(stamp, forKey: .stamp)
         try container.encodeIfPresent(route.flatMap(RouteToken.init(_:)), forKey: .route)
     }
 }
@@ -901,6 +921,11 @@ extension HouseRecordBuilder {
                 date: answered,
                 state: .none,
                 isNew: false,
+                // `iosd4-M4`: the mark her answer earned, from the one table
+                // that maps an outcome to a stamp — so the Record, the
+                // approval screen and the bell cannot draw three different
+                // marks over one act.
+                stamp: ProjectApprovalCopy.stamp(for: outcome).rawValue,
                 route: .decisionDetail(decisionId: approval.decisionId)
             )
         }
@@ -927,6 +952,9 @@ extension HouseRecordBuilder {
                 date: signed,
                 state: .none,
                 isNew: false,
+                // `iosd4-M4`. She signed it, on this surface — the seal's own
+                // mark, not the paper-signed variant.
+                stamp: PatinaStamp.State.signed.rawValue,
                 route: .proposalDetail(proposalId: proposal.id)
             )
         }
@@ -949,7 +977,8 @@ private extension HouseRecordRow {
         return HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
             state: state, isNew: date > lastSeen,
-            isStandingCondition: isStandingCondition, askedBy: askedBy, route: route
+            isStandingCondition: isStandingCondition, askedBy: askedBy,
+            stamp: stamp, route: route
         )
     }
 
@@ -959,7 +988,7 @@ private extension HouseRecordRow {
         HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
             state: state, isNew: false, isStandingCondition: true,
-            askedBy: askedBy, route: route
+            askedBy: askedBy, stamp: stamp, route: route
         )
     }
 }
