@@ -125,7 +125,26 @@ enum BudgetMath {
                 rollup: BudgetMath.rollup(invoices),
                 designerBudgetCents: budgetByProject[pid]
             )
-        }
+        } + studioSection(visibleInvoices: visibleInvoices)
+    }
+
+    /// Invoices with no project ("the studio · no house") don't belong to any
+    /// project section — group them into one extra section, placed last,
+    /// instead of dropping them (the studio invoice has no project to attach
+    /// to, but it's still money the client owes/paid).
+    private static func studioSection(visibleInvoices: [RemoteInvoice]) -> [BudgetProjectSection] {
+        let studioInvoices = visibleInvoices.filter { $0.project_id == nil }
+        guard !studioInvoices.isEmpty else { return [] }
+        return [
+            BudgetProjectSection(
+                id: "studio",
+                name: "From the studio",
+                proposals: [],
+                invoices: studioInvoices,
+                rollup: BudgetMath.rollup(studioInvoices),
+                designerBudgetCents: nil
+            )
+        ]
     }
 }
 

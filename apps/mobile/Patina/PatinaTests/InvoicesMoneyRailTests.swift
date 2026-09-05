@@ -110,6 +110,33 @@ struct InvoicesMoneyRailTests {
         #expect(invoice.balanceCents == 0)
     }
 
+    // MARK: - Studio invoices ("the studio · no house")
+
+    @Test("a studio invoice (no project) decodes cleanly and carries its title")
+    func decodesStudioInvoiceWithTitle() throws {
+        let json = """
+        {
+          "id": "inv-studio", "project_id": null, "designer_id": "des-1",
+          "client_id": "cli-1", "invoice_number": "INV-0099", "status": "sent",
+          "currency": "USD", "total_cents": 50000, "amount_paid_cents": 0,
+          "title": "Kitchen consult — ad hoc", "project": null,
+          "payments": []
+        }
+        """
+        let invoice = try decode(RemoteInvoice.self, json)
+        #expect(invoice.project_id == nil)
+        #expect(invoice.project == nil)
+        #expect(invoice.title == "Kitchen consult — ad hoc")
+        #expect(invoice.balanceCents == 50_000)
+        #expect(invoice.isPayable)
+    }
+
+    @Test("the detail context line falls back to the invoice's title, then \"Your studio\", when there is no project")
+    func contextLineFallsBackToTitleThenYourStudio() throws {
+        let source = try SourcePin.read("Patina/Features/Invoices/Views/InvoiceDetailView.swift")
+        #expect(source.contains(#"invoice.project?.name ?? invoice.title ?? "Your studio""#))
+    }
+
     @Test
     func designerDisplayNameFallsBackToBusinessName() throws {
         let json = """

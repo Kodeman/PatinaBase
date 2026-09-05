@@ -192,6 +192,70 @@ struct BudgetAggregationTests {
         #expect(sections.first?.name == "Orphan")
     }
 
+    // MARK: - Studio invoices ("the studio · no house")
+
+    @Test("invoices with no project are grouped into one 'From the studio' section, placed last")
+    func studioInvoicesFormTheirOwnSectionPlacedLast() throws {
+        let projects = [try project(#"{"id":"P1","name":"Loft"}"#)]
+        let visibleInvoices = [
+            try invoice(#"{"id":"invP","project_id":"P1","status":"sent","total_cents":10000,"amount_paid_cents":0}"#),
+            try invoice(#"""
+            {"id":"invS1","project_id":null,"status":"sent","total_cents":40000,"amount_paid_cents":0,
+             "title":"Kitchen consult — ad hoc"}
+            """#),
+            try invoice(#"{"id":"invS2","project_id":null,"status":"paid","total_cents":20000,"amount_paid_cents":20000}"#)
+        ]
+        let sections = BudgetMath.buildSections(
+            projects: projects,
+            acceptedProposals: [],
+            milestonesByProposal: [:],
+            visibleInvoices: visibleInvoices
+        )
+        // Project section first, studio section last.
+        #expect(sections.map(\.id) == ["P1", "studio"])
+        let studio = try #require(sections.last)
+        #expect(studio.name == "From the studio")
+        #expect(studio.proposals.isEmpty)
+        #expect(studio.invoices.map(\.id) == ["invS1", "invS2"])
+        #expect(studio.designerBudgetCents == nil)
+        // Rollup covers only the studio invoices, not the project one.
+        #expect(studio.rollup.billedCents == 60_000)
+        #expect(studio.rollup.paidCents == 20_000)
+        #expect(studio.rollup.outstandingCents == 40_000)
+    }
+
+    @Test("no studio section appears when every visible invoice has a project")
+    func noStudioSectionWhenAllInvoicesHaveAProject() throws {
+        let projects = [try project(#"{"id":"P1","name":"Loft"}"#)]
+        let visibleInvoices = [
+            try invoice(#"{"id":"invP","project_id":"P1","status":"sent","total_cents":10000,"amount_paid_cents":0}"#)
+        ]
+        let sections = BudgetMath.buildSections(
+            projects: projects,
+            acceptedProposals: [],
+            milestonesByProposal: [:],
+            visibleInvoices: visibleInvoices
+        )
+        #expect(sections.map(\.id) == ["P1"])
+        #expect(sections.contains { $0.id == "studio" } == false)
+    }
+
+    @Test("a client with only a studio invoice (no house at all) still gets one section")
+    func studioOnlyClientStillGetsASection() throws {
+        let visibleInvoices = [
+            try invoice(#"{"id":"invS","project_id":null,"status":"sent","total_cents":15000,"amount_paid_cents":0}"#)
+        ]
+        let sections = BudgetMath.buildSections(
+            projects: [],
+            acceptedProposals: [],
+            milestonesByProposal: [:],
+            visibleInvoices: visibleInvoices
+        )
+        #expect(sections.count == 1)
+        #expect(sections.first?.id == "studio")
+        #expect(sections.first?.name == "From the studio")
+    }
+
     // MARK: - Payment terms display
 
     @Test

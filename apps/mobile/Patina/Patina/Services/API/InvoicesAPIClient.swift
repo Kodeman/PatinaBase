@@ -88,6 +88,10 @@ public struct RemoteInvoice: Codable, Sendable, Identifiable {
     public let voided_at: String?
     public let void_reason: String?
     public let created_at: String?
+    /// Set on invoices with no project (studio invoices, "the studio · no
+    /// house") — the display label the portal falls back to. Always nil for
+    /// project-scoped invoices.
+    public let title: String?
     public let project: RemoteInvoiceProjectRef?
     public let designer: RemoteInvoiceDesignerRef?
     public let line_items: [RemoteInvoiceLineItem]?
@@ -182,7 +186,7 @@ public actor InvoicesAPIClient {
     private static let listSelect =
         "id,project_id,designer_id,client_id,invoice_number,status,issue_date,due_date,"
         + "currency,subtotal_cents,tax_rate,tax_cents,total_cents,amount_paid_cents,memo,"
-        + "sent_at,paid_at,voided_at,void_reason,created_at,"
+        + "sent_at,paid_at,voided_at,void_reason,created_at,title,"
         + "project:projects!invoices_project_id_fkey(id,name),"
         + "payments:invoice_payments(id,invoice_id,amount_cents,method,status,"
         + "stripe_payment_intent_id,reference,received_at,created_at)"
