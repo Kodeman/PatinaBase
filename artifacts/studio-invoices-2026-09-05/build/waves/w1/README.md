@@ -14,13 +14,17 @@ All three worktrees are freshly created off the same base commit, each `git work
 
 ## Bootstrap status
 
-Each worktree: bare `cd <wt>` then `pnpm install` (unsandboxed — proxy auth requires it) then `pnpm turbo build --filter=@patina/utils --filter=@patina/types --filter=@patina/api-routes --filter=@patina/shared`.
+**Environment note (correct this for later lane agents):** a bare `cd <wt>` in its own Bash call, as the brief instructs, does **not** persist to the next call in this session — verified empirically (`pwd`/`git rev-parse --show-toplevel` after a separate-call `cd` still reported the main checkout). The first bootstrap attempt silently ran `pnpm install`/`pnpm turbo build` in the **main checkout** instead of the worktrees, and a first attempt at the Step-5 commit landed on `main` in the main checkout rather than on `studio-invoices/integration` — caught by checking `node_modules`/`dist` existence per worktree after the fact, and fixed with `git reset --soft HEAD~1` + `git restore --staged` in the main checkout (no destructive op; the base checkout is back at clean `36b4b539e`, matching origin). **Correct pattern for this session: `cd <wt> && <command>` in one Bash call** (not two calls), or `git -C <wt> ...` for git specifically. Every command below was re-run this way and verified against each worktree's own `node_modules`/`dist`.
 
-- **agent-si-integration**: `pnpm install` → `Done in 12.4s`. Turbo build → `4 successful, 4 total, Cached: 4 cached, 4 total — FULL TURBO` (utils, types, api-routes cache-hit; auth rebuilt as a dependency).
-- **agent-si-db**: `pnpm install` → `Done in 11.3s`. Turbo build → `4 successful, 4 total — FULL TURBO`.
-- **agent-si-edge**: `pnpm install` → `Done in 11.9s`. Turbo build → `4 successful, 4 total — FULL TURBO`.
+Each worktree: `cd <wt> && pnpm install` then `cd <wt> && pnpm turbo build --filter=@patina/utils --filter=@patina/types --filter=@patina/api-routes --filter=@patina/shared` (both unsandboxed — proxy auth requires it).
+
+- **agent-si-integration**: `pnpm install` → `Done in 37.8s`. Turbo build → `4 successful, 4 total, Cached: 4 cached, 4 total — FULL TURBO`. Verified: `node_modules/.pnpm` populated; `packages/types/dist/index.d.ts` and `packages/api-routes/dist/index.js` present inside the worktree.
+- **agent-si-db**: `pnpm install` → `Done in 59.6s`. Turbo build → `4 successful, 4 total — FULL TURBO`. Verified: `node_modules/.pnpm` populated; `packages/types/dist/aesthete.d.ts` present.
+- **agent-si-edge**: `pnpm install` → `Done in 1m 4.2s`. Turbo build → `4 successful, 4 total — FULL TURBO`. Verified: `node_modules/.pnpm` populated; `packages/types/dist/aesthete.d.ts` present.
 
 **Note on `@patina/shared`**: it has no `build` script in `package.json` (only `type-check`/`lint`/`test`), so turbo silently skips it per the documented CLAUDE.md behavior ("turbo silently SKIPS workspaces lacking the script"). This is expected, not a bootstrap failure — confirmed by inspecting `packages/shared/package.json`.
+
+**Note on this `build/` folder's location**: Step 1 writes the program docs directly into the **main checkout** at `/Users/kody/Code/patina-merged/artifacts/studio-invoices-2026-09-05/build/` (that copy is the live, shared one other lane agents should read from — it is gitignored there, untracked, harmless). Step 5's literal `git -C <integration-worktree> add -f <main-checkout-path>` does **not** work as written — worktrees are separate directories sharing only `.git`, and git refuses to add a path outside the worktree's own root (`fatal: ... is outside repository`). Fixed by mirroring the folder into the worktree's own `artifacts/studio-invoices-2026-09-05/build/` before `add -f` + commit. Both copies now exist and are identical; the worktree copy is the one under version control on `studio-invoices/integration`.
 
 ## Local Supabase stack
 
