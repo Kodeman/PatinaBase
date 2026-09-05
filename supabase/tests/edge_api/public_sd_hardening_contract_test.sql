@@ -1708,15 +1708,20 @@ VALUES
     -- and BOTH arms require the household to sit on the designer_clients
     -- roster of an active non-guest member of the invoice's studio (an
     -- unlocked read), so a houseless invoice can no more be addressed to a
-    -- stranger than a project one can. The designer-domain check stays on the
-    -- INSERT arm, exactly as the project path judges its lead only on insert:
-    -- the four identity columns are immutable on UPDATE, and for the same
-    -- reason the UPDATE arm's live-authority reads sit BELOW its
-    -- service_role/postgres early return, as the project path's do, so a
-    -- settle or a void still replays once the stamped designer has left.
+    -- stranger than a project one can. On the INSERT arm that roster read and
+    -- the designer-domain check sit ABOVE the machine early return, exactly
+    -- where the project path holds service_role to its live tuple and to
+    -- has_designer_domain_role; only a true postgres/no-SET-ROLE session keeps
+    -- the bounded legacy-fixture bypass the project path grants at the same
+    -- point. The designer-domain check stays off the UPDATE arm, exactly as
+    -- the project path judges its lead only on insert: the four identity
+    -- columns are immutable on UPDATE, and for the same reason the UPDATE
+    -- arm's live-authority reads sit BELOW its service_role/postgres early
+    -- return, as the project path's do, so a settle or a void still replays
+    -- once the stamped designer has left.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89',
+    '3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c',
     ARRAY[]::text[]
   ),
   (
