@@ -2678,18 +2678,6 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00320_studio_branding_read_and_logos.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.resolve_studio_identity(uuid, uuid) FROM PUBLIC;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00320_studio_branding_read_and_logos.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.resolve_studio_identity(uuid, uuid) TO anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
 -- 00321_org_members_comember_select.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.is_active_org_member(uuid) FROM PUBLIC, anon;
@@ -12977,5 +12965,41 @@ END $g$;
 -- 00568_decision_first_notice_dispatch.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.decision_dispatch_first_notice() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00570_studio_invoices.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.create_draft_studio_invoice( uuid, uuid, text, numeric, integer, text, jsonb ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00570_studio_invoices.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_draft_studio_invoice( uuid, uuid, text, numeric, integer, text, jsonb ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00570_studio_invoices.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_invoice_payment_effects(UUID) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00570_studio_invoices.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_invoice_payment_effects(UUID) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00570_studio_invoices.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00570_studio_invoices.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) TO anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

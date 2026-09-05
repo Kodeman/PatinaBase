@@ -1695,9 +1695,17 @@ VALUES
     ARRAY['service_role']::text[]
   ),
   (
+    -- 00570 added the project-less studio-invoice branch to both arms
+    -- (00511's hash was
+    -- 3ce8183f5490b21a6a087a6a21e8e36c2c1b4c51d1577da614799a473f99099b).
+    -- Everything this file pins about the function is unchanged: still
+    -- SECURITY INVOKER, still no direct grants, every project-path line
+    -- byte-identical, and the canonical root -> user_roles -> memberships ->
+    -- organization lock order below is untouched - the new branch takes no
+    -- lock and returns before the project lookups.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '3ce8183f5490b21a6a087a6a21e8e36c2c1b4c51d1577da614799a473f99099b',
+    '06609af25c627f49c7b489c07968790c593ce1ad269e6a42e5bda6b1eb0a065a',
     ARRAY[]::text[]
   ),
   (
