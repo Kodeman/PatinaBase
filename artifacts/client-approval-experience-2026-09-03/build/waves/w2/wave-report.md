@@ -772,3 +772,125 @@ Sealed Resources version=2 rules=10 files=61
   numerals are ruled a Wave 3 sweep item (P-24 residue).
 - **The two lock-screen actions** still cannot be driven by the harness (an AX custom action), and
   the seal's haptic still cannot be observed on a simulator. Both are harness limits, unchanged.
+
+---
+
+# Wave 2 — the last fix round (round 4), 2026-09-05
+
+Two findings from the round-3 web walk, both about the same 520 ms: `W3-01` (the ruled P-19
+receipt is drawn and then unmounted) and `W3-02` (the delivery-retry recovery with it). One
+commit, `8aa7bbd96`, on `approvals/w2-integration` (base `ec5188fe0`). No iOS code was touched;
+no migration, no edge function, no other portal.
+
+## What was wrong
+
+Signing takes the paper out of `pendingProposals`, so the refetch the door awaits took the door's
+whole `<section>` with it — the header, the receipt and the recovery — about half a second after
+the leaf swung. Round 3 measured the receipt on screen for **525 ms** (`…cd102`) and **517 ms**
+(`…cd202`, of which only 377 ms at full opacity) for a 108-character sentence, and the delivery
+block for **531 ms**. Nothing else on the surface carries either sentence: `has your signature`
+count 0 after the unmount, and `CommercialNotificationRecovery` — the component the code's comment
+said the `?delivery=pending_retry` param lands on — does not exist any more; nothing reads the
+param.
+
+## The fix — the door that opened on her name stays on the page
+
+`threshold.tsx` keeps a signed door's **mark and paper** for the rest of the visit (`sealedDoors`,
+recorded from `DoorGate`'s `onSigned`, which fires the moment the signature lands and before the
+awaited refetch). The `DoorGate` is therefore never unmounted: its `open` state — title, `Open. It
+opened on your name.`, the P-19 receipt, the pending-delivery recovery and its act — is the plate
+that stands where the door was.
+
+Three details the fix is careful about:
+
+- **The band's own sentence is untouched.** A sealed mark never enters `band.marks`, which is what
+  `roomLine` counts for "one door waits on your name"; the render composes
+  `[...band.marks, ...sealedMarks in this room]` in **one** child array, because a key that moves
+  between two sibling arrays is an unmount, and an unmounted door has no receipt.
+- **The mat lists the paper once.** `The papers` reads the *open* door marks only, so a sealed
+  paper appears solely as its Previously line (`#previously`).
+- **The doorstep sentence and the plan key still count only open doors** — they read `model.marks`,
+  which the fix does not touch.
+
+`door-gate.tsx` changes no behaviour: the stale `CommercialNotificationRecovery` comment is
+replaced by what is actually true, and `onSigned` is documented as the seal.
+
+## Measured, on the local stack, after the fix
+
+Same harness as round 3 (headless chromium 1.58.2, 1280×1100, dev server from this worktree,
+`client@patina.dev`, project Aspen Loft Refresh; `web-walk-r4/*.mjs`, shots `web-walk-shots-r4/`).
+The three trade-scope doors were put back to unsigned with round 3's `reset-doors.sql` before each
+pass. **The stack was NOT reset** — ledger tail `00571, 00569, 00568, 00567`.
+
+`31-receipt-by-title.mjs`, sampling at frame resolution for 25 s (`…cd202`):
+
+```
+section present : 1ms → 25007ms  (25006ms, 2991 frames)
+receipt present : 1100ms → 25007ms  (23907ms, 2864 frames)
+delivery present: 1100ms → 25007ms  (23907ms, 2864 frames)
+leaf present    : 1ms → 1572ms   (the swing, then gone)
+section gone at : never          receipt gone at : never
+last frame      : {"id":"door-door-…cd202","head":"Open. It opened on your name.","op":1,"del":true,"leaf":false}
+receipt reads   : Aspen Loft — Primary bath stone · signed 5 September · Local Dev Studio has your
+                  signature. You’ll have a copy.
+```
+
+`32-receipt-reduced-motion.mjs` — the same, under `prefers-reduced-motion: reduce`, where the leaf
+goes at once and the refetch is released on the same tick (the tightest version of the race):
+receipt and recovery **1078 ms → 25006 ms**, section never gone.
+
+`30-receipt-persists.mjs` (first pass, id-scoped like round 3's script) reads the receipt gone at
+3426 ms — **a false negative worth recording**: the page-level `#door` anchor moves to the next
+door still asking the moment this one is sealed, so an id-scoped sampler follows the wrong section.
+Its whole-page counts are the honest ones and they are green: after 20 s and after scrolling the
+house, `has your signature` × 1, `confirmation delivery is still pending` × 1,
+`Resend confirmation notice` × 1, `countersign` × 0, Previously reads `SIGNED`, and `The papers`
+lists the paper once.
+
+The signature still lands: `commercial_document_signatures` → `…cd202 | client | Client User`.
+
+Shots: `web-walk-shots-r4/33-signed-door-25s.png`, `34-signed-door-reduced.png`,
+`35-the-plate.png` (the plate itself, scrolled to).
+
+## Test
+
+`threshold.test.tsx` gains two, both at the seam the finding is about — the page, not the
+component: sign the door, then flip `useClientSafeProposals` to the accepted shape and redraw.
+`leaves the receipt and the delivery recovery standing after the paper is gone` fails on the
+pre-fix tree (verified by removing the `onSigned` wiring: `✕`, 1 failed) and passes on it; the
+second holds the mat to one entry for a sealed paper, pointing at Previously.
+
+## Gates
+
+| Gate | Result |
+|---|---|
+| `IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE …/scripts/ios-gate.sh all` | **PASS**, exit 0 — `** BUILD SUCCEEDED **`, `Test run with 2639 tests in 285 suites passed after 7.759 seconds with 2 known issues`, `** TEST SUCCEEDED **`, `✓ lint-delta: no new warnings in touched files`. Tail committed as `ios-gate-r4-tail.log` (the full 11 MB log stays uncommitted in the main checkout) |
+| `pnpm --dir … --filter client-portal type-check` | **PASS** — `tsc --noEmit`, no output |
+| `pnpm --dir … --filter client-portal test` | **PASS** — 119 suites, **1683** tests (1681 before) |
+| walk-app rebuild | **NOT RUN, and not owed** — no iOS source changed this round; `DerivedDataWalk` still carries the round-3 build |
+| migrations / edge functions / designer + admin portals | **NOT RUN, and not owed** — none touched |
+
+The gate ran three times. The first died in the sandbox (`xcodebuild: error: Could not resolve
+package dependencies: error: permissionDenied`) — every xcodebuild call has to run unsandboxed. The
+second, run **while the dev server and headless chromium were working**, failed with a third issue:
+`CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves()` (`Expectation failed:
+(result → false) == true`). It is a wall-clock race — the test sleeps 50 ms, then flips a box a
+5 s-timeout poll loop is watching — and it went green on the same commit with the machine quiet.
+Recorded as load-flake, not a regression: no iOS file changed this round.
+
+### Advisories from this round
+
+1. **The recovery still does not survive a reload.** `pending_retry` is spoken exactly once, in the
+   sign route's response; no projection, RPC or GET carries it, and the replay route is a POST that
+   re-sends. So the block now stands for the whole visit but is gone if she reloads. Making it
+   durable is a schema question (a delivery state on the document), and Wave 3's `P-28` already
+   owns the retry sweep — this belongs with it, not in a fix round.
+2. **The `#door` anchor moves off a signed door**, to the next one still asking; the sealed section
+   falls back to its own `door-<mark id>` id. That is right for a reader arriving at `#door` from
+   `/proposals`, but any harness that scopes by `#door` will read the wrong section after a
+   signature (see the false negative above). Scope by title, or by the mark's own id.
+3. **Prettier drift is inherited.** The pre-commit hook warns (advisory) on all three touched
+   files; each already failed `prettier --check` at `HEAD~1`. Nothing was reformatted.
+4. **"Fixture gate in draft…" on the walked page is SEED text**, from
+   `apps/designer-portal/e2e/helpers/workflow-gate-fixture.sql:88`, not product copy — the P-04
+   sweep is not regressing.

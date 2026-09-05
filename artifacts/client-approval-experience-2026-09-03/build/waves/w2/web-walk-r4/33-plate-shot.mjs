@@ -1,0 +1,22 @@
+/* A picture of what stands where the door was. */
+import { open, signIn, openHouse, t, holdPress } from '../web-walk-r3/lib.mjs';
+const SH = '/Users/kody/Code/patina-merged/artifacts/client-approval-experience-2026-09-03/build/waves/w2/web-walk-shots-r4';
+const { browser, page } = await open({ width: 1280, height: 1100 });
+await signIn(page);
+await openHouse(page);
+const sec = page.locator('[data-threshold-unit="door"]').filter({ has: page.locator('[data-testid="door-way"]') }).first();
+await sec.scrollIntoViewIfNeeded();
+await page.waitForTimeout(400);
+const title = t(await sec.locator('h2').innerText());
+const dw = sec.locator('[data-testid="door-way"]').first();
+const sign = dw.getByRole('button', { name: /sign and authorize/i }).first();
+await dw.locator('input[type=text]').first().fill('Client User');
+await dw.locator('input[type=checkbox]').first().check();
+await holdPress(page, sign, 1400);
+await page.waitForTimeout(6000);
+const sealed = page.locator('[data-threshold-unit="door"]').filter({ hasText: title }).first();
+await sealed.scrollIntoViewIfNeeded();
+await page.waitForTimeout(600);
+await page.screenshot({ path: `${SH}/35-the-plate.png` });
+console.log('plate:', t(await sealed.innerText()).slice(0, 320));
+await browser.close();
