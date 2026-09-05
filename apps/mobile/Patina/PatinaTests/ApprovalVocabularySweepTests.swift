@@ -208,6 +208,13 @@ struct ApprovalVocabularySweepTests {
         // rail a homeowner presses.
         strings.append(contentsOf: ProjectApprovalCopy.acts.map(\.label))
         strings.append(contentsOf: ProjectApprovalCopy.acts.map(\.consequence))
+        // `iosd4-M3`: Today's own approval prompt — the loudest string on the
+        // rail whose Record card this lane rebuilt, and the one the sweep did
+        // not reach while it printed a figure and called the ask a decision.
+        for count in [1, 3] {
+            let move = TodayExperience.nextMove(for: TodayPriorityInput(pendingDecisionCount: count))
+            strings.append(contentsOf: [move.title, move.detail])
+        }
 
         for string in strings {
             let lowered = string.lowercased()
