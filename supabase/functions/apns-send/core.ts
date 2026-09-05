@@ -143,10 +143,9 @@ export function apnsCategoryFor(
 
 /**
  * One thread per thing (P-22): `decision-<id>`, `proposal-<id>`,
- * `invoice-<id>`. iOS groups a thread's notifications together, and the same
- * string is sent as `apns-collapse-id` so a reminder REPLACES the notice it
- * repeats instead of stacking a second copy of the same ask on the lock
- * screen.
+ * `invoice-<id>`. iOS groups a thread's notifications together. Grouping is
+ * safe for every entity — it stacks the notices, it never replaces one — so
+ * this is derived for any entity that names an id, routed or not.
  *
  * APNs caps `apns-collapse-id` at 64 bytes and rejects the request outright
  * past it, so an over-long id yields no thread rather than a failed push. An
@@ -162,8 +161,21 @@ export function apnsThreadId(input: ApnsSendInput): string | null {
 }
 
 /**
- * The request headers for one device send. `apns-collapse-id` is the thread id
- * (P-22) and is omitted when there is none — an empty collapse id is not the
+ * The request headers for one device send.
+ *
+ * `apns-collapse-id` is the thread id (P-22), and it is sent ONLY for an
+ * entity this app routes — decision, proposal, invoice. Collapsing REPLACES an
+ * unread notice with the next one carrying the same id, which is exactly what
+ * a reminder for one approval should do and exactly what must never happen to
+ * two different events that merely name the same row. Three design_request
+ * producers push on the lead id (00330 accept, 00331 ceremony complete, 00334
+ * refreshed slots); collapsing those would have let "your studio accepted" be
+ * swallowed by "new times are offered", while the bell — written separately,
+ * outside notify_client_attention's dedupe — still listed both. So the gate is
+ * the category: an entity whose notices are a known repeating ask collapses,
+ * everything else stacks.
+ *
+ * Omitted, never blank, when there is none — an empty collapse id is not the
  * same as no collapse id, and APNs treats "" as a real (shared) bucket.
  */
 export function buildApnsHeaders(
@@ -179,7 +191,9 @@ export function buildApnsHeaders(
     "content-type": "application/json",
   };
   const thread = apnsThreadId(input);
-  if (thread) headers["apns-collapse-id"] = thread;
+  if (thread && apnsCategoryFor(input.entity_type)) {
+    headers["apns-collapse-id"] = thread;
+  }
   return headers;
 }
 

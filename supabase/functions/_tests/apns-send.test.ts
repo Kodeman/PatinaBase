@@ -431,6 +431,46 @@ Deno.test("one thread per thing, and the collapse id is that thread (P-22)", () 
   assertEquals(headers.authorization, "bearer jwt");
 });
 
+// r1-B1: collapsing REPLACES the unread notice it repeats. That is right for a
+// reminder about one approval and wrong for two different events that merely
+// name the same row — 00330 (accepted), 00331 (ceremony complete) and 00334
+// (new times offered) all push entity_type 'design_request' with the lead id,
+// so a shared collapse id would have let the later notice quietly eat the
+// earlier unread one while the bell still listed both.
+Deno.test("an unrouted entity stacks: threaded for grouping, never collapsed", () => {
+  const input = {
+    title: "Your studio accepted",
+    body: "Leah has the room.",
+    entity_type: "design_request",
+    entity_id: "lead-1",
+  };
+  const headers = buildApnsHeaders(input, "cloud.patina.app", "jwt");
+  assert(
+    !("apns-collapse-id" in headers),
+    "two different design_request events share the lead id; collapsing loses one",
+  );
+  // Grouping is still wanted — it stacks the notices, it never replaces one.
+  assertEquals(
+    (buildApnsPayload(input) as { aps: Record<string, unknown> })
+      .aps["thread-id"],
+    "design_request-lead-1",
+  );
+});
+
+Deno.test("every routed entity collapses its repeats (P-22)", () => {
+  for (const entityType of ["decision", "proposal", "invoice"]) {
+    const headers = buildApnsHeaders(
+      { ...DECISION_PUSH, entity_type: entityType },
+      "cloud.patina.app",
+      "jwt",
+    );
+    assertEquals(
+      headers["apns-collapse-id"],
+      `${entityType}-11111111-2222-4333-8444-555555555555`,
+    );
+  }
+});
+
 Deno.test("a push with nothing to thread on carries no collapse id at all", () => {
   const headers = buildApnsHeaders(
     { title: "t", body: "b" },
