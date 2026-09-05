@@ -147,3 +147,72 @@ export function newApprovalIdempotencyKey(): string {
     `approval-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
 }
+
+/* ── P-13 · the designer's one-line why ────────────────────────────────────
+   The composer's first field. Optional, capped, and frozen with the artifact:
+   what she would tell the client about this, in one line, read under the
+   question on every client surface. ──────────────────────────────────────── */
+
+/** The cap the composer enforces and the frozen column holds. */
+export const WHY_MAX_LENGTH = 200;
+
+/** How close to the cap the live count starts speaking. */
+const WHY_COUNT_THRESHOLD = 20;
+
+const REMAINING_WORDS = [
+  'No',
+  'One',
+  'Two',
+  'Three',
+  'Four',
+  'Five',
+  'Six',
+  'Seven',
+  'Eight',
+  'Nine',
+  'Ten',
+  'Eleven',
+  'Twelve',
+  'Thirteen',
+  'Fourteen',
+  'Fifteen',
+  'Sixteen',
+  'Seventeen',
+  'Eighteen',
+  'Nineteen',
+  'Twenty',
+] as const;
+
+/**
+ * The live count, in words, and only near the cap — a number counting down
+ * from the first keystroke is a meter on a sentence she is still writing.
+ * Silent until twenty characters remain; never a bare figure.
+ */
+export function whyRemainingLine(value: string): string | null {
+  const remaining = WHY_MAX_LENGTH - value.length;
+  if (remaining > WHY_COUNT_THRESHOLD) return null;
+  const clamped = Math.max(0, Math.min(remaining, WHY_COUNT_THRESHOLD));
+  const word = REMAINING_WORDS[clamped];
+  return `${word} character${clamped === 1 ? '' : 's'} left.`;
+}
+
+/**
+ * The name the frozen why is signed with: exactly the display name the
+ * projection froze beside the sentence (`whyAuthorName`), never a name taken
+ * off the reader. The ruling of 2026-09-05 renders that key verbatim on every
+ * surface, so the portal does not shorten it here — email, the client
+ * Threshold and the iOS row would then sign one sentence three ways. An empty
+ * or absent name signs nothing rather than guessing.
+ */
+export function whyAttribution(name: string | null | undefined): string | null {
+  return (name ?? '').trim() || null;
+}
+
+/**
+ * The why is one line. Every interior run of whitespace — a pasted newline
+ * above all — collapses to a single space before the sentence can freeze into
+ * the immutable artifact, where it can never be corrected.
+ */
+export function oneLine(value: string): string {
+  return value.replace(/\s+/gu, ' ');
+}

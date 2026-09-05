@@ -38,15 +38,20 @@ import {
   GatePartBlock,
   GatePlain,
   GateQuestion,
+  GateWhy,
 } from './gate-anatomy';
 import {
   eligibleSupersessionCandidates,
   formatGateImpact,
   gateScope,
   newApprovalIdempotencyKey,
+  oneLine,
   parseSignedDelta,
   projectApprovalActions,
   toFutureDueAt,
+  whyAttribution,
+  whyRemainingLine,
+  WHY_MAX_LENGTH,
 } from './project-approval-model';
 import {
   FOCUS_PROJECT_APPROVAL_EVENT,
@@ -76,6 +81,8 @@ export interface ProjectApprovalPhase {
 interface ApprovalFormState {
   title: string;
   question: string;
+  /** P-13 — the composer's first field. Optional; capped at WHY_MAX_LENGTH. */
+  why: string;
   context: string;
   dueAt: string;
   phaseId: string;
@@ -86,7 +93,11 @@ interface ApprovalFormState {
   idempotencyKey: string;
 }
 
-interface SupersedeState extends Omit<ApprovalFormState, 'phaseId'> {
+/** P-13 carries the why on the composer only. `supersede_project_approval_decision`
+ *  does take a defaulted `p_why`, and the hook forwards one when a caller passes
+ *  it; this form does not ask again, so silence carries the predecessor's frozen
+ *  line forward rather than dropping it. */
+interface SupersedeState extends Omit<ApprovalFormState, 'phaseId' | 'why'> {
   decisionId: string;
 }
 
@@ -101,6 +112,7 @@ function emptyForm(): ApprovalFormState {
   return {
     title: '',
     question: '',
+    why: '',
     context: '',
     dueAt: '',
     phaseId: '',
@@ -359,6 +371,7 @@ export function ProjectApprovalDocument({
         payload: {
           title,
           question,
+          why: oneLine(form.why).trim() || null,
           context: form.context.trim() || null,
           dueAt: toFutureDueAt(form.dueAt),
           phaseId: form.phaseId,
@@ -500,6 +513,8 @@ export function ProjectApprovalDocument({
   };
 
   const composerArtifact = findArtifact(candidates, form.artifactValue);
+  // P-13 — the live count, in words, only once the cap is close.
+  const whyRemaining = whyRemainingLine(form.why);
 
   const decisionLeadId = authority?.decisionLeadId ?? null;
   const decidedCount = approvals.filter(isSealed).length;
@@ -743,6 +758,39 @@ export function ProjectApprovalDocument({
           <h3 className="font-heading text-[18px] text-[var(--color-charcoal)]">
             Draft an exact review request
           </h3>
+
+          {/* P-13 — her sentence comes first, before the anatomy. It sits
+              outside the six parts on purpose: a gate has six and no more. */}
+          <div className="mt-4 min-w-0">
+            <Field
+              label="What would you tell her about this?"
+              id="approval-why"
+            >
+              {/* One line means one line: a pasted newline collapses on the
+                  way in and Enter does nothing, because the sentence freezes
+                  into an immutable artifact that no one can correct after. */}
+              <textarea
+                id="approval-why"
+                rows={1}
+                className={INPUT}
+                maxLength={WHY_MAX_LENGTH}
+                value={form.why}
+                aria-describedby="approval-why-help"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.preventDefault();
+                }}
+                onChange={(event) =>
+                  updateForm({
+                    why: oneLine(event.target.value).slice(0, WHY_MAX_LENGTH),
+                  })
+                }
+              />
+            </Field>
+            <p id="approval-why-help" aria-live="polite" className={META}>
+              One line. She reads it under the question.
+              {whyRemaining ? ` ${whyRemaining}` : ''}
+            </p>
+          </div>
 
           <GateCeremony label="Gate anatomy">
             <GateFieldset part="artifact">
@@ -1035,6 +1083,18 @@ export function ProjectApprovalDocument({
 
                     <GatePartBlock part="question">
                       <GateQuestion>{review.question}</GateQuestion>
+                      {review.why && (
+                        /* P-13 — signed by the hand that wrote it. A studio has
+                           more than one designer, so the name comes off the
+                           frozen record under `whyAuthorName`, never off the
+                           reader; with no author on the record the sentence
+                           stands unsigned rather than borrowing a name. */
+                        <GateWhy
+                          attribution={whyAttribution(review.whyAuthorName)}
+                        >
+                          {review.why}
+                        </GateWhy>
+                      )}
                     </GatePartBlock>
 
                     <GatePartBlock part="scope">

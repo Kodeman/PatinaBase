@@ -28,7 +28,8 @@ import { DocumentAction, DocumentActionGroup } from './document-action';
 const NEED_KIND_STAMP_COLOR: Record<NeedKind, string> = {
   overdue_decision: 'var(--color-terracotta)',
   overdue_invoice: 'var(--color-terracotta)',
-  proposal_signed: 'var(--color-sage)',
+  // P-17 / R13 — SIGNED is mocha upstream; the folio dot follows it.
+  proposal_signed: 'var(--color-mocha)',
   damage_claim: 'var(--color-terracotta)',
   proposal_declined: 'var(--color-terracotta)',
   proposal_expired: 'var(--color-terracotta)',

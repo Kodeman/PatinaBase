@@ -466,6 +466,10 @@ const STAMP = {
   clay: { color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' },
   dustyBlue: { color: 'var(--color-dusty-blue)' },
   sage: { color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' },
+  /** P-17 / R13 — SIGNED's pigment. Sage stops carrying approval meaning and
+   *  stays a material hue (delivered goods, the weekly pulse). The word is the
+   *  pigment at full strength, so border and ink are the same token. */
+  mocha: { color: 'var(--color-mocha)', ink: 'var(--color-mocha)' },
 } as const;
 
 // Bare DATE columns (e.g. an invoice due_date 'YYYY-MM-DD') must parse as LOCAL
@@ -636,7 +640,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
         kind: 'proposal_signed',
         text: 'Signed — open the project',
         actionLabel: NEED_ACTION_LABELS.proposal_signed,
-        stamp: { label: 'SIGNED', ...STAMP.sage },
+        stamp: { label: 'SIGNED', ...STAMP.mocha },
         urgent: false,
         owner: 'designer',
       });

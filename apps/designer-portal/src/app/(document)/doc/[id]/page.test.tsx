@@ -4,6 +4,7 @@ import DocumentPage from './page';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 /**
  * W3 — the band's line 2, the one printing of the sentence that changes (L-1).
@@ -50,6 +51,10 @@ const mockMarkFirstDocumentOpenedMutate = jest.fn();
 let mockAuthUser: { id: string } | null = { id: 'owner-user' };
 // W4: the recap line counts drafted-and-unsent client approvals off this read.
 let mockProjectApprovalsQuery: Record<string, unknown> = { data: [] };
+// P-17/R13: the Record's settled stamps. Empty and 'requested' keep every
+// other case exactly where it was — no gate, so no grant stamp.
+let mockSectionGates: Array<Record<string, unknown>> = [];
+let mockGateState: (gate: Record<string, unknown>) => string = () => 'requested';
 // R108: the letterhead vitals read the resolver, never a stored column.
 const NO_RESOLVED_SCHEDULE = {
   phases: [],
@@ -484,8 +489,8 @@ jest.mock('@/hooks/use-document-rooms', () => ({
 }));
 
 jest.mock('@/hooks/use-section-work', () => ({
-  gateState: jest.fn(),
-  useSectionGates: () => ({ data: [] }),
+  gateState: (gate: Record<string, unknown>) => mockGateState(gate),
+  useSectionGates: () => ({ data: mockSectionGates }),
   useSectionTasks: () => ({ data: [] }),
 }));
 
@@ -559,6 +564,8 @@ beforeEach(() => {
   mockMyStudioMembers = [];
   mockMarkFirstDocumentOpenedMutate.mockClear();
   mockAuthUser = { id: 'owner-user' };
+  mockSectionGates = [];
+  mockGateState = () => 'requested';
 });
 
 describe('DocumentPage hydration render behavior', () => {
@@ -2120,6 +2127,79 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
+  });
+
+  // ── P-17 / R13: the Record's settled stamps read mocha ──
+  //
+  // The record's bodies only mount at `full`, so the density store is driven
+  // by hand (the supported test hook) rather than by an observer jsdom has no
+  // scrolling for.
+  describe('the settled stamps in the Record (P-17, R13)', () => {
+    const SIGNED_PROPOSAL = {
+      data: {
+        proposal: {
+          id: 'proposal-1',
+          version: 1,
+          status: 'signed',
+          signed_at: '2026-08-20T15:00:00.000Z',
+          signed_by_name: 'Leah Ward',
+        },
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    const openTheRecord = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Open the record' }));
+    };
+
+    beforeEach(() => {
+      __setDensityForTest('full');
+    });
+
+    afterEach(() => {
+      __setDensityForTest(undefined);
+    });
+
+    it('signs the Proposal in mocha, border and word alike — never sage', () => {
+      asProjectDocument();
+      mockProjectQuery = SIGNED_PROPOSAL;
+
+      render(<DocumentPage params={fulfilledParams} />);
+      openTheRecord();
+
+      const stamp = screen.getByText(/^Signed · /);
+      expect(stamp).toHaveStyle({
+        borderColor: 'var(--color-mocha)',
+        color: 'var(--color-mocha)',
+      });
+    });
+
+    it('grants a gate-settled section in mocha, border and word alike', () => {
+      asProjectDocument();
+      mockProjectQuery = SIGNED_PROPOSAL;
+      mockSectionGates = [
+        {
+          id: 'gate-1',
+          section_key: 'discovery',
+          title: 'Discovery',
+          status: 'responded',
+          due_date: null,
+          responded_at: '2026-08-18T15:00:00.000Z',
+          options: [{ id: 'o1', name: 'Approve', approves: true, selected: true, client_note: null }],
+        },
+      ];
+      mockGateState = () => 'approved';
+
+      render(<DocumentPage params={fulfilledParams} />);
+      openTheRecord();
+
+      const stamp = screen.getByText(/^Approved · /);
+      expect(stamp).toHaveStyle({
+        borderColor: 'var(--color-mocha)',
+        color: 'var(--color-mocha)',
+      });
+    });
   });
 
   // ── A3-L8: the wiring this wave's lanes contracted the page for ──
