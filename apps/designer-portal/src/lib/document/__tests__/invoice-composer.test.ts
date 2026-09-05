@@ -5,12 +5,16 @@
  */
 
 import {
+  STUDIO_TARGET,
+  activeDesignStudios,
   buildComposerLines,
+  canDraftStudioInvoice,
   dollarsToCents,
   partitionFfeBillable,
   unbilledMilestones,
   type ComposerFfeItem,
   type ComposerMilestone,
+  type ComposerStudio,
 } from '../invoice-composer';
 
 const MILESTONE: ComposerMilestone = {
@@ -190,5 +194,101 @@ describe('dollarsToCents', () => {
     expect(dollarsToCents('$150')).toBe(15_000);
     expect(dollarsToCents('')).toBe(0);
     expect(dollarsToCents('abc')).toBe(0);
+  });
+});
+
+// ── The studio invoice — an invoice with no house (R136) ────────────────────
+
+describe('canDraftStudioInvoice', () => {
+  const LINE = {
+    kind: 'adhoc' as const,
+    description: 'Design consultation, on site (2 h)',
+    quantity: 1,
+    unitAmountCents: 45_000,
+    sortOrder: 0,
+  };
+  const ready = {
+    clientId: 'client-1',
+    title: 'Design consultation · 12 Sept 2026',
+    studioId: 'studio-1',
+    lines: [LINE],
+  };
+
+  it('draws when a household, a regarding line, a studio and a line are all present', () => {
+    expect(canDraftStudioInvoice(ready)).toBe(true);
+  });
+
+  it('refuses without a household (S4)', () => {
+    expect(canDraftStudioInvoice({ ...ready, clientId: null })).toBe(false);
+  });
+
+  it('refuses a blank or whitespace-only regarding line (S12)', () => {
+    expect(canDraftStudioInvoice({ ...ready, title: '' })).toBe(false);
+    expect(canDraftStudioInvoice({ ...ready, title: '   ' })).toBe(false);
+  });
+
+  it('refuses without a studio to number off (S8)', () => {
+    expect(canDraftStudioInvoice({ ...ready, studioId: null })).toBe(false);
+    expect(canDraftStudioInvoice({ ...ready, studioId: '' })).toBe(false);
+  });
+
+  it('refuses with no line that carries money', () => {
+    expect(canDraftStudioInvoice({ ...ready, lines: [] })).toBe(false);
+  });
+});
+
+describe('studio mode line assembly (S6)', () => {
+  it('carries ad-hoc lines only — the composer passes no house-bound selection', () => {
+    const lines = buildComposerLines({
+      milestones: [],
+      ffeItems: [],
+      timeEntries: [],
+      adhoc: [
+        { description: 'Design consultation, on site (2 h)', quantity: '1', unitDollars: '450' },
+        { description: '', quantity: '1', unitDollars: '' },
+      ],
+    });
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      kind: 'adhoc',
+      description: 'Design consultation, on site (2 h)',
+      quantity: 1,
+      unitAmountCents: 45_000,
+      sortOrder: 0,
+    });
+  });
+});
+
+describe('activeDesignStudios', () => {
+  const studio = (over: Partial<ComposerStudio>): ComposerStudio => ({
+    id: 'studio-1',
+    name: 'Middle West Studio',
+    type: 'design_studio',
+    status: 'active',
+    ...over,
+  });
+
+  it('keeps only active design studios — a manufacturer is not a studio', () => {
+    const result = activeDesignStudios([
+      studio({}),
+      studio({ id: 'org-2', type: 'manufacturer', name: 'Hedges & Co.' }),
+      studio({ id: 'org-3', status: 'deactivated', name: 'A closed studio' }),
+    ]);
+    expect(result.map((s) => s.id)).toEqual(['studio-1']);
+  });
+
+  it('reports the two-studio case the studio line is gated on (S8)', () => {
+    const result = activeDesignStudios([
+      studio({}),
+      studio({ id: 'studio-2', name: 'Verona Interiors' }),
+    ]);
+    expect(result).toHaveLength(2);
+  });
+});
+
+describe('STUDIO_TARGET', () => {
+  it('is not a shape a project id could take', () => {
+    expect(STUDIO_TARGET).toBe('__studio__');
   });
 });

@@ -24,6 +24,9 @@ import { InvoiceComposer } from './invoice-composer';
 export interface InvoiceComposerContext {
   /** Bill this project; omitted = the composer asks (project picker). */
   projectId?: string;
+  /** R136 — open straight into the houseless choice (ruling S1). Honoured only
+   *  while the `studio-invoice` flag is on, and never alongside a projectId. */
+  mode?: 'studio';
   /** R76 — the ?ffeItemIds= descendant: these FF&E items arrive ticked. */
   initialFfeItemIds?: string[];
   /** R75 — Export week / bill-it: these unbilled entries arrive ticked
