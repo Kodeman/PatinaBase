@@ -142,3 +142,50 @@ jest --testPathPattern "invoice-folio|invoice-composer|accounts-studio-rows|desk
 Test Suites: 5 passed, 5 total
 Tests:       43 passed, 43 total
 ```
+
+## Fix round 2
+
+One finding, R2-1 (major): a designer whose account carries no active `design_studio` could choose
+"the studio · no house", fill every field, and watch the Draft act stay disabled with nothing said.
+`studioId` resolves to `''` (`studios[0]?.id || ''`), `canDraftStudioInvoice` requires it, and
+`multiStudio` is false at zero studios — so no studio line rendered to explain the hold. Reproduced in
+a browser by the reviewer against the seeded superadmin, who holds zero `organization_members` rows.
+
+The fix speaks the absence at the act site, in R83's grammar (invoice-composer.tsx):
+
+- `useOrganizations()` now also yields `isLoading`, so the absence is claimed only once the roster has
+  actually answered — an empty `data` mid-flight no longer reads as "no studio".
+- `studioMissing = studioMode && !organizationsLoading && studios.length === 0`.
+- One muted mono line under the Draft act, above the R83 failure band:
+  `no studio to draw from · this account belongs to none yet`. Muted ink, not terracotta — an absence,
+  not a refusal of an attempt. No badge, no colour status, no icon.
+
+The act stays disabled; nothing about `canDraftStudioInvoice` changed, so the pure twin is untouched.
+
+Two tests added to `invoice-composer-studio.test.tsx` (the mock now carries `isLoading`):
+
+- "speaks the absence, rather than dead-ending, when there is no studio at all" — `mockOrganizations = []`,
+  household + regarding + a priced line all filled, asserts the muted line renders, the act is disabled,
+  and no Studio select appears.
+- "stays silent about a missing studio while the roster is still loading" — empty data with
+  `isLoading: true`, asserts the line does not render.
+
+### Gates, round 2
+
+```
+pnpm --filter @patina/designer-portal type-check   → clean (tsc --noEmit, no output)
+
+pnpm --filter @patina/designer-portal test -- --testPathPattern "invoice-composer-studio"
+Test Suites: 1 passed, 1 total
+Tests:       11 passed, 11 total
+
+pnpm --filter @patina/designer-portal test
+Test Suites: 1 failed, 512 passed, 513 total
+Tests:       1 failed, 6136 passed, 6137 total
+```
+
+The single failure is unchanged from round 1 and is not this lane's: `client-note-composer.test.tsx:479`
+hard-codes "Taken down Sep 4" while the component renders today's date — the jest output prints the
+received DOM as `Taken down Sep 5. It moves to Previously.` `git diff 3a54d8743 HEAD --stat` lists neither
+`client-note-composer.tsx` nor its test. It will pass again the day the test is retimed; it fails
+identically on the lane's base commit.

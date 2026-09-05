@@ -15,6 +15,7 @@ let mockFlag = { value: false, isLoading: false };
 let mockOrganizations: Array<Record<string, unknown>> = [
   { id: 'studio-1', name: 'Middle West Studio', type: 'design_studio', status: 'active' },
 ];
+let mockOrganizationsLoading = false;
 
 jest.mock('@patina/supabase', () => ({
   useCreateDraftInvoice: () => ({ mutateAsync: mockCreateDraft, isPending: false }),
@@ -24,7 +25,10 @@ jest.mock('@patina/supabase', () => ({
   }),
   useDeleteDraftInvoice: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useFfeInvoiceCoverage: () => ({ data: undefined, isLoading: false }),
-  useOrganizations: () => ({ data: mockOrganizations }),
+  useOrganizations: () => ({
+    data: mockOrganizations,
+    isLoading: mockOrganizationsLoading,
+  }),
   useProjectFFEItems: () => ({ data: [], isLoading: false }),
   useProjectInvoices: () => ({ data: [] }),
   useProjectPaymentMilestones: () => ({ data: [] }),
@@ -62,6 +66,7 @@ describe('InvoiceComposer · the houseless choice is fail-closed', () => {
     mockOrganizations = [
       { id: 'studio-1', name: 'Middle West Studio', type: 'design_studio', status: 'active' },
     ];
+    mockOrganizationsLoading = false;
   });
 
   it('offers no studio option while the flag is still resolving', () => {
@@ -91,6 +96,7 @@ describe('InvoiceComposer · studio mode', () => {
     mockOrganizations = [
       { id: 'studio-1', name: 'Middle West Studio', type: 'design_studio', status: 'active' },
     ];
+    mockOrganizationsLoading = false;
   });
 
   it('puts the house-bound sections away and asks for the household and the regarding line', () => {
@@ -185,6 +191,40 @@ describe('InvoiceComposer · studio mode', () => {
     });
     expect(mockCreateDraft).not.toHaveBeenCalled();
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith('invoice-77', null));
+  });
+
+  it('speaks the absence, rather than dead-ending, when there is no studio at all', () => {
+    mockOrganizations = [];
+    render(<InvoiceComposer context={{}} onDrafted={jest.fn()} />);
+    pickStudio();
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick household' }));
+    fireEvent.change(screen.getByPlaceholderText('Design consultation · Sept 2026'), {
+      target: { value: 'Design consultation · 12 Sept 2026' },
+    });
+    fireEvent.change(screen.getByLabelText('Line description'), {
+      target: { value: 'Design consultation, on site (2 h)' },
+    });
+    fireEvent.change(screen.getByLabelText('Unit price (dollars)'), {
+      target: { value: '450' },
+    });
+
+    expect(
+      screen.getByText('no studio to draw from · this account belongs to none yet'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Draft the invoice' })).toBeDisabled();
+    expect(screen.queryByLabelText('Studio')).not.toBeInTheDocument();
+  });
+
+  it('stays silent about a missing studio while the roster is still loading', () => {
+    mockOrganizations = [];
+    mockOrganizationsLoading = true;
+    render(<InvoiceComposer context={{}} onDrafted={jest.fn()} />);
+    pickStudio();
+
+    expect(
+      screen.queryByText('no studio to draw from · this account belongs to none yet'),
+    ).not.toBeInTheDocument();
   });
 
   it('renders the R83 failure band inline when the draft is refused', async () => {

@@ -117,7 +117,8 @@ export function InvoiceComposer({
   const studioMode = studioChoiceAvailable && target === STUDIO_TARGET;
 
   const { data: projects } = useProjects();
-  const { data: organizations } = useOrganizations();
+  const { data: organizations, isLoading: organizationsLoading } =
+    useOrganizations();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
   const { data: projectInvoices } = useProjectInvoices(projectId || null);
   const { data: unbilledTime, isLoading: timeLoading } = useUnbilledTime(
@@ -178,6 +179,9 @@ export function InvoiceComposer({
   );
   const multiStudio = studios.length > 1;
   const studioId = chosenStudioId || studios[0]?.id || '';
+  // Nothing to bill from: the Draft act can never open, so say so (R83).
+  const studioMissing =
+    studioMode && !organizationsLoading && studios.length === 0;
 
   // ── Milestones: billable = pending/outstanding, not on a live invoice ─────
   const offerableMilestones = useMemo(
@@ -833,6 +837,12 @@ export function InvoiceComposer({
               Draft the invoice
             </DocumentAction>
           </div>
+
+          {studioMissing && (
+            <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              no studio to draw from · this account belongs to none yet
+            </p>
+          )}
 
           {/* R83 — the inline failure band, at the act site. */}
           {error && (
