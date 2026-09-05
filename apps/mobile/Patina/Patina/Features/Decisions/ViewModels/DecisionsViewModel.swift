@@ -73,12 +73,18 @@ final class DecisionDetailViewModel {
     /// Said once the review of the exact edition has been recorded.
     var reviewConfirmed: Bool = false
 
-    /// Whichever ceremony this decision belongs to is decided by the DECISION,
-    /// not by the review having loaded: a failed fetch must never let a
-    /// Stage-2 row fall through to the option cards, whose act
-    /// (`apply_client_decision`) refuses it.
+    /// Whichever ceremony this decision belongs to.
+    ///
+    /// The PROJECTION comes first, and has to: 00467:18-38 cut
+    /// `approval_contract = 'project_artifact_v1'` out of every raw
+    /// `client_decisions` SELECT policy a homeowner can reach, so for the very
+    /// person being asked `decision` is nil on exactly the rows this branch
+    /// exists for. The row is consulted second, for the studio co-member who
+    /// can still see it and for a Stage-2 row whose projection failed to
+    /// arrive — a failed fetch must never let one fall through to the option
+    /// cards, whose act (`apply_client_decision`) refuses it.
     var isStage2Approval: Bool {
-        decision?.isProjectArtifactApproval == true
+        approvalReview != nil || decision?.isProjectArtifactApproval == true
     }
 
     /// The approval is a Stage-2 one and its projection did not arrive.
@@ -120,7 +126,8 @@ final class DecisionDetailViewModel {
     }
 
     var messageRoute: MessageRoute? {
-        if let projectId = decision?.project_id, !projectId.isEmpty {
+        if let projectId = decision?.project_id ?? approvalReview?.projectId,
+           !projectId.isEmpty {
             return .project(projectId)
         }
         let relationship = DesignerRelationshipResolver.resolve(
@@ -196,13 +203,16 @@ final class DecisionDetailViewModel {
         let (d, o) = await (decisionTask, optionsTask)
         self.decision = d ?? nil
         self.options = o
-        await resolveDiscussThread()
         await loadApprovalReview(decisionId: decisionId)
+        await resolveDiscussThread()
         // Seed local selection from whatever the server already has, so a
         // re-open of a resolved decision shows the choice without re-asking.
         self.selectedOptionId = o.first(where: { $0.selected == true })?.id
         self.isLoading = false
-        if self.decision == nil {
+        // A Stage-2 approval is a load that SUCCEEDED with no row: 00467 hides
+        // the parent row from the homeowner and hands her the projection
+        // instead. Reporting that as a failure was the screen she actually got.
+        if self.decision == nil, self.approvalReview == nil {
             self.error = "Couldn’t load this decision"
         }
         // Fire-and-forget "seen" stamp. Failure here is non-fatal — it only
@@ -385,9 +395,10 @@ final class DecisionDetailViewModel {
 
     /// The read, behind a seam. Same reason as `approveSignoff`: the singleton
     /// actor's network call is not reachable from a test.
+    /// Argument: the decision id.
     @ObservationIgnored
-    var fetchApprovalReviews: () async throws -> [RemoteProjectApprovalReview] = {
-        try await DecisionsAPIClient.shared.listProjectApprovalReviews()
+    var fetchApprovalReview: (String) async throws -> RemoteProjectApprovalReview? = { decisionId in
+        try await DecisionsAPIClient.shared.fetchProjectApprovalReview(decisionId: decisionId)
     }
 
     /// `confirm_project_decision_review`, behind a seam.
@@ -415,16 +426,20 @@ final class DecisionDetailViewModel {
         )
     }
 
-    /// The outcome landed in this session. The server row is `responded` and
-    /// the next load will say so; until then this is what stops the screen
-    /// offering the three acts a second time.
-    var hasAnsweredApproval: Bool = false
+    /// The outcome recorded in this session. The server row is `responded` and
+    /// the next load will carry the word itself; until then this is what stops
+    /// the screen offering the three acts a second time, and what lets it name
+    /// the answer she just gave.
+    var answeredOutcome: ProjectApprovalOutcome?
+
+    var hasAnsweredApproval: Bool { answeredOutcome != nil }
 
     /// Look up the project's comms thread for the "Discuss this" action.
     /// Non-fatal: any failure (no project, no thread, RLS, network) just
     /// leaves the action hidden.
     private func resolveDiscussThread() async {
-        guard let projectId = decision?.project_id, !projectId.isEmpty else {
+        guard let projectId = decision?.project_id ?? approvalReview?.projectId,
+              !projectId.isEmpty else {
             discussThreadId = nil
             return
         }

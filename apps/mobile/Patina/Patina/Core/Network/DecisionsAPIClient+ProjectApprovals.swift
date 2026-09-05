@@ -6,16 +6,17 @@
 //  carrying `approval_contract = 'project_artifact_v1'` is an APPROVAL of one
 //  frozen edition of a document, not a choice between options.
 //
-//  It is read and written through its own RPCs, never through PostgREST on
-//  `client_decisions` — the row itself carries none of the artifact, the
-//  impacts or the review state:
+//  It is read and written through its own RPCs, and it MUST be — 00467:18-38
+//  cut Stage-2 out of every raw `client_decisions` SELECT policy a homeowner
+//  can reach, so a PostgREST read of the row returns nothing to the very
+//  person being asked. The projection is the only door she has:
 //
-//   • `list_my_project_decision_reviews()` (00467:135) — the caller-global,
-//     client-safe list. The studio-scoped `get_project_decision_reviews`
-//     raises `insufficient_privilege` for a homeowner; this one fans out over
-//     it as definer and filters each project to the frozen decision lead.
-//     Its per-row projection is built in 00465:370 and is the same camelCase
-//     shape `packages/supabase/src/hooks/use-project-approvals.ts` parses.
+//   • `get_project_decision_review(p_decision_id)` (00467:101) — the exact
+//     single-row read for a detail screen. Definer, granted to `authenticated`,
+//     and NULL for a nonexistent, legacy or unauthorized id without saying
+//     which. Its serialization is `get_project_decision_reviews`' own
+//     (00465:370) — the same camelCase shape
+//     `packages/supabase/src/hooks/use-project-approvals.ts` parses.
 //   • `confirm_project_decision_review` (00463:1467) — the review leg. CAS on
 //     the authority revision AND the artifact hash, and only while the
 //     decision is still `draft`.
@@ -86,6 +87,17 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
         return ProjectApprovalOutcome(rawValue: outcome)
     }
 
+    /// The studio pulled this approval back.
+    public var isWithdrawn: Bool { disposition == "withdrawn" }
+
+    /// A later edition took this one's place.
+    public var isSuperseded: Bool { disposition == "superseded" }
+
+    /// Neither open nor answered. The house's own precedence puts these two
+    /// AHEAD of an outcome (`client-attention.ts:55-71`), so a superseded
+    /// approval reads as superseded even when it also carries an answer.
+    public var isClosedByDisposition: Bool { isWithdrawn || isSuperseded }
+
     /// Every reviewer the frozen snapshot requires has confirmed this exact
     /// edition. Counted, not drawn — the numbers never reach the screen (R5).
     public var isReviewComplete: Bool {
@@ -99,17 +111,19 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// whose snapshot carried none is not offered an act the server refuses.
     public var needsReviewConfirmation: Bool {
         lifecycleStatus == "draft" && !isReviewComplete && authorityRevision != nil
+            && !isClosedByDisposition
     }
 
     /// The review is required, and cannot be given: the frozen revision is
     /// missing. The screen says so rather than drawing a dead act.
     public var reviewConfirmationUnavailable: Bool {
         lifecycleStatus == "draft" && !isReviewComplete && authorityRevision == nil
+            && !isClosedByDisposition
     }
 
     /// The review landed and the approval is now with the studio to issue.
     public var isAwaitingStudioIssue: Bool {
-        lifecycleStatus == "draft" && isReviewComplete
+        lifecycleStatus == "draft" && isReviewComplete && !isClosedByDisposition
     }
 
     /// An outcome can be recorded — the four legs `_respond_project_approval
@@ -124,12 +138,23 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
 
 extension DecisionsAPIClient {
 
-    /// Every Stage-2 approval this client is the frozen lead for, across
-    /// projects. `[]` where there are none — the RPC never reveals whether an
-    /// unauthorized decision exists.
-    public func listProjectApprovalReviews() async throws -> [RemoteProjectApprovalReview] {
-        let data = try await callRPC("list_my_project_decision_reviews", body: [:])
-        return try JSONDecoder().decode([RemoteProjectApprovalReview].self, from: data)
+    /// This Stage-2 approval, or nil.
+    ///
+    /// Nil covers three things the RPC deliberately does not distinguish: no
+    /// such decision, a legacy (non-Stage-2) one, and one this caller is not
+    /// the frozen lead or a studio co-member for.
+    public func fetchProjectApprovalReview(
+        decisionId: String
+    ) async throws -> RemoteProjectApprovalReview? {
+        let data = try await callRPC(
+            "get_project_decision_review", body: ["p_decision_id": decisionId]
+        )
+        // The RPC returns `jsonb`, so an unauthorized or nonexistent id comes
+        // back as the four bytes `null` — not as an empty list.
+        let payload = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let payload, !payload.isEmpty, payload != "null" else { return nil }
+        return try JSONDecoder().decode(RemoteProjectApprovalReview.self, from: data)
     }
 
     /// Record that this client read the exact edition, bound to the authority

@@ -129,19 +129,59 @@ struct ProjectApprovalPathTests {
         #expect(viewModel.hasNoOptionsAtAll == false)
         #expect(viewModel.decision?.isClientSignoff == false)
 
-        // …and the one chain that decides which ceremony is drawn asks the
-        // Stage-2 question before it ever reaches the option cards, so the
-        // branch order cannot drift.
+        // …and the screen asks the Stage-2 question FIRST, before the legacy
+        // chain and before anything that chain draws, so the branch order
+        // cannot drift.
         let view = try SourcePin.readCode(
             "Patina/Features/Decisions/Views/DecisionDetailView.swift"
         )
-        let chainStart = try #require(view.range(of: "private func ceremony(_ decision:"))
-        let chain = String(view[chainStart.lowerBound...])
-        let stage2 = try #require(chain.range(of: "if viewModel.isStage2Approval {"))
-        let cards = try #require(chain.range(of: "optionCard(option)"))
+        let stage2 = try #require(view.range(of: "if viewModel.isStage2Approval {"))
+        let legacy = try #require(view.range(of: "ceremony(decision)"))
+        let cards = try #require(view.range(of: "optionCard(option)"))
+        #expect(stage2.lowerBound < legacy.lowerBound)
         #expect(stage2.lowerBound < cards.lowerBound)
-        #expect(view.contains("ProjectApprovalBlock(viewModel: viewModel)"))
-        #expect(view.contains("ceremony(decision)"), "the body no longer draws the chain")
+        #expect(view.contains("ProjectApprovalScreen(viewModel: viewModel)"))
+        // The Stage-2 branch draws the whole screen, so none of the legacy
+        // pieces can reach it: not the option cards, not the resolved banner,
+        // and not the "Not yet / Neither of these" pair, which names options
+        // this approval does not have.
+        let screen = try SourcePin.readCode(
+            "Patina/Features/Decisions/Views/ProjectApprovalScreen.swift"
+        )
+        for legacyPiece in ["resolvedBanner", "deferralActs", "optionCard", "ceremony("] {
+            #expect(!screen.contains(legacyPiece),
+                    "the Stage-2 screen reaches the legacy piece \(legacyPiece)")
+        }
+    }
+
+    /// `iosb-B1`. 00467:18-38 cut `project_artifact_v1` out of every raw
+    /// `client_decisions` SELECT policy a homeowner can reach, so on HER
+    /// screen the parent row is nil. Branching the ceremony on that row put
+    /// the whole of P-09 behind a door only a studio co-member could open.
+    @Test("the projection alone opens the ceremony, with no parent row at all")
+    func theProjectionAloneOpensTheCeremony() async throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.fetchApprovalReview = { _ in try ProjectApprovalFixture.review() }
+
+        await viewModel.loadApprovalReview(decisionId: ProjectApprovalFixture.decisionId)
+
+        #expect(viewModel.decision == nil, "the homeowner never sees the row")
+        #expect(viewModel.approvalReview != nil)
+        #expect(viewModel.isStage2Approval)
+        #expect(viewModel.approvalUnavailable == false)
+    }
+
+    /// …and the load that found no row but did find the projection is not a
+    /// failure. It used to draw "Couldn’t load this decision".
+    @Test("a hidden parent row with a projection is not a load failure")
+    func aHiddenRowWithAProjectionIsNotAnError() throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review()
+        #expect(viewModel.isStage2Approval)
+        let source = try SourcePin.readCode(
+            "Patina/Features/Decisions/ViewModels/DecisionsViewModel.swift"
+        )
+        #expect(source.contains("if self.decision == nil, self.approvalReview == nil {"))
     }
 
     @Test("a decision with no contract keeps the option-card path")
@@ -160,35 +200,71 @@ struct ProjectApprovalPathTests {
         struct Boom: Error {}
         let viewModel = DecisionDetailViewModel()
         viewModel.decision = try ProjectApprovalFixture.decision()
-        viewModel.fetchApprovalReviews = { throw Boom() }
+        viewModel.fetchApprovalReview = { _ in throw Boom() }
 
         await viewModel.loadApprovalReview(decisionId: ProjectApprovalFixture.decisionId)
         #expect(viewModel.approvalReview == nil)
         #expect(viewModel.approvalUnavailable)
-        #expect(viewModel.isStage2Approval, "the branch is decided on the decision")
+        #expect(viewModel.isStage2Approval, "the row it did see still says which ceremony")
     }
 
-    /// Deep links carry whatever case the sender used.
-    @Test("the caller-global list is narrowed to this decision, case-insensitively")
-    func theListIsNarrowedToThisDecision() async throws {
-        let row = try ProjectApprovalFixture.review()
+    /// The projection is asked for by id, and only for this one.
+    @Test("the projection is fetched for the decision on screen")
+    func theProjectionIsFetchedById() async throws {
+        var asked: String?
         let viewModel = DecisionDetailViewModel()
-        viewModel.decision = try ProjectApprovalFixture.decision()
-        viewModel.fetchApprovalReviews = { [row] }
+        viewModel.fetchApprovalReview = { id in
+            asked = id
+            return try ProjectApprovalFixture.review()
+        }
 
-        await viewModel.loadApprovalReview(decisionId: ProjectApprovalFixture.decisionId.uppercased())
-        #expect(viewModel.approvalReview?.decisionId == ProjectApprovalFixture.decisionId)
+        await viewModel.loadApprovalReview(decisionId: ProjectApprovalFixture.decisionId)
+        #expect(asked == ProjectApprovalFixture.decisionId)
     }
 
-    @Test("a decision that is not Stage-2 never reads the approval list")
-    func aPlainDecisionSkipsTheList() async throws {
+    /// The one case that skips the RPC: a row that loaded and is plainly
+    /// legacy. A row that did NOT load cannot be ruled out, because that is
+    /// exactly what a homeowner's Stage-2 approval looks like.
+    @Test("a legacy decision that loaded never reads the projection")
+    func aPlainDecisionSkipsTheProjection() async throws {
         var asked = false
         let viewModel = DecisionDetailViewModel()
         viewModel.decision = try ProjectApprovalFixture.decision(contract: nil)
-        viewModel.fetchApprovalReviews = { asked = true; return [] }
+        viewModel.fetchApprovalReview = { _ in asked = true; return nil }
 
         await viewModel.loadApprovalReview(decisionId: ProjectApprovalFixture.decisionId)
         #expect(asked == false)
         #expect(viewModel.approvalReview == nil)
+        #expect(viewModel.isStage2Approval == false)
+    }
+
+    // MARK: - The approval that is closed
+
+    /// `iosb-M2`. Withdrawn and superseded offer no act, so the screen has to
+    /// say why — it used to draw the question, the edition and the impact and
+    /// then stop dead.
+    @Test("a closed disposition offers nothing, and is named",
+          arguments: ["withdrawn", "superseded"])
+    func aClosedDispositionIsNamed(disposition: String) throws {
+        let row = try ProjectApprovalFixture.review(disposition: disposition)
+        #expect(row.canRespond == false)
+        #expect(row.needsReviewConfirmation == false)
+        #expect(row.reviewConfirmationUnavailable == false)
+        #expect(row.isAwaitingStudioIssue == false)
+        #expect(row.isClosedByDisposition)
+    }
+
+    @Test("a withdrawn draft is still withdrawn, not a review to give")
+    func aWithdrawnDraftOffersNoReview() throws {
+        let row = try ProjectApprovalFixture.review(
+            lifecycleStatus: "draft", disposition: "withdrawn", completed: 0, required: 1
+        )
+        #expect(row.needsReviewConfirmation == false)
+        #expect(row.isWithdrawn)
+    }
+
+    @Test("an active approval is closed by neither")
+    func anActiveApprovalIsOpen() throws {
+        #expect(try ProjectApprovalFixture.review().isClosedByDisposition == false)
     }
 }

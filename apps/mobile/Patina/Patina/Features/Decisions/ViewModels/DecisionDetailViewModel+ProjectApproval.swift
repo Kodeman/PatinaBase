@@ -12,18 +12,19 @@ import Foundation
 
 extension DecisionDetailViewModel {
 
-    /// The caller-global list, narrowed to this decision. Deep links carry
-    /// whatever case the sender used, so the ids are compared case-insensitively.
+    /// The client-safe projection for this one decision.
+    ///
+    /// It is asked for whenever the parent row did NOT arrive — which is the
+    /// homeowner's case on every Stage-2 approval, because 00467 hides the row
+    /// from her — and whenever it arrived carrying the Stage-2 contract. Only
+    /// a row that loaded and is plainly legacy skips the call.
     func loadApprovalReview(decisionId: String) async {
-        guard isStage2Approval else {
+        guard decision == nil || decision?.isProjectArtifactApproval == true else {
             approvalReview = nil
             return
         }
         do {
-            let reviews = try await fetchApprovalReviews()
-            approvalReview = reviews.first {
-                $0.decisionId.caseInsensitiveCompare(decisionId) == .orderedSame
-            }
+            approvalReview = try await fetchApprovalReview(decisionId)
         } catch {
             MoneyFailureCopy.log("project approval review", error)
             approvalReview = nil
@@ -75,7 +76,7 @@ extension DecisionDetailViewModel {
             try await respondToApproval(
                 review.decisionId, outcome, review.updatedAt, UUID().uuidString
             )
-            self.hasAnsweredApproval = true
+            self.answeredOutcome = outcome
             self.chosenOutcome = nil
         } catch {
             MoneyFailureCopy.log("project approval response", error)
