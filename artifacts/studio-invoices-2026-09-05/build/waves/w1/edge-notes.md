@@ -768,3 +768,149 @@ stripe-webhook · trade-rfq-send
 
 `_shared/invoice-emails.ts` and `_shared/invoice-subject.ts` also changed this
 round; every function importing either is already inside the 20.
+
+---
+
+## Close (W1 edge lane, 2026-09-05)
+
+The close pass was handed five ruled items from `edge-review-r5.md`. Four of the
+five (W5-1, W5-2, W5-6, W5-7) had already landed on this branch in the fix round
+that answered review round 6 — commits `988c70d5d` *fix(edge): a studio
+invoice's letter names nothing it has not got* and `aa1dc6e8b` — and the fifth
+(W5-3) was corrected in the same round. The close pass re-verified each one
+against the source rather than against the round-7 review, and pinned each with
+its own mutation. Nothing new was written to shipped code.
+
+### Item-by-item verification
+
+**W5-1 · the five senders' SELECT is now gated.**
+`_shared/invoice-subject.test.ts:149` — *every invoice sender still selects the
+studio anchor and the title* — reads each of the five `index.ts` and asserts
+`/project_id,\s*studio_id,\s*title,\s*invoice_number/`. Mutation: rewrite that
+SELECT list to `project_id, invoice_number` in all five.
+
+```
+mutated files: 5
+grep -rn "studio_id, title" $T/functions/*/index.ts | wc -l   →  0
+deno test … _shared/    FAILED | 238 passed | 1 failed
+```
+
+(Round 5 recorded this mutation as `ok | 246 passed | 0 failed` — blind. It is
+now red.)
+
+**W5-2 · the webhook's invoice read no longer swallows its error.**
+`stripe-webhook/index.ts:288` `const { data, error } = await admin…`;
+`:303-305` `if (error) console.error('stripe-webhook: invoice lookup failed',
+invoiceId, error)`. Behaviour is otherwise unchanged — the function still
+returns `data ?? null`. The seam is the source itself (the module runs
+`Deno.serve` at load, so it cannot be imported), so the test reads the
+`loadInvoiceJoined` body and requires both halves
+(`_shared/invoice-subject.test.ts:182-192`). Mutation: restore `const { data }`
+and delete the `console.error`.
+
+```
+grep -c "invoice lookup failed" …/stripe-webhook/index.ts   →  0
+deno test … _shared/    FAILED | 238 passed | 1 failed
+```
+
+**W5-6 · the last-resort name is no name at all.**
+`_shared/invoice-subject.ts:39` `invoiceSubjectName(invoice, fallback)` takes a
+`fallback` that may be `null`; a letter passes `null` and
+`_shared/invoice-emails.ts:75-86` (`forClause` / `subjectTail`) drops the "for …"
+clause entirely rather than naming anything. The Stripe line item and the
+designer's own desk line, which must lead with something, pass `"Studio
+invoice"`. Rendered, with no project and no title:
+
+```
+SUBJECT  Middle West Studio sent you invoice INV-0031
+BODY     Leah Brandt has sent you an invoice.
+```
+
+Ten builders are covered by the `NAMELESS_LETTERS` table
+(`_shared/invoice-emails.test.ts:246-326`) — the six client letters of the
+ruling (sent, upcoming, still open, second notice, final notice, receipt) plus
+failed payment, A/R escalation, refund and check-incoming. Each asserts no
+"your studio", no "for undefined", no "for null".
+`grep -rn "your studio"` over `_shared/*.ts` and the five `index.ts` → comments
+only; the one live hit is `_shared/sms.ts:322`, untouched by this lane.
+Mutation: `forClause` falls back to `"your studio"` instead of `""`.
+
+```
+deno test … _shared/    FAILED | 228 passed | 11 failed
+```
+
+**W5-7 · a letter with no house links to the page she has.**
+`_shared/invoice-emails.ts:92-99` `studioInvoiceFooterLinks()` returns
+`Your page` (href = `portalBaseFor("client")`) + `Email preferences`; `wrap()`
+threads `opts.footerLinks` (`:150, :157`) and the seven client-audience invoice
+builders pass it when `params.studioInvoice` is true (`:207, :279, :313, :349,
+:385, :508, :742`). Project-invoice letters pass `undefined` and keep the
+standing `Your project` footer from `branded-email.ts`. Paired tests per letter
+(`invoice-emails.test.ts:182-239`): studio ⇒ `Your page</a>` and never
+`Your project`; project ⇒ `Your project` and never `Your page`. The
+*no rung of the reminder ladder invents a house* test (`:159-178`) no longer
+strips `Your project</a>` — it asserts the word "project" appears nowhere in
+subject or html. Mutation: `footerLinks: undefined` at all seven sites.
+
+```
+grep -c "studioInvoiceFooterLinks()" …/_shared/invoice-emails.ts   →  1 (the definition)
+deno test … _shared/    FAILED | 231 passed | 8 failed
+```
+
+**W5-3 · the ship order says 20.**
+`:176` reads `3. These 20 functions.` under `:133 ## Deploy set — 20
+functions`. `:273` still reads "the same 21 functions" and is correct as
+written: it is inside the verbatim Fix-round-1 record and carries its own
+correction — "(Round-1 record; the count was wrong — it is 20. See Fix round 2 /
+F-D.)". The orchestrator's copy of this file under the main checkout was a
+stale 10:37 snapshot that still said 21 in both places; it has been replaced
+with this file.
+
+### Gates, run by the close pass
+
+```
+$ git -C …/agent-si-edge rev-parse --show-toplevel
+/Users/kody/Code/patina-merged/.codex/worktrees/agent-si-edge
+$ git -C …/agent-si-edge branch --show-current
+studio-invoices/w1-edge
+
+$ deno test --allow-all --config …/supabase/functions/deno.json …/supabase/functions/_shared/
+ok | 239 passed | 0 failed (1s)
+$ deno test … …/supabase/functions/create-checkout-session/
+ok | 17 passed | 0 failed (22ms)
+$ deno test … …/supabase/functions/stripe-webhook/
+ok | 18 passed | 0 failed (23ms)
+  invoice-send · invoice-reminders · invoice-check-intent — no *.test.ts
+
+$ deno check --config …/supabase/functions/deno.json <each of the five index.ts>
+Check create-checkout-session/index.ts    Check invoice-send/index.ts
+Check invoice-reminders/index.ts          Check stripe-webhook/index.ts
+Check invoice-check-intent/index.ts       (all clean)
+
+$ find …/agent-si-edge -name deno.lock -not -path "*/node_modules/*"   →  nothing
+```
+
+### Deploy set — 20 functions
+
+```
+client-invite · commercial-document-notify · create-checkout-session ·
+decision-first-notice · decision-reminders · decision-resolved-notify ·
+expire-decisions · invoice-check-intent · invoice-reminders · invoice-send ·
+notification-digest · notification-dispatch · po-send · proposal-nudge ·
+proposal-sign-confirmation · quote-request-send · review-requests · spec-pdf ·
+stripe-webhook · trade-rfq-send
+```
+
+The migration goes strictly first (`:155-176`): all five senders now `select`
+`title`, and against a database without it PostgREST answers `42703` —
+`invoice-send` and `create-checkout-session` fail loudly, but
+`stripe-webhook`'s `loadInvoiceJoined` returns null and silently skips the
+receipt, failed-payment and refund letters while the money settles. That is
+the failure W5-2's `console.error` now leaves a trace of.
+
+### Advisory, not ruled and not touched
+
+This file names the db lane's migration as `00570` at `:22, :159, :233, :250,
+:367` and as `00571` at `:630, :645`. The db lane's file on disk is
+`00571_studio_invoices.sql` (no 00570). Prose only — no shipped code carries
+the number — and outside the five ruled items, so the close pass left it.
