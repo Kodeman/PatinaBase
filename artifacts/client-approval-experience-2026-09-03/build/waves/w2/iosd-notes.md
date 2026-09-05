@@ -780,3 +780,46 @@ read a first red as a lane regression.
 No migration, no edge function, no production mutation, no `.env`/hook/settings file read or
 written. No cross-lane file touched this round — `ProjectApprovalCopy.swift` is untouched, so
 the byte-identical merge with `approvals/w2-iosc` that round 2 arranged still holds.
+
+---
+
+# Round 4 — adversarial review (reviewer's append, 2026-09-05)
+
+`iosd-review-r4.md` is the record. Headline for whoever picks this up:
+
+- **`iosd3-M1` is closed.** `groupNoun` is one definition read by both frames, and
+  the three new tests pin the PAIR rather than the helper. The
+  `Coordinator.displayName` / `analyticsScreenName` argument checks out.
+- **Four majors stand.**
+  1. **The afterglow rows draw on the widget, and round 3's mitigation was wrong.**
+     `flagOn` is a recorded field, not a gate — `HouseWidgetPayload.swift:143` says
+     so itself ("D5: not gated on `flagOn`"), and `RecordSnapshotStore` writes the
+     payload unconditionally. R15 says the widget is untouched. Needs a ruling
+     before merge, not after.
+  2. **`BadgeCountService+Attention.studioHint` prints figures** ("3 new
+     conversations", "2 projects are moving") where `StudioAttentionSummary.hint`
+     prints the same two rungs in words three files away — and both feed the same
+     Companion footer (`CompanionOverlay.swift:312`). Two-line fix.
+  3. **`TodayExperience.projectMove`** carries a figure, "decision" for an
+     approval, and `checkmark.seal`, on the same screen as the Record card this
+     lane rewrote. Pre-existing; a scope call for the steward.
+  4. **The afterglow row still draws no `PatinaStamp` MARK** now that P-17 exists
+     on `approvals/w2-iosc`. Three rounds, no ruling recorded.
+- **Two lane/reviewer claims corrected against the wire.**
+  `route(forDeepLink:)`'s live beneficiaries are wider than round 3 said —
+  `stripe-webhook/index.ts:1437-1451` writes a client `channel: 'in_app'` row with
+  a Threshold `deep_link` and no entity pair. And round 3's `n1` reasoning
+  ("`?order=` is email-only") is wrong; leaving `order` out of `queryRoute` is
+  still right, but because a bare `"order"` maps to the FULFILLMENT rail and that
+  param carries a `direct_orders.id`.
+- **Confirmed sound:** `viewerRole`'s three literals against 00569 on
+  `approvals/w2-backend`; `artifactKind` on the projection; no double-draw of one
+  approval across NEEDS YOU and MOVED; one `markOpened` PATCH per tap from either
+  door; the Threshold link shapes in `_shared/client-portal-links.ts`;
+  `AppNotification.route` ordering unchanged; persistence symmetry and session
+  isolation for both new arrays; `ProjectApprovalCopy.acts` still byte-identical
+  to `approvals/w2-iosc` (re-diffed this round).
+- **Gates (reviewer's own runs):** `build` PASS exit 0; `unit` exit 65 with
+  `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` as the
+  only non-known failure, which PASSES in isolation (21 tests, exit 0);
+  `lint-delta main` PASS.
