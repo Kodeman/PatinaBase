@@ -84,6 +84,22 @@ struct ProjectApprovalDoorsTests {
         )
     }
 
+    /// `W2R1-m1`. The walk read one control naming the same person two ways
+    /// two lines apart — "Tell Leah what to change." over "…goes to your
+    /// designer…". The placeholder names her; the help line does not name
+    /// anyone.
+    @Test("the composer names the designer once")
+    func theComposerNamesTheDesignerOnce() {
+        #expect(!ProjectApprovalCopy.noteHelp.contains("your designer"))
+        #expect(!ProjectApprovalCopy.noteHelp.contains("designer"))
+        #expect(
+            ProjectApprovalCopy.noteHelp
+                == "Optional. Your note goes with this returned edition."
+        )
+        // …and the naming that survives is the placeholder's.
+        #expect(ProjectApprovalCopy.notePlaceholder(designer: "Leah").contains("Leah"))
+    }
+
     /// `IOSC-03`. The placeholder above can only name a designer if something
     /// resolves one, and the row the composer used to read is nil for the
     /// person being asked (00467:18-38). The projection's `projectId` against

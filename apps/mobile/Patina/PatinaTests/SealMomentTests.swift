@@ -124,7 +124,7 @@ struct SealMomentTests {
     /// already holds a name for it and never invented; no timing is stated,
     /// because none is known.
     @Test("the seal says what happens next without inventing a name or a date")
-    func theSealSaysWhatHappensNext() {
+    func theSealSaysWhatHappensNext() throws {
         // RULED 2026-09-05: "countersigns" asserted a second act nothing in
         // the app waits on or records. What is true is that the studio has
         // her name, and that a copy is hers.
@@ -132,14 +132,25 @@ struct SealMomentTests {
             ProposalSignActCopy.whatHappensNext(studio: "Quist Interiors")
                 == "Quist Interiors has your signature. You’ll have a copy."
         )
+        // `W2R1-m2`: the sentence names a STUDIO on every branch. It used to
+        // fall back to the designer's own full name, which is truthful and is
+        // not the ruled line — a signature is held by the practice, not by the
+        // person who asked for it.
         #expect(
             ProposalSignActCopy.whatHappensNext(studio: nil)
-                == "Your designer has your signature. You’ll have a copy."
+                == "Your studio has your signature. You’ll have a copy."
         )
         #expect(
             ProposalSignActCopy.whatHappensNext(studio: "")
-                == "Your designer has your signature. You’ll have a copy."
+                == "Your studio has your signature. You’ll have a copy."
         )
+        #expect(!ProposalSignActCopy.whatHappensNext(studio: nil).contains("designer"))
+        // …and the resolver behind it never hands a person's name over as one.
+        let resolver = try SourcePin.readCode(
+            "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift"
+        )
+        #expect(resolver.contains("var signingStudio: String?"))
+        #expect(!resolver.contains("designerStudioName ?? "))
         for line in [ProposalSignActCopy.whatHappensNext(studio: "Quist Interiors"),
                      ProposalSignActCopy.whatHappensNext(studio: nil)] {
             #expect(!line.lowercased().contains("countersign"), "\(line) still promises a countersignature")
@@ -171,6 +182,38 @@ struct SealMomentTests {
         let body = String(source[settle.lowerBound...].prefix(260))
         #expect(body.contains("HapticManager.shared.notification(.success)"))
         #expect(!body.contains("reduceMotion"), "the haptic was gated on the motion setting")
+    }
+
+    /// `W2R1-n2`. After this wave took red off every other line a homeowner
+    /// reads, the refused signature was the only red sentence left in the
+    /// ceremony — and it meets her at the moment she has just tried to sign.
+    @Test("the signature refusal is body ink, not the error ramp")
+    func theSignatureRefusalIsBodyInk() throws {
+        let source = try SourcePin.readCode(
+            "Patina/Features/Proposals/Views/SignActView.swift"
+        )
+        let error = try #require(source.range(of: "if let errorMessage {"))
+        let body = String(source[error.lowerBound...].prefix(600))
+        #expect(body.contains("PatinaColors.Text.secondary"))
+        #expect(!body.contains("PatinaColors.Text.error"))
+    }
+
+    /// `W2R2-n1`. The stamp's own settle is already a cross-fade under Reduce
+    /// Motion; the COVER carrying it still slid ~65 pt, because a
+    /// `.fullScreenCover` presentation is the system's and cross-fades only
+    /// under a second switch (Prefer Cross-Fade Transitions) that is off by
+    /// default. The ceremony's covers honour the setting themselves.
+    @Test("the ceremony's covers present without a slide under Reduce Motion")
+    func theCoversHonourReducedMotion() throws {
+        let detail = try SourcePin.readCode(
+            "Patina/Features/Proposals/Views/ProposalDetailView.swift"
+        )
+        #expect(detail.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"))
+        // Guarded by the setting: nothing is stilled for a reader who has not
+        // asked for it.
+        #expect(
+            detail.contains("if reduceMotion { transaction.disablesAnimations = true }")
+        )
     }
 
     /// The stamp is the reward. No party, no noise — she may be reading this

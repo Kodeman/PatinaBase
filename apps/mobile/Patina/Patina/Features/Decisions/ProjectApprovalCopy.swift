@@ -161,8 +161,13 @@ enum ProjectApprovalCopy {
     /// `IOSC-02`: the note lands ON the approval (`decision_comments`, the row
     /// the web writes to), so the sentence no longer sends her to the project
     /// conversation to look for it.
+    ///
+    /// `W2R1-m1`: it does NOT name the recipient. The placeholder two lines
+    /// above already does, by her designer's own given name — so naming the
+    /// same person again as "your designer" gave one control two ways of
+    /// saying who reads this. One name, once.
     static let noteHelp =
-        "Optional. Your note goes to your designer with this returned edition."
+        "Optional. Your note goes with this returned edition."
 
     /// The outcome landed and the note did not. Said plainly, beside the
     /// answer, because the answer is recorded and only the courtesy is not.

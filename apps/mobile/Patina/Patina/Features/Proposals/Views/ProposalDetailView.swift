@@ -16,6 +16,8 @@ struct ProposalDetailView: View {
     /// Read for the pinned-footer clearance only: the bar owns the bottom
     /// edge on the house-first root, the Companion dock on the flag-off one.
     @Environment(\.appCoordinator) private var coordinator
+    /// `W2R2-n1`: the ceremony's covers honour it themselves. See below.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = ProposalDetailViewModel()
 
     var body: some View {
@@ -73,10 +75,22 @@ struct ProposalDetailView: View {
         )
         .fullScreenCover(isPresented: $viewModel.showSealMoment) {
             SealMomentView(
-                studioName: viewModel.countersigningStudio,
+                studioName: viewModel.signingStudio,
                 signedName: viewModel.signedName,
                 onDone: { viewModel.showSealMoment = false }
             )
+        }
+        // `W2R2-n1`. `SealMomentView` already stills its own stamp under
+        // Reduce Motion — the settle measured a pure cross-fade, constant
+        // width, in flight. What still moved was the COVER: a
+        // `.fullScreenCover` presentation is the system's, and it translates
+        // the whole composition ~65 pt upward unless *Prefer Cross-Fade
+        // Transitions* is also on, which is off by default. A reader who has
+        // turned motion off was still handed a moving seal. The ceremony's
+        // covers honour the setting themselves rather than waiting on a second
+        // switch she has not found.
+        .transaction { transaction in
+            if reduceMotion { transaction.disablesAnimations = true }
         }
     }
 

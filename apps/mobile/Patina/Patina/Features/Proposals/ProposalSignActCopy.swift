@@ -60,15 +60,22 @@ enum ProposalSignActCopy {
 
     /// What happens next, and nothing else. No timing is invented: the studio
     /// is named where the app already holds a name for it, and named as "your
-    /// designer" where it does not.
+    /// studio" where it does not.
     ///
     /// RULED 2026-09-05: "countersigns" is gone. A `proposals` row records no
     /// studio counter-signature and nothing in the app waits on one, so the
     /// sentence asserted a second act that may never happen. What IS true the
     /// moment the RPC returns is that the studio has her name, and that a copy
     /// is hers.
+    ///
+    /// `W2R1-m2`: the fallback is a STUDIO, never a person. The ruled sentence
+    /// is "{Studio} has your signature." and the walk read "Leah Hartwell has
+    /// your signature." — truthful, and not the sentence: a signature is held
+    /// by the practice she is engaging, not by the individual who asked for
+    /// it. Where the app holds no studio name it says so in the general
+    /// ("Your studio") rather than substituting the nearest person.
     static func whatHappensNext(studio: String?) -> String {
-        let who = studio.flatMap { $0.isEmpty ? nil : $0 } ?? "Your designer"
+        let who = studio.flatMap { $0.isEmpty ? nil : $0 } ?? "Your studio"
         return "\(who) has your signature. You’ll have a copy."
     }
 

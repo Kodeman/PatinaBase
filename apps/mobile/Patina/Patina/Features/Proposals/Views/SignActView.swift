@@ -64,9 +64,16 @@ struct SignActView: View {
                 consent
                 signatureLine
                 if let errorMessage {
+                    // `W2R1-n2`. Body ink, not the error ramp. After this wave
+                    // took red off every other line a homeowner reads — the
+                    // money rail's "Past due · {date}" included — this was the
+                    // only red sentence left in the whole ceremony, and it
+                    // meets her at the moment she has just tried to sign. The
+                    // sentence already says the whole of it; the colour was
+                    // only ever raising its voice.
                     Text(errorMessage)
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.error)
+                        .foregroundStyle(PatinaColors.Text.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("proposalSign.error")
                 }

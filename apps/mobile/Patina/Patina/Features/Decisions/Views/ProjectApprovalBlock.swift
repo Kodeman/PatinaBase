@@ -391,7 +391,7 @@ struct ProjectApprovalBlock: View {
     /// present, carries no designer field at all. The name that survives is
     /// the one on the project the app already holds, matched on the
     /// projection's own `projectId` — the same resolution the seal makes in
-    /// `countersigningStudio`.
+    /// `signingStudio`.
     private var designerGivenName: String? {
         Self.designerGivenName(
             embedded: viewModel.decision?.project?.designer?.askedByName,
@@ -414,7 +414,7 @@ struct ProjectApprovalBlock: View {
     }
 
     /// The house a studio note on this approval is signed by, resolved the same way the seal
-    /// resolves it (`ProposalsViewModel.countersigningStudio`) — from the
+    /// resolves it (`ProposalsViewModel.signingStudio`) — from the
     /// project the app already holds, never invented.
     private var studioName: String? {
         guard let projectId = viewModel.approvalReview?.projectId

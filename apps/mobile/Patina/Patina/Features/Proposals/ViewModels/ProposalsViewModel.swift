@@ -105,13 +105,20 @@ final class ProposalDetailViewModel {
         )
     }
 
-    /// Who countersigns. Resolved from the project the app already holds,
-    /// matched on the proposal's own `project_id` — the bundle carries no
-    /// designer embed, and a studio name is never invented (`W1R2-M2`'s rule).
-    var countersigningStudio: String? {
+    /// The studio that now holds her signature. Resolved from the project the
+    /// app already holds, matched on the proposal's own `project_id` — the
+    /// bundle carries no designer embed, and a studio name is never invented
+    /// (`W1R2-M2`'s rule).
+    ///
+    /// `W2R1-m2`: a person's name is NOT a studio name. `displayName` used to
+    /// stand in when `business_name` was empty, so the seal read "Leah
+    /// Hartwell has your signature." where the ruling says a studio. Nil is
+    /// the honest answer; `whatHappensNext` says "Your studio" over it.
+    var signingStudio: String? {
         guard let projectId = proposal?.project_id else { return nil }
-        let project = BadgeCountService.shared.projects.first { $0.id == projectId }
-        return project?.designerStudioName ?? project?.designer?.displayName
+        return BadgeCountService.shared.projects
+            .first { $0.id == projectId }?
+            .designerStudioName
     }
 
     /// Signed either server-side or just now.
