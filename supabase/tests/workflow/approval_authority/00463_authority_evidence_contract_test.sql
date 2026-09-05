@@ -24,10 +24,10 @@ BEGIN
       to_regclass('public.project_approval_action_receipts') IS NOT NULL),
     ('function set_project_decision_authority(uuid,uuid,uuid,integer)',
       to_regprocedure('public.set_project_decision_authority(uuid,uuid,uuid,integer)') IS NOT NULL),
-    ('function create_project_approval_decision(uuid,jsonb,text)',
-      to_regprocedure('public.create_project_approval_decision(uuid,jsonb,text)') IS NOT NULL),
+    ('function create_project_approval_decision(uuid,jsonb,text,text)',
+      to_regprocedure('public.create_project_approval_decision(uuid,jsonb,text,text)') IS NOT NULL),
     ('private checked creation core',
-      to_regprocedure('public._create_project_approval_decision_checked(uuid,jsonb,text,uuid)') IS NOT NULL),
+      to_regprocedure('public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)') IS NOT NULL),
     ('function confirm_project_decision_review(uuid,jsonb,text)',
       to_regprocedure('public.confirm_project_decision_review(uuid,jsonb,text)') IS NOT NULL),
     ('column client_decisions.approval_contract', EXISTS (
@@ -229,7 +229,7 @@ BEGIN
   ), 'approval evidence foreign keys must use ON DELETE RESTRICT';
 
   SELECT pg_get_functiondef(
-    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid)'::regprocedure
+    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)'::regprocedure
   ) INTO v_create;
   SELECT pg_get_functiondef(
     'public.confirm_project_decision_review(uuid,jsonb,text)'::regprocedure
@@ -266,15 +266,15 @@ BEGIN
   ), 'checked authority assignment RPC must be authenticated';
   ASSERT has_function_privilege(
     'authenticated',
-    'public.create_project_approval_decision(uuid,jsonb,text)', 'EXECUTE'
+    'public.create_project_approval_decision(uuid,jsonb,text,text)', 'EXECUTE'
   ), 'atomic Stage 2 creation RPC must be authenticated';
   ASSERT NOT has_function_privilege(
     'authenticated',
-    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid)',
+    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)',
     'EXECUTE'
   ) AND NOT has_function_privilege(
     'service_role',
-    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid)',
+    'public._create_project_approval_decision_checked(uuid,jsonb,text,uuid,text)',
     'EXECUTE'
   ), 'predecessor-aware creation core must remain private';
   ASSERT has_function_privilege(
@@ -290,11 +290,13 @@ BEGIN
     WHERE oid = 'public.set_project_decision_authority(uuid,uuid,uuid,integer)'::regprocedure
   ), 'authority RPC JSON argument names are part of the public API';
   ASSERT (
+    -- 00569 appends the defaulted p_why (P-13). The three original names
+    -- keep their positions, so every installed caller still resolves.
     SELECT proargnames = ARRAY[
-      'p_project_id', 'p_payload', 'p_idempotency_key'
+      'p_project_id', 'p_payload', 'p_idempotency_key', 'p_why'
     ]
     FROM pg_proc
-    WHERE oid = 'public.create_project_approval_decision(uuid,jsonb,text)'::regprocedure
+    WHERE oid = 'public.create_project_approval_decision(uuid,jsonb,text,text)'::regprocedure
   ), 'create RPC JSON argument names are part of the public API';
   ASSERT (
     SELECT proargnames = ARRAY[
