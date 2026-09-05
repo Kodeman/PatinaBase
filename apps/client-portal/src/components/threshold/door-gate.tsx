@@ -142,6 +142,8 @@ export function DoorGate({
   const swingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The wait that holds the refetch back until the leaf has finished (W2-01). */
   const invalidateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Its resolver, so an unmount can let the refetch through rather than strand it. */
+  const releaseWait = useRef<(() => void) | null>(null);
   /**
    * Written beside `setSignedAt`, and read in the catch — where `signedAt`
    * itself is still the value this render closed over.
@@ -155,6 +157,10 @@ export function DoorGate({
     () => () => {
       if (swingTimer.current) clearTimeout(swingTimer.current);
       if (invalidateTimer.current) clearTimeout(invalidateTimer.current);
+      // Released, not just cancelled. The signature has landed by the time
+      // anything is waiting here, and a refetch that never runs leaves the
+      // signed paper standing on the doorstep until something else asks.
+      releaseWait.current?.();
     },
     [],
   );
@@ -260,8 +266,10 @@ export function DoorGate({
       // alone. The refetch is what ends the door, and it is allowed to end
       // it only once the swing has run.
       await new Promise<void>((resolve) => {
+        releaseWait.current = resolve;
         invalidateTimer.current = setTimeout(resolve, stilled ? 0 : SWING_MS);
       });
+      releaseWait.current = null;
       await invalidateSignedCommercialDocument(
         queryClient,
         proposal.id,
