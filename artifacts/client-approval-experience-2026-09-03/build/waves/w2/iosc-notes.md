@@ -322,3 +322,201 @@ The first `build` of the wave failed on a cold cache with
 `error: permissionDenied` while resolving the package graph — the sandbox, not
 the code. Rerunning the identical command unsandboxed succeeded, exactly as
 `env.md` warns.
+
+---
+
+# Fix round 1 — 2026-09-05
+
+Branch `approvals/w2-iosc`, from review head `c1d7bf924`. Answering
+`iosc-review-r1.md` (verdict: fix) plus the rulings made mid-Wave 2.
+
+## The interrupted attempt
+
+The worktree carried uncommitted work from the fix attempt the usage limit cut
+off: a staged `git rm` of the migration, six modified files, and one untracked
+new file (`ApprovalNoteWriter.swift`). Read as a diff, decided per file:
+
+| File | Verdict |
+|---|---|
+| `supabase/migrations/00569_…` (staged delete) | **kept** — IOSC-01's remedy |
+| `ApprovalNoteWriter.swift` (new) | **kept**, two edits: `CodingKeys` for the snake_case columns and the row moved to file scope (SwiftLint `identifier_name` **error** ×2 and `nesting` on a new file, which lint-delta counts as gained) |
+| `DecisionsAPIClient+ProjectApprovals.swift` | **kept**, corrected — it named the web lane's 00570, which the ruling deletes |
+| `DecisionDetailViewModel+ProjectApproval.swift` | **kept** (note routing), extended (signature ruling) |
+| `DecisionsViewModel.swift` | **kept** — the `sendApprovalNote` seam widened to `(decisionId, route, body)` |
+| `ProjectApprovalBlock.swift` | **kept** (IOSC-03 resolution), extended (signature gate) |
+| `HoldToActTests.swift`, `ProjectApprovalDoorsTests.swift` | **kept**, extended and repaired |
+
+Nothing was discarded. The partial work was sound; it was unfinished, not wrong
+— it had done IOSC-01/02/03 and none of IOSC-04, IOSC-05 or the two rulings.
+
+## What changed
+
+**IOSC-01 · the migration.** `00569_stage2_outcome_signature_payload.sql`
+deleted (`git rm`). Wave 2 ships ONE migration and it is the backend lane's
+00569, which redefines `respond_project_approval` anyway and now carries
+`clientConsentMethod` / `clientSignature`. iOS ships no SQL for this. The doc
+comment on `respondToProjectApproval` and the comment that replaced
+`theMigrationOpensExactlyTwoKeys` both name 00569, not 00570 — the interrupted
+attempt had pointed them at the web lane's file, which the same ruling deletes.
+**Deploy order still binds:** 00569 must be applied before an iOS build that
+sends a signature, or Approve fails `invalid_parameter_value`.
+
+**RULED · a signature only on Approve.** `approvalNeedsSignature`
+(`chosenOutcome == .approved`) and `canSubmitApproval` (`!needsSignature ||
+canSignApproval`). The submit gates on the latter; `submitApprovalResponse`
+sends the trimmed name for Approve and `""` for the other two, and the RPC
+client already drops the consent pair over an empty name — so Return and Hold
+leave `client_consent_method` at its clickthrough default rather than claiming
+an electronic signature nobody gave. The ruled line moved: it was drawn above
+the three doors, before one had been chosen; it is now inside the chosen branch
+and behind the gate, so Return shows the composer and Hold shows neither. Both
+are still press-and-hold — the deliberation stays, the ceremony does not.
+
+**IOSC-02 · the note lands on the approval.** `ApprovalNoteWriter` inserts into
+`decision_comments` keyed on the decision the outcome was recorded against —
+the row `useCreateDecisionComment` writes (`use-decisions.ts:991`), admitted for
+the person being asked by 00467:256. The project conversation is the FALLBACK,
+taken only when that write cannot happen, and only a note that actually took it
+moves "Discuss this" to a thread. `noteHelp` no longer sends her to the
+conversation to look for a note that is on the paper: *"Optional. Your note goes
+to your designer with this returned edition."*
+
+**IOSC-03 · the placeholder names a designer that exists.** `designerGivenName`
+is now a pure `(embedded, projectId, projects) -> String?` resolving from the
+projection's own `projectId` against `BadgeCountService.shared.projects` — the
+same resolution `countersigningStudio` makes — with the embed still winning
+where it arrived and "your designer" as the honest fallback. Tested twice: the
+function, and the view's binding, which was the half the old test could not see.
+
+**IOSC-04 · the muted rule.** `Stamp.mutedRule` was `Border.strong`, a
+field-outline hairline: **1.54:1** at the component's own 0.88 border opacity on
+paper. It is now the portals' `--text-subtle` (#5A4E43), added as
+`PatinaColors.subtleInk`, with `DarkPalette.textMuted` as its dark companion.
+`Pigment.lightRuleHex` follows. Measured with the repo's own instrument:
+
+```
+                       light/primary  light/secondary  dark/primary  dark/secondary
+muted rule @0.88            5.53            5.34           6.95          6.15
+muted rule @0.74 (aged)     3.94            3.84           5.32          4.81
+```
+
+`ContrastTests` now measures all five stamp rules at BOTH aging opacities on
+both grounds in both appearances against the 3:1 bar a non-text mark takes (the
+weakest of the twenty is clay aged on the card, 3.08:1), plus the counterfactual
+that `Border.strong` still cannot carry a rule.
+
+**IOSC-05 · the two covers.** `sign()` dismissed one `fullScreenCover` and
+presented another in one mutation. It now calls `armSeal(name:)`, which sets
+`sealPending` and dismisses; `ProposalDetailView` fires
+`viewModel.signCoverDismissed()` from the sign cover's `onDismiss`, one runloop
+later, with nothing in flight. `signCoverDismissed()` is idempotent and one-way,
+so "Not yet" ends in no seal and a shown seal cannot re-open. Proved with a
+UI-less test of the state machine (armed → dismissed → presented; the unarmed
+case; the second dismissal) plus a pin that the host wires `onDismiss`.
+
+**⚠ THE WALKER MUST SEE IT.** No test can prove a `fullScreenCover` actually
+presented. Sign a proposal on the simulator and confirm: (a) the seal appears
+after the sign cover dismisses, (b) it settles once with one haptic, (c) Done
+returns to a detail screen showing the SIGNED stamp. IOSC-08's 900 ms press
+still wants the same treatment.
+
+**RULED · P-19's sentence.** "countersigns" is gone — a `proposals` row records
+no counter-signature and nothing waits on one. `whatHappensNext` reads
+*"{Studio} has your signature. You'll have a copy."*, with "Your designer" as
+the un-invented fallback, and the test now refuses the word.
+
+**Item 5 · `ProjectApprovalCopy.acts`.** Already `"Return"` for
+`changes_requested` on this branch, unchanged by this round. A conflict with the
+iosd lane on this file at integration is expected; **take "Return"**.
+
+## Tests moved by the change
+
+Five existing pins moved with the behaviour rather than being deleted:
+
+- `ProjectApprovalActTests` "each outcome is submitted with the row's own
+  updatedAt" — signature is `"Margaret Whitfield"` for Approve, `""` for the
+  other two.
+- `ProjectApprovalDoorsTests` "the note is encouraged…" — the submit gates on
+  `canSubmitApproval`.
+- `HoldToActTests` ruled-line pin — renamed to "…under a chosen Approve" and
+  now asserts the rule is NOT above the doors and IS behind
+  `approvalNeedsSignature`.
+- `SealMomentTests` "the seal opens only on a signature given in this session" —
+  pins `armSeal(name: name)` and that `armSeal`'s body does not touch
+  `showSealMoment`.
+- `SealMomentTests` the sign-cover pin — the cover is multi-line now.
+
+New: 2 in `HoldToActTests` (the signature ruling), 3 in `SealMomentTests`
+(IOSC-05), 2 in `ContrastTests` (IOSC-04), 3 in `ProjectApprovalDoorsTests`
+(IOSC-02/03) — 2515 → 2525.
+
+## Findings NOT addressed (out of the fix brief's scope)
+
+IOSC-06 (double success haptic), IOSC-07 (dark DECLINED on `textError`),
+IOSC-08 (hold timing pinned by grep), IOSC-09 (VoiceOver hint names the hold),
+IOSC-10, IOSC-11, IOSC-12, IOSC-13 (note/outcome order vs web — needs a
+cross-surface ruling), IOSC-14, and nits IOSC-15..18. The fix brief named
+IOSC-01..05 and the four rulings; these stand for the steward.
+
+## Gates — fix round 1, on this lane's simulator, unsandboxed
+
+```
+$ IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE .../ios-gate.sh build
+** BUILD SUCCEEDED **                                              EXIT=0
+
+$ IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE .../ios-gate.sh unit
+━ Test run with 2525 tests in 275 suites passed after 8.949 seconds
+  with 2 known issues.                                             EXIT=0
+```
+
+The two known issues are the pre-existing pair inherited from Wave 1
+(`BrandVoiceLintTests` "curated_mix", `RoomLifecycleTests
+.theTodayRailFollowsALocalDelete`). One intermediate run also reported
+`CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` — the
+load flake this lane's notes already record; it passes on reruns and no code in
+this round touches it.
+
+`lint-delta main` was RED on the first attempt and is green now:
+
+```
+✗ lint-delta: NEW SwiftLint warnings in touched files:
+    Patina/Features/Proposals/Views/ProposalDetailView.swift: 0 → 1
+    PatinaTests/HoldToActTests.swift: 0 → 1
+```
+
+`multiple_closures_with_trailing_closure` (the sign cover now takes `onDismiss`
+as well as its content — rewritten as an explicit `content:` argument) and
+`empty_string` (`sent == ""` → `sent?.isEmpty == true`). Fixed in
+`a29dee43c`. **Lesson for the steward:** a NEW Swift file starts at a base count
+of zero, so the house's tolerated snake_case `Codable` fields are `identifier_name`
+ERRORS lint-delta will count as gained — a new wire-shape struct needs
+`CodingKeys`, and its `CodingKeys` needs file scope, not nesting.
+
+### Confirmation run on the final tree (`a29dee43c`)
+
+```
+$ IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE .../ios-gate.sh all
+** BUILD SUCCEEDED **
+━ Test run with 2525 tests in 275 suites passed after 10.068 seconds
+  with 2 known issues.
+✓ lint-delta: no new warnings in touched files
+ALL_EXIT=0
+```
+
+All three tiers on the tree that is committed, after the lint fix. The
+diagnostics teardown between the unit tier and lint-delta took ten minutes of
+silence — expected, and not a hang.
+
+## Commits
+
+```
+c5b6537c7 fix(ios): a closed stamp draws a rule that is actually on the paper (IOSC-04)
+8a11f6f31 fix(ios): the seal waits for the sign cover to leave (IOSC-05, P-19 copy)
+92ee2068f fix(ios): one migration for the wave, and the note lands on the approval (IOSC-01, IOSC-02, IOSC-03, R1)
+a29dee43c style(ios): the two SwiftLint warnings the fix round introduced
+```
+
+The first two commits of this round were made, then `git reset --mixed` and
+remade with explicit `--` pathspecs: `git commit` without a pathspec had swept
+the already-staged migration deletion into the stamp-pigment commit. The tree is
+identical; the record is not, and the record is the point.
