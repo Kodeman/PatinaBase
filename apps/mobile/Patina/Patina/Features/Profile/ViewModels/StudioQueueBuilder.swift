@@ -322,9 +322,19 @@ private extension StudioQueueBuilder {
             ? (decisions[0].title ?? "A project approval is ready")
             : "\(PatinaCount.inWordsCapitalized(decisions.count)) approvals are waiting on you"
 
+        // Vocabulary: "decision" belongs to an option choice between named
+        // alternatives. Where every waiting row is an approval — the ordinary
+        // case now that Stage-2 and the client sign-off both come through here
+        // — the group is named for what it holds. A mixed group keeps the
+        // older word, which is true of at least one of its rows.
+        let allApprovals = decisions.allSatisfy {
+            $0.isProjectArtifactApproval || $0.isClientSignoff
+        }
         return StudioQueueRow(
             id: "awaiting.decisions",
-            title: countLabel(decisions.count, singular: "Decision", plural: "Decisions"),
+            title: allApprovals
+                ? countLabel(decisions.count, singular: "Approval", plural: "Approvals")
+                : countLabel(decisions.count, singular: "Decision", plural: "Decisions"),
             detail: detail,
             meta: DateDisplay.approval(
                 due: dueDate, askedAt: askedAt, designer: askedBy,
