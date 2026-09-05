@@ -19,7 +19,7 @@ const args = { p_project_id: projectId, p_designer_id: designerId, p_studio_id: 
 ```
 
 PostgREST resolves an RPC by the argument names it is sent. Naming all three
-binds exactly one signature; a two-argument call would match BOTH the pre-00570
+binds exactly one signature; a two-argument call would match BOTH the pre-00571
 function and the new three-argument one if a deploy ever left them side by side,
 and Postgres answers that with 42725 — which this wrapper swallows as "no
 brand", i.e. silent letterhead loss. A `PGRST202` ("no such function") answer to
@@ -156,7 +156,7 @@ not belong.
 
 Ship order — **the migration goes first**:
 
-1. `00570_studio_invoices.sql` (db lane). All five functions now `select` the
+1. `00571_studio_invoices.sql` (db lane). All five functions now `select` the
    `title` column; against a database without it PostgREST answers `42703` and
    the function fails closed — `invoice-send` and `create-checkout-session`
    return 500 `lookup_failed` (nobody can pay), `invoice-reminders` dies on the
@@ -230,7 +230,7 @@ now named on **every** call (null when the caller has none), so the call binds
 one signature by name and 42725 is unreachable.
 
 Evidence that the overload risk is real-but-not-taken by the db lane: their
-`00570_studio_invoices.sql:1167` is `DROP FUNCTION IF EXISTS
+`00571_studio_invoices.sql:1167` is `DROP FUNCTION IF EXISTS
 public.resolve_studio_identity(uuid, uuid);` before the three-argument
 `CREATE OR REPLACE` at :1169, with REVOKE/GRANT re-issued on `(uuid, uuid,
 uuid)` at :1257-1258. So exactly one row survives in `pg_proc` — but this call
@@ -247,7 +247,7 @@ Tests, `_shared/studio-identity.test.ts`:
   two-argument call is unchanged") — the argument object is asserted exactly.
 - "studio alone is anchor enough" now asserts the argument object exactly too,
   not just the call count.
-- NEW "a project caller still brands against the pre-00570 RPC" — both calls
+- NEW "a project caller still brands against the pre-00571 RPC" — both calls
   asserted in order, second one two-argument, identity resolved.
 - NEW "a studio caller does NOT retry two-argument" — one call, `null` back.
 
@@ -364,7 +364,7 @@ strict subset of the 20, so the set is unchanged. Stated here so a later
 Agreed and closed, on the reviewer's own evidence: `set_invoice_studio_id`'s
 INSERT arm requires `project.studio_id = NEW.studio_id` **and**
 `project.designer_id = NEW.designer_id` (`00511:2851-2854`), and `p_studio_id`
-short-circuits the project branch in the new RPC (`00570:1191-1194`). Same org
+short-circuits the project branch in the new RPC (`00571:1191-1194`). Same org
 resolves before and after.
 
 ### Left open, deliberately
