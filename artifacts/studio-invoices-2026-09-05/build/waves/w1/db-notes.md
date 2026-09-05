@@ -1,13 +1,13 @@
-# W1 DB lane — studio invoices (00570)
+# W1 DB lane — studio invoices (00571)
 
 Branch `studio-invoices/w1-db`, worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-si-db`,
 base `36b4b539e1f2cb732fb722d84edfe758d6b4008a`.
 
-`deploySet = ['migration 00570_studio_invoices.sql']`
+`deploySet = ['migration 00571_studio_invoices.sql']`
 
-## The migration — `supabase/migrations/00570_studio_invoices.sql`
+## The migration — `supabase/migrations/00571_studio_invoices.sql`
 
-Minted 00570 (worktree tip was 00568; 00569 is a peer session's). One transaction,
+Minted 00571 (worktree tip was 00568; 00569 is a peer session's). One transaction,
 six parts, banner naming rulings S1–S12.
 
 1. **The anchor.** `invoices.project_id` DROP NOT NULL (FK + cascade kept),
@@ -67,7 +67,7 @@ six parts, banner naming rulings S1–S12.
 - **SD roster registration.** 00511's canonical-lock-order roster (migration `:7189`,
   contract test `:2443`) is a closed VALUES list that requires a `PERFORM user_role.id`
   roles-catalog lock; a studio invoice has no project lead, so no designer-domain role is
-  read and that lock does not exist. Instead 00570 carries its own
+  read and that lock does not exist. Instead 00571 carries its own
   `DO $studio_draft_roster$` block asserting the same things 00511 asserts about
   `create_draft_invoice`: overload universe = 1, owner postgres, plpgsql, SECURITY DEFINER,
   volatile, non-strict, non-leakproof, `proconfig = search_path=pg_catalog, public, pg_temp`,
@@ -159,7 +159,7 @@ this worktree (this agent's cwd resets between tool calls, so a bare `cd` does n
 it replayed main's ledger to 00568 and so dropped the peer 00569 that was on the shared
 local stack. The **second** run used `supabase db reset --workdir
 /Users/kody/Code/patina-merged/.codex/worktrees/agent-si-db` and applied this branch's
-ledger, tip **00570**. Both are logged in `stack-reset-notice.md`. Nothing was pushed and no
+ledger, tip **00571**. Both are logged in `stack-reset-notice.md`. Nothing was pushed and no
 production object was touched.
 
 ## Deferred / for later waves
@@ -181,7 +181,7 @@ production object was touched.
 Both listed findings addressed; minors F3–F8 left as advisories (none trivial enough
 to touch without widening scope, and none blocks the program).
 
-### F1 — BLOCKER, fixed · `supabase/migrations/00570_studio_invoices.sql`
+### F1 — BLOCKER, fixed · `supabase/migrations/00571_studio_invoices.sql`
 
 The studio branch used to `RETURN NEW` for any active non-guest member, on both
 arms, with no predicate on state or money. Direct PostgREST DML
@@ -217,8 +217,9 @@ Re-pinned body SHA-256 at
 
 | | value |
 |---|---|
-| was (00570 round 0) | `06609af25c627f49c7b489c07968790c593ce1ad269e6a42e5bda6b1eb0a065a` |
-| now | `e329335f260c48e56032a7445feffea2505cdd11972d23f75949ea9394509c97` (23106 bytes) |
+| was (round 0) | `06609af25c627f49c7b489c07968790c593ce1ad269e6a42e5bda6b1eb0a065a` |
+| fix round 1 | `e329335f260c48e56032a7445feffea2505cdd11972d23f75949ea9394509c97` (23106 bytes) |
+| now (fix round 2, after the 00570→00571 renumber) | `99100c8e3832adf7d7a27a22eab3651f3154d28be28dfeabe8d1dbd3f7ed2878` |
 
 Computed exactly as the contract test computes it, against the deployed body
 after the reset:
@@ -329,3 +330,88 @@ not a lane defect.
 - **F8** — `ADD CONSTRAINT chk_invoices_anchor` is unguarded (harmless on a
   fresh apply); `title` has no length CHECK, so direct DML can exceed the RPC's
   200-char bound.
+
+---
+
+## Fix round 2 — R2-1 (major): migration renumbered 00570 → 00571
+
+**The collision.** `00570` was claimed twice across live worktrees on 2026-09-05:
+
+```
+$ for w in …; do ls .codex/worktrees/$w/supabase/migrations | tail -3; done
+== agent-si-db:        00567_… 00568_… 00570_studio_invoices.sql
+== agent-cae-w2-web:   00567_… 00568_… 00570_approval_response_signature.sql
+== agent-cae-w2-backend: 00567_… 00568_… 00569_approval_why_viewer_role_and_receipt.sql
+== agent-si-edge / agent-si-integration / agent-cae-w2-{designer,iosc,iosd}: tip 00568
+main checkout tip:     00568_decision_first_notice_dispatch.sql
+```
+
+The concurrent client-approval program holds `00569` and `00570`. Two files sharing
+one version prefix land as one ledger row; whichever merges second risks being read
+as already applied and silently skipped on Strata
+(`patina-parallel-work` SKILL.md:132 — "re-check the target tip right before merge;
+renumber on collision").
+
+**What changed.** Nothing inside the migration body's logic. Only:
+
+- `git mv supabase/migrations/00570_studio_invoices.sql supabase/migrations/00571_studio_invoices.sql`
+- the literal string `00570` → `00571` in the migration banner and in every in-repo
+  reference to it: `supabase/seed/00-legacy-grants.sql` (6 generated comments),
+  `supabase/tests/edge_api/public_sd_hardening_contract_test.sql`,
+  `supabase/tests/billing/studio_invoice_test.sql`,
+  `supabase/functions/_tests/stripe-rail.test.ts`,
+  `packages/supabase/src/hooks/use-invoices.ts`,
+  `packages/supabase/src/hooks/__tests__/use-invoices.test.ts`,
+  `apps/designer-portal/src/lib/document/__tests__/desk-receivables.test.ts`.
+  (`services/aesthete-inference/tests/fixtures/golden_vectors.json` also matches
+  `00570` — that is a float in an embedding vector, left alone.)
+
+**Hash consequence.** Two of those strings sit *inside* the `set_invoice_studio_id()`
+body (the studio-branch comment on the INSERT arm and on the UPDATE arm), so the
+pinned body SHA-256 moved even though no statement changed:
+
+```
+$ psql … -At -c "select encode(extensions.digest(convert_to(prosrc,'UTF8'),'sha256'),'hex')
+                 from pg_proc where oid='public.set_invoice_studio_id()'::regprocedure;"
+99100c8e3832adf7d7a27a22eab3651f3154d28be28dfeabe8d1dbd3f7ed2878
+```
+
+Re-pinned at `supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1710`.
+No other pin moved — a repo-wide grep for the recomputed digests of
+`apply_invoice_payment_effects`, `resolve_studio_identity(uuid,uuid,uuid)` and
+`create_draft_studio_invoice` returns no hits, i.e. none of them is pinned anywhere.
+
+**Renumber is not permanent proof.** `00571` was free across every live worktree and
+the main tip at the time of this fix. The integration/ship lane must re-check the
+target tip once more immediately before merge.
+
+### Gates re-run after the renumber
+
+```
+$ supabase --workdir …/agent-si-db db reset
+Finished supabase db reset on branch main.
+{"target":"local","version":"","message":"Reset local database."}
+$ psql … -c "select version from supabase_migrations.schema_migrations order by version desc limit 4"
+00571 / 00568 / 00567 / 00566
+
+$ bash scripts/run-sql-tests.sh
+total:             157
+green:             136
+expected-fail:      21  (documented in supabase/tests/KNOWN_FAILURES.md)
+unexpected-fail:     0
+effective-green:   157 / 157
+  PASS supabase/tests/billing/studio_invoice_test.sql
+  PASS supabase/tests/billing/invoice_checkout_integrity_test.sql
+  PASS supabase/tests/edge_api/public_sd_hardening_contract_test.sql
+  PASS supabase/tests/commercial/multi_studio_signature_test.sql
+  PASS supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql
+
+$ pnpm --filter @patina/supabase type-check          → tsc --noEmit, clean
+$ pnpm --filter @patina/supabase test -- use-invoices → 1 file, 48 tests passed
+$ pnpm --filter @patina/designer-portal type-check   → tsc --noEmit, clean
+$ pnpm --filter @patina/client-portal type-check     → tsc --noEmit, clean
+$ pnpm --filter @patina/designer-portal test -- accounts desk-receivables
+    Test Suites: 3 passed, 3 total · Tests: 12 passed, 12 total
+```
+
+`deploySet` is now `['migration 00571_studio_invoices.sql']`.
