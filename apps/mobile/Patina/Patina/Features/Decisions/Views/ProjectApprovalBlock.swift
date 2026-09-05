@@ -212,19 +212,24 @@ struct ProjectApprovalBlock: View {
     private func outcomeLeg(_ review: RemoteProjectApprovalReview) -> some View {
         if review.canRespond, !viewModel.hasAnsweredApproval {
             VStack(alignment: .leading, spacing: 14) {
-                signatureLine
                 if let chosen = chosenAct {
                     Text("\(chosen.label) · \(chosen.consequence)")
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("decisionDetail.approval.consequence")
+                    // RULED: the rule and the name belong to the one act that
+                    // agrees to something. Return gets the composer instead;
+                    // Hold gets neither, and both are still held.
+                    if viewModel.approvalNeedsSignature {
+                        signatureLine
+                    }
                     if chosen.outcome == .changesRequested {
                         changeNoteComposer
                     }
                     HoldToActButton(
                         title: ProjectApprovalCopy.submitAction,
-                        isEnabled: viewModel.canSignApproval,
+                        isEnabled: viewModel.canSubmitApproval,
                         isBusy: viewModel.isSubmitting
                     ) {
                         Task { await viewModel.submitApprovalResponse() }
@@ -269,9 +274,12 @@ struct ProjectApprovalBlock: View {
         .accessibilityIdentifier("decisionDetail.approval.outcome.\(act.outcome.rawValue)")
     }
 
-    /// `P-18` / `R1`. The typed legal name on a ruled line, the date beside
-    /// it, above the three outcomes — so a homeowner signs the answer rather
-    /// than tapping it, and the name is on the page before the act is.
+    /// `P-18` / `R1`. The typed legal name on a ruled line, with the date
+    /// beside it, under a chosen Approve — so a homeowner signs the agreement
+    /// rather than tapping it. RULED 2026-09-05: it is drawn for Approve and
+    /// for nothing else (`approvalNeedsSignature`); a name asked for in order
+    /// to say "needs discussion" is theatre in front of the two doors she is
+    /// least likely to take.
     ///
     /// The date is today's, formatted in the device calendar, and it is the
     /// day she is signing on. The server stamps `client_consented_at` itself;
@@ -341,10 +349,36 @@ struct ProjectApprovalBlock: View {
         }
     }
 
-    /// Who the note is addressed to, where the app holds a name. Never
-    /// invented — the placeholder falls back to "your designer".
+    /// Who the note is addressed to, where the app already holds a name.
+    ///
+    /// `IOSC-03`. The embedded row is the wrong place to look on its own:
+    /// 00467:18-38 cut Stage-2 out of every raw `client_decisions` SELECT
+    /// policy a homeowner can reach, so for the very person being asked
+    /// `viewModel.decision` is nil — and with it the project embed and its
+    /// designer. `RemoteProjectApprovalReview`, the projection that IS
+    /// present, carries no designer field at all. The name that survives is
+    /// the one on the project the app already holds, matched on the
+    /// projection's own `projectId` — the same resolution the seal makes in
+    /// `countersigningStudio`.
     private var designerGivenName: String? {
-        viewModel.decision?.project?.designer?.askedByName
+        Self.designerGivenName(
+            embedded: viewModel.decision?.project?.designer?.askedByName,
+            projectId: viewModel.approvalReview?.projectId ?? viewModel.decision?.project_id,
+            projects: BadgeCountService.shared.projects
+        )
+    }
+
+    /// The resolution itself, as a value: the embed when it arrived, the held
+    /// project when it did not, and nobody rather than an invented name — the
+    /// placeholder's own fallback is "your designer".
+    static func designerGivenName(
+        embedded: String?,
+        projectId: String?,
+        projects: [RemoteProject]
+    ) -> String? {
+        if let embedded, !embedded.isEmpty { return embedded }
+        guard let projectId, !projectId.isEmpty else { return nil }
+        return projects.first { $0.id == projectId }?.designer?.askedByName
     }
 
     private var chosenAct: ProjectApprovalAct? {

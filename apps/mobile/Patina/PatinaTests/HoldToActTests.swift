@@ -146,7 +146,7 @@ struct HoldToActTests {
         #expect(sent == "Margaret Whitfield")
     }
 
-    /// `P-18` / `00569`. The two payload keys are the receipt's own
+    /// `P-18` / `00569`. The two payload keys are the receipt’s own
     /// (`00464:630-636`), and the consent method rides with the signature or
     /// neither goes — a signature with no method is a `check_violation`.
     @Test("the response payload carries the signature and its consent method")
@@ -173,23 +173,13 @@ struct HoldToActTests {
         #expect(!body.contains("optionId"))
     }
 
-    /// The wrapper had to be opened for any of the above to reach the server:
-    /// before 00569 it refused every payload key but `outcome`/`optionId` and
-    /// passed `NULL, NULL` to a checked function that has taken the pair since
-    /// 00464. The migration adds no rule of its own.
-    @Test("the migration opens exactly the two keys and adds no rule")
-    func theMigrationOpensExactlyTwoKeys() throws {
-        let sql = try SourcePin.read(
-            "../../../supabase/migrations/00569_stage2_outcome_signature_payload.sql"
-        )
-        #expect(sql.contains("'outcome', 'optionId', 'clientConsentMethod', 'clientSignature'"))
-        #expect(sql.contains("v_consent_method, v_signature"))
-        #expect(sql.contains("GRANT EXECUTE ON FUNCTION public.respond_project_approval("))
-        // The validation stays in one place. A copy here is how two copies
-        // come to disagree.
-        #expect(!sql.contains("electronic_signature'"), "the wrapper re-validates the method")
-        #expect(!sql.contains("char_length"), "the wrapper re-validates the signature length")
-    }
+    // The wrapper the pair travels through is widened by Wave 2's single
+    // migration, the BACKEND lane's `00569`, not by this branch: before it,
+    // `respond_project_approval` refused every payload key but
+    // `outcome`/`optionId` and passed `NULL, NULL` to a checked function that
+    // has taken the pair since 00464. Three lanes wrote that widening and one
+    // migration ships, so there is no SQL file on this branch to pin — the pin
+    // that matters on this side is what the client sends, above.
 
     /// The review leg keeps `portal_clickthrough` (R1): a press-and-hold IS a
     /// click-through, so no migration follows the review confirmation.
@@ -204,10 +194,58 @@ struct HoldToActTests {
         #expect(!body.contains("clientSignature"))
     }
 
+    // MARK: - The signed act, and the two that are not
+
+    /// RULED 2026-09-05. Approve accepts an edition and its stated impacts —
+    /// that is the act a name is on. Return asks for work and Hold asks for a
+    /// conversation; a typed legal name to say "needs discussion" is theatre,
+    /// and both stay press-and-hold regardless.
+    @Test("only Approve asks for a name, and the other two still submit without one")
+    func onlyApproveIsSigned() throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review()
+
+        viewModel.chooseOutcome(.approved)
+        #expect(viewModel.approvalNeedsSignature)
+        #expect(!viewModel.canSubmitApproval, "an unsigned Approve was offered")
+
+        for unsigned in [ProjectApprovalOutcome.changesRequested, .needsDiscussion] {
+            viewModel.chooseOutcome(unsigned)
+            #expect(!viewModel.approvalNeedsSignature, "\(unsigned.rawValue) asked for a name")
+            #expect(viewModel.canSubmitApproval, "\(unsigned.rawValue) waited on a name")
+        }
+    }
+
+    /// And the consent pair goes with it: the RPC client sends
+    /// `clientSignature` / `clientConsentMethod` only over a non-empty name,
+    /// so Return and Hold leave the consent method at its clickthrough
+    /// default rather than claiming an electronic signature that was never
+    /// given.
+    @Test("Return and Hold send no signature at all")
+    func returnAndHoldSendNoSignature() async throws {
+        for unsigned in [ProjectApprovalOutcome.changesRequested, .needsDiscussion] {
+            var sent: String?
+            let viewModel = DecisionDetailViewModel()
+            viewModel.decision = try ProjectApprovalFixture.decision()
+            viewModel.approvalReview = try ProjectApprovalFixture.review()
+            viewModel.respondToApproval = { _, _, signature, _, _ in sent = signature }
+            viewModel.sendApprovalNote = { _, _, _ in nil }
+            // Even a name typed under a previously chosen Approve does not
+            // ride along on an outcome that is not being signed.
+            viewModel.typedSignature = "Margaret Whitfield"
+            viewModel.chooseOutcome(unsigned)
+
+            await viewModel.submitApprovalResponse()
+
+            #expect(sent == "", "\(unsigned.rawValue) carried a signature")
+            #expect(viewModel.answeredOutcome == unsigned)
+        }
+    }
+
     // MARK: - The ruled line
 
-    @Test("the name sits on a rule with the date beside it, above the outcomes")
-    func theRuledLineIsDrawnAboveTheOutcomes() throws {
+    @Test("the name sits on a rule with the date beside it, under a chosen Approve")
+    func theRuledLineIsDrawnUnderApprove() throws {
         let source = try SourcePin.readCode(
             "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
         )
@@ -215,10 +253,14 @@ struct HoldToActTests {
         #expect(source.contains("ProjectApprovalCopy.signatureLabel"))
         #expect(source.contains("DateDisplay.long(Date())"))
         #expect(source.contains("ProjectApprovalCopy.signatureNotice"))
-        // Above, not below: the line is the first thing the outcome leg draws.
+        // Inside the chosen branch and behind the ruling's own gate — never
+        // standing over the three doors before one has been picked.
         let leg = try #require(source.range(of: "if review.canRespond, !viewModel.hasAnsweredApproval {"))
-        let body = String(source[leg.lowerBound...].prefix(220))
-        #expect(body.contains("signatureLine"))
+        let body = String(source[leg.lowerBound...].prefix(1400))
+        #expect(!String(body.prefix(200)).contains("signatureLine"), "the rule stands over the doors again")
+        let gate = try #require(body.range(of: "if viewModel.approvalNeedsSignature {"))
+        #expect(String(body[gate.lowerBound...].prefix(80)).contains("signatureLine"))
+        #expect(body.contains("isEnabled: viewModel.canSubmitApproval"))
     }
 
     /// The notice under the rule is the portals' `SIGNATURE_NOTICE`, verbatim,

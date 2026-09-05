@@ -322,8 +322,12 @@ extension DecisionsAPIClient {
     /// validates them, writes the three 00117 consent columns, and hashes them
     /// into the action receipt (`00464:630-636`, `:736-740`). What it did not
     /// have was a way in: the public wrapper rejected every payload key but
-    /// `outcome`/`optionId` and passed `NULL, NULL` down. **00569 opens
-    /// exactly those two keys**, and the names here are the receipt's own.
+    /// `outcome`/`optionId` and passed `NULL, NULL` down. **Wave 2's single
+    /// migration, 00569, opens exactly those two keys** — the backend lane's
+    /// file, which redefines this wrapper anyway — and the names here are the
+    /// receipt's own. iOS ships no migration for this, and must not ship
+    /// ahead of one: before 00569 the pair is rejected as
+    /// `invalid_parameter_value`.
     ///
     /// A consent method without a signature, or the reverse, is a
     /// `check_violation` server-side; the pair is therefore sent together or

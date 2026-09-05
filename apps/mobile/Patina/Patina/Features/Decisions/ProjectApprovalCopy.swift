@@ -148,8 +148,12 @@ enum ProjectApprovalCopy {
 
     /// Instructional, not validating: what the note does, and that the return
     /// stands without it.
+    ///
+    /// `IOSC-02`: the note lands ON the approval (`decision_comments`, the row
+    /// the web writes to), so the sentence no longer sends her to the project
+    /// conversation to look for it.
     static let noteHelp =
-        "Optional. Your note goes to your designer in this project’s conversation."
+        "Optional. Your note goes to your designer with this returned edition."
 
     /// The outcome landed and the note did not. Said plainly, beside the
     /// answer, because the answer is recorded and only the courtesy is not.

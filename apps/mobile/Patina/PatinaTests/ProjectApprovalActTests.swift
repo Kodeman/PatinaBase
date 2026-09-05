@@ -92,7 +92,12 @@ struct ProjectApprovalActTests {
         let call = try #require(sent, "the outcome never reached the RPC")
         #expect(call.id == ProjectApprovalFixture.decisionId)
         #expect(call.outcome == outcome)
-        #expect(call.signature == "Margaret Whitfield", "P-18: the outcome is signed")
+        // RULED 2026-09-05: Approve is the signed act. Return and Hold are
+        // held, not signed, and carry no name (`HoldToActTests`).
+        #expect(
+            call.signature == (outcome == .approved ? "Margaret Whitfield" : ""),
+            "P-18: the agreement is signed and the other two are not"
+        )
         #expect(call.expectedUpdatedAt == "2026-09-04T10:15:00+00:00")
         #expect(!call.key.isEmpty)
         #expect(viewModel.hasAnsweredApproval)

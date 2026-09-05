@@ -57,11 +57,12 @@ final class DecisionDetailViewModel {
     var reviewConfirmed: Bool = false
 
     /// `P-16` / `R10`: the change note, encouraged and never enforced. It
-    /// travels as a project-conversation message, the deferral rail's own —
-    /// `respond_project_approval` carries no note field. `noteFailure` is kept
-    /// apart from `submitFailure` on purpose: a recorded answer may never be
-    /// drawn as a failed one. `typedSignature` is `P-18` / `R1`, the legal
-    /// name the outcome is signed with.
+    /// lands on the approval as a `decision_comments` row, where the web's
+    /// note lands — `respond_project_approval` carries no note field, and the
+    /// project conversation is only the fallback. `noteFailure` is kept apart
+    /// from `submitFailure` on purpose: a recorded answer may never be drawn
+    /// as a failed one. `typedSignature` is `P-18` / `R1`, the legal name the
+    /// outcome is signed with.
     var changeNote: String = ""
     var noteFailure: String?
     var typedSignature: String = ""
@@ -441,16 +442,13 @@ final class DecisionDetailViewModel {
         )
     }
 
-    /// `P-16`. The note, behind a seam (`openThread` is private).
+    /// `P-16`. The note, behind a seam. It lands where the web's lands —
+    /// `decision_comments`, on the approval itself — and reaches the project
+    /// conversation only when that write cannot happen. Arguments: the
+    /// decision id, the fallback route, the note. See `ApprovalNoteWriter`.
     @ObservationIgnored
-    var sendApprovalNote: (MessageRoute, String) async throws -> String = { route, body in
-        let threadId: String
-        switch route {
-        case .project(let id): threadId = try await MessagingAPIClient.shared.createThread(projectId: id)
-        case .direct(let id): threadId = try await MessagingAPIClient.shared.createDirectThread(counterpart: id)
-        }
-        _ = try await MessagingAPIClient.shared.sendMessage(threadId: threadId, body: body)
-        return threadId
+    var sendApprovalNote: (String?, MessageRoute?, String) async throws -> String? = {
+        try await ApprovalNoteWriter.send(decisionId: $0, route: $1, body: $2)
     }
     /// The outcome recorded in this session. The server row is `responded` and
     /// the next load will carry the word itself; until then this is what stops
