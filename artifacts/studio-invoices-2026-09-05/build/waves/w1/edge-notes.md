@@ -615,3 +615,156 @@ $ find <worktree> -name deno.lock -not -path "*/node_modules/*"    → nothing
 ```
 
 Deploy set unchanged at **20**.
+
+---
+
+## Fix round 2 (review round 6 — R6-1 … R6-4)
+
+Four findings, all addressed. Nothing else in the lane was touched.
+
+### R6-1 (blocker) — `loadInvoiceJoined` swallowed the PostgREST error
+
+`stripe-webhook/index.ts` destructured `{ data }` only, and all three money
+letters (`sendSuccessSideEffects`, `sendFailureSideEffects`,
+`sendInvoiceRefundSideEffects`) return early on a null invoice — so a read that
+fails (42703 against a DB without 00571, an RLS surprise, a timeout) skipped the
+receipt, the failed-transfer notice and the refund notice with no log line at
+all while the money settled. Now:
+
+```ts
+const { data, error } = await admin.from('invoices').select(…)
+…
+if (error) {
+  console.error('stripe-webhook: invoice lookup failed', invoiceId, error);
+}
+return (data as unknown as InvoiceJoined) ?? null;
+```
+
+Behavior is otherwise unchanged: a failed read still returns null and still
+never throws inside a webhook handler. This closes plan item **W5-2**. The ship
+order (migration 00571 strictly before the 20 functions) remains a hard gate in
+the ship brief — the log line makes a mis-ordered ship *visible*, it does not
+make it safe.
+
+### R6-2 (major) — nothing pinned the five SELECTs
+
+Plan item **W5-1**. `_shared/invoice-subject.test.ts` gained two source-read
+assertions beside the ones already there (the five senders run `Deno.serve` at
+module load, so source-reading is the only reachable proof):
+
+- *every invoice sender still selects the studio anchor and the title* —
+  `/project_id,\s*studio_id,\s*title,\s*invoice_number/` over each `index.ts`.
+- *the webhook's invoice lookup reports a failed read instead of swallowing it*
+  — reads the `loadInvoiceJoined` body and requires both the `error`
+  destructure and the `console.error`, pinning R6-1 above.
+
+Both verified mutation-sensitive:
+
+```
+# deleted "title," from invoice-send's SELECT
+every invoice sender still selects the studio anchor and the title ... FAILED
+FAILED | 12 passed | 1 failed (22ms)
+
+# reverted loadInvoiceJoined to the swallowing form
+the webhook's invoice lookup reports a failed read instead of swallowing it ... FAILED
+FAILED | 12 passed | 1 failed (30ms)
+```
+
+### R6-3 (major) — every nameless studio letter said "for your studio"
+
+Ruling **W5-6**: never say "for your studio"; with neither house nor title, the
+"for …" clause is dropped entirely.
+
+- `_shared/invoice-subject.ts` — `invoiceSubjectName(invoice, fallback)`: the
+  fallback is now **required** and may be `null`, so the phrase "your studio"
+  no longer exists anywhere in the module. Typed
+  `<F extends string | null>(…): string | F`, so `null` callers get
+  `string | null` and the Stripe line item still gets `string`.
+- `_shared/invoice-emails.ts` — two private helpers, `forClause(name, strong?)`
+  and `subjectTail(name)`, return `""` for an absent name. Every `projectName`
+  in every builder now routes through them (`grep -n "params.projectName"` → 16
+  hits, all inside `forClause(` / `subjectTail(`). `projectName` is
+  `string | null | undefined` on all ten builder param types.
+- The five senders derive `invoiceSubjectName(invoice, null)` and build their
+  own `forClause`; `create-checkout-session` keeps
+  `invoiceSubjectName(invoice, 'Studio invoice')` for the Stripe line item.
+- The three designer in-app lines that lead with the name (`${name}: …` in
+  stripe-webhook ×3 and invoice-check-intent ×1) cannot drop a leading label, so
+  they fall back to `deskName = projectName ?? 'Studio invoice'` — the feature's
+  own designer-facing word, the same last rung the Stripe line item uses. No
+  homeowner-facing string has a stand-in phrase at all.
+
+Rendered proof, 9 letters × the nameless case, asserting no "your studio", no
+"for undefined", no "for null"; plus exact-string cases:
+
+```
+nameless invoice: the sent letter closes the sentence and the subject ... ok
+  subject === "Middle West Studio sent you invoice INV-0031"
+  html    ⊃ "Leah Brandt has sent you an invoice."
+nameless invoice: the reminder ladder's subjects end at the number ... ok
+  "Reminder: invoice INV-1042 is due soon" · "Still open: invoice INV-1042"
+  "Second notice: invoice INV-1042"        · "Final notice: invoice INV-1042"
+```
+
+### R6-4 (major) — the "Your project" footer on a letter with no project
+
+Ruling **W5-7**. `wrap()` in `_shared/invoice-emails.ts` now threads
+`opts.footerLinks` into `renderBrandedShell` (which already accepted it), and
+the seven client-addressed invoice builders take `studioInvoice?: boolean`.
+When true the footer becomes `Your page` (href = client base) + `Email
+preferences`; when false or absent the shell's default is byte-identical to
+before. Callers pass `studioInvoice: !invoice.project_id`. The designer-facing
+letters (A/R escalation, refund, check incoming) keep the designer footer.
+
+14 tests cover it — 7 letters × {studio → "Your page</a>" and never "Your
+project"; project → "Your project" and never "Your page"}. Mutation-checked by
+relabelling the link back:
+
+```
+studio invoice: the sent letter's footer names her page, not a project ... FAILED
+studio invoice: the upcoming letter's footer names her page, not a project ... FAILED
+studio invoice: the still open letter's footer names her page, not a project ... FAILED
+studio invoice: the second notice letter's footer names her page, not a project ... FAILED
+studio invoice: the final notice letter's footer names her page, not a project ... FAILED
+```
+
+The old test `studio invoice: no rung of the reminder ladder invents a house`
+had to strip `Your project</a>` out of the HTML before asserting "no project";
+with W5-7 in place it passes `studioInvoice: true` and asserts the raw text, so
+the exemption is gone.
+
+### Gates, re-run for this round
+
+```
+$ deno test --allow-all --config …/supabase/functions/deno.json …/supabase/functions/_shared/
+ok | 239 passed | 0 failed (2s)          (was 211; +28 this round)
+
+$ deno test … …/supabase/functions/create-checkout-session/
+ok | 17 passed | 0 failed (41ms)
+
+$ deno test … …/supabase/functions/stripe-webhook/
+ok | 18 passed | 0 failed (49ms)
+
+  invoice-send · invoice-reminders · invoice-check-intent — still no *.test.ts
+
+$ deno check --config …/supabase/functions/deno.json <each of the five index.ts>
+OK   create-checkout-session   OK   invoice-send      OK   invoice-reminders
+OK   stripe-webhook            OK   invoice-check-intent
+
+$ ls <worktree>/deno.lock   → No such file or directory
+```
+
+Deploy set recomputed from the import graph (transitive importers of
+`_shared/studio-identity.ts` ∪ the five) — unchanged at **20**:
+
+```
+client-invite · commercial-document-notify · create-checkout-session ·
+decision-first-notice · decision-reminders · decision-resolved-notify ·
+expire-decisions · invoice-check-intent · invoice-reminders · invoice-send ·
+notification-digest · notification-dispatch · po-send · proposal-nudge ·
+proposal-sign-confirmation · quote-request-send · review-requests · spec-pdf ·
+stripe-webhook · trade-rfq-send
+```
+
+`_shared/invoice-emails.ts` and `_shared/invoice-subject.ts` also changed this
+round; every function importing either is already inside the 20.
