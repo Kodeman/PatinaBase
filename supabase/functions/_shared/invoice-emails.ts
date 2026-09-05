@@ -100,9 +100,9 @@ function studioInvoiceFooterLinks(): { label: string; href: string }[] {
 export interface InvoiceSentEmailParams {
   invoiceNumber: string;
   /** The house, else the studio invoice's regarding line, else null. */
-  projectName?: string | null;
+  projectName: string | null;
   /** true ⇒ this invoice has no house; the footer names her page instead. */
-  studioInvoice?: boolean;
+  studioInvoice: boolean;
   /** Person named in the body prose (the individual designer). */
   designerName: string;
   /**
@@ -221,9 +221,9 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
 export interface InvoiceReminderEmailParams {
   invoiceNumber: string;
   /** The house, else the studio invoice's regarding line, else null. */
-  projectName?: string | null;
+  projectName: string | null;
   /** true ⇒ this invoice has no house; the footer names her page instead. */
-  studioInvoice?: boolean;
+  studioInvoice: boolean;
   designerName: string;
   /** Greeting name; falls back to "there". */
   clientName?: string | null;
@@ -391,7 +391,7 @@ export function buildInvoiceFinalNoticeEmail(
 export interface InvoiceArEscalationEmailParams {
   invoiceNumber: string;
   /** The house, else the studio invoice's regarding line, else null. */
-  projectName?: string | null;
+  projectName: string | null;
   clientName?: string | null;
   /** Greeting name for the designer; falls back to "there". */
   designerName?: string | null;
@@ -445,9 +445,9 @@ export function buildInvoiceArEscalationEmail(
 export interface PaymentReceiptEmailParams {
   invoiceNumber: string;
   /** The house, else the studio invoice's regarding line, else null. */
-  projectName?: string | null;
+  projectName: string | null;
   /** true ⇒ this invoice has no house; the footer names her page instead. */
-  studioInvoice?: boolean;
+  studioInvoice: boolean;
   designerName: string;
   clientName?: string | null;
   /** The payment amount being acknowledged. */
@@ -621,7 +621,7 @@ export function buildDirectOrderPaymentFailedEmail(
 export interface PaymentRefundedEmailParams {
   invoiceNumber: string;
   /** The house, else the studio invoice's regarding line, else null. */
-  projectName?: string | null;
+  projectName: string | null;
   /** Greeting name for the designer (this email is designer-facing). */
   designerName?: string | null;
   /** The amount actually refunded on this event. */
@@ -685,9 +685,9 @@ export function buildPaymentRefundedEmail(
 export interface PaymentFailedEmailParams {
   invoiceNumber: string;
   /** The house, else the studio invoice's regarding line, else null. */
-  projectName?: string | null;
+  projectName: string | null;
   /** true ⇒ this invoice has no house; the footer names her page instead. */
-  studioInvoice?: boolean;
+  studioInvoice: boolean;
   designerName: string;
   clientName?: string | null;
   /** The payment amount that failed to clear. */
@@ -749,7 +749,7 @@ export function buildPaymentFailedEmail(
 export interface CheckIntentEmailParams {
   invoiceNumber: string;
   /** The house, else the studio invoice's regarding line, else null. */
-  projectName?: string | null;
+  projectName: string | null;
   /** Greeting name for the designer (this email is designer-facing). */
   designerName?: string | null;
   /** Who said they're mailing a check. */

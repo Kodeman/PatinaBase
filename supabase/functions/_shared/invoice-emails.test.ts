@@ -35,6 +35,7 @@ const PARAMS: InvoiceReminderEmailParams = {
   dueDate: "2026-10-08",
   portalUrl: "https://client.patina.cloud/invoices/inv-1",
   studioName: "Middle West Studio",
+  studioInvoice: false,
 };
 
 const CLIENT_LETTERS: Array<[string, () => { subject: string; html: string }]> = [
@@ -118,6 +119,7 @@ Deno.test("studio invoice: the title reads where the house name would", () => {
     dueDate: "2026-10-08",
     portalUrl: "https://client.patina.cloud/invoices/inv-1",
     studioName: "Middle West Studio",
+    studioInvoice: true,
   });
   assertEquals(
     subject,
@@ -151,6 +153,7 @@ Deno.test("studio invoice: a title with markup in it is escaped, never rendered"
     amountPaidCents: 45000,
     balanceCents: 0,
     portalUrl: "https://client.patina.cloud/invoices/inv-1",
+    studioInvoice: true,
   });
   assertStringIncludes(html, "&lt;b&gt;Retainer&lt;/b&gt;");
   assert(!html.includes("<b>Retainer</b>"), "the title was rendered as markup");

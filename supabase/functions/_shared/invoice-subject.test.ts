@@ -110,6 +110,21 @@ const SENDERS = [
   "invoice-check-intent",
 ] as const;
 
+/** The four whose letters name the invoice, so a stand-in phrase is forbidden. */
+const LETTER_SENDERS = [
+  "invoice-send",
+  "invoice-reminders",
+  "stripe-webhook",
+  "invoice-check-intent",
+] as const;
+
+/** The three that flag a client letter's footer off the invoice's own row. */
+const FOOTER_FLAG_SENDERS = [
+  "invoice-send",
+  "invoice-reminders",
+  "stripe-webhook",
+] as const;
+
 /** The four that put a studio's letterhead on a client-facing letter. */
 const BRANDING_SENDERS = [
   "create-checkout-session",
@@ -143,6 +158,47 @@ Deno.test("every invoice sender names the letter through invoiceSubjectName", as
       !src.includes("invoice.project?.name ??"),
       `${name}/index.ts re-inlined the house-name fallback`,
     );
+    // Ruling W5-6: the phrase is banned at the argument too, not just in the
+    // module — a sender may not hand the resolver a stand-in to fall back to.
+    assert(
+      !/invoiceSubjectName\([^)]*['"]your studio['"]/.test(src),
+      `${name}/index.ts reinstated the "your studio" fallback (ruling W5-6)`,
+    );
+  }
+});
+
+Deno.test("no letter sender hands the resolver a stand-in name to fall back to", async () => {
+  // The module returning null is only half the ruling; a sender passing any
+  // last-resort phrase would put it back on the page with the module untouched.
+  for (const name of LETTER_SENDERS) {
+    const src = await senderSource(name);
+    const calls = src.match(/invoiceSubjectName\([^)]*\)/g) ?? [];
+    assert(calls.length > 0, `${name}/index.ts names no letter at all`);
+    for (const call of calls) {
+      assertEquals(
+        call,
+        "invoiceSubjectName(invoice, null)",
+        `${name}/index.ts passes a fallback name where the letter must say nothing`,
+      );
+    }
+  }
+});
+
+Deno.test("every client-letter sender reads the footer flag off the invoice row", async () => {
+  // Ruling W5-7 lives in the builder, but only the sender knows the invoice has
+  // no house; a hard-coded flag offers "Your project" to a reader who has none.
+  for (const name of FOOTER_FLAG_SENDERS) {
+    const src = await senderSource(name);
+    const assignments = [...src.matchAll(/studioInvoice\s*[:=]\s*([^,;\n]+)/g)]
+      .map((m) => m[1].trim());
+    assert(assignments.length > 0, `${name}/index.ts sets no studioInvoice flag`);
+    for (const expr of assignments) {
+      assertEquals(
+        expr,
+        "!invoice.project_id",
+        `${name}/index.ts hard-codes the studio-invoice footer instead of reading the row`,
+      );
+    }
   }
 });
 
