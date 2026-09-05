@@ -161,6 +161,40 @@ export function apnsThreadId(input: ApnsSendInput): string | null {
 }
 
 /**
+ * Where an entity's project id is kept, for the three entities the lock screen
+ * routes. Used to find the conversation "Ask a question" should open (P-22).
+ * An entity absent from this table has no project to ask in.
+ */
+const ENTITY_PROJECT_TABLE: Record<string, string> = {
+  decision: "client_decisions",
+  proposal: "proposals",
+  invoice: "invoices",
+};
+
+export function projectTableFor(
+  entityType: string | null | undefined,
+): string | null {
+  if (typeof entityType !== "string") return null;
+  return ENTITY_PROJECT_TABLE[entityType] ?? null;
+}
+
+/**
+ * "Ask a question" needs one thread to open, and only one (P-22, ruled
+ * mid-Wave-2: the action opens that thread, else the entity's own screen —
+ * never the inbox as a dead end). A project normally has a single
+ * `comms_threads` row of kind 'project'; where it somehow has two, there is no
+ * honest way to choose between them from here, so the key is omitted and the
+ * action falls back to the entity. Omitted, never blank.
+ */
+export function pickProjectThreadId(
+  rows: Array<{ id?: unknown }> | null | undefined,
+): string | null {
+  if (!Array.isArray(rows) || rows.length !== 1) return null;
+  const id = rows[0]?.id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+/**
  * The request headers for one device send.
  *
  * `apns-collapse-id` is the thread id (P-22), and it is sent ONLY for an
@@ -217,10 +251,19 @@ export function buildApnsHeaders(
  *
  * The Notification Service Extension is deferred by ruling, so there is no
  * `mutable-content` and no attachment key here.
+ *
+ * The custom `thread_id` is a different thing from `aps["thread-id"]`, and the
+ * near-collision is worth the plain name: `aps["thread-id"]` is APNs' grouping
+ * key (`decision-<id>`), while `thread_id` is the id of the CONVERSATION the
+ * "Ask a question" action opens (ruled mid-Wave-2 — that thread, else the
+ * entity's own screen, never the inbox as a dead end). It is resolved by the
+ * caller from the entity's project and omitted whenever there is no single
+ * project thread to open.
  */
 export function buildApnsPayload(
   input: ApnsSendInput,
   badge?: number,
+  conversationThreadId?: string | null,
 ): Record<string, unknown> {
   const aps: Record<string, unknown> = {
     alert: { title: input.title, body: input.body },
@@ -234,12 +277,16 @@ export function buildApnsPayload(
   if (category) aps.category = category;
   const thread = apnsThreadId(input);
   if (thread) aps["thread-id"] = thread;
-  return {
+  const payload: Record<string, unknown> = {
     aps,
     entity_type: input.entity_type ?? null,
     entity_id: input.entity_id ?? null,
     notification_log_id: input.notification_log_id ?? null,
   };
+  if (typeof conversationThreadId === "string" && conversationThreadId) {
+    payload.thread_id = conversationThreadId;
+  }
+  return payload;
 }
 
 /**

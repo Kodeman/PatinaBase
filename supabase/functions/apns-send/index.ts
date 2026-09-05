@@ -46,6 +46,8 @@ import {
   collapsedBadgeCount,
   isDeadTokenResponse,
   normalizePkcs8Pem,
+  pickProjectThreadId,
+  projectTableFor,
   type ResolvedToken,
   resolveTokens,
 } from "./core.ts";
@@ -105,6 +107,58 @@ async function unreadInAppBadge(
   } catch (err) {
     console.warn("[apns-send] badge count threw", err);
     return undefined;
+  }
+}
+
+/**
+ * The conversation the lock screen's "Ask a question" opens (P-22, ruled
+ * mid-Wave-2): the project thread belonging to the entity this notice names.
+ *
+ * Two hops, both by id: entity → its project, project → its 'project' thread.
+ * A project with no thread, or somehow more than one, yields nothing and the
+ * action falls back to the entity's own screen — which is the whole point of
+ * the ruling, since the alternative is landing her in an inbox with nothing
+ * selected.
+ *
+ * Returns null on any failure. A thread that cannot be resolved must never
+ * cost the homeowner the notification itself.
+ */
+async function resolveProjectThreadId(
+  supabase: SupabaseClient,
+  input: ApnsSendInput,
+): Promise<string | null> {
+  const table = projectTableFor(input.entity_type);
+  const entityId = input.entity_id;
+  if (!table || typeof entityId !== "string" || !entityId) return null;
+  try {
+    const { data: entity, error: entityError } = await supabase
+      .from(table)
+      .select("project_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    if (entityError) {
+      console.warn("[apns-send] entity project lookup failed", entityError);
+      return null;
+    }
+    const projectId = (entity as { project_id?: string | null } | null)
+      ?.project_id;
+    if (typeof projectId !== "string" || !projectId) return null;
+
+    // Two rows are enough to know there is no single thread to open.
+    const { data: threads, error: threadError } = await supabase
+      .from("comms_threads")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("kind", "project")
+      .limit(2);
+    if (threadError) {
+      console.warn("[apns-send] project thread lookup failed", threadError);
+      return null;
+    }
+    return pickProjectThreadId(threads as Array<{ id?: unknown }> | null);
+  } catch (err) {
+    console.warn("[apns-send] project thread lookup threw", err);
+    return null;
   }
 }
 
@@ -225,7 +279,10 @@ Deno.serve(async (req) => {
 
     const jwt = await providerJwt(authKey, keyId, teamId);
     const badge = await unreadInAppBadge(supabase, input.user_id);
-    const payload = JSON.stringify(buildApnsPayload(input, badge));
+    const conversationThreadId = await resolveProjectThreadId(supabase, input);
+    const payload = JSON.stringify(
+      buildApnsPayload(input, badge, conversationThreadId),
+    );
 
     let successes = 0;
     let providerId: string | undefined;

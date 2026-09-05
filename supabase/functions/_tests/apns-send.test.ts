@@ -25,6 +25,8 @@ import {
   collapsedBadgeCount,
   isDeadTokenResponse,
   normalizePkcs8Pem,
+  pickProjectThreadId,
+  projectTableFor,
   resolveTokens,
 } from "../apns-send/core.ts";
 
@@ -511,4 +513,52 @@ Deno.test("an unrouted entity gets the plain banner, not a broken category", () 
   assert(!("category" in aps));
   assertEquals(aps["thread-id"], "design_request-abc");
   assertEquals(aps["interruption-level"], "active");
+});
+
+// ── "Ask a question" needs one thread to open (P-22, ruled mid-Wave-2) ──────
+
+Deno.test("the conversation thread rides the payload as thread_id, beside aps.thread-id", () => {
+  const payload = buildApnsPayload(
+    DECISION_PUSH,
+    3,
+    "77777777-8888-4999-8aaa-bbbbbbbbbbbb",
+  ) as Record<string, unknown>;
+  assertEquals(payload.thread_id, "77777777-8888-4999-8aaa-bbbbbbbbbbbb");
+  // The APNs grouping key is a different thing and keeps its own shape.
+  assertEquals(
+    (payload.aps as Record<string, unknown>)["thread-id"],
+    "decision-11111111-2222-4333-8444-555555555555",
+  );
+});
+
+Deno.test("no project thread means no thread_id key at all, never a null one", () => {
+  for (const resolved of [undefined, null, ""]) {
+    const payload = buildApnsPayload(DECISION_PUSH, 3, resolved) as Record<
+      string,
+      unknown
+    >;
+    assert(
+      !("thread_id" in payload),
+      `a ${String(resolved)} thread must be omitted, not sent`,
+    );
+  }
+});
+
+Deno.test("exactly one project thread is opened; none and two are not", () => {
+  assertEquals(pickProjectThreadId([{ id: "thread-1" }]), "thread-1");
+  assertEquals(pickProjectThreadId([]), null);
+  assertEquals(
+    pickProjectThreadId([{ id: "thread-1" }, { id: "thread-2" }]),
+    null,
+  );
+  assertEquals(pickProjectThreadId(null), null);
+  assertEquals(pickProjectThreadId([{ id: null }]), null);
+});
+
+Deno.test("only the three routed entities look for a project to ask in", () => {
+  assertEquals(projectTableFor("decision"), "client_decisions");
+  assertEquals(projectTableFor("proposal"), "proposals");
+  assertEquals(projectTableFor("invoice"), "invoices");
+  assertEquals(projectTableFor("design_request"), null);
+  assertEquals(projectTableFor(undefined), null);
 });
