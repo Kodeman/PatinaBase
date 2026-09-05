@@ -1,125 +1,324 @@
 # W1 DB lane — adversarial review, round 2
 
-Reviewer: separate context, did not write the code. Worktree
+Reviewer: separate context, did not write this code. Worktree
 `/Users/kody/Code/patina-merged/.codex/worktrees/agent-si-db`, branch
-`studio-invoices/w1-db`, base `36b4b539e1f2cb732fb722d84edfe758d6b4008a`.
+`studio-invoices/w1-db`, diff `36b4b539e..HEAD` (25 commits, 24 files).
 
-**Verdict: fix** — no blocker. One **major** (a migration-number collision with a
-concurrent program's worktree; an integration action, not a code defect), plus
-polish. Every money-path and RLS probe I could think of came back clean.
+> This file supersedes the earlier `db-review-r2.md` written at this path
+> (commit `31fd3b89d`); that text is unchanged in git history.
 
----
-
-## Prior-round findings — status
-
-| id | r1 severity | status now | evidence |
-|---|---|---|---|
-| F1 ungated status write on the studio branch | blocker | **FIXED** | `INSERT invoices(project_id NULL, status 'paid', invoice_number 'INV-9999', amount_paid_cents 100000…)` as an authenticated member → `P2 refused sqlstate=P0001 msg=studio_id_not_designer_studio`. `UPDATE … SET status='sent', invoice_number='INV-7777'` on a studio draft → `HANDWRITE refused sqlstate=P0001`; `SET amount_paid_cents=40000` → `HANDWRITE amount_paid refused sqlstate=P0001`. Legitimate draft edit still passes (`DRAFT EDIT accepted memo=edited memo title=R consult, revised`). |
-| F2 Checkout rail unproven by the suite | major | **FIXED** | `studio_invoice_test.sql:156-217` now drives `claim_invoice_checkout_attempt → finalize → settle` and asserts paid + a `designer_earnings` row with `project_id IS NULL` and the title in the description. Suite `PASS`. |
-| F3 stack-reset log incomplete | minor | **PARTLY** | `db-notes.md:157-163` still says "Both are logged in `stack-reset-notice.md`"; the notice file has one lane line (14:21:55Z = the second, worktree-scoped reset). The first reset (main checkout, dropped the peer's 00569) still has no line. |
-| F4 no contract-test pin for `create_draft_studio_invoice` | minor | **UNCHANGED** | `grep -rn create_draft_studio_invoice supabase/tests/` → only `billing/studio_invoice_test.sql`. The pin lives only in the one-shot DO block at `00570:876-940`. |
-| F5 `resolve_studio_identity` short-circuits on a bogus studio | minor | **UNCHANGED** | `SELECT * FROM resolve_studio_identity(NULL, <designer>, '…dead')` → `studio_id NULL, name 'Studio Manager', source full_name` (skips the primary-studio derivation). |
-| F6 no `has_designer_domain_role` on the studio branch | minor | **UNCHANGED** | See R2-3 below — now with a sharper proof. |
-| F7 hook forces `kind:'adhoc'` | nit | **UNCHANGED** | `use-invoices.ts:789`; test at `__tests__/use-invoices.test.ts:542` pins it. |
-| F8 unguarded `ADD CONSTRAINT`, no title length CHECK | nit | **UNCHANGED** | `00570:45-56`. |
+**Verdict: SHIP.** No blocker, no major. Every numbered brief item is delivered,
+every function body is rebased on its true head with the project path
+byte-identical, the re-pinned trigger hash matches the deployed body exactly,
+and all listed gates are green. Four minors/nits carry forward or are new.
 
 ---
 
-## Brief items 1–10 — delivered
+## 1. Head-rebase proof (a stale head would be a blocker — none found)
 
-1. `project_id` nullable + FK/cascade kept, `title text`, `chk_invoices_anchor` **validated** (`convalidated = t`), `COMMENT ON COLUMN` present.
-2. `set_invoice_studio_id()` rebased on its TRUE head. Anchored grep → `00511_public_sd_hardening.sql` is the last definition before 00570. Body diff old→new: **145 inserted lines, 0 deleted** — every project-path line byte-identical.
-3. `create_draft_studio_invoice` — SECURITY DEFINER, `proconfig = {search_path=pg_catalog, public, pg_temp}`, ACL identical in shape to `create_draft_invoice` (`{postgres=X/postgres,authenticated=X/postgres}`), totals/rounding copied exactly (`round(qty*unit)::integer`, `round(subtotal*rate)::integer` — probe: qty 0.5 × 333¢, rate 0.0825 → 167 / 14 / 181).
-4. `apply_invoice_payment_effects` rebased on `00277`; diff is exactly two hunks — `JOIN` → `LEFT JOIN projects` and `COALESCE(pr.name, i.title, 'Studio invoice')`. Refund contra leg untouched.
-5. Three additive household SELECT policies; 00178's stay.
-6. `resolve_studio_identity` drop+create as the 3-arg form, grants and comment re-applied.
-7. `supabase/tests/billing/studio_invoice_test.sql` — PASS.
-8. `database.types.ts` regenerated (nullable `project_id`, `title`, the new RPC, the 3-arg resolver).
-9. Hooks: `Invoice.project_id: string | null`, `title`, `useCreateDraftStudioInvoice`, `useClientInvoices` (select shape matches `useProjectInvoices` exactly), both exported.
-10. Null-safety in the designer portal; the client portal needed none (`type-check` clean).
-
-## Gates I ran
+Anchored greps, run in the worktree:
 
 ```
-supabase --workdir …/agent-si-db db reset      → "Finished supabase db reset" (clean)
-bash …/scripts/run-sql-tests.sh                → total 157 · green 136 · expected-fail 21 · unexpected-fail 0
-  PASS supabase/tests/billing/studio_invoice_test.sql
-  PASS supabase/tests/billing/invoice_checkout_integrity_test.sql
-  PASS supabase/tests/edge_api/public_sd_hardening_contract_test.sql
-  PASS supabase/tests/commercial/multi_studio_signature_test.sql
-  PASS supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql
-pnpm --filter @patina/supabase type-check      → clean
-pnpm --filter @patina/supabase test -- use-invoices → 48 passed
-pnpm --filter @patina/designer-portal type-check → clean
-pnpm --filter @patina/client-portal type-check   → clean
-pnpm --filter @patina/designer-portal test -- accounts desk-receivables → 3 suites, 12 tests passed
+$ grep -rln "CREATE OR REPLACE FUNCTION[^(]*set_invoice_studio_id" supabase/migrations/*.sql | sort | tail -3
+supabase/migrations/00318_studio_invoice_numbering_and_ops.sql
+supabase/migrations/00511_public_sd_hardening.sql
+supabase/migrations/00571_studio_invoices.sql
+--- apply_invoice_payment_effects ---   00178 / 00277 / 00571
+--- resolve_studio_identity ---         00320 / 00571
+--- create_draft_invoice ---            00511 (untouched)
 ```
 
-## Independent probes (all against the freshly reset local stack)
+**`set_invoice_studio_id()` — 00511 is the head, project path byte-identical:**
 
-- **Cross-studio household** — member B of studio two billing a household on member A's studio-one roster → `42501 studio invoice household not found or access denied`.
-- **Non-member studio / blank title / empty lines / milestone kind** — covered by the suite (42501 / 23514) and re-run green.
-- **Direct DML on `invoice_line_items`** — a `milestone` line is refused by `chk_line_items_milestone_kind`, an `ffe` line by `chk_line_items_ffe_kind`, a **`time` line is accepted** on a studio draft (same latitude the project path has; S6 is enforced at the RPC only). See R2-10.
-- **Identity immutability** — `UPDATE … SET project_id = <a real project>` on a studio draft → `P0001`; `UPDATE … SET client_id = <stranger>` → `P0001`; `UPDATE invoices SET project_id = NULL` on a project invoice as `postgres` → `P0001`.
-- **RLS** — household: issued 1 / draft 0 / line items on issued 1 / line items on draft 0. Co-member: issued 1 / draft 1. Stranger: 0 invoices, 0 line items (zero rows, never an error). `anon`: 0 rows.
-- **The bookkeeper persona end to end** (the plan's studio moment): member B with no roster row draws the invoice → stamped `designer_id = A` (the roster owner); B issues it → `INV-0001` off `studio_invoice_counters`; B records a check → `paid`; `designer_earnings` = 1 row, `Invoice INV-0001 — Bookkeeper consult`.
+```
+$ wc -l head_trigger.sql new_trigger.sql
+     442 head_trigger.sql
+     641 new_trigger.sql
+$ diff head_trigger.sql new_trigger.sql | grep -c '^<'
+0
+```
+
+Zero removed lines; 199 pure insertions across the two arms, exactly as the
+banner claims.
+
+**`apply_invoice_payment_effects` — 00277 is the head, two lines changed:**
+
+```
+68c68,69
+<     'Invoice ' || COALESCE(i.invoice_number, '(draft)') || ' — ' || pr.name,
+---
+>     'Invoice ' || COALESCE(i.invoice_number, '(draft)') || ' — '
+>       || COALESCE(pr.name, i.title, 'Studio invoice'),
+77c78
+<   JOIN projects pr ON pr.id = i.project_id
+---
+>   LEFT JOIN projects pr ON pr.id = i.project_id
+```
+
+The refund-contra leg is untouched (`refunded` still neither held nor owed).
+`designer_earnings.project_id` stays `i.project_id` rather than the brief's
+`pr.id` — identical under a LEFT JOIN on that key, and the column has been
+nullable since 00178:183.
+
+**`resolve_studio_identity` — 00320 is the head; drop + create of the 3-arg
+form; the only body delta is step 0 plus `v_studio_id IS NULL AND` on step 1.**
+
+**Contract-test hash re-pin verified, not trusted:**
+
+```
+$ psql … -c "select encode(sha256(convert_to(prosrc,'UTF8')),'hex')
+             from pg_proc where oid = to_regprocedure('public.set_invoice_studio_id()');"
+b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89
+```
+
+which is byte-for-byte the value pinned at
+`supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1719`.
 
 ---
 
-## Findings
+## 2. Gates (run by the reviewer, pasted)
 
-### R2-1 · major (confidence 0.95) · migration number collision — renumber before merge
-`00570` is claimed twice across live worktrees:
+| Gate | Result |
+|---|---|
+| `supabase --workdir <wt> db reset` | clean — `Finished supabase db reset`, `{"target":"local","message":"Reset local database."}`; logged in `stack-reset-notice.md` |
+| `scripts/run-sql-tests.sh` | `total: 157 · green: 136 · expected-fail: 21 · unexpected-fail: 0 · effective-green: 157/157` |
+| named suites | `PASS billing/invoice_checkout_integrity_test.sql`, `PASS billing/studio_invoice_test.sql`, `PASS commercial/multi_studio_signature_test.sql`, `PASS edge_api/public_sd_hardening_contract_test.sql`, `PASS rls/00563_proposal_signing_multi_studio.test.sql` |
+| `pnpm --filter @patina/supabase type-check` | clean (`tsc --noEmit`, no output) |
+| `pnpm --filter @patina/supabase test -- use-invoices` | `1 passed (1) · 48 passed (48)` |
+| `pnpm --filter @patina/designer-portal type-check` | clean |
+| `pnpm --filter @patina/client-portal type-check` | clean |
+| `pnpm --filter @patina/designer-portal test -- accounts desk-receivables` | `3 passed, 3 total · 12 passed` |
+| `… test -- use-desk-engagements desk-derivation command-bar` (blast-radius §8 extras) | `3 passed, 3 total · 142 passed` |
+| `supabase/functions/_tests/stripe-rail.test.ts` | not runnable in this lane (integration runtime) — the null-project case is written and documented as deferred |
+
+---
+
+## 3. Adversarial probes (all as the real roles, on the reset stack)
+
+Seeded: studio One + Two (member A, owner, `studio_designer` role), co-member B
+(no designer-domain role), household on A's roster, a stranger profile.
+
+**Direct DML (F1's hole):**
+
 ```
-.codex/worktrees/agent-si-db/      … 00570_studio_invoices.sql
-.codex/worktrees/agent-cae-w2-web/ … 00570_approval_response_signature.sql
-.codex/worktrees/agent-cae-w2-backend/ … 00569_approval_why_viewer_role_and_receipt.sql
-main                               … tip 00568_decision_first_notice_dispatch.sql
+A1 spoofed paid studio INSERT      => REFUSED P0001 (studio_id_not_designer_studio)
+A2 direct money UPDATE             => REFUSED P0001
+A3 direct status UPDATE            => REFUSED P0001
+A4 memo edit on clean draft        => ACCEPTED
+A5 stranger household INSERT       => REFUSED P0001
+A6 non-designer co-member as designer => REFUSED P0001
+A7 studioless anchor               => REFUSED P0001
 ```
-`patina-parallel-work` SKILL.md:132 — "Re-check the target tip right before merge; renumber on collision". Two files sharing the version prefix land as one ledger version; whichever merges second is at risk of being treated as already applied and silently skipped on Strata. Fix: the integration lane renumbers this migration (00571+ after re-checking the tip) and re-runs `db reset` + the SQL suite. No code change inside the migration.
 
-### R2-2 · minor (confidence 0.9) · `title` is not in the trigger's `UPDATE OF` list
+**Immutability:**
+
 ```
-CREATE TRIGGER set_invoice_studio_id BEFORE INSERT OR UPDATE OF id, studio_id, designer_id,
-  client_id, project_id, status, invoice_number, issue_date, due_date, payment_terms_days,
-  currency, subtotal_cents, tax_rate, tax_cents, total_cents, amount_paid_cents, memo,
-  internal_notes, sent_at, paid_at, voided_at, void_reason, stripe_checkout_session_id,
-  reminder_count, last_reminder_at, ar_flagged_at, ar_last_chased_at, created_at, updated_at
-  ON public.invoices …
+C1 postgres nulls project_id on a project invoice        => REFUSED P0001
+C2 service_role nulls project_id on a project invoice    => REFUSED P0001
+C3 service_role reparents a studio invoice onto a project=> REFUSED P0001
 ```
-00570 adds a column the invoice emails, the Stripe product name, the ledger and the client's letterbox all read, but does not add it to the gate's column list — an `UPDATE invoices SET title = …` never fires `set_invoice_studio_id()` at all. Not exploitable today: the only designer/co-member UPDATE policies are `((designer_id = auth.uid()) AND (status = 'draft'))` and `(is_studio_comember(designer_id) AND (status = 'draft'))`, so a title rewrite on an issued invoice is refused by RLS. Defence-in-depth only, and a drift the contract test cannot catch (it pins the function body, not the trigger definition). Fix: `ALTER TRIGGER`/recreate the trigger with `title` in the `UPDATE OF` list, in the same migration, and assert the trigger definition in `studio_invoice_test.sql`.
 
-### R2-3 · minor (confidence 0.85) · a member with no designer-domain role can be stamped as `designer_id` and earn
-The project path requires `public.has_designer_domain_role(NEW.designer_id)` at two places in the trigger and joins `roles.domain = 'designer'` inside `create_draft_invoice`. The studio branch and `create_draft_studio_invoice` require only an active non-guest `organization_members` row. Sharper proof than r1: in one transaction, as the same actor with `has_designer_domain_role → f`,
+**`create_draft_studio_invoice` rejections:**
+
 ```
-create_draft_studio_invoice(...)  → OK
-create_draft_invoice(...)         → "invoice project not found or access denied"
+B1 milestone kind  => 23514 "ad-hoc lines only; milestone, time, and ffe lines are project-bound"
+B2 time kind       => 23514 (same)          B3 ffe kind => 23514 (same)
+B4 blank title     => 23514                 B5 null title => 23514
+B6 stranger household => 42501 "studio invoice household not found or access denied"
+B7 empty lines     => 23514                 B8 negative cents => 23514
+B9 quantity 999999999 => 23514              B10 fractional cents => 22P02
+B11 tax_rate 2.0   => 23514                 B12 tax_rate -0.1 => 23514
+B13 non-member studio => 42501              B14 second studio draw => ACCEPTED
+B15 co-member B draws => ACCEPTED, designer stamped = A (7a00…0001)
+B16 household calls it => 42501             B17 anon => 42501 permission denied
+B18 service_role => 42501 permission denied
 ```
-and after settle the studio invoice wrote a `designer_earnings` `design_fee` row for that user. Within the brief as written ("an active non-guest organization_members row"), and `db-notes` reasons it out ("a studio invoice has no project lead"), so this is an authority-model delta for the orchestrator to rule, not a brief violation. If it should match: add `AND public.has_designer_domain_role(NEW.designer_id)` to both studio-branch EXISTS clauses and to the roster resolution.
 
-### R2-4 · minor (confidence 0.9) · the new SD RPC is pinned only inside the migration
-`create_draft_studio_invoice` appears nowhere in `supabase/tests/` except its own behavior suite. `public_sd_hardening_contract_test.sql:2085-2115` pins `create_draft_invoice` (overload count, `prosecdef`, `proconfig`, args, result, ACL, body sha256, octet_length); the studio sibling has only the one-shot `DO $studio_draft_roster$` block at `00570:876-940`, which never runs again after the migration applies. Fix: add a sibling manifest row / DO block to the contract test.
+ACL: `postgres=X/postgres | authenticated=X/postgres`. `resolve_studio_identity`
+overload count = 1.
 
-### R2-5 · minor (confidence 0.8) · `resolve_studio_identity` short-circuits on an unresolvable `p_studio_id`
-`00570:1244-1248` sets `v_studio_id := p_studio_id` unconditionally, so a non-existent studio skips both the project and primary-studio derivations and falls to the profile identity (probe above). Unreachable from a real invoice (`studio_id` is FK-checked), so an edge-case note. Fix: only short-circuit when the `organizations` read `FOUND`.
+**Money rail, end to end on a project-less invoice:**
 
-### R2-6 · minor (confidence 0.9) · the reset log still doesn't record the reset that wiped the peer's 00569
-`db-notes.md:157-163` asserts both resets are logged; `stack-reset-notice.md` carries one lane line. The orchestrator should know the peer's 00569 was dropped from the shared local stack once, and the missing line should be appended.
+```
+D1 issue    => INV-0001
+D2 counter  => studio_invoice_counters(7a11…0001).next_number = 1  (last assigned)
+D3 row      => INV-0001 | sent | houseless=t
+D4 claim    => {"state":"claimed","amount_cents":50000,"surcharge_cents":1500,…}
+D5 finalize => cs_rv_probe_1
+D6 settle   => succeeded
+D7 invoice  => paid | 50000 / 50000 | paid_at set
+D8 earnings => design_fee | project_id NULL | 50000 | confirmed
+               | "Invoice INV-0001 — Reviewer probe"
+```
 
-### R2-7 · minor (confidence 0.75) · no index behind the new household policies
-`pg_indexes` on `invoices`: `designer_status`, `due_date_live`, `project`, `studio`, pkey and the two number-uniqueness indexes — **no `client_id` index**. All three new policies filter `client_id = auth.uid()`, and `useClientInvoices()` is an unscoped `select` that runs on the client page's front door. Fix: `CREATE INDEX idx_invoices_client ON public.invoices (client_id) WHERE client_id IS NOT NULL;`.
+**Project-invoice earnings regression (must be unchanged):**
 
-### R2-8 · nit (confidence 0.8) · guard symmetry and an unbounded title on direct DML
-`00570:48` uses `ADD COLUMN IF NOT EXISTS title` but `:51` uses a bare `ADD CONSTRAINT chk_invoices_anchor`; the RPC bounds the title at 200 chars while a draft `UPDATE … SET title = …` (accepted in probe 3) is unbounded. Optional `CHECK (char_length(title) <= 200)`.
+```
+E1 invoice b0000000-…-cc01 project "Cedar Lane Study"
+E2 project earnings: Invoice INV-2026-0301 — Cedar Lane Study | project_id=b0000000-…-c0d1
+```
 
-### R2-9 · nit (confidence 0.7) · the hook swallows a mis-typed line kind
-`use-invoices.ts:786-795` maps every line to `kind: 'adhoc'` and drops `milestoneId`/`ffeItemId`, so the RPC's explicit `23514` message ("a studio invoice carries ad-hoc lines only…") can never reach the R83 band. Pass `row.kind` through.
+**RLS boundary:**
 
-### R2-10 · nit (confidence 0.65) · S6 is enforced at the RPC only
-A `time`-kind line inserts cleanly onto a studio draft via direct DML (`invoice_line_items` INSERT policy is `designer_id = auth.uid() AND status = 'draft'`); only `milestone` and `ffe` are stopped, by their own pre-existing CHECKs. The same latitude exists on project invoices, so nothing regressed — but W2's line editor (`useUpsertLineItems`) must carry the ad-hoc lock, or a studio invoice can grow a `time` line the composer never intended.
+```
+F1 household invoices  => 1  ("Reviewer probe" — the issued one; the draft is invisible)
+F2 household lines     => 1        F3 household payments => 1
+F4 co-member invoices  => 2        F5 stranger invoices  => 0
+F6 stranger lines      => 0        F7 anon invoices      => 0
+```
 
-### R2-11 · nit (confidence 0.9) · M2's `Studio ·` stamp is not here (correctly)
-`accounts-ledger-page.tsx:131` / `accounts-receivables-page.tsx:170` render `project?.name ?? title ?? 'Studio'`, so a studio invoice shows only its title — proposal M2 shows `Studio · Design consultation · INV-0031 · sent · $450.00`. This is W2's stamp, and the brief forbade UI here; noting only so the orchestrator does not read W1 as having delivered M2.
+Zero rows, never an error that confirms existence.
 
-### R2-12 · nit (confidence 0.6) · narrower REVOKE list than the sibling
-`create_draft_invoice` revokes from `PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user`; `create_draft_studio_invoice` omits the last four. No exposure — the resulting ACLs are byte-identical (`{postgres=X/postgres,authenticated=X/postgres}` for both) and the migration's own ACL ASSERT proves it. Belt-and-braces divergence only.
+**PostgREST overload resolution after the drop + create** (the real risk of
+`resolve_studio_identity`), against the local REST endpoint:
+
+```
+2 named args (every existing caller) => [{"studio_id":"…0001","name":"RV Studio One","source":"studio"}]
+3 named args (the new studio path)   => [{"studio_id":"…0002","name":"RV Studio Two","source":"studio"}]
+1 named arg  (iOS designer-only)     => [{"studio_id":"…0001","name":"RV Studio One","source":"studio"}]
+anon POST /rpc/create_draft_studio_invoice => 401
+```
+
+All in-repo SQL callers pass two positional arguments
+(`00330:133`, `00331:294`, `00334:93`, `00388:278`, `00412:1545`, `00423:1781`)
+and resolve against the default third.
+
+---
+
+## 4. Prior-round findings — verification
+
+| id | was | now |
+|---|---|---|
+| F1 | blocker | **FIXED** — probes A1–A3 refused, A4 still accepted; clean-draft predicate on both arms |
+| F2 | major | **FIXED** — `studio_invoice_test.sql:179-240` drives claim → finalize → settle; suite green |
+| F3 | minor | **ADDRESSED** — `stack-reset-notice.md` now records the main-checkout reset and the peer 00569 drop; `db-notes.md` §Stack states it plainly |
+| F4 | minor | **OPEN** (see R2-1) |
+| F5 | minor | **FIXED** — the org read must FIND an active `design_studio` or the resolver falls through to the project/primary derivations; asserted at `studio_invoice_test.sql:799-840` |
+| F6 | minor | **FIXED** — `OR NOT public.has_designer_domain_role(NEW.designer_id)` on the INSERT arm; probe A6 refused |
+| F7 | nit | **OPEN** (see R2-2) |
+| F8 | nit | **PARTLY OPEN** (see R2-3) |
+
+---
+
+## 5. Findings this round
+
+### R2-1 · minor (carried F4) · no ongoing pin on `create_draft_studio_invoice`
+
+`supabase/migrations/00571_studio_invoices.sql:1007-1071` registers the new SD
+RPC in a `DO $studio_draft_roster$` block: overload universe = 1, owner,
+`prosecdef`, `proconfig`, result `uuid`, lock order (`PERFORM membership.id`
+before `PERFORM studio.id`), and the exact ACL tuple. That is a good
+registration, but it lives in the migration, so it only ever runs *at its own
+position* in the ledger — a later migration that redefines the function is not
+caught. `grep -rn create_draft_studio_invoice supabase/tests/` returns
+`billing/studio_invoice_test.sql` only; the 17-row `_00511_expected_public`
+manifest is a fixed list, not an SD enumeration, so nothing fails if the
+function drifts after merge. `db-notes.md` documents the deviation and the
+lock-order reason (sound). Fix if wanted: one manifest row (or a sibling DO
+block) in `public_sd_hardening_contract_test.sql` pinning args, result, ACL and
+body sha.
+
+### R2-2 · nit (carried F7) · the hook rewrites the caller's line kind
+
+`packages/supabase/src/hooks/use-invoices.ts:786` maps every line to
+`{ kind: 'adhoc', … }` regardless of `buildLineRow`'s kind, and the test
+`'forces kind adhoc even when the caller names another kind'` pins it. A
+mis-typed milestone line therefore becomes a silent ad-hoc line instead of
+surfacing the RPC's explicit `check_violation` message (which is a good one:
+"a studio invoice carries ad-hoc lines only; milestone, time, and ffe lines are
+project-bound"). Wave 2's composer is the surface that would show it.
+
+### R2-3 · nit (carried F8) · `title` is bounded only by the RPC
+
+`00571:47-58`: `ADD COLUMN IF NOT EXISTS title` is guarded, `ADD CONSTRAINT
+chk_invoices_anchor` is not (immaterial — migrations do not replay), and there
+is no `CHECK (char_length(title) <= 200)`. The 200-char bound lives only in
+`create_draft_studio_invoice`; a service-role write is unbounded. Related:
+ruling **S12** ("the title is required") is likewise enforced only in the RPC —
+a service-role INSERT can create a titleless studio invoice, after which the
+earnings description falls back to `'Studio invoice'` and the ledger to
+`'Studio'`. Both the `stripe-rail.test.ts` fixture and the machine-written rows
+in `studio_invoice_test.sql:742-798` are exactly that shape, so the fallback is
+load-bearing, not dead. Not a brief violation; a note for the orchestrator.
+
+### R2-4 · minor (new) · an issued studio invoice re-judges live roster
+### authority on every authenticated write
+
+`00571:151-186` (UPDATE arm). After the machine early return, an authenticated
+caller — including the SECURITY DEFINER billing RPCs, which arrive as
+`v_active_role='authenticated'`, `current_user='postgres'` — must satisfy, on
+*every* state write to an already-issued studio invoice:
+
+* the actor is an active non-guest member of `NEW.studio_id`, **and**
+* `NEW.client_id` still sits on the `designer_clients` roster of *some* active
+  non-guest member of that studio.
+
+The project path's analogue is a `projects` tuple that cannot change (the four
+identity columns are immutable). A roster *can* change. So if the designer
+tidies the household off their roster, or the only roster-holding member goes
+inactive, `record_invoice_payment`, `void_invoice` and `chase_invoice` on an
+outstanding studio invoice all start raising `studio_id_not_designer_studio` —
+an opaque error on the money path, with no copy anywhere that explains it. The
+Stripe/service-role rail is exempt (the early return sits above these reads, by
+design, commit `9576fa0b5`), so the household can still pay; it is the studio
+side that seizes.
+
+This is deliberate and documented (the branch comment calls S4 "the row's law
+on both arms", and `studio_invoice_test.sql:742-798` asserts it), so it is a
+design ruling to confirm rather than a defect to fix. Confidence 0.75: derived
+by reading the deployed body and the RPC call shapes. I could not run the probe
+— see the environment note below — so the orchestrator should treat the
+*consequence* as reasoned, not executed. If it is unwanted, the fix is to gate
+the roster read on `TG_OP = 'INSERT'` the way the designer-domain check already
+is, since `client_id`/`designer_id`/`studio_id` are immutable on UPDATE anyway.
+
+### R2-5 · nit (new) · two small additions the brief did not ask for
+
+Both are justified and documented, listed for scope accounting only:
+
+* `title` appended to the trigger's `UPDATE OF` list (`00571:728-737`). Without
+  it a direct `UPDATE … SET title = …` on an issued studio invoice never fires
+  the gate. The normalized trigger definition is re-pinned at
+  `public_sd_hardening_contract_test.sql:2379-2396` and the suite is green.
+* `CREATE INDEX IF NOT EXISTS idx_invoices_client ON public.invoices (client_id)
+  WHERE client_id IS NOT NULL` (`00571:1253`), behind the new household policy,
+  which filters on `client_id` and nothing else.
+
+### R2-6 · advisory · the `stripe-rail.test.ts` fixture bills the designer
+
+`supabase/functions/_tests/stripe-rail.test.ts:255-266` seeds the studio invoice
+with `client_id: ids.designerA` and no `designer_clients` row. It passes only
+because the INSERT arm's service-role early return precedes the roster and
+designer-domain checks. It proves the webhook/earnings leg on a null project,
+which is what it is for; it does not exercise S4. Fine as written — worth
+knowing when reading a green run.
+
+---
+
+## 6. Environment note (does not block anything)
+
+My `db reset` and every gate above ran on this branch's ledger, tip **00571**.
+Immediately after the gates, while I was cleaning up probe rows, a **peer session
+reset the shared local stack to a 00569 ledger** (`approvals/w2-backend`):
+
+```
+$ psql … -c "select version from supabase_migrations.schema_migrations order by version desc limit 5;"
+00569 / 00568 / 00567 / 00566 / 00565
+$ psql … -c "select count(*) … proname='create_draft_studio_invoice';"
+0
+```
+
+All the output above was captured before that. My probe rows (`7a00…`, `7a11…`)
+went with the peer's reset, so nothing of mine is left on the stack. I did not
+reset again — the peer is mid-work and the rule is explicit.
+
+## 7. Brief coverage
+
+Items 1–10 all delivered. Item 3's "register it in the SD roster the way 00511
+registers `create_draft_invoice`" is met in the migration but not in the
+contract test (R2-1). Item 7's Deno case is written and documented as
+un-runnable in this lane. Item 4's `designer_earnings.project_id` uses
+`i.project_id` rather than `pr.id` — equivalent. Nothing outside the lane is
+touched: 24 files, all under `supabase/`, `packages/supabase/`,
+`apps/designer-portal/src/…/accounts|document`, and the program's `build/`
+folder.

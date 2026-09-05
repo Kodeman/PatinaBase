@@ -265,6 +265,41 @@ BEGIN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
       END IF;
 
+      -- S4 is the row's law for every caller that judges live authority, not
+      -- the composer's alone: the household must sit on the designer_clients
+      -- roster of an active non-guest member of this studio - the rule
+      -- create_draft_studio_invoice resolves the household through - and the
+      -- stamped member must hold a designer-domain role. Without both, a
+      -- caller could address a studio invoice to any profile in the database,
+      -- or route its design_fee earning to a co-member who designs nothing.
+      -- The pair sits ABOVE the machine early return because the project path
+      -- holds service_role to the same two reads on insert (its live tuple at
+      -- the FOR SHARE select below, and has_designer_domain_role); only a true
+      -- postgres/no-SET-ROLE session receives the bounded legacy-fixture
+      -- bypass the project path grants at exactly this point. The roster read
+      -- is RLS-safe for every caller this branch admits:
+      -- designer_clients_studio_rw (00316:39) shows a co-member the whole
+      -- studio's roster, the SECURITY DEFINER billing RPCs arrive as the table
+      -- owner, and service_role bypasses RLS. Neither read takes a lock, so
+      -- the canonical root -> user_roles -> memberships -> organization order
+      -- below is untouched.
+      IF NOT v_postgres_migration THEN
+        IF NOT EXISTS (
+             SELECT 1
+             FROM public.designer_clients AS studio_roster
+             JOIN public.organization_members AS roster_membership
+               ON roster_membership.organization_id = NEW.studio_id
+              AND roster_membership.user_id = studio_roster.designer_id
+             WHERE studio_roster.client_id = NEW.client_id
+               AND roster_membership.status = 'active'
+               AND roster_membership.role <> 'guest'
+           )
+           OR NOT public.has_designer_domain_role(NEW.designer_id)
+        THEN
+          RAISE EXCEPTION 'studio_id_not_designer_studio';
+        END IF;
+      END IF;
+
       IF v_active_role = 'service_role' OR v_postgres_migration THEN
         RETURN NEW;
       END IF;
@@ -280,30 +315,6 @@ BEGIN
              AND studio_actor.status = 'active'
              AND studio_actor.role <> 'guest'
          )
-         -- S4 is the row's law, not only the composer's: the household must
-         -- sit on the designer_clients roster of an active non-guest member
-         -- of this studio - the rule create_draft_studio_invoice resolves the
-         -- household through - and the stamped member must hold a
-         -- designer-domain role. Without both, a member could address a
-         -- studio invoice to any profile in the database, or route its
-         -- design_fee earning to a co-member who designs nothing. The roster
-         -- read is RLS-safe for every actor this branch admits:
-         -- designer_clients_studio_rw (00316:39) shows a co-member the whole
-         -- studio's roster, and the SECURITY DEFINER billing RPCs arrive as
-         -- the table owner. Neither read takes a lock, so the canonical
-         -- root -> user_roles -> memberships -> organization order below is
-         -- untouched.
-         OR NOT EXISTS (
-           SELECT 1
-           FROM public.designer_clients AS studio_roster
-           JOIN public.organization_members AS roster_membership
-             ON roster_membership.organization_id = NEW.studio_id
-            AND roster_membership.user_id = studio_roster.designer_id
-           WHERE studio_roster.client_id = NEW.client_id
-             AND roster_membership.status = 'active'
-             AND roster_membership.role <> 'guest'
-         )
-         OR NOT public.has_designer_domain_role(NEW.designer_id)
       THEN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
       END IF;

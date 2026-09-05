@@ -739,13 +739,92 @@ BEGIN
 END;
 $$;
 
--- S4 is the row's law on the UPDATE arm too. The machine writes a studio
--- invoice for a household on nobody's roster (service_role returns before the
--- actor checks, exactly as the project path lets it reconcile history); a
--- member then cannot touch it by hand - not its memo, and not its title, which
--- reaches the trigger only because title now sits in the UPDATE OF list.
+-- S4 binds the machine on the INSERT arm as well. The project path holds
+-- service_role to its live tuple and to has_designer_domain_role on insert
+-- (00571's project branch), so the houseless branch holds it to the two reads
+-- that carry the same weight: the household's roster and the stamped member's
+-- designer-domain role. Only a true postgres session keeps the legacy-fixture
+-- bypass, which is why the UPDATE-arm fixture below is written from one.
 RESET ROLE;
 SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_state text;
+  v_accepted boolean;
+BEGIN
+  v_accepted := false;
+  v_state := NULL;
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id, title, status,
+      subtotal_cents, total_cents
+    ) VALUES (
+      '5f140000-0000-4000-8000-000000000007', NULL,
+      '5f100000-0000-4000-8000-000000000001',
+      '5f100000-0000-4000-8000-000000000004',
+      '5f110000-0000-4000-8000-000000000001',
+      'Machine-addressed to a stranger', 'draft', 1000, 1000
+    );
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'the machine cannot address a studio invoice to a household on nobody''s roster';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.invoices
+    WHERE id = '5f140000-0000-4000-8000-000000000007'
+  ), 'the machine-written stranger row never landed';
+
+  v_accepted := false;
+  v_state := NULL;
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id, title, status,
+      subtotal_cents, total_cents
+    ) VALUES (
+      '5f140000-0000-4000-8000-000000000008', NULL,
+      '5f100000-0000-4000-8000-000000000002',
+      '5f100000-0000-4000-8000-000000000006',
+      '5f110000-0000-4000-8000-000000000001',
+      'Machine-routed to a non-designer', 'draft', 1000, 1000
+    );
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'the machine cannot route a studio invoice''s earning to a non-designer';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.invoices
+    WHERE id = '5f140000-0000-4000-8000-000000000008'
+  ), 'the machine-written non-designer row never landed';
+
+  -- The machine still writes what it is meant to write: a roster household
+  -- stamped to a designer member, with no actor of its own.
+  INSERT INTO public.invoices (
+    id, project_id, designer_id, client_id, studio_id, title, status,
+    subtotal_cents, total_cents
+  ) VALUES (
+    '5f140000-0000-4000-8000-000000000009', NULL,
+    '5f100000-0000-4000-8000-000000000001',
+    '5f100000-0000-4000-8000-000000000003',
+    '5f110000-0000-4000-8000-000000000001',
+    'Machine-written for a roster household', 'draft', 1000, 1000
+  );
+  ASSERT (SELECT status = 'draft' FROM public.invoices
+          WHERE id = '5f140000-0000-4000-8000-000000000009'),
+    'the machine still writes a roster household stamped to a designer';
+END;
+$$;
+
+-- S4 is the row's law on the UPDATE arm too. A postgres session - the bounded
+-- legacy-fixture bypass, the only caller the INSERT arm still lets past the
+-- roster and designer-domain reads - lays down a studio invoice for a
+-- household on nobody's roster; a member then cannot touch it by hand, not its
+-- memo, and not its title, which reaches the trigger only because title now
+-- sits in the UPDATE OF list.
+RESET ROLE;
 INSERT INTO public.invoices (
   id, project_id, designer_id, client_id, studio_id, title, status,
   subtotal_cents, total_cents

@@ -906,3 +906,191 @@ window (unchanged by this fix) is the one recorded in the close-round advisory
 above.
 
 `deploySet = ['migration 00571_studio_invoices.sql']`
+
+---
+
+## Close — W1 db lane, the four ruled items (2026-09-05)
+
+Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-si-db`
+(`git rev-parse --show-toplevel` → same), branch `studio-invoices/w1-db`.
+
+**The brief named tip `07bfdd55c`; the branch was already at `4fbbc6624`.** All four
+ruled items had landed in the intervening fix commits — `aaf511c5a`
+(*hold a studio invoice to its household's roster and a designer*), `c289902d9`
+(*hold a studio invoice to its studio's roster on both trigger arms*),
+`c98ad2e51` (*pin the roster gate, the watched title, and the brand resolver
+fall-through*). This step re-verified each against the true head, replayed the
+ledger on the shared stack, and ran every named gate. **No new code was written:
+writing the same predicates a second time would have been a rewrite, not a fix.**
+
+### Item-by-item verification
+
+| ruled item | where it lives | proof |
+|---|---|---|
+| **R3-1** roster rule on BOTH arms of `set_invoice_studio_id()` | `00571:150-173` (UPDATE arm), `00571:284-305` (INSERT arm) | the exact clause the ruling names — `designer_clients` JOIN `organization_members ON organization_id = NEW.studio_id AND user_id = dc.designer_id`, `status = 'active'`, `role <> 'guest'` — inside each arm's authority `IF`, raising the project path's own `RAISE EXCEPTION 'studio_id_not_designer_studio'` (`P0001`) |
+| **R3-2** `resolve_studio_identity` short-circuit falls through | `00571:1329-1341` | step 0 is now `SELECT o.id INTO v_studio_id FROM organizations o WHERE o.id = p_studio_id AND o.type = 'design_studio' AND o.status = 'active'`; steps 1/2 are guarded on `v_studio_id IS NULL`, so a dead id, a manufacturer org, or an archived studio derives from project/designer instead |
+| **R3-3** `title` in the trigger's `UPDATE OF` list | `00571:727-734` | `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER`, list byte-identical to `00511:3078-3083` with `title` appended |
+| **R3-7** household-read index | `00571:1253-1255` | `CREATE INDEX IF NOT EXISTS idx_invoices_client ON public.invoices (client_id) WHERE client_id IS NOT NULL;` |
+
+### Rebase proof — bodies came off their TRUE heads
+
+```
+grep -rln "CREATE OR REPLACE FUNCTION[^(]*set_invoice_studio_id" supabase/migrations/*.sql | sort | tail -1
+  supabase/migrations/00571_studio_invoices.sql
+grep -rln "CREATE OR REPLACE FUNCTION[^(]*resolve_studio_identity" supabase/migrations/*.sql | sort | tail -1
+  supabase/migrations/00571_studio_invoices.sql
+```
+
+`set_invoice_studio_id` body, 00511 head → 00571 (`difflib.unified_diff`, n=0):
+
+```
+00511 head lines 441 | 00571 lines 640
+added 199 removed 0
+```
+
+**Zero removed — every project-path line byte-identical.**
+
+Deployed body hash equals the re-pinned contract value:
+
+```
+SELECT encode(sha256(convert_to(prosrc,'UTF8')),'hex'), octet_length(prosrc)
+FROM pg_proc WHERE proname='set_invoice_studio_id';
+  b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89 | 26272
+```
+
+= `supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1719`. The
+normalized `pg_get_triggerdef` pinned at `:2396` also ends `…,titleoninvoices…`.
+
+### Tests behind the four items (`supabase/tests/billing/studio_invoice_test.sql`)
+
+- `:538-565` — the r3 probe verbatim as **direct DML**: an INSERT addressed to
+  `5f100000-…-0004`, a profile on nobody's roster, refused `P0001`, and
+  `:566-569` asserts the row never landed.
+- `:569-593` — the co-member-without-a-designer-domain-role INSERT, refused `P0001`.
+- `:596-611` — **the positive case**: a roster household stamped to a designer
+  member still writes a clean draft.
+- `:380-395` — the RPC's own off-roster refusal (`create_draft_studio_invoice`).
+- `:757-779` — the UPDATE arm: a service_role-written stranger row cannot be
+  hand-edited by a member, `'the UPDATE arm holds a studio invoice to its
+  household''s roster too'`.
+- `:810-833` — `resolve_studio_identity` as **anon**: a manufacturer org id
+  (`5f110000-…-0004`) never names itself and returns the fall-through; an active
+  `design_studio` id returns it.
+- `:712` — `ASSERT position('title' IN pg_get_triggerdef(watcher.oid)) > 0`.
+- `:722` — `ASSERT` on `pg_indexes … indexname = 'idx_invoices_client'`.
+
+Live confirmation after the reset:
+
+```
+triggerdef_has_title = true | idx_invoices_client = 1
+```
+
+### Gates
+
+| gate | result |
+|---|---|
+| `supabase --workdir <wt> db reset` | clean — `Applying migration 00571_studio_invoices.sql…` then every seed, `Finished supabase db reset` |
+| `bash <wt>/scripts/run-sql-tests.sh` | `total 157 · green 136 · expected-fail 21 · unexpected-fail 0 · effective-green 157/157` |
+| — `billing/studio_invoice_test.sql` | PASS |
+| — `edge_api/public_sd_hardening_contract_test.sql` | PASS |
+| — `billing/invoice_checkout_integrity_test.sql` | PASS |
+| `pnpm --filter @patina/supabase type-check` | clean (`tsc --noEmit`, no output) |
+| `pnpm --filter @patina/designer-portal type-check` | clean (`tsc --noEmit`, no output) |
+
+deploySet: `migration 00571_studio_invoices.sql`.
+
+---
+
+## Fix round 1 — F1 (major): the machine INSERT arm now judges the row's law
+
+**Finding.** On the INSERT arm the `IF v_active_role = 'service_role' OR
+v_postgres_migration THEN RETURN NEW` early return sat ABOVE the roster
+`EXISTS` and `has_designer_domain_role(NEW.designer_id)`, so `service_role`
+could write a studio invoice addressed to a household on nobody's roster and
+stamped to a co-member who designs nothing. The project path holds
+`service_role` to both (its live tuple at the `FOR SHARE` select, and
+`has_designer_domain_role`); only a true postgres/no-`SET ROLE` session takes
+the bounded legacy bypass there.
+
+**Fix** — `supabase/migrations/00571_studio_invoices.sql`, INSERT arm only
+(00571:268-320). The roster + designer-domain pair moved above the machine
+early return, guarded by `IF NOT v_postgres_migration`, so the bypass the
+project path grants at exactly this point is the only one that survives. The
+actor-membership `EXISTS` stays authenticated-only, below the early return.
+The UPDATE arm is untouched: its live-authority reads still sit BELOW its
+machine early return, because the four identity columns are immutable there
+and a settle or a void must replay after the stamped designer has left.
+Project-path lines stay byte-identical; the branch still takes no lock, so the
+canonical `root -> user_roles -> memberships -> organization` order is
+untouched.
+
+```
+268:      -- S4 is the row's law for every caller that judges live authority, not
+...
+286:      IF NOT v_postgres_migration THEN
+287:        IF NOT EXISTS (
+288:             SELECT 1
+289:             FROM public.designer_clients AS studio_roster
+290:             JOIN public.organization_members AS roster_membership
+291:               ON roster_membership.organization_id = NEW.studio_id
+292:              AND roster_membership.user_id = studio_roster.designer_id
+293:             WHERE studio_roster.client_id = NEW.client_id
+294:               AND roster_membership.status = 'active'
+295:               AND roster_membership.role <> 'guest'
+296:           )
+297:           OR NOT public.has_designer_domain_role(NEW.designer_id)
+298:        THEN
+299:          RAISE EXCEPTION 'studio_id_not_designer_studio';
+300:        END IF;
+301:      END IF;
+302:
+303:      IF v_active_role = 'service_role' OR v_postgres_migration THEN
+304:        RETURN NEW;
+305:      END IF;
+```
+
+**Contract test re-pinned** —
+`supabase/tests/edge_api/public_sd_hardening_contract_test.sql:1724`. Body
+sha256 `b6f0ab2a38d6bbbf286df30d115dac544dcae96ed494c3235692feafb9a3cc89` →
+`3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c`, read live
+after the reset:
+
+```
+$ psql ... -tAc "SELECT encode(extensions.digest(convert_to(p.prosrc,'UTF8'),'sha256'),'hex')
+                 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+                 WHERE n.nspname='public' AND p.proname='set_invoice_studio_id';"
+3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c
+```
+
+The pin's comment now records that the INSERT arm's roster and designer-domain
+reads sit above the machine early return while the UPDATE arm's sit below.
+
+**Tests** — `supabase/tests/billing/studio_invoice_test.sql:742-817`, a new
+`SET LOCAL ROLE service_role` block carrying the r1 probes verbatim:
+
+- P4a: machine INSERT, household `…0004` (on nobody's roster), designer `…0001`
+  → refused `P0001`, row never landed.
+- P4b: machine INSERT, household `…0006` (on co-member B's roster, so the
+  roster half holds), designer `…0002` (no designer-domain role) → refused
+  `P0001`, row never landed.
+- Positive: machine INSERT, roster household `…0003` stamped to designer
+  `…0001` → accepted, lands `draft`.
+
+The UPDATE-arm stranger fixture at what was :747-758 was written as
+`SET LOCAL ROLE service_role`; it is now a bare `RESET ROLE` (postgres
+session) write, the one caller the INSERT arm still lets past. Its two
+assertions — a member can touch neither the memo nor the title of a
+stranger-household row — are unchanged and still pass.
+
+### Gates (fix round 1)
+
+| gate | result |
+|---|---|
+| `supabase --workdir <wt> db reset` | clean — seeds replayed, `Finished supabase db reset on branch main.` / `Reset local database.` |
+| `bash <wt>/scripts/run-sql-tests.sh` | `total 157 · green 136 · expected-fail 21 · unexpected-fail 0 · effective-green 157/157` |
+| — `billing/studio_invoice_test.sql` | PASS |
+| — `edge_api/public_sd_hardening_contract_test.sql` | PASS (2s) |
+| `pnpm --dir <wt> --filter @patina/supabase type-check` | clean (`tsc --noEmit`, no output) |
+| `pnpm --dir <wt> --filter @patina/designer-portal type-check` | clean (`tsc --noEmit`, no output) |
+
+deploySet unchanged: `migration 00571_studio_invoices.sql`.
