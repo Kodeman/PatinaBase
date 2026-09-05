@@ -12,7 +12,9 @@
 --      no backfill: an approval created before this migration simply has no
 --      why, and every renderer already treats it as absent. ≤ 200 characters,
 --      enforced by CHECK on the column AND by the creating RPC, so a direct
---      writer and an RPC caller are refused by the same rule.
+--      writer and an RPC caller are refused by the same rule. Supersession
+--      carries it too: a revision either re-asks the why or inherits the
+--      predecessor's, and never loses it.
 --
 --   2. iosb3-M2 — `viewerRole` on the sanitized projection. Wave 1 shipped
 --      `list_my_project_decision_reviews` returning every Stage-2 approval in
@@ -44,13 +46,15 @@
 -- Every redefined body is grafted from its latest prior definition:
 --   _create_project_approval_decision_checked / create_project_approval_decision
 --     ← 00463 (unchanged since)
+--   supersede_project_approval_decision         ← 00464 (unchanged since)
 --   get_project_decision_reviews                ← 00465
 --   _respond_project_approval_checked           ← 00464 (unchanged since)
 --
--- Both creating RPCs gain a defaulted trailing parameter, which would make a
--- 3-/4-argument call ambiguous against the installed signature — so the old
--- signature is DROPped first (the 00400 / 00475 precedent). Nothing else in
--- the tree references it by exact signature except its own REVOKE/GRANT.
+-- The two creating RPCs and the superseding one each gain a defaulted trailing
+-- parameter, which would make a call at the old arity ambiguous against the
+-- installed signature — so the old signature is DROPped first (the 00400 /
+-- 00475 precedent). Nothing else in the tree references them by exact
+-- signature except their own REVOKE/GRANT.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql.
 --
@@ -495,6 +499,312 @@ COMMENT ON FUNCTION public.create_project_approval_decision(uuid, jsonb, text, t
   'impact triplet, and one idempotency receipt. The public entry point always '
   'creates an original request with no predecessor. p_why freezes the '
   'designer''s one-line note into the immutable artifact row (P-13).';
+
+
+-- ── P-13. The revision keeps the why (r1-B2) ───────────────────────────────
+--
+-- `supersede_project_approval_decision` builds the successor by calling the
+-- creator, so until now a reissued approval could carry no why at all: the
+-- call passed four arguments, and `why` is a parameter rather than a payload
+-- key, so the composer had no way to send one and the predecessor's line
+-- vanished on every revision. Since revision is the normal sequel to a
+-- RETURNED approval (P-16), that emptied the composer's first field exactly
+-- when the homeowner had already asked once for more.
+--
+-- The RPC gains the same defaulted trailing `p_why` the creator got, which
+-- makes a 4-argument call ambiguous against the installed signature — so the
+-- old signature is DROPped first, as this migration already does for the two
+-- creating RPCs (the 00400 / 00475 precedent).
+--
+-- Body grafted from 00464 (unchanged since); four edits, all marked.
+
+DROP FUNCTION IF EXISTS public.supersede_project_approval_decision(
+  uuid, jsonb, timestamptz, text
+);
+
+CREATE OR REPLACE FUNCTION public.supersede_project_approval_decision(
+  p_decision_id uuid,
+  p_payload jsonb,
+  p_expected_updated_at timestamptz,
+  p_idempotency_key text,
+  p_why text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project_id uuid;
+  v_project public.projects%ROWTYPE;
+  v_decision public.client_decisions%ROWTYPE;
+  v_old_artifact public.project_approval_artifacts%ROWTYPE;
+  v_new_source record;
+  v_successor public.client_decisions%ROWTYPE;
+  v_receipt public.project_approval_action_receipts%ROWTYPE;
+  v_unknown jsonb;
+  v_key text := btrim(COALESCE(p_idempotency_key, ''));
+  v_source_kind text;
+  v_source_id uuid;
+  v_why_given text := NULLIF(btrim(COALESCE(p_why, '')), '');
+  v_why text;
+  v_core_payload jsonb;
+  v_create_result jsonb;
+  v_successor_id uuid;
+  v_request_hash text;
+  v_result jsonb;
+  v_receipt_id uuid := extensions.gen_random_uuid();
+  v_previous_parent_write text := current_setting(
+    'app.project_approval_decision_write_id', true
+  );
+  v_previous_legacy_write text := current_setting(
+    'app.client_decision_write_id', true
+  );
+  v_previous_evidence_write text := current_setting(
+    'app.project_approval_evidence_decision_id', true
+  );
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'project approval supersession requires an authenticated studio actor'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_payload IS NULL OR jsonb_typeof(p_payload) <> 'object' THEN
+    RAISE EXCEPTION 'p_payload must be a JSON object'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF p_expected_updated_at IS NULL THEN
+    RAISE EXCEPTION 'p_expected_updated_at is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF v_key = '' OR char_length(v_key) > 160 THEN
+    RAISE EXCEPTION 'idempotency key must contain 1 to 160 characters'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  v_unknown := p_payload - ARRAY[
+    'title', 'question', 'context', 'dueAt', 'artifactKind', 'artifactId',
+    'costCentsDelta', 'scheduleDaysDelta', 'leadTimeDaysDelta'
+  ];
+  IF v_unknown <> '{}'::jsonb THEN
+    RAISE EXCEPTION 'unsupported project supersede payload keys: %', v_unknown
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT decision.project_id INTO v_project_id
+  FROM public.client_decisions AS decision
+  WHERE decision.id = p_decision_id
+    AND decision.approval_contract = 'project_artifact_v1';
+  IF v_project_id IS NULL THEN
+    RAISE EXCEPTION 'project approval not found or supersession denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- Project → predecessor matches advance_project_phase lock order. The exact
+  -- predecessor lock serializes competing successor creation.
+  SELECT * INTO v_project
+  FROM public.projects AS project
+  WHERE project.id = v_project_id
+  FOR UPDATE;
+  SELECT * INTO v_decision
+  FROM public.client_decisions AS decision
+  WHERE decision.id = p_decision_id
+    AND decision.project_id = v_project_id
+    AND decision.approval_contract = 'project_artifact_v1'
+  FOR UPDATE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_decision.designer_id) THEN
+    RAISE EXCEPTION 'project approval not found or supersession denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  v_request_hash := public._project_approval_hash(
+    jsonb_build_object(
+      'decisionId', p_decision_id,
+      'payload', p_payload,
+      'expectedUpdatedAt', p_expected_updated_at
+    )
+    -- The why joins the hash only when the composer actually re-asked it.
+    -- Adding a null-valued key unconditionally would change the hash of every
+    -- supersession minted before this migration, so a key retried across the
+    -- deploy would be refused as "reused with a different supersession".
+    || CASE
+         WHEN v_why_given IS NULL THEN '{}'::jsonb
+         ELSE jsonb_build_object('why', v_why_given)
+       END
+  );
+  SELECT * INTO v_receipt
+  FROM public.project_approval_action_receipts AS receipt
+  WHERE receipt.decision_id = p_decision_id
+    AND receipt.action_kind = 'superseded'
+    AND receipt.idempotency_key = v_key
+  FOR UPDATE;
+  IF FOUND THEN
+    IF v_receipt.request_hash IS DISTINCT FROM v_request_hash
+       OR v_receipt.actor_id IS DISTINCT FROM v_actor
+    THEN
+      RAISE EXCEPTION 'idempotency key was reused with a different supersession'
+        USING ERRCODE = 'unique_violation';
+    END IF;
+    RETURN v_receipt.result || jsonb_build_object('idempotent', true);
+  END IF;
+
+  IF v_decision.updated_at IS DISTINCT FROM p_expected_updated_at THEN
+    RAISE EXCEPTION 'project approval decision changed since it was loaded'
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+  IF v_decision.status NOT IN ('pending', 'responded') THEN
+    RAISE EXCEPTION 'only pending or responded Stage-2 decisions may be superseded'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF EXISTS (
+       SELECT 1 FROM public.client_decisions AS successor
+       WHERE successor.predecessor_decision_id = p_decision_id
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.project_approval_action_receipts AS prior
+       WHERE prior.decision_id = p_decision_id
+         AND prior.action_kind IN ('withdrawn', 'superseded')
+     )
+  THEN
+    RAISE EXCEPTION 'only the exact current Stage-2 leaf may be superseded'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_old_artifact
+  FROM public.project_approval_artifacts AS artifact
+  WHERE artifact.decision_id = p_decision_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'predecessor artifact evidence is missing'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  v_source_kind := NULLIF(p_payload->>'artifactKind', '');
+  v_source_id := NULLIF(p_payload->>'artifactId', '')::uuid;
+  SELECT * INTO v_new_source
+  FROM public._resolve_project_approval_artifact(
+    v_project_id, v_source_kind, v_source_id
+  );
+  IF v_source_kind IS NOT DISTINCT FROM v_old_artifact.source_kind
+     AND v_source_id IS NOT DISTINCT FROM v_old_artifact.source_id
+     OR v_new_source.artifact_hash IS NOT DISTINCT FROM v_old_artifact.artifact_hash
+  THEN
+    RAISE EXCEPTION 'supersession requires a genuinely new immutable artifact'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  v_core_payload := p_payload || jsonb_build_object(
+    'phaseId', v_decision.phase_id,
+    'sectionKey', v_decision.section_key
+  );
+  -- P-13 (r1-B2): a revision is the normal sequel to a RETURNED approval, so
+  -- the successor must not lose the line that explained the ask. An explicit
+  -- p_why is the designer re-asking in the composer; silence carries the
+  -- predecessor's frozen why forward rather than dropping it on the floor.
+  v_why := COALESCE(v_why_given, v_old_artifact.why);
+  v_create_result := public._create_project_approval_decision_checked(
+    v_project_id,
+    v_core_payload,
+    'supersede-create:' || v_key,
+    p_decision_id,
+    v_why
+  );
+  v_successor_id := (v_create_result->>'decisionId')::uuid;
+
+  SELECT * INTO v_successor
+  FROM public.client_decisions AS successor
+  WHERE successor.id = v_successor_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_successor.predecessor_decision_id IS DISTINCT FROM p_decision_id
+     OR v_successor.project_id IS DISTINCT FROM v_decision.project_id
+     OR v_successor.phase_id IS DISTINCT FROM v_decision.phase_id
+     OR v_successor.section_key IS DISTINCT FROM v_decision.section_key
+     OR v_successor.blocks_kind IS DISTINCT FROM v_decision.blocks_kind
+     OR v_successor.blocking_status IS DISTINCT FROM v_decision.blocking_status
+     OR v_successor.blocks_kind IS DISTINCT FROM 'phase'
+     OR v_successor.blocking_status IS DISTINCT FROM 'blocks_phase'
+  THEN
+    RAISE EXCEPTION 'successor project, phase, section, or gate lineage drifted'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF v_decision.status = 'pending' THEN
+    PERFORM set_config(
+      'app.project_approval_decision_write_id', p_decision_id::text, true
+    );
+    PERFORM set_config(
+      'app.client_decision_write_id', p_decision_id::text, true
+    );
+    UPDATE public.client_decisions
+    SET status = 'expired', updated_at = now()
+    WHERE id = p_decision_id
+    RETURNING * INTO v_decision;
+  END IF;
+
+  v_result := jsonb_build_object(
+    'receiptId', v_receipt_id,
+    'projectId', v_decision.project_id,
+    'decisionId', v_decision.id,
+    'successorDecisionId', v_successor.id,
+    'status', v_decision.status,
+    'disposition', 'superseded',
+    'successorStatus', v_successor.status,
+    'updatedAt', v_decision.updated_at
+  );
+  PERFORM set_config(
+    'app.project_approval_evidence_decision_id', p_decision_id::text, true
+  );
+  INSERT INTO public.project_approval_action_receipts (
+    id, project_id, decision_id, action_kind, idempotency_key,
+    request_hash, actor_id, result, successor_decision_id
+  ) VALUES (
+    v_receipt_id, v_decision.project_id, p_decision_id, 'superseded', v_key,
+    v_request_hash, v_actor, v_result, v_successor.id
+  );
+
+  PERFORM set_config(
+    'app.project_approval_decision_write_id',
+    COALESCE(v_previous_parent_write, ''), true
+  );
+  PERFORM set_config(
+    'app.client_decision_write_id', COALESCE(v_previous_legacy_write, ''), true
+  );
+  PERFORM set_config(
+    'app.project_approval_evidence_decision_id',
+    COALESCE(v_previous_evidence_write, ''), true
+  );
+  RETURN v_result || jsonb_build_object('idempotent', false);
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.project_approval_decision_write_id',
+    COALESCE(v_previous_parent_write, ''), true
+  );
+  PERFORM set_config(
+    'app.client_decision_write_id', COALESCE(v_previous_legacy_write, ''), true
+  );
+  PERFORM set_config(
+    'app.project_approval_evidence_decision_id',
+    COALESCE(v_previous_evidence_write, ''), true
+  );
+  RAISE;
+END;
+
+$$;
+
+REVOKE ALL ON FUNCTION public.supersede_project_approval_decision(
+  uuid, jsonb, timestamptz, text, text
+) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.supersede_project_approval_decision(
+  uuid, jsonb, timestamptz, text, text
+) TO authenticated;
+
+COMMENT ON FUNCTION public.supersede_project_approval_decision(
+  uuid, jsonb, timestamptz, text, text
+) IS
+  'Replaces one Stage-2 leaf with a genuinely new immutable artifact, under '
+  'the caller''s expected updated_at and one idempotency receipt. p_why '
+  'freezes the designer''s one-line note onto the successor (P-13); when it '
+  'is absent the predecessor''s why carries forward, so a revision never '
+  'silently drops the line that explained the ask.';
 
 
 -- ── iosb3-M2 + P-13. The sanitized projection ──────────────────────────────

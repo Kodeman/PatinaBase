@@ -560,6 +560,142 @@ BEGIN
 END
 $receipt$;
 
+-- ── P-13. The revision keeps the why (r1-B2) ───────────────────────────────
+--
+-- Revision is the normal sequel to a RETURNED approval (P-16). The successor
+-- is built by the creator, so until 00569 widened the supersede call the
+-- composer's first field emptied itself on every reissue. Two chains, one for
+-- each branch: silence inherits the predecessor's line, an explicit p_why
+-- replaces it.
+
+INSERT INTO public.plan_issues (
+  id, project_id, issue_number, name, idempotency_key, request_hash,
+  set_checksum, sheet_count, created_by
+)
+SELECT
+  ('a5694000-0000-4000-8000-' || lpad(issue_no::text, 12, '0'))::uuid,
+  'a5693000-0000-4000-8000-000000000001'::uuid,
+  issue_no,
+  'W2 issued set ' || issue_no,
+  'w2-plan-' || issue_no,
+  encode(extensions.digest(('w2-request-' || issue_no)::bytea, 'sha256'), 'hex'),
+  encode(extensions.digest(('w2-artifact-' || issue_no)::bytea, 'sha256'), 'hex'),
+  4 + issue_no,
+  'a5690000-0000-4000-8000-000000000001'::uuid
+FROM generate_series(4, 7) AS issue_no;
+
+SELECT pg_temp.assume_actor('a5690000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.create_w2_approval(
+  'revise-carry', 4, 'The island moved a foot; the rest is as we drew it.'
+);
+SELECT pg_temp.create_w2_approval(
+  'revise-ask', 5, 'The island moved a foot; the rest is as we drew it.'
+);
+RESET ROLE;
+
+SELECT pg_temp.assume_actor('a5690000-0000-4000-8000-000000000002');
+SET LOCAL ROLE authenticated;
+INSERT INTO w2_results(label, payload)
+SELECT create_row.label || '-confirm',
+       public.confirm_project_decision_review(
+         (create_row.payload->>'decisionId')::uuid,
+         jsonb_build_object(
+           'authorityRevision', (create_row.payload->>'authorityRevision')::integer,
+           'artifactHash', create_row.payload->>'artifactHash',
+           'reviewMethod', 'portal_clickthrough'
+         ),
+         'w2-confirm-' || replace(create_row.label, '-create', '')
+       )
+FROM w2_results AS create_row
+WHERE create_row.label IN ('revise-carry-create', 'revise-ask-create')
+ORDER BY create_row.label;
+
+RESET ROLE;
+SELECT pg_temp.assume_actor('a5690000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+
+INSERT INTO w2_tokens(label, decision_id, updated_at)
+SELECT replace(create_row.label, '-create', ''), published.id, published.updated_at
+FROM w2_results AS create_row
+CROSS JOIN LATERAL public.publish_client_decision(
+  (create_row.payload->>'decisionId')::uuid
+) AS published
+WHERE create_row.label IN ('revise-carry-create', 'revise-ask-create')
+ORDER BY create_row.label;
+
+-- Silence: the predecessor's frozen line carries forward.
+INSERT INTO w2_results(label, payload)
+SELECT 'revise-carry-supersede', public.supersede_project_approval_decision(
+  token.decision_id,
+  jsonb_build_object(
+    'title', 'W2 revise-carry, reissued',
+    'question', 'Approve the reissued set?',
+    'context', 'Client-safe W2 fixture.',
+    'dueAt', (now() + interval '11 days')::text,
+    'artifactKind', 'plan_issue',
+    'artifactId', 'a5694000-0000-4000-8000-000000000006',
+    'costCentsDelta', 0,
+    'scheduleDaysDelta', 0,
+    'leadTimeDaysDelta', 0
+  ),
+  token.updated_at,
+  'w2-supersede-carry'
+)
+FROM w2_tokens AS token WHERE token.label = 'revise-carry';
+
+-- The composer re-asks: the new line wins.
+INSERT INTO w2_results(label, payload)
+SELECT 'revise-ask-supersede', public.supersede_project_approval_decision(
+  token.decision_id,
+  jsonb_build_object(
+    'title', 'W2 revise-ask, reissued',
+    'question', 'Approve the reissued set?',
+    'context', 'Client-safe W2 fixture.',
+    'dueAt', (now() + interval '11 days')::text,
+    'artifactKind', 'plan_issue',
+    'artifactId', 'a5694000-0000-4000-8000-000000000007',
+    'costCentsDelta', 0,
+    'scheduleDaysDelta', 0,
+    'leadTimeDaysDelta', 0
+  ),
+  token.updated_at,
+  'w2-supersede-ask',
+  'You asked us to hold the island where it was.'
+)
+FROM w2_tokens AS token WHERE token.label = 'revise-ask';
+
+RESET ROLE;
+
+DO $revision_why$
+DECLARE
+  v_carried text;
+  v_reasked text;
+BEGIN
+  SELECT artifact.why INTO v_carried
+  FROM w2_results AS row_carry
+  JOIN public.project_approval_artifacts AS artifact
+    ON artifact.decision_id = (row_carry.payload->>'successorDecisionId')::uuid
+  WHERE row_carry.label = 'revise-carry-supersede';
+  ASSERT v_carried = 'The island moved a foot; the rest is as we drew it.',
+    'the revision dropped the line that explained the ask: '
+    || COALESCE(v_carried, '<null>');
+
+  SELECT artifact.why INTO v_reasked
+  FROM w2_results AS row_ask
+  JOIN public.project_approval_artifacts AS artifact
+    ON artifact.decision_id = (row_ask.payload->>'successorDecisionId')::uuid
+  WHERE row_ask.label = 'revise-ask-supersede';
+  ASSERT v_reasked = 'You asked us to hold the island where it was.',
+    'the composer could not re-ask the why on a revision: '
+    || COALESCE(v_reasked, '<null>');
+
+  -- The 200-character ceiling is not re-implemented here: supersession hands
+  -- the value straight to the creating core, which already refuses an
+  -- over-long why above, and every artifact row meets the column CHECK.
+END
+$revision_why$;
+
 -- ── P-06. The deep link a producer's push row carries ──────────────────────
 
 DO $deep_links$

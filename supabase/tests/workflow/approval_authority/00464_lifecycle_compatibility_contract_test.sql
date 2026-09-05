@@ -24,8 +24,8 @@ BEGIN
       to_regprocedure('public.respond_project_approval(uuid,jsonb,timestamptz,text)') IS NOT NULL),
     ('function withdraw_project_approval_decision(uuid,timestamptz,text,text)',
       to_regprocedure('public.withdraw_project_approval_decision(uuid,timestamptz,text,text)') IS NOT NULL),
-    ('function supersede_project_approval_decision(uuid,jsonb,timestamptz,text)',
-      to_regprocedure('public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text)') IS NOT NULL),
+    ('function supersede_project_approval_decision(uuid,jsonb,timestamptz,text,text)',
+      to_regprocedure('public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text,text)') IS NOT NULL),
     ('function get_project_decision_reviews(uuid)',
       to_regprocedure('public.get_project_decision_reviews(uuid)') IS NOT NULL),
     ('shared fail-closed phase blocker predicate',
@@ -137,7 +137,7 @@ BEGIN
     'public.withdraw_project_approval_decision(uuid,timestamptz,text,text)'::regprocedure
   ) INTO v_withdraw;
   SELECT pg_get_functiondef(
-    'public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text)'::regprocedure
+    'public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text,text)'::regprocedure
   ) INTO v_supersede;
   SELECT pg_get_functiondef(
     'public.get_project_decision_reviews(uuid)'::regprocedure
@@ -188,6 +188,10 @@ BEGIN
      AND v_respond LIKE '%p_expected_updated_at%'
      AND v_respond LIKE '%p_idempotency_key%',
     'public response accepts no comment evidence and requires CAS/idempotency';
+  -- r1-B2: the successor must inherit or re-ask the why, never lose it.
+  ASSERT v_supersede LIKE '%v_old_artifact.why%'
+     AND v_supersede LIKE '%COALESCE(v_why_given, v_old_artifact.why)%',
+    'supersede must carry the predecessor why forward when none is re-asked';
   ASSERT v_supersede LIKE '%_create_project_approval_decision_checked%'
      AND v_supersede LIKE '%predecessor_decision_id%'
      AND v_supersede LIKE '%phaseId%'
@@ -218,7 +222,7 @@ BEGIN
   ), 'studio withdrawal RPC must be authenticated and internally authorize';
   ASSERT has_function_privilege(
     'authenticated',
-    'public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text)', 'EXECUTE'
+    'public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text,text)', 'EXECUTE'
   ), 'studio supersession RPC must be authenticated and internally authorize';
   ASSERT has_function_privilege(
     'authenticated', 'public.get_project_decision_reviews(uuid)', 'EXECUTE'
@@ -243,13 +247,15 @@ BEGIN
       'public.withdraw_project_approval_decision(uuid,timestamptz,text,text)'::regprocedure
   ), 'withdraw RPC JSON argument names are public API';
   ASSERT (
+    -- 00569 appends the defaulted p_why (P-13, r1-B2). The four original
+    -- names keep their positions, so every installed caller still resolves.
     SELECT proargnames = ARRAY[
       'p_decision_id', 'p_payload', 'p_expected_updated_at',
-      'p_idempotency_key'
+      'p_idempotency_key', 'p_why'
     ]
     FROM pg_proc
     WHERE oid =
-      'public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text)'::regprocedure
+      'public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text,text)'::regprocedure
   ), 'supersede RPC JSON argument names are public API';
 END
 $structure$;

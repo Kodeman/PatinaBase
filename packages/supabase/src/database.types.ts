@@ -34489,6 +34489,7 @@ export type Database = {
           p_expected_updated_at: string
           p_idempotency_key: string
           p_payload: Json
+          p_why?: string
         }
         Returns: Json
       }
