@@ -37,11 +37,15 @@ public enum DecisionPushType: String, Sendable, CaseIterable {
     /// A decision was resolved (selection applied / designer override).
     case resolved = "decision_resolved"
 
-    /// SF Symbol for the in-app feed / banner. Overdue reads as urgent.
+    /// SF Symbol for the in-app feed / banner.
+    ///
+    /// P-04 / R8: a passed date is a clock, not a warning triangle. The
+    /// studio is checking in on a question it asked; the app does not get to
+    /// escalate that on the studio's behalf.
     public var icon: String {
         switch self {
         case .required: return "checklist"
-        case .overdue: return "exclamationmark.triangle.fill"
+        case .overdue: return "clock"
         case .resolved: return "checkmark.seal.fill"
         }
     }
@@ -50,7 +54,7 @@ public enum DecisionPushType: String, Sendable, CaseIterable {
     public var defaultTitle: String {
         switch self {
         case .required: return "A decision needs you"
-        case .overdue: return "A decision is overdue"
+        case .overdue: return "A decision is still open"
         case .resolved: return "Decision confirmed"
         }
     }
