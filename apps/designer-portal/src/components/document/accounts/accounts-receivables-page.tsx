@@ -119,12 +119,12 @@ function ReceivableRow({
       // out) — the designer DID chase; the Desk need should still clear.
       const result = await send.mutateAsync({
         invoiceId: invoice.id,
-        projectId: invoice.project_id,
+        projectId: invoice.project_id ?? undefined,
         type: 'reminder',
       });
       await chase.mutateAsync({
         invoiceId: invoice.id,
-        projectId: invoice.project_id,
+        projectId: invoice.project_id ?? undefined,
       });
       // The Desk reads invoices under its OWN key (['document-state','desk']),
       // not ['invoices'] — so clear that too, or the overdue-invoice need lingers
@@ -167,7 +167,7 @@ function ReceivableRow({
         </button>
         <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {[
-            invoice.project?.name ?? 'Project',
+            invoice.project?.name ?? invoice.title ?? 'Studio',
             invoice.due_date ? `due ${fmtDay(invoice.due_date)}` : null,
             overdue ? `${days}d overdue` : 'within terms',
             invoice.ar_flagged_at ? 'cadence exhausted' : null,

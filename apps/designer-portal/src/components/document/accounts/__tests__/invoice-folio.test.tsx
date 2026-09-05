@@ -16,6 +16,7 @@ const invoice: Invoice = {
   designer_id: 'designer-1',
   client_id: 'client-1',
   invoice_number: null,
+  title: null,
   status: 'draft',
   issue_date: null,
   due_date: null,
@@ -218,6 +219,41 @@ describe('InvoiceFolio delivery recovery', () => {
       }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/has no linked portal account/i)).not.toBeInTheDocument();
+  });
+
+  it('offers no document doorway on a studio invoice, and issues it with no project', async () => {
+    mockInvoice = {
+      ...invoice,
+      project_id: null,
+      project: undefined,
+      title: 'Design consultation, September',
+    };
+    mockIssue.mockResolvedValue({
+      ...mockInvoice,
+      status: 'sent',
+      invoice_number: 'INV-0031',
+    });
+    mockSend.mockResolvedValue({ emailSent: true, recipient: 'client@example.com' });
+
+    const onOpenDocument = jest.fn();
+    render(<InvoiceFolio invoiceId="invoice-1" onOpenDocument={onOpenDocument} />);
+
+    expect(screen.queryByRole('button', { name: /document/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    await waitFor(() =>
+      expect(mockIssue).toHaveBeenCalledWith({
+        invoiceId: 'invoice-1',
+        projectId: undefined,
+      }),
+    );
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceId: 'invoice-1', projectId: undefined }),
+    );
+    expect(onOpenDocument).not.toHaveBeenCalled();
   });
 
   it('announces clipboard failure instead of silently resetting the button', async () => {

@@ -66,6 +66,9 @@ export function buildDeskReceivables(
 
   const byProject = new Map<string, Invoice[]>();
   for (const inv of overdue) {
+    // A studio invoice has no house to hang a need on; it is chased from the
+    // Receivables page instead (ruling S9).
+    if (!inv.project_id) continue;
     const list = byProject.get(inv.project_id) ?? [];
     list.push(inv);
     byProject.set(inv.project_id, list);

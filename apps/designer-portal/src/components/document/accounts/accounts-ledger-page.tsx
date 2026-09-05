@@ -128,7 +128,7 @@ function InvoiceRows({
               </p>
               <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                 {[
-                  inv.project?.name ?? 'Project',
+                  inv.project?.name ?? inv.title ?? 'Studio',
                   fmtUsd(inv.total_cents),
                   inv.due_date ? `due ${fmtDay(inv.due_date)}` : null,
                 ]

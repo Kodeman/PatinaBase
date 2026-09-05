@@ -88,6 +88,8 @@ export function InvoiceOverlays() {
             onOpenDocument={(projectId) => {
               // The doorway: close the folio and walk into the document. If an
               // Accounts sheet is open beneath, it stays (put it back with Esc).
+              // A studio invoice has no house, so there is nowhere to walk.
+              if (!projectId) return;
               close();
               router.push(`/doc/${projectId}`);
             }}
