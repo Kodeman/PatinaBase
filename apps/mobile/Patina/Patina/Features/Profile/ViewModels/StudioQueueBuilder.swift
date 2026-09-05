@@ -59,6 +59,16 @@ enum StudioQueueBuilder {
     /// (MJ-5).
     static let untitledDecisionTitle = "A project choice is ready"
 
+    /// The same, for an approval. An approval is not a choice, so it cannot
+    /// borrow the line above (`rulings-2026-09-04.md`, Vocabulary).
+    static let untitledApprovalTitle = "An approval is ready"
+
+    /// Whether a row carries a real question of its own, or one of the two
+    /// stand-ins above.
+    static func isUntitled(_ title: String) -> Bool {
+        title == untitledDecisionTitle || title == untitledApprovalTitle
+    }
+
     /// Whether a name belongs to a person or a studio, resolved from WHICH
     /// field carried it rather than from the string itself. `display_name` and
     /// `full_name` name a person; `business_name` names a studio, and the two
@@ -104,17 +114,26 @@ enum StudioQueueBuilder {
                     fallback: designerFallback,
                     fallbackIsPerson: designerFallbackIsPerson
                 )
+                // An APPROVAL — Stage-2, or a client-court sign-off — is not a
+                // choice between named alternatives, and the Record's decision
+                // grammar ("asked you to choose") is wrong for it.
+                let isApproval = decision.isProjectArtifactApproval || decision.isClientSignoff
                 return StudioQueueItemRow(
                     id: "decision:\(decision.id)",
                     kind: .decision,
                     entityId: decision.id,
-                    title: decision.title ?? StudioQueueBuilder.untitledDecisionTitle,
+                    title: decision.title ?? (
+                        isApproval
+                            ? StudioQueueBuilder.untitledApprovalTitle
+                            : StudioQueueBuilder.untitledDecisionTitle
+                    ),
                     detail: decision.project?.name,
                     askedAt: parsedDate(decision.created_at),
                     dueAt: parsedDate(decision.due_date),
                     amountCents: nil,
                     designerName: designer.name,
                     designerIsPerson: designer.isPerson,
+                    isApproval: isApproval,
                     route: .decisionDetail(decisionId: decision.id)
                 )
             }
@@ -195,6 +214,9 @@ struct StudioQueueItemRow: Identifiable, Sendable, Equatable {
     /// `full_name`) rather than a studio's (`business_name`). The Record's
     /// decision copy takes a first name only from a person (MJ-A).
     var designerIsPerson: Bool = false
+    /// The ask is an approval of one thing, not a choice between named
+    /// alternatives. The Record's copy branches on it; nothing else does.
+    var isApproval: Bool = false
     let route: AppRoute
 }
 
@@ -279,9 +301,12 @@ private extension StudioQueueBuilder {
         let dueDate = soonest?.1
         let askedAt = soonest.flatMap { parsedDate($0.0.created_at) }
         let askedBy = soonest?.0.project?.designer?.askedByName
+        // P-24: counted in words. And the plural line cannot call the group
+        // "choices" — one of them is routinely a sign-off, which is an
+        // approval and not a choice between named alternatives.
         let detail = decisions.count == 1
-            ? (decisions[0].title ?? "A project decision is ready")
-            : "\(decisions.count) project choices are ready"
+            ? (decisions[0].title ?? "A project approval is ready")
+            : "\(PatinaCount.inWordsCapitalized(decisions.count)) approvals are waiting on you"
 
         return StudioQueueRow(
             id: "awaiting.decisions",
@@ -291,7 +316,10 @@ private extension StudioQueueBuilder {
                 due: dueDate, askedAt: askedAt, designer: askedBy,
                 now: context.input.now
             )?.text,
-            systemImage: "checkmark.circle",
+            // Not a checkmark: a check drawn beside an OPEN obligation reads
+            // as a status mark saying it is done, which the refusals name.
+            // The raised hand is the glyph the bell already gives this ask.
+            systemImage: "hand.raised",
             route: .decisionList,
             priority: urgencyPriority(
                 date: dueDate,
@@ -308,7 +336,7 @@ private extension StudioQueueBuilder {
         let expiry = proposals.compactMap { parsedDate($0.valid_until) }.min()
         let detail = proposals.count == 1
             ? (proposals[0].title ?? "A proposal is ready to review")
-            : "\(proposals.count) proposals are ready to review"
+            : "\(PatinaCount.inWordsCapitalized(proposals.count)) proposals are ready to review"
 
         return StudioQueueRow(
             id: "awaiting.proposals",

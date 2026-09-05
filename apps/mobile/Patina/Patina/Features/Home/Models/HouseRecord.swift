@@ -430,9 +430,15 @@ extension HouseRecordBuilder {
     /// produce.
     static func title(for item: StudioQueueItemRow) -> String {
         switch item.kind {
+        // An approval is one thing to say yes or no to, so the row asks for
+        // the approval and lets the second line name the thing. The choice
+        // grammar below would call a sign-off a choice, and would run the
+        // question's own "?" straight into a full stop.
+        case .decision where item.isApproval:
+            return "\(subject(askedByName(for: item))) asked for your approval."
         case .decision:
             guard let name = item.designerName, !name.isEmpty,
-                  item.title != StudioQueueBuilder.untitledDecisionTitle
+                  !StudioQueueBuilder.isUntitled(item.title)
             else { return "\(subject(item.designerName)) asked you to choose." }
             return "\(item.designerIsPerson ? firstName(of: name) : name) asked about \(item.title)."
         case .proposal: return "\(subject(item.designerName)) sent a proposal to review."
@@ -460,10 +466,15 @@ extension HouseRecordBuilder {
 
     static func detail(for item: StudioQueueItemRow) -> String? {
         switch item.kind {
+        // The approval's headline is the ask, so its second line names the
+        // thing being approved. With no title of its own it falls back to the
+        // project, the way a choice row does.
+        case .decision where item.isApproval:
+            return StudioQueueBuilder.isUntitled(item.title) ? item.detail : item.title
         case .decision:
             // The question is in the headline now; the second line names the
             // project it belongs to, and nothing when there is none.
-            return item.title == StudioQueueBuilder.untitledDecisionTitle ? item.title : item.detail
+            return StudioQueueBuilder.isUntitled(item.title) ? item.title : item.detail
         case .proposal, .invoice:
             // The subject of the thing — the proposal's own name, the
             // invoice's own number.

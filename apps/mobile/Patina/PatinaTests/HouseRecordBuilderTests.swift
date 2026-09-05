@@ -861,15 +861,54 @@ struct HouseRecordDecisionCopyTests {
         title: String,
         designerName: String?,
         isPerson: Bool = true,
-        project: String? = "Aspen Loft Refresh"
+        project: String? = "Aspen Loft Refresh",
+        isApproval: Bool = false
     ) -> StudioQueueItemRow {
         StudioQueueItemRow(
             id: "decision:d1", kind: .decision, entityId: "d1", title: title,
             detail: project, askedAt: Date(timeIntervalSince1970: 1_755_000_000),
             dueAt: nil, amountCents: nil, designerName: designerName,
             designerIsPerson: isPerson,
+            isApproval: isApproval,
             route: .decisionDetail(decisionId: "d1")
         )
+    }
+
+    // MARK: - An approval is not a choice (W1R1-B1 / iosb3-B1)
+
+    @Test("an approval asks for an approval, and never for a choice")
+    func anApprovalIsNeverCalledAChoice() {
+        let item = row(title: "Approve the kitchen millwork as drawn?",
+                       designerName: "Leah Hartwell", isApproval: true)
+        #expect(HouseRecordBuilder.title(for: item) == "Leah asked for your approval.")
+        // The question is the second line, so its own "?" never runs into a
+        // full stop the grammar appended.
+        #expect(HouseRecordBuilder.detail(for: item)
+                == "Approve the kitchen millwork as drawn?")
+        #expect(!HouseRecordBuilder.title(for: item).contains("choose"))
+        #expect(!HouseRecordBuilder.title(for: item).lowercased().contains("decision"))
+    }
+
+    @Test("an approval with no designer still asks for an approval")
+    func anApprovalWithNoDesigner() {
+        let item = row(title: "Approve the kitchen millwork as drawn?",
+                       designerName: nil, isApproval: true)
+        #expect(HouseRecordBuilder.title(for: item) == "Your designer asked for your approval.")
+    }
+
+    @Test("a studio keeps its whole name on an approval, as it does on a choice")
+    func anApprovalNamesAStudioWhole() {
+        let item = row(title: "Approve the drawing set", designerName: "Hartwell Studio",
+                       isPerson: false, isApproval: true)
+        #expect(HouseRecordBuilder.title(for: item) == "Hartwell Studio asked for your approval.")
+    }
+
+    @Test("an untitled approval falls back to its project, never to the choice line")
+    func anUntitledApprovalFallsBackToTheProject() {
+        let item = row(title: StudioQueueBuilder.untitledApprovalTitle,
+                       designerName: "Leah Hartwell", isApproval: true)
+        #expect(HouseRecordBuilder.title(for: item) == "Leah asked for your approval.")
+        #expect(HouseRecordBuilder.detail(for: item) == "Aspen Loft Refresh")
     }
 
     @Test("a decision with a question names it, with the designer’s first name")
