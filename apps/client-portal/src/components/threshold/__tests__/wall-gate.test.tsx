@@ -207,14 +207,25 @@ describe('WallGate', () => {
     );
   });
 
-  it('refuses to accept without a typed name', async () => {
+  it('stays unlit until a name is on the rule, and accepts nothing', async () => {
     renderGate();
-    await holdAccept();
 
+    // No hold is spent on an act that cannot be taken: the word is unarmed
+    // until there is a name, the way the three other acts are.
+    const target = screen.getByRole('button', { name: /accept/i });
+    expect(target).toBeDisabled();
+    await holdAccept();
     expect(mutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Type your full name to accept the finished work.',
-    );
+
+    fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
+      target: { value: 'H' },
+    });
+    expect(target).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
+      target: { value: 'Harper Vale' },
+    });
+    expect(target).not.toBeDisabled();
   });
 
   it('accepts, heals the hatching and stamps what was released', async () => {
@@ -275,6 +286,8 @@ describe('WallGate', () => {
 
     // A tap is not the act, and neither is a hold let go of early.
     const target = screen.getByRole('button', { name: /accept/i });
+    fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+    fireEvent.pointerUp(target);
     fireEvent.click(target);
     expect(mutateAsync).not.toHaveBeenCalled();
 

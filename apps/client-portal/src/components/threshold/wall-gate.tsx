@@ -265,6 +265,10 @@ export function WallGate({
                     wrapperClassName="mt-3"
                     loading={accept.isPending}
                     loadingLabel="Accepting"
+                    // Unlit until there is a name, like the three other acts:
+                    // no one spends a hold to be told what she was never armed
+                    // to do. The sentence below stays as the backstop.
+                    disabled={!signatureIsComplete(signedName)}
                     aria-describedby={hintId}
                     onHold={onAccept}
                   >
