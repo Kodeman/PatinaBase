@@ -84,27 +84,33 @@ Deno.test("studioDisplayName: falls back when the resolver name is null/blank", 
 });
 
 // ── R7's third element: the city on the sign-off ────────────────────────────
-// The studio's city lives on organizations.address.city (what the designer
-// portal's branding form writes). profiles.city is a vestigial column no
-// surface writes; it stays only as a fallback.
+// Ruled at the Wave 1 close: profiles.city first, then the studio org's
+// address->>'city' (what the designer portal's branding form writes), then
+// omitted. Only the org leg is populated today, so the fallback is what
+// actually signs the letter.
 
-Deno.test("signatureCity: prefers the studio org's address city", () => {
+Deno.test("signatureCity: prefers the designer's own profile city", () => {
   assertEquals(
-    signatureCity({ line1: "12 Mill St", city: "Kansas City" }, "Chicago"),
-    "Kansas City",
+    signatureCity("Chicago", { line1: "12 Mill St", city: "Kansas City" }),
+    "Chicago",
   );
 });
 
-Deno.test("signatureCity: falls back to the designer profile's city", () => {
-  assertEquals(signatureCity(null, "Chicago"), "Chicago");
-  assertEquals(signatureCity({ city: "   " }, "Chicago"), "Chicago");
-  assertEquals(signatureCity({ city: 42 }, "Chicago"), "Chicago");
+Deno.test("signatureCity: falls back to the studio org's address city", () => {
+  assertEquals(
+    signatureCity(null, { line1: "12 Mill St", city: "Kansas City" }),
+    "Kansas City",
+  );
+  assertEquals(signatureCity("   ", { city: "Kansas City" }), "Kansas City");
+  assertEquals(signatureCity(undefined, { city: "Kansas City" }), "Kansas City");
 });
 
 Deno.test("signatureCity: undefined when neither knows one (R7 omits it)", () => {
   assertEquals(signatureCity(null, null), undefined);
-  assertEquals(signatureCity({ line1: "12 Mill St" }, null), undefined);
-  assertEquals(signatureCity({ city: "" }, "  "), undefined);
+  assertEquals(signatureCity(null, { line1: "12 Mill St" }), undefined);
+  assertEquals(signatureCity("  ", { city: "" }), undefined);
+  // A non-string city on the JSONB is not a city.
+  assertEquals(signatureCity(null, { city: 42 }), undefined);
 });
 
 /** Minimal admin-client stand-in: one RPC row plus two single-row table reads. */
@@ -133,7 +139,7 @@ function fakeAdmin(opts: {
   return { client, reads };
 }
 
-Deno.test("resolveStudioSignature: signs with the studio org's city", async () => {
+Deno.test("resolveStudioSignature: falls back to the studio org's city", async () => {
   const { client, reads } = fakeAdmin({
     identity: {
       studio_id: "s1",
@@ -173,6 +179,25 @@ Deno.test("resolveStudioSignature: no city anywhere → the letter omits it", as
   );
   assertEquals(signature.city, undefined);
   assertEquals(signature.designerGivenName, "Leah");
+});
+
+Deno.test("resolveStudioSignature: the designer's own city outranks the org's", async () => {
+  const { client } = fakeAdmin({
+    identity: {
+      studio_id: "s1",
+      name: "Middle West Studio",
+      logo_url: null,
+      website: null,
+      source: "studio",
+    },
+    organizations: { address: { city: "Kansas City", state: "MO" } },
+    profiles: { full_name: "Leah Brandt", city: "Chicago" },
+  });
+  const signature = await resolveStudioSignature(
+    client as unknown as Parameters<typeof resolveStudioSignature>[0],
+    { designerId: "d1", projectId: null },
+  );
+  assertEquals(signature.city, "Chicago");
 });
 
 Deno.test("resolveStudioSignature: business_name identity has no org to read", async () => {
