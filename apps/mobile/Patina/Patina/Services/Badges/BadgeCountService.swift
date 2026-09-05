@@ -60,17 +60,11 @@ final class BadgeCountService {
         writeSpringboardBadge(unreadNotificationCount)
     }
 
-    /// R5 keeps the springboard badge, and P-05 is what makes the number under
-    /// it true: the feed counts one `in_app` row per update instead of an
-    /// `in_app` and a `push` row for the same one. This writes that count to
-    /// the home screen, so the badge and the bell say the same thing.
-    ///
-    /// Injectable because `UNUserNotificationCenter` needs a grant a test host
-    /// does not have.
+    /// R5's home-screen badge, carrying the count above it — P-05 is what makes
+    /// that number true. Injectable: the real center needs a grant tests lack.
     var writeSpringboardBadge: (Int) -> Void = { count in
         UNUserNotificationCenter.current().setBadgeCount(count) { error in
-            guard let error else { return }
-            PatinaLog.ui.error("[Badge] springboard badge refused: \(error.localizedDescription)")
+            if let error { PatinaLog.ui.error("[Badge] refused: \(error.localizedDescription)") }
         }
     }
 
@@ -485,9 +479,8 @@ final class BadgeCountService {
         hasLoaded = false
         projectsLoaded = false
         lastRefreshFailed = false
-        // R-02: the floor is the PREVIOUS account's. Without this, account B's
-        // first launch paints account A's numbers. The home screen carries the
-        // same floor, so it is cleared with them.
+        // R-02: the floor is the PREVIOUS account's, home screen included.
+        // Without this, account B's first launch paints account A's numbers.
         defaults.removeObject(forKey: Self.persistedCountsKey)
         floorStoredAt = nil
         writeSpringboardBadge(0)
