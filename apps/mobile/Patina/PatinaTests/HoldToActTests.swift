@@ -255,7 +255,11 @@ struct HoldToActTests {
         #expect(source.contains("ProjectApprovalCopy.signatureNotice"))
         // Inside the chosen branch and behind the ruling's own gate — never
         // standing over the three doors before one has been picked.
-        let leg = try #require(source.range(of: "if review.canRespond, !viewModel.hasAnsweredApproval {"))
+        // `IOSC-R2-07` added the viewer test beside `canRespond`: the doors
+        // are drawn for an answerable row AND for the person who answers it.
+        let leg = try #require(
+            source.range(of: "if review.canRespond, review.viewerAnswers, !viewModel.hasAnsweredApproval {")
+        )
         let body = String(source[leg.lowerBound...].prefix(1400))
         #expect(!String(body.prefix(200)).contains("signatureLine"), "the rule stands over the doors again")
         let gate = try #require(body.range(of: "if viewModel.approvalNeedsSignature {"))

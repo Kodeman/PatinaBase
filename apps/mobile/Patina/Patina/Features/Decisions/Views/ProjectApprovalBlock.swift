@@ -61,6 +61,10 @@ struct ProjectApprovalBlock: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("decisionDetail.approval.question")
 
+            ApprovalWhyLine(
+                why: review.designerWhy, author: review.designerWhyAuthor
+            )
+
             Text(ProjectApprovalCopy.editionLine(
                 edition: review.artifactVersion,
                 due: review.dueAt.map(DateDisplay.fromTimestamp)
@@ -86,7 +90,12 @@ struct ProjectApprovalBlock: View {
             // because the projection in hand still says the review is
             // outstanding. The guard is now exactly `outcomeLeg`'s, so the
             // sentence lives and dies with the acts it introduces.
-            if !viewModel.hasAnsweredApproval, review.canRespond {
+            //
+            // `IOSC-R2-07`: and the same viewer test the doors take, because
+            // the guard is "exactly `outcomeLeg`'s" — a sentence introducing
+            // three acts that are no longer drawn introduces nothing, and it
+            // says "you are approving" to somebody who is not.
+            if !viewModel.hasAnsweredApproval, review.canRespond, review.viewerAnswers {
                 Text(ProjectApprovalCopy.immutability(edition: review.artifactVersion))
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)
@@ -128,7 +137,12 @@ struct ProjectApprovalBlock: View {
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("decisionDetail.approval.reviewConfirmed")
-        } else if review.needsReviewConfirmation {
+        // `IOSC-R2-07`: and hers to give. `confirm_project_decision_review`
+        // accepts the frozen lead and nobody else, so offering the hold to a
+        // studio co-member reading her own client app is offering an act the
+        // server refuses — the same subtraction `awaitsClientInFeed` already
+        // makes on every feed that leads here.
+        } else if review.needsReviewConfirmation, review.viewerAnswers {
             VStack(alignment: .leading, spacing: 10) {
                 Text(ProjectApprovalCopy.reviewPrompt)
                     .font(PatinaTypography.bodySmall)
@@ -145,7 +159,7 @@ struct ProjectApprovalBlock: View {
                 }
                 .accessibilityIdentifier("decisionDetail.approval.review")
             }
-        } else if review.reviewConfirmationUnavailable {
+        } else if review.reviewConfirmationUnavailable, review.viewerAnswers {
             Text(ProjectApprovalCopy.reviewUnavailable)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
@@ -216,7 +230,14 @@ struct ProjectApprovalBlock: View {
 
     @ViewBuilder
     private func outcomeLeg(_ review: RemoteProjectApprovalReview) -> some View {
-        if review.canRespond, !viewModel.hasAnsweredApproval {
+        // `IOSC-R2-07`: `canRespond` is the row's own state and says nothing
+        // about who is reading it. `respond_project_approval` accepts the
+        // frozen decision lead and refuses everybody else, so a studio
+        // co-member offered these three doors is offered three acts the
+        // server will not take. `viewerAnswers` default-INCLUDES an unknown
+        // or absent role, so a homeowner never loses her own doors to a
+        // projection this build does not recognise.
+        if review.canRespond, review.viewerAnswers, !viewModel.hasAnsweredApproval {
             VStack(alignment: .leading, spacing: 14) {
                 if let chosen = chosenAct {
                     Text("\(chosen.label) · \(chosen.consequence)")
@@ -400,6 +421,40 @@ struct ProjectApprovalBlock: View {
     private var chosenAct: ProjectApprovalAct? {
         guard let chosen = viewModel.chosenOutcome else { return nil }
         return ProjectApprovalCopy.acts.first { $0.outcome == chosen }
+    }
+}
+
+/// `P-13`. The designer's own line, under the question it explains and above
+/// the edition it was written about — the web's own order
+/// (`approval-ask.tsx`: question, why, attribution).
+///
+/// It is frozen with the artifact, so it is signed by the hand that wrote it
+/// or by nobody: `designerWhyAuthor` withholds a name that has no sentence
+/// over it, and neither half is invented from the studio the reader happens
+/// to be talking to today.
+///
+/// Its own view, at file scope, because `ProjectApprovalBlock` is at
+/// SwiftLint's 300-line `type_body_length` — the same reason
+/// `ApprovalDiscussionBlock` is a file of its own.
+private struct ApprovalWhyLine: View {
+    let why: String?
+    let author: String?
+
+    var body: some View {
+        if let why {
+            Text(why)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("decisionDetail.approval.why")
+            if let author {
+                Text(ProjectApprovalCopy.whyAttribution(author))
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("decisionDetail.approval.whyAuthor")
+            }
+        }
     }
 }
 

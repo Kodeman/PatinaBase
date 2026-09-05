@@ -68,6 +68,15 @@ enum ProjectApprovalCopy {
 
     static let eyebrow = "APPROVAL"
 
+    /// `P-13`. The attribution under the designer's own line, in the web's
+    /// exact shape (`approval-ask.tsx`'s `approval-attribution`): an em dash,
+    /// a space, and the frozen name — nothing added, nothing invented. The
+    /// name is rendered verbatim because it was frozen beside the sentence it
+    /// signs.
+    static func whyAttribution(_ author: String) -> String {
+        "— \(author)"
+    }
+
     /// What is being agreed to, and that it cannot change underneath her. The
     /// edition number is the whole point of the sentence.
     static func immutability(edition: Int) -> String {

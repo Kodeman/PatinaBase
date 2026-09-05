@@ -181,8 +181,10 @@ struct ApprovalCASOrderTests {
         let block = try SourcePin.readCode(
             "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
         )
+        // The guard is still exactly `outcomeLeg`'s — which since
+        // `IOSC-R2-07` also asks who is reading.
         let guarded = try #require(
-            block.range(of: "if !viewModel.hasAnsweredApproval, review.canRespond {")
+            block.range(of: "if !viewModel.hasAnsweredApproval, review.canRespond, review.viewerAnswers {")
         )
         let covered = String(block[guarded.upperBound...].prefix(200))
         #expect(covered.contains("ProjectApprovalCopy.immutability"))

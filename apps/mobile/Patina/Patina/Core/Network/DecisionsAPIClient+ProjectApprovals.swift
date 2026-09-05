@@ -124,6 +124,17 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     public let question: String
     /// The designer's framing of the ask. Nullable in the artifact table.
     public let context: String?
+    /// `P-13`. The one line the designer wrote to explain the ask, frozen into
+    /// the immutable artifact beside the question (00569). Absent on every
+    /// approval composed before that migration, and on every projection an
+    /// older build wrote — both decode as nil, and the screen draws nothing.
+    public let why: String?
+    /// The name of the hand that WROTE that line, frozen with it (ruled
+    /// 2026-09-05). A studio has more than one designer and the sentence is
+    /// immutable and client-facing, so it is signed by its author or by
+    /// nobody — never by whoever holds the project on the day she reads it.
+    /// The projection emits it only alongside a why.
+    public let whyAuthorName: String?
     public let dueAt: String?
     public let costCentsDelta: Int
     public let scheduleDaysDelta: Int
@@ -177,6 +188,21 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// homeowner's own obligations off every feed she has, which is a far
     /// worse failure than the one this field exists to fix.
     public var viewerAnswers: Bool { ProjectApprovalViewerRole(raw: viewerRole) != .observes }
+
+    /// The why as it is drawn. A whitespace-only line is no line at all — the
+    /// same reading the web's `whyOf` takes of the same field.
+    public var designerWhy: String? {
+        let trimmed = (why ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// The name under that line, and only under it: an attribution with no
+    /// sentence above it attributes nothing.
+    public var designerWhyAuthor: String? {
+        guard designerWhy != nil else { return nil }
+        let trimmed = (whyAuthorName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 
     /// The studio pulled this approval back.
     public var isWithdrawn: Bool { disposition == "withdrawn" }

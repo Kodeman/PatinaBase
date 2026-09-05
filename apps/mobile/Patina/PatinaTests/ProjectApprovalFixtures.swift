@@ -39,7 +39,12 @@ enum ProjectApprovalFixture {
         artifactKind: Any = "spec_book_artifact",
         /// Absent by default — that is the projection every build before the
         /// Wave 2 migration returns.
-        viewerRole: Any = NSNull()
+        viewerRole: Any = NSNull(),
+        /// `P-13`. Absent by default for the same reason: an approval composed
+        /// before 00569 carries no why, and the name is emitted only beside
+        /// one.
+        why: Any = NSNull(),
+        whyAuthorName: Any = NSNull()
     ) throws -> RemoteProjectApprovalReview {
         let row: [String: Any] = [
             "decisionId": decisionId,
@@ -54,6 +59,8 @@ enum ProjectApprovalFixture {
             "artifactTitle": "Kitchen millwork spec",
             "question": "Approve the kitchen millwork as drawn?",
             "context": context,
+            "why": why,
+            "whyAuthorName": whyAuthorName,
             "dueAt": "2026-09-11T00:00:00+00:00",
             "costCentsDelta": costCentsDelta,
             "scheduleDaysDelta": scheduleDaysDelta,
