@@ -66,16 +66,31 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function portalBase(): string {
+/**
+ * Who the mail is addressed to. A homeowner's footer link must land on the
+ * client portal, not on the studio's own desk.
+ */
+export type EmailAudience = "client" | "designer";
+
+const PORTAL_ENV: Record<EmailAudience, { key: string; fallback: string }> = {
+  client: { key: "CLIENT_PORTAL_URL", fallback: "https://client.patina.cloud" },
+  designer: {
+    key: "DESIGNER_PORTAL_URL",
+    fallback: "https://app.patina.cloud",
+  },
+};
+
+export function portalBaseFor(audience: EmailAudience = "designer"): string {
+  const { key, fallback } = PORTAL_ENV[audience] ?? PORTAL_ENV.designer;
   // Defensive: env access may be denied (e.g. `deno test` without --allow-env);
   // fall back to the prod URL rather than throwing a permission error.
   let v: string | undefined;
   try {
-    v = Deno.env.get("DESIGNER_PORTAL_URL");
+    v = Deno.env.get(key);
   } catch {
     v = undefined;
   }
-  return (v ?? "https://app.patina.cloud").replace(/\/$/, "");
+  return (v ?? fallback).replace(/\/$/, "");
 }
 
 // ---- Body helpers (compose the inner content) -------------------------------
@@ -112,6 +127,37 @@ export function ctaButton(url: string, label: string, variant: "ink" | "brass" =
   return `<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${bg}" style="border-radius:7px;"><a href="${url}" style="display:inline-block; padding:15px 32px; font-family:${F.sans}; font-size:15px; font-weight:600; line-height:1; letter-spacing:0.01em; background-color:${bg}; color:${C.buttonInkText}; text-decoration:none; border:1px solid ${border}; border-radius:7px;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
+/**
+ * The name a homeowner calls her designer. Everything after the first
+ * whitespace-separated token is the studio's business, not the greeting's.
+ */
+export function givenName(fullName: string | null | undefined): string {
+  return (fullName ?? "").trim().split(/\s+/)[0] ?? "";
+}
+
+export interface StudioSignOff {
+  /** The designer's given name — the person the homeowner knows. */
+  designerGivenName?: string | null;
+  studioName?: string | null;
+  /** Omitted entirely when unknown; never guessed. */
+  city?: string | null;
+}
+
+/**
+ * The studio signs client mail, not Patina (R7): given name and studio name on
+ * one line, the city under it. With neither a person nor a studio to name the
+ * letter goes unsigned — a homeowner never reads "— Patina".
+ */
+export function signOff(sig: StudioSignOff): string {
+  const person = (sig.designerGivenName ?? "").trim();
+  const studio = (sig.studioName ?? "").trim();
+  const city = (sig.city ?? "").trim();
+  const line = [person, studio].filter(Boolean).join(", ");
+  if (!line) return "";
+  const cityLine = city ? `<br>${escapeHtml(city)}` : "";
+  return paragraph(`&mdash; ${escapeHtml(line)}${cityLine}`);
+}
+
 export function spacer(px = 26): string {
   return `<div style="height:${px}px; line-height:${px}px; font-size:0;">&nbsp;</div>`;
 }
@@ -120,6 +166,11 @@ export function spacer(px = 26): string {
 
 export interface BrandedShellOpts {
   title: string;
+  /**
+   * Which portal the default footer links resolve against. Defaults to
+   * "designer" — the shape every existing caller renders.
+   */
+  audience?: EmailAudience;
   /** Inbox preview text. */
   preview?: string;
   /** Top-right mono eyebrow (e.g. "Invoice", "Proposal"). */
@@ -157,12 +208,21 @@ export interface BrandedShellOpts {
 // Healthy clients render identically. Keep in step with the React mirrors:
 // packages/email/src/components/BaseEmailLayout.tsx and src/block-html/skeleton.ts.
 export function renderBrandedShell(opts: BrandedShellOpts): string {
-  const base = portalBase();
-  const links = opts.footerLinks ?? [
-    { label: "Dashboard", href: base },
-    { label: "Help center", href: `${base}/help` },
-    { label: "Email preferences", href: `${base}/desk?account=notifications` },
-  ];
+  const audience = opts.audience ?? "designer";
+  const base = portalBaseFor(audience);
+  const links = opts.footerLinks ?? (audience === "client"
+    ? [
+      { label: "Your project", href: base },
+      { label: "Email preferences", href: `${base}/preferences` },
+    ]
+    : [
+      { label: "Dashboard", href: base },
+      { label: "Help center", href: `${base}/help` },
+      {
+        label: "Email preferences",
+        href: `${base}/desk?account=notifications`,
+      },
+    ]);
   const preheader = opts.preview
     ? `<div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all; color:transparent;">${escapeHtml(opts.preview)}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>`
     : "";

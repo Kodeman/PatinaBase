@@ -13,6 +13,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { givenName, type StudioSignOff } from "./branded-email.ts";
 
 export interface StudioIdentity {
   studioId: string | null;
@@ -81,6 +82,91 @@ export function studioCobrand(
     };
   }
   return {};
+}
+
+/**
+ * Who signs a client-facing letter (R7): the co-brand byline for the shell AND
+ * the sign-off at the foot. Patina never signs a homeowner's mail.
+ */
+export interface StudioSignature extends StudioSignOff {
+  studioName?: string;
+  studioLogoUrl?: string;
+}
+
+/**
+ * The city the studio actually types. `organizations.address` is the JSONB the
+ * designer portal's branding form writes (account-studio-page.tsx: line1, line2,
+ * city, state, zip); `profiles.city` is a vestigial 00013 column no surface
+ * writes, kept here only as a fallback for a row that somehow carries one.
+ */
+export function signatureCity(
+  orgAddress: unknown,
+  profileCity: string | null | undefined,
+): string | undefined {
+  const address = orgAddress as { city?: unknown } | null | undefined;
+  const fromOrg = typeof address?.city === "string"
+    ? address.city.trim()
+    : "";
+  if (fromOrg) return fromOrg;
+  const fromProfile = profileCity?.trim();
+  return fromProfile ? fromProfile : undefined;
+}
+
+/**
+ * Resolve that signature: the brand identity (studio → business name → person,
+ * via the canonical RPC) plus the designer's own given name and the studio's
+ * city. Never throws — an unresolved signature leaves the letter unsigned
+ * rather than signing it "Patina", and a studio with no city on file signs
+ * without one (R7: omit when unknown).
+ */
+export async function resolveStudioSignature(
+  admin: SupabaseClient,
+  opts: { designerId?: string | null; projectId?: string | null },
+): Promise<StudioSignature> {
+  const identity = await resolveStudioIdentity(admin, opts);
+  const signature: StudioSignature = studioCobrand(identity);
+
+  // The identity RPC returns brand-only columns and carries no address, so the
+  // org row is read separately for the city.
+  let orgAddress: unknown = null;
+  if (identity?.studioId) {
+    const { data, error } = await admin
+      .from("organizations")
+      .select("address")
+      .eq("id", identity.studioId)
+      .maybeSingle();
+    if (error) {
+      console.error("resolveStudioSignature: studio lookup failed", error);
+    } else {
+      orgAddress = (data as { address?: unknown } | null)?.address ?? null;
+    }
+  }
+
+  if (!opts.designerId) {
+    const cityOnly = signatureCity(orgAddress, null);
+    if (cityOnly) signature.city = cityOnly;
+    return signature;
+  }
+
+  const { data, error } = await admin
+    .from("profiles")
+    .select("full_name, city")
+    .eq("id", opts.designerId)
+    .maybeSingle();
+  if (error) {
+    console.error("resolveStudioSignature: profile lookup failed", error);
+    const cityOnly = signatureCity(orgAddress, null);
+    if (cityOnly) signature.city = cityOnly;
+    return signature;
+  }
+  const profile = data as
+    | { full_name: string | null; city: string | null }
+    | null;
+  const given = givenName(profile?.full_name);
+  if (given) signature.designerGivenName = given;
+  const city = signatureCity(orgAddress, profile?.city);
+  if (city) signature.city = city;
+  return signature;
 }
 
 /**

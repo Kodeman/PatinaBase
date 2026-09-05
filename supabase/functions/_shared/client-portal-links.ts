@@ -84,3 +84,26 @@ export function clientProjectDeepLink(
 ): string {
   return clientProjectLink("", projectId, anchor, params);
 }
+
+/**
+ * The address of one approval, as mail must write it: `/decisions/<id>`.
+ *
+ * Deliberately NOT a Threshold anchor link. The iOS app claims `/decisions/*`
+ * through its `applinks:` entitlement, so a homeowner with the app installed
+ * opens the native approval; everyone else is 308'd by the portal middleware
+ * onto `/#approval-<id>` (`retired-routes.ts`), which is the same section a
+ * hand-written anchor would have named — but anchors are declared mutable and
+ * cached for an hour, and a Universal Link is not.
+ *
+ * An id that is not a plain segment is refused rather than interpolated: the
+ * caller gets the doorstep instead of a forged path.
+ */
+export function clientDecisionLink(
+  baseUrl: string,
+  decisionId: string | null | undefined,
+): string {
+  if (!decisionId || !ID_SEGMENT.test(decisionId)) {
+    return clientProjectLink(baseUrl, null, "doorstep");
+  }
+  return `${baseUrl.replace(/\/$/, "")}/decisions/${decisionId}`;
+}

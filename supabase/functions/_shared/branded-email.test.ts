@@ -35,7 +35,20 @@ import {
   assertEquals,
   assertStringIncludes,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { renderBrandedShell, paragraph } from "./branded-email.ts";
+import {
+  givenName,
+  paragraph,
+  portalBaseFor,
+  renderBrandedShell,
+  signOff,
+} from "./branded-email.ts";
+
+try {
+  Deno.env.set("CLIENT_PORTAL_URL", "https://client.patina.cloud");
+  Deno.env.set("DESIGNER_PORTAL_URL", "https://app.patina.cloud");
+} catch {
+  // No --allow-env: portalBaseFor falls back to these same origins.
+}
 
 const BASELINE_URL = new URL(
   "./__snapshots__/branded-shell.baseline.html",
@@ -130,4 +143,72 @@ Deno.test("hostile studioLogoUrl is attribute-escaped (no quote breakout)", () =
   });
   assert(!html.includes('"><script>'), "the URL must not break out of the src attribute");
   assertStringIncludes(html, "&quot;&gt;&lt;script&gt;");
+});
+
+Deno.test("each audience resolves its own portal (P-03b)", () => {
+  assertEquals(portalBaseFor("client"), "https://client.patina.cloud");
+  assertEquals(portalBaseFor("designer"), "https://app.patina.cloud");
+  // The historical call took no argument and meant the studio's portal.
+  assertEquals(portalBaseFor(), "https://app.patina.cloud");
+});
+
+Deno.test("a client shell's default footer never sends her to the studio's desk", () => {
+  const html = renderBrandedShell({
+    title: "Client",
+    audience: "client",
+    body: paragraph("Hello."),
+  });
+  assertStringIncludes(html, 'href="https://client.patina.cloud"');
+  assertStringIncludes(html, 'href="https://client.patina.cloud/preferences"');
+  assert(!html.includes("app.patina.cloud"));
+  assert(!html.includes(">Dashboard</a>"));
+});
+
+Deno.test("a designer shell's default footer is unchanged", () => {
+  const html = renderBrandedShell({ title: "Designer", body: paragraph("Hello.") });
+  assertStringIncludes(html, 'href="https://app.patina.cloud"');
+  assertStringIncludes(html, 'href="https://app.patina.cloud/help"');
+  assertStringIncludes(
+    html,
+    'href="https://app.patina.cloud/desk?account=notifications"',
+  );
+});
+
+Deno.test("the sign-off names the person, the studio, then the city (R7)", () => {
+  assertStringIncludes(
+    signOff({
+      designerGivenName: "Leah",
+      studioName: "Middle West Studio",
+      city: "Madison",
+    }),
+    "&mdash; Leah, Middle West Studio<br>Madison",
+  );
+});
+
+Deno.test("an unknown city is omitted, not guessed", () => {
+  const html = signOff({ designerGivenName: "Leah", studioName: "Middle West Studio" });
+  assertStringIncludes(html, "&mdash; Leah, Middle West Studio<");
+  assert(!html.includes("<br>"));
+});
+
+Deno.test("with nobody to name the letter goes unsigned", () => {
+  assertEquals(signOff({}), "");
+  assertEquals(signOff({ designerGivenName: "  ", city: "Madison" }), "");
+});
+
+Deno.test("a hostile signature is escaped", () => {
+  const html = signOff({
+    designerGivenName: '<script>alert(1)</script>',
+    city: '"><b>',
+  });
+  assert(!html.includes("<script>alert"));
+  assertStringIncludes(html, "&lt;script&gt;");
+  assertStringIncludes(html, "&quot;&gt;&lt;b&gt;");
+});
+
+Deno.test("the given name is the first token of the full name", () => {
+  assertEquals(givenName("Leah Kochaver"), "Leah");
+  assertEquals(givenName("  Leah   Ann Kochaver "), "Leah");
+  assertEquals(givenName(null), "");
+  assertEquals(givenName("   "), "");
 });

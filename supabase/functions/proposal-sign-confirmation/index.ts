@@ -17,8 +17,10 @@ import {
   ctaButton,
   spacer,
   escapeHtml,
+  signOff,
 } from '../_shared/branded-email.ts';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
+import { resolveStudioSignature } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -119,8 +121,12 @@ Deno.serve(async (req: Request) => {
 
   if (proposal.client?.email) {
     const link = `${CLIENT_PORTAL_URL}/proposals/${proposal.id}`;
+    const signature = await resolveStudioSignature(supabase, {
+      designerId: proposal.designer_id,
+    });
     const html = renderBrandedShell({
       title: `Signed: "${proposal.title}"`,
+      audience: 'client',
       preview: `Your signed copy of ${proposal.title}, for your records.`,
       eyebrow: 'Signed',
       body: [
@@ -136,7 +142,7 @@ Deno.serve(async (req: Request) => {
         spacer(10),
         ctaButton(link, 'View proposal', 'ink'),
         spacer(),
-        muted('— Patina'),
+        signOff(signature),
       ].join(''),
     });
     const { success, error: sendError } = await sendCompliantEmail(supabase, {

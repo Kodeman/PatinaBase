@@ -20,6 +20,7 @@
 import {
   callout,
   ctaButton,
+  type EmailAudience,
   muted,
   paragraph,
   renderBrandedShell,
@@ -100,10 +101,19 @@ function wrap(
   inner: string,
   portalUrl: string,
   cta: string,
-  opts: { eyebrow?: string; title?: string; studioName?: string; studioLogoUrl?: string } = {},
+  opts: {
+    eyebrow?: string;
+    title?: string;
+    studioName?: string;
+    studioLogoUrl?: string;
+    /** Which portal the footer resolves. Client-addressed builders say
+     * "client"; the studio's own notices keep the designer default. */
+    audience?: EmailAudience;
+  } = {},
 ): string {
   return renderBrandedShell({
     title: opts.title ?? "Patina",
+    audience: opts.audience,
     eyebrow: opts.eyebrow ?? "Invoice",
     studioName: opts.studioName,
     studioLogoUrl: opts.studioLogoUrl,
@@ -148,6 +158,7 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
     params.portalUrl,
     "View invoice",
     {
+      audience: "client",
       eyebrow: "Invoice",
       title: subject,
       studioName: params.studioName,
@@ -214,6 +225,7 @@ export function buildInvoiceUpcomingReminderEmail(
     params.portalUrl,
     "View & pay invoice",
     {
+      audience: "client",
       eyebrow: "Payment due",
       title: subject,
       studioName: params.studioName,
@@ -223,18 +235,18 @@ export function buildInvoiceUpcomingReminderEmail(
   return { subject, html };
 }
 
-/** Stage 1 (due_date + 1 day): the invoice is now past due. */
+/** Stage 1 (due_date + 1 day): the invoice is still open past its date. */
 export function buildInvoiceOverdueNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Invoice ${params.invoiceNumber} is past due — ${params.projectName}`;
+  const subject = `Still open: invoice ${params.invoiceNumber} — ${params.projectName}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
         `Invoice <strong>${escapeHtml(params.invoiceNumber)}</strong> from ${escapeHtml(
           params.designerName,
-        )} for <strong>${escapeHtml(params.projectName)}</strong> is now past its due date.`,
+        )} for <strong>${escapeHtml(params.projectName)}</strong> is still open.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -246,7 +258,8 @@ export function buildInvoiceOverdueNoticeEmail(
     params.portalUrl,
     "Pay invoice",
     {
-      eyebrow: "Overdue",
+      audience: "client",
+      eyebrow: "Invoice",
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
@@ -260,7 +273,7 @@ export function buildInvoiceSecondNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Second notice: invoice ${params.invoiceNumber} is overdue — ${params.projectName}`;
+  const subject = `Second notice: invoice ${params.invoiceNumber} — ${params.projectName}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
@@ -268,7 +281,7 @@ export function buildInvoiceSecondNoticeEmail(
           params.invoiceNumber,
         )}</strong> from ${escapeHtml(params.designerName)} for <strong>${escapeHtml(
           params.projectName,
-        )}</strong> remains unpaid a week past its due date.`,
+        )}</strong> is still open, a week on from its due date.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -279,7 +292,8 @@ export function buildInvoiceSecondNoticeEmail(
     params.portalUrl,
     "Pay invoice now",
     {
-      eyebrow: "Overdue",
+      audience: "client",
+      eyebrow: "Invoice",
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
@@ -293,7 +307,7 @@ export function buildInvoiceFinalNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Final notice: invoice ${params.invoiceNumber} is seriously overdue — ${params.projectName}`;
+  const subject = `Final notice: invoice ${params.invoiceNumber} — ${params.projectName}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
@@ -301,7 +315,7 @@ export function buildInvoiceFinalNoticeEmail(
           params.invoiceNumber,
         )}</strong> from ${escapeHtml(params.designerName)} for <strong>${escapeHtml(
           params.projectName,
-        )}</strong>, now two weeks past due.`,
+        )}</strong>, now two weeks on from its due date.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -312,7 +326,8 @@ export function buildInvoiceFinalNoticeEmail(
     params.portalUrl,
     "Pay invoice immediately",
     {
-      eyebrow: "Overdue",
+      audience: "client",
+      eyebrow: "Invoice",
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
@@ -428,6 +443,7 @@ export function buildPaymentReceiptEmail(
     params.portalUrl,
     "View receipt",
     {
+      audience: "client",
       eyebrow: "Receipt",
       title: subject,
       studioName: params.studioName,
@@ -486,7 +502,7 @@ export function buildDirectOrderReceiptEmail(
       muted(`<em>We&rsquo;ll be in touch about delivery.</em>`),
     params.portalUrl,
     "View order",
-    { eyebrow: "Receipt", title: subject },
+    { audience: "client", eyebrow: "Receipt", title: subject },
   );
 
   return { subject, html };
@@ -538,7 +554,7 @@ export function buildDirectOrderPaymentFailedEmail(
       ),
     params.portalUrl,
     "Retry payment",
-    { eyebrow: "Payment failed", title: subject },
+    { audience: "client", eyebrow: "Payment failed", title: subject },
   );
 
   return { subject, html };
@@ -656,6 +672,7 @@ export function buildPaymentFailedEmail(
     params.portalUrl,
     "Try payment again",
     {
+      audience: "client",
       eyebrow: "Payment failed",
       title: subject,
       studioName: params.studioName,

@@ -1,5 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
+  clientDecisionLink,
   clientProjectDeepLink,
   clientProjectLink,
 } from "./client-portal-links.ts";
@@ -76,4 +77,26 @@ Deno.test("deep links are portal-relative", () => {
     "/projects/proj-1?invoice=inv-1#letterbox",
   );
   assertEquals(clientProjectDeepLink(null, "road"), "/#road");
+});
+
+Deno.test("an approval is addressed by its own id, not by an anchor", () => {
+  assertEquals(
+    clientDecisionLink(BASE, "dec-1"),
+    "https://client.patina.cloud/decisions/dec-1",
+  );
+  assertEquals(
+    clientDecisionLink("https://client.patina.cloud/", "dec-1"),
+    "https://client.patina.cloud/decisions/dec-1",
+  );
+});
+
+Deno.test("an approval id that is not a plain segment lands on the doorstep", () => {
+  assertEquals(
+    clientDecisionLink(BASE, "../../evil"),
+    "https://client.patina.cloud/#doorstep",
+  );
+  assertEquals(
+    clientDecisionLink(BASE, null),
+    "https://client.patina.cloud/#doorstep",
+  );
 });

@@ -27,6 +27,7 @@ import { sendCompliantEmail } from "../_shared/send-email.ts";
 import {
   artifactCitationsForDigest,
   buildReminderDigestEmail,
+  decisionDigestTitle,
   isReminderDigestDue,
   type ReminderDigestItem,
 } from "./logic.ts";
@@ -51,6 +52,7 @@ const PAGE = 200;
 interface DigestPrefRow {
   user_id: string;
   last_reminder_digest_sent_at: string | null;
+  timezone: string | null;
 }
 
 async function collectItems(
@@ -91,7 +93,7 @@ async function collectItems(
       decision:client_decisions(
         id, title, project_id, approval_contract,
         approval_artifact:project_approval_artifacts(
-          source_kind, source_version, artifact_hash, artifact_title
+          source_kind, source_version, artifact_hash, artifact_title, created_at
         ),
         authority_snapshot:project_decision_authority_snapshots(
           decision_lead_id
@@ -142,7 +144,7 @@ async function collectItems(
     const title = dec?.title || "A decision needs your input";
     items.push({
       category: "decision",
-      title: row.kind === "decision_overdue" ? `${title} (overdue)` : title,
+      title: decisionDigestTitle(row.kind, title),
       // /decisions is retired; a decision is answered on the doorstep of the
       // project it belongs to, at the ask's own anchor so a client with
       // several standing asks is put in front of the one this line names.
@@ -178,7 +180,7 @@ async function dispatchReminderDigests(
   while (true) {
     const { data: prefs, error } = await supabase
       .from("notification_preferences")
-      .select("user_id, last_reminder_digest_sent_at")
+      .select("user_id, last_reminder_digest_sent_at, timezone")
       .eq("reminder_cadence", "daily_digest")
       .eq("channels_email", true)
       .range(offset, offset + PAGE - 1);
@@ -214,6 +216,7 @@ async function dispatchReminderDigests(
         const { subject, html } = buildReminderDigestEmail(
           items,
           CLIENT_PORTAL_URL,
+          pref.timezone,
         );
         const result = await sendCompliantEmail(supabase, {
           to: profile.email as string,

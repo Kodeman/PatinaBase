@@ -8,6 +8,7 @@ export interface EmbeddedApprovalArtifact {
   source_version: number | null;
   artifact_hash: string | null;
   artifact_title: string | null;
+  created_at?: string | null;
 }
 
 export interface EmbeddedAuthoritySnapshot {
@@ -56,6 +57,7 @@ export function resolveApprovalArtifactCitation(
     version: artifact.source_version as number,
     checksum: artifact.artifact_hash,
     title: artifact.artifact_title,
+    issuedAt: artifact.created_at ?? null,
   };
 }
 
