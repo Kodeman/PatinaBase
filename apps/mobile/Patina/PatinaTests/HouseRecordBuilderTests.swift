@@ -65,6 +65,25 @@ struct HouseRecordBuilderTests {
         #expect(HouseRecordBuilder.askedByName(for: item(nil, isPerson: false)) == nil)
     }
 
+    /// The same rule, all the way through the builder to the drawn sentence.
+    /// `markingNew` rebuilds every NEEDS YOU row against the last visit, so a
+    /// field it forgets is a field that survives the first run and no other:
+    /// the sentence read "Leah asked" on arrival and "your designer asked"
+    /// on every visit after it.
+    @Test("the drawn sentence keeps the designer's name on a return visit")
+    func askedByNameSurvivesTheReturnVisit() throws {
+        let (decisions, _, _) = try waitingFixtures()
+        let calendar = Calendar(identifier: .gregorian)
+
+        for lastSeen in [nil, day("2026-08-20T12:00:00Z")] as [Date?] {
+            let record = build(badges: badges(decisions: decisions), lastSeen: lastSeen)
+            let row = try #require(record.needsYou.first)
+            #expect(row.askedBy == "Leah")
+            let shown = HouseRecordRowPresentation.make(row: row, now: now, calendar: calendar)
+            #expect(shown.stillOpenText == "Still open, Leah asked on Aug 22.")
+        }
+    }
+
     /// The seed's three waiting things, as the walk sees them.
     private func waitingFixtures() throws -> ( // swiftlint:disable:this large_tuple
         [RemoteClientDecision], [RemoteProposal], [RemoteInvoice]

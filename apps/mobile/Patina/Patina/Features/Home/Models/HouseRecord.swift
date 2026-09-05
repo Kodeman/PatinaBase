@@ -735,7 +735,7 @@ private extension HouseRecordRow {
         return HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
             state: state, isNew: date > lastSeen,
-            isStandingCondition: isStandingCondition, route: route
+            isStandingCondition: isStandingCondition, askedBy: askedBy, route: route
         )
     }
 
@@ -744,7 +744,8 @@ private extension HouseRecordRow {
     func asStandingCondition() -> HouseRecordRow {
         HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
-            state: state, isNew: false, isStandingCondition: true, route: route
+            state: state, isNew: false, isStandingCondition: true,
+            askedBy: askedBy, route: route
         )
     }
 }
