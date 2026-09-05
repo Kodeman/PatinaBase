@@ -56,9 +56,23 @@ export function apnsDeviceUrl(t: ResolvedToken): string {
   return `${apnsHostFor(t.environment)}/3/device/${t.token}`;
 }
 
-/** One unread in_app row, as the badge counter reads it. */
-export interface UnreadBadgeRow {
+/** One recent in_app row, as the badge counter reads it. */
+export interface BadgeRow {
   metadata?: Record<string, unknown> | null;
+  opened_at?: string | null;
+  status?: string | null;
+}
+
+/**
+ * Read, as the BELL decides read: `opened_at` set, or a status the app treats
+ * as read on its own (`NotificationsAPIClient.swift`'s
+ * `opened_at != nil || status == "opened" || status == "clicked"`). Keying on
+ * `opened_at` alone made the icon disagree with the app over a clicked row.
+ */
+export function badgeRowIsRead(row: BadgeRow): boolean {
+  const openedAt = row?.opened_at ?? null;
+  if (openedAt !== null) return true;
+  return row?.status === "opened" || row?.status === "clicked";
 }
 
 /**
@@ -68,29 +82,41 @@ export interface UnreadBadgeRow {
  * (`NotificationsViewModel.collapseDuplicates`) because more than one row can
  * name one thing: 00534's `notify_client_attention` de-dups its own bell row,
  * but 00289's design-request triggers do not, so two status changes on one lead
- * leave two unread in_app rows for one entity. A raw count therefore painted a
+ * leave two in_app rows for one entity. A raw count therefore painted a
  * home-screen number the app itself would never draw — and the app only
  * rewrites the badge when the feed loads, so the wrong number would stand for
  * as long as the app stayed closed, which is the whole point of the badge.
  *
+ * Collapsing alone was not enough: the bell's tie-break is that a read twin
+ * marks the survivor read (`collapseDuplicates`' `else if row.isRead` branch,
+ * pinned by `BellQueueFallbackTests` "a read twin marks the surviving row
+ * read"), so ONE entity counts only while NONE of its rows is read. Counting an
+ * entity as unread because some row of it was unread left the icon saying 1
+ * where the bell said 0 — she taps a row, `markOpened` stamps that row, the
+ * older twin stays unstamped. Hence: rows arrive unfiltered by read state and
+ * an entity is dropped as soon as any of its rows reads as read.
+ *
  * Rows with no entity key are counted individually, exactly as the bell keeps
  * them: they name nothing to collapse onto.
  */
-export function collapsedBadgeCount(rows: UnreadBadgeRow[]): number {
-  const seen = new Set<string>();
+export function collapsedBadgeCount(rows: BadgeRow[]): number {
   let count = 0;
+  const unreadByEntity = new Map<string, boolean>();
   for (const row of rows) {
+    const read = badgeRowIsRead(row);
     const metadata = row?.metadata ?? null;
     const entityType = metadata?.entity_type;
     const entityId = metadata?.entity_id;
     if (typeof entityType !== "string" || typeof entityId !== "string") {
-      count++;
+      if (!read) count++;
       continue;
     }
     const key = `${entityType}|${entityId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    count++;
+    const stillUnread = unreadByEntity.get(key) ?? true;
+    unreadByEntity.set(key, stillUnread && !read);
+  }
+  for (const unread of unreadByEntity.values()) {
+    if (unread) count++;
   }
   return count;
 }
