@@ -84,6 +84,8 @@ export interface ProposalWatchModel {
 const CLAY = 'var(--color-clay)';
 const CLAY_INK = 'var(--color-clay-ink)';
 const SAGE = 'var(--color-sage)';
+/** P-17 / R13 — SIGNED's pigment. Sage stops carrying approval meaning. */
+const MOCHA = 'var(--color-mocha)';
 const GOLDEN = 'var(--color-golden-hour)';
 const TERRACOTTA = 'var(--color-terracotta)';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
@@ -132,7 +134,7 @@ function deriveStamp(status: WatchStatus, aged: boolean): WatchStamp {
       // Opened and sitting too long without a signature → promote to AWAITING.
       return aged ? { label: 'AWAITING', color: GOLDEN } : { label: 'VIEWED', color: SAGE };
     case 'accepted':
-      return { label: 'SIGNED', color: SAGE };
+      return { label: 'SIGNED', color: MOCHA, ink: MOCHA };
     case 'declined':
       return { label: 'DECLINED', color: TERRACOTTA, ink: TERRACOTTA_INK };
     case 'expired':

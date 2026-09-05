@@ -36,6 +36,7 @@ import { useProposalProject } from '@/hooks/use-proposal-project';
 import { useProposal } from '@/hooks/use-proposals';
 import type { ProposalWatchModel } from '@/lib/document/proposal-watch-derivation';
 import { Stamp } from './stamp';
+import { SignedStamp } from './signed-stamp';
 import {
   DocumentAction,
   DocumentActionGroup,
@@ -373,6 +374,9 @@ export function ProposalWatch({
  *     engagement becomes shape A) and we walk into the new document.
  *   · failure — a quiet inline terracotta line at the act site (R83, no toast);
  *     the button stays as the retry.
+ *
+ * P-17 / R13 — the seal is drawn in mocha, doubled, with no fill: the sage
+ * plate and the sage word were a green mark on the most consequential state.
  */
 function SignedSeal({
   proposalId,
@@ -420,11 +424,11 @@ function SignedSeal({
     <DocumentActionGroup
       surfaceKey="open-document"
       regionKey="signed-proposal"
-      className="mt-1 !block rounded-[5px] border border-[var(--color-pearl)] bg-[rgba(168,181,160,0.12)] px-4 py-3"
+      className="mt-1 !block rounded-[5px] border border-[var(--color-pearl)] px-4 py-3"
       aria-label="Signed proposal"
     >
       <div className="flex items-center gap-3">
-        <Stamp label="SIGNED" color="var(--color-sage)" />
+        <SignedStamp />
         <p className="text-[12.5px] text-[var(--color-charcoal)]">
           {projectId ? (
             <>{signedLine} — the project is open.</>
