@@ -81,7 +81,7 @@ struct SealMomentTests {
         let detail = try SourcePin.readCode(
             "Patina/Features/Proposals/Views/ProposalDetailView.swift"
         )
-        #expect(detail.contains(".fullScreenCover(isPresented: $viewModel.showSignSheet)"))
+        #expect(detail.contains("isPresented: $viewModel.showSignSheet"))
         #expect(detail.contains(".fullScreenCover(isPresented: $viewModel.showSealMoment)"))
         #expect(!detail.contains(".presentationDetents"), "the detent survived")
 
@@ -125,18 +125,25 @@ struct SealMomentTests {
     /// because none is known.
     @Test("the seal says what happens next without inventing a name or a date")
     func theSealSaysWhatHappensNext() {
+        // RULED 2026-09-05: "countersigns" asserted a second act nothing in
+        // the app waits on or records. What is true is that the studio has
+        // her name, and that a copy is hers.
         #expect(
             ProposalSignActCopy.whatHappensNext(studio: "Quist Interiors")
-                == "Quist Interiors countersigns. You’ll have a copy."
+                == "Quist Interiors has your signature. You’ll have a copy."
         )
         #expect(
             ProposalSignActCopy.whatHappensNext(studio: nil)
-                == "Your designer countersigns. You’ll have a copy."
+                == "Your designer has your signature. You’ll have a copy."
         )
         #expect(
             ProposalSignActCopy.whatHappensNext(studio: "")
-                == "Your designer countersigns. You’ll have a copy."
+                == "Your designer has your signature. You’ll have a copy."
         )
+        for line in [ProposalSignActCopy.whatHappensNext(studio: "Quist Interiors"),
+                     ProposalSignActCopy.whatHappensNext(studio: nil)] {
+            #expect(!line.lowercased().contains("countersign"), "\(line) still promises a countersignature")
+        }
         for line in [ProposalSignActCopy.whatHappensNext(studio: "Quist Interiors"),
                      ProposalSignActCopy.whatHappensNext(studio: nil)] {
             for invented in ["soon", "shortly", "within", "hours", "days"] {
@@ -193,9 +200,75 @@ struct SealMomentTests {
         )
         let sign = try #require(source.range(of: "func sign(proposalId: String, name: String)"))
         let body = String(source[sign.lowerBound...].prefix(700))
-        #expect(body.contains("self.showSealMoment = true"))
-        #expect(body.contains("self.signedName = name"))
+        #expect(body.contains("self.armSeal(name: name)"))
+        let arm = try #require(source.range(of: "func armSeal(name: String)"))
+        let armBody = String(source[arm.lowerBound...].prefix(240))
+        #expect(armBody.contains("signedName = name"))
+        #expect(armBody.contains("sealPending = true"))
+        #expect(!armBody.contains("showSealMoment"), "the act presented the seal itself again")
         // Nothing else opens it, and `load` in particular does not.
         #expect(source.components(separatedBy: "showSealMoment = true").count - 1 == 1)
+    }
+
+    // MARK: - `IOSC-05` · the two covers never overlap
+
+    /// Dismissing one `fullScreenCover` and presenting another in the SAME
+    /// state mutation is the classic SwiftUI race: UIKit is asked to present
+    /// while a dismissal is in flight and drops the second, so the payoff of
+    /// the whole ceremony silently never appears — and no source pin would
+    /// notice, because every string is still there.
+    ///
+    /// This is the state machine that replaced it, driven with no view at
+    /// all: the act ARMS the seal and dismisses; the host fires the seal from
+    /// the sign cover's `onDismiss`, one runloop later, with nothing in
+    /// flight.
+    @Test("signing arms the seal and dismisses; the dismissal presents it")
+    func theSealIsPresentedAfterTheSignCoverDismisses() {
+        let viewModel = ProposalDetailViewModel()
+        viewModel.showSignSheet = true
+
+        viewModel.armSeal(name: "Margaret Whitfield")
+
+        // The instant after the act: the sign cover is going away and the
+        // seal is owed but NOT yet presented.
+        #expect(!viewModel.showSignSheet)
+        #expect(viewModel.sealPending)
+        #expect(!viewModel.showSealMoment, "both covers were live in one mutation")
+
+        viewModel.signCoverDismissed()
+
+        #expect(viewModel.showSealMoment)
+        #expect(!viewModel.sealPending, "the seal stayed armed after it fired")
+    }
+
+    /// A cancelled act arms nothing, and a seal already shown cannot be
+    /// re-opened by a later dismissal — "Not yet" must not end in a seal.
+    @Test("a dismissal with nothing armed opens no seal")
+    func anUnarmedDismissalOpensNothing() {
+        let viewModel = ProposalDetailViewModel()
+        viewModel.showSignSheet = true
+        viewModel.cancelSigning()
+
+        viewModel.signCoverDismissed()
+        #expect(!viewModel.showSealMoment)
+
+        // …and once it has fired, it does not fire twice.
+        viewModel.armSeal(name: "Margaret Whitfield")
+        viewModel.signCoverDismissed()
+        viewModel.showSealMoment = false
+        viewModel.signCoverDismissed()
+        #expect(!viewModel.showSealMoment)
+    }
+
+    /// The host is the other half: the seal is presented from the sign
+    /// cover's own `onDismiss`, on the same view that owns both covers.
+    @Test("the host fires the seal from the sign cover's onDismiss")
+    func theHostWiresOnDismiss() throws {
+        let detail = try SourcePin.readCode(
+            "Patina/Features/Proposals/Views/ProposalDetailView.swift"
+        )
+        let cover = try #require(detail.range(of: "isPresented: $viewModel.showSignSheet"))
+        let body = String(detail[cover.lowerBound...].prefix(140))
+        #expect(body.contains("onDismiss: { viewModel.signCoverDismissed() }"))
     }
 }

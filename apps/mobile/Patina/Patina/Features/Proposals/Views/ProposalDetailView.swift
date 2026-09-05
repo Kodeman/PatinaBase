@@ -47,7 +47,14 @@ struct ProposalDetailView: View {
         // line, a name and the act do not fit half a phone, and a medium
         // detent is dismissed by a flick over a document still half-visible
         // behind it.
-        .fullScreenCover(isPresented: $viewModel.showSignSheet) {
+        // `IOSC-05`: the seal is presented from the sign cover's `onDismiss`,
+        // never in the same mutation that dismisses it — a present issued
+        // while a dismissal is in flight is dropped, and the dropped one is
+        // the whole payoff of the ceremony.
+        .fullScreenCover(
+            isPresented: $viewModel.showSignSheet,
+            onDismiss: { viewModel.signCoverDismissed() }
+        ) {
             SignActView(
                 proposalTitle: viewModel.proposal?.title ?? "this proposal",
                 terms: ProposalSignTerms.make(

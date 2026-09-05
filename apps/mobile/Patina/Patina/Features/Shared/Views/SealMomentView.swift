@@ -20,8 +20,9 @@ import SwiftUI
 import UIKit
 
 struct SealMomentView: View {
-    /// The studio that countersigns, where the app already holds a name for
-    /// it. Never invented — `whatHappensNext` says "Your designer" instead.
+    /// The studio that now holds her signature, where the app already holds a
+    /// name for it. Never invented — `whatHappensNext` says "Your designer"
+    /// instead.
     let studioName: String?
     let signedName: String?
     let onDone: () -> Void

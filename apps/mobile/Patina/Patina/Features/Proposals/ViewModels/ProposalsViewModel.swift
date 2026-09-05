@@ -81,6 +81,17 @@ final class ProposalDetailViewModel {
     /// pretending to be paper.
     var showSealMoment: Bool = false
 
+    /// `IOSC-05`. The signature landed and the seal is owed, but the sign
+    /// cover is still on screen.
+    ///
+    /// Two `fullScreenCover`s on one host cannot be swapped in a single state
+    /// mutation: UIKit is asked to present the second while the first's
+    /// dismissal is in flight and drops it, so the payoff of the whole
+    /// ceremony silently never appears. The act therefore only ARMS the seal;
+    /// the host fires it from the sign cover's `onDismiss`, one runloop later,
+    /// with nothing in flight.
+    private(set) var sealPending: Bool = false
+
     /// The name she typed, for the line beneath the mark. The server's
     /// `signed_by_name` arrives on the next load; this is what the seal has.
     private(set) var signedName: String?
@@ -220,15 +231,34 @@ final class ProposalDetailViewModel {
         signError = nil
         do {
             try await ProposalsAPIClient.shared.signProposal(proposalId: proposalId, signedName: name)
-            self.didSign = true
-            self.signedName = name
-            self.showSignSheet = false
-            self.showSealMoment = true
+            self.armSeal(name: name)
         } catch {
             // SP-15 / C5: Patina's words, never the server's.
             MoneyFailureCopy.log("sign", error)
             self.signError = MoneyFailureCopy.sign(error).sentence
         }
         isSigning = false
+    }
+
+    /// `IOSC-05`. The act landed: record it, dismiss the sign cover, and ARM
+    /// the seal. Presenting it is the host's job one runloop later, which is
+    /// why this sets `sealPending` and not `showSealMoment`.
+    func armSeal(name: String) {
+        didSign = true
+        signedName = name
+        showSignSheet = false
+        sealPending = true
+    }
+
+    /// `IOSC-05`. The sign cover has finished dismissing; present the seal if
+    /// one is owed.
+    ///
+    /// Idempotent and one-way: a cancelled act arms nothing, so a dismissal
+    /// that follows "Not yet" opens no seal, and a second call cannot re-open
+    /// a seal already shown and dismissed.
+    func signCoverDismissed() {
+        guard sealPending else { return }
+        sealPending = false
+        showSealMoment = true
     }
 }
