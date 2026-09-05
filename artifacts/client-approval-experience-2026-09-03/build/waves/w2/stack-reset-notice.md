@@ -14,3 +14,8 @@ The backend lane (agent-cae-w2-backend) owns every local db reset during Wave 2 
   (`clientConsentMethod` + `clientSignature` on `respond_project_approval`) and gained
   `project_approval_artifacts.why_author_name`, so the whole ledger was replayed and
   `scripts/run-sql-tests.sh` re-run. Other Wave 2 lanes: re-seed before any local walk.
+- 2026-09-05 — **backend lane** (`agent-cae-w2-backend`) reset a fourth time. Another lane had
+  reset the shared stack from its own worktree in the meantime — the ledger tail read
+  `00570, 00568, 00567` with **no 00569** — so the round-2 state was replayed and every SQL gate
+  re-run against it. Reset ownership during builds is the backend lane's alone (env.md); other
+  Wave 2 lanes: re-seed before any local walk, and do not reset.

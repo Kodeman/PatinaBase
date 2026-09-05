@@ -528,3 +528,25 @@ append, and the third entry added on top; both copies now carry all three. For
 the next lane: that file is shared state, so append in place at
 `/Users/kody/Code/patina-merged/artifacts/.../w2/stack-reset-notice.md` and never
 `cp` a worktree copy over it.
+
+### Another lane reset the shared stack mid-gate
+
+After the round-2 gates went green I probed the live database for the report and
+found `_create_project_approval_decision_checked` back at four arguments and the
+ledger tail reading **00570, 00568, 00567 — with no 00569**. Another Wave 2 lane
+had run `db reset` from its own worktree, which carries 00570 and not 00569, and
+replaced my applied state with its own.
+
+Reset again from this worktree and re-ran everything. Ledger tail 00569; live
+probe: the wrapper takes `clientSignature`, the checked creator reads
+`p_project_id, p_payload, p_idempotency_key, p_predecessor_decision_id, p_why,
+p_why_author_name`, the projection contains `whyAuthorName`, `anon` holds no
+EXECUTE on the create RPC, and the `why_author_check` constraint is installed as
+written. `scripts/run-sql-tests.sh` green again at **157/157 effective**, and
+regenerating the types against the restored database produced **no delta** — the
+committed `database.types.ts` matches the applied schema.
+
+The gates in the table above are the ones that ran on this restored stack. For
+the integration steward: env.md's reset-ownership rule (backend lane only, during
+builds) was not held to, so treat any other lane's "reset + walk" evidence from
+this window as taken against a stack that may not have carried 00569.
