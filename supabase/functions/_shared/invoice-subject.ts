@@ -25,15 +25,17 @@ export interface InvoiceBrandingRow {
 
 /**
  * What the letter is *for*: the house, else the studio invoice's own regarding
- * line, else a plain word for the studio's own book.
+ * line, else the caller's last rung.
  *
- * `fallback` is the last rung only — the Stripe line item says "Studio invoice"
- * where a letter says "your studio".
+ * `fallback` is required and may be `null`. A letter passes `null` and drops
+ * its "for …" clause entirely rather than telling a reader the invoice is "for
+ * your studio" (ruling W5-6); the Stripe line item and the designer's own desk
+ * line, which must lead with something, pass "Studio invoice".
  */
-export function invoiceSubjectName(
+export function invoiceSubjectName<F extends string | null>(
   invoice: InvoiceSubjectRow,
-  fallback = 'your studio'
-): string {
+  fallback: F
+): string | F {
   return invoice.project?.name ?? invoice.title ?? fallback;
 }
 

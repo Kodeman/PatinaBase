@@ -168,7 +168,10 @@ Deno.serve(async (req: Request) => {
   }
 
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-  const projectName = invoiceSubjectName(invoice);
+  const projectName = invoiceSubjectName(invoice, null);
+  // The designer's own line must lead with something; her letter's "for …"
+  // clause simply closes early when the invoice names nothing.
+  const deskName = projectName ?? 'Studio invoice';
   const clientName = invoice.client?.full_name?.trim() || 'Your client';
   const designerName =
     invoice.designer?.full_name?.trim() || invoice.designer?.business_name?.trim() || null;
@@ -224,7 +227,7 @@ Deno.serve(async (req: Request) => {
       project_id: invoice.project_id,
       amount_cents: balanceCents,
       subject,
-      message: `${projectName}: ${clientName} is mailing a check for ${balanceLabel} toward ${invoiceNumber}. Record it when it arrives.`,
+      message: `${deskName}: ${clientName} is mailing a check for ${balanceLabel} toward ${invoiceNumber}. Record it when it arrives.`,
       deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
     },
   });

@@ -177,7 +177,8 @@ async function escalateToDesigner(
   }
 
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-  const projectName = invoiceSubjectName(invoice);
+  const projectName = invoiceSubjectName(invoice, null);
+  const forClause = projectName ? ` for ${projectName}` : '';
   const balanceCents = Math.max(
     (invoice.total_cents || 0) - (invoice.amount_paid_cents || 0),
     0,
@@ -199,7 +200,7 @@ async function escalateToDesigner(
       invoice_id: invoice.id,
       project_id: invoice.project_id,
       subject: subjectLine,
-      message: `Invoice ${invoiceNumber} for ${projectName} is ${overdueDays}+ days overdue. Automated reminders are exhausted — it needs direct follow-up.`,
+      message: `Invoice ${invoiceNumber}${forClause} is ${overdueDays}+ days overdue. Automated reminders are exhausted — it needs direct follow-up.`,
       deep_link: '/desk?book=accounts&page=receivables',
     },
   });
@@ -318,7 +319,10 @@ Deno.serve(async (_req: Request) => {
     }
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-    const projectName = invoiceSubjectName(invoice);
+    // null, not a stand-in phrase: a rung with nothing to name drops its
+    // "for …" clause rather than saying "for your studio" to the client.
+    const projectName = invoiceSubjectName(invoice, null);
+    const forClause = projectName ? ` for ${projectName}` : '';
     const designerName =
       invoice.designer?.full_name?.trim() ||
       invoice.designer?.business_name?.trim() ||
@@ -346,6 +350,7 @@ Deno.serve(async (_req: Request) => {
       currency: invoice.currency,
       studioName: cobrand.studioName,
       studioLogoUrl: cobrand.studioLogoUrl,
+      studioInvoice: !invoice.project_id,
     });
 
     let sendResult;
@@ -363,7 +368,7 @@ Deno.serve(async (_req: Request) => {
           project_id: invoice.project_id,
           reminder_stage: stage,
           subject: rendered.subject,
-          message: `Reminder ${stage + 1} of ${REMINDER_OFFSET_DAYS.length}: invoice ${invoiceNumber} for ${projectName}.`,
+          message: `Reminder ${stage + 1} of ${REMINDER_OFFSET_DAYS.length}: invoice ${invoiceNumber}${forClause}.`,
           deep_link: `/invoices/${invoice.id}`,
         },
       });
@@ -411,7 +416,7 @@ Deno.serve(async (_req: Request) => {
         entityType: 'invoice',
         entityId: invoice.id,
         title: 'An invoice is coming due',
-        body: `Invoice ${invoiceNumber} for ${projectName} is due soon.`,
+        body: `Invoice ${invoiceNumber}${forClause} is due soon.`,
         metadata: {
           project_id: invoice.project_id,
           amount_cents: invoice.total_cents,
@@ -437,7 +442,7 @@ Deno.serve(async (_req: Request) => {
           invoice_id: invoice.id,
           project_id: invoice.project_id,
           subject: `Invoice ${invoiceNumber} is past due`,
-          message: `Invoice ${invoiceNumber} for ${projectName} is past due. An automated overdue notice was sent to the client.`,
+          message: `Invoice ${invoiceNumber}${forClause} is past due. An automated overdue notice was sent to the client.`,
           deep_link: '/desk?book=accounts&page=receivables',
         },
       });

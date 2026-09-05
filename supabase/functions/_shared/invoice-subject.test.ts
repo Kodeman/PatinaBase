@@ -22,7 +22,7 @@ Deno.test("the house names the letter when there is one", () => {
     invoiceSubjectName({
       project: { name: "The Ridgeline House" },
       title: "Design consultation · September",
-    }),
+    }, null),
     "The Ridgeline House",
   );
 });
@@ -32,18 +32,20 @@ Deno.test("a studio invoice is named by its own regarding line", () => {
     invoiceSubjectName({
       project: null,
       title: "Design consultation · September",
-    }),
+    }, null),
     "Design consultation · September",
   );
 });
 
-Deno.test("no house and no title → 'your studio'", () => {
-  assertEquals(invoiceSubjectName({ project: null, title: null }), "your studio");
+Deno.test("no house and no title → null, so a letter can say nothing", () => {
+  // Ruling W5-6: the letter drops its "for …" clause rather than telling a
+  // reader the invoice is "for your studio".
+  assertEquals(invoiceSubjectName({ project: null, title: null }, null), null);
 });
 
 Deno.test("the fallback is the last rung only — Stripe's line item", () => {
-  // The Stripe product name says "Studio invoice" where a letter says "your
-  // studio"; a title still out-ranks it, and a house out-ranks the title.
+  // The Stripe product name and the designer's own desk line have to lead with
+  // something; a title still out-ranks it, and a house out-ranks the title.
   assertEquals(
     invoiceSubjectName({ project: null, title: null }, "Studio invoice"),
     "Studio invoice",
@@ -62,8 +64,8 @@ Deno.test("the fallback is the last rung only — Stripe's line item", () => {
 });
 
 Deno.test("a missing project embed is the same as a null one", () => {
-  assertEquals(invoiceSubjectName({ title: "Retainer · Q4" }), "Retainer · Q4");
-  assertEquals(invoiceSubjectName({}), "your studio");
+  assertEquals(invoiceSubjectName({ title: "Retainer · Q4" }, null), "Retainer · Q4");
+  assertEquals(invoiceSubjectName({}, null), null);
 });
 
 // ── The branding anchors ────────────────────────────────────────────────────
@@ -144,6 +146,19 @@ Deno.test("every invoice sender names the letter through invoiceSubjectName", as
   }
 });
 
+Deno.test("every invoice sender still selects the studio anchor and the title", async () => {
+  // Both columns arrive with migration 00571 and nothing else reads them, so a
+  // tidy-up that drops either from a SELECT would leave every gate green while
+  // the studio invoice loses its letterhead (studio_id) or its name (title).
+  for (const name of SENDERS) {
+    const src = await senderSource(name);
+    assert(
+      /project_id,\s*studio_id,\s*title,\s*invoice_number/.test(src),
+      `${name}/index.ts no longer selects studio_id and title on the invoice row`,
+    );
+  }
+});
+
 Deno.test("every branding sender resolves identity from the invoice's own anchors", async () => {
   for (const name of BRANDING_SENDERS) {
     const src = await senderSource(name);
@@ -157,6 +172,24 @@ Deno.test("every branding sender resolves identity from the invoice's own anchor
       `${name}/index.ts has a resolveStudioIdentity call that does not pass invoiceBrandingRef(invoice)`,
     );
   }
+});
+
+Deno.test("the webhook's invoice lookup reports a failed read instead of swallowing it", async () => {
+  // The receipt, failed-transfer and refund letters all return early on a null
+  // invoice, so a discarded PostgREST error is a silent skip while the money
+  // settles — the shape a pre-migration deploy would take (W5-2).
+  const src = await senderSource("stripe-webhook");
+  const from = src.indexOf("async function loadInvoiceJoined");
+  assert(from >= 0, "loadInvoiceJoined is gone from stripe-webhook");
+  const body = src.slice(from, src.indexOf("\n}\n", from));
+  assert(
+    /const \{ data, error \}/.test(body),
+    "loadInvoiceJoined destructures no error from the read",
+  );
+  assert(
+    body.includes("console.error('stripe-webhook: invoice lookup failed'"),
+    "loadInvoiceJoined discards the PostgREST error instead of logging it",
+  );
 });
 
 Deno.test("checkout returns through the null-tolerant address, never an interpolated house", async () => {

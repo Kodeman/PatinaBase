@@ -23,6 +23,7 @@ import {
   type EmailAudience,
   muted,
   paragraph,
+  portalBaseFor,
   renderBrandedShell,
   spacer,
 } from "./branded-email.ts";
@@ -63,9 +64,45 @@ export interface RenderedInvoiceEmail {
   html: string;
 }
 
+// ─── Naming what the invoice is for ──────────────────────────────────────────
+//
+// A studio invoice has no house. Its caller passes the invoice's own regarding
+// line as `projectName`; when it has neither, `projectName` is null and the
+// letter closes the sentence rather than naming something that does not exist
+// (ruling W5-6 — never "for your studio").
+
+/** ` for <strong>Rivera Residence</strong>`, or "" when there is no name. */
+function forClause(name: string | null | undefined, strong = false): string {
+  const trimmed = name?.trim();
+  if (!trimmed) return "";
+  const label = escapeHtml(trimmed);
+  return strong ? ` for <strong>${label}</strong>` : ` for ${label}`;
+}
+
+/** ` — Rivera Residence` subject tail, or "" when there is no name. */
+function subjectTail(name: string | null | undefined): string {
+  const trimmed = name?.trim();
+  return trimmed ? ` — ${trimmed}` : "";
+}
+
+/**
+ * Ruling W5-7: the client shell's footer offers "Your project", which a studio
+ * invoice's reader has none of. Its letters name the page she actually has.
+ */
+function studioInvoiceFooterLinks(): { label: string; href: string }[] {
+  const base = portalBaseFor("client");
+  return [
+    { label: "Your page", href: base },
+    { label: "Email preferences", href: `${base}/preferences` },
+  ];
+}
+
 export interface InvoiceSentEmailParams {
   invoiceNumber: string;
-  projectName: string;
+  /** The house, else the studio invoice's regarding line, else null. */
+  projectName?: string | null;
+  /** true ⇒ this invoice has no house; the footer names her page instead. */
+  studioInvoice?: boolean;
   /** Person named in the body prose (the individual designer). */
   designerName: string;
   /**
@@ -109,12 +146,15 @@ function wrap(
     /** Which portal the footer resolves. Client-addressed builders say
      * "client"; the studio's own notices keep the designer default. */
     audience?: EmailAudience;
+    /** Overrides the shell's footer nav (studio invoices; ruling W5-7). */
+    footerLinks?: { label: string; href: string }[];
   } = {},
 ): string {
   return renderBrandedShell({
     title: opts.title ?? "Patina",
     audience: opts.audience,
     eyebrow: opts.eyebrow ?? "Invoice",
+    footerLinks: opts.footerLinks,
     studioName: opts.studioName,
     studioLogoUrl: opts.studioLogoUrl,
     body:
@@ -135,13 +175,14 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
     ? callout(escapeHtml(params.personalMessage.trim()))
     : "";
 
-  const subject = `${params.senderName ?? params.designerName} sent you invoice ${params.invoiceNumber} — ${params.projectName}`;
+  const subject = `${params.senderName ?? params.designerName} sent you invoice ${params.invoiceNumber}${subjectTail(params.projectName)}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
-        `${escapeHtml(params.designerName)} has sent you an invoice for <strong>${escapeHtml(
+        `${escapeHtml(params.designerName)} has sent you an invoice${forClause(
           params.projectName,
-        )}</strong>.`,
+          true,
+        )}.`,
       ) +
       personalBlock +
       paragraph(`<strong>Invoice:</strong> ${escapeHtml(params.invoiceNumber)}`) +
@@ -163,6 +204,7 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
+      footerLinks: params.studioInvoice ? studioInvoiceFooterLinks() : undefined,
     },
   );
 
@@ -178,7 +220,10 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
 
 export interface InvoiceReminderEmailParams {
   invoiceNumber: string;
-  projectName: string;
+  /** The house, else the studio invoice's regarding line, else null. */
+  projectName?: string | null;
+  /** true ⇒ this invoice has no house; the footer names her page instead. */
+  studioInvoice?: boolean;
   designerName: string;
   /** Greeting name; falls back to "there". */
   clientName?: string | null;
@@ -210,13 +255,14 @@ export function buildInvoiceUpcomingReminderEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Reminder: invoice ${params.invoiceNumber} is due soon — ${params.projectName}`;
+  const subject = `Reminder: invoice ${params.invoiceNumber} is due soon${subjectTail(params.projectName)}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
-        `Just a friendly reminder that ${escapeHtml(params.designerName)}&rsquo;s invoice for <strong>${escapeHtml(
+        `Just a friendly reminder that ${escapeHtml(params.designerName)}&rsquo;s invoice${forClause(
           params.projectName,
-        )}</strong> is coming due.`,
+          true,
+        )} is coming due.`,
       ) +
       reminderFacts(params) +
       muted(
@@ -230,6 +276,7 @@ export function buildInvoiceUpcomingReminderEmail(
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
+      footerLinks: params.studioInvoice ? studioInvoiceFooterLinks() : undefined,
     },
   );
   return { subject, html };
@@ -240,13 +287,13 @@ export function buildInvoiceOverdueNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Still open: invoice ${params.invoiceNumber} — ${params.projectName}`;
+  const subject = `Still open: invoice ${params.invoiceNumber}${subjectTail(params.projectName)}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
         `Invoice <strong>${escapeHtml(params.invoiceNumber)}</strong> from ${escapeHtml(
           params.designerName,
-        )} for <strong>${escapeHtml(params.projectName)}</strong> is still open.`,
+        )}${forClause(params.projectName, true)} is still open.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -263,6 +310,7 @@ export function buildInvoiceOverdueNoticeEmail(
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
+      footerLinks: params.studioInvoice ? studioInvoiceFooterLinks() : undefined,
     },
   );
   return { subject, html };
@@ -273,15 +321,16 @@ export function buildInvoiceSecondNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Second notice: invoice ${params.invoiceNumber} — ${params.projectName}`;
+  const subject = `Second notice: invoice ${params.invoiceNumber}${subjectTail(params.projectName)}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
         `This is a second notice that invoice <strong>${escapeHtml(
           params.invoiceNumber,
-        )}</strong> from ${escapeHtml(params.designerName)} for <strong>${escapeHtml(
+        )}</strong> from ${escapeHtml(params.designerName)}${forClause(
           params.projectName,
-        )}</strong> is still open, a week on from its due date.`,
+          true,
+        )} is still open, a week on from its due date.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -297,6 +346,7 @@ export function buildInvoiceSecondNoticeEmail(
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
+      footerLinks: params.studioInvoice ? studioInvoiceFooterLinks() : undefined,
     },
   );
   return { subject, html };
@@ -307,15 +357,16 @@ export function buildInvoiceFinalNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Final notice: invoice ${params.invoiceNumber} — ${params.projectName}`;
+  const subject = `Final notice: invoice ${params.invoiceNumber}${subjectTail(params.projectName)}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
         `This is the <strong>final automated notice</strong> for invoice <strong>${escapeHtml(
           params.invoiceNumber,
-        )}</strong> from ${escapeHtml(params.designerName)} for <strong>${escapeHtml(
+        )}</strong> from ${escapeHtml(params.designerName)}${forClause(
           params.projectName,
-        )}</strong>, now two weeks on from its due date.`,
+          true,
+        )}, now two weeks on from its due date.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -331,6 +382,7 @@ export function buildInvoiceFinalNoticeEmail(
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
+      footerLinks: params.studioInvoice ? studioInvoiceFooterLinks() : undefined,
     },
   );
   return { subject, html };
@@ -338,7 +390,8 @@ export function buildInvoiceFinalNoticeEmail(
 
 export interface InvoiceArEscalationEmailParams {
   invoiceNumber: string;
-  projectName: string;
+  /** The house, else the studio invoice's regarding line, else null. */
+  projectName?: string | null;
   clientName?: string | null;
   /** Greeting name for the designer; falls back to "there". */
   designerName?: string | null;
@@ -367,9 +420,10 @@ export function buildInvoiceArEscalationEmail(
   const html = wrap(
     paragraph(`Hi ${escapeHtml(designerName)},`) +
       paragraph(
-        `Invoice <strong>${escapeHtml(params.invoiceNumber)}</strong>${clientLine} for <strong>${escapeHtml(
+        `Invoice <strong>${escapeHtml(params.invoiceNumber)}</strong>${clientLine}${forClause(
           params.projectName,
-        )}</strong> is now <strong>${params.daysOverdue}+ days overdue</strong> and the automated reminder sequence (upcoming nudge, overdue notice, second notice, final notice) has been exhausted without payment.`,
+          true,
+        )} is now <strong>${params.daysOverdue}+ days overdue</strong> and the automated reminder sequence (upcoming nudge, overdue notice, second notice, final notice) has been exhausted without payment.`,
       ) +
       paragraph(
         `<strong>Outstanding balance:</strong> ${formatInvoiceCurrency(
@@ -390,7 +444,10 @@ export function buildInvoiceArEscalationEmail(
 
 export interface PaymentReceiptEmailParams {
   invoiceNumber: string;
-  projectName: string;
+  /** The house, else the studio invoice's regarding line, else null. */
+  projectName?: string | null;
+  /** true ⇒ this invoice has no house; the footer names her page instead. */
+  studioInvoice?: boolean;
   designerName: string;
   clientName?: string | null;
   /** The payment amount being acknowledged. */
@@ -435,7 +492,7 @@ export function buildPaymentReceiptEmail(
           params.currency,
         )}</strong> toward invoice <strong>${escapeHtml(
           params.invoiceNumber,
-        )}</strong> for ${escapeHtml(params.projectName)}, billed by ${escapeHtml(
+        )}</strong>${forClause(params.projectName)}, billed by ${escapeHtml(
           params.designerName,
         )}.`,
       ) +
@@ -448,6 +505,7 @@ export function buildPaymentReceiptEmail(
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
+      footerLinks: params.studioInvoice ? studioInvoiceFooterLinks() : undefined,
     },
   );
 
@@ -562,7 +620,8 @@ export function buildDirectOrderPaymentFailedEmail(
 
 export interface PaymentRefundedEmailParams {
   invoiceNumber: string;
-  projectName: string;
+  /** The house, else the studio invoice's regarding line, else null. */
+  projectName?: string | null;
   /** Greeting name for the designer (this email is designer-facing). */
   designerName?: string | null;
   /** The amount actually refunded on this event. */
@@ -599,7 +658,7 @@ export function buildPaymentRefundedEmail(
     ? paragraph(
         `A <strong>partial refund</strong> of <strong>${refundLabel}</strong> was processed against the ${paymentLabel} payment on invoice <strong>${escapeHtml(
           params.invoiceNumber,
-        )}</strong> for ${escapeHtml(params.projectName)}.`,
+        )}</strong>${forClause(params.projectName)}.`,
       ) +
       paragraph(
         `The invoice balance and your earnings are <strong>unchanged</strong> — partial-refund accounting isn&rsquo;t automated yet. Reconcile this refund in your Stripe dashboard, then adjust the invoice by hand if needed.`,
@@ -607,7 +666,7 @@ export function buildPaymentRefundedEmail(
     : paragraph(
         `A <strong>refund</strong> of <strong>${refundLabel}</strong> was processed for the ${paymentLabel} payment on invoice <strong>${escapeHtml(
           params.invoiceNumber,
-        )}</strong> for ${escapeHtml(params.projectName)}.`,
+        )}</strong>${forClause(params.projectName)}.`,
       ) +
       paragraph(
         `This invoice has been reopened and the reversed payment removed from your earnings automatically. Any milestone this payment settled is outstanding again.`,
@@ -625,7 +684,10 @@ export function buildPaymentRefundedEmail(
 
 export interface PaymentFailedEmailParams {
   invoiceNumber: string;
-  projectName: string;
+  /** The house, else the studio invoice's regarding line, else null. */
+  projectName?: string | null;
+  /** true ⇒ this invoice has no house; the footer names her page instead. */
+  studioInvoice?: boolean;
   designerName: string;
   clientName?: string | null;
   /** The payment amount that failed to clear. */
@@ -657,7 +719,7 @@ export function buildPaymentFailedEmail(
           params.currency,
         )}</strong> toward invoice <strong>${escapeHtml(
           params.invoiceNumber,
-        )}</strong> for ${escapeHtml(params.projectName)}, billed by ${escapeHtml(
+        )}</strong>${forClause(params.projectName)}, billed by ${escapeHtml(
           params.designerName,
         )}, could not be completed.`,
       ) +
@@ -677,6 +739,7 @@ export function buildPaymentFailedEmail(
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
+      footerLinks: params.studioInvoice ? studioInvoiceFooterLinks() : undefined,
     },
   );
 
@@ -685,7 +748,8 @@ export function buildPaymentFailedEmail(
 
 export interface CheckIntentEmailParams {
   invoiceNumber: string;
-  projectName: string;
+  /** The house, else the studio invoice's regarding line, else null. */
+  projectName?: string | null;
   /** Greeting name for the designer (this email is designer-facing). */
   designerName?: string | null;
   /** Who said they're mailing a check. */
@@ -718,7 +782,7 @@ export function buildCheckIntentEmail(
       paragraph(
         `${escapeHtml(clientLabel)} let you know they&rsquo;re mailing a check for <strong>${balanceLabel}</strong> toward invoice <strong>${escapeHtml(
           params.invoiceNumber,
-        )}</strong> for ${escapeHtml(params.projectName)}.`,
+        )}</strong>${forClause(params.projectName)}.`,
       ) +
       paragraph(
         `Nothing has changed on the invoice yet — it stays open until the check lands. When it does, record the payment on the invoice and the balance will settle.`,

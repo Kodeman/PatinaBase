@@ -246,7 +246,11 @@ Deno.serve(async (req: Request) => {
   const identity = await resolveStudioIdentity(admin, invoiceBrandingRef(invoice));
   const senderName = studioDisplayName(identity, designerName);
   const cobrand = studioCobrand(identity);
-  const projectName = invoiceSubjectName(invoice);
+  // null, not a stand-in phrase: a letter with nothing to name drops its
+  // "for …" clause rather than telling the client it is "for your studio".
+  const projectName = invoiceSubjectName(invoice, null);
+  const forClause = projectName ? ` for ${projectName}` : '';
+  const studioInvoice = !invoice.project_id;
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
 
@@ -266,6 +270,7 @@ Deno.serve(async (req: Request) => {
           currency: invoice.currency,
           studioName: cobrand.studioName,
           studioLogoUrl: cobrand.studioLogoUrl,
+          studioInvoice,
         })
       : buildInvoiceSentEmail({
           invoiceNumber,
@@ -280,6 +285,7 @@ Deno.serve(async (req: Request) => {
           currency: invoice.currency,
           studioName: cobrand.studioName,
           studioLogoUrl: cobrand.studioLogoUrl,
+          studioInvoice,
         });
 
   let sendResult;
@@ -300,8 +306,8 @@ Deno.serve(async (req: Request) => {
         subject: rendered.subject,
         message:
           sendType === 'reminder'
-            ? `${senderName} sent a reminder about invoice ${invoiceNumber} for ${projectName}.`
-            : `${senderName} sent invoice ${invoiceNumber} for ${projectName}.`,
+            ? `${senderName} sent a reminder about invoice ${invoiceNumber}${forClause}.`
+            : `${senderName} sent invoice ${invoiceNumber}${forClause}.`,
         deep_link: `/invoices/${invoice.id}`,
       },
     });
@@ -336,7 +342,7 @@ Deno.serve(async (req: Request) => {
       entityType: 'invoice',
       entityId: invoice.id,
       title: 'An invoice is ready',
-      body: `${senderName} sent invoice ${invoiceNumber} for ${projectName}.${dueLine}`,
+      body: `${senderName} sent invoice ${invoiceNumber}${forClause}.${dueLine}`,
       metadata: {
         project_id: invoice.project_id,
         amount_cents: invoice.total_cents,

@@ -285,7 +285,7 @@ async function loadInvoiceJoined(
   admin: SupabaseClient,
   invoiceId: string
 ): Promise<InvoiceJoined | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from('invoices')
     .select(
       `
@@ -298,6 +298,12 @@ async function loadInvoiceJoined(
     )
     .eq('id', invoiceId)
     .maybeSingle();
+  // Every money letter (receipt, failed transfer, refund) returns early on
+  // null, so a swallowed error here is a silent skip while the money settles —
+  // e.g. 42703 if these functions ever ship ahead of the `title` migration.
+  if (error) {
+    console.error('stripe-webhook: invoice lookup failed', invoiceId, error);
+  }
   return (data as unknown as InvoiceJoined) ?? null;
 }
 
@@ -394,7 +400,11 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     if (!invoice) return;
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-    const projectName = invoiceSubjectName(invoice);
+    // null, not a stand-in phrase: the client's receipt drops its "for …"
+    // clause rather than saying "for your studio". The designer's own desk
+    // line has to lead with something, so it falls back to the feature's word.
+    const projectName = invoiceSubjectName(invoice, null);
+    const deskName = projectName ?? 'Studio invoice';
     const designerName = designerDisplayName(invoice);
     const balanceCents = invoice.total_cents - invoice.amount_paid_cents;
     // /invoices/<id> stays: the Patina iOS app claims `/invoices/*` in its
@@ -430,6 +440,7 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
         currency: invoice.currency,
         studioName: cobrand.studioName,
         studioLogoUrl: cobrand.studioLogoUrl,
+        studioInvoice: !invoice.project_id,
       });
       const sendResult = await sendCompliantEmail(admin, {
         to: recipient.email,
@@ -475,7 +486,7 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
         amount_cents: row.amount_cents,
         paid_in_full: paidInFull,
         subject,
-        message: `${projectName}: ${subject.toLowerCase()}${
+        message: `${deskName}: ${subject.toLowerCase()}${
           paidInFull ? '' : ` (balance ${formatInvoiceCurrency(balanceCents, invoice.currency)})`
         }.`,
         deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
@@ -496,7 +507,8 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
     if (!invoice) return;
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-    const projectName = invoiceSubjectName(invoice);
+    const projectName = invoiceSubjectName(invoice, null);
+    const deskName = projectName ?? 'Studio invoice';
     const designerName = designerDisplayName(invoice);
     const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
     const amountLabel = formatInvoiceCurrency(row.amount_cents, invoice.currency);
@@ -519,6 +531,7 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
         currency: invoice.currency,
         studioName: cobrand.studioName,
         studioLogoUrl: cobrand.studioLogoUrl,
+        studioInvoice: !invoice.project_id,
       });
       const sendResult = await sendCompliantEmail(admin, {
         to: recipient.email,
@@ -556,7 +569,7 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
         invoice_payment_id: row.id,
         amount_cents: row.amount_cents,
         subject,
-        message: `${projectName}: the client's bank transfer of ${amountLabel} on ${invoiceNumber} failed. They've been asked to try again.`,
+        message: `${deskName}: the client's bank transfer of ${amountLabel} on ${invoiceNumber} failed. They've been asked to try again.`,
         deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
       },
     });
@@ -1652,7 +1665,8 @@ async function sendInvoiceRefundSideEffects(
     if (!invoice) return;
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-    const projectName = invoiceSubjectName(invoice);
+    const projectName = invoiceSubjectName(invoice, null);
+    const deskName = projectName ?? 'Studio invoice';
     const designerName = designerDisplayName(invoice);
     const portalUrl = `${DESIGNER_PORTAL_URL}/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`;
     const refundLabel = formatInvoiceCurrency(opts.refundedAmount, invoice.currency);
@@ -1720,8 +1734,8 @@ async function sendInvoiceRefundSideEffects(
         partial: opts.partial,
         subject,
         message: opts.partial
-          ? `${projectName}: partial refund of ${refundLabel} on ${invoiceNumber} — reconcile in Stripe (balance unchanged).`
-          : `${projectName}: ${refundLabel} refunded on ${invoiceNumber} — the invoice has been reopened and earnings reversed.`,
+          ? `${deskName}: partial refund of ${refundLabel} on ${invoiceNumber} — reconcile in Stripe (balance unchanged).`
+          : `${deskName}: ${refundLabel} refunded on ${invoiceNumber} — the invoice has been reopened and earnings reversed.`,
         deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
       },
     });
