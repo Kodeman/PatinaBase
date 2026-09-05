@@ -336,7 +336,7 @@ struct DecisionDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(isSelected ? PatinaColors.sage : .clear, lineWidth: 1.5)
+                .stroke(isSelected ? PatinaColors.Stamp.mocha : .clear, lineWidth: 1.5)
         )
         .padding(.horizontal, 24)
     }
@@ -344,14 +344,15 @@ struct DecisionDetailView: View {
     @ViewBuilder
     private func optionAction(_ option: RemoteDecisionOption, isSelected: Bool, hasDetails: Bool) -> some View {
         if isSelected {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(PatinaColors.sage)
-                Text("Your choice")
-                    .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.sage)
-            }
-            .accessibilityIdentifier("decisionOption.selected")
+            // `W2R1-M2`: the word and the rule, in mocha. A filled sage
+            // checkmark broke three refusals at once on the screen one row
+            // from the ceremony — an icon standing in for status, a fill, and
+            // sage carrying approval meaning (ruled 2026-09-05: answered
+            // marks are mocha; sage keeps the material states).
+            Text("Your choice")
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Stamp.mocha)
+                .accessibilityIdentifier("decisionOption.selected")
         } else if !viewModel.isResolved {
             // Approval is contractual — a contentless card can't be chosen
             // here (R06); PatinaButton's isEnabled dims + disables.
