@@ -88,6 +88,7 @@ const APPROVAL: ProjectApprovalReview = {
   question: 'Do the library elevations read right to you?',
   context: 'This releases the joinery package for pricing. It does not order anything.',
   why: null,
+  whyAuthorName: null,
   viewerRole: 'lead',
   dueAt: '2026-08-20',
   costCentsDelta: 120000,
@@ -578,18 +579,49 @@ describe('the artifact, shown', () => {
     );
   });
 
-  it('sets the ask as a pull-quote and signs it in the designer’s name', () => {
-    render(<ApprovalAsk approval={APPROVAL} designerGivenName="Leah" />);
+  it('sets the ask as a pull-quote and signs it in its author’s name', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, whyAuthorName: 'Leah Quist' }}
+        designerGivenName="Leah"
+      />,
+    );
 
     const quote = screen.getByTestId('approval-question');
     expect(quote).toHaveTextContent('Do the library elevations read right to you?');
-    expect(within(quote).getByTestId('approval-attribution')).toHaveTextContent('— Leah');
+    expect(within(quote).getByTestId('approval-attribution')).toHaveTextContent('— Leah Quist');
     expect(quote.className).toContain('border-l-2');
     expect(quote.className).toContain('border-[var(--accent-primary)]');
   });
 
-  it('signs nothing when the house has no name to sign with', () => {
-    render(<ApprovalAsk approval={APPROVAL} />);
+  // A studio has more than one designer and this sentence is immutable. It is
+  // signed by the hand that wrote it or by nobody — never by whoever holds the
+  // project on the day she reads it (ruling, 2026-09-05).
+  it('never signs the ask with the designer who holds the project today', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, why: 'The sconces move up two inches.' }}
+        designerGivenName="Nora"
+        studioName="Quist Interiors"
+      />,
+    );
+
+    expect(screen.getByTestId('approval-why')).toBeInTheDocument();
+    expect(screen.queryByTestId('approval-attribution')).not.toBeInTheDocument();
+  });
+
+  it.each<[string, unknown]>([
+    ['no author at all', undefined],
+    ['an author the projection left null', null],
+    ['an author name that is blank', '   '],
+    ['an author name that is not a string', 12],
+  ])('signs nothing for %s', (_case, whyAuthorName) => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, whyAuthorName } as unknown as ProjectApprovalReview}
+        designerGivenName="Leah"
+      />,
+    );
     expect(screen.queryByTestId('approval-attribution')).not.toBeInTheDocument();
   });
 
@@ -1209,6 +1241,141 @@ describe('reviews counted in words', () => {
 
     expect(screen.getByTestId('approval-review-count')).toHaveTextContent(
       'None of three reviews are confirmed yet.',
+    );
+  });
+});
+
+/* ── The chair the reader is sitting in (00569 `viewerRole`) ─────────────────
+   `respond_project_approval` and `confirm_project_decision_review` both accept
+   the frozen decision lead ALONE. A studio co-member signed into the client app
+   used to be told "your answer is needed" and could hold Approve all the way
+   into the RPC's refusal. The projection now says which chair she is in, and a
+   door that would only refuse her is not drawn at all.
+   ─────────────────────────────────────────────────────────────────────────── */
+describe('who this approval waits on', () => {
+  const DOORS = /^(approve|return|hold)$/i;
+
+  it('offers the three doors to the lead', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, viewerRole: 'lead' }} />);
+
+    expect(screen.getByTestId('approval-acts')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: DOORS })).toHaveLength(3);
+    expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
+      'Your approval · your answer is needed',
+    );
+    expect(screen.queryByTestId('approval-answered-by-another')).not.toBeInTheDocument();
+  });
+
+  // A projection older or stranger than 00569 names no chair this build knows.
+  // Absence is not a licence to guess, so the surface behaves exactly as it did
+  // before the field existed rather than taking the lead's own doors from her.
+  it.each<[string, unknown]>([
+    ['a chair the projection left null', null],
+    ['no chair at all', undefined],
+    ['a chair this build does not recognise', 'owner'],
+  ])('offers the three doors for %s', (_case, viewerRole) => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, viewerRole } as unknown as ProjectApprovalReview}
+      />,
+    );
+
+    expect(screen.getByTestId('approval-acts')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: DOORS })).toHaveLength(3);
+  });
+
+  it.each<['studio' | 'household']>([['studio'], ['household']])(
+    'draws no door for a %s reader, and does not tell her an answer is owed',
+    (viewerRole) => {
+      render(<ApprovalAsk approval={{ ...APPROVAL, viewerRole }} />);
+
+      expect(screen.queryByTestId('approval-acts')).not.toBeInTheDocument();
+      expect(screen.queryAllByRole('button', { name: DOORS })).toHaveLength(0);
+
+      const ask = screen.getByTestId('doorstep-approval');
+      expect(ask).toHaveTextContent('This approval · yours to read');
+      expect(ask).not.toHaveTextContent('your answer is needed');
+      // Nothing is owed on it, so it is not spared the Since-Yesterday dim.
+      expect(ask).not.toHaveAttribute('data-never-dim');
+      // Not a screen whose acts merely went missing: one line says who answers.
+      expect(screen.getByTestId('approval-answered-by-another')).toHaveTextContent(
+        'This one is answered by the person it was sent to.',
+      );
+      // And the ask reads in the third person, never the second.
+      expect(screen.getByTestId('approval-review-count')).toHaveTextContent(
+        'The review is confirmed.',
+      );
+    },
+  );
+
+  it('draws no confirm act for a studio reader on a draft edition', () => {
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          viewerRole: 'studio',
+          lifecycleStatus: 'draft',
+          completedReviewCount: 0,
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: /review exact edition/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('approval-review-count')).toHaveTextContent(
+      'The review is still needed.',
+    );
+  });
+
+  // The refusal sentence explains an act she was offered. Never offered, never
+  // shown — a studio reader is not told the studio's tooling is broken.
+  it('does not show the confirmation-unavailable sentence to a studio reader', () => {
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          viewerRole: 'studio',
+          lifecycleStatus: 'draft',
+          completedReviewCount: 0,
+          authorityRevision: null,
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId('approval-confirmation-unavailable'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not claim a studio reader confirmed the edition herself', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...AWAITING, viewerRole: 'studio' }}
+        designerGivenName="Nora"
+      />,
+    );
+
+    const line = screen.getByTestId('approval-awaiting-studio-issue');
+    expect(line).toHaveTextContent('Edition 3 is confirmed. Nora issues it next.');
+    expect(line).not.toHaveTextContent("You've confirmed");
+    expect(line).not.toHaveTextContent('Nothing is waiting on you.');
+  });
+
+  it('still shows the recorded outcome to a reader who did not answer', () => {
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          viewerRole: 'studio',
+          outcome: 'approved',
+          respondedAt: '2026-08-14T12:00:00Z',
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
+      'This approval · answered',
     );
   });
 });

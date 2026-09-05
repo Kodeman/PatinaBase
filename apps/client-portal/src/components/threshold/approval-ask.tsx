@@ -221,6 +221,18 @@ function whyOf(approval: ProjectApprovalReview): string | null {
 }
 
 /**
+ * The name of the hand that WROTE the why, frozen with the artifact (P-13,
+ * ruling 2026-09-05). A studio has more than one designer and this sentence is
+ * immutable and client-facing, so it is signed by its author or by nobody —
+ * never by whoever happens to hold the project on the day she reads it. Null
+ * on every row whose projection predates the name, and rendered verbatim.
+ */
+function whyAuthorOf(approval: ProjectApprovalReview): string | null {
+  const name = approval.whyAuthorName;
+  return typeof name === 'string' && name.trim().length > 0 ? name.trim() : null;
+}
+
+/**
  * The artifact, shown.
  *
  * A plate with a frame around it: the budget itself where the artifact IS a
@@ -704,18 +716,37 @@ export function ApprovalAsk({
   // before retrying makes it a different thing to say, so it is sent.
   const notePosted = useRef<string | null>(null);
 
+  /**
+   * Whether the reader is the one this approval waits on. 00569 says which
+   * chair she is sitting in; `respond_project_approval` and
+   * `confirm_project_decision_review` both accept the frozen lead alone, so a
+   * studio co-member — or a household member who is not the lead — reads the
+   * ask and is offered no door that would only refuse her.
+   *
+   * Stated the negative way on purpose: only a chair the projection NAMES as
+   * somebody else's withholds the acts. A role that is null, absent, or a word
+   * this build does not know is a projection older or stranger than 00569, and
+   * that is not a licence to guess — the surface behaves exactly as it did
+   * before the field existed rather than silently taking the lead's own doors
+   * away from her.
+   */
+  const viewerAnswers =
+    approval.viewerRole !== 'studio' && approval.viewerRole !== 'household';
   const due = parseSourceDate(approval.dueAt);
   const reviewComplete = approval.completedReviewCount >= approval.requiredReviewCount;
   const canConfirm =
+    viewerAnswers &&
     approval.lifecycleStatus === 'draft' &&
     !reviewComplete &&
     approval.authorityRevision !== null;
   const confirmationUnavailable =
+    viewerAnswers &&
     approval.lifecycleStatus === 'draft' &&
     !reviewComplete &&
     approval.authorityRevision === null;
   const awaitingStudioIssue = isProjectApprovalAwaitingStudioIssue(approval);
   const canRespond =
+    viewerAnswers &&
     approval.lifecycleStatus === 'pending' &&
     approval.disposition === 'active' &&
     reviewComplete &&
@@ -733,14 +764,20 @@ export function ApprovalAsk({
   const designer = designerGivenName?.trim() || null;
   /** His one line about this edition, frozen with it, when the row carries one. */
   const why = whyOf(approval);
+  /** And the hand that wrote it, frozen beside it. Never the live designer. */
+  const whyAuthor = whyAuthorOf(approval);
 
   // Words, not a tally: what she is being told is whether her own review is in,
   // and on the rare approval that takes several, how many of them are.
   const reviewStanding =
     approval.requiredReviewCount <= 1
       ? reviewComplete
-        ? 'Your review is confirmed.'
-        : 'Your review is still needed.'
+        ? viewerAnswers
+          ? 'Your review is confirmed.'
+          : 'The review is confirmed.'
+        : viewerAnswers
+          ? 'Your review is still needed.'
+          : 'The review is still needed.'
       : approval.completedReviewCount === 0
         ? `None of ${countInWords(approval.requiredReviewCount)} reviews are confirmed yet.`
         : `${upperFirst(countInWords(approval.completedReviewCount))} of ${countInWords(
@@ -856,25 +893,33 @@ export function ApprovalAsk({
     <section
       id={`approval-${approval.decisionId}`}
       data-threshold-unit="doorstep-approval"
-      {...(recordedOutcome || awaitingStudioIssue ? {} : { 'data-never-dim': '' })}
+      {...(recordedOutcome || awaitingStudioIssue || !viewerAnswers
+        ? {}
+        : { 'data-never-dim': '' })}
       data-testid="doorstep-approval"
       aria-labelledby={`approval-gate-${approval.decisionId}`}
       className={SECTION_CLASS}
     >
       <p className={`pt-2.5 ${EYEBROW_CLASS}`}>
-        {recordedOutcome
-          ? 'Your approval · answered'
-          : awaitingStudioIssue
-            ? 'Your approval · with your studio'
-            : approval.lifecycleStatus === 'draft'
-              ? 'Your approval · read the edition first'
-              : 'Your approval · your answer is needed'}
+        {!viewerAnswers
+          ? recordedOutcome
+            ? 'This approval · answered'
+            : 'This approval · yours to read'
+          : recordedOutcome
+            ? 'Your approval · answered'
+            : awaitingStudioIssue
+              ? 'Your approval · with your studio'
+              : approval.lifecycleStatus === 'draft'
+                ? 'Your approval · read the edition first'
+                : 'Your approval · your answer is needed'}
       </p>
       <ArtifactPlate approval={approval} />
 
       {/* The ask is a thing someone said, so it is set as one: a pull-quote on
-          a clay rule, in the designer's hand, and signed. No attribution is
-          drawn when the house has no name to sign it with. */}
+          a clay rule, in the designer's hand, and signed by the hand that wrote
+          it — the name frozen with the artifact, never the designer who holds
+          the project today. No attribution is drawn when the row carries no
+          author: an unsigned sentence is honest, a wrongly signed one is not. */}
       <blockquote
         data-testid="approval-question"
         className="mt-4 max-w-[52ch] border-l-2 border-[var(--accent-primary)] pl-4"
@@ -893,12 +938,12 @@ export function ApprovalAsk({
             {why}
           </p>
         )}
-        {designer && (
+        {whyAuthor && (
           <p
             data-testid="approval-attribution"
             className="mt-2 text-[15px] leading-normal text-[var(--text-muted)]"
           >
-            {`— ${designer}`}
+            {`— ${whyAuthor}`}
           </p>
         )}
       </blockquote>
@@ -958,6 +1003,14 @@ export function ApprovalAsk({
       )}
 
       <div className="mt-4">
+        {!viewerAnswers && (
+          <p
+            data-testid="approval-answered-by-another"
+            className="mb-2 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+          >
+            This one is answered by the person it was sent to.
+          </p>
+        )}
         <p
           data-testid="approval-review-count"
           className="max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
@@ -1007,9 +1060,13 @@ export function ApprovalAsk({
               data-testid="approval-awaiting-studio-issue"
               className="mt-2.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
             >
-              {`You've confirmed edition ${approval.artifactVersion}. ${
-                designer ?? 'Your designer'
-              } issues it next. Nothing is waiting on you.`}
+              {viewerAnswers
+                ? `You've confirmed edition ${approval.artifactVersion}. ${
+                    designer ?? 'Your designer'
+                  } issues it next. Nothing is waiting on you.`
+                : `Edition ${approval.artifactVersion} is confirmed. ${
+                    designer ?? 'The designer'
+                  } issues it next.`}
             </p>
             {composer && (
               <div className="mt-2.5">
