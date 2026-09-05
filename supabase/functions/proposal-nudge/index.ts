@@ -25,6 +25,7 @@ import {
   resolveStudioIdentity,
   studioCobrand,
   studioDisplayName,
+  studioSignatureCity,
 } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -216,10 +217,17 @@ Deno.serve(async (req: Request) => {
       ctaButton(link, 'Review proposal', 'ink'),
       spacer(),
       muted(`If the button doesn&rsquo;t work, copy this link:<br>${link}`),
+      // R3-04: `profiles.city` first, then the studio org's address — the
+      // same precedence the approval letter signs with, so one studio's mail
+      // does not sign from two different places in one inbox.
       signOff({
         designerGivenName: givenName(proposal.designer?.full_name),
         studioName: cobrand.studioName,
-        city: proposal.designer?.city ?? null,
+        city: await studioSignatureCity(
+          supabase,
+          identity,
+          proposal.designer?.city,
+        ) ?? null,
       }),
     ].join(''),
   });

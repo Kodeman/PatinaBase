@@ -116,6 +116,44 @@ export function signatureCity(
 }
 
 /**
+ * The sign-off city for a caller that already holds a resolved identity: the
+ * designer's own `profiles.city` first, then the studio org's address.
+ *
+ * It exists because four letters sign a homeowner's mail and only one of them
+ * builds its signature through `resolveStudioSignature` — the invitation, the
+ * nudge and the review request each resolve the identity themselves and then
+ * assembled `signOff` by hand, so they signed "— Leah, Middle West Studio" with
+ * no city while the approval letter from the same studio, in the same inbox,
+ * signed with one. One org read, the same precedence, never a second opinion.
+ *
+ * Never throws: a failed lookup signs without a city rather than not at all.
+ */
+export async function studioSignatureCity(
+  admin: SupabaseClient,
+  identity: StudioIdentity | null,
+  profileCity: string | null | undefined,
+): Promise<string | undefined> {
+  let orgAddress: unknown = null;
+  if (identity?.studioId) {
+    try {
+      const { data, error } = await admin
+        .from("organizations")
+        .select("address")
+        .eq("id", identity.studioId)
+        .maybeSingle();
+      if (error) {
+        console.error("studioSignatureCity: studio lookup failed", error);
+      } else {
+        orgAddress = (data as { address?: unknown } | null)?.address ?? null;
+      }
+    } catch (e) {
+      console.error("studioSignatureCity: threw", e);
+    }
+  }
+  return signatureCity(profileCity, orgAddress);
+}
+
+/**
  * Resolve that signature: the brand identity (studio → business name → person,
  * via the canonical RPC) plus the designer's own given name and her city —
  * `profiles.city`, else the studio org's `address->>'city'`. Never throws — an unresolved signature leaves the letter unsigned
@@ -129,24 +167,8 @@ export async function resolveStudioSignature(
   const identity = await resolveStudioIdentity(admin, opts);
   const signature: StudioSignature = studioCobrand(identity);
 
-  // The identity RPC returns brand-only columns and carries no address, so the
-  // org row is read separately for the city.
-  let orgAddress: unknown = null;
-  if (identity?.studioId) {
-    const { data, error } = await admin
-      .from("organizations")
-      .select("address")
-      .eq("id", identity.studioId)
-      .maybeSingle();
-    if (error) {
-      console.error("resolveStudioSignature: studio lookup failed", error);
-    } else {
-      orgAddress = (data as { address?: unknown } | null)?.address ?? null;
-    }
-  }
-
   if (!opts.designerId) {
-    const cityOnly = signatureCity(null, orgAddress);
+    const cityOnly = await studioSignatureCity(admin, identity, null);
     if (cityOnly) signature.city = cityOnly;
     return signature;
   }
@@ -158,7 +180,7 @@ export async function resolveStudioSignature(
     .maybeSingle();
   if (error) {
     console.error("resolveStudioSignature: profile lookup failed", error);
-    const cityOnly = signatureCity(null, orgAddress);
+    const cityOnly = await studioSignatureCity(admin, identity, null);
     if (cityOnly) signature.city = cityOnly;
     return signature;
   }
@@ -167,7 +189,7 @@ export async function resolveStudioSignature(
     | null;
   const given = givenName(profile?.full_name);
   if (given) signature.designerGivenName = given;
-  const city = signatureCity(profile?.city, orgAddress);
+  const city = await studioSignatureCity(admin, identity, profile?.city);
   if (city) signature.city = city;
   return signature;
 }

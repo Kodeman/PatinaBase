@@ -14,6 +14,7 @@ import {
   studioCobrand,
   studioDisplayName,
   type StudioIdentity,
+  studioSignatureCity,
 } from "./studio-identity.ts";
 
 const studio: StudioIdentity = {
@@ -158,7 +159,9 @@ Deno.test("resolveStudioSignature: falls back to the studio org's city", async (
   assertEquals(signature.designerGivenName, "Leah");
   assertEquals(signature.studioName, "Middle West Studio");
   assertEquals(signature.city, "Kansas City");
-  assertEquals(reads, ["organizations", "profiles"]);
+  // The profile is read first and the org second: both legs go through
+  // `studioSignatureCity`, which is what the three sibling letters call.
+  assertEquals(reads, ["profiles", "organizations"]);
 });
 
 Deno.test("resolveStudioSignature: no city anywhere → the letter omits it", async () => {
@@ -218,4 +221,91 @@ Deno.test("resolveStudioSignature: business_name identity has no org to read", a
   assertEquals(reads, ["profiles"]);
   assertEquals(signature.city, "Chicago");
   assertEquals(signature.studioName, "Jane Doe Interiors");
+});
+
+// ── M2: the letters that were signing cityless ──────────────────────────────
+// The invitation, the nudge and the review request resolve their own identity
+// and assemble `signOff` by hand. They now ask this helper for the city, so
+// four letters from one studio sign from one place.
+
+Deno.test("studioSignatureCity: reads the org address when the profile has none", async () => {
+  const { client, reads } = fakeAdmin({
+    identity: null,
+    organizations: { address: { city: "Kansas City", state: "MO" } },
+  });
+  const city = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    {
+      studioId: "s1",
+      name: "Middle West Studio",
+      logoUrl: null,
+      website: null,
+      source: "studio",
+    },
+    null,
+  );
+  assertEquals(city, "Kansas City");
+  assertEquals(reads, ["organizations"]);
+});
+
+Deno.test("studioSignatureCity: the designer's own city outranks the org's", async () => {
+  const { client } = fakeAdmin({
+    identity: null,
+    organizations: { address: { city: "Kansas City" } },
+  });
+  const city = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    {
+      studioId: "s1",
+      name: "Middle West Studio",
+      logoUrl: null,
+      website: null,
+      source: "studio",
+    },
+    "Chicago",
+  );
+  assertEquals(city, "Chicago");
+});
+
+Deno.test("studioSignatureCity: no studio to read → the profile's city, or none", async () => {
+  const { client, reads } = fakeAdmin({ identity: null });
+  const withProfile = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    null,
+    "Chicago",
+  );
+  const withNothing = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    null,
+    null,
+  );
+  assertEquals(withProfile, "Chicago");
+  assertEquals(withNothing, undefined);
+  assertEquals(reads, []);
+});
+
+Deno.test("studioSignatureCity: a failed org read signs without a city, never throws", async () => {
+  const client = {
+    from: () => {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: () =>
+          Promise.resolve({ data: null, error: { message: "boom" } }),
+      };
+      return chain;
+    },
+  };
+  const city = await studioSignatureCity(
+    client as unknown as Parameters<typeof studioSignatureCity>[0],
+    {
+      studioId: "s1",
+      name: "Middle West Studio",
+      logoUrl: null,
+      website: null,
+      source: "studio",
+    },
+    null,
+  );
+  assertEquals(city, undefined);
 });
