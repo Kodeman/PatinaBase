@@ -322,3 +322,170 @@ own composer unit tests, which do not depend on the projection.
 pass edits it. If the backend lane also touched it the two changes must be merged by hand — check
 before taking either side whole. Nothing here reads `viewerRole` yet on web; it is carried so the
 client app and the iOS lanes can, which was the point of the finding.
+
+---
+
+# Wave 2 · WEB lane, stage B — P-18, the act, ranked and held
+
+Same worktree and branch, base for this stage `9e76a3c74` (stage A's last commit). Nothing
+pushed, no production mutation, no stack reset.
+
+| Commit | What |
+|---|---|
+| `2c1eac399` | `HoldAction` on `scored-action.tsx`, new `instruments/signature-line.tsx`, the `.da-hold` block in `globals.css`, 33 new tests |
+| `58107758a` | `useRespondProjectApproval` carries the consent pair; **migration 00570** widens the RPC wrapper that was dropping it; 2 tests |
+| `824ed9367` | the four acts become holds and sign on the rule: approval-ask, door-gate, wall-gate, scope-change-ask |
+| `01d649560` | door-acts clears the docked act at 390px |
+
+Gates, from the worktree:
+
+- `pnpm --dir <wt> --filter @patina/client-portal type-check` → clean.
+- `pnpm --dir <wt> --filter @patina/client-portal test` → **119 suites / 1650 tests, all
+  passing** (117 / 1616 at the end of stage A: +2 suites, +34 tests).
+- `pnpm --dir <wt> --filter @patina/supabase test` → **84 files / 997 passing, 12 skipped**.
+- `pnpm --dir <wt> --filter @patina/designer-portal type-check` → clean (it consumes the
+  widened hook input).
+
+## 🔴 The finding that changed the shape of this item: the RPC was NOT ready
+
+The brief says "respond_project_approval already writes client_signature + client_consent_method
+— send them", and R1 records the same reasoning ("the response RPC already writes … so the field
+drops in without a migration"). **Half of that is true, and the half that is false would have
+broken every approval on the doorstep.**
+
+- `_respond_project_approval_checked` (00464:496, replaced by 00569:993) does take
+  `p_client_consent_method` / `p_client_signature`, validates them (two methods only; an
+  electronic signature of at least two characters; a signature without a method refused) and
+  writes all three 00117 consent columns.
+- The **public wrapper** `respond_project_approval` (00464:811, re-issued verbatim by 00569:1376)
+  allowlists exactly two payload keys — `p_payload - ARRAY['outcome','optionId']`, anything else
+  raises `unsupported project response payload keys` — and then calls the checked function with
+  `NULL, NULL` hard-coded in the last two argument positions.
+- The one public path that ever carried a signature into a Stage-2 response is
+  `apply_client_decision` (00464:1506 → `_apply_client_decision_authorized` → the checked
+  function at :1675), and it requires an **option id**, which `get_project_decision_reviews` does
+  not project and `parseProjectApprovalReview` therefore cannot return. No client surface can
+  reach it.
+
+So sending the pair without a migration would have made every outcome submit fail with an
+`invalid_parameter_value`, and NOT sending it would have left P-18's own test ("approval submit
+sends client_signature") unsatisfiable. I minted **`00570_approval_response_signature.sql`**: the
+allowlist grows by `clientConsentMethod` and `clientSignature`, and the two nulls become the
+values read out of the payload. Every rule stays in the checked function; the wrapper adds none
+and relaxes none. A payload of `{"outcome": "approved"}` produces exactly the call 00569
+produced, so every existing caller keeps its behaviour byte for byte.
+
+⚠ **For the steward.** 00570 is a web-lane migration in a wave where the backend lane owns
+`supabase/migrations` (it minted 00569). It must be applied **after** 00569 — both `CREATE OR
+REPLACE` the same wrapper and the numbers already order them correctly. If the backend lane
+also widens the wrapper, take one of the two, not both bodies. **The deploy set for this wave
+now includes a migration from this lane.**
+
+⚠ **No SQL test.** `supabase/tests/rls/` has no existing test over `respond_project_approval` —
+there is no neighbouring suite to add to — and only the backend lane resets the shared local
+stack, so I could not have run one. The migration is four lines of pass-through over validation
+that already has a home; a test belongs with whoever next owns that RPC's suite.
+
+⚠ **The hook sends the pair only when a consent method is given.** `clientSignature` alone is
+dropped. That is deliberate: a signature with no method is a `check_violation` in the RPC, and
+the two extra keys are refused outright by any wrapper minted before 00570. A caller that does
+not sign therefore still works against a pre-00570 database. Two tests pin it.
+
+## (1) The hold — `HoldAction` in `scored-action.tsx`
+
+One export beside `ScoredAction`, not a prop on it: a held act takes no `href`, its click is not
+its act, and half of `ScoredAction`'s surface would have had to be disabled for it.
+
+- **900 ms** (`HOLD_MS`, exported so tests hold for exactly the shipped length).
+- **The ink is the report.** `.da-hold` swaps `.da-pool`'s circular clip for
+  `inset(0 calc(100% * (1 - var(--hold-fill,0))) 0 0)` with the hold's own duration, so the same
+  ink that already floods on contact fills **along the rule** instead. No bar, no ring, no
+  spinner, no percentage; a test asserts no `progress` element and no `role="progressbar"`.
+  ⚠ The rules are placed **last** in the I107 block on purpose: `.da-act:hover .da-pool` and
+  `.da-act:active .da-pool` are (0,3,0) and would otherwise reclaim the circle exactly while the
+  finger is down. Each is answered at equal specificity, later in the cascade. Anyone reordering
+  that file breaks the fill silently.
+- **Early release, pointer leave, pointer cancel and scroll all cancel**, and nothing is said
+  about it — a test asserts the page grows no `cancel|failed|try again` register.
+- **Keyboard.** Enter or Space, held for the same 900 ms. `preventDefault` on both keydown and
+  keyup because a native button fires click on Enter-down and Space-up, and the click path is
+  dead anyway (`onClick` preventDefaults). `repeat` does not restart the clock.
+- **The sentence** "Press and hold to {verb}." is an `sr-only` span joined into
+  `aria-describedby` (existing `aria-describedby` values are kept, not replaced — the door's and
+  the wall's hints still describe their acts).
+- **The visible hint** "or press and hold Enter" is drawn only when the focus arrived by key. A
+  module-level modality tracker (one shared `keydown`/`pointerdown` pair, ref-counted) decides;
+  `:focus-visible` in JS is not reliable under jsdom.
+- **Reduced motion stills the fill, not the wait.** The ink arrives at once (`.da-hold-still`
+  plus the media query) and the hold keeps its length. ⚠ Judgment call: the brief says
+  "prefers-reduced-motion = instant fill", which I read as the *fill*, not the *delay* — a
+  shorter path to a terminal act for one group of readers is a worse answer than a still one.
+- `presentation="mobile_dock"` makes the act's own box `sticky bottom-0` under 600px.
+
+## (2) The rule — `instruments/signature-line.tsx`
+
+Label, a one-edge ruled input, today's date in mono beside it, and `SIGNATURE_NOTICE` printed
+from `consent-copy.ts` — never composed, never reworded. `signatureIsComplete` (≥ 2 characters,
+trimmed) is the floor the sign route and the response RPC both keep, exported so an act can ask
+before arming itself. No `role="alert"`, no red, no "required": a test asserts the instrument
+contains none of `required|invalid|must|error`.
+
+- The date is `en-GB` **with the year** — "5 September 2026". A signature is dated, and a
+  dateline without a year is not one. It is fixed at first draw, not recomputed per keystroke.
+- ⚠ **Copy notes, both deliberate, both flag-worthy.**
+  1. `door-gate`'s hint lost its trailing `SIGNATURE_NOTICE`: the rule prints it now, and one
+     paper says it once. The hint's own sentences are unchanged byte for byte, and a test asserts
+     the notice appears exactly once on the door.
+  2. `wall-gate` **gains** the notice, which it did not carry before. It is the same
+     byte-identical sentence, and an acceptance that releases a draw on a typed name is a
+     signature; the SignatureLine carries it by definition. Revert by passing `notice={false}`
+     if Leah's ear disagrees.
+
+## (3) The wiring
+
+- **approval-ask.tsx** — "Review exact edition" is a hold (verb "confirm this exact edition") and
+  **stays `portal_clickthrough`**: no signature, no migration, per R1. The outcome submit is a
+  hold that also takes the typed name, on **all three outcomes** — R1 says every surface, and the
+  RPC will not take a signature without a method anyway. Stage A's plate, sentence, doors, stamp,
+  note latch and refusal copy are untouched.
+- **door-gate.tsx** — `signatureIsComplete` replaces the inline `>= 2`; `SignatureLine` replaces
+  the label+input; the act is a `HoldAction`. The POST body is unchanged (`signedByName`).
+- **wall-gate.tsx** — same substitution; `useAcceptTradeScope` still takes the trimmed name.
+- **scope-change-ask.tsx** — same substitution; `approvedByName` unchanged. The empty-name
+  refusal sentence stays, because the act arms on `signatureIsComplete` and the guard is the
+  same-tick backstop.
+
+## (4) The dock, and why the act moved
+
+⚠ **The Sign act is now a direct child of the door leaf, not of `SpineGate`'s `act` slot.** The
+consent line, the ruled name and the hint stay inside the gate; only the act moved, and it sits
+immediately below the gate on every viewport.
+
+The reason is mechanical and worth recording, because the obvious two implementations both fail:
+
+- `position: fixed` cannot be used inside the door. The doorway carries `[perspective:1800px]`
+  for the swing, and an ancestor with a perspective is the containing block for fixed
+  descendants — a "fixed" dock would have pinned itself to the doorway, not the viewport. (It
+  would also have stacked one bar per door on a page with several.)
+- `position: sticky` inside the gate's act slot had a few pixels of range: sticky travels only
+  within its containing block, and that block was the act block itself. On the leaf, the range is
+  the whole paper — which is exactly the requirement, and it retires itself when the door scrolls
+  past.
+
+`door-acts.tsx` takes `max-[600px]:pb-16`, giving the three answers the dock's height back so a
+stuck act never paints over them. Ask a question / Request a change / Decline stay tertiary
+whispers under the scored primary; their ranking did not need changing.
+
+## What I could not verify
+
+- **No browser walk.** The fill, the sticky dock at 390px and the keyboard hint's placement are
+  asserted by class name and jsdom only. jsdom evaluates no `clip-path`, no `transition` and no
+  media query, so `--hold-fill` / `--hold-ms` and the `.da-hold*` classes are what the tests read.
+  Someone should hold the Sign act on a 390px viewport, and once with reduced motion on, before
+  this ships.
+- **The migration is unapplied and untested against a database.** See the ⚠ above.
+- **Prettier still reports drift on every file this lane touches**, including files it did not.
+  Pre-existing and repo-wide for this app (stage A found the same on the base commit); the hook
+  is advisory. Not run, because reformatting these files would conflict with every other lane.
+- **`pnpm lint` was not run** — only designer-portal has a working ESLint config, and the brief
+  names type-check and test as the gates.
