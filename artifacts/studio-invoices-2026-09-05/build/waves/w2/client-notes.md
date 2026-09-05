@@ -200,3 +200,67 @@ pnpm --filter @patina/designer-portal type-check → clean (shared-hook consumer
   the finding list; a `studio_id`-keyed payee is a separate ruling.
 - The print sheet has no test suite in this repo (no `app/invoices/**/__tests__`),
   so C1's print-side change is covered at the hook boundary only.
+
+## Fix round 2 — 2026-09-05
+
+### R2-1 (major) · the plate named one studio over another studio's letter
+
+`letterbox-door.tsx` resolved `useStudioIdentity` from `standing[0]`, while the
+letter actually drawn in the slot is chosen by `Letterbox` itself: the
+`?invoice=` named row if the address named one, else the soonest-due open row.
+`useClientInvoices` orders `created_at desc`, so those two rows are unrelated —
+a household holding letters from two studios could read one studio's plate over
+the other studio's money. C1 fixed this class of error one level up (the
+letterhead comes off the row's own `studio_id`, never off the designer's primary
+studio); this is the same mistake made about *which row*.
+
+The door now repeats the slot's own choice, over the same `letters` list it hands
+`Letterbox` — named `?? open[0] ?? standing[0]` — and asks for the letterhead
+with that row's `studio_id` / `designer_id`. Nothing else moved: the `open` memo
+only shifted above the identity query so the choice can read it. The name is
+resolved before the door is ever drawn (the door holds on
+`invoicesQuery.isPending`, which outlasts `useNamedInvoice`'s effect), so no
+frame paints the wrong plate; and `consumeNamedInvoice` is a latch that caches
+its answer, so the door reading it does not starve `Letterbox`'s own read.
+
+Files:
+
+- `apps/client-portal/src/components/threshold/letterbox-door.tsx`
+- `apps/client-portal/src/components/threshold/__tests__/threshold.test.tsx`
+
+### Tests
+
+Both new tests fail on the pre-fix body and pass on the fixed one — verified by
+temporarily restoring `standing[0]`: `2 failed, 6 passed` → `8 passed`.
+
+- *names the studio of the letter in the slot, not the newest letter's* — a paid
+  letter from `studio-ash` stands first in the list, an open one from `studio-1`
+  is in the slot; identity is asked for `studio-1`, never for `studio-ash`, and
+  the doorplate reads "Middle West Studio".
+- *follows the letter the address named to that letter's studio* — `?invoice=`
+  names the later-due `studio-ash` letter; the plate reads "The Ash Studio" and
+  the envelope's regarding line is that letter's.
+
+The named-letter test unfolds the letter (the door's own behaviour), and
+unfolding mounts `Settlement`, so `useInvoicePaymentOptions` / `useStartCheckout`
+/ `useNotifyCheckIntent` were added to this suite's `@patina/supabase` factory
+with inert defaults in the `LetterboxDoor` `beforeEach`. Settlement's own
+behaviour stays `settlement.test.tsx`'s.
+
+### Gates
+
+```
+pnpm --filter @patina/client-portal type-check
+> tsc --noEmit            (clean, no output)
+
+pnpm --filter @patina/client-portal test
+Test Suites: 116 passed, 116 total
+Tests:       1578 passed, 1578 total
+Snapshots:   0 total
+Time:        10.582 s
+```
+
+### Still carried
+
+- The three items under "Still carried" in fix round 1 stand as written; none
+  was in this round's finding list.
