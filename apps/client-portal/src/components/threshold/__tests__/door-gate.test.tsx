@@ -321,6 +321,9 @@ describe('DoorGate', () => {
     renderGate();
     signWith();
 
+    // A tap is a press and the click trailing it; neither signs.
+    fireEvent.pointerDown(signAction(), { clientX: 4, clientY: 4 });
+    fireEvent.pointerUp(signAction());
     fireEvent.click(signAction());
     expect(global.fetch).not.toHaveBeenCalled();
 

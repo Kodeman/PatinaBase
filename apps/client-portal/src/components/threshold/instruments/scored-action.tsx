@@ -283,6 +283,12 @@ ScoredAction.displayName = 'ScoredAction';
 /** The length of a hold, in milliseconds. One beat of deliberation. */
 export const HOLD_MS = 900;
 
+/* An assistive click that follows a pointer gesture on this same control is
+   that gesture's own tail, not a screen reader taking the act. Browsers fire
+   it within a frame or two of the release; the window is generous because a
+   test harness's synthetic gesture is slower than a hand. */
+const POINTER_TAIL_MS = 700;
+
 /* Which way the last interaction came from. A visible keyboard hint on an act
    the client reached with her thumb is noise, so the hint waits for a key. One
    pair of listeners is shared by every held act on the page and retired with
@@ -387,6 +393,7 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const control = useRef<HTMLButtonElement | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const running = useRef(false);
+    const pointerAt = useRef(0);
     const shown = useRef(new Set<string>());
     const shownKey = `${actionKey}:${presentation}`;
     const saidId = `hold-${useId().replace(/:/g, '')}`;
@@ -423,6 +430,28 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
 
     useEffect(() => stop, [stop]);
 
+    /** The act itself, reported once and always the same way. */
+    const take = useCallback(() => {
+      makingEvents.actionSelected({
+        surface_key: surfaceKey,
+        region_key: regionKey,
+        action_key: actionKey,
+        variant,
+        presentation,
+      });
+      void Promise.resolve(onHold()).finally(() => {
+        restoreFocus(restoreFocusRef);
+      });
+    }, [
+      actionKey,
+      onHold,
+      presentation,
+      regionKey,
+      restoreFocusRef,
+      surfaceKey,
+      variant,
+    ]);
+
     const start = useCallback(() => {
       if (unavailable || running.current) return;
       running.current = true;
@@ -443,30 +472,9 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
         if (typeof window !== 'undefined') {
           window.removeEventListener('scroll', stop, true);
         }
-        makingEvents.actionSelected({
-          surface_key: surfaceKey,
-          region_key: regionKey,
-          action_key: actionKey,
-          variant,
-          presentation,
-        });
-        void Promise.resolve(onHold()).finally(() => {
-          restoreFocus(restoreFocusRef);
-        });
+        take();
       }, holdMs);
-    }, [
-      actionKey,
-      holdMs,
-      ink,
-      onHold,
-      presentation,
-      regionKey,
-      restoreFocusRef,
-      stop,
-      surfaceKey,
-      unavailable,
-      variant,
-    ]);
+    }, [holdMs, ink, stop, take, unavailable]);
 
     function onKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
@@ -524,12 +532,25 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
             className ?? '',
           ].join(' ')}
           onPointerDown={(event) => {
+            pointerAt.current = Date.now();
             markInkPoint(event);
             start();
           }}
-          onPointerUp={stop}
-          onPointerLeave={stop}
-          onPointerCancel={stop}
+          onPointerUp={(event) => {
+            pointerAt.current = Date.now();
+            stop();
+            rest.onPointerUp?.(event);
+          }}
+          onPointerLeave={(event) => {
+            pointerAt.current = Date.now();
+            stop();
+            rest.onPointerLeave?.(event);
+          }}
+          onPointerCancel={(event) => {
+            pointerAt.current = Date.now();
+            stop();
+            rest.onPointerCancel?.(event);
+          }}
           onKeyDown={onKeyDown}
           onKeyUp={onKeyUp}
           onBlur={(event) => {
@@ -541,9 +562,21 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
             setKeyboardHint(keyboardModality);
             rest.onFocus?.(event);
           }}
-          // A hold is the only way in. A click that arrives anyway — a
-          // synthetic one, an assistive click — is not the act.
-          onClick={(event) => event.preventDefault()}
+          /* A hold is the only way in for a hand. Assistive technology has no
+             hand: VoiceOver, Voice Control and switch access take an act by
+             dispatching a click, and there is nothing to press and hold. That
+             click IS the deliberate gesture — it costs several steps to reach
+             — so it takes the act at once, exactly as the iOS HoldableModifier
+             answers its "Activate" action. A trusted click is a real finger or
+             mouse and stays inert; so does an untrusted one trailing a pointer
+             sequence on this control, which is a gesture, not a screen reader. */
+          onClick={(event) => {
+            event.preventDefault();
+            if (unavailable || running.current) return;
+            if (event.isTrusted) return;
+            if (Date.now() - pointerAt.current < POINTER_TAIL_MS) return;
+            take();
+          }}
         >
           {variant !== 'tertiary' && <span aria-hidden className="da-pool" />}
           <span className="da-label">

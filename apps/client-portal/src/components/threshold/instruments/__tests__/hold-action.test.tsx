@@ -126,10 +126,59 @@ describe('HoldAction — the act, held', () => {
     expect(onHold).not.toHaveBeenCalled();
   });
 
-  it('a plain click is not the act', () => {
+  it('the click that trails a tap is not the act', () => {
     draw();
-    fireEvent.click(actWord());
+    const target = actWord();
+    // A finger that presses and lets go leaves a click behind it. The gesture
+    // was already answered — and answered by refusing it — so its tail must
+    // not take what the hold would not give.
+    fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+    fireEvent.pointerUp(target);
+    fireEvent.click(target);
     expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it('takes the act on an assistive click, which has no hold to give', () => {
+    draw();
+    // VoiceOver, Voice Control and switch access activate a control by
+    // dispatching a click: there is no pointer to hold down and no key to
+    // keep pressed. Reaching that click already took several deliberate
+    // steps, so it is the act — the same fallback the iOS holdable carries.
+    act(() => {
+      actWord().click();
+    });
+    expect(onHold).toHaveBeenCalledTimes(1);
+    expect(makingEvents.actionSelected).toHaveBeenCalledWith(
+      expect.objectContaining({ action_key: 'gate_sign' }),
+    );
+  });
+
+  it('an unavailable act is not taken by an assistive click either', () => {
+    draw({ disabled: true });
+    act(() => {
+      actWord().click();
+    });
+    expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it('an assistive click during a hold does not take the act twice', () => {
+    draw();
+    const target = actWord();
+
+    jest.useFakeTimers();
+    fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+    act(() => {
+      jest.advanceTimersByTime(400);
+    });
+    act(() => {
+      target.click();
+    });
+    expect(onHold).not.toHaveBeenCalled();
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS);
+    });
+    jest.useRealTimers();
+    expect(onHold).toHaveBeenCalledTimes(1);
   });
 
   it('holds on Enter and on Space for the same length, and not less', () => {

@@ -304,7 +304,9 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
     const target = screen.getByTestId("scope-change-approve");
     expect(target).toBeEnabled();
 
-    // A tap is not the act.
+    // A tap is not the act: neither the press nor the click that trails it.
+    fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+    fireEvent.pointerUp(target);
     fireEvent.click(target);
     expect(mutate).not.toHaveBeenCalled();
 
