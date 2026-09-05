@@ -238,6 +238,11 @@ describe('InvoiceFolio delivery recovery', () => {
     const onOpenDocument = jest.fn();
     render(<InvoiceFolio invoiceId="invoice-1" onOpenDocument={onOpenDocument} />);
 
+    // The head reads household · regarding · status where a house invoice
+    // reads household · house · status (R136).
+    expect(
+      screen.getByText(/Client Example · Design consultation, September · draft/),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /document/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));

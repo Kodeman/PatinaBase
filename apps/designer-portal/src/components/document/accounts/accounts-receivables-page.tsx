@@ -25,6 +25,7 @@ import {
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import { DocumentAction } from '../document-action';
+import { Stamp } from '../stamp';
 import { openInvoiceFolio } from './invoice-overlays';
 
 export function AccountsReceivablesPage({
@@ -110,6 +111,8 @@ function ReceivableRow({
   const balance = invoiceBalanceCents(invoice);
   const busy = send.isPending || chase.isPending;
   const chasedAt = invoice.ar_last_chased_at;
+  // R136 — a studio invoice ages like any other, but has no house to open.
+  const studioInvoice = invoice.project_id === null;
 
   const doChase = async () => {
     setNote(null);
@@ -166,8 +169,13 @@ function ReceivableRow({
           </span>
         </button>
         <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-          {[
-            invoice.project?.name ?? invoice.title ?? 'Studio',
+          {invoice.project?.name ?? invoice.title ?? 'Studio'}
+          {studioInvoice && (
+            <span className="ml-1.5 align-middle">
+              <Stamp label="studio" color="var(--color-clay-ink)" />
+            </span>
+          )}
+          {` · ${[
             invoice.due_date ? `due ${fmtDay(invoice.due_date)}` : null,
             overdue ? `${days}d overdue` : 'within terms',
             invoice.ar_flagged_at ? 'cadence exhausted' : null,
@@ -176,7 +184,7 @@ function ReceivableRow({
               : null,
           ]
             .filter(Boolean)
-            .join(' · ')}
+            .join(' · ')}`}
         </p>
         {note && (
           <p
@@ -210,13 +218,15 @@ function ReceivableRow({
         </span>
       )}
 
-      <button
-        type="button"
-        onClick={() => onOpenDocument(invoice.project_id)}
-        className="min-h-11 whitespace-nowrap rounded-[3px] text-[11px] text-[var(--color-clay-ink)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-      >
-        document ↗
-      </button>
+      {!studioInvoice && (
+        <button
+          type="button"
+          onClick={() => onOpenDocument(invoice.project_id)}
+          className="min-h-11 whitespace-nowrap rounded-[3px] text-[11px] text-[var(--color-clay-ink)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        >
+          document ↗
+        </button>
+      )}
     </li>
   );
 }

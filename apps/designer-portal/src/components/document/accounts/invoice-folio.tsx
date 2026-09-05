@@ -342,7 +342,9 @@ export function InvoiceFolio({
           <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {[
               invoice.client?.full_name ?? invoice.client?.email,
-              invoice.project?.name,
+              // R136 — a studio invoice reads its regarding line where a
+              // project invoice reads its house.
+              invoice.project?.name ?? invoice.title,
               overdue ? null : INVOICE_STATUS_LABELS[invoice.status].toLowerCase(),
             ]
               .filter(Boolean)
