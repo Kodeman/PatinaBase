@@ -60,14 +60,10 @@ export interface ProjectApprovalReview {
    * P-13 — the display name of the hand that WROTE the why, carried by the
    * projection so the sentence is signed by its author rather than by whoever
    * is reading it: a studio has more than one designer, and the record is
-   * immutable and client-facing. Null until the projection carries the column;
-   * an unsigned sentence is honest, a wrongly signed one is not.
-   *
-   * NOT YET PRODUCED. `get_project_decision_reviews` as rewritten in W2's
-   * 00569 emits `why` and no author of any kind, so on every real row this
-   * reads null and the sentence renders unsigned. P-13's attribution half is
-   * DEFERRED until a projection emits this exact key; the parse and the render
-   * are the landing site, not evidence that it lands.
+   * immutable and client-facing. Null on any row minted before the projection
+   * carried the name, and on any artifact whose author cannot be resolved; an
+   * unsigned sentence is honest, a wrongly signed one is not. Every surface
+   * renders this value verbatim (ruling, 2026-09-05) — no surface shortens it.
    */
   whyAuthorName?: string | null;
   context: string | null;
@@ -576,6 +572,16 @@ export function useSetProjectDecisionAuthority() {
   });
 }
 
+/**
+ * P-13 — the why is one line on its way to `p_why`. The composer strips
+ * newlines as they are typed; this is the last gate before the sentence
+ * freezes into `project_approval_artifacts`, a table that is append-only by
+ * design, so an interior newline reaching it could never be corrected.
+ */
+function oneLineWhy(value: string | null | undefined): string {
+  return (value ?? '').replace(/\s+/gu, ' ').trim();
+}
+
 export function useCreateProjectApproval() {
   const queryClient = useQueryClient();
   return approvalMutation(
@@ -586,7 +592,7 @@ export function useCreateProjectApproval() {
         idempotencyKey: string;
       },
     ) => {
-      const why = input.payload.why?.trim() ?? '';
+      const why = oneLineWhy(input.payload.why);
       return parseActionResult(
         await runRpc('create_project_approval_decision', {
           p_project_id: input.projectId,
@@ -719,8 +725,9 @@ export function useSupersedeProjectApproval() {
         expectedUpdatedAt: string;
         idempotencyKey: string;
       },
-    ) =>
-      parseActionResult(
+    ) => {
+      const why = oneLineWhy(input.payload.why);
+      return parseActionResult(
         await runRpc('supersede_project_approval_decision', {
           p_decision_id: input.decisionId,
           p_payload: {
@@ -734,9 +741,15 @@ export function useSupersedeProjectApproval() {
             scheduleDaysDelta: input.payload.scheduleDaysDelta,
             leadTimeDaysDelta: input.payload.leadTimeDaysDelta,
           },
+          // P-13 — a re-ask travels; silence omits the key, and the RPC then
+          // carries the predecessor's frozen why forward rather than clearing
+          // it. Omitting also leaves the supersession's idempotency hash
+          // unchanged for every key minted before `p_why` existed.
+          ...(why ? { p_why: why } : {}),
           p_expected_updated_at: input.expectedUpdatedAt,
           p_idempotency_key: input.idempotencyKey,
         }),
-      ),
+      );
+    },
   );
 }
