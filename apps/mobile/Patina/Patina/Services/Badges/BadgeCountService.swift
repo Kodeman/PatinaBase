@@ -21,6 +21,7 @@
 //
 
 import Foundation
+import UserNotifications
 
 /// App-wide badge counts for the Studio rail. `@Observable` so the rail
 /// re-renders when a refresh lands.
@@ -56,6 +57,21 @@ final class BadgeCountService {
     /// the bell can never disagree with the list behind it.
     func applyNotificationRows(_ rows: [AppNotification]) {
         unreadNotificationCount = rows.filter { !$0.isStudioFallback && !$0.isRead }.count
+        writeSpringboardBadge(unreadNotificationCount)
+    }
+
+    /// R5 keeps the springboard badge, and P-05 is what makes the number under
+    /// it true: the feed counts one `in_app` row per update instead of an
+    /// `in_app` and a `push` row for the same one. This writes that count to
+    /// the home screen, so the badge and the bell say the same thing.
+    ///
+    /// Injectable because `UNUserNotificationCenter` needs a grant a test host
+    /// does not have.
+    var writeSpringboardBadge: (Int) -> Void = { count in
+        UNUserNotificationCenter.current().setBadgeCount(count) { error in
+            guard let error else { return }
+            PatinaLog.ui.error("[Badge] springboard badge refused: \(error.localizedDescription)")
+        }
     }
 
     /// Proposals still awaiting the client's signature (sent/viewed, not
@@ -470,9 +486,11 @@ final class BadgeCountService {
         projectsLoaded = false
         lastRefreshFailed = false
         // R-02: the floor is the PREVIOUS account's. Without this, account B's
-        // first launch paints account A's numbers.
+        // first launch paints account A's numbers. The home screen carries the
+        // same floor, so it is cleared with them.
         defaults.removeObject(forKey: Self.persistedCountsKey)
         floorStoredAt = nil
+        writeSpringboardBadge(0)
     }
 
     /// Debounced refresh for bursty triggers (push receipt can deliver a
