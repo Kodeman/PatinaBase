@@ -1,6 +1,6 @@
 /**
  * The Desk hangs a receivable need on a folder, and a folder is a house. A
- * studio invoice (00570, ruling S1) has no house, so it is chased from the
+ * studio invoice (00571, ruling S1) has no house, so it is chased from the
  * Accounts Receivables page instead of the Desk (ruling S9) — it must not
  * crash the map and must not invent a folder.
  */

@@ -488,7 +488,7 @@ describe('useCreateDraftInvoice', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // useCreateDraftStudioInvoice + useClientInvoices — the invoice with no house
-// (migration 00570)
+// (migration 00571)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useCreateDraftStudioInvoice', () => {

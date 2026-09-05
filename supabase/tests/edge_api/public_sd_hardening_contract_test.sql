@@ -1695,7 +1695,7 @@ VALUES
     ARRAY['service_role']::text[]
   ),
   (
-    -- 00570 added the project-less studio-invoice branch to both arms
+    -- 00571 added the project-less studio-invoice branch to both arms
     -- (00511's hash was
     -- 3ce8183f5490b21a6a087a6a21e8e36c2c1b4c51d1577da614799a473f99099b).
     -- Everything this file pins about the function is unchanged: still
@@ -1707,7 +1707,7 @@ VALUES
     -- applies, so no caller can write state or money around the billing RPCs.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'e329335f260c48e56032a7445feffea2505cdd11972d23f75949ea9394509c97',
+    '99100c8e3832adf7d7a27a22eab3651f3154d28be28dfeabe8d1dbd3f7ed2878',
     ARRAY[]::text[]
   ),
   (

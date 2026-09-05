@@ -102,7 +102,7 @@ const ids = {
   payExpire: '', // PO_F deposit, PO cancelled, WITH pointer+PI → expire-po-session {expired:1}
   invoice: '',
   invPay: '',
-  // ── studio invoice (00570): an invoice with no project ──
+  // ── studio invoice (00571): an invoice with no project ──
   studio: '',
   studioInvoice: '', // project_id NULL → settles and earns off the title
   studioInvPay: '',
@@ -116,7 +116,7 @@ const ids = {
 };
 const EVT = {
   inv: `evt_inv_${RUN}`,
-  studioInv: `evt_studio_inv_${RUN}`, // 00570: project-less invoice settles
+  studioInv: `evt_studio_inv_${RUN}`, // 00571: project-less invoice settles
   poPaid: `evt_po_paid_${RUN}`,
   poPaidPi: `evt_po_paid_pi_${RUN}`, // DISTINCT event, same PI as poPaid — exercises the settle guard
   poFail: `evt_po_fail_${RUN}`,
@@ -231,7 +231,7 @@ async function seed() {
     stripe_checkout_session_id: SESS.inv, recorded_by: ids.designerA,
   });
 
-  // ── studio invoice (00570) ──
+  // ── studio invoice (00571) ──
   // project_id NULL, anchored on the studio and the household instead. The
   // studio-stamp trigger needs designerA to be an active non-guest member of
   // an active design studio; the webhook settles it on the service role.
@@ -492,7 +492,7 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       assertEquals(data!.stripe_payment_intent_id, `pi_inv_${RUN}`);
     });
 
-    // (a2) STUDIO INVOICE (00570): the same rail with no project. The
+    // (a2) STUDIO INVOICE (00571): the same rail with no project. The
     // payment-effects trigger LEFT JOINs projects, so the design-fee credit
     // still lands, keyed on the title instead of a house.
     await t.step('project-less studio invoice settles and earns', async () => {

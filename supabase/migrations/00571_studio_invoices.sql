@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00570 — Studio invoices: an invoice with no house
+-- 00571 — Studio invoices: an invoice with no house
 --
 -- Rulings implemented (plan "Studio invoices — invoices with no house",
 -- 2026-09-05; Kody ruled "go with your recommendations"):
@@ -107,7 +107,7 @@ BEGIN
 
     v_immutable_update := true;
 
-    -- 00570 studio invoices (S1): a row with no project is anchored by its
+    -- 00571 studio invoices (S1): a row with no project is anchored by its
     -- studio. Authority is the studio itself: an active design studio, an
     -- active non-guest member stamped as designer, a named household, and an
     -- actor that is either an active non-guest member or a machine role. The
@@ -207,7 +207,7 @@ BEGIN
   END IF;
 
   IF NOT v_immutable_update THEN
-    -- 00570 studio invoices (S1): a row with no project is anchored by its
+    -- 00571 studio invoices (S1): a row with no project is anchored by its
     -- studio. Authority is the studio itself: an active design studio, an
     -- active non-guest member stamped as designer, a named household, and an
     -- actor that is either an active non-guest member or a machine role. The
@@ -661,7 +661,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.set_invoice_studio_id() IS
-  'Invoker trigger authorizes project discovery before locking or deriving a missing invoice designer/client/studio from its canonical project. App/service inserts bind the current active non-guest project lead with a live designer-domain role, exact client, and active design studio; UPDATE cannot change invoice identity or its project/client/designer/studio tuple. Direct authenticated DML is limited to clean drafts by an exact-studio actor. Immutable machine updates require current-lead or previous_lead provenance. Authenticated owner cores require an exact-studio actor or exact client capability; service may reconcile exact historical tuples. A true postgres/no-SET-ROLE fixture or owner-maintenance session returns only after best-effort derivation and UPDATE immutability checks. 00570: a project-less studio invoice is authorized on both arms by its own studio instead - an active design studio, an active non-guest member as designer, a named household, and an actor that is an active non-guest member or a machine role - and takes no lock.';
+  'Invoker trigger authorizes project discovery before locking or deriving a missing invoice designer/client/studio from its canonical project. App/service inserts bind the current active non-guest project lead with a live designer-domain role, exact client, and active design studio; UPDATE cannot change invoice identity or its project/client/designer/studio tuple. Direct authenticated DML is limited to clean drafts by an exact-studio actor. Immutable machine updates require current-lead or previous_lead provenance. Authenticated owner cores require an exact-studio actor or exact client capability; service may reconcile exact historical tuples. A true postgres/no-SET-ROLE fixture or owner-maintenance session returns only after best-effort derivation and UPDATE immutability checks. 00571: a project-less studio invoice is authorized on both arms by its own studio instead - an active design studio, an active non-guest member as designer, a named household, and an actor that is an active non-guest member or a machine role - and takes no lock.';
 
 -- ─── PART 3: create_draft_studio_invoice — the composer boundary ────────────
 --
@@ -908,7 +908,7 @@ $$;
 COMMENT ON FUNCTION public.create_draft_studio_invoice(
   uuid, uuid, text, numeric, integer, text, jsonb
 ) IS
-  'Atomic authenticated composer boundary for a studio invoice (an invoice with no project, 00570 / ruling S1). Revalidates an active design studio the actor is an active non-guest member of, resolves the household through the designer_clients roster of an active non-guest member of that studio and stamps that member as the invoice designer, locks memberships then the organization in canonical order, bounds and allowlists line JSON, accepts kind=adhoc lines only, and owns invoice identity, state, totals, header insertion, and every initial line in one transaction. Returns the draft invoice id.';
+  'Atomic authenticated composer boundary for a studio invoice (an invoice with no project, 00571 / ruling S1). Revalidates an active design studio the actor is an active non-guest member of, resolves the household through the designer_clients roster of an active non-guest member of that studio and stamps that member as the invoice designer, locks memberships then the organization in canonical order, bounds and allowlists line JSON, accepts kind=adhoc lines only, and owns invoice identity, state, totals, header insertion, and every initial line in one transaction. Returns the draft invoice id.';
 
 REVOKE ALL PRIVILEGES ON FUNCTION public.create_draft_studio_invoice(
   uuid, uuid, text, numeric, integer, text, jsonb
@@ -934,7 +934,7 @@ BEGIN
     JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
     WHERE namespace.nspname = 'public'
       AND routine.proname = 'create_draft_studio_invoice'
-  ), '00570 studio draft overload universe drifted';
+  ), '00571 studio draft overload universe drifted';
 
   ASSERT (
     SELECT owner.rolname = 'postgres'
@@ -957,7 +957,7 @@ BEGIN
     WHERE routine.oid = to_regprocedure(
       'public.create_draft_studio_invoice(uuid,uuid,text,numeric,integer,text,jsonb)'
     )
-  ), '00570 studio draft semantic profile or authority lock order drifted';
+  ), '00571 studio draft semantic profile or authority lock order drifted';
 
   ASSERT NOT EXISTS (
     WITH actual AS (
@@ -988,7 +988,7 @@ BEGIN
       UNION ALL
       (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
     ) AS drift
-  ), '00570 studio draft direct ACL tuple drifted';
+  ), '00571 studio draft direct ACL tuple drifted';
 END
 $studio_draft_roster$;
 
@@ -1159,7 +1159,7 @@ COMMENT ON FUNCTION public.apply_invoice_payment_effects(UUID) IS
   'refunded payment (keyed on reverses_invoice_payment_id, replay-safe), and '
   'flips linked milestones paid?→outstanding as the invoice crosses the '
   'fully-paid line in either direction. Fired by the AFTER INSERT OR UPDATE OF '
-  'status trigger on invoice_payments. 00570: the earnings credit LEFT JOINs '
+  'status trigger on invoice_payments. 00571: the earnings credit LEFT JOINs '
   'projects and names itself from the invoice title when there is no house, so '
   'a studio invoice earns like any other design fee.';
 
@@ -1205,7 +1205,7 @@ CREATE POLICY invoice_payments_household_select
   );
 
 COMMENT ON POLICY invoices_household_select ON public.invoices IS
-  'The household reads its own issued invoices by invoices.client_id, the only anchor a studio invoice has (00570 / ruling S5). Additive to 00178''s project-keyed client policy; drafts stay invisible.';
+  'The household reads its own issued invoices by invoices.client_id, the only anchor a studio invoice has (00571 / ruling S5). Additive to 00178''s project-keyed client policy; drafts stay invisible.';
 
 -- ─── PART 6: resolve_studio_identity gains the studio it is asked about ─────
 --
@@ -1239,7 +1239,7 @@ DECLARE
   v_biz       text;
   v_full      text;
 BEGIN
-  -- 0. Named studio precedence (00570): a studio invoice carries its own
+  -- 0. Named studio precedence (00571): a studio invoice carries its own
   -- studio_id, so neither the project nor the designer's primary studio is
   -- consulted. Skips straight to the organizations read below.
   IF p_studio_id IS NOT NULL THEN
@@ -1311,6 +1311,6 @@ REVOKE ALL ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) FROM PUB
 GRANT EXECUTE ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) TO anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) IS
-  'Canonical studio brand resolver (plan D2): named studio→org (00570, so a studio invoice brands off its own studio_id rather than the designer''s primary studio), else project→studio→org, else designer→primary studio→org, else profile business_name/full_name (gated on is_designer so anon can''t enumerate non-designer names). Returns exactly one row, brand columns only. anon-granted (brand-only, same posture as open_design_requests).';
+  'Canonical studio brand resolver (plan D2): named studio→org (00571, so a studio invoice brands off its own studio_id rather than the designer''s primary studio), else project→studio→org, else designer→primary studio→org, else profile business_name/full_name (gated on is_designer so anon can''t enumerate non-designer names). Returns exactly one row, brand columns only. anon-granted (brand-only, same posture as open_design_requests).';
 
 COMMIT;

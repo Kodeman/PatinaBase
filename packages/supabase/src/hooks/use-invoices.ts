@@ -195,7 +195,7 @@ function parseInvoiceCheckoutReceipt(value: unknown): InvoiceCheckoutReceipt {
 
 export interface Invoice {
   id: string;
-  /** NULL on a studio invoice — the invoice with no house (00570, ruling S1). */
+  /** NULL on a studio invoice — the invoice with no house (00571, ruling S1). */
   project_id: string | null;
   studio_id: string;
   designer_id: string;
@@ -491,7 +491,7 @@ export function useProjectInvoices(projectId: string | null | undefined) {
 /**
  * Every invoice the signed-in household may read, project-bound and studio
  * alike. Unscoped on purpose: RLS decides (00178's project-keyed client
- * policies plus 00570's household policies), so a studio invoice — which has
+ * policies plus 00571's household policies), so a studio invoice — which has
  * no project to filter on — arrives here and nowhere else. Drafts never do.
  */
 export function useClientInvoices() {
@@ -764,7 +764,7 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
 }
 
 /**
- * Creates a draft studio invoice — the invoice with no house (00570). Same
+ * Creates a draft studio invoice — the invoice with no house (00571). Same
  * atomic boundary as useCreateDraftInvoice, minus the project: the RPC
  * resolves the household on a studio member's designer_clients roster, stamps
  * that member as the invoice designer, and refuses anything but ad-hoc lines.

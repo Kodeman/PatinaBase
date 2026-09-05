@@ -1,4 +1,4 @@
--- Studio invoices — an invoice with no house (00570)
+-- Studio invoices — an invoice with no house (00571)
 -- Run:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/billing/studio_invoice_test.sql
