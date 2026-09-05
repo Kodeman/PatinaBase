@@ -914,3 +914,117 @@ This file names the db lane's migration as `00570` at `:22, :159, :233, :250,
 :367` and as `00571` at `:630, :645`. The db lane's file on disk is
 `00571_studio_invoices.sql` (no 00570). Prose only — no shipped code carries
 the number — and outside the five ruled items, so the close pass left it.
+
+---
+
+## Fix round 1 — C1-1, C1-2, C1-3 (close review, round 1)
+
+Three findings, all majors, all mutation-blindness one layer up from where the
+W1-close pass closed it: the shared module's behaviour was pinned, the senders'
+use of it was not. Nothing about a rendered letter changes in this round — the
+whole delta is assertions and two type widenings reverted to required.
+
+### C1-1 — a sender could hand the resolver "your studio" again
+
+`_shared/invoice-subject.test.ts` asserted only `src.includes(
+"invoiceSubjectName(")`, never with what argument, so the four letter senders
+could re-fallback to the ruled-out phrase with every gate green. Two additions:
+
+- inside the existing `SENDERS` loop (all five), a negative on the argument:
+  `!/invoiceSubjectName\([^)]*['"]your studio['"]/.test(src)`;
+- a new test over `LETTER_SENDERS` (invoice-send, invoice-reminders,
+  stripe-webhook, invoice-check-intent) asserting **every** match of
+  `/invoiceSubjectName\([^)]*\)/g` equals exactly
+  `invoiceSubjectName(invoice, null)` — so a fallback of any wording, at any of
+  the six call sites, reds the gate. create-checkout-session is out of that set
+  on purpose: its Stripe line item legitimately passes `'Studio invoice'`.
+
+Mutation I re-run against the fixed tree (fresh `$TMPDIR` copy,
+`invoiceSubjectName(invoice, null)` → `invoiceSubjectName(invoice, 'your
+studio')`, `mutation I files: 4`):
+
+```
+FAILED | 239 passed | 2 failed (1s)
+  every invoice sender names the letter through invoiceSubjectName
+  no letter sender hands the resolver a stand-in name to fall back to
+```
+
+(Before this round the same mutation ran `ok | 239 passed | 0 failed`.)
+
+### C1-2 — the "Your page" footer could be reverted at every sender
+
+The paired footer tests in `invoice-emails.test.ts` prove the builder honours
+`studioInvoice`; nothing proved a sender ever sets it from the row. New test
+over `FOOTER_FLAG_SENDERS` (invoice-send, invoice-reminders, stripe-webhook):
+every `studioInvoice` assignment — `/studioInvoice\s*[:=]\s*([^,;\n]+)/g`,
+which catches both `studioInvoice: !invoice.project_id` and invoice-send's
+`const studioInvoice = !invoice.project_id;`, and correctly ignores the two
+shorthand `studioInvoice,` passes — must read exactly `!invoice.project_id`.
+
+Mutation J re-run (`… → studioInvoice: false`, `mutation J files: 3`):
+
+```
+FAILED | 240 passed | 1 failed (1s)
+  every client-letter sender reads the footer flag off the invoice row
+```
+
+### C1-3 — optional swallowed the compile-time force
+
+The W5-6 work widened `projectName: string` to `projectName?: string | null`
+on all seven param interfaces and added `studioInvoice?: boolean` on the four
+client-letter ones. `| null` is the ruling; `?` is not — it let a caller omit
+the name of a real house and send a nameless letter about it, and omit the
+footer flag and silently get "Your project". Both are now required-but-typed:
+
+- `projectName: string | null` at `_shared/invoice-emails.ts:103, 224, 394,
+  448, 624, 688, 752` (seven interfaces);
+- `studioInvoice: boolean` at `:105, 226, 450, 690` (the four client letters;
+  the refund and check-intent letters are addressed to the DESIGNER, so they
+  carry no client footer flag and were left alone).
+
+Every in-tree caller already passed both, so no sender changed. Three test
+literals gained the now-required flag: `PARAMS` (`studioInvoice: false`, the
+project-invoice baseline the whole file leans on) and the two standalone
+studio-invoice literals at `:122` and `:156` (`true`).
+
+Omission proof, the reviewer's own `omit-si.ts` against the fixed module:
+
+```
+TS2345 [ERROR]: … is missing the following properties from type
+'InvoiceSentEmailParams': projectName, studioInvoice
+error: Type checking failed.
+```
+
+(Before this round the same file checked clean and rendered `FOOTER: Your
+project`.)
+
+### Gates
+
+```
+$ deno test --allow-all --config …/supabase/functions/deno.json …/_shared/
+ok | 241 passed | 0 failed (1s)          (239 before; +2 new source tests)
+
+$ deno test --allow-all --config …/deno.json …/create-checkout-session/ …/stripe-webhook/
+ok | 35 passed | 0 failed (65ms)
+
+$ deno check --config …/deno.json  (the five index.ts)
+Check create-checkout-session/index.ts    Check invoice-send/index.ts
+Check invoice-reminders/index.ts          Check stripe-webhook/index.ts
+Check invoice-check-intent/index.ts       (exit 0, all clean)
+
+$ find …/agent-si-edge -name deno.lock -not -path "*/node_modules/*"   →  nothing
+$ ls /Users/kody/Code/patina-merged/deno.lock                          →  No such file
+```
+
+### Deploy set — unchanged, 20 functions
+
+```
+client-invite · commercial-document-notify · create-checkout-session ·
+decision-first-notice · decision-reminders · decision-resolved-notify ·
+expire-decisions · invoice-check-intent · invoice-reminders · invoice-send ·
+notification-digest · notification-dispatch · po-send · proposal-nudge ·
+proposal-sign-confirmation · quote-request-send · review-requests · spec-pdf ·
+stripe-webhook · trade-rfq-send
+```
+
+Migration 00571 still goes strictly before them.
