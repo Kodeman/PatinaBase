@@ -235,18 +235,18 @@ export function buildInvoiceUpcomingReminderEmail(
   return { subject, html };
 }
 
-/** Stage 1 (due_date + 1 day): the invoice is now past due. */
+/** Stage 1 (due_date + 1 day): the invoice is still open past its date. */
 export function buildInvoiceOverdueNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Invoice ${params.invoiceNumber} is past due — ${params.projectName}`;
+  const subject = `Still open: invoice ${params.invoiceNumber} — ${params.projectName}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
         `Invoice <strong>${escapeHtml(params.invoiceNumber)}</strong> from ${escapeHtml(
           params.designerName,
-        )} for <strong>${escapeHtml(params.projectName)}</strong> is now past its due date.`,
+        )} for <strong>${escapeHtml(params.projectName)}</strong> is still open.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -259,7 +259,7 @@ export function buildInvoiceOverdueNoticeEmail(
     "Pay invoice",
     {
       audience: "client",
-      eyebrow: "Overdue",
+      eyebrow: "Invoice",
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
@@ -273,7 +273,7 @@ export function buildInvoiceSecondNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Second notice: invoice ${params.invoiceNumber} is overdue — ${params.projectName}`;
+  const subject = `Second notice: invoice ${params.invoiceNumber} — ${params.projectName}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
@@ -281,7 +281,7 @@ export function buildInvoiceSecondNoticeEmail(
           params.invoiceNumber,
         )}</strong> from ${escapeHtml(params.designerName)} for <strong>${escapeHtml(
           params.projectName,
-        )}</strong> remains unpaid a week past its due date.`,
+        )}</strong> is still open, a week on from its due date.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -293,7 +293,7 @@ export function buildInvoiceSecondNoticeEmail(
     "Pay invoice now",
     {
       audience: "client",
-      eyebrow: "Overdue",
+      eyebrow: "Invoice",
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
@@ -307,7 +307,7 @@ export function buildInvoiceFinalNoticeEmail(
   params: InvoiceReminderEmailParams,
 ): RenderedInvoiceEmail {
   const clientName = params.clientName?.trim() || "there";
-  const subject = `Final notice: invoice ${params.invoiceNumber} is seriously overdue — ${params.projectName}`;
+  const subject = `Final notice: invoice ${params.invoiceNumber} — ${params.projectName}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
@@ -315,7 +315,7 @@ export function buildInvoiceFinalNoticeEmail(
           params.invoiceNumber,
         )}</strong> from ${escapeHtml(params.designerName)} for <strong>${escapeHtml(
           params.projectName,
-        )}</strong>, now two weeks past due.`,
+        )}</strong>, now two weeks on from its due date.`,
       ) +
       reminderFacts(params) +
       paragraph(
@@ -327,7 +327,7 @@ export function buildInvoiceFinalNoticeEmail(
     "Pay invoice immediately",
     {
       audience: "client",
-      eyebrow: "Overdue",
+      eyebrow: "Invoice",
       title: subject,
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,

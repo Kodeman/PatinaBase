@@ -1,8 +1,8 @@
 // Supabase Edge Function: proposal-nudge
 //
 // Invoked by useNudgeProposal after nudge_proposal() stamps last_nudged_at.
-// Sends the client a gentle reminder about a proposal that's still in their
-// hands (sent/viewed), with a link to client.patina.cloud/proposals/{id}.
+// Sends the client a reminder about a proposal that's still in their hands
+// (sent/viewed), with a link to client.patina.cloud/proposals/{id}.
 // Mirrors proposal-send (same Resend path, sender, and client-portal link);
 // the copy is a reminder rather than a first delivery. Does NOT mutate proposal
 // state — the RPC already stamped the nudge.
@@ -191,11 +191,11 @@ Deno.serve(async (req: Request) => {
       )
     : '';
 
-  // Lead the subject with the studio/sender when one resolves; otherwise keep
-  // the original generic reminder subject verbatim.
+  // Lead the subject with the studio/sender when one resolves; otherwise the
+  // generic form. Neither apologises for asking (no "gentle", no nudge).
   const subject = identity?.name
     ? `A reminder from ${senderName} about your proposal: "${proposal.title}"`
-    : `A gentle reminder about your proposal: "${proposal.title}"`;
+    : `A reminder about your proposal: "${proposal.title}"`;
   const html = renderBrandedShell({
     title: subject,
     audience: 'client',
@@ -204,12 +204,12 @@ Deno.serve(async (req: Request) => {
     studioName: cobrand.studioName,
     studioLogoUrl: cobrand.studioLogoUrl,
     body: [
-      heading('A gentle reminder'),
+      heading('Still open'),
       paragraph(`Hi ${escapeHtml(clientName)},`),
       paragraph(
-        `Just a gentle nudge — ${escapeHtml(designerName)}&rsquo;s proposal <strong>${escapeHtml(
+        `${escapeHtml(designerName)}&rsquo;s proposal <strong>${escapeHtml(
           proposal.title
-        )}</strong> is still waiting for you whenever you have a moment to review it.`
+        )}</strong> is still open and waiting for your review.`
       ),
       expiryLine,
       spacer(10),
