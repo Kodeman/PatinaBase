@@ -1,0 +1,196 @@
+
+> @patina/client-portal@0.1.0 dev /Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w2-integration/apps/client-portal
+> next dev --webpack -p 3002
+
+▲ Next.js 16.2.10 (webpack)
+- Local:         http://localhost:3002
+- Network:       http://192.168.1.63:3002
+✓ Ready in 459ms
+> [PWA] PWA support is disabled
+> [PWA] PWA support is disabled
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · serverActions
+
+○ Compiling /auth/signin ...
+Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+warn - The class `duration-[320ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;320ms&rsqb;` to silence this warning.
+
+warn - The class `duration-[420ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;420ms&rsqb;` to silence this warning.
+
+warn - The class `duration-[520ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;520ms&rsqb;` to silence this warning.
+
+warn - The class `ease-[cubic-bezier(.24,.78,.28,1)]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(.24,.78,.28,1)&rsqb;` to silence this warning.
+
+warn - The class `ease-[cubic-bezier(0.25,1,0.5,1)]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(0.25,1,0.5,1)&rsqb;` to silence this warning.
+
+warn - The class `max-[600px]:duration-[240ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `max-&lsqb;600px&rsqb;:duration-[240ms]` to silence this warning.
+
+warn - The class `motion-safe:duration-[420ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `motion-safe:duration-&lsqb;420ms&rsqb;` to silence this warning.
+ GET /auth/signin 200 in 8.9s (next.js: 7.6s, proxy.ts: 116ms, application-code: 1230ms)
+ GET /auth/signin 200 in 70ms (next.js: 6ms, proxy.ts: 16ms, application-code: 47ms)
+ GET /auth/signin?callbackUrl=%2F 200 in 50ms (next.js: 3ms, proxy.ts: 4ms, application-code: 42ms)
+ GET /auth/signin 200 in 126ms (next.js: 11ms, proxy.ts: 16ms, application-code: 99ms)
+○ Compiling / ...
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 10.2s (next.js: 7.9s, proxy.ts: 117ms, application-code: 2.2s)
+○ Compiling /api/inbox/mark-read ...
+ POST /api/inbox/mark-read 200 in 4.7s (next.js: 4.3s, proxy.ts: 79ms, application-code: 270ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 10.1s (next.js: 6.5s, proxy.ts: 61ms, application-code: 3.5s)
+ GET /auth/signin 200 in 192ms (next.js: 122ms, proxy.ts: 8ms, application-code: 61ms)
+ GET / 200 in 419ms (next.js: 155ms, proxy.ts: 56ms, application-code: 208ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 238ms (next.js: 9ms, proxy.ts: 42ms, application-code: 187ms)
+ GET /auth/signin 200 in 68ms (next.js: 1789µs, proxy.ts: 4ms, application-code: 61ms)
+ GET / 200 in 209ms (next.js: 1463µs, proxy.ts: 39ms, application-code: 168ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 194ms (next.js: 6ms, proxy.ts: 38ms, application-code: 151ms)
+ GET /auth/signin 200 in 46ms (next.js: 2ms, proxy.ts: 7ms, application-code: 37ms)
+ GET / 200 in 528ms (next.js: 6ms, proxy.ts: 113ms, application-code: 409ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 545ms (next.js: 13ms, proxy.ts: 115ms, application-code: 418ms)
+ GET /auth/signin 200 in 68ms (next.js: 7ms, proxy.ts: 18ms, application-code: 43ms)
+ GET / 200 in 483ms (next.js: 4ms, proxy.ts: 100ms, application-code: 380ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 471ms (next.js: 10ms, proxy.ts: 93ms, application-code: 368ms)
+ POST /api/inbox/mark-read 200 in 350ms (next.js: 3ms, proxy.ts: 91ms, application-code: 256ms)
+ GET /auth/signin 200 in 27ms (next.js: 1858µs, proxy.ts: 4ms, application-code: 21ms)
+ GET / 200 in 197ms (next.js: 1465µs, proxy.ts: 42ms, application-code: 153ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 178ms (next.js: 7ms, proxy.ts: 43ms, application-code: 128ms)
+ GET /auth/signin 200 in 32ms (next.js: 2ms, proxy.ts: 5ms, application-code: 25ms)
+ GET / 200 in 222ms (next.js: 1300µs, proxy.ts: 53ms, application-code: 167ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 179ms (next.js: 5ms, proxy.ts: 40ms, application-code: 135ms)
+ GET /auth/signin 200 in 23ms (next.js: 1029µs, proxy.ts: 3ms, application-code: 19ms)
+ GET / 200 in 211ms (next.js: 1360µs, proxy.ts: 51ms, application-code: 158ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 168ms (next.js: 5ms, proxy.ts: 38ms, application-code: 125ms)
+ GET /auth/signin 200 in 24ms (next.js: 1072µs, proxy.ts: 3ms, application-code: 21ms)
+ GET / 200 in 205ms (next.js: 1314µs, proxy.ts: 48ms, application-code: 156ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 195ms (next.js: 5ms, proxy.ts: 48ms, application-code: 143ms)
+ GET /auth/signin 200 in 25ms (next.js: 1048µs, proxy.ts: 6ms, application-code: 18ms)
+ GET / 200 in 185ms (next.js: 1556µs, proxy.ts: 42ms, application-code: 142ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 167ms (next.js: 4ms, proxy.ts: 39ms, application-code: 124ms)
+ GET /auth/signin 200 in 23ms (next.js: 1356µs, proxy.ts: 3ms, application-code: 18ms)
+ GET / 200 in 192ms (next.js: 1433µs, proxy.ts: 51ms, application-code: 140ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 192ms (next.js: 5ms, proxy.ts: 35ms, application-code: 152ms)
+ GET /auth/signin 200 in 24ms (next.js: 1507µs, proxy.ts: 3ms, application-code: 19ms)
+ GET / 200 in 189ms (next.js: 1181µs, proxy.ts: 47ms, application-code: 141ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 165ms (next.js: 5ms, proxy.ts: 39ms, application-code: 121ms)
+ GET /auth/signin 200 in 25ms (next.js: 1141µs, proxy.ts: 3ms, application-code: 20ms)
+ GET / 200 in 214ms (next.js: 1587µs, proxy.ts: 50ms, application-code: 163ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 175ms (next.js: 4ms, proxy.ts: 37ms, application-code: 134ms)
+ GET /auth/signin 200 in 23ms (next.js: 972µs, proxy.ts: 3ms, application-code: 19ms)
+ GET / 200 in 184ms (next.js: 1115µs, proxy.ts: 44ms, application-code: 139ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 164ms (next.js: 5ms, proxy.ts: 40ms, application-code: 119ms)
+ GET /auth/signin 200 in 56ms (next.js: 1109µs, proxy.ts: 3ms, application-code: 52ms)
+ GET / 200 in 179ms (next.js: 1303µs, proxy.ts: 39ms, application-code: 139ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 166ms (next.js: 7ms, proxy.ts: 39ms, application-code: 120ms)
+ POST /api/inbox/mark-read 200 in 89ms (next.js: 1900µs, proxy.ts: 35ms, application-code: 52ms)
+ GET /auth/signin 200 in 23ms (next.js: 1068µs, proxy.ts: 3ms, application-code: 19ms)
+ GET / 200 in 186ms (next.js: 1308µs, proxy.ts: 38ms, application-code: 147ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 166ms (next.js: 5ms, proxy.ts: 37ms, application-code: 124ms)
+ GET /auth/signin 200 in 25ms (next.js: 1098µs, proxy.ts: 3ms, application-code: 20ms)
+ GET / 200 in 187ms (next.js: 1274µs, proxy.ts: 39ms, application-code: 147ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 170ms (next.js: 4ms, proxy.ts: 39ms, application-code: 127ms)
+ GET /auth/signin 200 in 43ms (next.js: 4ms, proxy.ts: 8ms, application-code: 32ms)
+ GET / 200 in 227ms (next.js: 1541µs, proxy.ts: 48ms, application-code: 177ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 191ms (next.js: 11ms, proxy.ts: 42ms, application-code: 138ms)
+ GET /auth/signin 200 in 26ms (next.js: 1178µs, proxy.ts: 3ms, application-code: 21ms)
+ GET / 200 in 182ms (next.js: 1152µs, proxy.ts: 39ms, application-code: 142ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 167ms (next.js: 4ms, proxy.ts: 37ms, application-code: 125ms)
+trade scope execution failed {
+  proposalId: 'b0000000-0000-0000-0000-0000000cd102',
+  error: 'trade scope b0000000-0000-0000-0000-0000000cd102 not found or access denied'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd102/sign 500 in 2.5s (next.js: 2.4s, proxy.ts: 31ms, application-code: 68ms)
+ GET /auth/signin 200 in 1115ms (next.js: 185ms, proxy.ts: 4ms, application-code: 925ms)
+ GET / 200 in 479ms (next.js: 166ms, proxy.ts: 52ms, application-code: 261ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 351ms (next.js: 164ms, proxy.ts: 47ms, application-code: 141ms)
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd102',
+  transition: 'trade_scope_executed',
+  error: 'Edge Function returned a non-2xx status code'
+}
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd102',
+  transition: 'deposit_ready',
+  error: 'Edge Function returned a non-2xx status code'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd102/sign 200 in 134ms (next.js: 4ms, proxy.ts: 36ms, application-code: 94ms)
+ GET /auth/signin 200 in 31ms (next.js: 1845µs, proxy.ts: 4ms, application-code: 25ms)
+ GET / 200 in 243ms (next.js: 1433µs, proxy.ts: 46ms, application-code: 196ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 195ms (next.js: 5ms, proxy.ts: 40ms, application-code: 150ms)
+ GET /auth/signin 200 in 63ms (next.js: 4ms, proxy.ts: 9ms, application-code: 51ms)
+ GET / 200 in 256ms (next.js: 3ms, proxy.ts: 57ms, application-code: 197ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 185ms (next.js: 5ms, proxy.ts: 45ms, application-code: 135ms)
+ GET /auth/signin 200 in 26ms (next.js: 955µs, proxy.ts: 3ms, application-code: 22ms)
+ GET / 200 in 402ms (next.js: 3ms, proxy.ts: 69ms, application-code: 331ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 725ms (next.js: 17ms, proxy.ts: 302ms, application-code: 406ms)
+ GET /auth/signin 200 in 30ms (next.js: 1707µs, proxy.ts: 4ms, application-code: 25ms)
+ GET / 200 in 826ms (next.js: 4ms, proxy.ts: 95ms, application-code: 728ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 469ms (next.js: 11ms, proxy.ts: 84ms, application-code: 374ms)
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'trade_scope_executed',
+  error: 'Edge Function returned a non-2xx status code'
+}
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd202',
+  transition: 'deposit_ready',
+  error: 'Edge Function returned a non-2xx status code'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd202/sign 200 in 153ms (next.js: 5ms, proxy.ts: 57ms, application-code: 91ms)
+ GET /auth/signin 200 in 46ms (next.js: 3ms, proxy.ts: 7ms, application-code: 36ms)
+ GET / 200 in 579ms (next.js: 3ms, proxy.ts: 93ms, application-code: 483ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 373ms (next.js: 9ms, proxy.ts: 84ms, application-code: 280ms)
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd201',
+  transition: 'trade_scope_executed',
+  error: 'Edge Function returned a non-2xx status code'
+}
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd201',
+  transition: 'deposit_ready',
+  error: 'Edge Function returned a non-2xx status code'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd201/sign 200 in 157ms (next.js: 5ms, proxy.ts: 36ms, application-code: 116ms)
+ GET /auth/signin 200 in 52ms (next.js: 3ms, proxy.ts: 10ms, application-code: 38ms)
+ GET / 200 in 246ms (next.js: 4ms, proxy.ts: 45ms, application-code: 198ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 185ms (next.js: 6ms, proxy.ts: 46ms, application-code: 133ms)
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd201',
+  transition: 'trade_scope_executed',
+  error: 'Edge Function returned a non-2xx status code'
+}
+commercial notification pending retry {
+  documentId: 'b0000000-0000-0000-0000-0000000cd201',
+  transition: 'deposit_ready',
+  error: 'Edge Function returned a non-2xx status code'
+}
+ POST /api/proposals/b0000000-0000-0000-0000-0000000cd201/sign 200 in 126ms (next.js: 5ms, proxy.ts: 33ms, application-code: 88ms)
+ GET /auth/signin 200 in 28ms (next.js: 1158µs, proxy.ts: 4ms, application-code: 23ms)
+ GET / 200 in 245ms (next.js: 1674µs, proxy.ts: 58ms, application-code: 185ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 180ms (next.js: 5ms, proxy.ts: 38ms, application-code: 137ms)
+ GET /auth/signin 200 in 27ms (next.js: 2ms, proxy.ts: 3ms, application-code: 22ms)
+ GET / 200 in 222ms (next.js: 1385µs, proxy.ts: 40ms, application-code: 181ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 176ms (next.js: 4ms, proxy.ts: 45ms, application-code: 126ms)
+ GET /auth/signin 200 in 26ms (next.js: 1116µs, proxy.ts: 3ms, application-code: 22ms)
+ GET / 200 in 197ms (next.js: 1327µs, proxy.ts: 47ms, application-code: 148ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 169ms (next.js: 4ms, proxy.ts: 38ms, application-code: 126ms)
+ GET /auth/signin 200 in 1069ms (next.js: 187ms, proxy.ts: 4ms, application-code: 879ms)
+ GET / 200 in 444ms (next.js: 170ms, proxy.ts: 39ms, application-code: 234ms)
+ GET /?proposal=b0000000-0000-0000-0000-0000000cd102 200 in 189ms (next.js: 1583µs, proxy.ts: 38ms, application-code: 150ms)
+ POST /api/inbox/mark-read 200 in 83ms (next.js: 1389µs, proxy.ts: 36ms, application-code: 46ms)
+ GET /?proposal=b0000000-0000-0000-0000-0000000cd003 200 in 174ms (next.js: 1250µs, proxy.ts: 30ms, application-code: 143ms)
+ GET /auth/signin 200 in 28ms (next.js: 1100µs, proxy.ts: 3ms, application-code: 23ms)
+ GET / 200 in 242ms (next.js: 1484µs, proxy.ts: 52ms, application-code: 188ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 325ms (next.js: 147ms, proxy.ts: 40ms, application-code: 138ms)
+⨯ Error: aborted
+    at ignore-listed frames
+○ Compiling /_error ...
+ POST /api/inbox/mark-read 200 in 1277ms (next.js: 999ms, proxy.ts: 208ms, application-code: 70ms)
