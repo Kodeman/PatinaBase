@@ -378,6 +378,33 @@ struct ProjectApprovalClosureTests {
         #expect(viewModel.chosenOutcome == nil)
     }
 
+    /// `iosb2-M2`. The projection is not refetched after a successful submit,
+    /// so the row in hand still says `canRespond` — and the screen printed the
+    /// present-tense "You are approving edition 3, exactly as shown." directly
+    /// above "You approved this edition."
+    @Test("the immutability sentence goes when the answer lands")
+    func theImmutabilitySentenceGoesWithTheAct() async throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review()
+        viewModel.respondToApproval = { _, _, _, _ in }
+
+        viewModel.chooseOutcome(.approved)
+        await viewModel.submitApprovalResponse()
+
+        // The state the screen is left holding: an unrefetched row that still
+        // says she may answer, over an answer she has already given.
+        #expect(viewModel.approvalReview?.canRespond == true)
+        #expect(viewModel.hasAnsweredApproval)
+
+        let block = try SourcePin.readCode(
+            "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
+        )
+        let answered = try #require(block.range(of: "if !viewModel.hasAnsweredApproval,"))
+        let covered = String(block[answered.upperBound...].prefix(200))
+        #expect(covered.contains("ProjectApprovalCopy.immutability"),
+                "the answered guard no longer covers the immutability sentence")
+    }
+
     /// The block reads the recorded outcome — it decoded one and never drew it.
     @Test("the block draws the closed and answered lines where the acts would be")
     func theBlockDrawsTheClosureLines() throws {
@@ -412,5 +439,42 @@ struct ProjectApprovalClosureTests {
                 == "This edition isn’t ready to be confirmed. Your designer has to send it again."
         )
         #expect(ProjectApprovalCopy.unavailable == "We couldn’t open this approval.")
+    }
+}
+
+/// `P-09`, half four: the money on the impact row. A type of its own for the
+/// same per-type budget reason as the suite above it.
+@MainActor
+struct ProjectApprovalImpactTests {
+
+    /// `iosb2-M1`. `abs(cents) / 100` truncates, so a $1,250.60 delta printed
+    /// "+$1,250" here while the same edition's email and web copy printed
+    /// "+$1,251" — `moneyInWords` (`standing-sentence.ts:148`) is
+    /// `Intl.NumberFormat` at `maximumFractionDigits: 0`, which rounds. Two
+    /// surfaces stating different figures for one edition is the defect; a
+    /// 99-cent delta printing "+$0" under a row that exists only because the
+    /// cost changed is the same bug saying so out loud.
+    @Test("the money rounds where the web rounds, and never contradicts its own row")
+    func theMoneyRoundsLikeTheWeb() {
+        #expect(ProjectApprovalCopy.money(125_060) == "+$1,251")
+        #expect(ProjectApprovalCopy.money(-125_099) == "−$1,251")
+        #expect(ProjectApprovalCopy.money(99) == "+$1")
+        #expect(ProjectApprovalCopy.money(-99) == "−$1")
+        // The whole-dollar figures the screen already shipped are unchanged.
+        #expect(ProjectApprovalCopy.money(120_000) == "+$1,200")
+        #expect(ProjectApprovalCopy.money(-45_000) == "−$450")
+    }
+
+    /// …and the figure comes from the house's own currency formatter, so a
+    /// device outside en-US renders USD rather than a "$" typed in front of a
+    /// decimal number ("$1.250" on a de-DE device).
+    @Test("the impact money is currency-formatted, not a symbol and a number")
+    func theMoneyIsCurrencyFormatted() throws {
+        let copy = try SourcePin.readCode(
+            "Patina/Features/Decisions/ProjectApprovalCopy.swift"
+        )
+        #expect(copy.contains("PatinaCurrency.formatWholeDollars"))
+        #expect(!copy.contains("NumberFormatter.localizedString"))
+        #expect(!copy.contains("abs(cents) / 100"))
     }
 }

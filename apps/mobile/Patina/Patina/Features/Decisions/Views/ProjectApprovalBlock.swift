@@ -66,8 +66,13 @@ struct ProjectApprovalBlock: View {
 
             // The sentence is present-tense and belongs only where the act is
             // still hers to take; over an answered approval it would describe
-            // something that already happened.
-            if review.needsReviewConfirmation || review.canRespond {
+            // something that already happened. `canRespond` is the projection's
+            // word and the projection is not refetched after a submit, so the
+            // answer given in THIS session has to be asked about too — without
+            // it the screen printed "You are approving edition 3" directly
+            // above "You approved this edition." (`iosb2-M2`).
+            if !viewModel.hasAnsweredApproval,
+               review.needsReviewConfirmation || review.canRespond {
                 Text(ProjectApprovalCopy.immutability(edition: review.artifactVersion))
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)

@@ -142,12 +142,17 @@ enum ProjectApprovalCopy {
 
     /// "+$1,200" / "−$450" — whole dollars, the app-wide convention, with the
     /// typographic minus the house uses rather than a hyphen.
+    ///
+    /// `PatinaCurrency.formatWholeDollars` rather than a "$" typed in front of
+    /// a decimal figure, and it ROUNDS where the old integer divide truncated.
+    /// The homeowner reads the same delta in her email and on the web, where
+    /// `moneyInWords` (`standing-sentence.ts:148`) is `Intl.NumberFormat` at
+    /// `maximumFractionDigits: 0` over `cents / 100` — so $1,250.60 has to read
+    /// "$1,251" on both, and 99 cents of change has to stop reading "+$0" under
+    /// a row that exists only because the cost changed.
     static func money(_ cents: Int) -> String {
-        let dollars = abs(cents) / 100
-        let figure = NumberFormatter.localizedString(
-            from: NSNumber(value: dollars), number: .decimal
-        )
-        return "\(cents > 0 ? "+" : "−")$\(figure)"
+        let figure = PatinaCurrency.formatWholeDollars(cents: abs(cents))
+        return "\(cents > 0 ? "+" : "−")\(figure)"
     }
 
     /// "+3 days" / "−1 day".
