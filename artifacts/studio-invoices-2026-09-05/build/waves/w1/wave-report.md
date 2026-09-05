@@ -11,7 +11,10 @@ git -C ... branch --show-current
   studio-invoices/integration
 ```
 
-**Integration tip: `73cd9561ae30b65fe6c32cfa409a3462b919ece4`**
+**Integration code tip: `73cd9561ae30b65fe6c32cfa409a3462b919ece4`** — the last
+commit that touches shipping code. The branch tip is the docs commit that adds
+this report; the three W2 branches are fast-forwarded onto it, so every lane
+carries the report and the code is identical either way.
 (base `36b4b539e`; nothing pushed, nothing on Strata.)
 
 **Stack: none touched.** A peer session holds the shared local stack. This step
@@ -212,7 +215,8 @@ Portals are W2's business; nothing portal-side ships from W1.
 
 ## 6 · W2 worktrees created
 
-All three cut from the integration tip `73cd9561a`, `pnpm install` + bootstrap
+All three cut from the integration code tip `73cd9561a` and fast-forwarded onto
+the report commit, `pnpm install` + bootstrap
 build (`@patina/utils`, `@patina/types`, `@patina/api-routes`, `@patina/shared`)
 run in each:
 
