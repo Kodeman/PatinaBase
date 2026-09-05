@@ -26,10 +26,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  deliverDecisionNotification,
-  firstNoticeAlreadySent,
-} from "../_shared/decision-notify.ts";
+import { deliverDecisionNotification } from "../_shared/decision-notify.ts";
 import { reminderStampDisposition } from "./logic.ts";
 import {
   type EmbeddedApprovalArtifact,
@@ -150,18 +147,10 @@ Deno.serve(async (_req: Request) => {
 
     // This cron fires 48 hours before the due date, which is days or weeks
     // after the studio pressed send: it returns to an approval already made
-    // and never announces one (P-02). The one exception is a homeowner the
-    // publish-time producer never reached — quiet hours at the moment of
-    // sending, a preference that has since changed, a decision published
-    // before decision-first-notice existed. Then this IS her first letter and
-    // says so. Unknowable for a recipient with no auth user (nothing is logged
-    // against her), and there the register that claims nothing wins.
-    const announced = await firstNoticeAlreadySent(
-      supabase,
-      recipient!.userId,
-      d.id,
-    );
-
+    // and never announces one. ALWAYS the reminder register — only the
+    // publish-time producer (decision-first-notice, fired by 00568's trigger)
+    // speaks the announcing one, so an approval already in flight at deploy
+    // never hears "sent" late.
     const result = await deliverDecisionNotification(
       supabase,
       "decision_required",
@@ -171,7 +160,7 @@ Deno.serve(async (_req: Request) => {
         dueDate: d.due_date,
         artifact,
         sentAt: d.sent_at,
-        notice: announced ? "reminder" : "first",
+        notice: "reminder",
       },
       recipient!,
       signature,
