@@ -12,8 +12,11 @@
 //     card's own header (r1-notes §9.1);
 //   • `· new` comes from `isNew` and nothing else. `State.new` is never
 //     emitted (r1-notes §9.2) and is drawn as no state at all;
-//   • `error` red is reserved for money that is actually late, plus the one
-//     word `overdue`. Everything else on the right is muted mono;
+//   • `error` red is reserved for money that is actually late. An approval
+//     that has passed its date says so in body ink and nothing else — P-04 /
+//     R8: red status is a VISION refusal, and painting a homeowner's own
+//     unanswered question red is the app editorialising on the studio's
+//     behalf. Everything else on the right is muted mono;
 //   • the empty halves draw only where they are true answers — from engaged
 //     upward. At guest and discovering the caller does not mount the card at
 //     all (`HomeComposition.recordDraws`).
@@ -29,10 +32,18 @@ import SwiftUI
 struct HouseRecordRowPresentation: Equatable {
     /// Mono, muted. Nil for a standing condition, which claims no date.
     let leadText: String?
-    /// Mono, `error`. The only red on the card.
+    /// Mono, `error`. The only red on the card, and money only.
     let lateText: String?
+    /// P-04 / R8. An approval past its date, said in body ink: it is still
+    /// open, and the row's own title already names who asked and about what.
+    /// Never red, and never the word this program retired.
+    let stillOpenText: String?
     let showsNewTick: Bool
     let accessibilityLabel: String
+
+    /// The one word the state prints. Ruled copy — pinned rather than spelled
+    /// out at each of its three sites.
+    static let stillOpen = "Still open"
 
     static func make(
         row: HouseRecordRow,
@@ -43,7 +54,7 @@ struct HouseRecordRowPresentation: Equatable {
         // behind. Its copy carries the whole meaning.
         guard !row.isStandingCondition else {
             return HouseRecordRowPresentation(
-                leadText: nil, lateText: nil, showsNewTick: false,
+                leadText: nil, lateText: nil, stillOpenText: nil, showsNewTick: false,
                 accessibilityLabel: spoken(row: row, state: nil, isNew: false)
             )
         }
@@ -51,16 +62,23 @@ struct HouseRecordRowPresentation: Equatable {
         let tick = row.isNew
         switch row.state {
         case .overdue:
+            // R8's sentence, assembled across the row it belongs to: the title
+            // beside this already opens with the designer's given name and the
+            // question ("Leah asked about Rug color."), so the rail carries the
+            // rest of it and VoiceOver hears the whole line at once.
             let asked = "asked \(HouseRecordDates.short(row.date, calendar: calendar))"
             return HouseRecordRowPresentation(
-                leadText: asked, lateText: "overdue", showsNewTick: tick,
-                accessibilityLabel: spoken(row: row, state: "\(asked), overdue", isNew: tick)
+                leadText: asked, lateText: nil, stillOpenText: Self.stillOpen,
+                showsNewTick: tick,
+                accessibilityLabel: spoken(
+                    row: row, state: "\(Self.stillOpen), \(asked)", isNew: tick
+                )
             )
 
         case .due(let due):
             let by = "by \(HouseRecordDates.short(due, calendar: calendar))"
             return HouseRecordRowPresentation(
-                leadText: by, lateText: nil, showsNewTick: tick,
+                leadText: by, lateText: nil, stillOpenText: nil, showsNewTick: tick,
                 accessibilityLabel: spoken(row: row, state: "Due \(by)", isNew: tick)
             )
 
@@ -75,9 +93,12 @@ struct HouseRecordRowPresentation: Equatable {
             return HouseRecordRowPresentation(
                 leadText: late ? nil : text,
                 lateText: late ? text : nil,
+                stillOpenText: nil,
                 showsNewTick: tick,
+                // "past its date" rather than the retired word: this is spoken
+                // copy, and it is the same phrase the web bucket now carries.
                 accessibilityLabel: spoken(
-                    row: row, state: late ? "\(text), overdue" : text, isNew: tick
+                    row: row, state: late ? "\(text), past its date" : text, isNew: tick
                 )
             )
 
@@ -86,7 +107,7 @@ struct HouseRecordRowPresentation: Equatable {
             // second, unearned newness signal beside the tick.
             let date = HouseRecordDates.short(row.date, calendar: calendar)
             return HouseRecordRowPresentation(
-                leadText: date, lateText: nil, showsNewTick: tick,
+                leadText: date, lateText: nil, stillOpenText: nil, showsNewTick: tick,
                 accessibilityLabel: spoken(row: row, state: date, isNew: tick)
             )
         }
@@ -259,7 +280,8 @@ struct HouseRecordCard: View {
                 eyebrow: "NEEDS YOU",
                 rows: record.needsYou,
                 empty: HouseRecordDates.needsYouEmpty,
-                isFirst: true
+                isFirst: true,
+                hasMore: record.hasMoreNeedsYou
             )
 
             half(
@@ -267,10 +289,9 @@ struct HouseRecordCard: View {
                 eyebrow: "MOVED",
                 rows: record.moved,
                 empty: HouseRecordDates.movedEmpty(lastSeenAt: record.lastSeenAt),
-                isFirst: record.needsYou.isEmpty && !drawsEmpties
+                isFirst: record.needsYou.isEmpty && !drawsEmpties,
+                hasMore: record.hasMoreMoved
             )
-
-            seeAllFooter
         }
         .padding(.horizontal, PatinaSpacing.md)
         .padding(.top, 10)
@@ -304,32 +325,29 @@ struct HouseRecordCard: View {
         ).day
     }
 
-    /// M1 draws ONE `See all →`, under both eyebrow groups, with a rule above
-    /// it. Per half it reads as a divider between NEEDS YOU and MOVED rather
-    /// than as the card's footer. It leads with whichever half has more.
+    /// P-12: each overflowing half draws its OWN `See all →`, under its own
+    /// rows. One footer per card led with whichever half had more, so a card
+    /// with four MOVED rows and four NEEDS YOU rows made an open obligation
+    /// reachable only through a link labelled for the news half. The visible
+    /// word is the same on both; VoiceOver is told which half it opens.
     @ViewBuilder
-    private var seeAllFooter: some View {
-        if record.hasMoreNeedsYou || record.hasMoreMoved {
-            let half: Half = record.hasMoreNeedsYou ? .needsYou : .moved
-            VStack(alignment: .leading, spacing: 0) {
-                Rectangle()
-                    .fill(PatinaColors.Border.hairline)
-                    .frame(height: 1)
-                    .padding(.top, PatinaSpacing.sm)
-                    .accessibilityHidden(true)
-                Button {
-                    onSeeAll(half)
-                } label: {
-                    Text("See all →")
-                        .font(PatinaTypography.uiAction)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("See all")
-            }
+    private func seeAll(_ half: Half) -> some View {
+        Button {
+            onSeeAll(half)
+        } label: {
+            Text("See all →")
+                .font(PatinaTypography.uiAction)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(half == .needsYou ? "See all that needs you" : "See all that moved")
+        .accessibilityIdentifier(
+            half == .needsYou
+                ? "DailyRoomView.RecordSeeAllNeedsYou"
+                : "DailyRoomView.RecordSeeAllMoved"
+        )
     }
 
     @ViewBuilder
@@ -338,7 +356,8 @@ struct HouseRecordCard: View {
         eyebrow: String,
         rows: [HouseRecordRow],
         empty: String,
-        isFirst: Bool
+        isFirst: Bool,
+        hasMore: Bool
     ) -> some View {
         if !rows.isEmpty || drawsEmpties {
             VStack(alignment: .leading, spacing: 0) {
@@ -377,6 +396,14 @@ struct HouseRecordCard: View {
                         }
                         HouseRecordRowView(row: row, now: now) { onRow(row) }
                     }
+                }
+
+                if hasMore {
+                    Rectangle()
+                        .fill(PatinaColors.Border.hairline)
+                        .frame(height: 1)
+                        .accessibilityHidden(true)
+                    seeAll(half)
                 }
             }
         }
@@ -420,10 +447,30 @@ struct HouseRecordRowView: View {
         // contrast; the trait line below still keeps VoiceOver from announcing
         // it as a button.
         .allowsHitTesting(row.route != nil)
+        // P-12: an obligation carries a margin rule and a piece of news does
+        // not. That is the whole differentiator — no second colour, no heavier
+        // type, no count, no badge. Every row is inset by the same gutter so
+        // the titles still line up across the two halves; only the rule itself
+        // appears or does not.
+        .padding(.leading, Self.marginRuleGutter)
+        .overlay(alignment: .leading) {
+            if row.kind.isObligation {
+                Rectangle()
+                    .fill(PatinaColors.clay)
+                    .frame(width: Self.marginRuleWidth)
+                    .accessibilityHidden(true)
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityAddTraits(row.route == nil ? [] : .isButton)
     }
+
+    /// Two points, per the sheet.
+    static let marginRuleWidth: CGFloat = 2
+    /// The gutter the rule sits in, kept on every row so a NEEDS YOU title and
+    /// a MOVED title start at the same x.
+    static let marginRuleGutter = PatinaSpacing.sm
 
     private var rowContent: some View {
         Group {
@@ -475,6 +522,20 @@ struct HouseRecordRowView: View {
                     .tracking(0.4)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.error)
+            }
+            if let stillOpen = shown.stillOpenText {
+                if shown.leadText != nil {
+                    Text("·")
+                        .font(PatinaTypography.monoLabel)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
+                // Body ink at the rail's own size — the state is stated, not
+                // flagged (P-04).
+                Text(stillOpen)
+                    .font(PatinaTypography.monoLabel)
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(PatinaColors.Text.primary)
             }
             if shown.showsNewTick {
                 Text("· new")

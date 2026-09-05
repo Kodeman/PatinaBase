@@ -35,6 +35,21 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         case savedPieceWithdrawn
         case story
         case matchedDesigner
+
+        /// True for the three kinds that are obligations — the NEEDS YOU
+        /// half. P-12 draws these with a margin rule so an obligation stops
+        /// depending on a 10 pt eyebrow to tell it from a piece of news; the
+        /// predicate lives on the kind so the rule and the half it belongs to
+        /// cannot drift apart.
+        var isObligation: Bool {
+            switch self {
+            case .decisionAsked, .proposalSent, .invoiceDue:
+                return true
+            case .messageReceived, .orderMoved, .savedPieceRepriced,
+                 .savedPieceWithdrawn, .story, .matchedDesigner:
+                return false
+            }
+        }
     }
 
     /// What sits on the right of the row. `amount` carries the figure the
