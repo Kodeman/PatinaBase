@@ -21,6 +21,7 @@ jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useConfirmProjectApprovalReview: jest.fn(),
   useRespondProjectApproval: jest.fn(),
+  useSetDecisionSnooze: jest.fn(),
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
@@ -50,6 +51,7 @@ import {
   useDecisionComments,
   useDecisionRealtime,
   useRespondProjectApproval,
+  useSetDecisionSnooze,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
@@ -64,6 +66,7 @@ import {
 
 const confirmHook = useConfirmProjectApprovalReview as jest.Mock;
 const respondHook = useRespondProjectApproval as jest.Mock;
+const snoozeHook = useSetDecisionSnooze as jest.Mock;
 const commentsHook = useDecisionComments as jest.Mock;
 const createCommentHook = useCreateDecisionComment as jest.Mock;
 const realtimeHook = useDecisionRealtime as jest.Mock;
@@ -74,6 +77,7 @@ const respondMutate = jest.fn();
 const confirmMutate = jest.fn();
 const commentMutate = jest.fn();
 const commentMutateAsync = jest.fn();
+const snoozeMutateAsync = jest.fn();
 
 const APPROVAL: ProjectApprovalReview = {
   decisionId: 'dec-1',
@@ -173,6 +177,8 @@ beforeEach(() => {
 
   confirmHook.mockReturnValue({ mutateAsync: confirmMutate, isPending: false });
   respondHook.mockReturnValue({ mutateAsync: respondMutate, isPending: false });
+  snoozeMutateAsync.mockReset().mockResolvedValue({});
+  snoozeHook.mockReturnValue({ mutateAsync: snoozeMutateAsync, isPending: false });
   commentsHook.mockReturnValue({ data: [], isLoading: false, isError: false });
   commentMutateAsync.mockReset().mockResolvedValue({});
   createCommentHook.mockReturnValue({
@@ -733,6 +739,112 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(acts).toHaveLength(1);
     expect(acts[0]).toHaveTextContent('Review revised edition');
     expect(acts[0]).toHaveAttribute('href', '#approval-dec-2');
+  });
+});
+
+/* ── P-28 · she sets the pace, on this one approval ───────────────────────── */
+
+describe('ApprovalAsk — remind me', () => {
+  it('offers the four words under the ask, and says what a snooze does NOT do', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    const snooze = screen.getByTestId('approval-snooze');
+    expect(snooze).toHaveTextContent('Remind me');
+    for (const label of [
+      'Tomorrow morning',
+      'Sunday',
+      "When it's due",
+      "Don't remind me",
+    ]) {
+      expect(within(snooze).getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    // The approval is not deferred; only the reminders are.
+    expect(snooze).toHaveTextContent('Still yours to answer; only the reminders wait.');
+  });
+
+  it('stands the reminders down with the choice she pressed, and says so', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sunday' }));
+
+    await waitFor(() => expect(snoozeMutateAsync).toHaveBeenCalledTimes(1));
+    expect(snoozeMutateAsync.mock.calls[0][0]).toMatchObject({
+      projectId: 'proj-1',
+      decisionId: 'dec-1',
+      choice: 'sunday',
+    });
+    expect(await screen.findByTestId('approval-snooze-said')).toHaveTextContent(
+      "I'll ask you Sunday.",
+    );
+  });
+
+  it('sends the three other choices by their own words', async () => {
+    for (const [label, choice] of [
+      ['Tomorrow morning', 'tomorrow_morning'],
+      ["When it's due", 'when_due'],
+      ["Don't remind me", 'none'],
+    ] as const) {
+      snoozeMutateAsync.mockClear();
+      const { unmount } = render(<ApprovalAsk approval={APPROVAL} />);
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      await waitFor(() => expect(snoozeMutateAsync).toHaveBeenCalledTimes(1));
+      expect(snoozeMutateAsync.mock.calls[0][0].choice).toBe(choice);
+      unmount();
+    }
+  });
+
+  /**
+   * "Don't remind me" is not "never tell me". A snooze moves the reminders;
+   * the notice that an approval has passed its date is the last thing Patina
+   * says before it hands the item back to the studio, and no snooze buries it.
+   */
+  it('says plainly that even "don’t remind me" runs out at the date', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: "Don't remind me" }));
+
+    expect(await screen.findByTestId('approval-snooze-said')).toHaveTextContent(
+      "I won't remind you again until it's past its date.",
+    );
+  });
+
+  it('offers no snooze over an approval past its date, and says why', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, isOverdue: true }} />);
+
+    expect(screen.queryByTestId('approval-snooze')).not.toBeInTheDocument();
+    const line = screen.getByTestId('approval-snooze-past-due');
+    expect(line).toHaveTextContent('This one is past its date, so its notice stands.');
+    // The retired word never reaches a homeowner.
+    expect(line.textContent).not.toMatch(/overdue/i);
+  });
+
+  it('offers no snooze on a gate she has already answered', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, outcome: 'approved', lifecycleStatus: 'responded' }}
+      />,
+    );
+
+    expect(screen.queryByTestId('approval-snooze')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('approval-snooze-past-due')).not.toBeInTheDocument();
+  });
+
+  it('offers no snooze to a reader who is not the one it waits on', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, viewerRole: 'studio' }} />);
+    expect(screen.queryByTestId('approval-snooze')).not.toBeInTheDocument();
+  });
+
+  it('says it refused in the house’s own words, never the database’s', async () => {
+    snoozeMutateAsync.mockRejectedValue(
+      new Error('new row violates row-level security policy for table "client_decisions"'),
+    );
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sunday' }));
+
+    const refusal = await screen.findByRole('alert');
+    expect(refusal).toHaveTextContent('The reminders could not be set just now. Try again.');
+    expect(refusal.textContent).not.toMatch(/row-level security|client_decisions/);
   });
 });
 

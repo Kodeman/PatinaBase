@@ -127,12 +127,26 @@ const DIGEST_OPTIONS: Array<{
   { value: "monthly", label: "Monthly" },
 ];
 
+/**
+ * P-28. Three cadences, in her words rather than in the column's — the tokens
+ * `immediate` / `daily_digest` / `weekly_digest` never reach the page.
+ *
+ * The default is the quietest cadence that still gets a real answer on time,
+ * and it is NOT chosen here: `useNotificationPreferences` seeds `immediate`
+ * for a client with no row yet, and this list only says what each one means.
+ *
+ * A cadence the widened column does not yet accept is refused by the RPC, and
+ * the section says "Could not save." rather than showing a choice that
+ * silently did not take. A row still carrying one of the two old values reads
+ * back correctly here, because both survive the widening.
+ */
 const REMINDER_OPTIONS: Array<{
   value: NotificationPreferences["reminder_cadence"];
   label: string;
 }> = [
-  { value: "immediate", label: "Right away" },
-  { value: "daily_digest", label: "Daily summary" },
+  { value: "immediate", label: "Tell me right away" },
+  { value: "daily_digest", label: "Once a day" },
+  { value: "weekly_digest", label: "Once a week, on Sunday" },
 ];
 
 const COMMON_TIMEZONES = [
@@ -507,6 +521,15 @@ function NotificationsSection() {
             <p className="text-[13px] text-[var(--text-muted)]">
               Pause non-urgent notifications during set hours.
             </p>
+            {/* P-28 / R16. The floor holds whether or not she sets hours of
+                her own, so it is stated as a fact about Patina rather than as
+                a setting she has to find. */}
+            <p
+              data-testid="details-quiet-floor"
+              className="mt-1 text-[13px] text-[var(--text-body)]"
+            >
+              Patina never sends approval mail before 8am or after 8pm, or on Sunday.
+            </p>
             <PrefToggle
               label="Enable quiet hours"
               checked={prefs.quiet_hours_enabled}
@@ -595,7 +618,8 @@ function NotificationsSection() {
             <p className="text-[13px] text-[var(--text-muted)]">
               How gentle nudges — proposal reminders and approval requests —
               reach you. A new proposal and invoice reminders are time-sensitive
-              and always arrive right away, regardless of this setting.
+              and always arrive right away, regardless of this setting. So does
+              the notice that an approval has passed its date.
             </p>
             <fieldset className="mt-2 flex flex-col gap-1.5">
               <legend className="sr-only">Reminder cadence</legend>

@@ -44,6 +44,7 @@ import {
   useMyProjectApprovalReviews,
   usePublishProjectApproval,
   useRespondProjectApproval,
+  useSetDecisionSnooze,
   useSetProjectDecisionAuthority,
   useSupersedeProjectApproval,
   useWithdrawProjectApproval,
@@ -621,6 +622,74 @@ describe('project approval authority and lifecycle RPCs', () => {
     });
 
     expect(rpc.mock.calls[0][1].p_payload).toEqual({ outcome: 'needs_discussion' });
+  });
+
+  /* ── P-28 · she sets the pace, per approval ───────────────────────────── */
+
+  it('stands the reminders down with the choice she named, and her own zone', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+
+    await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'sunday',
+      timezone: 'America/Chicago',
+    });
+
+    // Symbolic, not a timestamp: "Sunday" is a question about her wall
+    // calendar, and one answer has to serve the mail, the push and the row.
+    expect(rpc).toHaveBeenCalledWith('set_decision_snooze', {
+      p_decision_id: 'decision-1',
+      p_choice: 'sunday',
+      p_timezone: 'America/Chicago',
+    });
+  });
+
+  it('sends a null zone rather than inventing one the browser cannot name', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+
+    await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'none',
+    });
+
+    expect(rpc.mock.calls[0][1].p_timezone).toBeNull();
+  });
+
+  it('rides the approval invalidation rail, so the ask redraws with its snooze', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+    const result = await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'when_due',
+    });
+
+    invalidateQueries.mockClear();
+    await snooze.onSuccess?.(result, {
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'when_due',
+    });
+
+    const keys = (
+      invalidateQueries.mock.calls as unknown as Array<[{ queryKey: unknown }]>
+    ).map(([call]) => JSON.stringify(call.queryKey));
+    expect(keys).toContain(JSON.stringify(['project-approvals', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['my-project-approval-reviews']));
+    expect(keys).toContain(JSON.stringify(['project-approval', 'decision-1']));
   });
 
   it('uses the exact withdrawal and supersession signatures', async () => {

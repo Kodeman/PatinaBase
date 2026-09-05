@@ -207,6 +207,7 @@ export async function invalidateProjectApprovalQueries(
 }
 
 type ProjectApprovalRpcName =
+  | 'set_decision_snooze'
   | 'set_project_decision_authority'
   | 'create_project_approval_decision'
   | 'confirm_project_decision_review'
@@ -723,6 +724,61 @@ export function useRespondProjectApproval() {
           p_idempotency_key: input.idempotencyKey,
         }),
       ),
+  );
+}
+
+/* ── P-28 · she sets the pace, per approval ─────────────────────────────────
+   A snooze moves the REMINDERS and nothing else. The approval stays open, her
+   answer stays hers to give, and two classes of mail ignore this setting
+   entirely: the overdue notice (it is the last thing Patina says before it
+   goes quiet, and burying it would leave her with nothing at all) and a
+   superseding edition (a new edition is news, not a reminder).
+
+   The four choices are SYMBOLIC, not timestamps. "Tomorrow morning" and
+   "Sunday" are questions about her wall calendar, and "when it's due" is a
+   date only the row knows; resolving them server-side keeps one answer for
+   the mail, the push and the in-app row, where a client-computed instant would
+   drift the moment she crossed a timezone.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * `none` is "don't remind me — I'll come back": it stands the reminders down
+ * until the overdue notice, which no snooze suppresses.
+ */
+export type DecisionSnoozeChoice =
+  | 'tomorrow_morning'
+  | 'sunday'
+  | 'when_due'
+  | 'none';
+
+export interface DecisionSnoozeInput extends ProjectApprovalInvalidationScope {
+  decisionId: string;
+  choice: DecisionSnoozeChoice;
+  /**
+   * The reader's own IANA zone, so "tomorrow morning" is eight o'clock on HER
+   * wall and not on the server's. Omitted when the browser cannot name one;
+   * the RPC then falls back to the stored notification-preference timezone.
+   */
+  timezone?: string | null;
+}
+
+/**
+ * Stand this approval's reminders down (P-28).
+ *
+ * Rides the same invalidation rail every authoritative Stage-2 mutation uses,
+ * so the ask redraws with the snooze it was just given rather than with the
+ * one it had a moment ago.
+ */
+export function useSetDecisionSnooze() {
+  const queryClient = useQueryClient();
+  return approvalMutation(queryClient, async (input: DecisionSnoozeInput) =>
+    parseActionResult(
+      await runRpc('set_decision_snooze', {
+        p_decision_id: input.decisionId,
+        p_choice: input.choice,
+        p_timezone: input.timezone ?? null,
+      }),
+    ),
   );
 }
 

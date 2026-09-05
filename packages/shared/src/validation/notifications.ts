@@ -42,7 +42,7 @@ export const notificationPrioritySchema = z.enum(['critical', 'high', 'normal', 
 
 export const digestFrequencySchema = z.enum(['daily', 'weekly', 'biweekly', 'monthly', 'never']);
 
-export const reminderCadenceSchema = z.enum(['immediate', 'daily_digest']);
+export const reminderCadenceSchema = z.enum(['immediate', 'daily_digest', 'weekly_digest']);
 
 // ─── Preference update schema ────────────────────────────────────────────
 

@@ -8,7 +8,9 @@ import {
   useDecisionComments,
   useDecisionRealtime,
   useRespondProjectApproval,
+  useSetDecisionSnooze,
   type DecisionComment,
+  type DecisionSnoozeChoice,
   type ProjectApprovalOutcome,
   type ProjectApprovalReview,
 } from '@patina/supabase';
@@ -803,6 +805,134 @@ function KeepACopy({ decisionId }: { decisionId: string }) {
   );
 }
 
+/* ── P-28 · she sets the pace, on this one approval ──────────────────────────
+   Four words under the ask. A snooze moves the REMINDERS and nothing else:
+   the approval stays open, the answer stays hers, and the copy says so
+   directly rather than leaving her to wonder whether she has just deferred a
+   decision.
+
+   NEVER OVER A PAST DUE DATE. The overdue notice is the last thing Patina
+   says before it goes quiet and hands the item back to the studio; a snooze
+   that could bury it would leave her with nothing at all. So on an approval
+   past its date the acts are not drawn, and the surface says why instead of
+   offering something it would then refuse.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const SNOOZE_ACTS: Array<{
+  choice: DecisionSnoozeChoice;
+  label: string;
+  /** What she is told once it lands. Never a promise about the decision. */
+  confirmation: string;
+}> = [
+  {
+    choice: 'tomorrow_morning',
+    label: 'Tomorrow morning',
+    confirmation: "I'll ask you tomorrow morning.",
+  },
+  { choice: 'sunday', label: 'Sunday', confirmation: "I'll ask you Sunday." },
+  {
+    choice: 'when_due',
+    label: "When it's due",
+    confirmation: "I'll ask you when it's due.",
+  },
+  {
+    choice: 'none',
+    label: "Don't remind me",
+    confirmation: "I won't remind you again until it's past its date.",
+  },
+];
+
+/** The house sentence for a snooze that did not land. */
+const SNOOZE_REFUSED = 'The reminders could not be set just now. Try again.';
+
+function RemindMe({
+  approval,
+}: {
+  approval: Pick<ProjectApprovalReview, 'decisionId' | 'projectId' | 'isOverdue'>;
+}) {
+  const setSnooze = useSetDecisionSnooze();
+  const [said, setSaid] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+
+  if (approval.isOverdue) {
+    return (
+      <p
+        data-testid="approval-snooze-past-due"
+        className="mt-4 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+      >
+        This one is past its date, so its notice stands.
+      </p>
+    );
+  }
+
+  async function stand(act: (typeof SNOOZE_ACTS)[number]) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setError(null);
+    try {
+      await setSnooze.mutateAsync({
+        projectId: approval.projectId,
+        decisionId: approval.decisionId,
+        choice: act.choice,
+        // Her wall, not the server's. Absent where the browser cannot name
+        // one, and the RPC falls back to her stored preference then.
+        timezone:
+          typeof Intl === 'undefined'
+            ? null
+            : (Intl.DateTimeFormat().resolvedOptions().timeZone ?? null),
+      });
+      setSaid(act.confirmation);
+    } catch (cause) {
+      setError(refusalSentence(cause, SNOOZE_REFUSED));
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  return (
+    <div className="mt-4 max-w-[52ch]" data-testid="approval-snooze">
+      <p className={EYEBROW_CLASS}>Remind me</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-5">
+        {SNOOZE_ACTS.map((act) => (
+          <ScoredAction
+            key={act.choice}
+            actionKey={`snooze_approval_${act.choice}`}
+            regionKey="doorstep"
+            surfaceKey="the_threshold"
+            variant="tertiary"
+            loading={setSnooze.isPending}
+            loadingLabel="Setting"
+            onClick={() => stand(act)}
+          >
+            {act.label}
+          </ScoredAction>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]">
+        Still yours to answer; only the reminders wait.
+      </p>
+      {said && (
+        <p
+          role="status"
+          data-testid="approval-snooze-said"
+          className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {said}
+        </p>
+      )}
+      {error && (
+        <p
+          role="alert"
+          className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** How many closed gates stand open before the rest are folded away. */
 const RECORDS_SHOWN = 3;
 
@@ -1554,6 +1684,14 @@ export function ApprovalAsk({
           </p>
         </div>
       )}
+
+      {/* P-28. Under the ask, and only while something is actually waiting on
+          her: a gate she has answered, or one the studio now holds, has no
+          reminders left to stand down. */}
+      {viewerAnswers &&
+        !recordedOutcome &&
+        !awaitingStudioIssue &&
+        approval.disposition === 'active' && <RemindMe approval={approval} />}
 
       {notice && (
         <p

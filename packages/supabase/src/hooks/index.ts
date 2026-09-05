@@ -344,6 +344,7 @@ export {
   useRespondProjectApproval,
   useWithdrawProjectApproval,
   useSupersedeProjectApproval,
+  useSetDecisionSnooze,
 } from "./use-project-approvals";
 export type {
   ProjectApprovalArtifactKind,
@@ -358,6 +359,8 @@ export type {
   ProjectApprovalCreatePayload,
   ProjectApprovalActionResult,
   ProjectApprovalInvalidationScope,
+  DecisionSnoozeChoice,
+  DecisionSnoozeInput,
 } from "./use-project-approvals";
 export {
   projectContextualHandoffKeys,

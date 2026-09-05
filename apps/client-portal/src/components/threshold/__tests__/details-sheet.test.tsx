@@ -408,10 +408,81 @@ describe("DetailsSheet — what you hear from us", () => {
       ),
     ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("radio", { name: "Daily summary" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Once a day" }));
     expect(updatePrefsMutate).toHaveBeenCalledWith({
       reminder_cadence: "daily_digest",
     });
+  });
+
+  /**
+   * P-28. Three cadences, in plain words. The column's own tokens —
+   * `immediate`, `daily_digest`, `weekly_digest` — never reach the page.
+   */
+  it("offers three cadences and says them in her words, never in tokens", async () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    const cadence = screen.getByRole("group", { name: "Reminder cadence" });
+    const options = within(cadence).getAllByRole("radio");
+    expect(options).toHaveLength(3);
+    expect(options.map((option) => option.getAttribute("aria-label") ?? "")).not.toContain(
+      "daily_digest",
+    );
+
+    for (const label of [
+      "Tell me right away",
+      "Once a day",
+      "Once a week, on Sunday",
+    ]) {
+      expect(within(cadence).getByRole("radio", { name: label })).toBeInTheDocument();
+    }
+    expect(cadence.textContent).not.toMatch(/immediate|daily_digest|weekly_digest/);
+  });
+
+  it("writes the widened value for the Sunday cadence", async () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    await userEvent.click(
+      screen.getByRole("radio", { name: "Once a week, on Sunday" }),
+    );
+    expect(updatePrefsMutate).toHaveBeenCalledWith({
+      reminder_cadence: "weekly_digest",
+    });
+  });
+
+  it("reads back a row still carrying one of the two old values", () => {
+    mockUseNotificationPreferences.mockReturnValue({
+      data: makePrefs({ reminder_cadence: "daily_digest" }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    expect(screen.getByRole("radio", { name: "Once a day" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Tell me right away" })).not.toBeChecked();
+  });
+
+  /**
+   * R16's floor holds whether or not she sets quiet hours of her own, so it is
+   * stated as a fact about Patina rather than as a setting she has to find.
+   */
+  it("states the floor under quiet hours", () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    expect(screen.getByTestId("details-quiet-floor")).toHaveTextContent(
+      "Patina never sends approval mail before 8am or after 8pm, or on Sunday.",
+    );
+  });
+
+  /** P-24: the ask is an approval, and the copy says so. */
+  it("calls them approval requests", () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    expect(screen.getByTestId("details-notifications")).toHaveTextContent(
+      "approval requests",
+    );
+    expect(screen.getByTestId("details-notifications")).not.toHaveTextContent(
+      "decision requests",
+    );
   });
 });
 
