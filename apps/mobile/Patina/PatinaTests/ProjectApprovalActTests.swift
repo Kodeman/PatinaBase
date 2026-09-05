@@ -138,10 +138,10 @@ struct ProjectApprovalActTests {
         )
         let start = try #require(source.range(of: "public func listProjectApprovalReviews("))
         let body = String(source[start.lowerBound...].prefix(900))
-        #expect(body.contains("/rest/v1/rpc/list_my_project_decision_reviews"))
+        #expect(body.contains("callRPC(\"list_my_project_decision_reviews\""))
         // `get_project_decision_reviews` is studio-scoped and answers a
         // homeowner with `insufficient_privilege`.
-        #expect(!body.contains("rpc/get_project_decision_reviews"))
+        #expect(!body.contains("get_project_decision_reviews"))
     }
 
     /// The parameters `use-project-approvals.ts` sends, argument for argument.
@@ -152,7 +152,7 @@ struct ProjectApprovalActTests {
         )
         let start = try #require(source.range(of: "public func confirmProjectApprovalReview("))
         let body = String(source[start.lowerBound...].prefix(1400))
-        #expect(body.contains("/rest/v1/rpc/confirm_project_decision_review"))
+        #expect(body.contains("callRPC(\"confirm_project_decision_review\""))
         #expect(body.contains("\"p_decision_id\": decisionId"))
         #expect(body.contains("\"authorityRevision\": authorityRevision"))
         #expect(body.contains("\"artifactHash\": artifactChecksum"))
@@ -167,7 +167,7 @@ struct ProjectApprovalActTests {
         )
         let start = try #require(source.range(of: "public func respondToProjectApproval("))
         let body = String(source[start.lowerBound...].prefix(1400))
-        #expect(body.contains("/rest/v1/rpc/respond_project_approval"))
+        #expect(body.contains("callRPC(\"respond_project_approval\""))
         #expect(body.contains("\"p_decision_id\": decisionId"))
         #expect(body.contains("\"outcome\": outcome.rawValue"))
         #expect(body.contains("\"p_expected_updated_at\": expectedUpdatedAt"))

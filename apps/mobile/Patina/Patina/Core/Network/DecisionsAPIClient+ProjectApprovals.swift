@@ -24,7 +24,9 @@
 //     confirmation already recorded.
 //
 //  This lives beside `DecisionsAPIClient.swift` rather than in it because that
-//  file is 445 lines against SwiftLint's 500-line `file_length` warning.
+//  file is at SwiftLint's 500-line `file_length` warning. `callRPC` is the one
+//  internal seam it reaches back through: the actor's session, base URL and
+//  headers stay private, which `NetworkRecoveryTests` pins.
 //
 
 import Foundation
@@ -126,16 +128,8 @@ extension DecisionsAPIClient {
     /// projects. `[]` where there are none — the RPC never reveals whether an
     /// unauthorized decision exists.
     public func listProjectApprovalReviews() async throws -> [RemoteProjectApprovalReview] {
-        let url = baseURL.appendingPathComponent("/rest/v1/rpc/list_my_project_decision_reviews")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        await applyHeaders(to: &request)
-        request.httpBody = try JSONSerialization.data(withJSONObject: [String: Any]())
-        let (data, response) = try await session.patinaData(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-        return try decoder.decode([RemoteProjectApprovalReview].self, from: data)
+        let data = try await callRPC("list_my_project_decision_reviews", body: [:])
+        return try JSONDecoder().decode([RemoteProjectApprovalReview].self, from: data)
     }
 
     /// Record that this client read the exact edition, bound to the authority
@@ -151,11 +145,7 @@ extension DecisionsAPIClient {
         artifactChecksum: String,
         idempotencyKey: String
     ) async throws {
-        let url = baseURL.appendingPathComponent("/rest/v1/rpc/confirm_project_decision_review")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        await applyHeaders(to: &request)
-        let params: [String: Any] = [
+        _ = try await callRPC("confirm_project_decision_review", body: [
             "p_decision_id": decisionId,
             "p_payload": [
                 "authorityRevision": authorityRevision,
@@ -163,12 +153,7 @@ extension DecisionsAPIClient {
                 "reviewMethod": "portal_clickthrough"
             ],
             "p_idempotency_key": idempotencyKey
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: params)
-        let (data, response) = try await session.patinaData(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
+        ])
     }
 
     /// Record one of the three canonical outcomes against the edition the
@@ -181,20 +166,11 @@ extension DecisionsAPIClient {
         expectedUpdatedAt: String,
         idempotencyKey: String
     ) async throws {
-        let url = baseURL.appendingPathComponent("/rest/v1/rpc/respond_project_approval")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        await applyHeaders(to: &request)
-        let params: [String: Any] = [
+        _ = try await callRPC("respond_project_approval", body: [
             "p_decision_id": decisionId,
             "p_payload": ["outcome": outcome.rawValue],
             "p_expected_updated_at": expectedUpdatedAt,
             "p_idempotency_key": idempotencyKey
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: params)
-        let (data, response) = try await session.patinaData(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
+        ])
     }
 }

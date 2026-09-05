@@ -241,12 +241,9 @@ public struct RemoteDecisionOption: Codable, Sendable, Identifiable {
 public actor DecisionsAPIClient {
     public static let shared = DecisionsAPIClient()
 
-    // Not `private`: the Stage-2 RPCs live in `DecisionsAPIClient+ProjectApprovals
-    // .swift` because this file is already at SwiftLint's `file_length` warning,
-    // and an extension in another file cannot reach a `private` member.
-    let baseURL = APIConfiguration.apiURL
-    let session = PatinaURLSession.shared
-    let decoder = JSONDecoder()
+    private let baseURL = APIConfiguration.apiURL
+    private let session = PatinaURLSession.shared
+    private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     /// Decision columns selected with PostgREST aliases so the wire JSON
@@ -280,7 +277,7 @@ public actor DecisionsAPIClient {
         try? await SupabaseClientManager.shared.client.auth.session.accessToken
     }
 
-    func applyHeaders(to request: inout URLRequest, prefer: String? = nil) async {
+    private func applyHeaders(to request: inout URLRequest, prefer: String? = nil) async {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(APIConfiguration.anonKey, forHTTPHeaderField: "apikey")
@@ -291,6 +288,25 @@ public actor DecisionsAPIClient {
         if let prefer {
             request.setValue(prefer, forHTTPHeaderField: "Prefer")
         }
+    }
+
+    /// One authenticated POST to an RPC, returning its body.
+    ///
+    /// The Stage-2 RPCs live in `DecisionsAPIClient+ProjectApprovals.swift` —
+    /// this file is at SwiftLint's `file_length` — and an extension in another
+    /// file cannot reach this actor's `private` plumbing, which
+    /// `NetworkRecoveryTests` requires stay private and on `PatinaURLSession`.
+    func callRPC(_ name: String, body: [String: Any]) async throws -> Data {
+        let url = baseURL.appendingPathComponent("/rest/v1/rpc/\(name)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        await applyHeaders(to: &request)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await session.patinaData(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
     }
 
     // MARK: - Reads
