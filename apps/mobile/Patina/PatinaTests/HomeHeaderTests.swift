@@ -29,13 +29,19 @@ struct HomeHeaderTests {
                 "the header still reads the attention count")
         #expect(!header.contains("waitingValue"),
                 "VoiceOver still speaks the retired count")
-        // The bell's own `UnreadBadge` is a different count on a different
-        // instrument (`unreadNotificationCount`) and is not P-24's subject —
-        // so the fill is pinned to the Studio control's own block, not the file.
+        // `iosb2-M3`: R5 retires the tab badge "and any in-product numeric
+        // badge", so the bell's count went too. Clay survives on this header
+        // as the unread DOT's fill — a mark, not a number — which is why the
+        // capsule pin is still scoped to the Studio control's own block.
         let studio = try #require(header.range(of: "private var studioControl: some View {"))
         let afterStudio = String(header[studio.lowerBound...].prefix(600))
         #expect(!afterStudio.contains("PatinaColors.clayInk"),
                 "the count capsule's fill is still drawn on the Studio control")
+        // And nowhere on the header does a number get drawn.
+        #expect(!header.contains("Capsule().fill(PatinaColors.clayInk)"),
+                "an in-product count capsule is still drawn (R5)")
+        #expect(!header.contains("UnreadBadge"),
+                "the bell's numeric badge is still here (R5)")
     }
 
     // `TimeOfDay` lives in PatinaDesignKit, which the unit-test target does not

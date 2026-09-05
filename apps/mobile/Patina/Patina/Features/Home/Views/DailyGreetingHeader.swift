@@ -171,7 +171,8 @@ struct DailyGreetingHeader: View {
 
     private var controlCluster: some View {
         HStack(spacing: 4) {
-            // PT-3-7: bell (notifications) glyph with unread-count badge.
+            // PT-3-7: bell (notifications) glyph, marked when something is
+            // unread. `P-24` / R5 took the number off the mark.
             if let onBellTap {
                 Button(action: onBellTap) {
                     Image(systemName: "bell")
@@ -179,8 +180,8 @@ struct DailyGreetingHeader: View {
                         .foregroundStyle(PatinaColors.Text.secondary)
                         .frame(width: 36, height: 36)
                         .overlay(alignment: .topTrailing) {
-                            UnreadBadge(count: unreadCount)
-                                .offset(x: -4, y: 4)
+                            UnreadMark(isUnread: unreadCount > 0)
+                                .offset(x: -6, y: 6)
                         }
                         .contentShape(Rectangle())
                 }
@@ -188,7 +189,7 @@ struct DailyGreetingHeader: View {
                 .accessibilityLabel("Notifications")
                 .accessibilityValue(
                     unreadCount > 0
-                        ? "\(unreadCount) unread"
+                        ? "Unread notifications"
                         : (unreadCountIsKnown ? "No unread notifications" : "")
                 )
                 .accessibilityHint("Opens your notifications.")
@@ -240,31 +241,27 @@ struct DailyGreetingHeader: View {
     }
 }
 
-/// PT-3-7: small unread-count badge rendered over the bell glyph. Renders
-/// nothing when `count <= 0`. Caps the displayed value at "9+".
-private struct UnreadBadge: View {
-    let count: Int
+/// PT-3-7, as `P-24` / **R5** leaves it: the bell says *something* is unread,
+/// and does not say how many. Renders nothing when nothing is unread.
+///
+/// It used to be a clay capsule printing the count, capped at "9+" — the last
+/// in-product numeric badge in the app after the Studio pill's went. R5 keeps
+/// the springboard badge and retires every one inside the app, so what remains
+/// here is the mark without the number: a fixed 8 pt dot, which is also the end
+/// of the Dynamic Type problem the count had. At accessibility-XXXL the "3" was
+/// a ~40 pt disc with the bell nowhere on screen behind it
+/// (shots/w1-l1c/05-today-ax3xl-light.png), and a cap at `xxxLarge` was still a
+/// ~24 pt disc over a 17 pt glyph (shots/w1-review-l1c/10b-bell-badge-crop.png).
+/// A dot carries no text, so it never grows into the control it marks. The
+/// state is announced in words by the button's own accessibilityValue.
+private struct UnreadMark: View {
+    let isUnread: Bool
 
     var body: some View {
-        if count > 0 {
-            Text(count > 9 ? "9+" : "\(count)")
-                .font(PatinaTypography.captionSmall)
-                .foregroundStyle(PatinaColors.offWhite)
-                .padding(.horizontal, PatinaSpacing.xs)
-                .frame(minWidth: 14, minHeight: 14)
-                .background(Capsule().fill(PatinaColors.clayInk))
-                // The bell glyph is a fixed 17 pt inside a 36 pt frame, so an
-                // uncapped badge outgrows the control it marks: at
-                // accessibility-XXXL the "3" was a ~40 pt disc with the bell
-                // nowhere on screen behind it (shots/w1-l1c/05-today-ax3xl-light.png).
-                // A first cap at `xxxLarge` was still a ~24 pt disc occluding
-                // most of a 17 pt glyph — a clay circle with one sliver of bell
-                // outline (shots/w1-review-l1c/10b-bell-badge-crop.png). A badge
-                // is a mark ON a control, not body copy: it scales to the top of
-                // the standard ramp's usable band for a 17 pt glyph and stops.
-                // Its count is announced by the button's accessibilityValue, so
-                // nothing is lost by not growing it.
-                .dynamicTypeSize(...DynamicTypeSize.large)
+        if isUnread {
+            Circle()
+                .fill(PatinaColors.clayInk)
+                .frame(width: 8, height: 8)
                 .accessibilityHidden(true)
         }
     }
