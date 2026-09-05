@@ -251,3 +251,118 @@ the Record, because the merge routes it into the legacy decision state machine).
 - **Deploy ordering.** `00568` first, then all 27 functions (every one bundles a copy of an
   edited `_shared` module — a partial redeploy leaves mixed copy in the mail), then the client
   portal.
+
+---
+
+## Walk fixes — round 1 (2026-09-05)
+
+Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w1-integration`
+(`git rev-parse --show-toplevel` returns exactly that), branch `approvals/w1-integration`.
+Five findings from the simulator walk (`walk-r1.md`): one blocker, four majors.
+
+### The blocker was a lane, not a line — iosb is merged
+
+**W1R1-B1** — "P-09 is entirely absent from the integration branch" — was not a defect in the
+merged code. It was the held lane. `approvals/w1-iosb` (`0369544d7`) carries the whole item:
+the two read RPCs (`get_project_decision_review`, `list_my_project_decision_reviews`), the
+three canonical outcomes, `confirm_project_decision_review` / `respond_project_approval`, the
+impact triplet, and `ProjectApprovalScreen` — the surface that ends the bell's dead end on
+"Couldn't load this decision".
+
+Merged `--no-ff` as `84918b022` **with no conflicts** — 19 files, +2264/−123, all under
+`apps/mobile/Patina`, exactly as the integration report predicted.
+
+That merge also closes two of the walk's own findings outright:
+
+- **W1R1-M2** (the bell's numeric badge) — `UnreadBadge` is gone; `DailyGreetingHeader.swift:183`
+  now mounts `UnreadMark`, an 8 pt clay dot, and the button's accessibility value says
+  "Unread notifications" rather than speaking the number. `grep -rn "9+" DailyGreetingHeader.swift`
+  finds only the comment recording what was removed. R5's re-ruling is no longer blocking:
+  the wave gets the dot; if R5 was meant to leave the bell alone, `iosb2-M3` is still the one
+  commit to revert.
+- **iosb3-M3** (a Stage-2 approval past its date drawn in error red) — already answered by lane A,
+  which the steward had merged: `HouseRecordRowPresentation.make` maps `.overdue` to R8's whole
+  sentence in body ink (`HouseRecordCard.swift:67-78`, `:531-539`), and the only red left on the
+  card is money.
+
+The lane's open blocker had to be fixed for the merge to be honest — see below.
+
+### The five fixes
+
+| commit | finding | what changed |
+|---|---|---|
+| `0542908dd` | **W1R1-B1** (the lane's `iosb3-B1`) | The Record's decision grammar called an approval a choice. `StudioQueueItemRow` gains `isApproval`, set from `isProjectArtifactApproval \|\| isClientSignoff`; `HouseRecordBuilder.title(for:)` branches to "Leah asked for your approval." and lets the second line carry the question, so the question's own "?" never runs into an appended full stop. An untitled approval falls back to `untitledApprovalTitle` ("An approval is ready"), never to "A project choice is ready". Also in this commit, because they live in the same builder: the hub row's `checkmark.circle` and its counted detail (W1R1-M4's half of `StudioQueueBuilder`). |
+| `51b50d981` | **W1R1-M3** | The eyebrow reads `APPROVAL` on a sign-off or a Stage-2 row (`DecisionDetailViewModel.isApprovalAsk`), `DECISION` on a real option choice. `availableDeferrals` drops "Neither of these" wherever there are no options to be neither of, so the screen no longer offers it in the same breath as "Nothing to choose". The deferral receipt says "This approval is still open." on an approval. |
+| `00bf6eceb` | **W1R1-M4** | The hub counts in words. New `PatinaCount` mirrors the web's own list and past-twelve cutoff (`standing-sentence.ts:120-144`), and `StudioAttentionSummary` and the section-header figure both go through it: "Five things need your eye", "five", "zero". |
+| `8959cb0f5` | **W1R1-M1** | P-04's clock was dead code. `AppNotification` gains `iconOverride`, set in `init(from:)` from `DecisionPushType(rawValue: notification_log.type)?.icon`, so the feed draws the type's own mark instead of one `hand.raised` for all three; `defaultTitle` is read on the same path. Because those glyphs now reach a homeowner, `.required` became `hand.raised` (the mark the bell already gave the ask) and `.resolved` left `checkmark.seal.fill` for `seal` — a check beside a row is a status mark. |
+| `968ed6900` | **iosb3-M1** | `PatinaCurrency.formatWholeDollars` sets `roundingMode = .halfUp`; `NumberFormatter` defaults to half-even, so $2.50 read "$2" on iOS and "$3" in the same letter (`Intl.NumberFormat` expands a tie away from zero). And a delta under fifty cents now reads "+less than $1" instead of "+$0" under a row that exists only because the cost changed. |
+
+Tests: two new files — `ApprovalVocabularyOnTheRecordTests` (the projection and the sign-off
+through `itemizedAwaitingRows` into `title(for:)`, and that no approval row says "choose",
+"choice", "decision" or "?.") and `WalkFixCopyTests` (the feed's glyph per push type, the
+eyebrow, the deferral pair, the words, the rounding pair) — plus four approval cases in
+`HouseRecordBuilderTests`. Four suites that pinned the retired figures were rewritten
+(`AttentionCountTests`, `StudioHubTests`, `BellQueueFallbackTests`).
+
+### One thing the merge broke that the walk could not have seen
+
+`313853b8d` — `BadgeCountService.swift` came out of the merge at **504 lines**, four past
+SwiftLint's 500-line `file_length`, and `lint-delta` failed the first re-run on it
+(`Patina/Services/Badges/BadgeCountService.swift: 0 → 1`). Neither lane produced it alone: iosb
+split `mergedDecisions` out precisely to stay under the floor, and iosa's own growth landed on
+top. The nested `PersistedCounts` moved to `BadgeCountService+…`-style neighbour
+`BadgeCountPersistedCounts.swift`, still nested on the service, so every reference in the file
+reads unchanged and the four source pins that read `BadgeCountService.swift`
+(`BadgeCountPersistenceTests`, `ColdLaunchStalenessTests`, `BadgeFreshnessTests`,
+`ProjectApprovalPathTests`, `SessionIsolationTests`, `RecordForegroundTests`) still find what
+they look for. 468 lines now.
+
+### Gates (final tree, `313853b8d`)
+
+```
+IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE …/ios-gate.sh all
+  ** BUILD SUCCEEDED **
+  ━ Test run with 2436 tests in 265 suites passed after 7.550 seconds
+    with 2 known issues.
+  ** TEST SUCCEEDED **
+  ✓ lint-delta: no new warnings in touched files
+  exit=0
+```
+
+2367 tests in 255 suites before this pass (the steward's run), **2436 in 265** after — the iosb
+merge's suites plus this round's two new files. The two known issues are the same pre-existing
+pair both iOS lanes report: a `BrandVoiceLint` expectation on "curated_mix" and
+`RoomLifecycleTests.theTodayRailFollowsALocalDelete`.
+
+The first re-run failed on lint-delta alone (`exit=1`, the 504-line file above); build and tests
+were green on that run too.
+
+### The walk app is rebuilt at the same path
+
+```
+xcodebuild build -scheme Patina -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath …/apps/mobile/Patina/.build/DerivedDataWalk
+```
+
+**walkAppPath** (unchanged, ready to re-install on `cae-w1-walk`
+`29E64516-9C2F-4D77-95D8-55D7B61E017B`):
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w1-integration/apps/mobile/Patina/.build/DerivedDataWalk/Build/Products/Debug-iphonesimulator/Patina.app`
+
+### Still open on the branch after this pass
+
+- **iosb3-M2 — NOT FIXED, and it needs a ruling, not a patch.** `list_my_project_decision_reviews`
+  (00467:135) is project-scoped: it returns every Stage-2 approval in every project a
+  **studio co-member** co-authors, and the projection carries no field naming the frozen lead.
+  So a studio person signed into the *client* app gains every draft approval in the studio as
+  "waiting on you". Fixing it honestly means adding a viewer-role field to the projection — a
+  migration and a redeploy, i.e. a wave decision, not a walk fix. The homeowner path is
+  unaffected: 00467 hides her from nothing and shows her only her own.
+- **iosa R3-02** (the retired word on the invoice list, the invoice detail and the Studio money
+  row, via `DateDisplay.due` → `Overdue · Aug 21`) — carried, untouched. It is money, not the
+  approval rail, and the walk did not name it this round.
+- `DecisionListView.emptyView` draws `checkmark.circle` beside "Nothing waiting on you". Not
+  named in the walk and arguably an illustration rather than a status mark, but it is the last
+  checkmark left on this rail — worth a look in W2.
+- Everything the integration report already carried (backend R3-01/03/04 and F4–F12, web's
+  minors, iosa's minors) is unchanged.
