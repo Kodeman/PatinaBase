@@ -220,30 +220,42 @@ export function DoorActs({
   const panelIdFor = (key: ActKey) => `${panelId}-panel-${key}`;
 
   return (
-    <div
-      data-testid="door-acts"
-      /* The door's primary act docks to the bottom edge on a narrow viewport
-         (door-gate.tsx), and a stuck act is painted over whatever scrolls
-         under it. These three answers are the last thing on the leaf, so the
-         paper is given the dock's own height back at that width — Ask a
-         question, Request a change and Decline stay reachable, and none of
-         them is ever read through the act they are alternatives to. */
-      className="mt-6 border-t border-[var(--border-subtle)] pt-3 max-[600px]:pb-16"
-    >
-      <div ref={rowRef} tabIndex={-1} className="flex flex-wrap items-center gap-3">
-        {acts.map((act) => (
-          <ScoredAction
-            key={act.key}
-            actionKey={`door_${act.key}`}
-            regionKey="door"
-            variant="tertiary"
-            aria-expanded={open === act.key}
-            aria-controls={open === act.key ? panelIdFor(act.key) : undefined}
-            onClick={(event) => toggle(act.key, event)}
-          >
-            {act.label}
-          </ScoredAction>
-        ))}
+    <>
+      <div
+        data-testid="door-acts"
+        data-acts-dock=""
+        /* `W2-06`. The door's primary act docks to the bottom edge on a narrow
+           viewport (door-gate.tsx). These four answers are the last thing on
+           the leaf, and clearing the dock's height was not enough: measured at
+           390x844 with Sign docked at y=751, all four sat at y=840 and y=896 —
+           below the fold, reachable only by scrolling past the act they are
+           alternatives to.
+
+           So they dock too, as a compact row riding directly above the
+           primary. 61px is that dock's own height (44px act + 2x8px of padding
+           + its 1px rule); this row sits on top of it and the paper scrolls
+           under both. It has to be THIS box that sticks and it has to hold
+           nothing but the row: a sticky box is constrained by its parent, so a
+           wrapper no taller than the row would pin nothing — and the unfolded
+           panels, were they children, would be pinned to the bottom edge with
+           it. They are siblings below. */
+        className="mt-6 border-t border-[var(--border-subtle)] pt-3 max-[600px]:sticky max-[600px]:bottom-[61px] max-[600px]:z-20 max-[600px]:-mx-5 max-[600px]:mt-4 max-[600px]:border-[var(--border-default)] max-[600px]:bg-[var(--bg-surface)] max-[600px]:px-5 max-[600px]:pb-2"
+      >
+        <div ref={rowRef} tabIndex={-1} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {acts.map((act) => (
+            <ScoredAction
+              key={act.key}
+              actionKey={`door_${act.key}`}
+              regionKey="door"
+              variant="tertiary"
+              aria-expanded={open === act.key}
+              aria-controls={open === act.key ? panelIdFor(act.key) : undefined}
+              onClick={(event) => toggle(act.key, event)}
+            >
+              {act.label}
+            </ScoredAction>
+          ))}
+        </div>
       </div>
 
       {declinedAt && (
@@ -341,7 +353,7 @@ export function DoorActs({
           />
         )}
       </div>
-    </div>
+    </>
   );
 }
 
