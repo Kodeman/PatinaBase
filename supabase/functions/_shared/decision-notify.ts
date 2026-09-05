@@ -111,6 +111,21 @@ export interface ApprovalArtifactCitation {
   title: string;
   /** When this edition was issued (project_approval_artifacts.created_at). */
   issuedAt?: string | null;
+  /**
+   * P-13. The designer's one line about this ask, frozen into the artifact at
+   * compose time (`project_approval_artifacts.why`, 00569). Absent on every
+   * approval created before that migration and on every ask whose author left
+   * the field empty — the letter then simply does not carry a note.
+   */
+  why?: string | null;
+  /**
+   * P-13. Who wrote that line, frozen beside it at compose time
+   * (`project_approval_artifacts.why_author_name`, 00569). Any studio
+   * co-member may compose an ask, so the project's designer of record is the
+   * wrong signature and a later rename would rewrite a sentence she already
+   * read. NULL whenever the why is.
+   */
+  whyAuthorName?: string | null;
 }
 
 // What a homeowner calls each artifact kind. The enum spelling is a database
@@ -424,7 +439,10 @@ export async function resolveDecisionSignature(
 const DEFAULT_TIME_ZONE = "America/New_York";
 
 /** "Thursday" in the recipient's zone, or null when there is no date. */
-function weekday(iso: string | null | undefined, timeZone: string): string | null {
+function weekday(
+  iso: string | null | undefined,
+  timeZone: string,
+): string | null {
   if (!iso) return null;
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return null;
@@ -470,6 +488,38 @@ function renderArtifactEvidence(
         escapeHtml(artifact.checksum)
       }</span>`,
     ),
+  ].join("");
+}
+
+/**
+ * P-13. The designer's own line, under the ask, in her voice and signed with
+ * her given name — not a second paragraph of Patina's prose. Rendered as a
+ * quotation because that is what it is: a sentence one person wrote to
+ * another.
+ *
+ * The attribution is dropped rather than invented when no name resolved. "—
+ * Your designer" under a first-person sentence reads as a system speaking in
+ * someone's place, which is the one thing this line exists to avoid.
+ *
+ * The frozen author wins over the cobrand signature. `cobrand.designerGivenName`
+ * is the project's designer of record resolved live at send time; a studio
+ * co-member may compose the ask, and a designer may be renamed between the
+ * first notice and the overdue letter. Either way the letter would sign a
+ * first-person sentence with someone who did not write it, and disagree with
+ * the projection, which renders the frozen name.
+ */
+function renderDesignerNote(
+  artifact: ApprovalArtifactCitation | null | undefined,
+  cobrand: DecisionCobrand,
+): string {
+  const note = (artifact?.why ?? "").trim();
+  if (!note) return "";
+  const named = (artifact?.whyAuthorName ?? "").trim() ||
+    (cobrand.designerGivenName ?? "").trim() ||
+    (cobrand.studioName ?? "").trim();
+  return [
+    paragraph(`&ldquo;${escapeHtml(note)}&rdquo;`),
+    named ? muted(`&mdash; ${escapeHtml(named)}`) : "",
   ].join("");
 }
 
@@ -601,6 +651,7 @@ export function renderDecisionEmail(
   }
 
   const editionLine = renderEditionLine(decision.artifact, timeZone);
+  const designerNote = renderDesignerNote(decision.artifact, cobrand);
   const door = renderDoor(decision.id, `Review the ${kindLabel}`);
   const dueWeekday = weekday(decision.dueDate, timeZone);
   const dueDay = calendarDay(decision.dueDate, timeZone);
@@ -630,6 +681,7 @@ export function renderDecisionEmail(
           paragraph(
             `${titleHtml} is waiting for your answer, exactly as it was sent.`,
           ),
+          designerNote,
           editionLine,
           door,
           studioSignature,
@@ -665,6 +717,7 @@ export function renderDecisionEmail(
                 : "is ready for your answer."
             }`,
           ),
+          designerNote,
           editionLine,
           dueWeekday && dueDay
             ? paragraph(`Due ${escapeHtml(dueWeekday)}, ${escapeHtml(dueDay)}.`)
@@ -699,11 +752,262 @@ export function renderDecisionEmail(
               : ""
           }`,
         ),
+        designerNote,
         editionLine,
         door,
         studioSignature,
       ].join(""),
     }),
+  };
+}
+
+// ── P-20. The approval receipt ─────────────────────────────────────────────
+//
+// The one letter addressed to the homeowner AFTER she answers. It never
+// re-offers the act, carries no call to action beyond a plain link to the
+// record, and names a consequence only where the data carries one (R9).
+//
+// It is not a DecisionNotificationKind: those three each own a spine RPC
+// (00173) and this one has none — the client's in-app row and push envelope
+// are written by notify_client_attention from inside the response itself
+// (00569). This is the email leg alone.
+
+/** What she did, in the word the stamp uses. */
+export type DecisionReceiptOutcome = "approved" | "returned" | "held";
+
+/**
+ * The database's three outcomes, in the vocabulary the homeowner reads.
+ * `changes_requested` is RETURNED everywhere — never "Declined".
+ */
+export function receiptOutcomeWord(
+  outcome: string | null | undefined,
+): DecisionReceiptOutcome | null {
+  switch (outcome) {
+    case "approved":
+      return "approved";
+    case "changes_requested":
+      return "returned";
+    case "needs_discussion":
+      return "held";
+    default:
+      return null;
+  }
+}
+
+const RELEASED_COUNT_WORD: readonly string[] = [
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+  "twenty",
+];
+
+/**
+ * The consequence clause, or silence dressed as one honest sentence.
+ *
+ * Mirrors `public._project_approval_release_sentence` (00569), which writes the
+ * identical line into the bell and the push, so the three surfaces say the same
+ * thing about the same answer. Nothing released ⇒ nothing claimed.
+ *
+ * A piece is NAMED only when it is the only one and its name carries no comma.
+ * `project_ffe_items.name` is catalogue text the studio typed — "Built-in
+ * shelving, north wall" is an ordinary one — so joining two of them with "and"
+ * produced "It releases Built-in shelving, north wall and Built-in Window
+ * Banquette", which reads as a list of three things. Everything else is counted
+ * in words, up to twenty; past that the count stops being worth reading and the
+ * sentence states the fact without it.
+ */
+export function decisionReleaseSentence(
+  releasedItems: readonly string[] = [],
+): string {
+  const names = releasedItems
+    .map((name) => (name ?? "").trim())
+    .filter((name) => name.length > 0);
+  if (names.length === 0) return "Your answer is on the record.";
+  if (names.length === 1 && !names[0].includes(",")) {
+    return `It releases ${names[0]}.`;
+  }
+  const word = RELEASED_COUNT_WORD[names.length - 1] ?? "the";
+  const piece = names.length === 1
+    ? "piece that was waiting on it"
+    : "pieces that were waiting on it";
+  return `It releases ${word} ${piece}.`;
+}
+
+export interface DecisionReceiptContext extends DecisionContext {
+  /** What she answered, as `client_decisions.answer` spells it. */
+  outcome: string | null;
+  /**
+   * `project_ffe_items.name` for every piece this answer unblocked, frozen
+   * into the immutable `responded` receipt by 00569 because the response
+   * clears the link it would otherwise be read back through. Empty for a
+   * return, a hold, and an approval that released nothing.
+   */
+  releasedItems?: readonly string[];
+}
+
+/**
+ * The receipt, rendered.
+ *
+ * Subject: "You approved "Kitchen plan set"." — second person, past tense, the
+ * act already done. Body: what it released, or the one sentence that claims
+ * nothing. Then the record's address as a plain link. No button: a button is an
+ * invitation to act, and there is nothing left to do.
+ */
+export function renderDecisionReceiptEmail(
+  recipientName: string,
+  decision: DecisionReceiptContext,
+  cobrand: DecisionCobrand = {},
+): RenderedEmail {
+  const name = recipientName || "there";
+  const word = receiptOutcomeWord(decision.outcome) ?? "answered";
+  const title = decision.artifact?.title || decision.title || "the approval";
+  const subject = `You ${word} "${title}".`;
+  const url = clientDecisionLink(portalBaseFor("client"), decision.id);
+  const consequence = decisionReleaseSentence(decision.releasedItems ?? []);
+  return {
+    subject,
+    html: renderBrandedShell({
+      title: subject,
+      preview: consequence,
+      eyebrow: "Answered",
+      audience: "client",
+      studioName: cobrand.studioName,
+      studioLogoUrl: cobrand.studioLogoUrl,
+      body: [
+        paragraph(`Hi ${escapeHtml(name)},`),
+        paragraph(
+          `You ${word} <strong style="color:#1F1B16; font-weight:600;">${
+            escapeHtml(title)
+          }</strong>.`,
+        ),
+        paragraph(escapeHtml(consequence)),
+        muted(
+          `The record: <a href="${url}" style="color:#4E7A66; text-decoration:none;">${
+            escapeHtml(url)
+          }</a>`,
+        ),
+        signOff(cobrand),
+      ].join(""),
+    }),
+  };
+}
+
+/** notification_log.type for the receipt. One letter per decision, ever. */
+const RECEIPT_LOG_TYPE = "decision_receipt";
+
+/**
+ * Send the receipt through the same compliance chokepoint as every other
+ * client letter: preference + channel gate, quiet hours, suppression, rate
+ * cap, notification_log dedupe on (decision, type).
+ *
+ * Quiet hours DEFER rather than drop — the receipt is not urgent and the
+ * caller's trigger is one-shot, so a deferred receipt is a receipt not sent.
+ * It is therefore treated like the resolved notice: sent whenever the response
+ * lands, because the act it acknowledges just happened and a letter about it
+ * arriving eight hours later is a stranger.
+ */
+export async function deliverDecisionReceipt(
+  supabase: SupabaseClient,
+  decision: DecisionReceiptContext,
+  recipient: DecisionRecipient,
+  cobrand: DecisionCobrand = {},
+): Promise<DeliverDecisionNotificationResult> {
+  if (!recipient.email) {
+    return {
+      inAppOk: true,
+      emailSent: false,
+      emailSkipped: true,
+      reason: "no_recipient_email",
+    };
+  }
+
+  if (recipient.userId) {
+    const pref = await loadPreferences(supabase, recipient.userId);
+    if (pref.type_project_milestone === false) {
+      return {
+        inAppOk: true,
+        emailSent: false,
+        emailSkipped: true,
+        reason: "type_disabled",
+      };
+    }
+    if (pref.channels_email === false) {
+      return {
+        inAppOk: true,
+        emailSent: false,
+        emailSkipped: true,
+        reason: "email_channel_disabled",
+      };
+    }
+  }
+
+  const query = supabase
+    .from("notification_log")
+    .select("status")
+    .eq("type", RECEIPT_LOG_TYPE)
+    .eq("channel", "email")
+    .neq("status", "failed")
+    .contains("metadata", { decisionId: decision.id });
+  if (recipient.userId) query.eq("user_id", recipient.userId);
+  const { data: priorRows, error: priorError } = await query;
+  if (priorError) {
+    console.error("decision receipt log lookup failed", priorError);
+  }
+  const existingLogStatus = classifyExistingDecisionEmailLogStatuses(
+    ((priorRows ?? []) as Array<{ status: string }>).map((row) => row.status),
+  );
+  if (existingLogStatus) {
+    return {
+      inAppOk: true,
+      emailSent: false,
+      emailSkipped: true,
+      reason: "already_sent",
+      existingLogStatus,
+    };
+  }
+
+  const rendered = renderDecisionReceiptEmail(
+    recipient.name ?? "",
+    decision,
+    cobrand,
+  );
+  const result = await sendCompliantEmail(supabase, {
+    to: recipient.email,
+    subject: rendered.subject,
+    html: rendered.html,
+    userId: recipient.userId ?? undefined,
+    notificationType: RECEIPT_LOG_TYPE,
+    category: "operational",
+    templateId: "decision-receipt",
+    metadata: {
+      decisionId: decision.id,
+      kind: RECEIPT_LOG_TYPE,
+      outcome: decision.outcome,
+      releasedItemCount: (decision.releasedItems ?? []).length,
+    },
+  });
+
+  return {
+    inAppOk: true,
+    emailSent: result.success === true,
+    emailSkipped: result.success !== true,
+    reason: result.success ? undefined : result.error ?? "send_failed",
   };
 }
 
