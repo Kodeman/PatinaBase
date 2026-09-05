@@ -237,8 +237,7 @@ struct LoadStateHonestyTests {
         }
         return StudioLoadResult(
             projects: projects,
-            decisions: decisionsFailed ? nil : decisions,
-            approvals: decisionsFailed ? nil : [],
+            decisions: decisionsFailed ? nil : decisions, approvals: decisionsFailed ? nil : [],
             proposals: [], invoices: [], documents: [], threads: [], notifications: []
         )
     }
