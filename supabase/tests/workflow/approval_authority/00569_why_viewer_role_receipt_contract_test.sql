@@ -17,8 +17,11 @@
 --      lead; the projection's own row filter makes it unreachable at 00569,
 --      which this file states rather than pretends otherwise.)
 --   4. Answering writes the household its receipt on the client rail: one
---      in_app bell row and one push envelope, titled in the second person and
---      naming the released piece — or claiming nothing when nothing moved.
+--      in_app bell row, titled in the second person and naming the released
+--      piece — or claiming nothing when nothing moved. The row arrives already
+--      read and writes NO push envelope: it acknowledges the act of the person
+--      it is addressed to, and the product does not buzz her to report what she
+--      just did. Every other caller of the rail keeps both rows, unread.
 --   5. The released piece names are frozen into the immutable 'responded'
 --      receipt, because the same statement that names them clears the link.
 --   6. P-06 — a proposal and an invoice attention row carry /proposals/<id>
@@ -165,10 +168,22 @@ BEGIN
   ASSERT public._project_approval_release_sentence(ARRAY['the cabinet order'])
     = 'It releases the cabinet order.', 'one piece is named';
   ASSERT public._project_approval_release_sentence(ARRAY['a', 'b'])
-    = 'It releases a and b.', 'two pieces are both named';
+    = 'It releases two pieces that were waiting on it.',
+    'two pieces are counted, not joined with "and"';
   ASSERT public._project_approval_release_sentence(ARRAY['a', 'b', 'c'])
     = 'It releases three pieces that were waiting on it.',
     'three pieces are counted in words';
+  -- project_ffe_items.name is catalogue text the studio typed. A comma inside
+  -- one name turned an "and" join into what reads as a list of three things,
+  -- on the email, the bell and the lock screen at once.
+  ASSERT public._project_approval_release_sentence(
+      ARRAY['Built-in shelving, north wall']
+    ) = 'It releases one piece that was waiting on it.',
+    'a lone name carrying a comma is counted, not named';
+  ASSERT public._project_approval_release_sentence(
+      ARRAY['Built-in shelving, north wall', 'Built-in Window Banquette']
+    ) = 'It releases two pieces that were waiting on it.',
+    'two names, one with a comma, must not read as three things';
   ASSERT public._project_approval_release_sentence(
       (SELECT array_agg('p' || n) FROM generate_series(1, 21) AS n)
     ) = 'It releases the pieces that were waiting on it.',
@@ -537,6 +552,7 @@ DECLARE
   u_lead uuid := 'a5690000-0000-4000-8000-000000000002';
   v_released uuid := (SELECT decision_id FROM w2_tokens WHERE label = 'released');
   v_returned uuid := (SELECT decision_id FROM w2_tokens WHERE label = 'returned');
+  v_other uuid := extensions.gen_random_uuid();
   v_result jsonb;
   v_meta jsonb;
   v_count integer;
@@ -584,13 +600,57 @@ BEGIN
      AND v_meta->>'deep_link' = '/decisions/' || v_released::text,
     'the receipt does not address the record';
 
-  -- 3. The push envelope is its own row, queued, carrying the same words.
+  -- 3. A receipt is not a summons. It acknowledges the act of the person it is
+  --    addressed to — the responder IS the frozen lead, the checked responder
+  --    refuses anyone else — so it writes NO push envelope (no sound, no
+  --    interruption-level active, no springboard number for her own answer)
+  --    and the bell row arrives already read. The ceremony rides the email.
   SELECT count(*) INTO v_count
   FROM public.notification_log
   WHERE user_id = u_lead AND channel = 'push'
     AND metadata->>'entity_id' = v_released::text
     AND metadata->>'kind' = 'decision_receipt';
-  ASSERT v_count = 1, 'the receipt wrote no push envelope';
+  ASSERT v_count = 0,
+    'the receipt pushed the person who just acted: ' || v_count;
+
+  -- And it added no envelope at all: the one push row this approval owns is
+  -- the ASK's, written when the studio sent it. The receipt left it alone.
+  SELECT count(*) INTO v_count
+  FROM public.notification_log
+  WHERE user_id = u_lead AND channel = 'push'
+    AND metadata->>'entity_id' = v_released::text;
+  ASSERT v_count = 1,
+    'the answer changed how many envelopes this approval owns: ' || v_count;
+
+  SELECT count(*) INTO v_count
+  FROM public.notification_log
+  WHERE user_id = u_lead AND channel = 'in_app'
+    AND metadata->>'entity_id' = v_released::text
+    AND opened_at IS NOT NULL AND status = 'opened';
+  ASSERT v_count = 1,
+    'the receipt left an unread line asking her to acknowledge her own answer';
+
+  -- Every other caller of the rail is untouched: an attention row that carries
+  -- no 'decision_receipt' kind still writes its envelope and still arrives
+  -- unread. Probed on an entity of its own so it cannot disturb the rows the
+  -- receipt assertions read.
+  PERFORM public.notify_client_attention(
+    u_lead, 'decision', v_other, 'A decision needs you', 'Body',
+    '{}'::jsonb
+  );
+  SELECT count(*) INTO v_count
+  FROM public.notification_log
+  WHERE user_id = u_lead AND channel = 'push'
+    AND metadata->>'entity_id' = v_other::text;
+  ASSERT v_count = 1,
+    'a non-receipt attention row lost its push envelope: ' || v_count;
+  SELECT count(*) INTO v_count
+  FROM public.notification_log
+  WHERE user_id = u_lead AND channel = 'in_app'
+    AND metadata->>'entity_id' = v_other::text
+    AND opened_at IS NULL AND status = 'delivered';
+  ASSERT v_count = 1,
+    'a non-receipt attention row arrived already read';
 
   -- 4. A return claims no consequence and is never called "declined".
   SELECT metadata INTO v_meta

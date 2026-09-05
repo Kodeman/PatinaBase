@@ -51,8 +51,12 @@
 -- (user, entity_type, entity_id) while unopened, so the receipt replaces the
 -- unread "needs you" line for the same approval rather than stacking beside
 -- it. 'decision_receipt' lives in metadata.kind, colliding with no dedupe key.
+-- That same key now also tells the rail this row acknowledges the reader's own
+-- act: it is written already opened, with no push envelope and no dispatch, so
+-- the product never buzzes a homeowner to report what she just did.
 --
 -- Every redefined body is grafted from its latest prior definition:
+--   notify_client_attention                     ← 00534
 --   _create_project_approval_decision_checked / create_project_approval_decision
 --     ← 00463 (unchanged since)
 --   supersede_project_approval_decision         ← 00464 (unchanged since)
@@ -117,6 +121,13 @@ COMMENT ON COLUMN public.project_approval_artifacts.why_author_name IS
 -- reading and the sentence names the fact without it. Kept as its own function
 -- so the bell, the push and the SQL tests all read the identical sentence; the
 -- email renderer mirrors it in _shared/decision-notify.ts.
+--
+-- A piece is NAMED only when it is the only one and its name carries no comma.
+-- project_ffe_items.name is catalogue text the studio typed — "Built-in
+-- shelving, north wall" is an ordinary one — so joining two of them with "and"
+-- produced "It releases Built-in shelving, north wall and Built-in Window
+-- Banquette", which a homeowner reads as a list of three things. Everything
+-- else is counted.
 CREATE OR REPLACE FUNCTION public._project_approval_release_sentence(
   p_names text[]
 )
@@ -125,18 +136,22 @@ LANGUAGE sql
 IMMUTABLE
 SET search_path = public, pg_temp
 AS $$
-  SELECT CASE COALESCE(cardinality(p_names), 0)
-    WHEN 0 THEN 'Your answer is on the record.'
-    WHEN 1 THEN 'It releases ' || p_names[1] || '.'
-    WHEN 2 THEN 'It releases ' || p_names[1] || ' and ' || p_names[2] || '.'
+  SELECT CASE
+    WHEN COALESCE(cardinality(p_names), 0) = 0
+      THEN 'Your answer is on the record.'
+    WHEN cardinality(p_names) = 1 AND position(',' IN p_names[1]) = 0
+      THEN 'It releases ' || p_names[1] || '.'
     ELSE 'It releases ' || COALESCE(
       (ARRAY[
-        'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
-        'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
-        'seventeen', 'eighteen', 'nineteen', 'twenty'
-      ])[cardinality(p_names) - 2],
+        'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+        'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
+        'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'
+      ])[cardinality(p_names)],
       'the'
-    ) || ' pieces that were waiting on it.'
+    ) || CASE WHEN cardinality(p_names) = 1
+      THEN ' piece that was waiting on it.'
+      ELSE ' pieces that were waiting on it.'
+    END
   END;
 $$;
 
@@ -144,9 +159,168 @@ REVOKE ALL ON FUNCTION public._project_approval_release_sentence(text[])
   FROM PUBLIC, anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public._project_approval_release_sentence(text[]) IS
-  'P-20/R9: the receipt''s consequence clause. Names the released pieces when '
-  'there are one or two, counts them in words up to twenty, and claims nothing '
-  'at all when the answer released nothing.';
+  'P-20/R9: the receipt''s consequence clause. Names the released piece only '
+  'when it is the only one and its catalogue name carries no comma, counts '
+  'them in words up to twenty otherwise, and claims nothing at all when the '
+  'answer released nothing.';
+
+-- ── P-20. A receipt is not a summons ───────────────────────────────────────
+--
+-- Grafted from 00534, whose body this restates unchanged for every caller but
+-- one. The receipt is the single attention row addressed to the person who
+-- just acted — `_respond_project_approval_checked` refuses any actor who is
+-- not the frozen decision lead, so the recipient is always the answerer. On
+-- 00534's ordinary path that row would push with `sound: "default"` and
+-- `interruption-level: "active"` (apns-send), raise the springboard number
+-- R5 made real, and leave an unread dot on the bell — the product buzzing a
+-- homeowner's pocket to tell her what she did ten seconds ago, and asking her
+-- to clear the notice afterwards.
+--
+-- So a row whose metadata.kind is 'decision_receipt' is written READ: the bell
+-- keeps the line as a record, the badge counts nothing (apns-send's
+-- collapsedBadgeCount drops an entity the moment any row of it reads as read,
+-- and 00534's dedupe means the "needs you" line for this approval IS this row),
+-- and no push envelope is written or dispatched. The ceremony rides the email,
+-- which is where a letter belongs.
+--
+-- Every other caller — the proposal rail, the invoice rail, the decision
+-- publish trigger — is byte-for-byte unaffected: they mint no metadata.kind.
+
+CREATE OR REPLACE FUNCTION public.notify_client_attention(
+  p_user_id     uuid,
+  p_entity_type text,
+  p_entity_id   uuid,
+  p_title       text,
+  p_body        text,
+  p_metadata    jsonb DEFAULT '{}'::jsonb
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_path       text;
+  v_meta       jsonb;
+  v_type       text;
+  v_in_app     uuid;
+  v_push       uuid;
+  v_is_receipt boolean;
+BEGIN
+  -- A notification helper must never abort its caller's transaction. Every
+  -- rejection here is a quiet NULL, not an exception.
+  IF p_user_id IS NULL OR p_entity_id IS NULL OR p_title IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  v_is_receipt := COALESCE(p_metadata->>'kind', '') = 'decision_receipt';
+
+  v_path := CASE p_entity_type
+              WHEN 'proposal' THEN '/proposals/'
+              WHEN 'invoice'  THEN '/invoices/'
+              WHEN 'decision' THEN '/decisions/'
+            END;
+  IF v_path IS NULL THEN
+    RAISE WARNING 'notify_client_attention: unroutable entity_type %', p_entity_type;
+    RETURN NULL;
+  END IF;
+  v_path := v_path || p_entity_id::text;
+  v_type := p_entity_type || '_attention';
+
+  v_meta := COALESCE(p_metadata, '{}'::jsonb) || jsonb_build_object(
+    'entity_type', p_entity_type,
+    'entity_id',   p_entity_id::text,
+    'title',       p_title,
+    'body',        COALESCE(p_body, ''),
+    -- 'message' mirrors 'body': the client portal inbox renders metadata.message
+    -- (00388, invoice-send), the iOS bell renders metadata.body.
+    'message',     COALESCE(p_body, ''),
+    'deep_link',   v_path,
+    'url',         v_path
+  );
+
+  -- The bell row. De-duplicated on (user, entity_type, entity_id) while the
+  -- reader has not opened it, so a reminder cadence refreshes one line instead
+  -- of burying the screen.
+  SELECT n.id INTO v_in_app
+    FROM public.notification_log n
+   WHERE n.user_id = p_user_id
+     AND n.channel = 'in_app'
+     AND n.opened_at IS NULL
+     AND n.metadata->>'entity_type' = p_entity_type
+     AND n.metadata->>'entity_id'   = p_entity_id::text
+   ORDER BY n.created_at DESC
+   LIMIT 1;
+
+  IF v_in_app IS NOT NULL THEN
+    UPDATE public.notification_log
+       SET metadata  = metadata || v_meta,
+           type      = v_type,
+           -- 'opened' beside opened_at is the shape markOpened writes
+           -- (NotificationsAPIClient), so every reader agrees this is read.
+           status    = CASE WHEN v_is_receipt THEN 'opened' ELSE 'delivered' END
+                         ::public.notification_status,
+           opened_at = CASE WHEN v_is_receipt THEN now() ELSE opened_at END,
+           sent_at   = now()
+     WHERE id = v_in_app;
+  ELSE
+    INSERT INTO public.notification_log
+      (user_id, type, channel, status, template_id, metadata, sent_at, opened_at)
+    VALUES
+      (p_user_id, v_type, 'in_app',
+       (CASE WHEN v_is_receipt THEN 'opened' ELSE 'delivered' END)
+         ::public.notification_status,
+       'client-attention', v_meta, now(),
+       CASE WHEN v_is_receipt THEN now() END)
+    RETURNING id INTO v_in_app;
+  END IF;
+
+  -- A receipt stops here: no envelope, nothing to hand apns-send, no id to
+  -- return. The caller PERFORMs this and reads no result.
+  IF v_is_receipt THEN
+    RETURN NULL;
+  END IF;
+
+  -- The push envelope. Always its own row, always the id apns-send is handed.
+  INSERT INTO public.notification_log
+    (user_id, type, channel, status, template_id, metadata)
+  VALUES
+    (p_user_id, v_type, 'push', 'queued', 'client-attention-push', v_meta)
+  RETURNING id INTO v_push;
+
+  -- Best-effort dispatch. Locally the Vault carries no service_role_key, so
+  -- invoke_edge_function returns NULL with a warning; on a device with no APNs
+  -- secrets apns-send answers 200 {skipped}. Neither may break a send.
+  BEGIN
+    PERFORM public.invoke_edge_function(
+      'apns-send',
+      jsonb_build_object(
+        'user_id',             p_user_id,
+        'title',               p_title,
+        'body',                COALESCE(p_body, ''),
+        'entity_type',         p_entity_type,
+        'entity_id',           p_entity_id::text,
+        'notification_log_id', v_push
+      )
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'notify_client_attention: apns dispatch failed for % %: %',
+      p_entity_type, p_entity_id, sqlerrm;
+  END;
+
+  RETURN v_push;
+END;
+$$;
+
+COMMENT ON FUNCTION public.notify_client_attention(uuid, text, uuid, text, text, jsonb) IS
+  'SP-08: the one writer of client-facing attention rows. Two notification_log '
+  'rows per call — in_app/delivered (the bell, never handed to apns-send) and '
+  'push/queued (the envelope, whose id is). De-duplicates the bell row on '
+  '(user, entity_type, entity_id) while unopened. P-20 (00569): a row whose '
+  'metadata.kind is ''decision_receipt'' acknowledges the reader''s own act, so '
+  'it is written already opened and gets no push envelope and no dispatch — '
+  'one row, no badge, no sound. service_role only: it writes for an arbitrary '
+  'user_id.';
 
 -- ── P-13. The creating RPCs learn the why ──────────────────────────────────
 
