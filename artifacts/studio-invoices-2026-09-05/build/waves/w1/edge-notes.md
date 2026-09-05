@@ -173,7 +173,7 @@ Ship order — **the migration goes first**:
    (`app/page.tsx:61-69`). Until W3's `useClientInvoices()` and letterbox-only
    front door land, a paid studio invoice returns to a page that states nothing
    about the payment.
-3. These 21 functions.
+3. These 20 functions.
 
 (The RPC argument change alone is order-tolerant — see the `studio-identity`
 section — but the `title` column is not, so the order above is the one to
@@ -270,7 +270,8 @@ deno check — also clean for the ten other direct importers of studio-identity.
 find . -name deno.lock -not -path "./node_modules/*"  →  nothing
 ```
 
-Deploy set is unchanged: the same 21 functions.
+Deploy set is unchanged: the same 21 functions. (Round-1 record; the
+count was wrong — it is 20. See Fix round 2 / F-D.)
 
 ---
 
@@ -537,3 +538,80 @@ $ find . -name deno.lock -not -path "*/node_modules/*"   → nothing
 
 Deploy set unchanged at **20**: `_shared/invoice-subject.ts` is imported only by
 the five, all already in the set.
+
+---
+
+## Fix round 1 (re-handed) — F-A only
+
+> **Numbering note.** This brief is labelled "Fix round 1" and hands a single
+> finding, `F-A`, whose evidence is round 3's. Sections named "Fix round 1" and
+> "Fix round 2" already exist above; overwriting either would destroy a record,
+> so this is appended under its brief's own name. Chronologically it is the
+> fourth fix pass on this lane.
+
+### F-A (major) — a paid studio invoice returns to a page that renders nothing
+
+**Already addressed, and re-verified line by line in this worktree today. No
+lane code changed, because the finding's own remedy is "Program-level gate …
+No change to this lane's code."**
+
+Every cited line still reads as the finding says, checked in
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-si-edge` at HEAD
+`72ddcd213`:
+
+| claim | verified |
+|---|---|
+| the letterbox's rows can never hold a studio invoice | `packages/supabase/src/hooks/use-invoices.ts:465` → `.eq('project_id', projectId)` |
+| that query is what the letterbox is fed | `apps/client-portal/src/components/threshold/threshold.tsx:272` → `const invoicesQuery = useProjectInvoices(projectId);` |
+| so `settlement` is null and no receipt line renders | `apps/client-portal/src/components/threshold/letterbox.tsx:139-141` → `? (invoices.find((row) => row.id === returned.invoiceId) ?? null) : null` |
+| a payer with no house mounts no Letterbox at all | `apps/client-portal/src/app/page.tsx:61-69` → `if (!projectView) { … <ProjectsEmptyState /> … }` |
+
+The gate is recorded in the two places a shipper looks, both already in the
+branch (commit `0008e7445`, tightened in `8add1bd31`):
+
+1. `supabase/functions/create-checkout-session/index.ts:292-306` — the ⚠ DEPLOY
+   ORDER block, which now states the stronger pre-W3 fact: a studio invoice is
+   not merely mute on return, it is unreachable end to end (its letter points at
+   `/invoices/<id>`, folded onto the letterbox front door, whose list cannot
+   contain the row), so the recipient never reaches a Pay control and this
+   function is never called for one. "Do not SEND a studio invoice until W3
+   lands the client-invoice read and the letterbox-only front door."
+2. The **Ship order** section above, step 2 — the client portal that matters for
+   the studio leg is the W3 one (`useClientInvoices()` + the letterbox-only
+   front door), not the currently-deployed worker.
+
+F-A does not close inside W1. It closes when W3 lands.
+
+### Trivial minor fixed while in the same paragraph
+
+Ship order step 3 said "These **21** functions" under a `## Deploy set — 20
+functions` heading (review round 5, `R4-3`). Corrected to 20; the one other
+stale "21" is in the round-1 record and is now annotated as superseded rather
+than rewritten.
+
+### Gates, re-run for this round
+
+```
+$ deno test --allow-all --config …/supabase/functions/deno.json …/supabase/functions/_shared/
+ok | 211 passed | 0 failed (1s)
+
+$ deno test … …/supabase/functions/create-checkout-session/
+ok | 17 passed | 0 failed (25ms)
+
+$ deno test … …/supabase/functions/stripe-webhook/
+ok | 18 passed | 0 failed (22ms)
+
+  invoice-send · invoice-reminders · invoice-check-intent — still no *.test.ts
+  (ls …/<dir>/*test* → "no matches found" for all three)
+
+$ deno check --config …/supabase/functions/deno.json <each of the five index.ts>
+OK   create-checkout-session
+OK   invoice-send
+OK   invoice-reminders
+OK   stripe-webhook
+OK   invoice-check-intent
+
+$ find <worktree> -name deno.lock -not -path "*/node_modules/*"    → nothing
+```
+
+Deploy set unchanged at **20**.
