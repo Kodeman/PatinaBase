@@ -267,15 +267,26 @@ struct AttentionCountTests {
     /// takes to be honest is (a) one derivation for the attention count, and
     /// (b) a card that says out loud when it is showing fewer rows than the
     /// count it sits under.
-    @Test("the bell and the Studio pill count different things, and both say which")
-    func theTwoCountsAreDistinctAndBothAreNamed() throws {
+    /// `P-24` / **R5** answered (a) by deletion, and `iosb2-M3` finished it:
+    /// R5 retires the tab badge "and any in-product numeric badge", which is
+    /// both of them. The Studio pill's capsule went first; the bell's went
+    /// second. Neither number is drawn anywhere on this header now, so there
+    /// is nothing left for the two of them to disagree about.
+    @Test("the header draws no count at all, on either instrument")
+    func theHeaderDrawsNoCount() throws {
         let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
-        // The bell is unread notifications and names itself as such.
+        let code = SourcePin.code(header)
+        // The bell still names itself, and says its state in words.
         #expect(header.contains(#"accessibilityLabel("Notifications")"#))
-        #expect(header.contains(#"\(unreadCount) unread"#))
-        // The Studio control prints THE attention count and names it.
-        #expect(header.contains("StudioControlLabel.waitingValue(count: attentionCount)"))
-        // And it does not recompute either from a fetch of its own.
+        #expect(code.contains(#""Unread notifications""#))
+        #expect(!code.contains(#"\(unreadCount) unread"#),
+                "the bell still speaks a number")
+        // Neither instrument draws one either: no count text, no "9+" cap.
+        #expect(!code.contains(#"Text(count"#))
+        #expect(!code.contains(#""9+""#))
+        // The Studio control carries no number at all.
+        #expect(code.contains("attentionCount") == false)
+        // And it does not recompute anything from a fetch of its own.
         #expect(header.contains("BadgeCountService") == false)
     }
 

@@ -364,6 +364,7 @@ final class BadgeCountService {
         }
 
         async let decisionsFetch = try? DecisionsAPIClient.shared.listPending()
+        async let approvalsFetch = try? DecisionsAPIClient.shared.fetchProjectApprovalReviews()
         async let summariesFetch = try? MessagingAPIClient.shared.listThreadSummaries()
         async let proposalsFetch = try? ProposalsAPIClient.shared.listProposals()
         async let invoicesFetch = try? InvoicesAPIClient.shared.listInvoices()
@@ -372,17 +373,21 @@ final class BadgeCountService {
         let (decisions, summaries, proposals, invoices, fetchedProjects) = await (
             decisionsFetch, summariesFetch, proposalsFetch, invoicesFetch, projectsFetch
         )
+        let approvals = await approvalsFetch
         let fetchedRoster = await rosterFetch
 
         // The account changed while these were in the air: these are the
         // previous account's rows and there is nothing here to write them to.
         guard token == refreshToken else { return }
 
+        let merged = Self.mergedDecisions(
+            pending: decisions, approvals: approvals, previous: pendingDecisions
+        )
         apply(
-            decisions: decisions, summaries: summaries, proposals: proposals,
+            decisions: merged, summaries: summaries, proposals: proposals,
             invoices: invoices, projects: fetchedProjects, roster: fetchedRoster
         )
-        if decisions != nil || summaries != nil || proposals != nil
+        if merged != nil || summaries != nil || proposals != nil
             || invoices != nil || fetchedProjects != nil {
             hasLoaded = true
             lastRefreshFailed = false

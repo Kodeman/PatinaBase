@@ -150,6 +150,15 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
         status == "responded" || responded_at != nil
     }
 
+    /// `P-09`: a Stage-2 project-artifact approval. It is answered through
+    /// `respond_project_approval` with one of three canonical outcomes, and it
+    /// is read through `list_my_project_decision_reviews` — the row alone
+    /// carries neither the edition it binds nor its impacts, so the screen must
+    /// know which ceremony it is drawing before it draws anything.
+    public var isProjectArtifactApproval: Bool {
+        approval_contract == "project_artifact_v1"
+    }
+
     /// A sign-off the addressed client is the one to give — exactly the shape
     /// `approve_client_signoff` (00564) accepts, so the screen never draws an
     /// act the server will refuse.
@@ -290,6 +299,25 @@ public actor DecisionsAPIClient {
         if let prefer {
             request.setValue(prefer, forHTTPHeaderField: "Prefer")
         }
+    }
+
+    /// One authenticated POST to an RPC, returning its body.
+    ///
+    /// The Stage-2 RPCs live in `DecisionsAPIClient+ProjectApprovals.swift` —
+    /// this file is at SwiftLint's `file_length` — and an extension in another
+    /// file cannot reach this actor's `private` plumbing, which
+    /// `NetworkRecoveryTests` requires stay private and on `PatinaURLSession`.
+    func callRPC(_ name: String, body: [String: Any]) async throws -> Data {
+        let url = baseURL.appendingPathComponent("/rest/v1/rpc/\(name)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        await applyHeaders(to: &request)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await session.patinaData(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
     }
 
     // MARK: - Reads

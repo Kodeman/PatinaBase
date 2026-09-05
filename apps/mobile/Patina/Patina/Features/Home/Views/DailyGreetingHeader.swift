@@ -8,17 +8,18 @@ import SwiftUI
 /// The labelled `Studio` control that replaced the bare monogram (B §2; the
 /// graft synthesis §5 takes from Direction A). Named so its copy is a fact a
 /// test can hold rather than a string buried in a view.
+///
+/// `P-24` / **R5**: the control no longer carries a count. The clay capsule
+/// beside the word, and the "N waiting" VoiceOver value that spoke the same
+/// number, were the app's in-product attention badge — a numeric count chip,
+/// which VISION §6 refuses. The springboard (home-screen) badge is kept as the
+/// permitted re-engagement instrument, and inside the app the NEEDS YOU eyebrow
+/// on the Record is what carries the truth, in rows a client can act on rather
+/// than a number she can only feel.
 enum StudioControlLabel {
     /// The canonical surface name in full, for VoiceOver (C4 / B-7).
     static let voiceOverName = "Your Studio"
     static let title = "Studio"
-
-    /// What the control says is waiting. Nil at zero — a control that prints
-    /// "0 waiting" is a chore counter, and this one counts nothing at anybody.
-    static func waitingValue(count: Int) -> String? {
-        guard count > 0 else { return nil }
-        return count == 1 ? "1 waiting" : "\(count) waiting"
-    }
 }
 
 struct DailyGreetingHeader: View {
@@ -27,8 +28,6 @@ struct DailyGreetingHeader: View {
     /// carried unused. The surface is still named "Today" (C4); the greeting
     /// is what it says, not what it is called.
     let greeting: String
-    /// SP-16's one attention count, printed beside the Studio label.
-    var attentionCount: Int = 0
     /// Tap handler for the `?` help affordance. When non-nil, a small
     /// SF-Symbol question-mark button is rendered to the left of the
     /// monogram avatar; tapping it opens the contextual help panel for
@@ -65,7 +64,7 @@ struct DailyGreetingHeader: View {
     /// the help glyph and the Studio pill, so its width is whatever the
     /// cluster leaves — about 150 pt. At XXXL the serif h4 broke inside words
     /// ("Good / afternoo / n."), at AX-XXXL into six fragments, while the
-    /// Studio chip truncated to "Stu…" and still drew its count. Above
+    /// Studio chip truncated to "Stu…". Above
     /// `.accessibility1` the band splits: the greeting takes the full content
     /// width and the cluster gets its own row underneath.
     static func stacksControls(at size: DynamicTypeSize) -> Bool {
@@ -119,7 +118,7 @@ struct DailyGreetingHeader: View {
             studioControl
                 // First-launch tour anchor — Step 3 popover attaches to the
                 // same slot the monogram held; the control there is now
-                // labelled, and carries the count. The anchor travels with the
+                // labelled. The anchor travels with the
                 // control: on the house-first root the door is the bar's Studio
                 // tab and the anchor is mounted there instead.
                 .firstLaunchTourAnchor(.profileMonogram)
@@ -172,7 +171,8 @@ struct DailyGreetingHeader: View {
 
     private var controlCluster: some View {
         HStack(spacing: 4) {
-            // PT-3-7: bell (notifications) glyph with unread-count badge.
+            // PT-3-7: bell (notifications) glyph, marked when something is
+            // unread. `P-24` / R5 took the number off the mark.
             if let onBellTap {
                 Button(action: onBellTap) {
                     Image(systemName: "bell")
@@ -180,8 +180,8 @@ struct DailyGreetingHeader: View {
                         .foregroundStyle(PatinaColors.Text.secondary)
                         .frame(width: 36, height: 36)
                         .overlay(alignment: .topTrailing) {
-                            UnreadBadge(count: unreadCount)
-                                .offset(x: -4, y: 4)
+                            UnreadMark(isUnread: unreadCount > 0)
+                                .offset(x: -6, y: 6)
                         }
                         .contentShape(Rectangle())
                 }
@@ -189,7 +189,7 @@ struct DailyGreetingHeader: View {
                 .accessibilityLabel("Notifications")
                 .accessibilityValue(
                     unreadCount > 0
-                        ? "\(unreadCount) unread"
+                        ? "Unread notifications"
                         : (unreadCountIsKnown ? "No unread notifications" : "")
                 )
                 .accessibilityHint("Opens your notifications.")
@@ -214,28 +214,18 @@ struct DailyGreetingHeader: View {
         }
     }
 
-    /// The Studio control: the surface's name and the one attention count,
-    /// where a bare initial used to sit. A monogram said who you are; this
-    /// says what is waiting (B §2, synthesis §5).
+    /// The Studio control: the surface's name, where a bare initial used to
+    /// sit. A monogram said who you are; this says where the door goes
+    /// (B §2, synthesis §5). `P-24` / R5 took the count off it.
     @ViewBuilder
     private var studioControl: some View {
-        let control = HStack(spacing: 6) {
-            Text(StudioControlLabel.title)
-                .font(PatinaTypography.uiSmall)
-                .foregroundStyle(PatinaColors.Text.primary)
-                .lineLimit(1)
-            if attentionCount > 0 {
-                Text("\(attentionCount)")
-                    .font(PatinaTypography.monoMedium)
-                    .foregroundStyle(PatinaColors.offWhite)
-                    .padding(.horizontal, PatinaSpacing.xs)
-                    .frame(minWidth: 18, minHeight: 18)
-                    .background(Capsule().fill(PatinaColors.clayInk))
-            }
-        }
-        .padding(.horizontal, PatinaSpacing.xsm)
-        .frame(minHeight: 44)
-        .background(Capsule().fill(PatinaColors.Background.secondary))
+        let control = Text(StudioControlLabel.title)
+            .font(PatinaTypography.uiSmall)
+            .foregroundStyle(PatinaColors.Text.primary)
+            .lineLimit(1)
+            .padding(.horizontal, PatinaSpacing.xsm)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(PatinaColors.Background.secondary))
 
         if let onStudioTap {
             Button(action: onStudioTap) {
@@ -243,7 +233,6 @@ struct DailyGreetingHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(StudioControlLabel.voiceOverName)
-            .accessibilityValue(StudioControlLabel.waitingValue(count: attentionCount) ?? "")
             .accessibilityHint("Opens your studio.")
             .accessibilityIdentifier("DailyRoomView.StudioButton")
         } else {
@@ -252,31 +241,27 @@ struct DailyGreetingHeader: View {
     }
 }
 
-/// PT-3-7: small unread-count badge rendered over the bell glyph. Renders
-/// nothing when `count <= 0`. Caps the displayed value at "9+".
-private struct UnreadBadge: View {
-    let count: Int
+/// PT-3-7, as `P-24` / **R5** leaves it: the bell says *something* is unread,
+/// and does not say how many. Renders nothing when nothing is unread.
+///
+/// It used to be a clay capsule printing the count, capped at "9+" — the last
+/// in-product numeric badge in the app after the Studio pill's went. R5 keeps
+/// the springboard badge and retires every one inside the app, so what remains
+/// here is the mark without the number: a fixed 8 pt dot, which is also the end
+/// of the Dynamic Type problem the count had. At accessibility-XXXL the "3" was
+/// a ~40 pt disc with the bell nowhere on screen behind it
+/// (shots/w1-l1c/05-today-ax3xl-light.png), and a cap at `xxxLarge` was still a
+/// ~24 pt disc over a 17 pt glyph (shots/w1-review-l1c/10b-bell-badge-crop.png).
+/// A dot carries no text, so it never grows into the control it marks. The
+/// state is announced in words by the button's own accessibilityValue.
+private struct UnreadMark: View {
+    let isUnread: Bool
 
     var body: some View {
-        if count > 0 {
-            Text(count > 9 ? "9+" : "\(count)")
-                .font(PatinaTypography.captionSmall)
-                .foregroundStyle(PatinaColors.offWhite)
-                .padding(.horizontal, PatinaSpacing.xs)
-                .frame(minWidth: 14, minHeight: 14)
-                .background(Capsule().fill(PatinaColors.clayInk))
-                // The bell glyph is a fixed 17 pt inside a 36 pt frame, so an
-                // uncapped badge outgrows the control it marks: at
-                // accessibility-XXXL the "3" was a ~40 pt disc with the bell
-                // nowhere on screen behind it (shots/w1-l1c/05-today-ax3xl-light.png).
-                // A first cap at `xxxLarge` was still a ~24 pt disc occluding
-                // most of a 17 pt glyph — a clay circle with one sliver of bell
-                // outline (shots/w1-review-l1c/10b-bell-badge-crop.png). A badge
-                // is a mark ON a control, not body copy: it scales to the top of
-                // the standard ramp's usable band for a 17 pt glyph and stops.
-                // Its count is announced by the button's accessibilityValue, so
-                // nothing is lost by not growing it.
-                .dynamicTypeSize(...DynamicTypeSize.large)
+        if isUnread {
+            Circle()
+                .fill(PatinaColors.clayInk)
+                .frame(width: 8, height: 8)
                 .accessibilityHidden(true)
         }
     }
@@ -288,7 +273,6 @@ private struct UnreadBadge: View {
         DailyGreetingHeader(
             dateString: "WEDNESDAY · APR 7",
             greeting: "Good evening.",
-            attentionCount: 4,
             onHelpTap: {},
             onStudioTap: {},
             onBellTap: {},

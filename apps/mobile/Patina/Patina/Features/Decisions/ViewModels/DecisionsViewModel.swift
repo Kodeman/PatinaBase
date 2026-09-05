@@ -16,11 +16,28 @@ final class DecisionsListViewModel {
     var isLoading: Bool = false
     var error: String?
 
+    /// The list every decision reaches the client through — and, since
+    /// `iosb-B1`, the Stage-2 approvals too.
+    ///
+    /// Two reads, because there is no one read that returns both: 00467:18-38
+    /// hides a `project_artifact_v1` row from the very person being asked, so
+    /// `listPending` returns everything EXCEPT her approvals and the projection
+    /// returns only those. A failed projection leaves the ordinary decisions
+    /// standing; it does not empty the list.
     func load() async {
         isLoading = true
         error = nil
+        async let approvalsFetch = try? DecisionsAPIClient.shared
+            .fetchProjectApprovalReviews()
         do {
-            self.decisions = try await DecisionsAPIClient.shared.listPending()
+            let pending = try await DecisionsAPIClient.shared.listPending()
+            let approvals = await approvalsFetch ?? []
+            // A studio co-member is the one caller both reads answer for, and
+            // one obligation must not draw twice under one id.
+            let carried = Set(pending.map(\.id))
+            self.decisions = pending
+                + approvals.filter(\.awaitsClient).map(\.asWaitingDecision)
+                    .filter { !carried.contains($0.id) }
         } catch {
             self.error = "Couldn’t load decisions"
             #if DEBUG
@@ -57,6 +74,41 @@ final class DecisionDetailViewModel {
     /// instead of dropping her back into the list of options.
     var lastAttemptedOptionId: String?
 
+    // MARK: - P-09 · the Stage-2 approval
+
+    /// The client-safe projection for a `project_artifact_v1` decision, read
+    /// from `get_project_decision_review`. Nil for every other decision,
+    /// and nil for a Stage-2 decision whose fetch failed — which is a state
+    /// the screen names, never one it falls back to option cards from.
+    var approvalReview: RemoteProjectApprovalReview?
+
+    /// The outcome the client has picked but not yet submitted. An outcome is
+    /// terminal, so it takes two beats: the act names its consequence, and the
+    /// client submits it.
+    var chosenOutcome: ProjectApprovalOutcome?
+
+    /// Said once the review of the exact edition has been recorded.
+    var reviewConfirmed: Bool = false
+
+    /// Whichever ceremony this decision belongs to.
+    ///
+    /// The PROJECTION comes first, and has to: 00467:18-38 cut
+    /// `approval_contract = 'project_artifact_v1'` out of every raw
+    /// `client_decisions` SELECT policy a homeowner can reach, so for the very
+    /// person being asked `decision` is nil on exactly the rows this branch
+    /// exists for. The row is consulted second, for the studio co-member who
+    /// can still see it and for a Stage-2 row whose projection failed to
+    /// arrive — a failed fetch must never let one fall through to the option
+    /// cards, whose act (`apply_client_decision`) refuses it.
+    var isStage2Approval: Bool {
+        approvalReview != nil || decision?.isProjectArtifactApproval == true
+    }
+
+    /// The approval is a Stage-2 one and its projection did not arrive.
+    var approvalUnavailable: Bool {
+        isStage2Approval && !isLoading && approvalReview == nil
+    }
+
     // MARK: - SP-17 · deferral
 
     /// The deferral the client tapped — drives the note sheet.
@@ -91,7 +143,8 @@ final class DecisionDetailViewModel {
     }
 
     var messageRoute: MessageRoute? {
-        if let projectId = decision?.project_id, !projectId.isEmpty {
+        if let projectId = decision?.project_id ?? approvalReview?.projectId,
+           !projectId.isEmpty {
             return .project(projectId)
         }
         let relationship = DesignerRelationshipResolver.resolve(
@@ -167,12 +220,16 @@ final class DecisionDetailViewModel {
         let (d, o) = await (decisionTask, optionsTask)
         self.decision = d ?? nil
         self.options = o
+        await loadApprovalReview(decisionId: decisionId)
         await resolveDiscussThread()
         // Seed local selection from whatever the server already has, so a
         // re-open of a resolved decision shows the choice without re-asking.
         self.selectedOptionId = o.first(where: { $0.selected == true })?.id
         self.isLoading = false
-        if self.decision == nil {
+        // A Stage-2 approval is a load that SUCCEEDED with no row: 00467 hides
+        // the parent row from the homeowner and hands her the projection
+        // instead. Reporting that as a failure was the screen she actually got.
+        if self.decision == nil, self.approvalReview == nil {
             self.error = "Couldn’t load this decision"
         }
         // Fire-and-forget "seen" stamp. Failure here is non-fatal — it only
@@ -227,6 +284,7 @@ final class DecisionDetailViewModel {
     /// given, or the status says so). Used to hide the per-option choose CTAs.
     var isResolved: Bool {
         decision?.isResolved == true || selectedOptionId != nil || hasSignedOff
+            || hasAnsweredApproval
     }
 
     /// `W1-B-03`: the sign-off landed in this session. The server row is
@@ -279,6 +337,13 @@ final class DecisionDetailViewModel {
     /// sign-off itself, which carries no option to remember.
     func retrySelection() {
         guard !isSubmitting, !isResolved else { return }
+        // P-09: the chosen outcome survives a failed submit, so the retry is
+        // the banner going away and Submit becoming live again — there is no
+        // consent step on this path to re-open.
+        if isStage2Approval {
+            submitFailure = nil
+            return
+        }
         if awaitsClientSignoff {
             submitFailure = nil
             isApprovingSignoff = true
@@ -343,11 +408,55 @@ final class DecisionDetailViewModel {
         isSubmitting = false
     }
 
+    // MARK: - P-09 · the Stage-2 acts, behind their seams
+
+    /// The read, behind a seam. Same reason as `approveSignoff`: the singleton
+    /// actor's network call is not reachable from a test.
+    /// Argument: the decision id.
+    @ObservationIgnored
+    var fetchApprovalReview: (String) async throws -> RemoteProjectApprovalReview? = { decisionId in
+        try await DecisionsAPIClient.shared.fetchProjectApprovalReview(decisionId: decisionId)
+    }
+
+    /// `confirm_project_decision_review`, behind a seam.
+    /// Arguments: decision id, frozen authority revision, artifact checksum,
+    /// idempotency key.
+    @ObservationIgnored
+    var confirmApprovalReview: (String, Int, String, String) async throws -> Void = { decisionId, revision, checksum, key in
+        try await DecisionsAPIClient.shared.confirmProjectApprovalReview(
+            decisionId: decisionId,
+            authorityRevision: revision,
+            artifactChecksum: checksum,
+            idempotencyKey: key
+        )
+    }
+
+    /// `respond_project_approval`, behind a seam.
+    /// Arguments: decision id, outcome, expected `updatedAt`, idempotency key.
+    @ObservationIgnored
+    var respondToApproval: (String, ProjectApprovalOutcome, String, String) async throws -> Void = { decisionId, outcome, expectedUpdatedAt, key in
+        try await DecisionsAPIClient.shared.respondToProjectApproval(
+            decisionId: decisionId,
+            outcome: outcome,
+            expectedUpdatedAt: expectedUpdatedAt,
+            idempotencyKey: key
+        )
+    }
+
+    /// The outcome recorded in this session. The server row is `responded` and
+    /// the next load will carry the word itself; until then this is what stops
+    /// the screen offering the three acts a second time, and what lets it name
+    /// the answer she just gave.
+    var answeredOutcome: ProjectApprovalOutcome?
+
+    var hasAnsweredApproval: Bool { answeredOutcome != nil }
+
     /// Look up the project's comms thread for the "Discuss this" action.
     /// Non-fatal: any failure (no project, no thread, RLS, network) just
     /// leaves the action hidden.
     private func resolveDiscussThread() async {
-        guard let projectId = decision?.project_id, !projectId.isEmpty else {
+        guard let projectId = decision?.project_id ?? approvalReview?.projectId,
+              !projectId.isEmpty else {
             discussThreadId = nil
             return
         }
