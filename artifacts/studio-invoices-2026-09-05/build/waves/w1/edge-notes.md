@@ -421,3 +421,119 @@ review-requests OK           spec-pdf OK   trade-rfq-send OK
 ```
 $ find . -name deno.lock -not -path "*/node_modules/*"   → nothing
 ```
+
+
+---
+
+## Fix round 3 — this fixer's round 2 (adversarial review, round 4)
+
+Two findings, both addressed. (Heading numbered 3 because the file already
+carries a "Fix round 2"; this is the pass answering review round 4.)
+
+### R4-1 (major) — the three headline behaviours were mutation-blind
+The review deleted `?? invoice.title` from all five `index.ts`, and deleted
+`studioId: invoice.studio_id,` from all four resolver call sites, and every gate
+stayed green either way. Cause is structural: all five run `Deno.serve` at
+module load, so no test may import them, and nothing written inside one of those
+files is reachable by an assertion. This also closes **F-C**, which round 2 left
+open as "a refactor of five files" — through a shared seam it is a one-line
+import and a one-line call per file.
+
+`_shared/invoice-subject.ts` (new, two pure exports):
+
+```ts
+invoiceSubjectName(invoice, fallback = 'your studio')  // project.name → title → fallback
+invoiceBrandingRef(invoice)  // { projectId, designerId, studioId } for resolveStudioIdentity
+```
+
+Call sites now:
+
+- `create-checkout-session:271,274` — `resolveStudioIdentity(admin,
+  invoiceBrandingRef(invoice))`, and `invoiceSubjectName(invoice, 'Studio
+  invoice')` for the Stripe line item (the only caller with a different last
+  rung).
+- `invoice-send:246,249` · `invoice-reminders:180,321,335` ·
+  `stripe-webhook:397,420,499,510,1655` · `invoice-check-intent:171`.
+- The two per-file `function invoiceSubjectName(...)` copies
+  (`invoice-reminders`, `stripe-webhook`) are deleted; every call site in those
+  files goes through the shared one.
+- Behaviour is unchanged: the `??` chain is copied verbatim (a blank title still
+  out-ranks the fallback, exactly as before), and `invoiceBrandingRef` coerces an
+  absent anchor to `null`, which is what the wrapper already did.
+
+```
+$ grep -rn "invoice.title\|invoice.project?.name" <the five>/index.ts   → no hits
+```
+
+Tests — `_shared/invoice-subject.test.ts` (new, 11 cases). Five pin the display
+chain (house > title > `'your studio'`; the `'Studio invoice'` fallback is the
+last rung only; a missing embed reads as a null one); three pin the branding
+anchors (studio-only, all three, absent → null); three read the five `index.ts`
+**as source** — the only assertion that can reach a `Deno.serve` module — to pin
+that each still routes through the seam, that every `resolveStudioIdentity(`
+call in the four branding senders passes `invoiceBrandingRef(invoice)`, and that
+checkout still returns through `invoiceCheckoutReturnAddress` and interpolates
+no `/projects/${…}`.
+
+Mutation evidence — the review's own mutations re-run against the fix, each on a
+fresh copy of `supabase/functions` in `$TMPDIR`, `_shared` suite:
+
+```
+A  perl -pi -e 's/ \?\? invoice\.title//g' _shared/invoice-subject.ts */index.ts
+   FAILED | 208 passed | 3 failed        (before this fix: ok | 200 passed | 0 failed)
+B  studioId: invoice.studio_id ?? null,  →  studioId: null,
+   FAILED | 209 passed | 2 failed        (before: ok | 200 passed | 0 failed)
+C  re-inline the chain in invoice-send/index.ts
+   FAILED | 210 passed | 1 failed
+D  successUrl: invoiceCheckoutReturnAddress(  →  successUrl: legacyUrl(
+   FAILED | 210 passed | 1 failed
+```
+
+### R4-2 (major) — the ship gate was stated too weakly
+Program gate; the only code change is the comment that stated it wrongly.
+
+**The gate, restated: until W3 lands `useClientInvoices()` and the
+letterbox-only front door, a studio invoice is unreachable by its recipient —
+do not send one.** Not "no receipt on return": the recipient cannot open the
+invoice or reach a Pay control at all, so `create-checkout-session` is never
+called for one in the first place — the return address is the *last* thing that
+would be wrong.
+
+The chain, as the review traced it: all five functions point letters at
+`${CLIENT_PORTAL_URL}/invoices/<id>`; `apps/client-portal/src/lib/
+retired-routes.ts:135-142` folds that to `{ path: '/', anchor: 'letterbox',
+params: { invoice } }` — the same front door the new return address uses; the
+letterbox's rows come from `useProjectInvoices(projectId)`
+(`threshold.tsx:272`), which is `.eq('project_id', projectId)`
+(`packages/supabase/src/hooks/use-invoices.ts:465`), so a `project_id IS NULL`
+row is never in the list and `letterbox.tsx:139-141` leaves settlement null; and
+a payer with no house at all renders `ProjectsEmptyState` and mounts no
+Letterbox (`app/page.tsx:61-69`).
+
+`create-checkout-session/index.ts`'s ⚠ DEPLOY ORDER block now says exactly that,
+in place of the old "the studio return address is mute" framing. The numbered
+ship order is unchanged and still correct — migration → client portal (now
+specifically the **W3** portal) → the 20 functions — with sending a studio
+invoice gated on W3 separately from deploying them.
+
+### Gates, re-run
+
+```
+$ deno test --allow-all --config …/supabase/functions/deno.json …/supabase/functions/_shared/
+ok | 211 passed | 0 failed (7s)        (round-2 baseline: 200; +11 = invoice-subject.test.ts)
+
+$ deno test … …/supabase/functions/create-checkout-session/
+ok | 17 passed | 0 failed (41ms)
+
+$ deno test … …/supabase/functions/stripe-webhook/
+ok | 18 passed | 0 failed (93ms)
+
+$ deno check --config …/deno.json <index.ts>   — exit 0 for all five:
+create-checkout-session · invoice-send · invoice-reminders · stripe-webhook ·
+invoice-check-intent
+
+$ find . -name deno.lock -not -path "*/node_modules/*"   → nothing
+```
+
+Deploy set unchanged at **20**: `_shared/invoice-subject.ts` is imported only by
+the five, all already in the set.
