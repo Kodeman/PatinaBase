@@ -18,6 +18,7 @@ import {
   apnsHostFor,
   bearerRole,
   buildApnsPayload,
+  collapsedBadgeCount,
   isDeadTokenResponse,
   normalizePkcs8Pem,
   resolveTokens,
@@ -224,4 +225,42 @@ Deno.test("buildApnsPayload sends a true zero, which clears the badge", () => {
     aps: Record<string, unknown>;
   }).aps;
   assertEquals(aps.badge, 0);
+});
+
+// ── R5, second pass: the badge counts what the bell counts ──────────────────
+// `collapseDuplicates` on iOS folds rows on `entity_type|entity_id`; a raw row
+// count would paint a springboard number the app itself never draws, and it
+// would stand for as long as the app stayed closed.
+
+Deno.test("collapsedBadgeCount folds two rows naming one entity (M1)", () => {
+  const rows = [
+    { metadata: { entity_type: "design_request", entity_id: "dr-1" } },
+    { metadata: { entity_type: "design_request", entity_id: "dr-1" } },
+    { metadata: { entity_type: "decision", entity_id: "dec-9" } },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 2);
+});
+
+Deno.test("collapsedBadgeCount counts entity-less rows individually", () => {
+  const rows = [
+    { metadata: null },
+    { metadata: {} },
+    { metadata: { entity_type: "decision" } },
+    { metadata: { entity_type: "decision", entity_id: "dec-9" } },
+    { metadata: { entity_type: "decision", entity_id: "dec-9" } },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 4);
+});
+
+Deno.test("collapsedBadgeCount is zero for no unread rows", () => {
+  assertEquals(collapsedBadgeCount([]), 0);
+});
+
+Deno.test("collapsedBadgeCount keeps distinct entities of the same kind", () => {
+  const rows = [
+    { metadata: { entity_type: "invoice", entity_id: "inv-1" } },
+    { metadata: { entity_type: "invoice", entity_id: "inv-2" } },
+    { metadata: { entity_type: "proposal", entity_id: "inv-1" } },
+  ];
+  assertEquals(collapsedBadgeCount(rows), 3);
 });

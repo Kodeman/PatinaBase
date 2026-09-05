@@ -10,8 +10,9 @@
 //           notification_log_id? }
 // Reads device_push_tokens for user_id unless explicit tokens are passed, and
 // — when a user_id is given — counts that user's unread in_app notification_log
-// rows into aps.badge, so the springboard number moves while the app is
-// backgrounded (R5, ruled at the Wave 1 close).
+// rows, collapsed on the entity key the bell collapses on, into aps.badge, so
+// the springboard number moves while the app is backgrounded (R5, ruled at the
+// Wave 1 close) and says what the bell behind it says.
 // Per token: POST to api.push.apple.com or api.sandbox.push.apple.com — host
 // chosen PER TOKEN from its registered environment column (I66: never inferred
 // from build config). Provider auth: ES256 JWT via jose (importPKCS8 + kid
@@ -39,11 +40,16 @@ import {
   type ApnsSendInput,
   bearerRole,
   buildApnsPayload,
+  collapsedBadgeCount,
   isDeadTokenResponse,
   normalizePkcs8Pem,
   type ResolvedToken,
   resolveTokens,
+  type UnreadBadgeRow,
 } from "./core.ts";
+
+/** The bell's own page size (`NotificationsAPIClient.list(limit: 50)`). */
+const BADGE_WINDOW = 50;
 
 /**
  * The springboard number (R5): how many in-app notifications this person has
@@ -51,6 +57,13 @@ import {
  * event (00534's notify_client_attention writes the pair), so the count is
  * taken over the in_app leg alone — the same leg the bell reads — or the icon
  * would say twice what the app does.
+ *
+ * The rows themselves are read rather than counted in the database, because the
+ * bell does not count rows either: it collapses them on the entity key first
+ * (`collapsedBadgeCount`), and producers other than 00534 leave two unread
+ * in_app rows on one entity. The window matches the bell's own
+ * (`NotificationsAPIClient.list(limit: 50)`), so neither surface can see rows
+ * the other cannot.
  *
  * Returns undefined on any failure, and the payload then omits `aps.badge`
  * rather than sending 0 and clearing a number that is still true.
@@ -61,17 +74,19 @@ async function unreadInAppBadge(
 ): Promise<number | undefined> {
   if (!userId) return undefined;
   try {
-    const { count, error } = await supabase
+    const { data, error } = await supabase
       .from("notification_log")
-      .select("id", { count: "exact", head: true })
+      .select("metadata")
       .eq("user_id", userId)
       .eq("channel", "in_app")
-      .is("opened_at", null);
-    if (error || typeof count !== "number") {
+      .is("opened_at", null)
+      .order("created_at", { ascending: false })
+      .limit(BADGE_WINDOW);
+    if (error || !Array.isArray(data)) {
       console.warn("[apns-send] badge count unavailable", error ?? null);
       return undefined;
     }
-    return count;
+    return collapsedBadgeCount(data as UnreadBadgeRow[]);
   } catch (err) {
     console.warn("[apns-send] badge count threw", err);
     return undefined;

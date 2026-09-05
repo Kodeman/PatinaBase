@@ -56,15 +56,54 @@ export function apnsDeviceUrl(t: ResolvedToken): string {
   return `${apnsHostFor(t.environment)}/3/device/${t.token}`;
 }
 
+/** One unread in_app row, as the badge counter reads it. */
+export interface UnreadBadgeRow {
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * The springboard number (R5), counted the way the BELL counts it.
+ *
+ * The bell collapses its rows on `entity_type|entity_id`
+ * (`NotificationsViewModel.collapseDuplicates`) because more than one row can
+ * name one thing: 00534's `notify_client_attention` de-dups its own bell row,
+ * but 00289's design-request triggers do not, so two status changes on one lead
+ * leave two unread in_app rows for one entity. A raw count therefore painted a
+ * home-screen number the app itself would never draw — and the app only
+ * rewrites the badge when the feed loads, so the wrong number would stand for
+ * as long as the app stayed closed, which is the whole point of the badge.
+ *
+ * Rows with no entity key are counted individually, exactly as the bell keeps
+ * them: they name nothing to collapse onto.
+ */
+export function collapsedBadgeCount(rows: UnreadBadgeRow[]): number {
+  const seen = new Set<string>();
+  let count = 0;
+  for (const row of rows) {
+    const metadata = row?.metadata ?? null;
+    const entityType = metadata?.entity_type;
+    const entityId = metadata?.entity_id;
+    if (typeof entityType !== "string" || typeof entityId !== "string") {
+      count++;
+      continue;
+    }
+    const key = `${entityType}|${entityId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    count++;
+  }
+  return count;
+}
+
 /**
  * The push payload: a standard alert + the routing refs the iOS
  * NotificationRouter expects (mirrors notification_log metadata keys).
  *
  * `badge` is the springboard number iOS paints on the app icon while the app is
- * backgrounded (R5): the recipient's unread in-app count, resolved by the
- * caller. It is OMITTED, never zeroed, when that count could not be read — an
- * absent key leaves the badge as it stands, where a 0 would silently clear a
- * number that is still true.
+ * backgrounded (R5): the recipient's unread in-app count collapsed on the
+ * entity key, resolved by the caller. It is OMITTED, never zeroed, when that
+ * count could not be read — an absent key leaves the badge as it stands, where
+ * a 0 would silently clear a number that is still true.
  */
 export function buildApnsPayload(
   input: ApnsSendInput,
