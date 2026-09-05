@@ -45,6 +45,45 @@ struct HouseRecordBuilderTests {
         return service
     }
 
+    /// P-04 / R8: the name the still-open sentence uses, by the same rule
+    /// `title(for:)` follows — a person's given name, a studio's whole name,
+    /// and nothing invented when the wire carried none.
+    @Test("the row is handed the name its own title already uses")
+    func askedByNameFollowsTheTitleRule() {
+        func item(_ name: String?, isPerson: Bool) -> StudioQueueItemRow {
+            StudioQueueItemRow(
+                id: "item", kind: .decision, entityId: "d-1", title: "Rug color",
+                detail: nil, askedAt: now, dueAt: now, amountCents: nil,
+                designerName: name, designerIsPerson: isPerson,
+                route: .decisionDetail(decisionId: "d-1")
+            )
+        }
+        #expect(HouseRecordBuilder.askedByName(for: item("Leah Hartwell", isPerson: true))
+                == "Leah")
+        #expect(HouseRecordBuilder.askedByName(for: item("Hartwell Studio", isPerson: false))
+                == "Hartwell Studio")
+        #expect(HouseRecordBuilder.askedByName(for: item(nil, isPerson: false)) == nil)
+    }
+
+    /// The same rule, all the way through the builder to the drawn sentence.
+    /// `markingNew` rebuilds every NEEDS YOU row against the last visit, so a
+    /// field it forgets is a field that survives the first run and no other:
+    /// the sentence read "Leah asked" on arrival and "your designer asked"
+    /// on every visit after it.
+    @Test("the drawn sentence keeps the designer's name on a return visit")
+    func askedByNameSurvivesTheReturnVisit() throws {
+        let (decisions, _, _) = try waitingFixtures()
+        let calendar = Calendar(identifier: .gregorian)
+
+        for lastSeen in [nil, day("2026-08-20T12:00:00Z")] as [Date?] {
+            let record = build(badges: badges(decisions: decisions), lastSeen: lastSeen)
+            let row = try #require(record.needsYou.first)
+            #expect(row.askedBy == "Leah")
+            let shown = HouseRecordRowPresentation.make(row: row, now: now, calendar: calendar)
+            #expect(shown.stillOpenText == "Still open, Leah asked on Aug 22.")
+        }
+    }
+
     /// The seed's three waiting things, as the walk sees them.
     private func waitingFixtures() throws -> ( // swiftlint:disable:this large_tuple
         [RemoteClientDecision], [RemoteProposal], [RemoteInvoice]

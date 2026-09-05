@@ -35,6 +35,21 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         case savedPieceWithdrawn
         case story
         case matchedDesigner
+
+        /// True for the three kinds that are obligations — the NEEDS YOU
+        /// half. P-12 draws these with a margin rule so an obligation stops
+        /// depending on a 10 pt eyebrow to tell it from a piece of news; the
+        /// predicate lives on the kind so the rule and the half it belongs to
+        /// cannot drift apart.
+        var isObligation: Bool {
+            switch self {
+            case .decisionAsked, .proposalSent, .invoiceDue:
+                return true
+            case .messageReceived, .orderMoved, .savedPieceRepriced,
+                 .savedPieceWithdrawn, .story, .matchedDesigner:
+                return false
+            }
+        }
     }
 
     /// What sits on the right of the row. `amount` carries the figure the
@@ -66,16 +81,21 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
     /// the dated group: no window-relative date, and never a "new" tick.
     /// Ordering still uses `date`.
     let isStandingCondition: Bool
+    /// P-04 / R8: who asked, as the sentence an open approval prints names
+    /// them — a person's given name, a studio's whole name, nil when the wire
+    /// carried none. Absent from snapshots written before the sentence
+    /// existed, which decode as nil and fall back to "your designer".
+    let askedBy: String?
     let route: AppRoute?
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, title, detail, date, state, isNew, isStandingCondition, route
+        case id, kind, title, detail, date, state, isNew, isStandingCondition, askedBy, route
     }
 
     init(
         id: String, kind: Kind, title: String, detail: String?,
         date: Date, state: State, isNew: Bool,
-        isStandingCondition: Bool = false, route: AppRoute?
+        isStandingCondition: Bool = false, askedBy: String? = nil, route: AppRoute?
     ) {
         self.id = id
         self.kind = kind
@@ -85,6 +105,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         self.state = state
         self.isNew = isNew
         self.isStandingCondition = isStandingCondition
+        self.askedBy = askedBy
         self.route = route
     }
 
@@ -100,6 +121,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         isStandingCondition = try container.decodeIfPresent(
             Bool.self, forKey: .isStandingCondition
         ) ?? false
+        askedBy = try container.decodeIfPresent(String.self, forKey: .askedBy)
         route = try container.decodeIfPresent(RouteToken.self, forKey: .route)?.route
     }
 
@@ -113,6 +135,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         try container.encode(state, forKey: .state)
         try container.encode(isNew, forKey: .isNew)
         try container.encode(isStandingCondition, forKey: .isStandingCondition)
+        try container.encodeIfPresent(askedBy, forKey: .askedBy)
         try container.encodeIfPresent(route.flatMap(RouteToken.init(_:)), forKey: .route)
     }
 }
@@ -379,6 +402,7 @@ extension HouseRecordBuilder {
                 date: asked,
                 state: state(for: item, now: now),
                 isNew: false,
+                askedBy: askedByName(for: item),
                 route: item.route
             )
         }
@@ -422,6 +446,16 @@ extension HouseRecordBuilder {
     /// studio name goes through whole (see `title(for:)`).
     static func firstName(of name: String) -> String {
         name.split(separator: " ").first.map(String.init) ?? name
+    }
+
+    /// P-04 / R8: the name the still-open sentence uses. Same rule as
+    /// `title(for:)` — a person is named by their given name, a studio by its
+    /// whole name — so the two sentences on one row cannot name them
+    /// differently. Nil where the wire carried no designer at all, and the
+    /// sentence falls back to "your designer".
+    static func askedByName(for item: StudioQueueItemRow) -> String? {
+        guard let name = item.designerName, !name.isEmpty else { return nil }
+        return item.designerIsPerson ? firstName(of: name) : name
     }
 
     static func detail(for item: StudioQueueItemRow) -> String? {
@@ -701,7 +735,7 @@ private extension HouseRecordRow {
         return HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
             state: state, isNew: date > lastSeen,
-            isStandingCondition: isStandingCondition, route: route
+            isStandingCondition: isStandingCondition, askedBy: askedBy, route: route
         )
     }
 
@@ -710,7 +744,8 @@ private extension HouseRecordRow {
     func asStandingCondition() -> HouseRecordRow {
         HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
-            state: state, isNew: false, isStandingCondition: true, route: route
+            state: state, isNew: false, isStandingCondition: true,
+            askedBy: askedBy, route: route
         )
     }
 }

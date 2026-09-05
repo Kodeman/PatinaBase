@@ -194,12 +194,13 @@ struct DecisionDetailView: View {
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
             }
-            // SP-15: "Overdue · Aug 22" reached the Studio hub and stopped
-            // there; the decision itself never said it was late.
-            if !viewModel.isResolved, let due = DateDisplay.due(decision.due_date) {
-                Text(due.text)
+            // SP-15: the date reached the Studio hub and stopped there; the
+            // decision itself never said where it stood. P-04 / R8: past its
+            // date it is the ruled sentence in body ink, never red.
+            if !viewModel.isResolved, let standing = DateDisplay.approval(dueDate: decision.due_date, askedAt: decision.created_at, designer: decision.project?.designer?.askedByName) {
+                Text(standing.text)
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
+                    .foregroundStyle(standing.isStillOpen ? PatinaColors.Text.primary : PatinaColors.Text.secondary)
                     .padding(.top, 2)
                     .accessibilityIdentifier("decisionDetail.due")
             }

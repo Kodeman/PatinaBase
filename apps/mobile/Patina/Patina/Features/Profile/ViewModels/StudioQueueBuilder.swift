@@ -266,7 +266,19 @@ private extension StudioQueueBuilder {
     static func pendingDecisionRow(_ context: StudioQueueContext) -> StudioQueueRow? {
         guard !context.pendingDecisions.isEmpty else { return nil }
         let decisions = context.pendingDecisions
-        let dueDate = decisions.compactMap { parsedDate($0.due_date) }.min()
+        // P-04 / R8: the approval rail says when it was asked, not that it is
+        // late. `dueLabel` stays where it belongs, on the money row above.
+        //
+        // One decision answers all three: the soonest-due one. Taking the
+        // earliest due date from one row and the earliest asked date from
+        // another named a day that belonged to neither approval — timing the
+        // rail invented rather than read.
+        let soonest = decisions
+            .compactMap { decision in parsedDate(decision.due_date).map { (decision, $0) } }
+            .min { $0.1 < $1.1 }
+        let dueDate = soonest?.1
+        let askedAt = soonest.flatMap { parsedDate($0.0.created_at) }
+        let askedBy = soonest?.0.project?.designer?.askedByName
         let detail = decisions.count == 1
             ? (decisions[0].title ?? "A project decision is ready")
             : "\(decisions.count) project choices are ready"
@@ -275,7 +287,10 @@ private extension StudioQueueBuilder {
             id: "awaiting.decisions",
             title: countLabel(decisions.count, singular: "Decision", plural: "Decisions"),
             detail: detail,
-            meta: dueDate.map { dueLabel($0, now: context.input.now) },
+            meta: DateDisplay.approval(
+                due: dueDate, askedAt: askedAt, designer: askedBy,
+                now: context.input.now
+            )?.text,
             systemImage: "checkmark.circle",
             route: .decisionList,
             priority: urgencyPriority(

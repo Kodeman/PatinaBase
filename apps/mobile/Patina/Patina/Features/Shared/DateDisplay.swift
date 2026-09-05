@@ -82,6 +82,55 @@ enum DateDisplay {
         return DueLine(text: "Expires \(short(date))", isPastDue: false)
     }
 
+    // MARK: - P-04 / R8 · an approval that has passed its date
+
+    /// R8's sentence, composed in one place: "Still open, Leah asked on
+    /// Aug 22." `due(_:)` above keeps its own past-due wording for money —
+    /// an unpaid invoice is a debt and names itself as one — but an
+    /// unanswered approval is a question the studio is still waiting on, and
+    /// this program retired the other word for it.
+    static func stillOpen(designer: String?, askedOn day: String) -> String {
+        "Still open, \(designer ?? "your designer") asked on \(day)."
+    }
+
+    /// The one line an unresolved approval prints under its title.
+    struct ApprovalLine: Equatable {
+        let text: String
+        /// True once the date has passed. Drives body ink instead of muted —
+        /// never the error ramp, which stays money's.
+        let isStillOpen: Bool
+    }
+
+    static func approval(
+        due dueDate: Date?,
+        askedAt: Date?,
+        designer: String? = nil,
+        now: Date = Date()
+    ) -> ApprovalLine? {
+        guard let dueDate else { return nil }
+        let calendar = Calendar.current
+        guard calendar.startOfDay(for: dueDate) < calendar.startOfDay(for: now) else {
+            return ApprovalLine(text: due(dueDate, now: now).text, isStillOpen: false)
+        }
+        // The sentence names the day the studio asked, never the day that
+        // passed. With no asked-on date on the wire it says only what it
+        // knows and invents nothing.
+        guard let askedAt else { return ApprovalLine(text: "Still open.", isStillOpen: true) }
+        return ApprovalLine(
+            text: stillOpen(designer: designer, askedOn: short(askedAt)),
+            isStillOpen: true
+        )
+    }
+
+    static func approval(
+        dueDate: String?,
+        askedAt: String?,
+        designer: String? = nil,
+        now: Date = Date()
+    ) -> ApprovalLine? {
+        approval(due: parsed(dueDate), askedAt: parsed(askedAt), designer: designer, now: now)
+    }
+
     private static func parsed(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
         return ISO8601DateParsing.dateOrDay(from: raw)
