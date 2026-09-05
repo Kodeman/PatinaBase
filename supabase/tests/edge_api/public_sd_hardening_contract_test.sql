@@ -1704,10 +1704,16 @@ VALUES
     -- organization lock order below is untouched - the new branch takes no
     -- lock and returns before the project lookups. The branch holds direct
     -- authenticated DML to the same clean-draft predicate the project path
-    -- applies, so no caller can write state or money around the billing RPCs.
+    -- applies, so no caller can write state or money around the billing RPCs,
+    -- and its INSERT arm requires the household to sit on the stamped
+    -- member's designer_clients roster and that member to hold a
+    -- designer-domain role (both unlocked reads), so a houseless invoice can
+    -- no more be addressed to a stranger than a project one can. The UPDATE
+    -- arm judges neither, exactly as the project path judges its lead only on
+    -- insert: the four identity columns are immutable there.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '99100c8e3832adf7d7a27a22eab3651f3154d28be28dfeabe8d1dbd3f7ed2878',
+    '03db693656dbaf6b747709b9514543bfabd19873b3f812d9054ec8d0371b7307',
     ARRAY[]::text[]
   ),
   (

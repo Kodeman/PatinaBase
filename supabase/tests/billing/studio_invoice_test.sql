@@ -7,9 +7,10 @@
 -- issue (studio-keyed number) -> pay (Stripe Checkout claim -> finalize ->
 -- settle, earnings with a NULL project) -> refund contra -> void, the
 -- household/co-member/stranger read boundary, the payload and authority
--- rejections, the clean-draft bound set_invoice_studio_id puts on direct
--- PostgREST DML, and a two-studio designer drawing off the studio they named
--- rather than their primary one.
+-- rejections, the roster and designer-domain law set_invoice_studio_id keeps
+-- at the row (S4, S7) whether or not the composer RPC wrote it, the
+-- clean-draft bound it puts on direct PostgREST DML, and a two-studio
+-- designer drawing off the studio they named rather than their primary one.
 
 BEGIN;
 
@@ -27,6 +28,8 @@ VALUES
   ('5f100000-0000-4000-8000-000000000004', 'studioinv-stranger@test.invalid', '', now(), now(), now(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('5f100000-0000-4000-8000-000000000005', 'studioinv-outsider@test.invalid', '', now(), now(), now(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('5f100000-0000-4000-8000-000000000006', 'studioinv-household2@test.invalid', '', now(), now(), now(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
@@ -35,7 +38,8 @@ VALUES
   ('5f100000-0000-4000-8000-000000000002', 'studioinv-b@test.invalid', 'Studio Invoice B', true, now(), now()),
   ('5f100000-0000-4000-8000-000000000003', 'studioinv-household@test.invalid', 'Studio Invoice Household', false, now(), now()),
   ('5f100000-0000-4000-8000-000000000004', 'studioinv-stranger@test.invalid', 'Studio Invoice Stranger', false, now(), now()),
-  ('5f100000-0000-4000-8000-000000000005', 'studioinv-outsider@test.invalid', 'Studio Invoice Outsider', true, now(), now())
+  ('5f100000-0000-4000-8000-000000000005', 'studioinv-outsider@test.invalid', 'Studio Invoice Outsider', true, now(), now()),
+  ('5f100000-0000-4000-8000-000000000006', 'studioinv-household2@test.invalid', 'Studio Invoice Household Two', false, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- Studio One and Studio Two both belong to member A: the two-studio case S8
@@ -57,12 +61,27 @@ VALUES
   ('5f120000-0000-4000-8000-000000000004', '5f100000-0000-4000-8000-000000000005',
    '5f110000-0000-4000-8000-000000000003', 'owner', 'active', now());
 
+-- Member A holds a designer-domain role; co-member B deliberately holds none.
+-- A studio invoice's design_fee earning has to land on a designer, so both the
+-- RPC and set_invoice_studio_id refuse to stamp B however the row is written.
+INSERT INTO public.user_roles (id, user_id, role_id, granted_by)
+SELECT '5f150000-0000-4000-8000-000000000001',
+       '5f100000-0000-4000-8000-000000000001', role.id,
+       '5f100000-0000-4000-8000-000000000001'
+FROM public.roles AS role
+WHERE role.name = 'studio_designer';
+
 -- The household sits on member A's roster only. The roster is per-designer
--- (00014), which is why the RPC resolves it and stamps that member.
+-- (00014), which is why the RPC resolves it and stamps that member. Household
+-- Two sits on co-member B's roster only, so it is reachable by roster and
+-- unreachable for want of a designer-domain role.
 INSERT INTO public.designer_clients (id, designer_id, client_id, status)
 VALUES ('5f130000-0000-4000-8000-000000000001',
         '5f100000-0000-4000-8000-000000000001',
-        '5f100000-0000-4000-8000-000000000003', 'active');
+        '5f100000-0000-4000-8000-000000000003', 'active'),
+       ('5f130000-0000-4000-8000-000000000002',
+        '5f100000-0000-4000-8000-000000000002',
+        '5f100000-0000-4000-8000-000000000006', 'active');
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_studio_actor(p_actor uuid)
 RETURNS void
@@ -383,6 +402,21 @@ BEGIN
     GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
   END;
   ASSERT v_state = '42501', 'the actor must be an active member of the studio';
+
+  BEGIN
+    PERFORM public.create_draft_studio_invoice(
+      '5f100000-0000-4000-8000-000000000006',
+      '5f110000-0000-4000-8000-000000000001',
+      'Household two', 0, 15, NULL,
+      '[{"kind":"adhoc","description":"Consultation","quantity":1,
+         "unit_amount_cents":1000,"sort_order":0}]'::jsonb
+    );
+    RAISE EXCEPTION 'a household held only by a non-designer was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT v_state = '42501',
+    'the member the invoice is stamped to must hold a designer-domain role';
 END;
 $$;
 
@@ -493,6 +527,100 @@ BEGIN
   ASSERT (SELECT memo = 'Two sessions and a site walk, revised.'
           FROM public.invoices WHERE id = v_draft),
     'a clean studio draft still edits from the composer';
+END;
+$$;
+
+-- The trigger is the last word on S4 as well: the household must sit on the
+-- stamped member's roster and that member must be a designer, however the row
+-- is hand-written. Neither predicate rides on the composer RPC.
+DO $$
+DECLARE
+  v_state text;
+  v_accepted boolean;
+BEGIN
+  v_accepted := false;
+  v_state := NULL;
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id, title, status,
+      subtotal_cents, total_cents
+    ) VALUES (
+      '5f140000-0000-4000-8000-000000000003', NULL,
+      '5f100000-0000-4000-8000-000000000001',
+      '5f100000-0000-4000-8000-000000000004',
+      '5f110000-0000-4000-8000-000000000001',
+      'Addressed to a stranger', 'draft', 1000, 1000
+    );
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'a household on nobody''s roster cannot be billed by hand';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.invoices
+    WHERE id = '5f140000-0000-4000-8000-000000000003'
+  ), 'the stranger-household row never landed';
+
+  -- Household Two is on co-member B's roster, so the roster half is satisfied
+  -- here and only the designer-domain half can refuse: without it the
+  -- design_fee earning would settle onto a member who designs nothing.
+  v_accepted := false;
+  v_state := NULL;
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id, title, status,
+      subtotal_cents, total_cents
+    ) VALUES (
+      '5f140000-0000-4000-8000-000000000004', NULL,
+      '5f100000-0000-4000-8000-000000000002',
+      '5f100000-0000-4000-8000-000000000006',
+      '5f110000-0000-4000-8000-000000000001',
+      'Earnings routed to a non-designer', 'draft', 1000, 1000
+    );
+    v_accepted := true;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  ASSERT NOT v_accepted AND v_state = 'P0001',
+    'a co-member without a designer-domain role cannot carry a studio invoice';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.invoices
+    WHERE id = '5f140000-0000-4000-8000-000000000004'
+  ), 'the non-designer row never landed';
+
+  -- The roster household stamped to a designer member still writes cleanly:
+  -- the two new predicates refuse only what they are meant to refuse.
+  INSERT INTO public.invoices (
+    id, project_id, designer_id, client_id, studio_id, title, status,
+    subtotal_cents, total_cents
+  ) VALUES (
+    '5f140000-0000-4000-8000-000000000005', NULL,
+    '5f100000-0000-4000-8000-000000000001',
+    '5f100000-0000-4000-8000-000000000003',
+    '5f110000-0000-4000-8000-000000000001',
+    'Hand-written clean draft', 'draft', 1000, 1000
+  );
+  ASSERT (SELECT status = 'draft' FROM public.invoices
+          WHERE id = '5f140000-0000-4000-8000-000000000005'),
+    'a roster household stamped to a designer still writes a clean draft';
+END;
+$$;
+
+-- The roster read inside the trigger is studio-wide, not owner-only
+-- (designer_clients_studio_rw, 00316:39): a co-member who owns no roster row
+-- still edits the draft the trigger judges against member A's roster.
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_studio_actor('5f100000-0000-4000-8000-000000000002');
+DO $$
+DECLARE v_draft uuid;
+BEGIN
+  SELECT id INTO v_draft FROM studio_invoice_ids WHERE label = 'draft';
+  UPDATE public.invoices SET memo = 'Co-member revision.' WHERE id = v_draft;
+  ASSERT (SELECT memo = 'Co-member revision.'
+          FROM public.invoices WHERE id = v_draft),
+    'a co-member still edits a clean studio draft';
 END;
 $$;
 

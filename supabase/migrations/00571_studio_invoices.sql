@@ -8,7 +8,8 @@
 --   S2  the name is "studio invoice"; "ad-hoc" stays the line kind . PART 3
 --   S3  drawn from the same composer, one create RPC ............... PART 3
 --   S4  addressed to a household on a studio member's designer_clients
---       roster (R73 invite-on-send), never an email-only recipient .. PART 3
+--       roster (R73 invite-on-send), never an email-only recipient
+--       ................................................. PART 2, PART 3
 --   S5  the client pays in the letterbox, so the household needs a read
 --       path that does not run through projects ................... PART 5
 --   S6  ad-hoc lines only; milestone/time/ffe are project-bound .... PART 3
@@ -24,7 +25,7 @@
 -- which RAISEs on every NULL-project row on both the INSERT and the UPDATE
 -- arm, before its service_role early return. PART 2 adds a studio branch to
 -- both arms; every project-path line is byte-identical to 00511's body (the
--- branch is 145 inserted lines across the two arms, zero removed). Its body
+-- branch is 171 inserted lines across the two arms, zero removed). Its body
 -- SHA-256 is re-pinned in
 -- supabase/tests/edge_api/public_sd_hardening_contract_test.sql.
 --
@@ -148,6 +149,14 @@ BEGIN
              AND studio_actor.status = 'active'
              AND studio_actor.role <> 'guest'
          )
+         -- The roster and designer-domain law S4 and S7 ask for is the
+         -- INSERT arm's, exactly as the project path judges its lead there
+         -- and not here: project_id, designer_id, client_id and studio_id are
+         -- immutable above, so a row reaching this arm was already judged
+         -- against them. Re-asking here would only strand an outstanding
+         -- invoice the day the studio drops the household from a roster or a
+         -- designer's role is revoked - issue_invoice and void_invoice reach
+         -- this arm as the owner and would start raising.
       THEN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
       END IF;
@@ -248,6 +257,24 @@ BEGIN
              AND studio_actor.status = 'active'
              AND studio_actor.role <> 'guest'
          )
+         -- S4 is the row's law, not only the composer's: the household must
+         -- sit on the stamped member's own designer_clients roster, and that
+         -- member must hold a designer-domain role. Without both, a member
+         -- could address a studio invoice to any profile in the database, or
+         -- route its design_fee earning to a co-member who designs nothing.
+         -- The roster read is RLS-safe for every actor this branch admits:
+         -- designer_clients_studio_rw (00316:39) shows a co-member the whole
+         -- studio's roster, and the SECURITY DEFINER billing RPCs arrive as
+         -- the table owner. Neither read takes a lock, so the canonical
+         -- root -> user_roles -> memberships -> organization order below is
+         -- untouched.
+         OR NOT EXISTS (
+           SELECT 1
+           FROM public.designer_clients AS studio_roster
+           WHERE studio_roster.designer_id = NEW.designer_id
+             AND studio_roster.client_id = NEW.client_id
+         )
+         OR NOT public.has_designer_domain_role(NEW.designer_id)
       THEN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
       END IF;
@@ -678,9 +705,12 @@ COMMENT ON FUNCTION public.set_invoice_studio_id() IS
 --   * only kind='adhoc' lines are accepted (S6) - milestone/time/ffe lines
 --     are project-bound and would otherwise raise opaquely later from
 --     guard_time_entry_invoice_authority (00412:2643) or the milestone latch;
---   * the roles catalog is not locked and no designer-domain role is
---     required: a studio invoice has no project lead, so the authority rows
---     are the memberships and the organization, locked in that order.
+--   * the roles catalog is not locked, but the stamped member must still
+--     hold a designer-domain role (public.has_designer_domain_role, an
+--     unlocked DEFINER read): a studio invoice has no project lead whose
+--     user_roles row could be locked, and its design_fee earning must land
+--     on a designer all the same. The locked authority rows stay the
+--     memberships and the organization, in that order.
 
 CREATE OR REPLACE FUNCTION public.create_draft_studio_invoice(
   p_client_id uuid,
@@ -737,6 +767,7 @@ BEGIN
   WHERE relationship.client_id = p_client_id
     AND roster_membership.status = 'active'
     AND roster_membership.role <> 'guest'
+    AND public.has_designer_domain_role(relationship.designer_id)
   ORDER BY (relationship.designer_id = v_actor) DESC, relationship.designer_id
   LIMIT 1;
   IF v_designer_id IS NULL THEN
@@ -786,6 +817,7 @@ BEGIN
        WHERE relationship.designer_id = v_designer_id
          AND relationship.client_id = p_client_id
      )
+     OR NOT public.has_designer_domain_role(v_designer_id)
   THEN
     RAISE EXCEPTION 'studio invoice studio not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
