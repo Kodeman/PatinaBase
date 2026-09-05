@@ -78,6 +78,19 @@ public enum PatinaColors {
     /// superseded and reviewed approval.
     public static let subtleInk = Color(hex: "5A4E43")
 
+    /// `agedOak` dark enough to carry a WORD — the portals' `--text-muted`
+    /// (`globals.css:80`), byte-identical, and the ink the stamp table names
+    /// for a closed mark.
+    ///
+    /// `IOSC-R2-02`: the four muted states — REVIEWED, WITHDRAWN, SUPERSEDED,
+    /// EXPIRED — wrote their word in `agedOak` itself, which measures 4.20:1
+    /// on paper and 4.02:1 on a card, below the 4.5:1 bar every other stamp
+    /// word clears. Two of those marks stand with no sentence beside them, so
+    /// the word is the whole content of the row. `agedOak` is untouched: it
+    /// is the metadata value at a hundred sites, all of them de-emphasised
+    /// text taking the 3:1 bar, and darkening it would move every one.
+    public static let oakInk = Color(hex: "4E4339")
+
     // MARK: - Status Colors
 
     /// Success, match badges
@@ -277,8 +290,16 @@ public enum PatinaColors {
         public static let terracotta = Color.patinaDynamic(
             light: terracottaInk, dark: DarkPalette.textError
         )
-        /// Withdrawn, Superseded, Expired, Reviewed — the muted grammar.
-        public static let mutedInk = PatinaColors.Text.muted
+        /// Withdrawn, Superseded, Expired, Reviewed — the muted grammar's WORD.
+        ///
+        /// `oakInk`, not `Text.muted`: the ceremony table names `--text-muted`
+        /// for this ink and the two share that name without sharing its value.
+        /// `Text.muted` is `agedOak`, de-emphasised METADATA at the 3:1 bar; a
+        /// stamp's word is text, takes 4.5:1, and on EXPIRED and SUPERSEDED it
+        /// is the only thing on the row (`IOSC-R2-02`).
+        public static let mutedInk = Color.patinaDynamic(
+            light: oakInk, dark: DarkPalette.textMuted
+        )
         /// …and the rule those four are drawn in. NOT `Border.strong`: that
         /// is the page's field-outline hairline, and a stamp is a mark, which
         /// owes the 3:1 bar a non-text mark takes. `ContrastTests` measures

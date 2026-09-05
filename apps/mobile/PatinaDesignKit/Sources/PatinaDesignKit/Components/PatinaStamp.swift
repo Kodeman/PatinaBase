@@ -175,13 +175,18 @@ public struct PatinaStamp: View {
         /// name. `muted` is the one pigment whose rule and ink differ — a
         /// closed mark is drawn in the page's rule and written in its muted
         /// ink — so the two are named separately.
+        ///
+        /// Every one of these clears the 4.5:1 text bar on both grounds in
+        /// both appearances, measured by `ContrastTests
+        /// .everyStampWordStaysReadable`. `muted` was `8B7355` (`agedOak`,
+        /// 4.20:1 on paper) until `IOSC-R2-02`.
         public var lightInkHex: String {
             switch self {
             case .mocha: return "5C4A3C"
             case .goldenHour: return "79651E"
             case .clay: return "82612F"
             case .terracotta: return "9C5340"
-            case .muted: return "8B7355"
+            case .muted: return "4E4339"
             case .word: return "2C2926"
             }
         }

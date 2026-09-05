@@ -239,6 +239,46 @@ struct ContrastTests {
         }
     }
 
+    /// `IOSC-R2-02`. The rule is the mark; the WORD is text, and it takes the
+    /// body bar — on both grounds, in both appearances, and at full ink,
+    /// because the word never ages (`PatinaStamp.words` applies no opacity).
+    ///
+    /// The previous round measured `pigment.rule` for every pigment and
+    /// `pigment.ink` for none, which is how `muted`'s word stayed at 4.20:1 on
+    /// paper and 4.02:1 on a card through a fix round aimed at exactly this
+    /// component. Two of the four muted states — EXPIRED on the proposal
+    /// banner, SUPERSEDED on a closed approval — draw with no sentence beside
+    /// them, so there the word is the whole of what the row says.
+    @Test("every stamp word stays readable on both grounds")
+    func everyStampWordStaysReadable() {
+        for style in PatinaContrast.appearances {
+            for pigment in PatinaStamp.Pigment.allCases {
+                for (groundName, ground) in Self.grounds {
+                    let measured = PatinaContrast.ratio(pigment.ink, on: ground, style)
+                    #expect(
+                        measured >= 4.5,
+                        "the \(pigment.rawValue) stamp word on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below the 4.5:1 text bar"
+                    )
+                }
+            }
+        }
+    }
+
+    /// The counterfactual for the word, so "the metadata token was fine" is
+    /// met with the number rather than an opinion. `Text.muted` is `agedOak`,
+    /// the de-emphasised value at a hundred sites, and it is right there —
+    /// it just cannot carry a word.
+    @Test("the metadata ink still cannot carry a stamp's word")
+    func theMetadataInkStillCannotCarryTheWord() {
+        let measured = PatinaContrast.ratio(
+            PatinaColors.Text.muted, on: PatinaColors.Background.primary, .light
+        )
+        #expect(
+            measured < 4.5,
+            "Text.muted is now \(PatinaContrast.rounded(measured)):1 on paper — if this passes, IOSC-R2-02's premise changed"
+        )
+    }
+
     /// The counterfactual, so "the separator token was fine" is met with the
     /// number rather than an opinion.
     @Test("the hairline separator still cannot carry a stamp's rule")
