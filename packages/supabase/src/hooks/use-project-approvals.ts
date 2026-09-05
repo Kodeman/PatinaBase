@@ -62,6 +62,12 @@ export interface ProjectApprovalReview {
    * is reading it: a studio has more than one designer, and the record is
    * immutable and client-facing. Null until the projection carries the column;
    * an unsigned sentence is honest, a wrongly signed one is not.
+   *
+   * NOT YET PRODUCED. `get_project_decision_reviews` as rewritten in W2's
+   * 00569 emits `why` and no author of any kind, so on every real row this
+   * reads null and the sentence renders unsigned. P-13's attribution half is
+   * DEFERRED until a projection emits this exact key; the parse and the render
+   * are the landing site, not evidence that it lands.
    */
   whyAuthorName?: string | null;
   context: string | null;

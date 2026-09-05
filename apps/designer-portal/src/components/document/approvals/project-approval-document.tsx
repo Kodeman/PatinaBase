@@ -1076,7 +1076,11 @@ export function ProjectApprovalDocument({
                         /* P-13 — signed by the hand that wrote it. A studio
                            has more than one designer, so the given name comes
                            off the frozen record, never off the reader; with no
-                           author on the record the sentence stands unsigned. */
+                           author on the record the sentence stands unsigned.
+                           Which is what every row does today: no projection
+                           emits `whyAuthorName` (00569 carries the why alone),
+                           so the attribution is DEFERRED and this branch is
+                           the landing site for the day one does. */
                         <GateWhy attribution={givenName(review.whyAuthorName)}>
                           {review.why}
                         </GateWhy>
