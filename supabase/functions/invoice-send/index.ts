@@ -46,6 +46,7 @@ import {
   studioCobrand,
   studioDisplayName,
 } from '../_shared/studio-identity.ts';
+import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -242,16 +243,10 @@ Deno.serve(async (req: Request) => {
   // brand — a studio invoice has no project to read it from, and a two-studio
   // designer's primary studio would be the wrong letterhead. Subject/in-app lead
   // with the studio; email prose stays the individual designer's name.
-  const identity = await resolveStudioIdentity(admin, {
-    projectId: invoice.project_id,
-    designerId: invoice.designer_id,
-    studioId: invoice.studio_id,
-  });
+  const identity = await resolveStudioIdentity(admin, invoiceBrandingRef(invoice));
   const senderName = studioDisplayName(identity, designerName);
   const cobrand = studioCobrand(identity);
-  // What the letter is *for*: the house, else the studio invoice's own regarding
-  // line, else a plain word for the studio's own book.
-  const projectName = invoice.project?.name ?? invoice.title ?? 'your studio';
+  const projectName = invoiceSubjectName(invoice);
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
 

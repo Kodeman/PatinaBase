@@ -69,6 +69,7 @@ import {
   formatInvoiceCurrency,
 } from '../_shared/invoice-emails.ts';
 import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity.ts';
+import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
 // Agent OS (WP-2.1) — reconciliation emission onto the agent_tasks queue.
 // Additive: the constants + enqueue helper live in ./reconcile-emit.ts (kept out
 // of this Deno.serve module so they unit-test offline, per the repo's core/index
@@ -345,15 +346,6 @@ function designerDisplayName(invoice: InvoiceJoined): string {
   );
 }
 
-/**
- * What the letter is *for*: the house, else the studio invoice's own regarding
- * line, else a plain word for the studio's own book. All three invoice letters
- * this file sends — receipt, failed payment, refund — name it the same way.
- */
-function invoiceSubjectName(invoice: InvoiceJoined): string {
-  return invoice.project?.name ?? invoice.title ?? 'your studio';
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // State flips + side effects
 // ─────────────────────────────────────────────────────────────────────────────
@@ -425,11 +417,7 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
       // brand — a studio invoice has no project to read it from, and a
       // two-studio designer's primary studio would be the wrong letterhead.
       const cobrand = studioCobrand(
-        await resolveStudioIdentity(admin, {
-          projectId: invoice.project_id,
-          designerId: invoice.designer_id,
-          studioId: invoice.studio_id,
-        })
+        await resolveStudioIdentity(admin, invoiceBrandingRef(invoice))
       );
       const rendered = buildPaymentReceiptEmail({
         invoiceNumber,
@@ -519,11 +507,7 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
       // brand — a studio invoice has no project to read it from, and a
       // two-studio designer's primary studio would be the wrong letterhead.
       const cobrand = studioCobrand(
-        await resolveStudioIdentity(admin, {
-          projectId: invoice.project_id,
-          designerId: invoice.designer_id,
-          studioId: invoice.studio_id,
-        })
+        await resolveStudioIdentity(admin, invoiceBrandingRef(invoice))
       );
       const rendered = buildPaymentFailedEmail({
         invoiceNumber,

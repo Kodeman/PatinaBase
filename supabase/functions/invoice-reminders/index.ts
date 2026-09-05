@@ -60,6 +60,7 @@ import {
   type RenderedInvoiceEmail,
 } from '../_shared/invoice-emails.ts';
 import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity.ts';
+import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -107,14 +108,6 @@ interface InvoiceRow {
     business_name: string | null;
     email: string | null;
   } | null;
-}
-
-/**
- * What the letter is *for*: the house, else the studio invoice's own regarding
- * line, else a plain word for the studio's own book.
- */
-function invoiceSubjectName(invoice: InvoiceRow): string {
-  return invoice.project?.name ?? invoice.title ?? 'your studio';
 }
 
 /** Whole days from due_date (DATE) to today, UTC-pinned. Negative = not yet due. */
@@ -339,11 +332,7 @@ Deno.serve(async (_req: Request) => {
     // brand for the client-facing reminder shell — a studio invoice has no
     // project to read it from, and a two-studio designer's primary studio would
     // be the wrong letterhead.
-    const identity = await resolveStudioIdentity(admin, {
-      projectId: invoice.project_id,
-      designerId: invoice.designer_id,
-      studioId: invoice.studio_id,
-    });
+    const identity = await resolveStudioIdentity(admin, invoiceBrandingRef(invoice));
     const cobrand = studioCobrand(identity);
 
     const rendered = STAGE_BUILDERS[stage]({

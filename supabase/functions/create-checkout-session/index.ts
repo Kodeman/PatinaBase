@@ -65,6 +65,7 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17';
 import { resolveStudioIdentity } from '../_shared/studio-identity.ts';
+import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
 import {
   type InvoiceCheckoutAttempt,
@@ -267,14 +268,10 @@ async function loadInvoicePayable(
   // statement descriptor / merchant identity stay "Patina" (single platform
   // account). The invoice's own studio_id is deterministic for multi-studio
   // designers and is the only anchor a studio invoice has.
-  const identity = await resolveStudioIdentity(admin, {
-    projectId: invoice.project_id,
-    designerId: invoice.designer_id,
-    studioId: invoice.studio_id,
-  });
+  const identity = await resolveStudioIdentity(admin, invoiceBrandingRef(invoice));
   const studioSuffix = identity?.name?.trim() ? ` · ${identity.name.trim()}` : '';
   const label = `Invoice ${invoice.invoice_number ?? invoice.id.slice(0, 8)} — ${
-    invoice.project?.name ?? invoice.title ?? 'Studio invoice'
+    invoiceSubjectName(invoice, 'Studio invoice')
   }${studioSuffix}`;
 
   return {
@@ -298,13 +295,15 @@ async function loadInvoicePayable(
     // cancellation notice. Ship order is: portal first, probe it, THEN these
     // functions (2026-09-04 review, finding 2).
     //
-    // The studio leg needs MORE than that portal: the letterbox only speaks a
-    // settlement it can see a row for, and it reads rows from
-    // useProjectInvoices(projectId), which filters `.eq('project_id')` — a
-    // studio invoice is never in that list, and a payer with no house at all
-    // never mounts a Letterbox. So the studio return address is mute until W3
-    // lands the client-invoice read and the letterbox-only front door
-    // (2026-09-05 review, finding F-A).
+    // ⚠ AND: pre-W3 a studio invoice is not merely mute on return — it is
+    // unreachable end to end. Its letter points at `/invoices/<id>`, which the
+    // portal folds onto the letterbox front door; the letterbox lists rows from
+    // useProjectInvoices(projectId) (`.eq('project_id')`), so a row with no
+    // project is never in it, and a payer with no house at all never mounts a
+    // Letterbox. The recipient therefore cannot open the invoice or reach a Pay
+    // control at all, so this function is never even called for one. Do not
+    // SEND a studio invoice until W3 lands the client-invoice read and the
+    // letterbox-only front door (2026-09-05 review, findings F-A / R4-2).
     successUrl: invoiceCheckoutReturnAddress(
       CLIENT_PORTAL_URL,
       invoice.project_id,

@@ -36,6 +36,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { buildCheckIntentEmail } from '../_shared/invoice-emails.ts';
+import { invoiceSubjectName } from '../_shared/invoice-subject.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -167,9 +168,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-  // What the notice is *for*: the house, else the studio invoice's own regarding
-  // line, else a plain word for the studio's own book.
-  const projectName = invoice.project?.name ?? invoice.title ?? 'your studio';
+  const projectName = invoiceSubjectName(invoice);
   const clientName = invoice.client?.full_name?.trim() || 'Your client';
   const designerName =
     invoice.designer?.full_name?.trim() || invoice.designer?.business_name?.trim() || null;
