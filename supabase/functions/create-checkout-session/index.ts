@@ -65,12 +65,14 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17';
 import { resolveStudioIdentity } from '../_shared/studio-identity.ts';
+import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
 import {
   type InvoiceCheckoutAttempt,
   InvoiceCheckoutIntegrityError,
   type InvoiceCheckoutPaymentMethod,
   type InvoiceCheckoutSession,
+  invoiceCheckoutReturnAddress,
   invoiceCheckoutReturnUrl,
   reconcileInvoiceCheckoutSession,
   runInvoiceCheckout,
@@ -193,7 +195,10 @@ interface InvoiceRow {
   id: string;
   designer_id: string;
   client_id: string | null;
-  project_id: string;
+  // NULL on a studio invoice — an invoice drawn for a household with no house.
+  project_id: string | null;
+  studio_id: string | null;
+  title: string | null;
   invoice_number: string | null;
   status: string;
   currency: string;
@@ -213,7 +218,7 @@ async function loadInvoicePayable(
     .from('invoices')
     .select(
       `
-      id, designer_id, client_id, project_id, invoice_number, status,
+      id, designer_id, client_id, project_id, studio_id, title, invoice_number, status,
       currency, total_cents, amount_paid_cents, stripe_checkout_session_id,
       project:projects!invoices_project_id_fkey(id, name, client_id)
     `
@@ -261,13 +266,12 @@ async function loadInvoicePayable(
   // Human-readable line item — append the studio name (Designer Studios) when
   // the resolver returns one. This is TEXT ONLY: no Stripe Connect, and the
   // statement descriptor / merchant identity stay "Patina" (single platform
-  // account). projectId path is deterministic for multi-studio designers.
-  const identity = await resolveStudioIdentity(admin, {
-    projectId: invoice.project_id,
-  });
+  // account). The invoice's own studio_id is deterministic for multi-studio
+  // designers and is the only anchor a studio invoice has.
+  const identity = await resolveStudioIdentity(admin, invoiceBrandingRef(invoice));
   const studioSuffix = identity?.name?.trim() ? ` · ${identity.name.trim()}` : '';
   const label = `Invoice ${invoice.invoice_number ?? invoice.id.slice(0, 8)} — ${
-    invoice.project?.name ?? 'Patina project'
+    invoiceSubjectName(invoice, 'Studio invoice')
   }${studioSuffix}`;
 
   return {
@@ -277,20 +281,41 @@ async function loadInvoicePayable(
     lineItemName: label,
     existingSessionId: invoice.stripe_checkout_session_id,
     metadata: { payable_type: 'invoice', invoice_id: invoice.id },
-    // Back to the project page the client pays from — the letterbox reads
-    // ?checkout= there and states the outcome in place. `invoice` names which
-    // one settled, and `#letterbox` puts the receipt on screen at first paint
-    // instead of after hydration rewrites the hash. The fragment survives the
-    // attempt params: invoiceCheckoutReturnUrl splits it off and re-appends it
-    // last (invoice-checkout-core.ts).
+    // Back to the page the client pays from — the letterbox reads ?checkout=
+    // there and states the outcome in place. `invoice` names which one settled,
+    // and `#letterbox` puts the receipt on screen at first paint instead of
+    // after hydration rewrites the hash. A studio invoice has no house, so it
+    // returns to the front door. The fragment survives the attempt params:
+    // invoiceCheckoutReturnUrl splits it off and re-appends it last
+    // (invoice-checkout-core.ts).
     //
     // ⚠ DEPLOY ORDER — this function must NOT ship before the flagless client
     // portal. `/projects/[projectId]` on the currently-deployed worker reads no
     // `?checkout=` at all, so a return landing there gets no receipt and no
     // cancellation notice. Ship order is: portal first, probe it, THEN these
     // functions (2026-09-04 review, finding 2).
-    successUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=success&session_id={CHECKOUT_SESSION_ID}#letterbox`,
-    cancelUrl: `${CLIENT_PORTAL_URL}/projects/${invoice.project_id}?invoice=${invoice.id}&checkout=cancelled#letterbox`,
+    //
+    // ⚠ AND: pre-W3 a studio invoice is not merely mute on return — it is
+    // unreachable end to end. Its letter points at `/invoices/<id>`, which the
+    // portal folds onto the letterbox front door; the letterbox lists rows from
+    // useProjectInvoices(projectId) (`.eq('project_id')`), so a row with no
+    // project is never in it, and a payer with no house at all never mounts a
+    // Letterbox. The recipient therefore cannot open the invoice or reach a Pay
+    // control at all, so this function is never even called for one. Do not
+    // SEND a studio invoice until W3 lands the client-invoice read and the
+    // letterbox-only front door (2026-09-05 review, findings F-A / R4-2).
+    successUrl: invoiceCheckoutReturnAddress(
+      CLIENT_PORTAL_URL,
+      invoice.project_id,
+      invoice.id,
+      'success'
+    ),
+    cancelUrl: invoiceCheckoutReturnAddress(
+      CLIENT_PORTAL_URL,
+      invoice.project_id,
+      invoice.id,
+      'cancelled'
+    ),
     processingDetail:
       'A bank transfer for this invoice is already processing. Bank transfers take 3–5 business days to clear.',
     async onStaleSession(sessionId: string) {

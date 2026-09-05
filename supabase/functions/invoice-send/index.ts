@@ -46,6 +46,7 @@ import {
   studioCobrand,
   studioDisplayName,
 } from '../_shared/studio-identity.ts';
+import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -61,7 +62,10 @@ interface InvoiceRow {
   id: string;
   designer_id: string;
   client_id: string | null;
-  project_id: string;
+  // NULL on a studio invoice — an invoice drawn for a household with no house.
+  project_id: string | null;
+  studio_id: string | null;
+  title: string | null;
   invoice_number: string | null;
   status: string;
   total_cents: number;
@@ -146,7 +150,7 @@ Deno.serve(async (req: Request) => {
     .from('invoices')
     .select(
       `
-      id, designer_id, client_id, project_id, invoice_number, status,
+      id, designer_id, client_id, project_id, studio_id, title, invoice_number, status,
       total_cents, amount_paid_cents, currency, due_date, sent_at,
       project:projects!invoices_project_id_fkey(id, name, client_id),
       client:profiles!invoices_client_id_fkey(id, full_name, email),
@@ -235,16 +239,18 @@ Deno.serve(async (req: Request) => {
     invoice.designer?.full_name?.trim() ||
     invoice.designer?.business_name?.trim() ||
     'Your designer';
-  // Studio co-brand (Designer Studios): the invoice's project resolves the
-  // studio brand. Subject/in-app lead with the studio; email prose stays the
-  // individual designer's name.
-  const identity = await resolveStudioIdentity(admin, {
-    projectId: invoice.project_id,
-    designerId: invoice.designer_id,
-  });
+  // Studio co-brand (Designer Studios): the invoice's own studio resolves the
+  // brand — a studio invoice has no project to read it from, and a two-studio
+  // designer's primary studio would be the wrong letterhead. Subject/in-app lead
+  // with the studio; email prose stays the individual designer's name.
+  const identity = await resolveStudioIdentity(admin, invoiceBrandingRef(invoice));
   const senderName = studioDisplayName(identity, designerName);
   const cobrand = studioCobrand(identity);
-  const projectName = invoice.project?.name ?? 'your project';
+  // null, not a stand-in phrase: a letter with nothing to name drops its
+  // "for …" clause rather than telling the client it is "for your studio".
+  const projectName = invoiceSubjectName(invoice, null);
+  const forClause = projectName ? ` for ${projectName}` : '';
+  const studioInvoice = !invoice.project_id;
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
 
@@ -264,6 +270,7 @@ Deno.serve(async (req: Request) => {
           currency: invoice.currency,
           studioName: cobrand.studioName,
           studioLogoUrl: cobrand.studioLogoUrl,
+          studioInvoice,
         })
       : buildInvoiceSentEmail({
           invoiceNumber,
@@ -278,6 +285,7 @@ Deno.serve(async (req: Request) => {
           currency: invoice.currency,
           studioName: cobrand.studioName,
           studioLogoUrl: cobrand.studioLogoUrl,
+          studioInvoice,
         });
 
   let sendResult;
@@ -298,8 +306,8 @@ Deno.serve(async (req: Request) => {
         subject: rendered.subject,
         message:
           sendType === 'reminder'
-            ? `${senderName} sent a reminder about invoice ${invoiceNumber} for ${projectName}.`
-            : `${senderName} sent invoice ${invoiceNumber} for ${projectName}.`,
+            ? `${senderName} sent a reminder about invoice ${invoiceNumber}${forClause}.`
+            : `${senderName} sent invoice ${invoiceNumber}${forClause}.`,
         deep_link: `/invoices/${invoice.id}`,
       },
     });
@@ -334,7 +342,7 @@ Deno.serve(async (req: Request) => {
       entityType: 'invoice',
       entityId: invoice.id,
       title: 'An invoice is ready',
-      body: `${senderName} sent invoice ${invoiceNumber} for ${projectName}.${dueLine}`,
+      body: `${senderName} sent invoice ${invoiceNumber}${forClause}.${dueLine}`,
       metadata: {
         project_id: invoice.project_id,
         amount_cents: invoice.total_cents,
