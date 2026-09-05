@@ -46,7 +46,11 @@ import {
   studioCobrand,
   studioDisplayName,
 } from '../_shared/studio-identity.ts';
-import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
+import {
+  invoiceBrandingRef,
+  invoiceForClause,
+  invoiceSubjectName,
+} from '../_shared/invoice-subject.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -249,7 +253,7 @@ Deno.serve(async (req: Request) => {
   // null, not a stand-in phrase: a letter with nothing to name drops its
   // "for …" clause rather than telling the client it is "for your studio".
   const projectName = invoiceSubjectName(invoice, null);
-  const forClause = projectName ? ` for ${projectName}` : '';
+  const forClause = invoiceForClause(invoice);
   const studioInvoice = !invoice.project_id;
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;

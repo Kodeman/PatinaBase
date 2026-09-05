@@ -60,7 +60,11 @@ import {
   type RenderedInvoiceEmail,
 } from '../_shared/invoice-emails.ts';
 import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity.ts';
-import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
+import {
+  invoiceBrandingRef,
+  invoiceForClause,
+  invoiceSubjectName,
+} from '../_shared/invoice-subject.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -178,7 +182,7 @@ async function escalateToDesigner(
 
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   const projectName = invoiceSubjectName(invoice, null);
-  const forClause = projectName ? ` for ${projectName}` : '';
+  const forClause = invoiceForClause(invoice);
   const balanceCents = Math.max(
     (invoice.total_cents || 0) - (invoice.amount_paid_cents || 0),
     0,
@@ -322,7 +326,7 @@ Deno.serve(async (_req: Request) => {
     // null, not a stand-in phrase: a rung with nothing to name drops its
     // "for …" clause rather than saying "for your studio" to the client.
     const projectName = invoiceSubjectName(invoice, null);
-    const forClause = projectName ? ` for ${projectName}` : '';
+    const forClause = invoiceForClause(invoice);
     const designerName =
       invoice.designer?.full_name?.trim() ||
       invoice.designer?.business_name?.trim() ||

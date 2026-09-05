@@ -13,7 +13,12 @@ import {
   assert,
   assertEquals,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { invoiceBrandingRef, invoiceSubjectName } from "./invoice-subject.ts";
+import {
+  invoiceBrandingRef,
+  invoiceDeskName,
+  invoiceForClause,
+  invoiceSubjectName,
+} from "./invoice-subject.ts";
 
 // ── The display name: house → title → plain word ────────────────────────────
 
@@ -66,6 +71,37 @@ Deno.test("the fallback is the last rung only — Stripe's line item", () => {
 Deno.test("a missing project embed is the same as a null one", () => {
   assertEquals(invoiceSubjectName({ title: "Retainer · Q4" }, null), "Retainer · Q4");
   assertEquals(invoiceSubjectName({}, null), null);
+});
+
+// ── The composed clause and desk line ──────────────────────────
+
+Deno.test("the clause names the house when there is one", () => {
+  assertEquals(
+    invoiceForClause({ project: { name: "The Ridgeline House" }, title: "Retainer · Q4" }),
+    " for The Ridgeline House",
+  );
+});
+
+Deno.test("the clause names a studio invoice by its regarding line", () => {
+  assertEquals(
+    invoiceForClause({ project: null, title: "Design consultation · September" }),
+    " for Design consultation · September",
+  );
+});
+
+Deno.test("an invoice naming nothing closes the sentence instead", () => {
+  // Ruling W5-6: no " for your studio", no " for your project" — no clause.
+  assertEquals(invoiceForClause({ project: null, title: null }), "");
+  assertEquals(invoiceForClause({}), "");
+});
+
+Deno.test("the desk line leads with the house, the title, then the feature's word", () => {
+  assertEquals(
+    invoiceDeskName({ project: { name: "The Ridgeline House" }, title: "Retainer · Q4" }),
+    "The Ridgeline House",
+  );
+  assertEquals(invoiceDeskName({ project: null, title: "Retainer · Q4" }), "Retainer · Q4");
+  assertEquals(invoiceDeskName({ project: null, title: null }), "Studio invoice");
 });
 
 // ── The branding anchors ────────────────────────────────────────────────────
@@ -263,4 +299,102 @@ Deno.test("checkout returns through the null-tolerant address, never an interpol
     !src.includes("/projects/${"),
     "create-checkout-session interpolates a project path again",
   );
+});
+
+// ── No sender may write a stand-in phrase of its own ────────────────────
+
+/**
+ * Every string literal in a source file, comments excluded.
+ *
+ * A phrase scan that reads raw source cannot tell prose from code: these files
+ * quote the banned phrases in their own comments to explain why they are
+ * banned. Template expressions are kept as literal text, which only widens the
+ * net (2026-09-05 review, E-1).
+ */
+function stringLiterals(src: string): string[] {
+  const out: string[] = [];
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      i = src.indexOf("\n", i);
+      if (i < 0) break;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      const end = src.indexOf("*/", i + 2);
+      i = end < 0 ? src.length : end + 2;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === "`") {
+      let j = i + 1;
+      let body = "";
+      while (j < src.length) {
+        if (src[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (src[j] === c) break;
+        body += src[j];
+        j += 1;
+      }
+      out.push(body);
+      i = j + 1;
+      continue;
+    }
+    i += 1;
+  }
+  return out;
+}
+
+Deno.test("the literal scanner reads code and skips the prose around it", () => {
+  assertEquals(
+    stringLiterals(`// says 'your studio' here\nconst a = 'kept'; /* 'and here' */ const b = \`t \${x}\`;`),
+    ["kept", "t ${x}"],
+  );
+});
+
+/** Phrases a homeowner may never read in place of a name (ruling W5-6). */
+const STAND_IN_PHRASES = [/your studio/i, /your project/i, /your home/i];
+
+Deno.test("no invoice sender carries a stand-in phrase in any string it can print", async () => {
+  // The call-shape pins above constrain the argument only: `invoiceSubjectName(
+  // invoice, null) ?? 'your studio'` satisfies every one of them and puts the
+  // ruled-out copy straight back on the page. This reaches the whole file.
+  for (const name of SENDERS) {
+    const src = await senderSource(name);
+    for (const literal of stringLiterals(src)) {
+      for (const phrase of STAND_IN_PHRASES) {
+        assert(
+          !phrase.test(literal),
+          `${name}/index.ts prints the stand-in phrase ${phrase.source} in ${JSON.stringify(literal)}`,
+        );
+      }
+    }
+  }
+});
+
+Deno.test("no sender re-composes the name, the clause or the desk line itself", async () => {
+  for (const name of SENDERS) {
+    const src = await senderSource(name);
+    // A second fallback bolted onto the shared call is the exact mutation the
+    // argument pins miss.
+    assert(
+      !/invoiceSubjectName\([^)]*\)\s*(\?\?|\|\|)/.test(src),
+      `${name}/index.ts falls back again after invoiceSubjectName`,
+    );
+    for (const [label, expected] of [
+      ["projectName", "invoiceSubjectName(invoice, null)"],
+      ["forClause", "invoiceForClause(invoice)"],
+      ["deskName", "invoiceDeskName(invoice)"],
+    ] as const) {
+      for (const m of src.matchAll(new RegExp(`\\b${label}\\s*=\\s*([^;\\n]+)`, "g"))) {
+        assertEquals(
+          m[1].trim(),
+          expected,
+          `${name}/index.ts composes ${label} itself instead of using the shared derivation`,
+        );
+      }
+    }
+  }
 });

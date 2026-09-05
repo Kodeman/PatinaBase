@@ -1028,3 +1028,172 @@ stripe-webhook · trade-rfq-send
 ```
 
 Migration 00571 still goes strictly before them.
+
+---
+
+## Fix round 2 — E-1 (major, carry-over)
+
+**Finding.** The letter's name chain was pinned at the *argument* of
+`invoiceSubjectName` only. Two one-line call-site mutations put the ruled-out
+homeowner copy back with every gate green:
+
+- **M1** `invoice-send/index.ts:251` → `const projectName = invoiceSubjectName(invoice, null) ?? 'your studio';`
+- **M9** `invoice-send/index.ts:252` → `const forClause = projectName ? \` for ${projectName}\` : ' for your project';`
+
+Both survived because the composition — the `for …` clause and the desk line —
+was written inline in each `index.ts`, where nothing can reach it, and because
+the source pins matched only inside the call parens.
+
+**Fix.** Two moves, per the reviewer's recommendation ("and/or" — both taken):
+
+1. The composition moved into `_shared/invoice-subject.ts`, where a unit test
+   can execute it:
+   - `invoiceForClause(invoice)` → `" for <house|title>"`, else `""` (W5-6: the
+     sentence closes rather than naming a stand-in).
+   - `invoiceDeskName(invoice)` → house → title → `"Studio invoice"` (the
+     designer's own line must lead with something).
+   Call sites now read `const forClause = invoiceForClause(invoice);` /
+   `const deskName = invoiceDeskName(invoice);` — 6 sites across 4 senders
+   (invoice-send ×1, invoice-reminders ×2, stripe-webhook ×3, invoice-check-intent ×1).
+2. Two source pins in `_shared/invoice-subject.test.ts` that reach the whole
+   file, not just the call parens:
+   - **no stand-in phrase in any string a sender can print** — a quote-aware
+     scanner lifts every string literal (comments excluded, because these files
+     legitimately *quote* the banned phrases in prose explaining the ban) and
+     rejects `/your studio/i`, `/your project/i`, `/your home/i`. The scanner
+     itself has a unit test.
+   - **no sender re-composes the name, clause or desk line** — every
+     `projectName =` / `forClause =` / `deskName =` assignment must read exactly
+     the shared derivation, and no `??`/`||` may follow an `invoiceSubjectName(…)`
+     call.
+
+### Mutation proof (both of the reviewer's mutations now fail)
+
+```
+M1  invoice-send/index.ts:255 -> const projectName = invoiceSubjectName(invoice, null) ?? 'your studio';
+$ deno test --allow-all --config …/deno.json …/_shared/
+FAILED | 246 passed | 2 failed (11s)
+  no invoice sender carries a stand-in phrase in any string it can print
+  no sender re-composes the name, the clause or the desk line itself
+
+M9  invoice-send/index.ts:256 -> const forClause = projectName ? ` for ${projectName}` : ' for your project';
+$ deno test --allow-all --config …/deno.json …/_shared/
+FAILED | 246 passed | 2 failed (9s)
+  no invoice sender carries a stand-in phrase in any string it can print
+  no sender re-composes the name, the clause or the desk line itself
+```
+
+Both mutations reverted; `git status --short -- supabase` shows only the six
+intended files.
+
+### Gates (clean tree)
+
+```
+$ deno test --allow-all --config …/supabase/functions/deno.json …/_shared/
+ok | 248 passed | 0 failed (1s)          (241 before; +7 new tests)
+
+$ deno test --allow-all --config …/deno.json …/_shared/invoice-subject.test.ts
+ok | 22 passed | 0 failed (265ms)
+
+$ deno test --allow-all --config …/deno.json …/create-checkout-session/
+ok | 17 passed | 0 failed (23ms)
+$ deno test --allow-all --config …/deno.json …/stripe-webhook/
+ok | 18 passed | 0 failed (22ms)
+(invoice-send, invoice-reminders, invoice-check-intent still carry no test file)
+
+$ deno check --config …/deno.json  (the five index.ts)
+Check create-checkout-session/index.ts    Check invoice-send/index.ts
+Check invoice-reminders/index.ts          Check stripe-webhook/index.ts
+Check invoice-check-intent/index.ts       (exit 0, all clean)
+
+$ ls deno.lock supabase/functions/deno.lock   →  No such file or directory (both)
+```
+
+Deploy set unchanged (20 functions, listed above); migration 00571 still goes
+strictly first.
+
+## Close — re-verification hand (2026-09-05, ruling r5 W5-1/2/3/6/7)
+
+This hand was dispatched against tip `72ddcd213` to *deliver* the five ruled
+items. That tip is eleven commits behind: `72ddcd213` is reflog `HEAD@{14}` on
+this branch, and the fix rounds that followed it (`ba2003f4c`, `988c70d5d`,
+`aa1dc6e8b`, `9de5995b5`, `fdecb3e0c`, `312efc120`, `1d2998884`) had already
+landed all five. **No code changed in this hand.** What follows is the evidence
+that each ruling is real and gated — every one pinned by a mutation that turns
+a gate red, run on a fresh `$TMPDIR` copy.
+
+### The five, each with the mutation that kills it
+
+| ruling | site | mutation | result |
+|---|---|---|---|
+| **W5-1** five senders' SELECT | `_shared/invoice-subject.test.ts:241-249` | delete `studio_id, title, ` from all five `index.ts` SELECTs (5 files, 0 residual) | `FAILED \| 282 passed \| 1 failed` — *every invoice sender still selects the studio anchor and the title* |
+| **W5-2** webhook read reports its error | `stripe-webhook/index.ts:292,308-310` | drop the `if (error) console.error(...)` and re-swallow (`const { data } =`) | `FAILED \| 282 passed \| 1 failed` — *the webhook's invoice lookup reports a failed read instead of swallowing it* (`invoice-subject.test.ts:269`) |
+| **W5-6** no stand-in house | `_shared/invoice-subject.ts:70-73` (`invoiceForClause`) | restore `` ` for ${invoiceSubjectName(invoice, 'your studio')}` `` | `FAILED \| 282 passed \| 1 failed` — *an invoice naming nothing closes the sentence instead* (`invoice-subject.test.ts:92`) |
+| **W5-7** footer names her page | `_shared/invoice-emails.ts:89-95,157,207…742` (7 sites) | `footerLinks: params.studioInvoice ? studioInvoiceFooterLinks() : undefined` → `footerLinks: undefined` | `FAILED \| 275 passed \| 8 failed` — the six footer tests **plus** *no rung of the reminder ladder invents a house*, which no longer strips `Your project</a>` before asserting |
+| **W5-3** ship order says 20 | `edge-notes.md:176` | n/a (docs) | `3. These 20 functions.` under `:133 ## Deploy set — 20 functions`; `:273` keeps `21` inside the historical round-1 record, correct as history |
+
+W5-2 did have a seam after all: `loadInvoiceJoined` is unimportable (module-load
+`Deno.serve`), so the pin is a source-read in `invoice-subject.test.ts`, the same
+technique the other source-scanning tests use. No "note it instead" was needed.
+
+### W5-6 rendered through the real builders, `project` and `title` both null
+
+```
+SENT      SUBJ: Leah Brandt sent you invoice INV-0031
+          BODY: Leah Brandt has sent you an invoice.
+UPCOM     SUBJ: Reminder: invoice INV-0031 is due soon
+          BODY: Just a friendly reminder that Leah Brandt's invoice is coming due.
+STILLOPEN SUBJ: Still open: invoice INV-0031
+          BODY: Invoice INV-0031 from Leah Brandt is still open.
+SECOND    SUBJ: Second notice: invoice INV-0031
+          BODY: This is a second notice that invoice INV-0031 from Leah Brandt is
+                still open, a week on from its due date.
+FINAL     SUBJ: Final notice: invoice INV-0031
+          BODY: This is the final automated notice for invoice INV-0031 from Leah
+                Brandt, now two weeks on from its due date.
+RECEIPT   SUBJ: Payment received — invoice INV-0031 is paid in full
+          BODY: We received your payment of $450.00 toward invoice INV-0031,
+                billed by Leah Brandt.
+```
+
+The clause is gone, not replaced: no "for your studio", no "for the studio", no
+dangling "for ." The receipt's raw HTML closes
+`toward invoice <strong>INV-0031</strong>, billed by Leah Brandt.` — the comma
+sits against the number with no gap.
+
+### Gates, run by this hand
+
+```
+$ deno test --allow-all --config …/functions/deno.json …/functions/_shared/
+ok | 248 passed | 0 failed (1s)
+
+$ deno test … …/functions/create-checkout-session/     ok | 17 passed | 0 failed (24ms)
+$ deno test … …/functions/stripe-webhook/              ok | 18 passed | 0 failed (24ms)
+(invoice-send, invoice-reminders, invoice-check-intent carry no test file)
+
+$ deno check --config …/functions/deno.json  (each of the five index.ts)
+Check create-checkout-session/index.ts   Check invoice-send/index.ts
+Check invoice-reminders/index.ts         Check stripe-webhook/index.ts
+Check invoice-check-intent/index.ts      (all clean)
+
+$ find <worktree> -name deno.lock -not -path "*/node_modules/*"   → nothing
+$ git status --porcelain   → clean (only sandbox EPERM lines on .env*)
+```
+
+### One thing the ship agent must not read past
+
+The ship order at `:160` still names **`00570_studio_invoices.sql`**. The db lane
+renumbered: `ls .codex/worktrees/agent-si-db/supabase/migrations | tail` →
+`00567…`, `00568…`, **`00571_studio_invoices.sql`** — there is no 00570 on disk.
+Seven `00570` strings remain in this file against six `00571`. This is review
+nit **W5-10**, outside this hand's five ruled items, so the historical rounds are
+left as written — but **the migration to push is 00571**, and it still goes
+strictly before the 20 functions.
+
+Deploy set unchanged — 20 functions: `client-invite`,
+`commercial-document-notify`, `create-checkout-session`, `decision-first-notice`,
+`decision-reminders`, `decision-resolved-notify`, `expire-decisions`,
+`invoice-check-intent`, `invoice-reminders`, `invoice-send`,
+`notification-digest`, `notification-dispatch`, `po-send`, `proposal-nudge`,
+`proposal-sign-confirmation`, `quote-request-send`, `review-requests`,
+`spec-pdf`, `stripe-webhook`, `trade-rfq-send`.

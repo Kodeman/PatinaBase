@@ -69,7 +69,11 @@ import {
   formatInvoiceCurrency,
 } from '../_shared/invoice-emails.ts';
 import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity.ts';
-import { invoiceBrandingRef, invoiceSubjectName } from '../_shared/invoice-subject.ts';
+import {
+  invoiceBrandingRef,
+  invoiceDeskName,
+  invoiceSubjectName,
+} from '../_shared/invoice-subject.ts';
 // Agent OS (WP-2.1) — reconciliation emission onto the agent_tasks queue.
 // Additive: the constants + enqueue helper live in ./reconcile-emit.ts (kept out
 // of this Deno.serve module so they unit-test offline, per the repo's core/index
@@ -404,7 +408,7 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     // clause rather than saying "for your studio". The designer's own desk
     // line has to lead with something, so it falls back to the feature's word.
     const projectName = invoiceSubjectName(invoice, null);
-    const deskName = projectName ?? 'Studio invoice';
+    const deskName = invoiceDeskName(invoice);
     const designerName = designerDisplayName(invoice);
     const balanceCents = invoice.total_cents - invoice.amount_paid_cents;
     // /invoices/<id> stays: the Patina iOS app claims `/invoices/*` in its
@@ -508,7 +512,7 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
     const projectName = invoiceSubjectName(invoice, null);
-    const deskName = projectName ?? 'Studio invoice';
+    const deskName = invoiceDeskName(invoice);
     const designerName = designerDisplayName(invoice);
     const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
     const amountLabel = formatInvoiceCurrency(row.amount_cents, invoice.currency);
@@ -1666,7 +1670,7 @@ async function sendInvoiceRefundSideEffects(
 
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
     const projectName = invoiceSubjectName(invoice, null);
-    const deskName = projectName ?? 'Studio invoice';
+    const deskName = invoiceDeskName(invoice);
     const designerName = designerDisplayName(invoice);
     const portalUrl = `${DESIGNER_PORTAL_URL}/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`;
     const refundLabel = formatInvoiceCurrency(opts.refundedAmount, invoice.currency);
