@@ -431,6 +431,63 @@ describe('project approval authority and lifecycle RPCs', () => {
     expect(JSON.stringify(rpc.mock.calls[0])).not.toContain('comment');
   });
 
+  it('carries the typed name and its consent method when one is given (P-18)', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        projectId: 'project-1',
+        decisionId: 'decision-1',
+        outcome: 'approved',
+      },
+      error: null,
+    });
+    const mutation =
+      useRespondProjectApproval() as unknown as MutationConfig<any>;
+
+    await mutation.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      outcome: 'approved',
+      expectedUpdatedAt: '2026-08-10T12:05:00.000Z',
+      idempotencyKey: 'respond-2',
+      clientSignature: 'Harper Vale',
+      clientConsentMethod: 'electronic_signature',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('respond_project_approval', {
+      p_decision_id: 'decision-1',
+      p_payload: {
+        outcome: 'approved',
+        clientConsentMethod: 'electronic_signature',
+        clientSignature: 'Harper Vale',
+      },
+      p_expected_updated_at: '2026-08-10T12:05:00.000Z',
+      p_idempotency_key: 'respond-2',
+    });
+  });
+
+  it('sends neither key without a consent method, so a pre-00570 wrapper still answers', async () => {
+    rpc.mockResolvedValue({
+      data: { projectId: 'project-1', decisionId: 'decision-1' },
+      error: null,
+    });
+    const mutation =
+      useRespondProjectApproval() as unknown as MutationConfig<any>;
+
+    // A signature with no method is a check_violation in the RPC, and the two
+    // extra keys are refused outright by any wrapper minted before 00570 — so
+    // the method is what decides whether either travels.
+    await mutation.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      outcome: 'needs_discussion',
+      expectedUpdatedAt: '2026-08-10T12:05:00.000Z',
+      idempotencyKey: 'respond-3',
+      clientSignature: 'Harper Vale',
+    });
+
+    expect(rpc.mock.calls[0][1].p_payload).toEqual({ outcome: 'needs_discussion' });
+  });
+
   it('uses the exact withdrawal and supersession signatures', async () => {
     rpc.mockResolvedValue({
       data: { projectId: 'project-1', decisionId: 'decision-1' },

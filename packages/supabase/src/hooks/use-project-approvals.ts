@@ -654,6 +654,15 @@ export function usePublishProjectApproval() {
   );
 }
 
+/**
+ * How the client agreed. `respond_project_approval` accepts the pair from
+ * 00570 onward; before it the wrapper refused any payload key but `outcome`
+ * and `optionId`, which is why the keys are sent ONLY when a method is given.
+ */
+export type ProjectApprovalConsentMethod =
+  | 'electronic_signature'
+  | 'click_through';
+
 export function useRespondProjectApproval() {
   const queryClient = useQueryClient();
   return approvalMutation(
@@ -664,12 +673,21 @@ export function useRespondProjectApproval() {
         outcome: ProjectApprovalOutcome;
         expectedUpdatedAt: string;
         idempotencyKey: string;
+        /** The typed legal name (R1). Required by the RPC for a signature. */
+        clientSignature?: string | null;
+        clientConsentMethod?: ProjectApprovalConsentMethod | null;
       },
     ) =>
       parseActionResult(
         await runRpc('respond_project_approval', {
           p_decision_id: input.decisionId,
-          p_payload: { outcome: input.outcome },
+          p_payload: input.clientConsentMethod
+            ? {
+                outcome: input.outcome,
+                clientConsentMethod: input.clientConsentMethod,
+                clientSignature: input.clientSignature ?? null,
+              }
+            : { outcome: input.outcome },
           p_expected_updated_at: input.expectedUpdatedAt,
           p_idempotency_key: input.idempotencyKey,
         }),
