@@ -197,3 +197,79 @@ the seven new functions.
 7. **Not done, and not mine:** nothing was applied to Strata, the shared local
    stack was not reset or written to, and no iOS/web surface for the snooze was
    built (the RPC is there for those lanes).
+
+---
+
+# Round 1 fixes — 2026-09-05
+
+Eight findings (two blockers, six majors) from `backend-review-r1.md`. All eight
+are addressed. `00572_she_sets_the_pace.sql` was edited IN PLACE — it has never
+been applied to Strata and lives only on this unmerged branch, so fixing forward
+into a 00573 would have shipped a file whose first version was wrong.
+
+| id | what changed |
+|---|---|
+| B1 | `notification-digest` reads `decision_snoozes`. `collectItems` now drops a snoozed approval from the summary through a new pure `dropSnoozedDecisions`, fed by one `decision_snoozes` query per reader (fails open, same as the mail gate). R16's superseding-edition exception needs no clause here: a successor is its own `client_decisions` row with its own id, so a snooze set on the edition she answered cannot reach it, and the announcement mails direct rather than batching. |
+| B2 | `proposal-nudge` stopped testing `reminder_cadence === 'daily_digest'`, a value 00572 makes impossible. New `proposal-nudge/logic.ts` exports `nudgeRoutesToDigest`, which tests the cadence's SHAPE through the shared `normalizeReminderCadence` — every cadence but `right_away` batches. A reader with NO preferences row keeps the direct letter she always had. **`proposal-nudge` joins the deploy set** (it now imports `_shared/decision-notify.ts`). |
+| M3 | `isDigestDue` gained the letter's own hours: never before 8am local, and never on Sunday except for `weekly_sunday`. That is impossible on a once-a-day cron (15:00 UTC is 07:00 in California in winter), so **`notification-digest-daily` becomes `notification-digest-hourly`** (`20 * * * *`), mirroring what this wave already did to `decision-reminders`. The 20-hour and six-day min-intervals are untouched, so twenty-four passes still send one summary. New `digestWindowStart` stretches the window back to the last summary actually sent (capped at a fortnight) so the Sunday skip does not drop Saturday's reminders through the floor. |
+| M4 | `release_due_client_pushes` no longer rings about an ask she answered while the envelope waited. Each due row is dispatched only while its bell row is still unopened AND (for a decision) the decision is still `pending`; anything else is retired as `suppressed` with `metadata.release_skipped`, not left queued forever. `entity_id` is compared as text so a malformed envelope cannot raise a cast error inside a cron. |
+| M5 | The gate now runs BEFORE the spine RPC in `deliverDecisionNotification`, and `shouldFireDecisionInApp` decides whether the row may be re-armed. A STANDING quiet (`snoozed`, `quiet_after_overdue`, `type_disabled`, `email_channel_disabled`) leaves an existing line exactly as she left it — no unread pop, no refreshed `created_at` holding it in the digest window. `cadence_digest` deliberately still re-arms: the digest is built from that row's own freshness, and suppressing it would have silenced every batching reader. The hours-long holds (Sunday, before her morning, her quiet hours) also still re-arm; they lift by themselves and their letter then stamps the approval out of the cron's window. A decision with NO row always gets one — R16 defers the push, never the record. |
+| M6 | `backfill_why_author_display_names()` resolves an inherited why to its COMPOSER, not to the designer who reissued the edition. A recursive walk up `predecessor_decision_id` stops at the deepest ancestor still carrying the same sentence and reads that decision's immutable `created` receipt. A line re-asked on a reissue differs from its predecessor's, stops the walk at depth 0, and is signed by whoever re-asked it. |
+| M7 | `sweep_decision_first_notices` covers EVERY decision put to the client, not only Stage-2 approvals — 00568's trigger announces every one of them and this wave's Sunday/8am gates can hold any of those letters. Frozen evidence is still required where the contract requires it; the publish moment reads `COALESCE(sent_at, created_at)`. |
+| M8 | `_decision_first_notice_sweep_cutoff()` stopped being a guessed constant. `decision_first_notice_sweep_state` records the cutoff ONCE when 00572 applies, as `GREATEST('2026-09-05T00:00:00Z', now())`. Migrations apply in order, so that moment is provably at or after 00568's own: the sweep cannot mail a back catalogue whatever date the constant claimed. Cost: an approval published between the two applies that missed its letter gets no retry — and the 72-hour window stops that binding three days after the file lands. |
+
+## Deploy set (revised)
+
+`decision-first-notice`, `decision-reminders`, `decision-resolved-notify`,
+`expire-decisions`, `notification-digest`, **`proposal-nudge`**.
+Portals: `client-portal` (cadence picker + regenerated types).
+
+## Gates — round 1
+
+Scratch database `patina_w3` on the shared local Postgres, rebuilt this round
+**keeping ACLs** (`pg_dump --no-owner --exclude-schema=cron`, no `--no-acl`).
+That is a correction to the previous round's harness note: with `--no-acl` every
+grant-posture assertion in the approval-authority suite fails for the wrong
+reason. The shared `postgres` database was never reset, migrated or written to.
+
+| Gate | Result |
+|---|---|
+| scratch apply (`psql -v ON_ERROR_STOP=1 -f 00572…`) | **exit 0** |
+| second apply, same DB (idempotency) | **exit 0** |
+| `cron.job` after apply | `decision-reminders-hourly 0 * * * *` · `notification-digest-hourly 20 * * * *` · `client-push-window-release */15 * * * *` · `decision-first-notice-retry-sweep */30 * * * *` |
+| `decision_first_notice_sweep_state.cutoff_at` | `2026-09-06 00:34:26+00` (the apply moment, later than the constant) |
+| `she_sets_the_pace_test.sql` (now 10 sections) | **PASS** |
+| `workflow/approval_authority/*.sql` (6 files) | **6 PASS** |
+| `notifications/client_attention_test.sql` | **PASS** |
+| `deno test --config … _shared/ decision-reminders/ decision-first-notice/ notification-digest/ expire-decisions/ proposal-nudge/` | **262 passed, 0 failed** |
+| `deno test … _tests/apns-send.test.ts _tests/client-attention-deep-links.test.ts` | **42 passed, 0 failed** |
+| `deno check --config …` (8 touched files) | clean |
+| `pnpm --filter @patina/supabase type-check` | **PASS** |
+| `pnpm --filter @patina/notifications test` | **89 passed** |
+| `pnpm --filter @patina/client-portal type-check` | **PASS** |
+| `database.types.ts` | **+15 / −0** (`decision_first_notice_sweep_state` only; the peer program's 00571 noise in the scratch dump was excluded by hand, same method as round 0) |
+| `seed/00-legacy-grants.sql` | regenerated, **+12 / −0** |
+| no `deno.lock` at the repo root or in the worktree | confirmed |
+
+## New SQL test sections
+
+- **§9** builds a real supersession chain inside the fixture — a second studio
+  member ("Marta Ashford") reissues two of Leah's approvals, once in silence and
+  once re-asking the why — then puts all three names back to the given names
+  00569 would have frozen and watches the backfill resolve each one correctly.
+- **§10** mints a push for a legacy decision, holds it, closes the decision
+  through 00399's own write lever, and asserts the release retires the envelope
+  instead of ringing.
+- §4 gained the answered-bell case; §6 gained the legacy sweep candidate and the
+  recorded cutoff.
+
+## Owed / advisories, round 1
+
+1. **`session_replication_role` is not available inside a DO block** on this
+   stack (`postgres` is not a superuser; the file-level `SET LOCAL` is granted,
+   `set_config()` inside plpgsql is not). §10 uses 00399's
+   `app.client_decision_write_id` lever instead — the same one the product uses.
+2. **The digest cron moved**, so the integration steward should expect
+   `notification-digest-daily` to be gone from `cron.job` on the shared stack
+   after the reset, replaced by `notification-digest-hourly`.
+3. Round-0 advisories 3, 4, 5 and 7 stand unchanged. Advisory 6 is closed by M8.
