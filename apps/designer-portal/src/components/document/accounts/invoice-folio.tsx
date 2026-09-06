@@ -313,7 +313,7 @@ export function InvoiceFolio({
       setNote(
         documentProjectId
           ? 'invoice voided · linked milestones and time released'
-          : 'invoice voided · the number retired, the letter withdrawn',
+          : 'invoice voided · the letter withdrawn, nothing else released',
       );
       setAct(null);
       setVoidReason('');

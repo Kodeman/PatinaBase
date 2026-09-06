@@ -297,7 +297,7 @@ describe('InvoiceFolio delivery recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Void invoice' }));
 
     expect(
-      await screen.findByText('invoice voided · the number retired, the letter withdrawn'),
+      await screen.findByText('invoice voided · the letter withdrawn, nothing else released'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/milestones and time released/)).not.toBeInTheDocument();
   });

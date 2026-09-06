@@ -295,15 +295,11 @@ async function loadInvoicePayable(
     // cancellation notice. Ship order is: portal first, probe it, THEN these
     // functions (2026-09-04 review, finding 2).
     //
-    // ⚠ AND: pre-W3 a studio invoice is not merely mute on return — it is
-    // unreachable end to end. Its letter points at `/invoices/<id>`, which the
-    // portal folds onto the letterbox front door; the letterbox lists rows from
-    // useProjectInvoices(projectId) (`.eq('project_id')`), so a row with no
-    // project is never in it, and a payer with no house at all never mounts a
-    // Letterbox. The recipient therefore cannot open the invoice or reach a Pay
-    // control at all, so this function is never even called for one. Do not
-    // SEND a studio invoice until W3 lands the client-invoice read and the
-    // letterbox-only front door (2026-09-05 review, findings F-A / R4-2).
+    // A studio invoice (`project_id IS NULL`) is reachable: the client portal's
+    // houseless door and the merged client-invoice read ship in the SAME
+    // release as this function. Delivered order is migration → these functions
+    // → designer portal → client portal, so a studio invoice can only be drawn
+    // once the whole chain stands.
     successUrl: invoiceCheckoutReturnAddress(
       CLIENT_PORTAL_URL,
       invoice.project_id,
