@@ -16,5 +16,5 @@
 // guaranteed rather than remembered. `ExportOptions.plist` sets
 // `manageAppVersionAndBuildNumber` to false so nothing downstream moves it.
 
-CURRENT_PROJECT_VERSION = 3
+CURRENT_PROJECT_VERSION = 4
 MARKETING_VERSION = 1.0
