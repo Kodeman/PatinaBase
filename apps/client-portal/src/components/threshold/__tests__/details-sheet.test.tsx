@@ -81,7 +81,7 @@ function makePrefs(
     type_seasonal_campaign: true,
     type_reengagement: true,
     digest_frequency: "weekly",
-    reminder_cadence: "immediate",
+    reminder_cadence: "right_away",
     quiet_hours_enabled: false,
     quiet_hours_start: "22:00",
     quiet_hours_end: "08:00",
@@ -408,9 +408,17 @@ describe("DetailsSheet — what you hear from us", () => {
       ),
     ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("radio", { name: "Daily summary" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Once a day" }));
     expect(updatePrefsMutate).toHaveBeenCalledWith({
-      reminder_cadence: "daily_digest",
+      reminder_cadence: "daily",
+    });
+
+    // P-28: the third cadence she can choose, in her own words.
+    await userEvent.click(
+      screen.getByRole("radio", { name: "Once a week, on Sunday" }),
+    );
+    expect(updatePrefsMutate).toHaveBeenCalledWith({
+      reminder_cadence: "weekly_sunday",
     });
   });
 });
