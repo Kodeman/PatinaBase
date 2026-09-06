@@ -54,6 +54,7 @@ const ANSWERED: ProjectApprovalReview = {
   predecessorDecisionId: null,
   successorDecisionId: null,
   clientSignature: 'Harper Vale',
+  clientConsentMethod: 'electronic_signature',
   createdAt: '2026-08-01T12:00:00Z',
   sentAt: '2026-08-02T12:00:00Z',
   respondedAt: '2026-08-12T15:00:00Z',
@@ -106,12 +107,13 @@ describe('/decisions/[id]/record — the owner', () => {
       'data-stamp-state',
       'approved',
     );
+    expect(screen.getByTestId('record-signature')).toHaveTextContent('Signed');
     expect(screen.getByTestId('record-signed-name')).toHaveTextContent('Harper Vale');
     expect(screen.getByTestId('record-signed-on')).toHaveTextContent(
       'Answered 12 August 2026',
     );
     expect(screen.getByTestId('record-consent')).toHaveTextContent(
-      'Signed electronically by typed name.',
+      'Signed electronically by typed name: Harper Vale.',
     );
   });
 
@@ -122,11 +124,67 @@ describe('/decisions/[id]/record — the owner', () => {
    * still says the method either way.
    */
   it('prints no name for a projection older than 00573', async () => {
-    const { clientSignature: _dropped, ...older } = ANSWERED;
+    const older = { ...ANSWERED };
+    delete (older as Partial<ProjectApprovalReview>).clientSignature;
+    delete (older as Partial<ProjectApprovalReview>).clientConsentMethod;
     reviewsHook.mockReturnValue({ data: [older], isLoading: false, isError: false });
     await renderPage();
 
     expect(screen.queryByTestId('record-signed-name')).not.toBeInTheDocument();
+  });
+
+  /* `W3W-R2-01`. Every approval answered before 00569 — which is every
+     approval standing in production — carries neither a method nor a name.
+     The sheet used to print "SIGNED / Signed electronically by typed name."
+     over the gap, on the one page the program built to be filed and kept. It
+     now says what it can source: that the answer was recorded, and when. */
+  it('records, and claims no signature, on a row that carries no method', async () => {
+    reviewsHook.mockReturnValue({
+      data: [{ ...ANSWERED, clientSignature: null, clientConsentMethod: null }],
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    const block = screen.getByTestId('record-signature');
+    expect(block).toHaveTextContent('Recorded');
+    expect(block).toHaveTextContent('Recorded on 12 August 2026.');
+    expect(block).not.toHaveTextContent(/sign/i);
+    expect(screen.queryByTestId('record-signed-name')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('record-signed-on')).not.toBeInTheDocument();
+    // The outcome is still hers, and still stamped.
+    expect(screen.getByTestId('record-stamp')).toHaveAttribute(
+      'data-stamp-state',
+      'approved',
+    );
+  });
+
+  /* An APPROVED row whose method says click-through — Wave 2's own token for
+     an act with no name on it — is headed for what it was. */
+  it('follows the stored method, not the outcome', async () => {
+    reviewsHook.mockReturnValue({
+      data: [{ ...ANSWERED, clientSignature: null, clientConsentMethod: 'click_through' }],
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.getByTestId('record-signature')).toHaveTextContent('Confirmed');
+    expect(screen.getByTestId('record-consent')).toHaveTextContent(
+      'Confirmed by press-and-hold.',
+    );
+  });
+
+  it('says a wet signature was given on paper', async () => {
+    reviewsHook.mockReturnValue({
+      data: [{ ...ANSWERED, clientConsentMethod: 'paper' }],
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.getByTestId('record-signature')).toHaveTextContent('Signed');
+    expect(screen.getByTestId('record-consent')).toHaveTextContent('Signed on paper.');
   });
 
   it('presses the maker’s mark at the plate’s edge — twelve characters (R6)', async () => {
@@ -141,7 +199,12 @@ describe('/decisions/[id]/record — the owner', () => {
     reviewsHook.mockReturnValue({
       // Only Approve takes a name (ruled 2026-09-05); the column is left
       // NULL on Return and Hold, so the sheet has none to print.
-      data: [{ ...ANSWERED, outcome: 'changes_requested', clientSignature: null }],
+      data: [{
+        ...ANSWERED,
+        outcome: 'changes_requested',
+        clientSignature: null,
+        clientConsentMethod: 'click_through',
+      }],
       isLoading: false,
       isError: false,
     });
@@ -151,8 +214,11 @@ describe('/decisions/[id]/record — the owner', () => {
       'data-stamp-state',
       'returned',
     );
+    // `W3W-R1-05`: the block was headed "Signed" whatever she had done.
+    expect(screen.getByTestId('record-signature')).toHaveTextContent('Confirmed');
+    expect(screen.getByTestId('record-signature')).not.toHaveTextContent('Signed');
     expect(screen.getByTestId('record-consent')).toHaveTextContent(
-      'Confirmed by click-through.',
+      'Confirmed by press-and-hold.',
     );
     expect(screen.queryByTestId('record-signed-name')).not.toBeInTheDocument();
   });
@@ -193,7 +259,7 @@ describe('/decisions/[id]/record — the owner', () => {
     );
     expect(screen.getByTestId('record-signed-name')).toHaveTextContent('Harper Vale');
     expect(screen.getByTestId('record-consent')).toHaveTextContent(
-      'Signed electronically by typed name.',
+      'Signed electronically by typed name: Harper Vale.',
     );
   });
 
@@ -281,6 +347,27 @@ describe('/decisions/[id]/record — the owner', () => {
     expect(css).toMatch(/\[data-stamp-state\]\s*\{\s*transform: none !important;/);
     expect(css).toContain('background: #FFFFFF !important');
     expect(css).toContain('box-shadow: none !important');
+    // `W3W-R1-n1`: the overlay was white over a cream page, so a printer with
+    // background graphics on laid ink around the sheet.
+    expect(css).toMatch(/html,\s*body\s*\{[^}]*background: #FFFFFF !important/);
+  });
+
+  /* `W3W-R1-08`. axe's `region` rule counted eight nodes outside a landmark:
+     the page had one scoped `header` and one `role="region"` and no `main` at
+     all. Three landmarks now, and every word of the sheet inside one. */
+  it('puts every word of the sheet inside a landmark', async () => {
+    const { container } = await renderPage();
+    const sheet = screen.getByTestId('record-sheet');
+
+    expect(sheet.querySelectorAll(':scope > header')).toHaveLength(1);
+    expect(sheet.querySelectorAll(':scope > main')).toHaveLength(1);
+    expect(sheet.querySelectorAll(':scope > footer')).toHaveLength(1);
+    // Nothing outside the three but the sheet's own print rules.
+    const strays = [...sheet.children].filter(
+      (child) => !['HEADER', 'MAIN', 'FOOTER', 'STYLE'].includes(child.tagName),
+    );
+    expect(strays).toHaveLength(0);
+    expect(container.querySelectorAll('main')).toHaveLength(1);
   });
 });
 
@@ -308,12 +395,32 @@ describe('/decisions/[id]/record — anyone else', () => {
   });
 
   it('says the read failed rather than claiming there is no record', async () => {
-    reviewsHook.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    reviewsHook.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('network'),
+    });
     await renderPage();
 
     expect(
       screen.getByText('This record could not be read just now. Refresh to try again.'),
     ).toBeInTheDocument();
+  });
+
+  /* `W3W-R1-04`. A refusal is not a bad moment: refreshing will never fix a
+     403, and offering the refresh also says the id exists. */
+  it('answers a refusal with the not-found sentence, not a refresh', async () => {
+    reviewsHook.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { code: '42501', message: 'permission denied' },
+    });
+    await renderPage();
+
+    expect(screen.getByText('This record could not be found.')).toBeInTheDocument();
+    expect(screen.queryByText(/Refresh to try again/)).not.toBeInTheDocument();
   });
 
   it('keeps nothing of an approval still standing open', async () => {

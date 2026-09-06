@@ -130,8 +130,9 @@ describe('/proposals/[id]/record — the owner', () => {
     expect(screen.getByTestId('record-signed-on')).toHaveTextContent(
       'Signed 5 August 2026',
     );
+    expect(screen.getByTestId('record-signature')).toHaveTextContent('Signed');
     expect(screen.getByTestId('record-consent')).toHaveTextContent(
-      'Signed electronically by typed name.',
+      'Signed electronically by typed name: Harper Vale.',
     );
     expect(screen.getByTestId('record-stamp')).toHaveAttribute('data-stamp-state', 'signed');
   });
@@ -240,6 +241,40 @@ describe('/proposals/[id]/record — anyone else', () => {
 
   it('says the read failed rather than claiming there is no record', async () => {
     bundleHook.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    await renderPage();
+
+    expect(
+      screen.getByText('This record could not be read just now. Refresh to try again.'),
+    ).toBeInTheDocument();
+  });
+});
+
+/* `W3W-R1-04`. `get_client_commercial_document_bundle` refuses a reader the
+   paper is not addressed to with a 403, and React Query used to retry it
+   three times — five seconds of blank page, and then "Refresh to try again"
+   about a door that will never open. One answer, at once, in the sibling
+   rail's words. */
+describe('/proposals/[id]/record — a refusal', () => {
+  it('reads as a record that could not be found, with no refresh offered', async () => {
+    bundleHook.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { code: '42501', message: 'permission denied' },
+    });
+    await renderPage();
+
+    expect(screen.getByText('This record could not be found.')).toBeInTheDocument();
+    expect(screen.queryByText(/Refresh to try again/)).not.toBeInTheDocument();
+  });
+
+  it('still says a bad moment is a bad moment', async () => {
+    bundleHook.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('network'),
+    });
     await renderPage();
 
     expect(

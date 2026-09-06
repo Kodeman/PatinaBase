@@ -356,6 +356,24 @@ describe('project approval sanitized reads', () => {
       expect.objectContaining({ clientSignature: null }),
     );
   });
+
+  // P-26 / `W3W-R2-01` (00573). HOW she consented is a fact the ROW carries.
+  // Derived from the outcome instead, the printed Record of Decision claimed
+  // "Signed electronically by typed name." on every approval answered before
+  // 00569 — which is every approval standing in production.
+  it('carries the stored consent method, and null where the row has none', () => {
+    for (const method of ['electronic_signature', 'click_through', 'paper']) {
+      expect(
+        parseProjectApprovalReview({ ...REVIEW, clientConsentMethod: method }),
+      ).toEqual(expect.objectContaining({ clientConsentMethod: method }));
+    }
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, clientConsentMethod: null }),
+    ).toEqual(expect.objectContaining({ clientConsentMethod: null }));
+    expect(parseProjectApprovalReview({ ...REVIEW })).toEqual(
+      expect.objectContaining({ clientConsentMethod: null }),
+    );
+  });
 });
 
 describe('project approval authority and lifecycle RPCs', () => {

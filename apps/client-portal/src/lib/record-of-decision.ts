@@ -1,5 +1,3 @@
-import type { ProjectApprovalOutcome } from '@patina/supabase';
-
 import { wholeNumberInWords } from '@/components/threshold/instruments/standing-sentence';
 
 /* ── THE RECORD OF DECISION — the words on the keepsake ───────────────────────
@@ -31,47 +29,85 @@ export type ConsentMethod =
   | 'portal_clickthrough'
   | 'paper';
 
-/**
- * How she agreed, said as a sentence.
- *
- * The raw token is a database word — `electronic_signature` on a keepsake is
- * the schema leaking onto paper. An unknown token says nothing at all rather
- * than printing itself: a record that cannot name the method honestly is a
- * record with one fewer line, not a record with a wrong one.
- */
-export function consentSentence(
-  method: ConsentMethod | string | null | undefined,
-): string | null {
-  switch (method) {
-    case 'electronic_signature':
-      return 'Signed electronically by typed name.';
-    case 'click_through':
-    case 'portal_clickthrough':
-      return 'Confirmed by click-through.';
-    case 'paper':
-      return 'Signed on paper.';
-    default:
-      return null;
-  }
+/* ── THE SIGNATURE BLOCK ──────────────────────────────────────────────────────
+   `W3W-R2-01` / `W3W-R1-05`. What the sheet may claim about how she agreed —
+   and it may claim only what the ROW says.
+
+   The block used to be derived from the outcome: approved therefore
+   `electronic_signature` therefore "Signed electronically by typed name.",
+   under a heading that read "Signed" whatever she had done. Two consequences,
+   both walked: every approval answered before 00569 — which is every approval
+   standing in production — printed a provenance claim its row cannot
+   substantiate, and a RETURNED record was headed with the word for the act
+   she did not perform.
+
+   So: the stored `client_consent_method` decides the heading and the
+   sentence, the stored `client_signature` decides whether a name is printed,
+   and a row that carries neither says "Recorded" and states the day. A
+   keepsake with one fewer line is better than a keepsake with a wrong one —
+   the same rule the name has always been held to.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export interface RecordSignatureBlock {
+  /** The label over the block: what KIND of act the row records. */
+  heading: string;
+  /** Her typed name, where the row carries one. Never inferred. */
+  name: string | null;
+  /** "Answered 5 September 2026". Absent where the sentence carries the day. */
+  dateLine: string | null;
+  /** How she agreed, as a sentence. */
+  sentence: string | null;
 }
 
 /**
- * Which method an approval outcome was recorded under.
+ * The block, composed from the row.
  *
- * Ruled 2026-09-05: only an Approve is signed — it writes the typed legal name
- * and `electronic_signature`. Return and Hold are a press and hold, which is a
- * click-through, and they record `click_through` (the schema's own word) and
- * never NULL. The projection does not carry the column, so the sheet reads the
- * outcome, which is the same fact from the other side.
+ * `day` is the day in words, for the one case whose sentence carries it;
+ * `dateLine` is the composed line the sheet prints for every other case
+ * ("Answered 5 September 2026" on an approval, "Signed 6 August 2026" on a
+ * paper), which the caller words because the two rails word it differently.
  */
-export function consentMethodForOutcome(
-  outcome: ProjectApprovalOutcome | null | undefined,
-): ConsentMethod | null {
-  if (outcome === 'approved') return 'electronic_signature';
-  if (outcome === 'changes_requested' || outcome === 'needs_discussion') {
-    return 'click_through';
+export function signatureBlock(input: {
+  method?: ConsentMethod | string | null;
+  name?: string | null;
+  day?: string | null;
+  dateLine?: string | null;
+}): RecordSignatureBlock {
+  const name = input.name?.trim() ? input.name.trim() : null;
+  const dateLine = input.dateLine?.trim() ? input.dateLine.trim() : null;
+
+  switch (input.method) {
+    case 'electronic_signature':
+      return {
+        heading: 'Signed',
+        name,
+        dateLine,
+        // A method with no name behind it is still a true statement about the
+        // method; it is only the NAME the sheet must not invent.
+        sentence: name
+          ? `Signed electronically by typed name: ${name}.`
+          : 'Signed electronically.',
+      };
+    case 'click_through':
+    case 'portal_clickthrough':
+      return {
+        heading: 'Confirmed',
+        // A press-and-hold carries no name by ruling (2026-09-05), so none is
+        // printed even where a stray row holds one.
+        name: null,
+        dateLine,
+        sentence: 'Confirmed by press-and-hold.',
+      };
+    case 'paper':
+      return { heading: 'Signed', name, dateLine, sentence: 'Signed on paper.' };
+    default:
+      return {
+        heading: 'Recorded',
+        name: null,
+        dateLine: null,
+        sentence: input.day?.trim() ? `Recorded on ${input.day.trim()}.` : null,
+      };
   }
-  return null;
 }
 
 /** How many characters of the hash the record carries (R6). */

@@ -7,11 +7,11 @@ import { useMyProjectApprovalReviews, useStudioIdentity } from '@patina/supabase
 import { RecordSheet } from '@/components/record/record-sheet';
 import {
   checksumMark,
-  consentMethodForOutcome,
-  consentSentence,
   recordStampStateForApproval,
+  signatureBlock,
   supersededNoteSentence,
 } from '@/lib/record-of-decision';
+import { isPermissionRefusal } from '@/lib/threshold/refusal';
 import { parseSourceDate } from '@/lib/threshold/derive';
 
 /* ── /decisions/[id]/record ──────────────────────────────────────────────────
@@ -57,7 +57,13 @@ export default function DecisionRecordPage({
   }
 
   if (reviews.isError) {
-    return (
+    // `W3W-R1-04`, on this rail too: a refusal is not a bad moment. Offering
+    // "Refresh to try again" to a reader the row is not addressed to is an
+    // invitation to press a button that will never work, and it also tells
+    // her the id exists. Same sentence as a record that is not there.
+    return isPermissionRefusal(reviews.error) ? (
+      <Nothing line="This record could not be found." backHref="/" />
+    ) : (
       <Nothing
         line="This record could not be read just now. Refresh to try again."
         backHref="/"
@@ -86,7 +92,19 @@ export default function DecisionRecordPage({
 
   const issued = parseSourceDate(approval.sentAt) ?? parseSourceDate(approval.createdAt);
   const answeredAt = parseSourceDate(approval.respondedAt);
-  const method = consentMethodForOutcome(approval.outcome);
+  const answeredOn = answeredAt ? LONG_DATE.format(answeredAt) : null;
+
+  /* `W3W-R2-01` / `W3W-R1-05`. The signature block follows the ROW — the
+     consent method 00573 projects and the name it carries — and never the
+     outcome. Derived from the outcome, this sheet printed "Signed
+     electronically by typed name." over an empty name line on every approval
+     answered before 00569, and headed a RETURNED record "Signed". */
+  const signature = signatureBlock({
+    method: approval.clientConsentMethod,
+    name: approval.clientSignature,
+    day: answeredOn,
+    dateLine: answeredOn ? `Answered ${answeredOn}` : null,
+  });
 
   /* A superseded edition she ALREADY ANSWERED keeps her own outcome as the
      mark — the doorstep's precedence, which puts SUPERSEDED first so the dead
@@ -124,15 +142,10 @@ export default function DecisionRecordPage({
       stampDateLabel={answeredAt ? DAY_MONTH.format(answeredAt) : null}
       stampSubject={`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
       stampNote={stampNote}
-      /* Her typed name, carried by the projection since 00573. Only Approve
-         takes a name — Return and Hold are press-and-hold only (ruled
-         2026-09-05) — so on those two outcomes, and on any approval answered
-         before 00569, the line is simply absent rather than blank: the sheet
-         states nothing it cannot source. The consent sentence below says the
-         method in either case. */
-      signedName={approval.clientSignature?.trim() || null}
-      signedOn={answeredAt ? `Answered ${LONG_DATE.format(answeredAt)}` : null}
-      consentSentence={consentSentence(method)}
+      signatureHeading={signature.heading}
+      signedName={signature.name}
+      signedOn={signature.dateLine}
+      consentSentence={signature.sentence}
       checksum={checksumMark(approval.artifactChecksum)}
       backHref={back}
       backLabel="Back to the approval"

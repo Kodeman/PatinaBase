@@ -102,6 +102,14 @@ export interface ProjectApprovalReview {
    * every approval answered before 00569, and on any older projection.
    */
   clientSignature?: string | null;
+  /**
+   * P-26 / `W3W-R2-01` — HOW she consented, as the row recorded it:
+   * `electronic_signature`, `click_through`, `paper`, or null on every
+   * approval answered before 00569. The Record of Decision reads this and
+   * never the outcome: "approved therefore signed" printed a provenance
+   * claim the row could not substantiate.
+   */
+  clientConsentMethod?: string | null;
   createdAt: string;
   sentAt: string | null;
   respondedAt: string | null;
@@ -374,8 +382,11 @@ export function parseProjectApprovalReview(
         : null,
     predecessorDecisionId: nullableString(row, 'predecessorDecisionId'),
     successorDecisionId: nullableString(row, 'successorDecisionId'),
-    // Arrived with 00573; an older projection simply has no name to give.
+    // Arrived with 00573; an older projection simply has no name to give,
+    // and no method — which the keepsake says as "Recorded", never as a
+    // signature.
     clientSignature: nullableString(row, 'clientSignature'),
+    clientConsentMethod: nullableString(row, 'clientConsentMethod'),
     createdAt: stringValue(row, 'createdAt', label),
     sentAt: nullableString(row, 'sentAt'),
     respondedAt: nullableString(row, 'respondedAt'),

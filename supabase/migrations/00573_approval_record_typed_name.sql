@@ -1,7 +1,7 @@
 -- 00573_approval_record_typed_name.sql
 --
--- P-26 (Wave 3, "The Decision, Delivered"). One additive key on the Stage-2
--- projection: `clientSignature`.
+-- P-26 (Wave 3, "The Decision, Delivered"). Two additive keys on the Stage-2
+-- projection: `clientSignature` and `clientConsentMethod`.
 --
 -- The printed Record of Decision is meant to carry her outcome, her typed name
 -- and the date. `respond_project_approval` has written `client_signature` since
@@ -11,13 +11,20 @@
 --
 -- Redefinition ledger (grep before editing):
 --   get_project_decision_reviews  ← 00464 → 00465 → 00569 → HERE
--- The body below is 00569's, verbatim, plus the one key. Anything that
--- redefines this function after 00573 must carry `clientSignature` forward or
--- the printed record silently loses her name again.
+-- The body below is 00569's, verbatim, plus the two keys. Anything that
+-- redefines this function after 00573 must carry `clientSignature` and
+-- `clientConsentMethod` forward or the printed record silently loses her name
+-- again, and starts inferring how she consented from what she decided.
 --
--- `client_consent_method` is deliberately NOT projected: the sheet derives its
--- consent sentence from the outcome (ruled 2026-09-05), and the IP address the
--- same response writes never leaves the database.
+-- `client_consent_method` IS projected, as of the W3 round-2 walk
+-- (`W3W-R2-01`). Deriving the consent sentence from the OUTCOME instead —
+-- approved therefore signed — printed "Signed electronically by typed name."
+-- on every approval answered before 00569, which is every approval standing
+-- in production: a provenance claim the row cannot substantiate, on the one
+-- page the program built to be filed and kept. The sheet now says only what
+-- the row says, and a row with no method says "Recorded".
+--
+-- The IP address the same response writes still never leaves the database.
 
 CREATE OR REPLACE FUNCTION public.get_project_decision_reviews(
   p_project_id uuid
@@ -136,6 +143,14 @@ BEGIN
              -- consent metadata beyond the name travels: the IP address
              -- stays in the row and never reaches a reader.
              'clientSignature', decision.client_signature,
+             -- P-26 / `W3W-R2-01`. HOW she consented, as the row recorded it:
+             -- 'electronic_signature' where she typed her legal name,
+             -- 'click_through' for a press-and-hold (Return and Hold, ruled
+             -- 2026-09-05), 'paper' where the studio filed a wet signature,
+             -- and NULL on every approval answered before 00569. The keepsake
+             -- reads this and never the outcome. No other consent metadata
+             -- travels — the IP address stays in the row.
+             'clientConsentMethod', decision.client_consent_method,
              'respondedAt', decision.responded_at,
              'updatedAt', decision.updated_at
            ) AS item
@@ -214,5 +229,7 @@ COMMENT ON FUNCTION public.get_project_decision_reviews(uuid) IS
   'identities. Since 00569 it also carries the frozen one-line why and the '
   'name of whoever wrote it (P-13), and viewerRole — lead | studio | '
   'household — so a caller can tell a row it answers from a row it only '
-  'watches. Since 00573 it carries clientSignature, the name she typed when '
-  'she signed, for the printed Record of Decision (P-26).';
+  'watches. Since 00573 it carries clientSignature and clientConsentMethod — '
+  'the name she typed and the method the row recorded — so the printed Record '
+  'of Decision states her provenance from the row rather than inferring it '
+  'from the outcome (P-26).';

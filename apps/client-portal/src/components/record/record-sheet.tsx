@@ -56,6 +56,15 @@ export interface RecordSheetProps {
    * stamp (P-27).
    */
   stampNote?: string | null;
+  /**
+   * The label over the signature block: what KIND of act the row records.
+   *
+   * `W3W-R1-05`: it was the unconditional word "Signed", so a RETURNED record
+   * was headed with the word for the act she did not perform. It is now
+   * composed from the stored consent method (`signatureBlock`), and a row that
+   * records no method is headed "Recorded".
+   */
+  signatureHeading?: string;
   /** The name she typed, when the record carries one. */
   signedName?: string | null;
   /** When she answered, already in words. */
@@ -84,6 +93,7 @@ export function RecordSheet({
   stampDateLabel = null,
   stampSubject,
   stampNote = null,
+  signatureHeading = 'Signed',
   signedName = null,
   signedOn = null,
   consentSentence = null,
@@ -102,6 +112,14 @@ export function RecordSheet({
     >
       <style>{`
         @media print {
+          /* W3W-R1-n1. The overlay is white, but the page under it kept the
+             Threshold's cream — so a printer with background graphics on laid
+             a field of ink around the sheet. The paper is white to its own
+             edges, and that means the document root as well. */
+          html, body {
+            background: #FFFFFF !important;
+            background-color: #FFFFFF !important;
+          }
           body * { visibility: hidden; }
           #record-print-root, #record-print-root * { visibility: visible; }
           #record-print-root {
@@ -131,7 +149,11 @@ export function RecordSheet({
         }
       `}</style>
 
-      <div className="record-toolbar sticky top-0 z-10 flex items-center justify-end gap-3 border-b border-[#E5E2DD] bg-white px-6 py-3">
+      {/* `W3W-R1-08`. Three landmarks, so every word on the sheet sits inside
+          one: the toolbar is the page's banner, the sheet is its main, and the
+          maker's mark is its contentinfo. axe's `region` rule counted eight
+          nodes outside a landmark before this. */}
+      <header className="record-toolbar sticky top-0 z-10 flex items-center justify-end gap-3 border-b border-[#E5E2DD] bg-white px-6 py-3">
         <Link
           href={backHref}
           className="inline-flex min-h-[44px] items-center px-3 text-[13px] text-[#2B2925] no-underline hover:opacity-70"
@@ -146,15 +168,18 @@ export function RecordSheet({
         >
           Print / Save PDF
         </button>
-      </div>
+      </header>
 
-      <div
-        className="mx-auto max-w-[44rem] px-8 py-12"
+      <main
+        className="mx-auto max-w-[44rem] px-8 pt-12"
         style={{ fontFamily: 'var(--font-body, Georgia, serif)' }}
       >
         {/* The letterhead is the studio's. Patina does not sign this sheet
-            any more than it signs the mail (P-03). */}
-        <header className="mb-10 flex items-start justify-between gap-6">
+            any more than it signs the mail (P-03). A plain block rather than a
+            second `<header>`: the banner above is the page's, and two of them
+            is the `landmark-unique` failure this sheet's sibling already
+            paid for. */}
+        <div className="mb-10 flex items-start justify-between gap-6">
           <div>
             {studioLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -185,7 +210,7 @@ export function RecordSheet({
           <p className={`${LABEL_CLASS} text-right`} data-testid="record-kind">
             {kindLine}
           </p>
-        </header>
+        </div>
 
         <section className="mb-8">
           <p className={LABEL_CLASS}>The edition</p>
@@ -266,7 +291,7 @@ export function RecordSheet({
           style={{ borderColor: '#E5E2DD' }}
           data-testid="record-signature"
         >
-          <p className={LABEL_CLASS}>Signed</p>
+          <p className={LABEL_CLASS}>{signatureHeading}</p>
           {signedName && (
             <p
               data-testid="record-signed-name"
@@ -297,27 +322,28 @@ export function RecordSheet({
             </p>
           )}
         </section>
+      </main>
 
-        {/* The maker's mark, at the plate's edge. Provenance, not a string she
-            is being asked to check — and the only place twelve characters of
-            the hash survive (R6). */}
-        <footer
-          className="border-t pt-4"
-          style={{
-            borderColor: '#E5E2DD',
-            fontFamily: 'var(--font-mono, monospace)',
-            fontSize: '0.58rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            color: '#6B6259',
-          }}
-        >
-          {checksum && (
-            <span data-testid="record-checksum">{`Mark ${checksum} · `}</span>
-          )}
-          <span>{`Kept by ${studioName} · Prepared with Patina`}</span>
-        </footer>
-      </div>
+      {/* The maker's mark, at the plate's edge. Provenance, not a string she
+          is being asked to check — and the only place twelve characters of
+          the hash survive (R6). It is the page's contentinfo, outside `main`,
+          so the sheet's last line is inside a landmark like every other. */}
+      <footer
+        className="mx-auto max-w-[44rem] border-t px-8 pb-12 pt-4"
+        style={{
+          borderColor: '#E5E2DD',
+          fontFamily: 'var(--font-mono, monospace)',
+          fontSize: '0.58rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          color: '#6B6259',
+        }}
+      >
+        {checksum && (
+          <span data-testid="record-checksum">{`Mark ${checksum} · `}</span>
+        )}
+        <span>{`Kept by ${studioName} · Prepared with Patina`}</span>
+      </footer>
     </div>
   );
 }

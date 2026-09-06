@@ -9,9 +9,10 @@ import { KIND_LABEL, summaryLineFor } from '@/components/threshold/consent-copy'
 import { useClientCommercialDocument } from '@/hooks/use-commercial-client';
 import {
   checksumMark,
-  consentSentence,
   releasedWorkSentence,
+  signatureBlock,
 } from '@/lib/record-of-decision';
+import { isPermissionRefusal } from '@/lib/threshold/refusal';
 import { parseSourceDate } from '@/lib/threshold/derive';
 
 /* ── /proposals/[id]/record ──────────────────────────────────────────────────
@@ -58,7 +59,16 @@ export default function ProposalRecordPage({
   }
 
   if (bundle.isError) {
-    return (
+    // `W3W-R1-04`. A 403 is a refusal, not a bad moment: `get_client_
+    // commercial_document_bundle` says no to a reader the paper is not
+    // addressed to, and it will say no again however many times she presses
+    // Refresh. The query no longer retries one (`clientCommercialDocument
+    // QueryOptions`), and the sentence is the sibling rail's — which is also
+    // the sentence the owner gets for an id that does not exist, so the page
+    // still never says whether it does.
+    return isPermissionRefusal(bundle.error) ? (
+      <Nothing line="This record could not be found." backHref="/" />
+    ) : (
       <Nothing
         line="This record could not be read just now. Refresh to try again."
         backHref="/"
@@ -99,6 +109,17 @@ export default function ProposalRecordPage({
     (paper.furnishings?.items ?? []).map((item) => item.description),
   );
 
+  /* `W3W-R2-01`'s rule, on the rail that has always been able to keep it: the
+     block says what the receipt recorded — a wet signature the studio filed,
+     or the typed legal name `sign_proposal` takes — and names her only where
+     the row carries a name. */
+  const block = signatureBlock({
+    method: signature.signedOnPaper ? 'paper' : 'electronic_signature',
+    name: signature.signerName,
+    day: signedOn ? LONG_DATE.format(signedOn) : null,
+    dateLine: signedOn ? `Signed ${LONG_DATE.format(signedOn)}` : null,
+  });
+
   return (
     <RecordSheet
       studioName={identity.data?.name?.trim() || 'Your studio'}
@@ -112,11 +133,10 @@ export default function ProposalRecordPage({
       stampState={signature.signedOnPaper ? 'signed_on_paper' : 'signed'}
       stampDateLabel={signedOn ? DAY_MONTH.format(signedOn) : null}
       stampSubject={`${paper.document.title} · Edition ${paper.document.version}`}
-      signedName={signature.signerName}
-      signedOn={signedOn ? `Signed ${LONG_DATE.format(signedOn)}` : null}
-      consentSentence={consentSentence(
-        signature.signedOnPaper ? 'paper' : 'electronic_signature',
-      )}
+      signatureHeading={block.heading}
+      signedName={block.name}
+      signedOn={block.dateLine}
+      consentSentence={block.sentence}
       releaseSentence={release}
       checksum={checksumMark(signature.documentFingerprint)}
       backHref={back}

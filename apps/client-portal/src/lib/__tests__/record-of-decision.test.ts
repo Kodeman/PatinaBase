@@ -1,60 +1,96 @@
 import {
   CHECKSUM_MARK_LENGTH,
   checksumMark,
-  consentMethodForOutcome,
-  consentSentence,
   recordStampStateForApproval,
   releasedWorkSentence,
+  signatureBlock,
   supersededNoteSentence,
 } from '../record-of-decision';
 
 /* P-26. The words on the keepsake, tested apart from the sheet that prints
    them — the sentences are the product here, not the layout. */
 
-describe('consentSentence', () => {
-  it('writes every method the schema allows as a sentence, never as its token', () => {
-    expect(consentSentence('electronic_signature')).toBe(
-      'Signed electronically by typed name.',
-    );
-    expect(consentSentence('click_through')).toBe('Confirmed by click-through.');
-    expect(consentSentence('paper')).toBe('Signed on paper.');
+/* `W3W-R2-01` / `W3W-R1-05`. The block follows the ROW: the stored consent
+   method decides the heading and the sentence, the stored name decides
+   whether a name is printed, and a row that records neither says "Recorded"
+   and states the day. Four cases, because the column has four values and the
+   fourth is the one every approval in production carries. */
+describe('signatureBlock', () => {
+  const DAY = '5 September 2026';
+  const LINE = 'Answered 5 September 2026';
+
+  it('names her where she typed her name', () => {
+    expect(
+      signatureBlock({
+        method: 'electronic_signature',
+        name: 'Margaret Whitfield',
+        day: DAY,
+        dateLine: LINE,
+      }),
+    ).toEqual({
+      heading: 'Signed',
+      name: 'Margaret Whitfield',
+      dateLine: LINE,
+      sentence: 'Signed electronically by typed name: Margaret Whitfield.',
+    });
   });
 
-  it('reads the review leg’s own spelling as the same sentence', () => {
-    // `portal_clickthrough` belongs to `review_method`, a different column.
-    // If it ever reaches this sheet it must not print itself.
-    expect(consentSentence('portal_clickthrough')).toBe('Confirmed by click-through.');
+  it('claims the method but never the name, where the row carries no name', () => {
+    const block = signatureBlock({
+      method: 'electronic_signature',
+      name: '   ',
+      day: DAY,
+      dateLine: LINE,
+    });
+    expect(block.heading).toBe('Signed');
+    expect(block.name).toBeNull();
+    expect(block.sentence).toBe('Signed electronically.');
   });
 
-  it('says nothing at all rather than printing a token it cannot read', () => {
-    expect(consentSentence(null)).toBeNull();
-    expect(consentSentence(undefined)).toBeNull();
-    expect(consentSentence('')).toBeNull();
-    expect(consentSentence('some_new_method')).toBeNull();
+  it('heads a press-and-hold "Confirmed", and prints no signature', () => {
+    for (const method of ['click_through', 'portal_clickthrough'] as const) {
+      expect(signatureBlock({ method, name: 'Margaret Whitfield', day: DAY, dateLine: LINE }))
+        .toEqual({
+          heading: 'Confirmed',
+          name: null,
+          dateLine: LINE,
+          sentence: 'Confirmed by press-and-hold.',
+        });
+    }
+  });
+
+  it('says where a wet signature was given', () => {
+    expect(
+      signatureBlock({ method: 'paper', name: 'Harper Vale', day: DAY, dateLine: 'Signed 5 September 2026' }),
+    ).toEqual({
+      heading: 'Signed',
+      name: 'Harper Vale',
+      dateLine: 'Signed 5 September 2026',
+      sentence: 'Signed on paper.',
+    });
+  });
+
+  it('records, and claims nothing, where the row carries no method', () => {
+    for (const method of [null, undefined, '', 'biometric']) {
+      const block = signatureBlock({ method, name: 'Margaret Whitfield', day: DAY, dateLine: LINE });
+      expect(block).toEqual({
+        heading: 'Recorded',
+        name: null,
+        dateLine: null,
+        sentence: 'Recorded on 5 September 2026.',
+      });
+      expect(block.sentence).not.toMatch(/sign/i);
+    }
+  });
+
+  it('states no day it does not have', () => {
+    expect(signatureBlock({ method: null, day: null }).sentence).toBeNull();
   });
 
   it('never prints a raw enum value', () => {
     for (const method of ['electronic_signature', 'click_through', 'paper'] as const) {
-      expect(consentSentence(method)).not.toContain('_');
+      expect(signatureBlock({ method, name: 'Harper Vale' }).sentence).not.toContain('_');
     }
-  });
-});
-
-describe('consentMethodForOutcome', () => {
-  /**
-   * Ruled 2026-09-05: only an Approve is signed. Return and Hold are a press
-   * and hold, which is a click-through, and record `click_through` — never
-   * NULL, and never the review leg's spelling.
-   */
-  it('reads the outcome as the method it was recorded under', () => {
-    expect(consentMethodForOutcome('approved')).toBe('electronic_signature');
-    expect(consentMethodForOutcome('changes_requested')).toBe('click_through');
-    expect(consentMethodForOutcome('needs_discussion')).toBe('click_through');
-  });
-
-  it('claims no method for an approval that carries no outcome', () => {
-    expect(consentMethodForOutcome(null)).toBeNull();
-    expect(consentMethodForOutcome(undefined)).toBeNull();
   });
 });
 
