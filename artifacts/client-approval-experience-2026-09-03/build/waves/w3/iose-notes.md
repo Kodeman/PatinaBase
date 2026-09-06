@@ -248,3 +248,108 @@ class body will cross it.
    is pinned at 3 and 6; the actual paging geometry wants the walker's eye at four or more.
 8. **Cross-surface clay ink** (#82612F iOS vs #7C5E30 web) still stands from Wave 2; the leaning
    dot and the page dots are the newest users of it.
+
+---
+
+# Round 1 — the fix pass
+
+Four findings from the adversarial review: one blocker (the lint gate), three majors. All four
+closed. No new behaviour beyond what each finding asked for.
+
+## `B1` (blocker) — `lint-delta main` was red, and had never been run
+
+Three new SwiftLint warnings in touched files: `DecisionsAPIClient+ProjectApprovals.swift` and
+`DecisionsAPIClient.swift` crossed the 500-line `file_length` floor, and `StudioHubView`'s struct
+body crossed the 300-line `type_body_length` floor. The lane's own note predicted exactly this
+shape for `DecisionsViewModel.swift` and then did not check the two files it had actually pushed
+over.
+
+Fixed the way this codebase already splits a full file — by moving whole units out, not by
+disabling a rule:
+
+- **`Patina/Core/Network/DecisionsAPIClient+Pace.swift`** (new) takes `setDecisionSnooze`.
+  `DecisionsAPIClient+ProjectApprovals.swift`: 506 → **484**.
+- **`Patina/Core/Network/RemoteClientDecision+Kind.swift`** (new) takes `kindChipLabel` and
+  `untitledRowTitle`. `DecisionsAPIClient.swift`: 517 → **494**.
+- **`StudioHubView`**'s `isOnStudio` / `studioEntryKey` pair moves to a `private extension` at the
+  foot of the same file — `type_body_length` counts the type's own body, not its extensions. The
+  file, the source pins and the behaviour are unchanged.
+
+`DecisionPaceTests.theSnoozeCallsTheRPC`'s source pin follows the RPC to `+Pace.swift`.
+
+## `M1` (major) — the quiet-hours caption over-claimed
+
+`DecisionPaceCopy.quietHours` said *"Patina never sends an approval reminder before 8am or after
+8pm, or on Sunday"* — drawn directly beneath a picker whose third option is "Once a week, on
+Sunday", and above a backend that (a) has no 8pm ceiling on mail at all and (b) mails
+`weekly_sunday` ON Sunday morning by design (`notification-digest`'s `isDigestDue`). Two false
+promises in one sentence, one of them contradicting the control it sits under.
+
+Rewritten to the two facts every leg actually keeps:
+
+> Patina never mails about an approval before 8am, and your phone only buzzes between 8am and
+> 8pm — your own clock. Anything later waits for the morning.
+
+The 8am floor is `LOCAL_MORNING_HOUR` in the digest and `before_local_morning` in
+`decision-notify`; the 8am–8pm ceiling is the PUSH leg's, 00572's `push_deliver_after`, and the
+buzz is deferred to the next 8am rather than dropped — which is why the sentence says it waits.
+The Sunday clause is gone. New test `theFloorDoesNotOutrunTheLegs` pins the absence of "Sunday"
+against `ReminderCadence.weeklySunday.label`, so the caption cannot drift back into contradicting
+the option above it.
+
+## `M2` (major) — the option choice can be e-signed again
+
+Advisory 1 of the build pass, ruled against. `P-30` asked for one named held act in place of a
+stack of submit buttons; it did not ask for the loss of `client_consent_method =
+'electronic_signature'` on a legacy option choice, and the mid-Wave-2 "signature only on Approve"
+ruling is scoped to the Stage-2 ceremony rail, not to `client_decisions` (00117 carries the column
+per decision). Restored as the reviewer's own suggested fix — an optional line, not a second act:
+
+- `DecisionSpread.signatureTitle` / `signatureNote` / `signatureFieldLabel` / `signatureTooShort`,
+  and `DecisionSpread.consent(forTypedName:)` → `.clickThrough` · `.signed(name)` · `.tooShort`.
+- `DecisionDetailView.signatureLine` draws one `PatinaTextField` above the act. Empty is the
+  ordinary path and still sends `click_through`; a name sends `electronic_signature` with it,
+  through the same held act.
+- The two-character floor is `_apply_client_decision`'s own. Below it the act is **held**, with
+  "Your full legal name, or leave it empty." — a half-typed name is never silently downgraded to
+  an unsigned submit.
+- `commitLeaning(decisionId:typedName:)` carries it; the sheet stays gone.
+
+**Second order, also closed.** The retired sheet carried the only sentence on this path naming what
+the act DOES; `leaningPrompt` names only what is not happening. `DecisionSpread.actConsequence` —
+*"Choosing sends your decision to your designer and unblocks any work waiting on it."* — is the
+sheet's own sentence in the choice's words, drawn beside the act. "Any work" stays hedged: `R9`
+says name the real consequence or stay silent, and the app cannot see whether there is any.
+
+Five new cases in `DecisionSpreadTests`.
+
+## `M3` (major) — the count sweep used the wrong helper
+
+`PatinaCount.inWords` where `inWordsCapitalized` is the convention at every other head-of-line
+site, so one order read "One piece on its way" and two read "two pieces on their way" in the same
+slot. Swept the fourteen head-of-line strings in `StudioQueueBuilder` — eleven `detail` lines and
+the three `meta` lines, which `StudioHubView` also draws as their own `Text`. Line 397's
+mid-sentence "… and N more" is left lowercase, correctly. The two money list eyebrows
+("Accepted (three)") are parenthetical and also stay lowercase. `OrderRoutingTests` and
+`WaveTwoCarryTests` expectations follow.
+
+## Gates, round 1
+
+Run from this worktree, unsandboxed, `IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE`.
+
+| Gate | Result |
+|---|---|
+| `ios-gate.sh build` | **PASS** — `** BUILD SUCCEEDED **` |
+| `ios-gate.sh unit` | **PASS** — `Test run with 2694 tests in 289 suites passed after 8.547 seconds with 2 known issues.` · `** TEST SUCCEEDED **` (2688 → 2694; the six are `M1`'s one and `M2`'s five) |
+| `ios-gate.sh lint-delta main` | **PASS** — `✓ lint-delta: no new warnings in touched files` |
+
+`CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` did not flake: the build
+pass made its poll counted rather than clock-raced, and it is green in a full-suite run here.
+
+## Advisories still standing from the build pass
+
+2 (the cadence write depends on 00572), 3 (`SettingsService` default vs the column DEFAULT), 4
+(the keepsake prints no name on a return visit), 5 (the snooze confirmation is session-local), 6
+(the push fallback branch is unreachable at this deployment target), 7 (the paged spread wants the
+walker's eye at four or more options) and 8 (cross-surface clay ink) are unchanged. Advisory 1 is
+withdrawn — `M2` closed it.
