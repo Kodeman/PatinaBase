@@ -72,18 +72,84 @@ describe('client middleware Universal Link exemption', () => {
     expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
   });
 
+  // S8 — the header block now covers ALL SIX bearer prefixes. /share, /rfq,
+  // /evidence and /field had carried neither header since they shipped; the
+  // ordinary public pages (/piece, /quiz) are still left alone.
+  it.each([
+    ['/share', `/share/${'a'.repeat(64)}`],
+    ['/rfq', `/rfq/${'a'.repeat(64)}`],
+    ['/evidence', `/evidence/${'a'.repeat(64)}`],
+    ['/field', `/field/sr_abc123`],
+    ['/pay', `/pay/${'a'.repeat(64)}`],
+  ])('stamps no-store + noindex on the %s bearer surface too', async (_name, pathname) => {
+    const response = (await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname,
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never)) as unknown as { headers: Map<string, string> };
+
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store, max-age=0');
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+  });
+
   it('does not stamp bearer-surface cache headers on ordinary public pages', async () => {
     const response = (await middleware({
       headers: new Headers({ host: 'localhost:3002' }),
       nextUrl: {
         origin: 'http://localhost:3002',
-        pathname: `/share/${'a'.repeat(64)}`,
+        pathname: '/piece/a-piece-id',
         search: '',
         searchParams: new URLSearchParams(),
       },
     } as never)) as unknown as { headers: Map<string, string> };
 
     expect(response.headers.get('Cache-Control')).toBeUndefined();
+  });
+
+  // S11 — the token must never reach a callbackUrl builder. Without /pay in
+  // isPublicPage, a signed-out guest following an invoice link would be sent
+  // to /auth/signin?callbackUrl=/pay/<64hex>, parking a permanent payment
+  // credential in a query string, in browser history, and in any log that
+  // records the sign-in URL.
+  it.each([
+    ['the sheet', `/pay/${'a'.repeat(64)}`],
+    ['the state route', `/pay/${'a'.repeat(64)}/state`],
+    ['the return hop', `/pay/return/${'b'.repeat(64)}`],
+    ['the dead sheet', '/pay/dead'],
+  ])('lets a signed-out guest reach %s with no redirect and no callbackUrl', async (
+    _name,
+    pathname,
+  ) => {
+    const response = await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname,
+        search: '?checkout=success',
+        searchParams: new URLSearchParams('checkout=success'),
+      },
+    } as never);
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(response).toBeDefined();
+
+    // T-6: the case is named "no callbackUrl", so it must actually look for
+    // one. Asserting only that nothing redirected would keep passing if a
+    // future middleware built a callbackUrl WITHOUT redirecting — which is
+    // precisely S11's stated failure mode.
+    expect(
+      JSON.stringify((NextResponse.redirect as jest.Mock).mock.calls),
+    ).not.toContain("callbackUrl");
+    const headers = (response as unknown as { headers: Map<string, string> })
+      .headers;
+    for (const value of headers.values()) {
+      expect(value).not.toContain("a".repeat(64));
+      expect(value).not.toContain("b".repeat(64));
+    }
   });
 
   it('lets an unauthenticated guest through to /rfq/[token] without a sign-in redirect', async () => {
@@ -98,6 +164,20 @@ describe('client middleware Universal Link exemption', () => {
     } as never);
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(response).toBeDefined();
+
+    // T-6: the case is named "no callbackUrl", so it must actually look for
+    // one. Asserting only that nothing redirected would keep passing if a
+    // future middleware built a callbackUrl WITHOUT redirecting — which is
+    // precisely S11's stated failure mode.
+    expect(
+      JSON.stringify((NextResponse.redirect as jest.Mock).mock.calls),
+    ).not.toContain("callbackUrl");
+    const headers = (response as unknown as { headers: Map<string, string> })
+      .headers;
+    for (const value of headers.values()) {
+      expect(value).not.toContain("a".repeat(64));
+      expect(value).not.toContain("b".repeat(64));
+    }
   });
 
   it('preserves pathname and query in the post-sign-in callback', async () => {
@@ -524,6 +604,20 @@ describe('client middleware retired-route map', () => {
     const response = await visit('/preferences/unsubscribe', 'token=abc');
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(response).toBeDefined();
+
+    // T-6: the case is named "no callbackUrl", so it must actually look for
+    // one. Asserting only that nothing redirected would keep passing if a
+    // future middleware built a callbackUrl WITHOUT redirecting — which is
+    // precisely S11's stated failure mode.
+    expect(
+      JSON.stringify((NextResponse.redirect as jest.Mock).mock.calls),
+    ).not.toContain("callbackUrl");
+    const headers = (response as unknown as { headers: Map<string, string> })
+      .headers;
+    for (const value of headers.values()) {
+      expect(value).not.toContain("a".repeat(64));
+      expect(value).not.toContain("b".repeat(64));
+    }
   });
 
   it('does not fold /preferences/unsubscribe for a signed-in recipient either', async () => {

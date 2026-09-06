@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { invoiceBalanceCents } from '@patina/shared';
 import type { Invoice } from '@patina/supabase';
@@ -15,7 +15,7 @@ import {
 } from '@/components/threshold/instruments/standing-sentence';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { useNamedInvoice } from '@/lib/threshold/checkout-return';
+import { useNamedInvoice, useStripStaleTillParams } from '@/lib/threshold/checkout-return';
 import { parseSourceDate, toInvoiceModel } from '@/lib/threshold/derive';
 import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
 
@@ -23,14 +23,18 @@ import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
    A studio invoice can reach a household the studio has never opened a
    project for — a consultation, a paid review, a retainer. She has no house,
    so `ProjectsEmptyState` would tell her she has no projects and hand her
-   nothing to do about the money she has been sent. Worse, it mounts no
-   letterbox, and the letterbox is the only thing that reads the return from
-   the till: a client who paid would come back to "no active projects yet"
-   and no receipt.
+   nothing to do about the money she has been sent, and it mounts no
+   letterbox at all — the one place a studio invoice can state its own
+   figures and offer its own address (00574 · K1).
 
-   So the front door becomes the letterbox itself — the studio's letterhead,
-   the letter, and the same settlement ceremony unfolding in place. No header
-   and no nav (R135): every act she has is on this page.
+   So the front door becomes the letterbox itself — the studio's letterhead
+   and the letter, "Open the invoice" its only act (W3b — settle-in-place is
+   retired). No header and no nav (R135): every act she has is on this page.
+
+   This door never renders `RoadOrders` (there are no projects, so there are
+   no direct orders), so it is also the one place with no `useCheckoutReturn`
+   consumer left to strike a stale return off the address — `stripStaleTillParams`
+   below does that alone.
 
    A household with no letter waiting still meets the empty state; this door
    only stands where there is something in the slot. ────────────────────── */
@@ -81,6 +85,8 @@ export function LetterboxDoor() {
   // letters from two studios from reading one studio's plate over the other
   // studio's letter.
   const namedId = useNamedInvoice();
+  // No `RoadOrders` ever mounts on this door — see the file comment.
+  useStripStaleTillParams(true);
   const inSlot =
     (namedId ? (letters.find((row) => row.id === namedId) ?? null) : null) ??
     open[0] ??
@@ -98,12 +104,6 @@ export function LetterboxDoor() {
   });
 
   const today = useMemo(() => (hydrated ? new Date() : undefined), [hydrated]);
-
-  const refetch = invoicesQuery.refetch;
-  // Stable: the confirmation poll holds this in an effect's dependency list.
-  const onRefetch = useCallback(async () => {
-    await refetch();
-  }, [refetch]);
 
   // A door that renders the empty state and then grows a letter is the one
   // reversal a money surface may not perform.
@@ -139,8 +139,6 @@ export function LetterboxDoor() {
         <Letterbox
           invoice={open.length > 0 ? toInvoiceModel(open[0]) : null}
           invoices={letters}
-          designerName={identityQuery.data?.name ?? null}
-          onRefetch={onRefetch}
           today={today}
         />
       </div>

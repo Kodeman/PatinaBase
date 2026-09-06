@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import type { Invoice } from '@patina/supabase';
 
@@ -12,6 +13,29 @@ import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useInvoiceLink: jest.fn(),
+}));
+
+// `prefetch` is a Next `Link` prop, not a DOM attribute, so it leaves no trace
+// on the rendered anchor. It is surfaced as `data-prefetch` here so the
+// guarantee below can be asserted at all — the pay-link e2e CANNOT assert it,
+// because `next dev` disables prefetching outright and the suite would pass
+// just as green with the prop deleted.
+jest.mock('next/link', () => ({
+  __esModule: true,
+  default: ({
+    children,
+    href,
+    prefetch,
+    ...rest
+  }: {
+    children: ReactNode;
+    href: string;
+    prefetch?: boolean;
+  } & Record<string, unknown>) => (
+    <a href={href} data-prefetch={String(prefetch)} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({
@@ -301,9 +325,22 @@ describe('Letterbox — one letter, half out of the slot', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     const open = screen.getByRole('link', { name: 'Open the invoice' });
-    expect(open).toHaveAttribute('href', `https://client.test/pay/${LINK_TOKEN}`);
+    expect(open).toHaveAttribute('href', `/pay/${LINK_TOKEN}`);
     expect(screen.queryByRole('button', { name: /open the letterbox/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Print' })).not.toBeInTheDocument();
+  });
+
+  /* F6: Next prefetches a `Link` as it scrolls into view, and the pay page
+     records a view and spends its rate-limit budget on every render. Scrolling
+     past the letterbox must therefore cost the link nothing, which `prefetch`
+     being explicitly false is the whole of. */
+  it('never warms the pay page by scrolling past it', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.getByRole('link', { name: 'Open the invoice' })).toHaveAttribute(
+      'data-prefetch',
+      'false',
+    );
   });
 
   it('says nothing about an address the invoice does not have', () => {

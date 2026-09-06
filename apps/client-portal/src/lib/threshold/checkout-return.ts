@@ -48,10 +48,19 @@ export function readCheckoutReturn(search: string): CheckoutReturn | null {
   };
 }
 
-/** The same address with the till's params struck out and `hash` set. */
-export function cleanedCheckoutUrl(href: string, hash: string): string {
+/**
+ * The same address with `paramsToStrip` struck out and `hash` set. Defaults
+ * to every till param, `?invoice=`/`?order=` included — the return's own
+ * cleanup. A narrower list lets a caller strip only the return's own params
+ * while leaving `?invoice=`/`?order=` for someone else to read.
+ */
+export function cleanedCheckoutUrl(
+  href: string,
+  hash: string,
+  paramsToStrip: readonly string[] = TILL_PARAMS,
+): string {
   const url = new URL(href, 'http://threshold.invalid');
-  for (const key of TILL_PARAMS) url.searchParams.delete(key);
+  for (const key of paramsToStrip) url.searchParams.delete(key);
   return `${url.pathname}${url.search}${hash}`;
 }
 
@@ -61,8 +70,13 @@ let consumedValue: CheckoutReturn | null = null;
 /**
  * The return, read and cleaned once. Callers after the first get the same
  * answer without a second history entry.
+ *
+ * `hash` is the fragment the cleaned address keeps. The house has two sections
+ * a receipt can belong to, so it defaults to choosing between them exactly as
+ * it always has. `/pay/<token>` is one sheet with no sections and no anchor to
+ * name, and passes `''`.
  */
-export function consumeCheckoutReturn(): CheckoutReturn | null {
+export function consumeCheckoutReturn(hash?: string): CheckoutReturn | null {
   if (consumed) return consumedValue;
   consumed = true;
   if (typeof window === 'undefined') return null;
@@ -71,7 +85,10 @@ export function consumeCheckoutReturn(): CheckoutReturn | null {
     window.history.replaceState(
       {},
       '',
-      cleanedCheckoutUrl(window.location.href, consumedValue.orderId ? '#road' : '#letterbox'),
+      cleanedCheckoutUrl(
+        window.location.href,
+        hash ?? (consumedValue.orderId ? '#road' : '#letterbox'),
+      ),
     );
   }
   return consumedValue;
@@ -136,13 +153,16 @@ export function resetCheckoutReturn(): void {
 }
 
 /** The return, after hydration — never during SSR, where there is no address. */
-export function useCheckoutReturn(): CheckoutReturn | null {
+export function useCheckoutReturn(hash?: string): CheckoutReturn | null {
   const [received, setReceived] = useState<CheckoutReturn | null>(null);
   useEffect(() => {
     // Reading the browser's return address is a synchronization with an
     // external system, not derived state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReceived(consumeCheckoutReturn());
+    setReceived(consumeCheckoutReturn(hash));
+    // The hash names the cleaned address once, on the first read; a later
+    // change to it has nothing left to clean.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return received;
 }
@@ -212,4 +232,47 @@ export function revealReturnAnchor(element: HTMLElement | null): void {
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)')?.matches === true;
   element.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+}
+
+/* ── A RETURN NOBODY IS READING (W3b) ────────────────────────────────────────
+   The letterbox stopped consuming `?checkout=` when settle-in-place moved to
+   `/pay/<token>`; only `RoadOrders` reads it now, and `RoadOrders` mounts
+   only where there are direct orders. A household with a studio invoice and
+   no orders — the `LetterboxDoor` path, and `Threshold` whenever the road has
+   none — has nothing left that strikes a stale return off the address, so a
+   `?checkout=success&session_id=…` from an old mail or a shared link would
+   otherwise linger in the bar, and in anything the client copies, for the
+   rest of the SPA session.
+
+   This does NOT restore a receipt: it only keeps the address honest. It
+   leaves `?invoice=`/`?order=` alone — those name a letter or a road record
+   on their own, independently of any return — so only the return's own four
+   params are struck. ─────────────────────────────────────────────────────── */
+
+const RETURN_ONLY_PARAMS = ['checkout', 'session_id', 'checkout_attempt_id', 'payment_id'] as const;
+
+/** Strike a stale return's own params, once, when one is present. A no-op on
+ * an address with no `?checkout=` — a plain `?invoice=` link is untouched. */
+export function stripStaleTillParams(): void {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  if (!params.get('checkout')) return;
+  window.history.replaceState(
+    {},
+    '',
+    cleanedCheckoutUrl(window.location.href, window.location.hash || '', RETURN_ONLY_PARAMS),
+  );
+}
+
+/**
+ * `stripStaleTillParams`, on mount, only when `enabled`. Pass `false` where a
+ * `RoadOrders` (or any other `useCheckoutReturn` consumer) is mounted
+ * alongside — it reads and cleans the return's params itself, and racing it
+ * would strip `checkout` before it gets a chance to recognise the return.
+ */
+export function useStripStaleTillParams(enabled: boolean): void {
+  useEffect(() => {
+    if (!enabled) return;
+    stripStaleTillParams();
+  }, [enabled]);
 }

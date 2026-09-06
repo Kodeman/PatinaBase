@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { Invoice } from '@patina/supabase';
 import { useInvoiceLink } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
-import { invoiceLinkUrl } from '@patina/utils';
+import { invoiceLinkPath } from '@patina/utils';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
@@ -76,16 +76,17 @@ function byArrival(a: Invoice, b: Invoice): number {
   return right - left;
 }
 
-/* A folded letter's own address. Its own hook per row, mounted whether the
-   line is open or already settled — a plain link carries no state to gate
-   behind a toggle, unlike the settle panel it replaces. */
-function FoldedInvoiceLink({
-  invoiceId,
-  linkOrigin,
-}: {
-  invoiceId: string;
-  linkOrigin: string;
-}) {
+/* A folded letter's own address. `/pay` is a route of this very portal, so
+   the root-relative path is the whole address: correct on the server and the
+   client alike, with no origin to read. Its own `useInvoiceLink` per row,
+   mounted whether the line is open or already settled — a plain link carries
+   no state to gate behind a toggle, unlike the settle panel it replaces —
+   but only once the disclosure below is open, so a threshold load never
+   fires one of these per row in the project's history. Never warmed by
+   scrolling past: a prefetch that ever renders would record a view and spend
+   the pay page's rate-limit budget on a letter nobody opened, multiplied by
+   every row at once. */
+function FoldedInvoiceLink({ invoiceId }: { invoiceId: string }) {
   const { data: invoiceLink } = useInvoiceLink(invoiceId);
   if (!invoiceLink) return null;
   return (
@@ -94,7 +95,8 @@ function FoldedInvoiceLink({
       regionKey="letterbox"
       surfaceKey="the_threshold"
       variant="tertiary"
-      href={invoiceLinkUrl(linkOrigin, invoiceLink.token)}
+      href={invoiceLinkPath(invoiceLink.token)}
+      prefetch={false}
     >
       Open the invoice
     </ScoredAction>
@@ -106,16 +108,12 @@ export interface EarlierInvoicesProps {
   invoices: Invoice[];
   /** The one standing in the letterbox — it is not also kept behind it. */
   exceptId?: string | null;
-  /** The client-portal origin, resolved after mount by the letterbox — the
-   * same address each line's own act builds its link from. */
-  linkOrigin?: string;
   today?: Date;
 }
 
 export function EarlierInvoices({
   invoices,
   exceptId,
-  linkOrigin = '',
   today,
 }: EarlierInvoicesProps) {
   const [open, setOpen] = useState(false);
@@ -162,7 +160,7 @@ export function EarlierInvoices({
                         invoice.currency || 'USD',
                       )} · ${receiptTrail(invoice, today)}${origin(invoice)}`}
                     </span>
-                    <FoldedInvoiceLink invoiceId={invoice.id} linkOrigin={linkOrigin} />
+                    <FoldedInvoiceLink invoiceId={invoice.id} />
                   </div>
                 </li>
               ))}

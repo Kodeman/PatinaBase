@@ -4,6 +4,7 @@ import {
   INVOICE_LINK_TOKEN_PATTERN,
   invoiceLinkPath,
   invoiceLinkUrl,
+  letterPortalUrl,
 } from './invoice-links.ts';
 
 const TOKEN = 'f'.repeat(64);
@@ -74,31 +75,18 @@ Deno.test('invoice links: ensureInvoiceLinkUrl is null on every failure shape (t
   );
 });
 
-// ── The producers' substitution (invoice-send:259, invoice-reminders:353) ──
+// ── The address the letters actually use ──────────────────────────────────
 //
-// Both letters build their portalUrl as
-//   `(await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
-//     `${CLIENT_PORTAL_URL}/invoices/${invoice.id}``
-// Neither function has a test harness of its own (each is one monolithic
-// Deno.serve handler), so the expression's two outcomes are pinned here —
-// the shape a producer edit must not break.
+// `letterPortalUrl` IS what invoice-send:265 and invoice-reminders:353 call —
+// the fallback lives beside the helper it guards, so these exercise the real
+// producer path rather than a restatement of it.
 
 const CLIENT_PORTAL_URL = 'https://client.patina.cloud';
-
-async function producerPortalUrl(
-  admin: Parameters<typeof ensureInvoiceLinkUrl>[0],
-  invoiceId: string
-): Promise<string> {
-  return (
-    (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoiceId)) ??
-    `${CLIENT_PORTAL_URL}/invoices/${invoiceId}`
-  );
-}
 
 Deno.test('invoice links: the letters address /pay/<token> when the link mints', async () => {
   const { client, calls } = rpcClient({ data: TOKEN, error: null });
   assertEquals(
-    await producerPortalUrl(client, 'inv-1'),
+    await letterPortalUrl(client, CLIENT_PORTAL_URL, 'inv-1'),
     `https://client.patina.cloud/pay/${TOKEN}`
   );
   // Asked per letter, never cached — a Regenerate is honored by the next send.
@@ -113,8 +101,15 @@ Deno.test('invoice links: the letters fall back to /invoices/<id>, never a broke
     new Error('network'),
   ]) {
     assertEquals(
-      await producerPortalUrl(rpcClient(result).client, 'inv-1'),
+      await letterPortalUrl(rpcClient(result).client, CLIENT_PORTAL_URL, 'inv-1'),
       'https://client.patina.cloud/invoices/inv-1'
     );
   }
+});
+
+Deno.test('invoice links: the fallback normalizes a trailing slash on the base', async () => {
+  assertEquals(
+    await letterPortalUrl(rpcClient({ data: null, error: null }).client, 'https://client.test/', 'inv-1'),
+    'https://client.test/invoices/inv-1'
+  );
 });

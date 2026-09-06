@@ -18,6 +18,22 @@ const withPWA =
         publicExcludes: ['!icons/**/*'],
         buildExcludes: [/middleware-manifest\.json$/],
         runtimeCaching: [
+          // S1 — bearer-URL surfaces are NEVER stored. Cache Storage does not
+          // honour `Cache-Control: no-store`, so the middleware's header would
+          // not have covered this: a NetworkFirst entry would keep a revoked
+          // link's sheet (and, for /pay, a live payment page) in the visitor's
+          // browser for thirty days. Must stay BEFORE the catch-all below —
+          // workbox takes the first matching route.
+          //
+          // Inert on the deployed Worker: `withPWA` is the identity function
+          // when OPEN_NEXT === 'true' (above) and deploy-portal.sh sets it, so
+          // no service worker ships. Kept because it costs one line, protects
+          // non-OpenNext builds and preview hosts, and fails safe if the PWA
+          // is ever re-enabled.
+          {
+            urlPattern: /^https?:\/\/[^/]+\/(pay|plans|share|rfq|evidence|field)\//,
+            handler: 'NetworkOnly',
+          },
           {
             urlPattern: /^https?.*/,
             handler: 'NetworkFirst',

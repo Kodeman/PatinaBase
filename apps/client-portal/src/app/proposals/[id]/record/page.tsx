@@ -22,14 +22,15 @@ import { parseSourceDate } from '@/lib/threshold/derive';
    (name, day, consent version, fingerprint) where the Stage-2 projection does
    not.
 
-   AUTH AND RLS, again the invoice print page's. The middleware signs her in
-   and gates the portal role; the bundle RPC is the client-scoped read the door
-   itself uses, so a stranger's call comes back with nothing and the sheet says
-   the record could not be found — never whether the id exists.
+   AUTH AND RLS follow every other non-public path's. The middleware signs her
+   in and gates the portal role; the bundle RPC is the client-scoped read the
+   door itself uses, so a stranger's call comes back with nothing and the
+   sheet says the record could not be found — never whether the id exists.
 
    `retired-routes.ts` folds `/proposals/<id>` and `/proposals/<id>/sign` onto
-   `#door` and leaves this one standing, on the `/invoices/<id>/print`
-   precedent.
+   `#door` and leaves this one standing: a printable sheet has no in-page
+   equivalent it could fold onto, and folding it would send "Keep a copy"
+   back to the ask it was pressed on.
    ────────────────────────────────────────────────────────────────────────── */
 
 const LONG_DATE = new Intl.DateTimeFormat('en-GB', {

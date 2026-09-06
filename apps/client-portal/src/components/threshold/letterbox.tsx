@@ -1,9 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
 import { useInvoiceLink, type Invoice } from '@patina/supabase';
-import { invoiceLinkUrl } from '@patina/utils';
+import { invoiceLinkPath } from '@patina/utils';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
@@ -49,16 +47,10 @@ export interface LetterboxProps {
   invoice: InvoiceModel | null;
   /** Every invoice on the project — what is kept behind the one letter. */
   invoices?: Invoice[];
-  /** Last-resort payee name. Unused since W3b retired settle-in-place; kept
-   * so callers that still hand it down (`threshold.tsx`, `letterbox-door.tsx`)
-   * need no change of their own. */
-  designerName?: string | null;
-  /** Unused since W3b retired settle-in-place; kept for the same reason. */
-  onRefetch?: () => void | Promise<unknown>;
   /**
    * Today, for deciding whether the due date needs its year spelled out — the
-   * rule `SpineToll` applies. Omitted during SSR and the first client paint,
-   * which simply drops the year.
+   * same rule every date on this page keeps. Omitted during SSR and the
+   * first client paint, which simply drops the year.
    */
   today?: Date;
 }
@@ -121,12 +113,10 @@ export function Letterbox({
 
   // The letter's own address (00574 · K1) — the whole invoice on one page, and
   // the till on it. This is the letter's only act now (W3b).
+  // `/pay/[token]` is a route of this very portal, so the root-relative path is
+  // the whole address: correct on the server and the client alike, with no
+  // origin to read and nothing to reconcile at hydration.
   const { data: invoiceLink } = useInvoiceLink(invoice?.id ?? null);
-  // Read after mount so the first client render matches the server's, which
-  // has no window. Same origin either way, so the relative form is correct
-  // until it resolves.
-  const [origin, setOrigin] = useState('');
-  useEffect(() => setOrigin(window.location.origin), []);
 
   // The row behind the model: the currency the figures are quoted in, and the
   // studio a check would be made out to. That studio is the LETTER's, not the
@@ -189,7 +179,11 @@ export function Letterbox({
                 regionKey="letterbox"
                 surfaceKey="the_threshold"
                 variant="primary"
-                href={invoiceLinkUrl(origin, invoiceLink.token)}
+                href={invoiceLinkPath(invoiceLink.token)}
+                // Never warmed by scrolling past: a prefetch that ever renders
+                // would record a view and spend the pay page's rate-limit
+                // budget on a letter nobody opened.
+                prefetch={false}
               >
                 Open the invoice
               </ScoredAction>
@@ -208,7 +202,6 @@ export function Letterbox({
       <EarlierInvoices
         invoices={invoices}
         exceptId={invoice?.id ?? null}
-        linkOrigin={origin}
         today={today}
       />
     </div>

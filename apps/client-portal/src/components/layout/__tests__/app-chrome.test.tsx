@@ -44,7 +44,7 @@ describe('AppChrome', () => {
     expect(screen.getByText('guest content')).toBeInTheDocument();
   });
 
-  it.each(['/', '/projects/proj-1', '/invoices/inv-1/print'])(
+  it.each(['/', '/projects/proj-1', '/decisions/dec-1/record'])(
     'marks the signed-in path %s authenticated and renders no header',
     (pathname) => {
       mockPathname = pathname;

@@ -9,12 +9,12 @@ import { Stamp, type StampState } from '@/components/threshold/instruments/stamp
    P-26. One sheet, printable, that says what she was asked and what she
    answered — the keepsake the ceremony has owed since Wave 2 sealed it.
 
-   IT IS A PRINT SHEET, NOT A ZONE. `/invoices/[id]/print` set the precedent
-   and `retired-routes.ts` names it: a printable instrument has no in-page
-   equivalent, so it keeps its own address instead of folding onto an anchor.
-   These two routes follow it exactly — same chromeless white overlay, same
-   visibility-scoped print rules, same back link into the page the client came
-   from.
+   IT IS A PRINT SHEET, NOT A ZONE. `retired-routes.ts` names the carve-out: a
+   printable instrument with no in-page equivalent keeps its own address
+   instead of folding onto an anchor, on the same reasoning that keeps
+   `/decisions/<id>/record` and `/proposals/<id>/record` unfolded — same
+   chromeless white overlay, same visibility-scoped print rules, same back
+   link into the page the client came from.
 
    WHAT THE PAPER DOES DIFFERENTLY FROM THE SCREEN
    · White, forced. The Threshold's warm ground is a screen decision; a laser

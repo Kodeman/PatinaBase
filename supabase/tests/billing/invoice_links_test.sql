@@ -14,8 +14,13 @@
 -- RPCs; the M4 link identity term on finalize/recover; M8; the M11
 -- Regenerate refusal for all three live states; the M10 void refusal on
 -- processing and the link closing on void; the sweep; S5/S6 authority on
--- regenerate/get_invoice_link; and the ACL posture (anon holds EXECUTE on
--- none of the new functions, the table is unreadable by browser roles).
+-- regenerate/get_invoice_link; the ACL posture (anon holds EXECUTE on none
+-- of the new functions, the table is unreadable by browser roles); and the
+-- review pass: F1 (a processing attempt is never superseded by another
+-- actor), F2 (a nonce dies with the link it was minted under), F3 (only a
+-- PaymentIntent-stamped pending row is money in flight), F9 (invoice_voided
+-- lands), F14 (the checkout resolver names the payer), studio.location and
+-- line_items[].attribution, and the kind discriminator.
 
 BEGIN;
 
@@ -108,6 +113,13 @@ VALUES
    'a5740000-0000-4000-8000-000000000001', NULL,
    'a5740000-0000-4000-8000-000000000001', 'active', 'a5741000-0000-4000-8000-000000000001');
 
+-- Studio Two carries an address (organizations.address is the
+-- OrganizationAddress jsonb) → studio.location = 'Portland, OR'; Studio One
+-- has none → location NULL.
+UPDATE public.organizations
+SET address = '{"street":"1 Elm St","city":" Portland ","state":"OR","zip":"97201"}'::jsonb
+WHERE id = 'a5741000-0000-4000-8000-000000000002';
+
 -- Studio Two carries billing settings; Studio One deliberately has none (the
 -- majority case — the payload must still say 300).
 INSERT INTO public.studio_billing_settings (studio_id, card_surcharge_bps, check_remit_to)
@@ -188,6 +200,29 @@ FROM public.invoices i WHERE i.id::text LIKE 'a5745000-%'
 UNION ALL
 SELECT i.id, 'adhoc', 'Line two', 1, i.total_cents - 5000, i.total_cents - 5000, 1
 FROM public.invoices i WHERE i.id::text LIKE 'a5745000-%';
+
+-- line_items[].attribution on the payer-less invoice 32: an FF&E line whose
+-- item names its maker, one whose vendor record does, an ad-hoc line with an
+-- explicit attribution on its metadata, and one whose metadata carries an
+-- email (dropped — a name only, never an address).
+INSERT INTO public.vendors (id, name)
+VALUES ('a5747000-0000-4000-8000-000000000001', 'Vendor Records Ltd');
+INSERT INTO public.project_ffe_items (id, project_id, name, vendor_name, vendor_id)
+VALUES
+  ('a5746000-0000-4000-8000-000000000001', 'a5744000-0000-4000-8000-000000000002',
+   'Walnut credenza', 'Maker Co', NULL),
+  ('a5746000-0000-4000-8000-000000000002', 'a5744000-0000-4000-8000-000000000002',
+   'Wool runner', NULL, 'a5747000-0000-4000-8000-000000000001');
+UPDATE public.invoice_line_items SET kind = 'ffe', ffe_item_id = 'a5746000-0000-4000-8000-000000000001'
+WHERE invoice_id = 'a5745000-0000-4000-8000-000000000032' AND sort_order = 0;
+UPDATE public.invoice_line_items SET kind = 'ffe', ffe_item_id = 'a5746000-0000-4000-8000-000000000002'
+WHERE invoice_id = 'a5745000-0000-4000-8000-000000000032' AND sort_order = 1;
+INSERT INTO public.invoice_line_items (invoice_id, kind, description, quantity, unit_amount_cents, amount_cents, sort_order, metadata)
+VALUES
+  ('a5745000-0000-4000-8000-000000000032', 'adhoc', 'Hand-forged hardware', 1, 0, 0, 2,
+   '{"attribution": "  Hand Forge "}'::jsonb),
+  ('a5745000-0000-4000-8000-000000000032', 'adhoc', 'Delivery', 1, 0, 0, 3,
+   '{"attribution": "someone@test.invalid"}'::jsonb);
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_links_actor(p_actor uuid)
 RETURNS void
@@ -566,6 +601,12 @@ BEGIN
   v := public.resolve_invoice_link(v_token);
   ASSERT v IS NOT NULL, 'an active link on a sent invoice resolves';
   ASSERT v->>'kind' = 'invoice' AND v->>'sheet' = 'invoice', 'payable sheet discriminator';
+  ASSERT v->>'kind' IN ('invoice', 'withdrawn', 'settling'), 'kind is the discriminator W2 reads';
+  ASSERT v->'studio' ? 'location' AND v->'studio'->'location' = 'null'::jsonb,
+    'a studio with no address carries location null';
+  ASSERT (SELECT bool_and(li ? 'attribution' AND li->'attribution' = 'null'::jsonb)
+          FROM jsonb_array_elements(v->'line_items') li),
+    'plain ad-hoc lines carry attribution null';
   ASSERT v->'invoice'->>'status' = 'sent'
      AND (v->'invoice'->>'total_cents')::int = 10000
      AND (v->'invoice'->>'amount_paid_cents')::int = 0
@@ -626,6 +667,21 @@ BEGIN
   v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token32'));
   ASSERT v->>'kind' = 'invoice' AND v->>'client_display_name' = 'Harper Guest',
     format('payer-less invoice resolves with the roster name: %s', v->>'client_display_name');
+  ASSERT (SELECT jsonb_agg(li->'attribution' ORDER BY (li->>'description'))
+          FROM jsonb_array_elements(v->'line_items') li)
+         = '[null, "Hand Forge", "Maker Co", "Vendor Records Ltd"]'::jsonb,
+    format('attribution: FF&E vendor_name, then the vendor record, an explicit metadata text, and never an email: %s',
+           (SELECT jsonb_agg(jsonb_build_object('d', li->>'description', 'a', li->'attribution')) FROM jsonb_array_elements(v->'line_items') li));
+  ASSERT (SELECT bool_and(nullif(li->>'attribution', '') !~ '@') FROM jsonb_array_elements(v->'line_items') li),
+    'no attribution is an email';
+  -- F14: the checkout resolver names the payer the same way the page does.
+  ASSERT (SELECT r.client_display_name = 'Harper Guest'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token32')) r),
+    'F14: the checkout resolver carries the roster name for a payer-less invoice';
+  ASSERT (SELECT r.client_display_name = 'Links Client'
+          FROM public.resolve_invoice_link_for_checkout(v_token) r),
+    'F14: the checkout resolver carries the household profile name';
 
   -- Studio invoice with no house: the letterhead is the studio it names, not
   -- the designer's primary studio; its settings row is read.
@@ -639,6 +695,8 @@ BEGIN
   ASSERT (v->'payment_options'->>'card_surcharge_bps')::int = 150
      AND v->'payment_options'->>'check_remit_to' = 'PO Box 7, Somewhere',
     'studio billing settings reach the payload';
+  ASSERT v->'studio'->>'location' = 'Portland, OR',
+    format('studio.location is City, State from the studio address: %s', v->'studio');
   ASSERT (SELECT s.name = 'Links Studio Two'
           FROM public.resolve_studio_identity(
             p_project_id => NULL,
@@ -1080,6 +1138,72 @@ END;
 $$;
 RESET ROLE;
 
+-- ── F3: only a PaymentIntent-stamped pending row is money in flight ───────
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_claim jsonb;
+  v jsonb;
+  -- Invoice 42's link was minted by the partially_paid jump, after the token
+  -- snapshot above, so it is read from the table.
+  v_token text := (SELECT token FROM public.invoice_links
+                   WHERE invoice_id = 'a5745000-0000-4000-8000-000000000042' AND status = 'active');
+  v_link uuid;
+  v_error text;
+BEGIN
+  v_claim := public.claim_invoice_checkout_attempt(
+    'a5745000-0000-4000-8000-000000000042', 'a5740000-0000-4000-8000-000000000004',
+    'cus_links_client', false, 'card');
+  INSERT INTO links_state VALUES ('attempt42', v_claim->>'attempt_id');
+  v := public.resolve_invoice_link(v_token, false);
+  ASSERT (v->'pay'->>'processing')::boolean = false AND v->'payments' = '[]'::jsonb,
+    format('F3: a merely-claimed card attempt is neither listed nor processing: %s', v->'pay');
+
+  PERFORM public.finalize_invoice_checkout_attempt(
+    (v_claim->>'attempt_id')::uuid, 'a5740000-0000-4000-8000-000000000004',
+    'cus_links_client', 'cs_42');
+  v := public.resolve_invoice_link(v_token, false);
+  ASSERT (v->'pay'->>'processing')::boolean = false AND v->'payments' = '[]'::jsonb,
+    'F3: an open (abandonable) Checkout session is not money in flight either';
+
+  -- The PaymentIntent stamp is the debit: now it is listed and processing.
+  UPDATE public.invoice_payments SET stripe_payment_intent_id = 'pi_42'
+  WHERE id = (v_claim->>'payment_id')::uuid;
+  ASSERT (SELECT state = 'processing' FROM public.invoice_checkout_attempts
+          WHERE id = (v_claim->>'attempt_id')::uuid),
+    'the PI stamp moves the attempt to processing';
+  v := public.resolve_invoice_link(v_token, false);
+  ASSERT (v->'pay'->>'processing')::boolean = true
+     AND jsonb_array_length(v->'payments') = 1
+     AND v->'payments'->0->>'status' = 'pending',
+    format('F3: a PaymentIntent-stamped pending row is processing and listed: %s', v->'pay');
+
+  -- ── F1 A: a guest never supersedes the household's money in flight ──
+  SELECT id INTO v_link FROM public.invoice_links
+  WHERE invoice_id = 'a5745000-0000-4000-8000-000000000042' AND status = 'active';
+  PERFORM public.set_invoice_link_stripe_customer(v_link, 'cus_guest_42');
+  v_error := NULL;
+  BEGIN
+    PERFORM public.claim_invoice_link_checkout_attempt(
+      'a5745000-0000-4000-8000-000000000042', v_link, 'cus_guest_42', 'card');
+  EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
+  ASSERT v_error = 'invoice_checkout_in_progress',
+    format('F1 A: a guest meeting a processing household attempt must wait, got %L', v_error);
+  ASSERT (SELECT state = 'processing' FROM public.invoice_checkout_attempts
+          WHERE id = (v_claim->>'attempt_id')::uuid),
+    'F1 A: the in-flight attempt is untouched';
+  ASSERT (SELECT status = 'pending' FROM public.invoice_payments
+          WHERE id = (v_claim->>'payment_id')::uuid),
+    'F1 A: the in-flight payment is untouched';
+  -- The same actor may still re-enter its own processing attempt.
+  ASSERT (public.claim_invoice_checkout_attempt(
+    'a5745000-0000-4000-8000-000000000042', 'a5740000-0000-4000-8000-000000000004',
+    'cus_links_client', false, 'card'))->>'attempt_id' = v_claim->>'attempt_id',
+    'the household re-enters its own processing attempt';
+END;
+$$;
+RESET ROLE;
+
 -- ── M11 / M10 on invoice 39: claimed → session_created → processing ───────
 DO $$
 DECLARE
@@ -1150,9 +1274,26 @@ BEGIN
 END;
 $$;
 
+-- ── F1 B: the household never supersedes a guest's money in flight ────────
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE v_error text;
+BEGIN
+  BEGIN
+    PERFORM public.claim_invoice_checkout_attempt(
+      'a5745000-0000-4000-8000-000000000039', 'a5740000-0000-4000-8000-000000000004',
+      'cus_links_client', false, 'card');
+  EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
+  ASSERT v_error = 'invoice_checkout_in_progress',
+    format('F1 B: the household meeting a processing guest attempt must wait, got %L', v_error);
+  ASSERT (SELECT state = 'processing' FROM public.invoice_checkout_attempts
+          WHERE id = (SELECT value::uuid FROM links_state WHERE label = 'attempt39')),
+    'F1 B: the guest''s in-flight attempt is untouched';
+END;
+$$;
+
 -- ── M10: void succeeds for claimed (35) and session_created (40); the link
 --    closes; K5 withdrawn sheet ─────────────────────────────────────────────
-SET LOCAL ROLE service_role;
 DO $$
 DECLARE v_claim jsonb;
 BEGIN
@@ -1188,9 +1329,9 @@ BEGIN
   ASSERT (SELECT bool_and(status = 'void') FROM public.invoices
           WHERE id IN ('a5745000-0000-4000-8000-000000000035','a5745000-0000-4000-8000-000000000040')),
     'M10: void succeeds for claimed and session_created';
-  -- The 00397 sync trigger closes the attempt when its payment fails, before
-  -- the void body's own guarded UPDATE runs, so failure_reason is not pinned.
-  ASSERT (SELECT bool_and(state = 'failed')
+  -- Review F9: the void body writes the attempt before its payment, so the
+  -- reason survives the 00397 sync trigger.
+  ASSERT (SELECT bool_and(state = 'failed' AND failure_reason = 'invoice_voided')
           FROM public.invoice_checkout_attempts
           WHERE id IN ((SELECT value::uuid FROM links_state WHERE label = 'attempt35'),
                        (SELECT value::uuid FROM links_state WHERE label = 'attempt40'))),
@@ -1358,9 +1499,11 @@ BEGIN
     'the old token is dead';
   ASSERT public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token46b')) IS NOT NULL,
     'the new token resolves';
-  ASSERT public.resolve_invoice_return_nonce(v_claim->>'return_nonce')
-         = (SELECT value FROM links_state WHERE label = 'token46b'),
-    'an old nonce follows the invoice to its new active token';
+  -- Review F2: a nonce in Stripe's retained logs must never become an alias
+  -- for a token minted after its attempt — Regenerate is the designer's
+  -- revocation act.
+  ASSERT public.resolve_invoice_return_nonce(v_claim->>'return_nonce') IS NULL,
+    'F2: an old nonce dies with the link it was minted under';
 
   SELECT id INTO v_link FROM public.invoice_links
   WHERE invoice_id = 'a5745000-0000-4000-8000-000000000046' AND status = 'active';

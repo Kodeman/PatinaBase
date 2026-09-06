@@ -17,19 +17,18 @@ import { parseSourceDate } from '@/lib/threshold/derive';
 /* ── /decisions/[id]/record ──────────────────────────────────────────────────
    P-26. The keepsake for a Stage-2 approval.
 
-   AUTH AND RLS ARE THE INVOICE PRINT PAGE'S, EXACTLY. Sign-in and the
-   portal-role gate are the middleware's for every non-public path, and the row
-   itself comes from `list_my_project_decision_reviews` — the caller-global
-   sanitized read the Threshold already uses, which returns the frozen lead's
-   own approvals and the studio's, and nothing else. A stranger's read comes
-   back without this id and the page says the record could not be found: the
-   same shape `/invoices/[id]/print` uses, and it never reveals whether the id
-   exists.
+   AUTH AND RLS FOLLOW EVERY OTHER NON-PUBLIC PATH'S. Sign-in and the
+   portal-role gate are the middleware's, and the row itself comes from
+   `list_my_project_decision_reviews` — the caller-global sanitized read the
+   Threshold already uses, which returns the frozen lead's own approvals and
+   the studio's, and nothing else. A stranger's read comes back without this
+   id and the page says the record could not be found, and never reveals
+   whether the id exists at all.
 
    THE ROUTE IS NOT FOLDED. `retired-routes.ts` maps `/decisions/<id>` onto
-   `#approval-<id>` and deliberately leaves this one alone, the way it leaves
-   `/invoices/<id>/print` alone — a printable sheet has no in-page equivalent.
-   ────────────────────────────────────────────────────────────────────────── */
+   `#approval-<id>` and deliberately leaves this one alone: a printable sheet
+   has no in-page equivalent it could fold onto, and folding it would send
+   "Keep a copy" back to the ask it was pressed on. ─────────────────────────── */
 
 const LONG_DATE = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',

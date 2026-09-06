@@ -35,6 +35,23 @@
 -- S5 (get_invoice_link gate), S6, S10 (return nonce on BOTH rails so the
 -- token never reaches Stripe's retained logs), S13, S15, S16.
 --
+-- Review pass (delivery/reviews/w1-review.md): F1 a processing attempt is
+-- never superseded by a different actor (both claims raise
+-- invoice_checkout_in_progress); F2 a return nonce resolves only to a link
+-- that existed when its attempt was claimed; F3 pay.processing / payments[]
+-- count only PaymentIntent-stamped pending rows; F9 the void body writes the
+-- attempt before its payment so failure_reason = 'invoice_voided' lands;
+-- F13 with INVOICE_CHECKOUT_DESIGNER_TEST_MODE a designer's test claim now
+-- supersedes a household's live session (actor_changed) where 00428 raised
+-- payer_mismatch — JWT path, Stripe test key only, accepted; F14 the
+-- checkout resolver returns client_display_name so the link customer is
+-- named; F5 (ruled) the guest rail ALWAYS pays as the link — the resolver's
+-- payer_id is informational (the household, for the F1/M3 actor comparison)
+-- and never picks a Stripe customer; only the signed-in rail pays as the
+-- household profile. Payload additions for W2: studio.location
+-- (organizations.address city/state) and line_items[].attribution (FF&E
+-- maker name, never an id).
+--
 -- Rollback (each alone): DROP TRIGGER invoice_link_mint_on_issue ON
 -- public.invoices freezes minting without breaking a link;
 -- cron.unschedule('invoice-checkout-attempts-expire') stops the sweep.
@@ -314,6 +331,15 @@ BEGIN
       OR v_attempt.invoice_link_id IS NOT NULL
       OR v_attempt.stripe_customer_id IS DISTINCT FROM p_stripe_customer_id;
 
+    -- Review F1: money in flight is never superseded. A processing attempt
+    -- carries a stamped PaymentIntent — a bank debit already initiated — so a
+    -- different actor waits, exactly as void_invoice does (M10). The rail /
+    -- balance supersede on a same-actor processing attempt is 00428's and is
+    -- deliberately not widened here.
+    IF v_attempt.state = 'processing' AND v_actor_changed THEN
+      RAISE EXCEPTION 'invoice_checkout_in_progress';
+    END IF;
+
     -- A manual payment may have changed the authoritative remaining balance,
     -- or the payer may have switched rails (which changes the Stripe session's
     -- allowed method AND its total) — either way the live attempt is stale.
@@ -547,6 +573,11 @@ BEGIN
       v_attempt.payer_id IS NOT NULL
       OR v_attempt.invoice_link_id IS DISTINCT FROM p_invoice_link_id
       OR v_attempt.stripe_customer_id IS DISTINCT FROM p_stripe_customer_id;
+
+    -- Review F1: never supersede money in flight (see the household claim).
+    IF v_attempt.state = 'processing' AND v_actor_changed THEN
+      RAISE EXCEPTION 'invoice_checkout_in_progress';
+    END IF;
 
     IF v_attempt.amount_cents <> v_amount
        OR v_attempt.currency <> lower(coalesce(v_invoice.currency, 'USD'))
@@ -940,17 +971,22 @@ BEGIN
   -- A hosted session cannot be expired from SQL. Close the local attempt and
   -- row now; if Stripe reports a late charge, settle_invoice_checkout_payment
   -- converts it to requires_refund because the invoice is void.
+  --
+  -- Review F9: the attempt is written BEFORE its payment. Failing the payment
+  -- fires sync_invoice_checkout_attempt (00428), which marks the attempt
+  -- failed with no reason; written first, failure_reason = 'invoice_voided'
+  -- survives that trigger (it never touches the reason).
+  UPDATE invoice_checkout_attempts
+  SET state = 'failed', failure_reason = 'invoice_voided', finalized_at = now()
+  WHERE invoice_id = p_invoice_id
+    AND state IN ('claimed','session_created','processing');
+
   UPDATE invoice_payments
   SET status = 'failed',
       note = concat_ws(' ', note, 'Invoice voided before Checkout settled.')
   WHERE invoice_id = p_invoice_id
     AND status = 'pending'
     AND method = 'stripe';
-
-  UPDATE invoice_checkout_attempts
-  SET state = 'failed', failure_reason = 'invoice_voided', finalized_at = now()
-  WHERE invoice_id = p_invoice_id
-    AND state IN ('claimed','session_created','processing');
 
   -- 00574 (M9 / K5): the link records the death. resolve_invoice_link renders
   -- the withdrawn sheet for a closed link — or the settling sheet while a
@@ -1040,6 +1076,8 @@ DECLARE
   v_studio_logo    text;
   v_studio_site    text;
   v_studio_source  text;
+  v_studio_id      uuid;
+  v_studio_location text;
   v_designer_name  text;
   v_client_name    text;
   v_bps            integer;
@@ -1078,13 +1116,24 @@ BEGIN
 
   -- Studio-first letterhead: the invoice's own studio, then the project's,
   -- then the designer's primary — all three named (the two-studio fix).
-  SELECT s.name, s.logo_url, s.website, s.source
-  INTO v_studio_name, v_studio_logo, v_studio_site, v_studio_source
+  SELECT s.studio_id, s.name, s.logo_url, s.website, s.source
+  INTO v_studio_id, v_studio_name, v_studio_logo, v_studio_site, v_studio_source
   FROM public.resolve_studio_identity(
     p_project_id  => v_invoice.project_id,
     p_designer_id => v_invoice.designer_id,
     p_studio_id   => v_invoice.studio_id
   ) AS s;
+
+  -- "City, State" from the studio's address (organizations.address is the
+  -- OrganizationAddress jsonb: street/city/state/zip/country). NULL when the
+  -- studio has no address or the letterhead is not a studio org.
+  IF v_studio_id IS NOT NULL THEN
+    SELECT nullif(concat_ws(', ',
+             nullif(btrim(o.address->>'city'), ''),
+             nullif(btrim(o.address->>'state'), '')), '')
+    INTO v_studio_location
+    FROM organizations o WHERE o.id = v_studio_id;
+  END IF;
 
   SELECT coalesce(
            nullif(btrim(pr.full_name), ''),
@@ -1111,7 +1160,8 @@ BEGIN
       ),
       'studio', jsonb_build_object(
         'name', v_studio_name, 'logo_url', v_studio_logo,
-        'website', v_studio_site, 'source', v_studio_source
+        'website', v_studio_site, 'source', v_studio_source,
+        'location', v_studio_location
       ),
       'designer_display_name', v_designer_name,
       'contact', jsonb_build_object(
@@ -1143,17 +1193,42 @@ BEGIN
     HAVING count(*) = 1;
   END IF;
 
+  -- attribution: the maker / vendor a furnishings line came through — an
+  -- explicit text on the line's metadata, else the FF&E item's vendor_name,
+  -- else the vendor record's name. A name only: anything shaped like an id or
+  -- an address is dropped rather than printed.
   SELECT coalesce(jsonb_agg(jsonb_build_object(
            'description', li.description,
            'quantity', li.quantity,
            'unit_amount_cents', li.unit_amount_cents,
            'amount_cents', li.amount_cents,
-           'kind', li.kind
+           'kind', li.kind,
+           'attribution', (
+             SELECT CASE
+               WHEN a.name IS NULL THEN NULL
+               WHEN a.name ~ '@' THEN NULL
+               WHEN a.name ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN NULL
+               ELSE a.name
+             END
+             FROM (SELECT coalesce(
+                     nullif(btrim(li.metadata->>'attribution'), ''),
+                     nullif(btrim(li.metadata->>'vendor_name'), ''),
+                     nullif(btrim(f.vendor_name), ''),
+                     nullif(btrim(v.name), '')
+                   ) AS name) a
+           )
          ) ORDER BY li.sort_order, li.created_at, li.id), '[]'::jsonb)
   INTO v_lines
   FROM invoice_line_items li
+  LEFT JOIN project_ffe_items f ON f.id = li.ffe_item_id
+  LEFT JOIN vendors v ON v.id = f.vendor_id
   WHERE li.invoice_id = v_invoice.id;
 
+  -- Review F3: a pending row exists from the moment of claim — before any
+  -- Stripe session, and for up to 24h after an abandoned card Checkout. Only a
+  -- row with a stamped PaymentIntent is money in flight (an ACH debit
+  -- initiated; 00428's sync trigger moves the attempt to processing on that
+  -- stamp), so only those pending rows are listed or count as processing.
   SELECT coalesce(jsonb_agg(jsonb_build_object(
            'amount_cents', p.amount_cents,
            'surcharge_cents', coalesce(p.surcharge_cents, 0),
@@ -1166,7 +1241,8 @@ BEGIN
   INTO v_payments, v_processing
   FROM invoice_payments p
   WHERE p.invoice_id = v_invoice.id
-    AND p.status <> 'failed';
+    AND p.status <> 'failed'
+    AND NOT (p.status = 'pending' AND p.stripe_payment_intent_id IS NULL);
 
   SELECT sbs.card_surcharge_bps, sbs.check_remit_to INTO v_bps, v_remit
   FROM studio_billing_settings sbs
@@ -1197,7 +1273,8 @@ BEGIN
     'payments', v_payments,
     'studio', jsonb_build_object(
       'name', v_studio_name, 'logo_url', v_studio_logo,
-      'website', v_studio_site, 'source', v_studio_source
+      'website', v_studio_site, 'source', v_studio_source,
+      'location', v_studio_location
     ),
     'designer_display_name', v_designer_name,
     'client_display_name', v_client_name,
@@ -1216,11 +1293,13 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.resolve_invoice_link(text, boolean) IS
-  'The only guest read path for /pay/<token>. Called through the client portal''s service client (authenticated + service_role hold EXECUTE, anon never). Validates the 64-hex token, bumps view_count when p_record_view, and returns one narrow jsonb: kind invoice (the payable sheet — no uuids, no emails, no internal notes, no Stripe ids, no token), kind withdrawn (closed link / void invoice, K5), kind settling (closed with a Stripe payment pending or requires_refund, M10), or NULL for malformed/unknown/revoked/draft.';
+  'The only guest read path for /pay/<token>. Called through the client portal''s service client (authenticated + service_role hold EXECUTE, anon never). Validates the 64-hex token, bumps view_count when p_record_view, and returns one narrow jsonb discriminated by kind (sheet is an alias for now): invoice (the payable sheet — no uuids, no emails, no internal notes, no Stripe ids, no token; studio.location is the studio address''s City, State; line_items[].attribution is the FF&E maker name), withdrawn (closed link / void invoice, K5), settling (closed with a PaymentIntent-stamped pending or a requires_refund payment, M10), or NULL for malformed/unknown/revoked/draft. pay.processing and payments[] count only PaymentIntent-stamped pending rows (F3).';
 
 -- Ids only, for invoice-link-checkout. Rows only when the link is active, the
 -- invoice is sent/partially_paid and the balance is positive.
-CREATE OR REPLACE FUNCTION public.resolve_invoice_link_for_checkout(p_token text)
+DROP FUNCTION IF EXISTS public.resolve_invoice_link_for_checkout(text);
+
+CREATE FUNCTION public.resolve_invoice_link_for_checkout(p_token text)
 RETURNS TABLE (
   invoice_id uuid,
   link_id uuid,
@@ -1228,7 +1307,11 @@ RETURNS TABLE (
   link_stripe_customer_id text,
   balance_cents integer,
   currency text,
-  card_surcharge_bps integer
+  card_surcharge_bps integer,
+  -- Review F14: the name the link Stripe customer is given — the household
+  -- profile's, else the designer's single email-only roster row's (the same
+  -- derivation resolve_invoice_link uses). Never an email.
+  client_display_name text
 )
 LANGUAGE sql
 STABLE
@@ -1241,11 +1324,22 @@ AS $$
          l.stripe_customer_id,
          (i.total_cents - i.amount_paid_cents)::integer,
          lower(coalesce(i.currency, 'USD')),
-         coalesce(s.card_surcharge_bps, 300)
+         coalesce(s.card_surcharge_bps, 300),
+         coalesce(
+           nullif(btrim(pr.full_name), ''),
+           nullif(btrim(pr.display_name), ''),
+           (SELECT min(dc.client_name)
+            FROM public.designer_clients dc
+            WHERE dc.designer_id = i.designer_id
+              AND dc.client_id IS NULL
+              AND nullif(btrim(dc.client_name), '') IS NOT NULL
+            HAVING count(*) = 1)
+         )
   FROM public.invoice_links l
   JOIN public.invoices i ON i.id = l.invoice_id
   LEFT JOIN public.projects p ON p.id = i.project_id
   LEFT JOIN public.studio_billing_settings s ON s.studio_id = i.studio_id
+  LEFT JOIN public.profiles pr ON pr.id = coalesce(i.client_id, p.client_id)
   WHERE p_token IS NOT NULL
     AND p_token ~ '^[0-9a-f]{64}$'
     AND l.token = p_token
@@ -1255,11 +1349,14 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.resolve_invoice_link_for_checkout(text) IS
-  'Service-only: the ids invoice-link-checkout needs to open a Checkout for a link — invoice, link, the household payer (coalesce(invoices.client_id, projects.client_id), NULL for the link-payer branch), the link''s own Stripe customer, the balance, and the always-coalesced card bps. Empty unless active + payable.';
+  'Service-only: the ids invoice-link-checkout needs to open a Checkout for a link — invoice, link, the household payer if one exists (coalesce(invoices.client_id, projects.client_id); informational only — the guest rail always pays as the link, F5), the link''s own Stripe customer, the balance, the always-coalesced card bps, and the payer''s display name. Empty unless active + payable.';
 
--- The nonce on Stripe's return URL resolves to the invoice's current link
--- token: the active one, else the closed one (so a payer returning after a
--- void lands on the withdrawn/settling sheet), never a revoked one.
+-- The nonce on Stripe's return URL resolves to the link that was in force
+-- when its attempt was claimed (review F2: a nonce in Stripe's retained logs
+-- must never become an alias for a LATER token — Regenerate is the
+-- designer's only revocation act). Active, or closed by a void (so a payer
+-- returning after the void lands on the withdrawn/settling sheet); never a
+-- revoked link and never one minted after the attempt.
 CREATE OR REPLACE FUNCTION public.resolve_invoice_return_nonce(p_nonce text)
 RETURNS text
 LANGUAGE sql
@@ -1274,12 +1371,13 @@ AS $$
     AND p_nonce ~ '^[0-9a-f]{64}$'
     AND a.return_nonce = p_nonce
     AND l.status <> 'revoked'
+    AND l.created_at <= a.created_at
   ORDER BY (l.status = 'active') DESC, l.created_at DESC
   LIMIT 1;
 $$;
 
 COMMENT ON FUNCTION public.resolve_invoice_return_nonce(text) IS
-  'Service-only: the link token behind a Checkout return nonce (/pay/return/<nonce> → /pay/<token>). NULL for malformed/unknown. Valid for the attempt''s life; never resolves a revoked link.';
+  'Service-only: the link token behind a Checkout return nonce (/pay/return/<nonce> → /pay/<token>). NULL for malformed/unknown. Resolves only the link in force when the attempt was claimed (active or closed, never revoked, never a later mint) — a nonce is not an alias for a regenerated token (F2).';
 
 -- Compare-and-set the link's Stripe customer, then return the canonical winner
 -- (the ensureStripeCustomer race discipline).

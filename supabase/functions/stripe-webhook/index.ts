@@ -320,11 +320,11 @@ async function loadInvoiceJoined(
  * Resolve the client recipient the way invoice-send does: invoice.client
  * profile → project.client_id profile → the address the payer gave at
  * Checkout (invoice_links.payer_email, 00574 / M5) → designer_clients
- * .client_email for not-yet-signed-up clients.
+ * .client_email keyed on the household profile.
  *
  * The payer-less household — the population the invoice link exists for — has
- * no profile on either side, so the last two rungs are the ones that carry a
- * receipt or a failure letter to a real inbox.
+ * no profile on either side, so payer_email is the rung that carries its
+ * receipt or failure letter to a real inbox.
  */
 async function resolveRecipient(
   admin: SupabaseClient,
@@ -358,19 +358,18 @@ async function resolveRecipient(
     email = (link as any)?.payer_email ?? null;
   }
 
-  if (!email) {
-    // The roster: keyed on the household profile when there is one; otherwise
-    // the designer's email-only roster row. designer_clients has no project_id
-    // to key on, so maybeSingle() resolves only when exactly one such row
-    // exists (idx_designer_clients_unique_email) and yields null otherwise.
-    const roster = admin
+  if (!email && clientUserId) {
+    // The roster, keyed on the household profile. A payer-less invoice has no
+    // profile to key on and designer_clients has no project_id, so a
+    // designer-keyed lookup could address another household's receipt (review
+    // F6): for that case the Checkout-collected payer_email above is the only
+    // truthful address, and with none the letter is not sent.
+    const { data: dc } = await admin
       .from('designer_clients')
       .select('client_email, client_name')
-      .eq('designer_id', invoice.designer_id);
-    const { data: dc } = await (clientUserId
-      ? roster.eq('client_id', clientUserId)
-      : roster.is('client_id', null)
-    ).maybeSingle();
+      .eq('designer_id', invoice.designer_id)
+      .eq('client_id', clientUserId)
+      .maybeSingle();
     email = (dc as any)?.client_email ?? null;
     name = name ?? (dc as any)?.client_name ?? null;
   }

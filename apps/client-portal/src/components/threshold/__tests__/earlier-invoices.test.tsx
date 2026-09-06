@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { Invoice } from '@patina/supabase';
 
@@ -11,6 +12,28 @@ jest.mock('@/lib/analytics/events', () => ({
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useInvoiceLink: jest.fn(),
+}));
+
+// `prefetch` is a Next `Link` prop, not a DOM attribute, so it leaves no trace
+// on the rendered anchor without this — surfaced as `data-prefetch` so M3's
+// guarantee (never warm N pay-page links at once by scrolling past the
+// disclosure) is assertable at all.
+jest.mock('next/link', () => ({
+  __esModule: true,
+  default: ({
+    children,
+    href,
+    prefetch,
+    ...rest
+  }: {
+    children: ReactNode;
+    href: string;
+    prefetch?: boolean;
+  } & Record<string, unknown>) => (
+    <a href={href} data-prefetch={String(prefetch)} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 import { useInvoiceLink } from '@patina/supabase';
@@ -129,11 +152,24 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
   });
 
   it('opens an invoice from its own address', () => {
-    render(<EarlierInvoices invoices={[invoice()]} today={TODAY} linkOrigin="https://client.test" />);
+    render(<EarlierInvoices invoices={[invoice()]} today={TODAY} />);
     fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
 
     const open = screen.getByRole('link', { name: 'Open the invoice' });
-    expect(open).toHaveAttribute('href', `https://client.test/pay/${LINK_TOKEN}`);
+    expect(open).toHaveAttribute('href', `/pay/${LINK_TOKEN}`);
+  });
+
+  /* M3: expanding "Earlier invoices" puts every row's `/pay/<token>` in the
+     viewport at once — a prefetch that ever renders would record a view and
+     spend the pay page's rate-limit budget on every row nobody opened. */
+  it('never warms a folded invoice by scrolling past it', () => {
+    render(<EarlierInvoices invoices={[invoice()]} today={TODAY} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+
+    expect(screen.getByRole('link', { name: 'Open the invoice' })).toHaveAttribute(
+      'data-prefetch',
+      'false',
+    );
   });
 
   it('says nothing about an address a line does not have', () => {

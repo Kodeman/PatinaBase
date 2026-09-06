@@ -1,8 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { FFEStageKey } from '@patina/types';
 
 import { SpineGate } from '../spine-gate';
-import { SpineToll } from '../spine-toll';
 import { TrackingRow } from '../tracking-row';
 
 // ScoredAction renders `next/link` whenever it is given an href. Without an
@@ -58,17 +57,6 @@ const PAINTWORK_GATE = {
   depositCents: 144000,
   caption: 'Draws one through three are paid.',
   href: '/projects/vale/trade-scopes/ts-2',
-};
-
-// `settle` is required: the toll's act is always taken in place — there is no
-// outbound branch, because the acts never leave the page.
-const INVOICE_4 = {
-  invoiceId: 'inv-4',
-  invoiceNumber: 'Invoice No. 4',
-  totalCents: 1825000,
-  paidCents: 912500,
-  dueDate: '2026-08-15',
-  settle: { onSettle: () => {} },
 };
 
 const CREDENZA = {
@@ -167,79 +155,6 @@ describe('SpineGate', () => {
   it('omits the deposit line rather than printing a zero', () => {
     render(<SpineGate {...FURNISHINGS_GATE} depositCents={0} />);
     expect(screen.queryByTestId('spine-gate-deposit')).not.toBeInTheDocument();
-  });
-});
-
-// ── The toll — an open balance on the line ──────────────────────────────────
-
-describe('SpineToll', () => {
-  it('spells the year only once the due date leaves this one', () => {
-    const today = new Date(2026, 7, 5);
-
-    const { unmount } = render(<SpineToll {...INVOICE_4} today={today} />);
-    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'A toll on the line · due August 15',
-    );
-    unmount();
-
-    render(<SpineToll {...INVOICE_4} dueDate="2027-02-10" today={today} />);
-    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'due February 10, 2027',
-    );
-  });
-
-  it('runs the ledger in the accountant’s order and derives the balance', () => {
-    render(<SpineToll {...INVOICE_4} />);
-    const ledger = within(screen.getByTestId('spine-toll-ledger'));
-    expect(ledger.getByText('Total')).toBeInTheDocument();
-    expect(ledger.getByText('$18,250')).toBeInTheDocument();
-    expect(ledger.getByText('Paid')).toBeInTheDocument();
-    // paid and balance are the same figure on a half-settled invoice; both
-    // must be present, which getAllByText proves without over-asserting order
-    expect(ledger.getAllByText('$9,125')).toHaveLength(2);
-    expect(ledger.getByText('Balance')).toBeInTheDocument();
-  });
-
-  it('names the invoice and the day it comes due', () => {
-    render(<SpineToll {...INVOICE_4} />);
-    expect(screen.getByText('Invoice No. 4')).toBeInTheDocument();
-    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'A toll on the line · due August 15',
-    );
-  });
-
-  it('drops the due clause when the invoice carries no due date', () => {
-    render(<SpineToll {...INVOICE_4} dueDate={null} />);
-    expect(screen.getByTestId('spine-toll-due')).toHaveTextContent('A toll on the line');
-    expect(screen.getByTestId('spine-toll-due')).not.toHaveTextContent('due');
-  });
-
-  it('falls back to a plain word when the invoice was issued without a number', () => {
-    render(<SpineToll {...INVOICE_4} invoiceNumber={null} />);
-    expect(screen.getByText('Invoice')).toBeInTheDocument();
-  });
-
-  it('floors an overpaid invoice at zero rather than showing a negative toll', () => {
-    render(<SpineToll {...INVOICE_4} paidCents={2000000} />);
-    expect(within(screen.getByTestId('spine-toll-ledger')).getByText('$0')).toBeInTheDocument();
-  });
-
-  it('settles in place — the act never leaves the page — and reports the follow', () => {
-    const onFollow = jest.fn();
-    const onSettle = jest.fn();
-    render(<SpineToll {...INVOICE_4} onFollow={onFollow} settle={{ onSettle }} />);
-    const act = screen.getByRole('button', { name: /settle the balance/i });
-    expect(screen.queryByRole('link', { name: /settle the balance/i })).toBeNull();
-    expect(act).toHaveAttribute('data-action-region', 'toll');
-    fireEvent.click(act);
-    expect(onFollow).toHaveBeenCalledTimes(1);
-    expect(onSettle).toHaveBeenCalledTimes(1);
-  });
-
-  it('never inks money red — past due reads in the same ink as anything else', () => {
-    const { container } = render(<SpineToll {...INVOICE_4} dueDate="2020-01-01" />);
-    expect(container.innerHTML).not.toContain('--color-terracotta');
-    expect(container.innerHTML).not.toContain('--color-error');
   });
 });
 

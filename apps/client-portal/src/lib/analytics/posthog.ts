@@ -75,17 +75,40 @@ export function isAnalyticsPossible(): boolean {
 // rather than folding into the generic hex one below.
 const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
 
-// /share, /rfq, /evidence, and /plans all mint the same 64-char lowercase-hex
-// bearer (sha256/gen_random_bytes idiom — document_shares, trade_rfq_tokens,
-// fulfillment_mint_evidence_token, plan_transmittal_tokens) — one generic
-// pattern covers all four while preserving which prefix gets redacted back
-// into the URL.
-const HEX_BEARER_IN_URL = /\/(share|rfq|evidence|plans)\/[0-9a-f]{64}(?![0-9a-f])/gi;
+// /share, /rfq, /evidence, /plans and /pay all mint the same 64-char
+// lowercase-hex bearer (sha256/gen_random_bytes idiom — document_shares,
+// trade_rfq_tokens, fulfillment_mint_evidence_token, plan_transmittal_tokens,
+// invoice_links) — one generic pattern covers all five while preserving which
+// prefix gets redacted back into the URL.
+//
+// /pay is the one that reaches a till: its token is a PERMANENT credential
+// that stays live for the invoice's life, so a raw pageview URL in PostHog
+// would be a standing payment capability sitting in an analytics store.
+// The optional `return/` segment covers `/pay/return/<64-hex nonce>` (S-2).
+// The nonce is a real credential — single-purpose and attempt-lived — and
+// while nothing can carry it into PostHog today (the return route is a 303
+// handler with no HTML, and an HTTP redirect preserves Stripe's own Referer),
+// the asymmetry would be a trap for whoever next hrefs that path or turns the
+// hop into a page.
+const HEX_BEARER_IN_URL =
+  /\/(share|rfq|evidence|plans|pay)\/(?:return\/)?[0-9a-f]{64}(?![0-9a-f])/gi;
+
+// The till writes ids onto the address it hands back — `session_id=cs_live_…`
+// above all — and §9's property law is "no id of any kind". `redactBearerPaths`
+// only rewrote PATH bearers, and `consumeCheckoutReturn` strips these in a
+// `useEffect` that is not ordered against PostHog's pageview capture, so the
+// id could be captured before it was cleaned. `checkout` itself is kept: it is
+// an outcome literal (`success|cancel|cancelled`, see
+// `lib/threshold/checkout-return.ts` `readCheckoutReturn`), not an id, and it
+// is the only thing distinguishing a completed return from an abandoned one.
+const TILL_ID_IN_URL =
+  /([?&](?:session_id|checkout_attempt_id|payment_id|invoice|order)=)[^&#\s"'\\]*/gi;
 
 function redactBearerPaths(value: string): string {
   return value
     .replace(FIELD_BEARER_IN_URL, '/field/[redacted]')
-    .replace(HEX_BEARER_IN_URL, (_match, prefix: string) => `/${prefix}/[redacted]`);
+    .replace(HEX_BEARER_IN_URL, (_match, prefix: string) => `/${prefix}/[redacted]`)
+    .replace(TILL_ID_IN_URL, (_match, prefix: string) => `${prefix}[redacted]`);
 }
 
 function sanitizeAnalyticsValue(value: unknown, seen: WeakMap<object, unknown>): unknown {

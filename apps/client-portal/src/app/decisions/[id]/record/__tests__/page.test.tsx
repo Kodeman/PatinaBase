@@ -375,8 +375,7 @@ describe('/decisions/[id]/record — anyone else', () => {
   /**
    * `list_my_project_decision_reviews` is caller-scoped: a stranger's read
    * simply does not carry this id. The sheet says the record could not be
-   * found and never says whether the decision exists — the same shape
-   * `/invoices/[id]/print` uses for an invoice that is not hers.
+   * found and never says whether the decision exists at all.
    */
   it('shows a record that could not be found, and nothing about it', async () => {
     reviewsHook.mockReturnValue({ data: [], isLoading: false, isError: false });

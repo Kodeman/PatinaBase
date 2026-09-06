@@ -467,4 +467,88 @@ describe('InvoiceFolio delivery recovery', () => {
       ),
     ).toBeInTheDocument();
   });
+
+  /* ── F1: the link exists the moment the invoice is issued ──────────────
+     useIssueInvoice invalidates ['invoice-link', id], so the folio's acts
+     and its recovery band see the minted link rather than a five-minute
+     stale null. Modelled by a mock that has no link until issue resolves. */
+
+  it('shows a live Copy link as soon as the invoice is issued', async () => {
+    mockInvoiceLink = null;
+    // What the real acts do: issue_invoice mints the link, and invalidating
+    // ['invoices'] + ['invoice-link', id] refetches both reads together.
+    mockIssue.mockImplementation(async () => {
+      mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1060' };
+      mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
+      return mockInvoice;
+    });
+    mockSend.mockResolvedValue({ emailSent: true, recipient: 'client@example.com' });
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    const copy = await screen.findByRole('button', { name: 'Copy link' });
+    expect(copy).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Regenerate link' })).toBeEnabled();
+  });
+
+  it('gives the recovery band the minted link when the send fails on issue', async () => {
+    mockInvoiceLink = null;
+    mockIssue.mockImplementation(async () => {
+      mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
+      return { ...invoice, status: 'sent', invoice_number: 'INV-1061' };
+    });
+    mockSend.mockRejectedValue(new Error('provider unavailable'));
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    // Not the "no link yet · resend to try again" else-branch.
+    expect(await screen.findByRole('link', { name: PAY_URL })).toBeInTheDocument();
+    expect(screen.queryByText(/this invoice has no link yet/i)).not.toBeInTheDocument();
+  });
+
+  /* ── F7: two copy sites, two statuses ─────────────────────────────────── */
+
+  it('keeps the two copy sites\u2019 statuses apart', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    mockIssue.mockImplementation(async () => {
+      mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1062' };
+      return mockInvoice;
+    });
+    mockSend.mockRejectedValue(new Error('provider unavailable'));
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    // Both sites are on screen: the toolbar act and the recovery band.
+    await screen.findByRole('button', { name: 'Copy client link' });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+
+    expect(await screen.findByRole('button', { name: 'Link copied' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy client link' })).toBeInTheDocument();
+  });
+
+  /* ── F8: no greyed-out act without a reason ───────────────────────────── */
+
+  it('omits both link acts entirely while the invoice has no link', () => {
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1063' };
+    mockInvoiceLink = null;
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Regenerate link' })).not.toBeInTheDocument();
+    // Print still stands — it does not depend on the link.
+    expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
+  });
 });

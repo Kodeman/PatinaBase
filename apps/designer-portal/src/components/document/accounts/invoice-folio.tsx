@@ -82,6 +82,7 @@ const INPUT =
   'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
 type ActPanel = 'send' | 'resend' | 'payment' | 'void' | 'regenerate-link' | null;
+type CopyStatus = 'idle' | 'copied' | 'failed';
 
 export function InvoiceFolio({
   invoiceId,
@@ -113,7 +114,11 @@ export function InvoiceFolio({
   const [reference, setReference] = useState('');
   const [receivedDate, setReceivedDate] = useState(() => todayYmd());
   const [showClientFallback, setShowClientFallback] = useState(false);
-  const [clientLinkStatus, setClientLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  // Two act sites copy the same address — the toolbar act and the recovery
+  // band — and each has to report its own outcome: one shared status made the
+  // band say "select the link above" about a link that was not above it.
+  const [toolbarCopyStatus, setToolbarCopyStatus] = useState<CopyStatus>('idle');
+  const [bandCopyStatus, setBandCopyStatus] = useState<CopyStatus>('idle');
   const pendingStripeSessionId = invoice?.payments?.find(
     (payment) =>
       payment.method === 'stripe' &&
@@ -182,15 +187,11 @@ export function InvoiceFolio({
   const canPrint = !isDraft && invoice.status !== 'void';
   // Legacy/project-derived invoices may intentionally leave invoice.client_id
   // null while the project itself has the authoritative portal client. Match
-  // the invoice-send and checkout resolution path before deciding that the
-  // household needs another invite.
+  // the invoice-send and checkout resolution path before deciding this
+  // household has no address on file at all.
   const portalClientId = invoice.client_id ?? invoice.project?.client_id ?? null;
   // A studio invoice has no house, so there is no document to walk into.
   const documentProjectId = invoice.project_id;
-  const portalClientProfile = invoice.client ?? invoice.project?.client ?? null;
-  const hasClientPortalAccount = Boolean(
-    portalClientId && portalClientProfile?.id === portalClientId,
-  );
   const busy =
     issue.isPending ||
     send.isPending ||
@@ -213,7 +214,8 @@ export function InvoiceFolio({
   const doIssueAndSend = async () => {
     setNote(null);
     setShowClientFallback(false);
-    setClientLinkStatus('idle');
+    setToolbarCopyStatus('idle');
+    setBandCopyStatus('idle');
     let issued: Invoice;
     try {
       issued = await issue.mutateAsync({
@@ -251,7 +253,8 @@ export function InvoiceFolio({
 
   const doResend = async () => {
     setNote(null);
-    setClientLinkStatus('idle');
+    setToolbarCopyStatus('idle');
+    setBandCopyStatus('idle');
     try {
       const result = await send.mutateAsync({
         invoiceId,
@@ -283,20 +286,22 @@ export function InvoiceFolio({
       )
     : null;
 
-  const copyClientInvoiceUrl = async () => {
+  const copyClientInvoiceUrl = async (site: 'toolbar' | 'band') => {
     if (!clientInvoiceUrl) return;
+    const report = site === 'toolbar' ? setToolbarCopyStatus : setBandCopyStatus;
     try {
       await navigator.clipboard.writeText(clientInvoiceUrl);
-      setClientLinkStatus('copied');
+      report('copied');
     } catch {
-      setClientLinkStatus('failed');
+      report('failed');
     }
   };
 
   // Regenerate is one confirmed act: the old address dies the moment it lands.
   const doRegenerateLink = async () => {
     setNote(null);
-    setClientLinkStatus('idle');
+    setToolbarCopyStatus('idle');
+    setBandCopyStatus('idle');
     try {
       await regenerateLink.mutateAsync({ invoiceId });
       setNote('link replaced · the old one is dead');
@@ -639,25 +644,29 @@ export function InvoiceFolio({
               Void
             </DocumentAction>
           )}
-          {canShareLink && (
+          {/* R51/R83: say why, or do not offer the act. `canShareLink` reads
+              the invoice's status and the link reads its own query, so the two
+              disagree on first load and after a failed mint — a greyed act
+              with no reason given is the one thing the folio must not draw. */}
+          {canShareLink && clientInvoiceUrl && (
             <DocumentAction
               actionKey="copy-invoice-link"
               variant="tertiary"
-              disabled={busy || !clientInvoiceUrl}
-              onClick={() => void copyClientInvoiceUrl()}
+              disabled={busy}
+              onClick={() => void copyClientInvoiceUrl('toolbar')}
             >
-              {clientLinkStatus === 'copied'
+              {toolbarCopyStatus === 'copied'
                 ? 'Link copied'
-                : clientLinkStatus === 'failed'
+                : toolbarCopyStatus === 'failed'
                   ? 'Copy failed'
                   : 'Copy link'}
             </DocumentAction>
           )}
-          {canShareLink && (
+          {canShareLink && clientInvoiceUrl && (
             <DocumentAction
               actionKey="regenerate-invoice-link"
               variant="tertiary"
-              disabled={busy || !clientInvoiceUrl}
+              disabled={busy}
               onClick={() => openPanel('regenerate-link')}
             >
               Regenerate link
@@ -714,19 +723,19 @@ export function InvoiceFolio({
                 <DocumentAction
                   actionKey="copy-client-invoice-link"
                   variant="tertiary"
-                  onClick={() => void copyClientInvoiceUrl()}
+                  onClick={() => void copyClientInvoiceUrl('band')}
                   className="mt-1"
                 >
-                  {clientLinkStatus === 'copied'
+                  {bandCopyStatus === 'copied'
                     ? 'Client link copied'
-                    : clientLinkStatus === 'failed'
+                    : bandCopyStatus === 'failed'
                       ? 'Copy failed — select the link above'
                       : 'Copy client link'}
                 </DocumentAction>
                 {/* M5: with no profile on either side there is no address on
                     file, so the receipt is addressed to whatever they type at
                     checkout — which the webhook now captures. */}
-                {!hasClientPortalAccount && !portalClientId && (
+                {!portalClientId && (
                   <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
                     This household has no account with you, so the receipt goes to the address they
                     give at checkout.

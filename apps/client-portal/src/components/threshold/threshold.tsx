@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
 
@@ -45,6 +45,7 @@ import { isClientActionableProjectApproval } from '@/lib/client-attention';
 import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
 import { standsUnfiled } from '@/lib/threshold/adopted-house';
 import { thresholdPhases } from '@/lib/threshold/canonical-phases';
+import { useStripStaleTillParams } from '@/lib/threshold/checkout-return';
 import {
   deriveThreshold,
   parseSourceDate,
@@ -311,17 +312,6 @@ export function Threshold({
     () => [...(invoicesQuery.data ?? []), ...studioInvoices],
     [invoicesQuery.data, studioInvoices],
   );
-  const clientInvoicesRefetch = clientInvoicesQuery.refetch;
-  const projectInvoicesRefetch = invoicesQuery.refetch;
-  // Stable by construction: the confirmation poll holds this in an effect's
-  // dependency list, and a fresh identity each render would restart it.
-  const refetchInvoices = useCallback(async () => {
-    await Promise.all(
-      adopted
-        ? [projectInvoicesRefetch(), clientInvoicesRefetch()]
-        : [projectInvoicesRefetch()],
-    );
-  }, [adopted, clientInvoicesRefetch, projectInvoicesRefetch]);
   // Every id this house holds, for the notices that name no project of their
   // own. Keyed by value rather than by array identity, so the mapping below is
   // not rebuilt on every render.
@@ -897,8 +887,6 @@ export function Threshold({
     <Letterbox
       invoice={model.letterbox}
       invoices={invoices}
-      designerName={studioName}
-      onRefetch={refetchInvoices}
       today={today}
     />
   );
@@ -913,6 +901,15 @@ export function Threshold({
   const ordersSettled = !ordersQuery.isPending && !ordersUnread;
   const roadOrders = ordersSettled ? toRoadOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
   const closedOrders = ordersSettled ? toClosedOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
+  // `RoadOrders` — the only remaining `useCheckoutReturn` consumer — mounts
+  // exactly when `orders.length > 0 || closedOrders.length > 0`
+  // (`the-road.tsx:220-227`). Whenever it will not mount, nothing on this
+  // page strikes a stale return's params off the address any more (W3b); this
+  // is that project's own no-orders case, alongside `LetterboxDoor`'s
+  // no-project one. Held until orders settle so this never races
+  // `RoadOrders`'s own read of `checkout` on a project that turns out to have
+  // orders.
+  useStripStaleTillParams(ordersSettled && roadOrders.length === 0 && closedOrders.length === 0);
   const road =
     ordersUnread ||
     (ordersSettled &&
