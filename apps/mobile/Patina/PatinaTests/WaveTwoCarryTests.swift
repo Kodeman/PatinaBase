@@ -41,8 +41,8 @@ struct WaveTwoCarryTests {
         let three = try #require(Self.proposalsRow(
             in: StudioQueueBuilder.build(Self.input(proposals: try Self.proposals(3, accepted: 2)))
         ))
-        #expect(three.detail == "three shared proposals")
-        #expect(three.meta == "two accepted")
+        #expect(three.detail == "Three shared proposals")
+        #expect(three.meta == "Two accepted")
 
         let one = try #require(Self.proposalsRow(
             in: StudioQueueBuilder.build(Self.input(proposals: try Self.proposals(1, accepted: 1)))

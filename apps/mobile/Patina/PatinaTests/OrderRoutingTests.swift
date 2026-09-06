@@ -126,7 +126,7 @@ struct OrderRoutingTests {
             order("a", .confirmed), order("b", .shipped)
         ])
         #expect(row?.title == "Ordered")
-        #expect(row?.detail == "two pieces on their way")
+        #expect(row?.detail == "Two pieces on their way")
         #expect(row?.meta == "Shipped")
         #expect(row?.route == .orderList)
 
@@ -141,7 +141,7 @@ struct OrderRoutingTests {
         let allArrived = StudioQueueBuilder.orderRecordRow([
             order("a", .delivered), order("b", .delivered)
         ])
-        #expect(allArrived?.detail == "two pieces delivered")
+        #expect(allArrived?.detail == "Two pieces delivered")
         #expect(allArrived?.meta == "Delivered")
 
         // A refunded order is in the list, is not "on its way", and is not

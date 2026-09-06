@@ -437,7 +437,7 @@ private extension StudioQueueBuilder {
             : (unreadCount == 0
                ? "All caught up"
                : countLabel(unreadCount, singular: "One unread thread",
-                            plural: "\(PatinaCount.inWords(unreadCount)) unread threads"))
+                            plural: "\(PatinaCount.inWordsCapitalized(unreadCount)) unread threads"))
 
         return StudioQueueRow(
             id: "conversation.threads",
@@ -468,7 +468,7 @@ private extension StudioQueueBuilder {
             : countLabel(
                 unreadCount,
                 singular: "One unread update",
-                plural: "\(PatinaCount.inWords(unreadCount)) unread updates"
+                plural: "\(PatinaCount.inWordsCapitalized(unreadCount)) unread updates"
             )
 
         return StudioQueueRow(
@@ -510,13 +510,13 @@ extension StudioQueueBuilder {
             detail = countLabel(
                 moving.count,
                 singular: "One piece on its way",
-                plural: "\(PatinaCount.inWords(moving.count)) pieces on their way"
+                plural: "\(PatinaCount.inWordsCapitalized(moving.count)) pieces on their way"
             )
         } else if delivered > 0 {
             detail = countLabel(
                 delivered,
                 singular: "One piece delivered",
-                plural: "\(PatinaCount.inWords(delivered)) pieces delivered"
+                plural: "\(PatinaCount.inWordsCapitalized(delivered)) pieces delivered"
             )
         } else {
             // Everything she has is refunded or cancelled. The door still
@@ -524,7 +524,7 @@ extension StudioQueueBuilder {
             detail = countLabel(
                 orders.count,
                 singular: "One past order",
-                plural: "\(PatinaCount.inWords(orders.count)) past orders"
+                plural: "\(PatinaCount.inWordsCapitalized(orders.count)) past orders"
             )
         }
 
@@ -570,10 +570,10 @@ private extension StudioQueueBuilder {
             detail: countLabel(
                 proposals.count,
                 singular: "One shared proposal",
-                plural: "\(PatinaCount.inWords(proposals.count)) shared proposals"
+                plural: "\(PatinaCount.inWordsCapitalized(proposals.count)) shared proposals"
             ),
             meta: accepted > 0
-                ? countLabel(accepted, singular: "One accepted", plural: "\(PatinaCount.inWords(accepted)) accepted")
+                ? countLabel(accepted, singular: "One accepted", plural: "\(PatinaCount.inWordsCapitalized(accepted)) accepted")
                 : nil,
             systemImage: "doc.badge.ellipsis",
             route: .proposalList,
@@ -594,10 +594,10 @@ private extension StudioQueueBuilder {
             detail: countLabel(
                 invoices.count,
                 singular: "One shared invoice",
-                plural: "\(PatinaCount.inWords(invoices.count)) shared invoices"
+                plural: "\(PatinaCount.inWordsCapitalized(invoices.count)) shared invoices"
             ),
             meta: paid > 0
-                ? countLabel(paid, singular: "One paid", plural: "\(PatinaCount.inWords(paid)) paid")
+                ? countLabel(paid, singular: "One paid", plural: "\(PatinaCount.inWordsCapitalized(paid)) paid")
                 : nil,
             systemImage: "creditcard",
             route: .invoiceList,
@@ -618,13 +618,13 @@ private extension StudioQueueBuilder {
             detail: countLabel(
                 documents.count,
                 singular: "One shared file",
-                plural: "\(PatinaCount.inWords(documents.count)) shared files"
+                plural: "\(PatinaCount.inWordsCapitalized(documents.count)) shared files"
             ),
             meta: projectCount > 0
                 ? countLabel(
                     projectCount,
                     singular: "One project",
-                    plural: "\(PatinaCount.inWords(projectCount)) projects"
+                    plural: "\(PatinaCount.inWordsCapitalized(projectCount)) projects"
                 )
                 : nil,
             systemImage: "doc.text",
@@ -669,7 +669,7 @@ private extension StudioQueueBuilder {
             detail: countLabel(
                 projects.count,
                 singular: "One completed or archived project",
-                plural: "\(PatinaCount.inWords(projects.count)) completed or archived projects"
+                plural: "\(PatinaCount.inWordsCapitalized(projects.count)) completed or archived projects"
             ),
             meta: nil,
             systemImage: "folder",
@@ -693,7 +693,7 @@ private extension StudioQueueBuilder {
             detail: countLabel(
                 archived.count,
                 singular: "One declined or expired proposal",
-                plural: "\(PatinaCount.inWords(archived.count)) declined or expired proposals"
+                plural: "\(PatinaCount.inWordsCapitalized(archived.count)) declined or expired proposals"
             ),
             meta: nil,
             systemImage: "doc.badge.ellipsis",
@@ -715,7 +715,7 @@ private extension StudioQueueBuilder {
             detail: countLabel(
                 voided.count,
                 singular: "One voided invoice",
-                plural: "\(PatinaCount.inWords(voided.count)) voided invoices"
+                plural: "\(PatinaCount.inWordsCapitalized(voided.count)) voided invoices"
             ),
             meta: nil,
             systemImage: "creditcard",
