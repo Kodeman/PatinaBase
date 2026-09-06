@@ -77,6 +77,7 @@ struct ProposalDetailView: View {
             SealMomentView(
                 studioName: viewModel.signingStudio,
                 signedName: viewModel.signedName,
+                record: viewModel.record(),
                 onDone: { viewModel.showSealMoment = false }
             )
         }
@@ -208,6 +209,11 @@ struct ProposalDetailView: View {
                 .foregroundStyle(PatinaColors.Text.secondary)
             }
             .padding(.top, 8)
+            // `P-26`: on the settled screen too, not only in the moment. She
+            // may come back for the copy months later.
+            if let record = viewModel.record() {
+                KeepACopyAct(record: record)
+            }
         } else if let stamp {
             // No sentence beside this one — the badge it replaces carried its
             // own word — so the mark speaks rather than hiding.
@@ -236,7 +242,11 @@ struct ProposalDetailView: View {
             if !viewModel.isSigned, let expiry = DateDisplay.expiry(proposal.valid_until) {
                 Text(expiry.text)
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(expiry.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
+                    // `IOSC-R3-01`: body ink. This branch deliberately
+                    // retired the warning-tinted EXPIRED badge for a muted
+                    // stamp, and then printed a red status word two lines
+                    // below it on the same screen.
+                    .foregroundStyle(expiry.isPastDue ? PatinaColors.Text.primary : PatinaColors.Text.secondary)
                     .accessibilityIdentifier("proposalDetail.expiry")
             }
         }

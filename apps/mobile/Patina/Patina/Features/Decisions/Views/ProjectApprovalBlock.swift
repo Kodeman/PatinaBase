@@ -198,6 +198,10 @@ struct ProjectApprovalBlock: View {
                 stamp: ProjectApprovalCopy.stamp(for: answered),
                 id: "recorded"
             )
+            // `P-26`: the copy she keeps, beside the mark that settled it.
+            if let record = viewModel.approvalRecord(studio: studioName) {
+                KeepACopyAct(record: record)
+            }
             if let noteFailure = viewModel.noteFailure {
                 Text(noteFailure)
                     .font(PatinaTypography.bodySmall)

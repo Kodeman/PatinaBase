@@ -25,6 +25,9 @@ struct SealMomentView: View {
     /// instead.
     let studioName: String?
     let signedName: String?
+    /// `P-26`. The copy she leaves with. Nil where the screen cannot build
+    /// one — the act is then simply not offered.
+    var record: RecordOfDecision?
     let onDone: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -43,6 +46,12 @@ struct SealMomentView: View {
                     .foregroundStyle(PatinaColors.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("sealMoment.next")
+            }
+            if let record {
+                // `P-26`: "You'll have a copy" is the sentence above; this is
+                // the copy. It sits with the seal because this is the one
+                // moment she is holding the whole thing in her head.
+                KeepACopyAct(record: record)
             }
             Spacer(minLength: 0)
             PatinaButton(ProposalSignActCopy.done, style: .secondary) {
