@@ -19,18 +19,26 @@ jest.mock('@patina/supabase', () => ({
   useInvoicePaymentOptions: jest.fn(),
   useStartCheckout: jest.fn(),
   useNotifyCheckIntent: jest.fn(),
+  useStudioIdentity: jest.fn(),
 }));
 
 import {
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useStartCheckout,
+  useStudioIdentity,
 } from '@patina/supabase';
 
 import { EarlierInvoices } from '../earlier-invoices';
 
 /** 5 August 2026 — the deck's "today". */
 const TODAY = new Date(2026, 7, 5);
+
+/** Two studios, one designer — Kody's own shape. */
+const STUDIO_NAMES: Record<string, string> = {
+  'studio-1': 'Alder & Fox',
+  'studio-b': 'Bramwell Fox',
+};
 
 function invoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
@@ -81,6 +89,14 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
       mutateAsync: jest.fn(),
       isPending: false,
     });
+    // The brand resolver, keyed the way 00571 keys it: the studio the row
+    // names itself wins, and each studio answers with its own name.
+    (useStudioIdentity as jest.Mock).mockImplementation(
+      ({ studioId }: { studioId?: string | null }) => ({
+        isPending: false,
+        data: { name: STUDIO_NAMES[studioId ?? ''] ?? null },
+      }),
+    );
   });
 
   it('says nothing when the letterbox holds the only invoice', () => {
@@ -183,6 +199,37 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
     expect(screen.getByTestId('settlement')).toBeInTheDocument();
     expect(screen.getByTestId('spine-toll')).toHaveAttribute('data-invoice-id', 'inv-5');
     expect(screen.getByTestId('threshold-payment-methods')).toBeInTheDocument();
+  });
+
+  it("makes each folded letter's check out to that letter's own studio", () => {
+    render(
+      <EarlierInvoices
+        invoices={[
+          invoice({
+            id: 'inv-31',
+            invoice_number: 'Invoice No. 31',
+            project_id: null,
+            studio_id: 'studio-b',
+            title: 'Design consultation',
+            status: 'sent',
+            amount_paid_cents: 0,
+            paid_at: null,
+          }),
+        ]}
+        // The slot letter's studio, handed down as the last resort.
+        designerName="Alder & Fox"
+        today={TODAY}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Settle this balance' }));
+    fireEvent.click(screen.getByRole('radio', { name: /check/i }));
+
+    expect(
+      screen.getByRole('button', { name: 'Let Bramwell Fox know a check is coming' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Alder & Fox/ })).not.toBeInTheDocument();
   });
 
   it('withholds the act on the line whose own return is not confirmed', () => {

@@ -10,6 +10,7 @@ import { moneyInWords } from '@/components/threshold/instruments/standing-senten
 import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
 import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
 
+import { useLetterPayee } from './letter-payee';
 import { Settlement } from './settlement';
 
 /* ── EARLIER INVOICES ────────────────────────────────────────────────────────
@@ -97,12 +98,42 @@ function byArrival(a: Invoice, b: Invoice): number {
   return right - left;
 }
 
+/* One folded letter's settle panel. It is its own component because the payee
+   has to come off THIS letter's studio rather than off the letter in the slot,
+   and only one folded letter is ever unfolded at a time — so the resolution is
+   a mounted component's hook, never a hook in a loop. */
+function FoldedSettlement({
+  invoice,
+  hold,
+  fallbackName,
+  onRefetch,
+  today,
+}: {
+  invoice: Invoice;
+  hold: boolean;
+  fallbackName?: string | null;
+  onRefetch?: () => void | Promise<unknown>;
+  today?: Date;
+}) {
+  const payee = useLetterPayee(invoice, fallbackName);
+  return (
+    <Settlement
+      invoice={toModel(invoice)}
+      currency={invoice.currency || 'USD'}
+      hold={hold}
+      designerName={payee}
+      onRefetch={onRefetch}
+      today={today}
+    />
+  );
+}
+
 export interface EarlierInvoicesProps {
   /** Every invoice on the project; drafts and voids are dropped here. */
   invoices: Invoice[];
   /** The one standing in the letterbox — it is not also kept behind it. */
   exceptId?: string | null;
-  /** Who a check would be coming to, when a line here is settled. */
+  /** Last-resort payee name. Each folded letter resolves its own studio first. */
   designerName?: string | null;
   /**
    * A letter whose own return from the till is still unconfirmed. Its settle
@@ -207,16 +238,10 @@ export function EarlierInvoices({
                     >
                       <div className="min-h-0">
                         {settling === invoice.id && (
-                          <Settlement
-                            invoice={toModel(invoice)}
-                            currency={invoice.currency || 'USD'}
+                          <FoldedSettlement
+                            invoice={invoice}
                             hold={heldInvoiceId === invoice.id}
-                            designerName={
-                              invoice.designer?.full_name?.trim() ||
-                              invoice.designer?.business_name?.trim() ||
-                              designerName?.trim() ||
-                              'your designer'
-                            }
+                            fallbackName={designerName}
                             onRefetch={onRefetch}
                             today={today}
                           />

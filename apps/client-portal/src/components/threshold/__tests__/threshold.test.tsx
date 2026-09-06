@@ -160,6 +160,10 @@ jest.mock('@/lib/analytics/events', () => ({
     // with no house under it.
     paymentCompleted: jest.fn(),
     paymentCancelled: jest.fn(),
+    // Choosing "check" on the adopted studio letter is how the payee is read.
+    paymentMethodSelected: jest.fn(),
+    checkIntentSubmitted: jest.fn(),
+    paymentStarted: jest.fn(),
   },
   makingEvents: {
     surfaceViewed: jest.fn(),
@@ -1778,6 +1782,43 @@ describe("Threshold — the studio's own letters", () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
     expect(screen.getByText(/Invoice No\. 4/)).toBeInTheDocument();
+  });
+
+  // The adopted house belongs to one studio; the letter standing in its
+  // letterbox may have been drawn by another. The plate is the HOUSE's and the
+  // payee is the LETTER's, and neither may borrow the other's studio.
+  it("makes the check out to the letter's studio while the plate keeps the house's", async () => {
+    paymentOptionsMock.mockReturnValue({
+      isPending: false,
+      data: { card_surcharge_bps: 300, check_remit_to: null },
+    });
+    startCheckoutMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+    notifyCheckIntentMock.mockReturnValue({ mutateAsync: jest.fn() });
+    identityMock.mockImplementation(({ studioId }: { studioId: string | null }) =>
+      settled({
+        name: studioId === 'studio-ash' ? 'The Ash Studio' : 'Quist Interiors',
+        source: 'studio',
+      }),
+    );
+    clientInvoicesMock.mockReturnValue(
+      settled([{ ...STUDIO_INVOICE, studio_id: 'studio-ash' }]),
+    );
+
+    renderThreshold();
+
+    expect(screen.getByTestId('doorplate-line')).toHaveTextContent('Quist Interiors');
+
+    fireEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
+    fireEvent.click(screen.getByRole('radio', { name: /check/i }));
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Let The Ash Studio know a check is coming',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Let Quist Interiors know/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('leaves the studio letters out of a house that has not adopted them', () => {

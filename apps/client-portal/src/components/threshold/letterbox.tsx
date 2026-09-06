@@ -21,6 +21,7 @@ import {
 } from '@/lib/threshold/derive';
 
 import { EarlierInvoices } from './earlier-invoices';
+import { useLetterPayee } from './letter-payee';
 import { Settlement } from './settlement';
 
 /* ── The letterbox ──────────────────────────────────────────────────────────
@@ -54,7 +55,7 @@ export interface LetterboxProps {
   invoice: InvoiceModel | null;
   /** Every invoice on the project — what is kept behind the one letter. */
   invoices?: Invoice[];
-  /** Who a check would be coming to. Falls back to the invoice's own designer. */
+  /** Last-resort payee name. The letter's own studio is resolved first. */
   designerName?: string | null;
   /**
    * Re-read the project's invoices. Polled while a return from the till is
@@ -188,13 +189,11 @@ export function Letterbox({
   }, [namedRow]);
 
   // The row behind the model: the currency the figures are quoted in, and the
-  // designer a check would be made out to.
+  // studio a check would be made out to. That studio is the LETTER's, not the
+  // surrounding house's: a studio invoice stands in the adopted house, which
+  // may belong to a different studio than the one that drew it.
   const row = invoice ? (invoices.find((candidate) => candidate.id === invoice.id) ?? null) : null;
-  const studio =
-    designerName?.trim() ||
-    row?.designer?.full_name?.trim() ||
-    row?.designer?.business_name?.trim() ||
-    'your designer';
+  const studio = useLetterPayee(row, designerName);
 
   // A letter for no house at all (ruling S1). It stands in this letterbox
   // because this is the adopted house, not because the work is here, and it
@@ -334,7 +333,7 @@ export function Letterbox({
       <EarlierInvoices
         invoices={invoices}
         exceptId={invoice?.id ?? null}
-        designerName={studio}
+        designerName={designerName}
         heldInvoiceId={
           confirm === 'confirming' || confirm === 'unconfirmed'
             ? (settlement?.invoiceId ?? null)
