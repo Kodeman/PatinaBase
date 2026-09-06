@@ -78,12 +78,24 @@
 --      runs every 30 minutes and re-invokes `decision-first-notice` for a
 --      still-pending Stage-2 approval published in the last 72 hours that has
 --      no `notification_log` row keyed {decisionId, notice:'first'} and no
---      attempt inside the last 30 minutes. `decision_first_notice_attempts`
---      records the attempt itself, because a letter skipped by a preference
---      gate writes no log row at all and would otherwise be retried 144 times.
---      It covers EVERY decision put to the client, Stage-2 approval or legacy
---      choice, because 00568's trigger announces every one of them and this
---      wave's Sunday and 8am gates can hold any of those letters.
+--      attempt inside the last 30 minutes. It covers EVERY decision put to the
+--      client, Stage-2 approval or legacy choice, because 00568's trigger
+--      announces every one of them and this wave's Sunday and 8am gates can
+--      hold any of those letters.
+--
+--      THE MAIL LOG IS NOT A SUFFICIENT STOP CONDITION (r2 B-R2-01/M-R2-04).
+--      There are nine ordinary paths on which the letter is handled and no
+--      notification_log row is written: a legacy client with no auth profile
+--      (notification_log.user_id is NOT NULL, so the letter SENDS and logs
+--      nothing), a suppressed address, the per-user hourly cap, and the six
+--      preference and timing holds. On every one of them a log-only guard
+--      stayed true and the invocation repeated — for the legacy client, 144
+--      real letters over three days. So `decision_first_notice_attempts` now
+--      carries the outcome decision-first-notice reports back after every
+--      delivery, sweep-invoked or trigger-invoked: a TERMINAL disposition
+--      (`_decision_first_notice_disposition_is_terminal`) ends the sweep for
+--      that approval, and `attempts >= 96` (48 hours of passes, longer than
+--      the longest hold this wave can impose) is the ceiling under it.
 --
 --      CUTOFF: nothing published before `_decision_first_notice_sweep_cutoff()`,
 --      which is recorded once when this file applies as the LATER of
@@ -125,6 +137,12 @@
 -- resolves an inherited sentence to its composer instead of the designer who
 -- reissued it (M6); and the digest cron goes hourly so the summary can keep the
 -- same 8am-local, never-Sunday promise as the letter (M3).
+--
+-- Round-2 repairs, likewise folded in: the sweep stops on a terminal
+-- disposition and an attempts ceiling instead of on a log row that is often
+-- never written (B-R2-01, M-R2-04); and the 'when_due' snooze lifts at the
+-- last 8am before the due moment rather than at the moment itself, so its
+-- letter has a reminder pass to land in (M-R2-06).
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql.
 --
@@ -331,7 +349,7 @@ GRANT EXECUTE ON FUNCTION public.next_local_morning(text, timestamptz)
 
 COMMENT ON FUNCTION public.next_local_morning(text, timestamptz) IS
   'R16''s release hour: the first 8am in p_zone at or after p_from. Used by '
-  'the push window and by the ''tomorrow_morning'' snooze.';
+  'the push window and by the ''tomorrow_morning'' and ''when_due'' snoozes.';
 
 CREATE OR REPLACE FUNCTION public.set_decision_snooze(
   p_decision_id uuid,
@@ -397,10 +415,27 @@ BEGIN
   IF v_kind = 'never' THEN
     v_until := 'infinity'::timestamptz;
   ELSIF v_kind = 'when_due' THEN
+    -- "When it's due" is a reminder ON the day, not a notice after the fact
+    -- (ux/03 §290). Lifting the hold at due_date itself produced neither:
+    -- decision-reminders only reaches a decision while its date is still
+    -- ahead (due_date BETWEEN now AND now + 48h), so a snooze expiring at the
+    -- due moment had no pass left to land in and the next thing she heard was
+    -- the overdue register (r2 M-R2-06). So the hold lifts at the last 8am
+    -- local strictly before the due moment: within the day before it, always
+    -- inside the reminder cron's window, and never after the date has passed.
+    --
     -- A dateless approval has no due moment, and Patina will not invent one
     -- (no invented timing). Recorded as a standing quiet; the overdue notice
     -- cannot exist without a date, and a superseding edition still breaks it.
-    v_until := COALESCE(v_decision.due_date, 'infinity'::timestamptz);
+    v_until := CASE
+      WHEN v_decision.due_date IS NULL THEN 'infinity'::timestamptz
+      ELSE public.next_local_morning(
+             v_zone,
+             -- next_local_morning returns the first 8am at or after its
+             -- argument, so an argument one day and one minute back lands the
+             -- result strictly inside (due - 24h, due).
+             v_decision.due_date - interval '1 day' - interval '1 minute')
+    END;
   ELSIF v_kind = 'tomorrow_morning' THEN
     v_local := v_now AT TIME ZONE v_zone;
     v_until := (date_trunc('day', v_local) + interval '1 day'
@@ -442,9 +477,11 @@ GRANT EXECUTE ON FUNCTION public.set_decision_snooze(uuid, text)
 COMMENT ON FUNCTION public.set_decision_snooze(uuid, text) IS
   'P-28: "Remind me later" — tomorrow_morning | sunday | when_due | never. '
   'Computes snoozed_until in the caller''s own zone (notification_time_zone) '
-  'and refuses any caller the approval is not addressed to. Never suppresses '
-  'the overdue notice or a superseding edition (R16) — that exception lives in '
-  'the delivery chokepoint.';
+  'and refuses any caller the approval is not addressed to. ''when_due'' lifts '
+  'at the last 8am local before the due moment, so the letter arrives on the '
+  'day with the date still ahead of it rather than after it has passed. Never '
+  'suppresses the overdue notice or a superseding edition (R16) — that '
+  'exception lives in the delivery chokepoint.';
 
 -- ── 3. The hour it may ring ────────────────────────────────────────────────
 
@@ -854,8 +891,15 @@ CREATE TABLE IF NOT EXISTS public.decision_first_notice_attempts (
   decision_id uuid PRIMARY KEY
     REFERENCES public.client_decisions(id) ON DELETE CASCADE,
   attempts integer NOT NULL DEFAULT 0,
-  last_attempt_at timestamptz NOT NULL DEFAULT now()
+  last_attempt_at timestamptz NOT NULL DEFAULT now(),
+  -- What the last attempt came to, in decision-first-notice's own words
+  -- ('sent', 'suppressed', 'snoozed', 'before_local_morning', …). NULL means
+  -- the invocation never reported back.
+  disposition text
 );
+
+ALTER TABLE public.decision_first_notice_attempts
+  ADD COLUMN IF NOT EXISTS disposition text;
 
 ALTER TABLE public.decision_first_notice_attempts
   ENABLE ROW LEVEL SECURITY;
@@ -873,9 +917,89 @@ GRANT ALL ON TABLE public.decision_first_notice_attempts TO service_role;
 
 COMMENT ON TABLE public.decision_first_notice_attempts IS
   'Bookkeeping for the first-notice retry sweep (Wave-1 carry R3-03, ruled to '
-  'ride with P-28). A letter skipped by a preference gate writes no '
-  'notification_log row, so the sweep records its own attempts here and honours '
-  'a 30-minute cooldown against them. Never read by any client surface.';
+  'ride with P-28). notification_log is not a sufficient stop condition: it '
+  'carries no row for a legacy client with no auth profile (user_id is NOT '
+  'NULL, so the letter sends and logs nothing), for a suppressed address, for '
+  'the hourly cap, or for any preference or timing hold. So the sweep reads '
+  'all three columns here — the 30-minute cooldown on last_attempt_at, the '
+  'TERMINAL disposition decision-first-notice reports back, and attempts as a '
+  'hard ceiling under it. Never read by any client surface.';
+
+COMMENT ON COLUMN public.decision_first_notice_attempts.disposition IS
+  'decision-first-notice''s own answer for the last attempt. Terminal values '
+  '(_decision_first_notice_disposition_is_terminal) end the sweep for that '
+  'approval; sunday_quiet / before_local_morning / quiet_hours / rate_capped / '
+  'send_failed lift by themselves and are retried.';
+
+-- Which answers end the sweep. 'sent' is the one that matters most: a legacy
+-- client with no auth profile is mailed successfully and no notification_log
+-- row exists to prove it, which is exactly how the sweep came to re-send the
+-- same announcement every half hour for three days (r2 B-R2-01).
+CREATE OR REPLACE FUNCTION
+  public._decision_first_notice_disposition_is_terminal(p_disposition text)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT COALESCE(p_disposition, '') IN (
+    'sent',
+    'already_sent',
+    'no_recipient_email',
+    'suppressed',
+    'cadence_digest',
+    'snoozed',
+    'quiet_after_overdue',
+    'type_disabled',
+    'email_channel_disabled'
+  );
+$$;
+
+REVOKE ALL ON FUNCTION
+  public._decision_first_notice_disposition_is_terminal(text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION
+  public._decision_first_notice_disposition_is_terminal(text)
+  TO service_role;
+
+COMMENT ON FUNCTION
+  public._decision_first_notice_disposition_is_terminal(text) IS
+  'True for an attempt outcome nothing later will change: the letter went, it '
+  'was already logged, there is no address, the address refused, the digest '
+  'has it, she asked for quiet, or she closed the channel.';
+
+-- decision-first-notice reports its own outcome here after every delivery,
+-- whether the sweep invoked it or 00568's publish trigger did. The trigger's
+-- own run therefore normally writes 'sent' before the sweep ever looks, and
+-- the approval is never picked up at all.
+CREATE OR REPLACE FUNCTION public.record_decision_first_notice_attempt(
+  p_decision_id uuid,
+  p_disposition text
+)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  INSERT INTO public.decision_first_notice_attempts
+    (decision_id, attempts, last_attempt_at, disposition)
+  VALUES (p_decision_id, 1, now(), btrim(COALESCE(p_disposition, '')))
+  ON CONFLICT (decision_id) DO UPDATE
+    SET last_attempt_at = now(),
+        disposition     = btrim(COALESCE(p_disposition, ''));
+$$;
+
+REVOKE ALL ON FUNCTION
+  public.record_decision_first_notice_attempt(uuid, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION
+  public.record_decision_first_notice_attempt(uuid, text)
+  TO service_role;
+
+COMMENT ON FUNCTION public.record_decision_first_notice_attempt(uuid, text) IS
+  'decision-first-notice''s report back: what this attempt came to. Does not '
+  'increment attempts — the sweep counts its own passes — it only records the '
+  'outcome and refreshes the cooldown.';
 
 -- The cutoff is recorded ONCE, at the moment this migration applies, rather
 -- than hard-coded to a date the author guessed. `supabase_migrations.
@@ -992,11 +1116,24 @@ BEGIN
             AND log.metadata @> jsonb_build_object(
                   'decisionId', d.id::text, 'notice', 'first')
        )
+       -- Three stop conditions on one row (r2 B-R2-01 / M-R2-04). The
+       -- 30-minute cooldown paces the sweep; the TERMINAL disposition ends it
+       -- for good; the attempts ceiling is the backstop under both, for an
+       -- invocation that never reported back at all. 96 passes is 48 hours —
+       -- longer than the longest hold this wave can impose (a Saturday-evening
+       -- publish held by the Sunday rule until Monday 8am local, about 36
+       -- hours) and well short of the 144 the 72-hour window would otherwise
+       -- allow.
        AND NOT EXISTS (
          SELECT 1
            FROM public.decision_first_notice_attempts AS attempt
           WHERE attempt.decision_id = d.id
-            AND attempt.last_attempt_at > now() - interval '30 minutes'
+            AND (
+              attempt.last_attempt_at > now() - interval '30 minutes'
+              OR public._decision_first_notice_disposition_is_terminal(
+                   attempt.disposition)
+              OR attempt.attempts >= 96
+            )
        )
      ORDER BY COALESCE(d.sent_at, d.created_at)
      LIMIT GREATEST(COALESCE(p_limit, 100), 1)
@@ -1035,9 +1172,10 @@ COMMENT ON FUNCTION public.sweep_decision_first_notices(integer) IS
   'an approval permanently. Re-invokes decision-first-notice for any pending '
   'client-court decision — Stage-2 approval or legacy choice, the same edge '
   '00568''s trigger announces on — published in the last 72 hours with no '
-  '{decisionId, notice:''first''} email row and no attempt in the last 30 '
-  'minutes. Never for an approval published before the cutoff, and never for '
-  'one already past its date.';
+  '{decisionId, notice:''first''} email row, no terminal disposition recorded '
+  'against it, fewer than 96 attempts, and no attempt in the last 30 minutes. '
+  'Never for an approval published before the cutoff, and never for one '
+  'already past its date.';
 
 -- ── The two crons ──────────────────────────────────────────────────────────
 

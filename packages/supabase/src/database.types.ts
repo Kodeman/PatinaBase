@@ -4096,16 +4096,19 @@ export type Database = {
         Row: {
           attempts: number
           decision_id: string
+          disposition: string | null
           last_attempt_at: string
         }
         Insert: {
           attempts?: number
           decision_id: string
+          disposition?: string | null
           last_attempt_at?: string
         }
         Update: {
           attempts?: number
           decision_id?: string
+          disposition?: string | null
           last_attempt_at?: string
         }
         Relationships: [
@@ -28586,6 +28589,10 @@ export type Database = {
         Args: { p_revision_id: string }
         Returns: Json
       }
+      _decision_first_notice_disposition_is_terminal: {
+        Args: { p_disposition: string }
+        Returns: boolean
+      }
       _decision_first_notice_sweep_cutoff: { Args: never; Returns: string }
       _decision_selection_snapshot_safe: {
         Args: { p_snapshot: Json }
@@ -33053,6 +33060,10 @@ export type Database = {
           p_status: string
         }
         Returns: Json
+      }
+      record_decision_first_notice_attempt: {
+        Args: { p_decision_id: string; p_disposition: string }
+        Returns: undefined
       }
       record_decision_studio_handoff: {
         Args: { p_decision_id: string }

@@ -978,19 +978,22 @@ Deno.test("isSnoozeActive reads one column the same way for letter and summary",
   assertEquals(isSnoozeActive("soon", now), false);
 });
 
-Deno.test("a held approval does not re-arm the bell row it already wrote (r1 M5)", () => {
+Deno.test("a held approval does not re-arm the bell row it already wrote (r1 M5, r2 M-R2-03)", () => {
   // Nothing is holding the letter: the row is written, as it always was.
   assertEquals(shouldFireDecisionInApp({ hold: null, rowExists: true }), true);
   assertEquals(shouldFireDecisionInApp({ hold: null, rowExists: false }), true);
-  // A standing quiet, and the line is already there: leave it exactly as she
-  // left it. The reminder cron runs hourly since 00572; without this a snoozed
-  // line would pop back to unread twenty-four times a day.
+
+  // EVERY hold leaves a standing line as she left it. The reminder cron runs
+  // hourly since 00572 and the first-notice sweep every half hour, so an
+  // hours-long hold that re-armed would flip her line back to unread some
+  // seventy times across one Sunday (r2 M-R2-03).
   for (
     const hold of [
       "snoozed",
       "quiet_after_overdue",
-      "type_disabled",
-      "email_channel_disabled",
+      "sunday_quiet",
+      "before_local_morning",
+      "quiet_hours",
     ] as const
   ) {
     assertEquals(shouldFireDecisionInApp({ hold, rowExists: true }), false);
@@ -1001,18 +1004,48 @@ Deno.test("a held approval does not re-arm the bell row it already wrote (r1 M5)
 
   // The cadence hold is a hand-off, not a silence: the digest is built from
   // this row's own freshness, so it must be re-armed or the batching reader
-  // hears nothing at all. The hours-long holds lift by themselves and their
-  // letter then stamps the approval out of the cron's window.
-  for (
-    const hold of [
-      "cadence_digest",
-      "sunday_quiet",
-      "before_local_morning",
-      "quiet_hours",
-    ] as const
-  ) {
-    assertEquals(shouldFireDecisionInApp({ hold, rowExists: true }), true);
-  }
+  // hears nothing at all.
+  assertEquals(
+    shouldFireDecisionInApp({ hold: "cadence_digest", rowExists: true }),
+    true,
+  );
+});
+
+Deno.test("the bell answers to the bell's own switch, never to an email one (r2 M-R2-05)", () => {
+  // channels_in_app off: her line stands as it is, whatever the letter is doing.
+  assertEquals(
+    shouldFireDecisionInApp({
+      hold: null,
+      rowExists: true,
+      inAppEnabled: false,
+    }),
+    false,
+  );
+  assertEquals(
+    shouldFireDecisionInApp({
+      hold: "cadence_digest",
+      rowExists: true,
+      inAppEnabled: false,
+    }),
+    false,
+  );
+  // Even then, an approval with no line at all gets one: R16 never defers the
+  // record.
+  assertEquals(
+    shouldFireDecisionInApp({
+      hold: null,
+      rowExists: false,
+      inAppEnabled: false,
+    }),
+    true,
+  );
+  // And the two EMAIL switches never reach this function at all — they are
+  // answered in deliverDecisionNotification, so a reader whose only remaining
+  // channel is the bell has it re-armed by every pass that would have mailed.
+  assertEquals(
+    shouldFireDecisionInApp({ hold: null, rowExists: true, inAppEnabled: true }),
+    true,
+  );
 });
 
 Deno.test("a snooze never suppresses the overdue notice or a superseding edition (R16)", () => {

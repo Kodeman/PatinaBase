@@ -82,6 +82,67 @@ export function dropSnoozedDecisions(
   );
 }
 
+/**
+ * A notification_log row whose status means a letter actually left Patina.
+ * 'failed' and 'suppressed' mean it did not, so they must not silence the
+ * summary — she has heard nothing yet.
+ */
+const EMAIL_ACTUALLY_LEFT: ReadonlySet<string> = new Set([
+  "queued",
+  "sending",
+  "sent",
+  "delivered",
+  "opened",
+  "clicked",
+  "unconfirmed",
+  "bounced",
+  "complained",
+]);
+
+export interface DirectDecisionMailRow {
+  status?: string | null;
+  metadata?: { decisionId?: unknown } | null;
+}
+
+/**
+ * Which of these approvals already had a letter of their own inside this
+ * window (r2 M-R2-02).
+ *
+ * The first notice and a superseding edition break the digest and mail direct
+ * (decisionMailHold), so on the default cadence the very approval announced at
+ * four in the afternoon would be listed again in the next morning's summary —
+ * two letters about one ask inside a day, which ux/03 §282 forbids. Reading
+ * the mail log is the only place that fact is recorded, because the bell row
+ * the summary is built from carries no notion of which register spoke.
+ */
+export function directlyMailedDecisionIds(
+  rows: readonly DirectDecisionMailRow[],
+): string[] {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (!EMAIL_ACTUALLY_LEFT.has(String(row?.status ?? ""))) continue;
+    const id = row?.metadata?.decisionId;
+    if (typeof id === "string" && id.length > 0) ids.add(id);
+  }
+  return [...ids];
+}
+
+/**
+ * ux/03 §282: no second automated notice for one approval inside 24 hours.
+ * An approval whose own letter went out inside this window is not repeated in
+ * the summary that follows it.
+ */
+export function dropDirectlyMailedDecisions(
+  items: ReminderDigestItem[],
+  mailedDecisionIds: readonly string[],
+): ReminderDigestItem[] {
+  if (mailedDecisionIds.length === 0) return items;
+  const spokenFor = new Set(mailedDecisionIds);
+  return items.filter((item) =>
+    !(item.decisionId && spokenFor.has(item.decisionId))
+  );
+}
+
 export interface RenderedDigest {
   subject: string;
   html: string;

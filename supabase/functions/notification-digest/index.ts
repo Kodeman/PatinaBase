@@ -32,8 +32,11 @@ import {
   decisionDigestTitle,
   type DigestPeriod,
   digestCategoryForDecision,
+  type DirectDecisionMailRow,
+  directlyMailedDecisionIds,
   digestWindowStart,
   dropDecisionsPastOverdue,
+  dropDirectlyMailedDecisions,
   dropSnoozedDecisions,
   isDigestDue,
   type ReminderDigestItem,
@@ -113,6 +116,41 @@ async function snoozedDecisions(
   >)
     .filter((row) => isSnoozeActive(row.snoozed_until, now))
     .map((row) => row.decision_id);
+}
+
+/**
+ * The approvals that already had a letter of their own inside this window
+ * (r2 M-R2-02). The first notice and a superseding edition break the digest
+ * and mail direct, so without this the default cadence says the same thing
+ * twice inside a day: the announcement in the afternoon, the summary the next
+ * morning. ux/03 §282 allows one.
+ *
+ * Fails open — a log that cannot be read must not become a silence. The
+ * duplicate is the lesser harm than a summary that never mentions the ask.
+ */
+async function decisionsMailedDirect(
+  supabase: SupabaseClient,
+  userId: string,
+  decisionIds: string[],
+  sinceIso: string,
+): Promise<string[]> {
+  if (decisionIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("notification_log")
+    .select("status, metadata")
+    .eq("user_id", userId)
+    .eq("channel", "email")
+    .eq("type", "decision_required")
+    .gt("created_at", sinceIso)
+    .limit(200);
+  if (error) {
+    console.warn("[notification-digest] direct-mail lookup failed", error);
+    return [];
+  }
+  const wanted = new Set(decisionIds);
+  return directlyMailedDecisionIds(
+    (data ?? []) as DirectDecisionMailRow[],
+  ).filter((id) => wanted.has(id));
 }
 
 async function collectItems(
@@ -221,12 +259,15 @@ async function collectItems(
   const decisionIds = items.flatMap((item) =>
     item.decisionId ? [item.decisionId] : []
   );
-  return dropSnoozedDecisions(
-    dropDecisionsPastOverdue(
-      items,
-      await decisionsPastOverdue(supabase, userId, decisionIds),
+  return dropDirectlyMailedDecisions(
+    dropSnoozedDecisions(
+      dropDecisionsPastOverdue(
+        items,
+        await decisionsPastOverdue(supabase, userId, decisionIds),
+      ),
+      await snoozedDecisions(supabase, userId, decisionIds, now),
     ),
-    await snoozedDecisions(supabase, userId, decisionIds, now),
+    await decisionsMailedDirect(supabase, userId, decisionIds, sinceIso),
   );
 }
 

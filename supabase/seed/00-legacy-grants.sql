@@ -13126,6 +13126,30 @@ END $g$;
 
 -- 00572_she_sets_the_pace.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._decision_first_notice_disposition_is_terminal(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._decision_first_notice_disposition_is_terminal(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_decision_first_notice_attempt(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_decision_first_notice_attempt(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
   REVOKE ALL ON TABLE public.decision_first_notice_sweep_state FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

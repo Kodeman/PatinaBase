@@ -13,7 +13,9 @@ import {
   decisionDigestTitle,
   digestCategoryForDecision,
   digestWindowStart,
+  directlyMailedDecisionIds,
   dropDecisionsPastOverdue,
+  dropDirectlyMailedDecisions,
   dropSnoozedDecisions,
   isDigestDue,
   isReminderDigestDue,
@@ -345,4 +347,48 @@ Deno.test("the Sunday summary says which summary it is", () => {
   );
   assertStringIncludes(daily.html, "Your daily summary");
   assert(!daily.html.includes("Your Sunday summary"));
+});
+
+// ── One approval, one letter inside a day (r2 M-R2-02) ─────────────────────
+
+Deno.test("an approval already mailed direct is not repeated in the summary", () => {
+  const items: ReminderDigestItem[] = [
+    {
+      category: "approval",
+      title: "Approve the issued set",
+      link: null,
+      decisionId: "d-announced",
+    },
+    {
+      category: "choice",
+      title: "Pick a pull",
+      link: null,
+      decisionId: "d-quiet",
+    },
+    { category: "proposal", title: "A proposal is waiting", link: null },
+  ];
+  const kept = dropDirectlyMailedDecisions(items, ["d-announced"]);
+  assertEquals(kept.length, 2);
+  assertEquals(kept[0].decisionId, "d-quiet");
+  // A proposal nudge carries no decisionId and is never touched by this.
+  assertEquals(kept[1].category, "proposal");
+  // Nothing mailed, nothing dropped — and the same array back.
+  assertEquals(dropDirectlyMailedDecisions(items, []), items);
+});
+
+Deno.test("only a letter that actually left silences the summary", () => {
+  const rows = [
+    { status: "sent", metadata: { decisionId: "d-sent" } },
+    { status: "delivered", metadata: { decisionId: "d-delivered" } },
+    { status: "sending", metadata: { decisionId: "d-sending" } },
+    // Neither of these reached her, so the summary is still the only thing
+    // that will mention the approval.
+    { status: "failed", metadata: { decisionId: "d-failed" } },
+    { status: "suppressed", metadata: { decisionId: "d-suppressed" } },
+    // Malformed envelopes are simply not evidence of anything.
+    { status: "sent", metadata: null },
+    { status: "sent", metadata: { decisionId: 7 } as never },
+  ];
+  const ids = directlyMailedDecisionIds(rows);
+  assertEquals(ids.sort(), ["d-delivered", "d-sending", "d-sent"]);
 });

@@ -273,3 +273,89 @@ reason. The shared `postgres` database was never reset, migrated or written to.
    `notification-digest-daily` to be gone from `cron.job` on the shared stack
    after the reset, replaced by `notification-digest-hourly`.
 3. Round-0 advisories 3, 4, 5 and 7 stand unchanged. Advisory 6 is closed by M8.
+
+---
+
+# Round 2 fixes — 2026-09-05
+
+Six findings (one blocker, five majors) from `backend-review-r2.md`. All six are
+addressed. `00572_she_sets_the_pace.sql` was edited IN PLACE again, for the
+same reason as round 1: it has never been applied to Strata and lives only on
+this unmerged branch.
+
+| id | what changed |
+|---|---|
+| **B-R2-01** | The sweep's only stop condition was a `notification_log` row, and there are **nine ordinary paths that write none** — the worst of them a legacy client with no auth profile, whose letter SENDS (`send-email.ts:391`, `shouldLog = Boolean(options.userId …)`) and logs nothing, so the same announcement went out every thirty minutes for seventy-two hours. `decision-first-notice` now reports what its attempt came to, through the new `record_decision_first_notice_attempt(uuid, text)` RPC, on EVERY run — the sweep's and 00568's publish trigger's alike. A **terminal** disposition (`_decision_first_notice_disposition_is_terminal`: `sent`, `already_sent`, `no_recipient_email`, `suppressed`, `cadence_digest`, `snoozed`, `quiet_after_overdue`, `type_disabled`, `email_channel_disabled`) ends the sweep for that approval. The trigger's own run normally writes `sent` before the sweep ever looks. |
+| **M-R2-02** | `notification-digest` drops any approval whose own letter went out inside the window (`decisionsMailedDirect` + the pure `directlyMailedDecisionIds` / `dropDirectlyMailedDecisions`). The first notice and a superseding edition break the digest and mail direct, so on the new DEFAULT cadence the ask announced at four in the afternoon was listed again in the next morning's summary — two letters about one approval inside a day, which ux/03 §282 forbids. Only a status that means the letter actually left counts (`failed` and `suppressed` do not silence the summary), and the lookup fails open. |
+| **M-R2-03** | `shouldFireDecisionInApp` now re-arms the bell row for exactly two reasons: the letter is going out on this pass, or it has been handed to the digest (which is built from that row's own freshness). **Every** other hold — her snooze, the quiet after the overdue notice, Sunday, before her morning, her own quiet hours — leaves the line exactly as she left it. `STANDING_QUIET` is gone. A decision with no row still always gets one: R16 defers the push, never the record. |
+| **M-R2-04** | `decision_first_notice_attempts.attempts` is read at last, as a hard ceiling (`>= 96`, forty-eight hours of passes — longer than the longest hold this wave can impose, a Saturday-evening publish held by the Sunday rule until Monday 8am local, about thirty-six hours) under the terminal disposition. The table comment and the migration banner say what is actually true: the mail log is not a sufficient stop condition, and here is the list of paths on which it writes nothing. |
+| **M-R2-05** | The two EMAIL switches stopped deciding the bell. `deliverDecisionNotification` keeps them apart now: `emailClosed` (`type_disabled` / `email_channel_disabled`) answers only for the letter, and `timingHold` — `decisionMailHold`'s answer plus her quiet hours — is the only thing the bell's re-arm reads. The reported `reason` order is unchanged, so every caller reads back what it read before. The re-arm is gated on `channels_in_app` instead, so a reader whose only remaining channel is the bell has it re-armed by every pass that would have mailed her, and a reader who closed the bell keeps the line she has. |
+| **M-R2-06** | `set_decision_snooze`'s `when_due` lifts at `next_local_morning(zone, due_date − 1 day − 1 minute)` — the last 8am local strictly before the due moment — instead of at `due_date` itself. `decision-reminders` only reaches a decision while its date is still ahead (`due_date` BETWEEN now AND now+48h), so a hold expiring at the due moment had no pass left to land in and the next thing she heard was the overdue register. `next_local_morning` returns the first 8am at or after its argument, so the result always falls strictly inside `(due − 24h, due)`: on the day, with the date still ahead of it, inside the reminder cron's window. |
+
+## Deploy set (unchanged from round 1)
+
+`decision-first-notice`, `decision-reminders`, `decision-resolved-notify`,
+`expire-decisions`, `notification-digest`, `proposal-nudge`.
+Portals: `client-portal` (cadence picker + regenerated types).
+
+`decision-first-notice` and `notification-digest` are edited directly this
+round; the rest ride the `_shared/decision-notify.ts` change.
+
+## Gates — round 2
+
+Scratch database `patina_w3` on the shared local Postgres, rebuilt this round
+by the same recipe (`pg_dump --no-owner --exclude-schema=cron postgres`, ACLs
+kept, a stub `cron.job` + `cron.schedule`/`cron.unschedule` standing in), then
+00569, then 00572. The shared `postgres` database was never reset, migrated or
+written to — its ledger still reads `00571, 00568, 00567` after this pass, and
+the scratch database was dropped at the end.
+
+| Gate | Result |
+|---|---|
+| scratch apply (`psql -v ON_ERROR_STOP=1 -f 00572…`) | **exit 0** |
+| second apply, same DB (idempotency) | **exit 0** |
+| `cron.job` after apply | `client-push-window-release */15 * * * *` · `decision-first-notice-retry-sweep */30 * * * *` · `decision-reminders-hourly 0 * * * *` · `notification-digest-hourly 20 * * * *` |
+| `decision_first_notice_attempts` shape | `decision_id` · `attempts` · `last_attempt_at` · **`disposition`** |
+| `she_sets_the_pace_test.sql` (§6b new) | **PASS** — "all assertions passed" |
+| `workflow/approval_authority/*.sql` (6 files) | **6 PASS** (exit 0 each) |
+| `notifications/client_attention_test.sql` | **PASS** |
+| `deno test --config … _shared/ decision-reminders/ decision-first-notice/ notification-digest/ expire-decisions/ proposal-nudge/` | **270 passed, 0 failed** (was 262) |
+| `deno test … _tests/apns-send.test.ts _tests/client-attention-deep-links.test.ts` | **42 passed, 0 failed** |
+| `deno check --config …` (8 touched files) | clean |
+| `pnpm --filter @patina/supabase type-check` | **PASS** |
+| `pnpm --filter @patina/notifications test` | **89 passed** |
+| `pnpm --filter @patina/client-portal type-check` | **PASS** |
+| `database.types.ts` | **+11 / −0** (`disposition` on the attempts table, and the two new functions; the peer program's 00571 noise in the scratch dump was excluded by hand, same method as rounds 0 and 1) |
+| `seed/00-legacy-grants.sql` | regenerated, **+24 / −0** |
+| no `deno.lock` at the repo root, in `supabase/` or in `supabase/functions/` | confirmed |
+
+## New test coverage
+
+- **SQL §6b** — the grant posture on `record_decision_first_notice_attempt`
+  (no browser, no signed-in reader), the terminal/retryable split, the report
+  back recorded without inflating the sweep's own pass count, a `sent`
+  disposition removing an approval from the selection (4 → 3 candidates), the
+  96-pass ceiling, and one pass short of it under a hold that lifts.
+- **SQL §3** — `when_due` now asserts the hold lifts strictly BEFORE the date,
+  inside the day before it, at eight in her own morning.
+- **deno** — five new cases on `firstNoticeDisposition` (a letter that went with
+  nothing to log it; a refused address vs the hourly cap; the three holds that
+  lift; the seven handled answers that end the sweep; an unreadable failure);
+  two on the digest's direct-mail drop; and `shouldFireDecisionInApp` rewritten
+  into two tests, one per rule.
+
+## Owed / advisories, round 2
+
+1. **The dateless `when_due` branch is not exercised in SQL.** `due_date` is
+   frozen evidence and the only lever that clears one is
+   `session_replication_role`, which this stack refuses inside a DO block
+   (round-1 advisory 1). The branch is a one-line CASE returning `'infinity'`,
+   and the `never` kind covers the same storage path.
+2. **`decisionMailHold` now runs even when the email channel is closed**, so a
+   reader with email off costs two extra reads per pass (`decision_snoozes`,
+   `decision_notifications`). That is the price of the bell answering to its own
+   switch; both queries are indexed point lookups.
+3. **A reader with `channels_in_app` off still gets the first row written.**
+   R16 says the record is never deferred; only the re-arm is hers to switch off.
+4. Round-0 advisories 3, 4, 5 and 7 and round-1 advisories 2 and 3 stand
+   unchanged. Advisory 6 is closed by M8; round-1 advisory 1 is restated above.

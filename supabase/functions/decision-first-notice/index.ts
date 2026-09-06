@@ -39,6 +39,7 @@ import {
 } from "../_shared/project-approval-notification.ts";
 import {
   type ArtifactDeltas,
+  firstNoticeDisposition,
   type PredecessorRow,
   resolveSupersededEdition,
 } from "./logic.ts";
@@ -115,6 +116,29 @@ async function loadPredecessor(
     return null;
   }
   return (data ?? null) as unknown as PredecessorRow | null;
+}
+
+/**
+ * Say what this attempt came to, so the retry sweep can stop (r2 B-R2-01).
+ * Non-fatal: a bookkeeping write must never cost a homeowner her letter. The
+ * cost of a lost write is one more sweep pass, not a lost notice.
+ */
+async function recordAttempt(
+  supabase: SupabaseClient,
+  decisionId: string,
+  disposition: string,
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    "record_decision_first_notice_attempt",
+    { p_decision_id: decisionId, p_disposition: disposition },
+  );
+  if (error) {
+    console.warn(
+      "decision-first-notice: attempt bookkeeping failed",
+      decisionId,
+      error,
+    );
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -239,11 +263,19 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // The sweep's stop condition. A letter that sends without writing a log row
+  // — the legacy client with no auth profile — used to leave the sweep with
+  // nothing to see, and it re-sent every half hour for three days.
+  const attempt = firstNoticeDisposition(result);
+  await recordAttempt(supabase, decision.id, attempt.disposition);
+
   return json({
     decision_id: decision.id,
     in_app_ok: result.inAppOk,
     email_sent: result.emailSent,
     email_skipped: result.emailSkipped,
     reason: result.reason ?? null,
+    disposition: attempt.disposition,
+    disposition_terminal: attempt.terminal,
   });
 });

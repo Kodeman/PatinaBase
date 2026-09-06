@@ -91,3 +91,82 @@ export function resolveSupersededEdition(
 
   return edition;
 }
+
+// ── The sweep's terminal answer (r2 B-R2-01 / M-R2-04) ─────────────────────
+//
+// `sweep_decision_first_notices` (00572) re-invokes this function every thirty
+// minutes for seventy-two hours until the approval's first letter is recorded.
+// Its only record was a `notification_log` row — and there are nine ordinary
+// paths on which no such row is ever written: a legacy client with no auth
+// profile (notification_log.user_id is NOT NULL, so the letter sends and logs
+// nothing), a suppressed address, the per-user hourly cap, and the six
+// preference and timing holds. On every one of them the sweep's NOT EXISTS
+// stayed true and the invocation repeated — up to 144 times, and for the
+// legacy client 144 actual letters.
+//
+// So the function now says what happened, once, per approval. A TERMINAL
+// disposition ends the sweep for that approval; a retryable one lets it come
+// back when the hold lifts.
+
+/** What one first-notice attempt came to. */
+export interface FirstNoticeDisposition {
+  disposition: string;
+  /** True when nothing later will change this answer. */
+  terminal: boolean;
+}
+
+/** The delivery facts this classifier reads. */
+export interface FirstNoticeDeliveryResult {
+  emailSent: boolean;
+  emailSkipped: boolean;
+  emailSuppressed?: boolean;
+  reason?: string | null;
+}
+
+/**
+ * A hold that lifts by itself, and whose letter is therefore still owed. Every
+ * other answer is final for this approval: the letter went, it was already
+ * logged, there is no address, the digest has it, she asked for quiet, or the
+ * channel is closed.
+ */
+const RETRYABLE_HOLDS: ReadonlySet<string> = new Set([
+  "sunday_quiet",
+  "before_local_morning",
+  "quiet_hours",
+]);
+
+export function firstNoticeDisposition(
+  result: FirstNoticeDeliveryResult,
+): FirstNoticeDisposition {
+  if (result.emailSent) return { disposition: "sent", terminal: true };
+
+  const reason = (result.reason ?? "").trim();
+  if (!reason) return { disposition: "send_failed", terminal: false };
+
+  if (RETRYABLE_HOLDS.has(reason)) {
+    return { disposition: reason, terminal: false };
+  }
+
+  if (result.emailSuppressed) {
+    // The hourly cap is a "come back later"; an unsubscribe, a bounce or a
+    // complaint is the address itself refusing, and no retry changes it.
+    return reason.startsWith("global_rate_cap")
+      ? { disposition: "rate_capped", terminal: false }
+      : { disposition: "suppressed", terminal: true };
+  }
+
+  switch (reason) {
+    case "already_sent":
+    case "no_recipient_email":
+    case "cadence_digest":
+    case "snoozed":
+    case "quiet_after_overdue":
+    case "type_disabled":
+    case "email_channel_disabled":
+      return { disposition: reason, terminal: true };
+    default:
+      // An unreadable provider answer, a transport error, a non-2xx: the
+      // letter may still be owed, so the sweep keeps its place in the queue.
+      return { disposition: "send_failed", terminal: false };
+  }
+}

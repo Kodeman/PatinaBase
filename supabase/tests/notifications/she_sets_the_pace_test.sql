@@ -18,8 +18,9 @@
 --      and release_due_client_pushes claiming only the rows whose hour came.
 --   5. The receipt is still silent (00569, regrafted here): one already-read
 --      in_app row, no push envelope, nothing handed to apns-send.
---   6. The first-notice retry sweep's selection — what it picks up and the
---      five things it leaves alone.
+--   6. The first-notice retry sweep's selection — what it picks up, the five
+--      things it leaves alone, and (6b) the terminal disposition and attempts
+--      ceiling that stop it re-sending a letter no mail log ever recorded.
 --   7. The studio hand-off row: the sentence, the rail, and its idempotency.
 --   8. The why is signed with the display name, and the backfill moves a row
 --      00569 signed with a given name.
@@ -415,11 +416,30 @@ BEGIN
            WHERE user_id = u_client AND decision_id = d_one) = 1,
     'choosing again replaces the standing snooze rather than stacking one';
 
+  -- r2 M-R2-06. "When it's due" used to lift AT the due moment, which is the
+  -- one instant no letter can be sent from: decision-reminders only reaches a
+  -- decision while its date is still ahead, so the hold expired into an empty
+  -- window and the next thing she heard was the overdue register. It lifts at
+  -- the last 8am local before the date instead — on the day, with the date
+  -- still ahead of it.
   v_result := public.set_decision_snooze(d_one, 'when_due');
-  ASSERT (SELECT snoozed_until FROM public.decision_snoozes
-           WHERE user_id = u_client AND decision_id = d_one)
-         = (SELECT due_date FROM public.client_decisions WHERE id = d_one),
-    '"when it''s due" is the approval''s own date, never an invented one';
+  v_until := (SELECT snoozed_until FROM public.decision_snoozes
+               WHERE user_id = u_client AND decision_id = d_one);
+  ASSERT v_until < (SELECT due_date FROM public.client_decisions
+                     WHERE id = d_one),
+    '"when it''s due" lifts BEFORE the date, so a reminder pass can carry it';
+  ASSERT v_until > (SELECT due_date - interval '1 day' - interval '1 minute'
+                      FROM public.client_decisions WHERE id = d_one),
+    'and inside the day before it, never earlier — no invented timing';
+  ASSERT extract(hour FROM (v_until AT TIME ZONE 'America/New_York')) = 8,
+    'and at eight in her own morning';
+  ASSERT v_until >= now(),
+    'the fixture is due in three days, so the hold is still ahead of us';
+
+  -- (A dateless approval has no due moment to wait for and is recorded as a
+  -- standing quiet — the CASE's NULL branch. It is not exercised here because
+  -- due_date is frozen evidence: the only lever that clears one is
+  -- session_replication_role, which this stack refuses inside a DO block.)
 
   v_result := public.set_decision_snooze(d_one, 'never');
   ASSERT (SELECT snoozed_until FROM public.decision_snoozes
@@ -622,6 +642,70 @@ BEGIN
             JOIN sp_decisions AS row ON row.decision_id = attempt.decision_id
            WHERE row.label IN ('catalogue', 'lapsing', 'draft')) = 0,
     'the back catalogue, the lapsed approval and the unpublished draft are never swept';
+
+  -- ══ 6b. The sweep's terminal answer (r2 B-R2-01 / M-R2-04) ═══════════════
+  --
+  -- The mail log was the only stop condition, and there are nine ordinary
+  -- paths that write no log row — the worst of them a legacy client with no
+  -- auth profile, whose letter SENDS and logs nothing, so the same
+  -- announcement went out every half hour for three days. decision-first-
+  -- notice now reports what its attempt came to.
+
+  ASSERT NOT has_function_privilege('anon',
+    'public.record_decision_first_notice_attempt(uuid, text)', 'EXECUTE'),
+    'no browser reports a delivery outcome';
+  ASSERT NOT has_function_privilege('authenticated',
+    'public.record_decision_first_notice_attempt(uuid, text)', 'EXECUTE'),
+    'nor a signed-in reader';
+
+  ASSERT public._decision_first_notice_disposition_is_terminal('sent'),
+    'a letter that went is a terminal answer, log row or no log row';
+  ASSERT public._decision_first_notice_disposition_is_terminal('suppressed'),
+    'an address that refused will refuse again';
+  ASSERT public._decision_first_notice_disposition_is_terminal('snoozed'),
+    'and a quiet she asked for is not something to retry her out of';
+  ASSERT NOT public._decision_first_notice_disposition_is_terminal(
+    'before_local_morning'),
+    'but a hold that lifts by itself still owes her the letter';
+  ASSERT NOT public._decision_first_notice_disposition_is_terminal(NULL),
+    'and an invocation that never reported back is not an answer at all';
+
+  DELETE FROM public.decision_first_notice_attempts;
+  DELETE FROM public.notification_log WHERE user_id = u_client;
+  PERFORM public.record_decision_first_notice_attempt(d_one, 'sent');
+  ASSERT (SELECT disposition FROM public.decision_first_notice_attempts
+           WHERE decision_id = d_one) = 'sent',
+    'the report back is recorded against the approval';
+  ASSERT (SELECT attempts FROM public.decision_first_notice_attempts
+           WHERE decision_id = d_one) = 1,
+    'and does not inflate the pass count the sweep keeps for itself';
+  -- Age it past the cooldown so the next assertion can only be about the
+  -- disposition.
+  UPDATE public.decision_first_notice_attempts
+     SET last_attempt_at = now() - interval '2 hours';
+  v_count := public.sweep_decision_first_notices(50);
+  ASSERT v_count = 3,
+    'the approval whose letter went is never swept again — got ' || v_count;
+
+  -- And the ceiling under it, for an invocation that never reports back at all.
+  DELETE FROM public.decision_first_notice_attempts;
+  INSERT INTO public.decision_first_notice_attempts
+    (decision_id, attempts, last_attempt_at, disposition)
+  VALUES (d_one, 96, now() - interval '2 hours', NULL);
+  ASSERT public.sweep_decision_first_notices(50) = 3,
+    'ninety-six passes is where the sweep stops asking';
+
+  DELETE FROM public.decision_first_notice_attempts;
+  INSERT INTO public.decision_first_notice_attempts
+    (decision_id, attempts, last_attempt_at, disposition)
+  VALUES (d_one, 95, now() - interval '2 hours', 'before_local_morning');
+  ASSERT public.sweep_decision_first_notices(50) = 4,
+    'one pass short of it, under a hold that lifts, she is still owed the letter';
+  ASSERT (SELECT attempts FROM public.decision_first_notice_attempts
+           WHERE decision_id = d_one) = 96,
+    'and that pass is counted';
+
+  DELETE FROM public.decision_first_notice_attempts;
 
   -- ══ 7. The studio hand-off ═══════════════════════════════════════════════
 
