@@ -71,12 +71,19 @@ import {
   type InvoiceCheckoutAttempt,
   InvoiceCheckoutIntegrityError,
   type InvoiceCheckoutPaymentMethod,
-  type InvoiceCheckoutSession,
   invoiceCheckoutReturnAddress,
-  invoiceCheckoutReturnUrl,
   reconcileInvoiceCheckoutSession,
-  runInvoiceCheckout,
-} from './invoice-checkout-core.ts';
+} from '../_shared/invoice-checkout-core.ts';
+import {
+  checkoutCustomerFailureBody,
+  ensureStripeCustomer,
+} from '../_shared/invoice-checkout-stripe.ts';
+import {
+  invoiceAttemptFields,
+  startInvoiceCheckout,
+  stripeSessionView,
+} from '../_shared/invoice-checkout-driver.ts';
+import { ensureInvoiceLinkUrl } from '../_shared/invoice-links.ts';
 import {
   TAX_SHIPPING_CONFIG_KEY,
   buildDirectOrderIntakeMetadata,
@@ -753,154 +760,6 @@ async function loadDirectOrderPayable(
 // Shared driver: ensure Stripe customer → session reuse → create → persist.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function ensureStripeCustomer(
-  admin: SupabaseClient,
-  stripe: Stripe,
-  caller: CallerUser
-): Promise<string | Response> {
-  const { data: payerProfile, error: payerErr } = await admin
-    .from('profiles')
-    .select('id, email, full_name, stripe_customer_id')
-    .eq('id', caller.id)
-    .maybeSingle();
-  if (payerErr || !payerProfile) {
-    console.error('create-checkout-session: payer profile lookup failed', payerErr);
-    return json({ error: 'payer_profile_not_found' }, 500);
-  }
-
-  let candidate = (payerProfile as any).stripe_customer_id as string | null;
-  try {
-    if (!candidate) {
-      const customer = await stripe.customers.create(
-        {
-          email: (payerProfile as any).email ?? undefined,
-          name: (payerProfile as any).full_name ?? undefined,
-          metadata: { profile_id: caller.id },
-        },
-        { idempotencyKey: `patina-profile-customer:${caller.id}` }
-      );
-      candidate = customer.id;
-      const { error: persistErr } = await admin
-        .from('profiles')
-        .update({ stripe_customer_id: candidate })
-        .eq('id', caller.id)
-        .is('stripe_customer_id', null);
-      if (persistErr) {
-        console.error('create-checkout-session: failed to persist stripe_customer_id', persistErr);
-        return json(
-          {
-            error: 'customer_persistence_failed',
-            detail: 'Checkout was not opened.',
-          },
-          500
-        );
-      }
-    }
-
-    // Use the compare-and-set winner, never an unpersisted candidate customer.
-    const { data: canonical, error: canonicalErr } = await admin
-      .from('profiles')
-      .select('stripe_customer_id')
-      .eq('id', caller.id)
-      .maybeSingle();
-    const customerId = (canonical as any)?.stripe_customer_id as string | null;
-    if (canonicalErr || !customerId) {
-      console.error('create-checkout-session: canonical customer read failed', canonicalErr);
-      return json(
-        {
-          error: 'customer_persistence_failed',
-          detail: 'Checkout was not opened.',
-        },
-        500
-      );
-    }
-    return customerId;
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Stripe customer unavailable.';
-    console.error('create-checkout-session: customer creation failed', detail);
-    return json({ error: 'stripe_error', detail }, 502);
-  }
-}
-
-function stripeSessionView(session: Stripe.Checkout.Session): InvoiceCheckoutSession {
-  const customerId =
-    typeof session.customer === 'string'
-      ? session.customer
-      : session.customer && !('deleted' in session.customer)
-        ? session.customer.id
-        : null;
-  return {
-    id: session.id,
-    status: session.status,
-    paymentStatus: session.payment_status,
-    url: session.url,
-    amountTotal: session.amount_total,
-    currency: session.currency,
-    customerId,
-    metadata: Object.fromEntries(
-      Object.entries(session.metadata ?? {}).filter(
-        (entry): entry is [string, string] => typeof entry[1] === 'string'
-      )
-    ),
-  };
-}
-
-function mapInvoiceAttempt(data: any): InvoiceCheckoutAttempt {
-  if (
-    !data?.attempt_id ||
-    !data?.payment_id ||
-    !data?.invoice_id ||
-    !data?.payer_id ||
-    !data?.stripe_customer_id ||
-    !Number.isInteger(data?.amount_cents) ||
-    // The fee is money: a non-integer here would silently mis-charge, so it is
-    // as load-bearing as the balance. The claim RPC always returns it (0 for a
-    // legacy/no-method attempt).
-    !Number.isInteger(data?.surcharge_cents) ||
-    !data?.currency ||
-    !data?.stripe_idempotency_key
-  ) {
-    throw new Error('Database returned an invalid invoice Checkout claim.');
-  }
-  return {
-    attemptId: data.attempt_id,
-    paymentId: data.payment_id,
-    invoiceId: data.invoice_id,
-    payerId: data.payer_id,
-    stripeCustomerId: data.stripe_customer_id,
-    amountCents: data.amount_cents,
-    surchargeCents: data.surcharge_cents,
-    // The DB CHECK already constrains this to card | us_bank_account | NULL;
-    // `?? null` normalizes the JSON-null the reused-attempt branch returns.
-    paymentMethod: (data.payment_method ?? null) as InvoiceCheckoutPaymentMethod | null,
-    currency: data.currency,
-    state: data.state,
-    stripeIdempotencyKey: data.stripe_idempotency_key,
-    stripeCheckoutSessionId: data.stripe_checkout_session_id ?? null,
-    supersededSessionId: data.superseded_session_id ?? null,
-  };
-}
-
-/** Fee line-item label per rail. Mirrors the client portal's totals rows. */
-const SURCHARGE_LINE_LABEL: Record<InvoiceCheckoutPaymentMethod, string> = {
-  card: 'Card processing fee',
-  us_bank_account: 'Bank transfer fee',
-};
-
-function invoiceAttemptFields(attempt: InvoiceCheckoutAttempt, sessionId?: string | null) {
-  return {
-    amount_cents: attempt.amountCents,
-    // Additive: existing clients ignore unknown keys, the client portal reads
-    // them to reconcile what was actually charged.
-    surcharge_cents: attempt.surchargeCents,
-    payment_method: attempt.paymentMethod,
-    currency: attempt.currency,
-    checkout_attempt_id: attempt.attemptId,
-    payment_id: attempt.paymentId,
-    session_id: sessionId ?? attempt.stripeCheckoutSessionId,
-  };
-}
-
 async function reconcileStoredInvoiceCheckout(
   admin: SupabaseClient,
   stripe: Stripe,
@@ -911,7 +770,7 @@ async function reconcileStoredInvoiceCheckout(
   const { data: attemptData, error: attemptError } = await admin
     .from('invoice_checkout_attempts')
     .select(
-      'id, invoice_id, payer_id, stripe_customer_id, amount_cents, surcharge_cents, payment_method, currency, state, stripe_idempotency_key, stripe_checkout_session_id',
+      'id, invoice_id, payer_id, invoice_link_id, return_nonce, stripe_customer_id, amount_cents, surcharge_cents, payment_method, currency, state, stripe_idempotency_key, stripe_checkout_session_id',
     )
     .eq('invoice_id', invoiceId)
     .eq('stripe_checkout_session_id', sessionId)
@@ -970,7 +829,9 @@ async function reconcileStoredInvoiceCheckout(
     !activeState ||
     !knownMethod ||
     !attemptData.id ||
-    !attemptData.payer_id ||
+    // Exactly one of payer_id / invoice_link_id — the 00574 discriminated union.
+    (typeof attemptData.payer_id === 'string' && attemptData.payer_id.length > 0) ===
+      (typeof attemptData.invoice_link_id === 'string' && attemptData.invoice_link_id.length > 0) ||
     !attemptData.stripe_customer_id ||
     !Number.isInteger(attemptData.amount_cents) ||
     !Number.isInteger(attemptData.surcharge_cents) ||
@@ -990,7 +851,9 @@ async function reconcileStoredInvoiceCheckout(
     attemptId: attemptData.id,
     paymentId: payment.id,
     invoiceId: attemptData.invoice_id,
-    payerId: attemptData.payer_id,
+    payerId: attemptData.payer_id ?? null,
+    invoiceLinkId: attemptData.invoice_link_id ?? null,
+    returnNonce: attemptData.return_nonce ?? null,
     stripeCustomerId: attemptData.stripe_customer_id,
     amountCents: attemptData.amount_cents,
     surchargeCents: attemptData.surcharge_cents,
@@ -1049,200 +912,45 @@ async function reconcileStoredInvoiceCheckout(
   }
 }
 
-async function startInvoiceCheckout(
+/**
+ * The signed-in invoice rail: the caller's own Stripe customer, then the shared
+ * driver on the payer identity. Return addresses move onto the
+ * /pay/return/<nonce> form (00574, S10) whenever the invoice has a live link;
+ * ensureInvoiceLinkUrl returning null — the M7 safety valve — keeps today's
+ * letterbox address so a session is never created with a broken return.
+ */
+async function startSignedInInvoiceCheckout(
   admin: SupabaseClient,
   stripe: Stripe,
   caller: CallerUser,
   payable: Payable,
   paymentMethod: InvoiceCheckoutPaymentMethod | null
 ): Promise<Response> {
-  const customerResult = await ensureStripeCustomer(admin, stripe, caller);
-  if (customerResult instanceof Response) return customerResult;
-  const customerId = customerResult;
+  const customer = await ensureStripeCustomer(admin, stripe, caller.id);
+  if (!customer.ok) return json(checkoutCustomerFailureBody(customer), customer.status);
   const invoiceId = payable.metadata.invoice_id;
-
-  let lastAttempt: InvoiceCheckoutAttempt | null = null;
-  try {
-    const result = await runInvoiceCheckout({
-      async claim() {
-        const { data, error } = await admin.rpc('claim_invoice_checkout_attempt', {
-          p_invoice_id: invoiceId,
-          p_payer_id: caller.id,
-          p_stripe_customer_id: customerId,
-          p_allow_designer_test: INVOICE_CHECKOUT_DESIGNER_TEST_MODE,
-          p_payment_method: paymentMethod,
-        });
-        if (error) throw error;
-        const claimed = mapInvoiceAttempt(data);
-        lastAttempt = claimed;
-        // The claim superseded a live session on the other rail (or at the old
-        // fee). Close it so the client can't wander back and pay the wrong
-        // amount. Best-effort only — the DB already failed that attempt, so a
-        // Stripe hiccup here must not break the fresh checkout (mirrors the
-        // stale-session expire in startCheckout).
-        if (claimed.supersededSessionId) {
-          try {
-            await stripe.checkout.sessions.expire(claimed.supersededSessionId);
-          } catch (err) {
-            console.warn('create-checkout-session: superseded session expire failed', err);
-          }
-        }
-        return claimed;
-      },
-      async retrieveSession(sessionId) {
-        return stripeSessionView(await stripe.checkout.sessions.retrieve(sessionId));
-      },
-      async createSession(attempt) {
-        // A legacy (null-rail) attempt must produce the pre-surcharge session
-        // byte for byte: both rails, no fee line, no extra metadata keys.
-        const rails: Array<'card' | 'us_bank_account'> = attempt.paymentMethod
-          ? [attempt.paymentMethod]
-          : ['card', 'us_bank_account'];
-        const offersAch = rails.includes('us_bank_account');
-        const metadata = {
-          payable_type: 'invoice',
-          invoice_id: attempt.invoiceId,
-          checkout_attempt_id: attempt.attemptId,
-          payer_id: attempt.payerId,
-          ...(attempt.paymentMethod
-            ? {
-                payment_method: attempt.paymentMethod,
-                surcharge_cents: String(attempt.surchargeCents),
-              }
-            : {}),
-        };
-        const session = await stripe.checkout.sessions.create(
-          {
-            mode: 'payment',
-            customer: attempt.stripeCustomerId,
-            payment_method_types: rails,
-            ...(offersAch
-              ? {
-                  payment_method_options: {
-                    us_bank_account: { verification_method: 'automatic' as const },
-                  },
-                }
-              : {}),
-            line_items: [
-              {
-                quantity: 1,
-                price_data: {
-                  currency: attempt.currency,
-                  unit_amount: attempt.amountCents,
-                  product_data: { name: payable.lineItemName },
-                },
-              },
-              // Stripe "Pattern A": the fee is its own line, so amount_total is
-              // exactly balance + fee (no tax/shipping on this session config)
-              // and the client sees what they're paying for.
-              ...(attempt.surchargeCents > 0 && attempt.paymentMethod
-                ? [
-                    {
-                      quantity: 1,
-                      price_data: {
-                        currency: attempt.currency,
-                        unit_amount: attempt.surchargeCents,
-                        product_data: {
-                          name: SURCHARGE_LINE_LABEL[attempt.paymentMethod],
-                        },
-                      },
-                    },
-                  ]
-                : []),
-            ],
-            metadata,
-            payment_intent_data: { metadata },
-            // Return the local claim identity on both paths. A cancellation has
-            // no reliable Checkout session placeholder, so analytics and UI
-            // reconciliation use the exact attempt/payment IDs instead of the
-            // invoice's mutable outstanding balance.
-            success_url: invoiceCheckoutReturnUrl(payable.successUrl, attempt),
-            cancel_url: invoiceCheckoutReturnUrl(payable.cancelUrl, attempt),
-          },
-          { idempotencyKey: attempt.stripeIdempotencyKey }
-        );
-        return stripeSessionView(session);
-      },
-      async finalize(attempt, sessionId) {
-        const { data, error } = await admin.rpc('finalize_invoice_checkout_attempt', {
-          p_attempt_id: attempt.attemptId,
-          p_payer_id: caller.id,
-          p_stripe_customer_id: customerId,
-          p_stripe_checkout_session_id: sessionId,
-        });
-        if (error) throw error;
-        lastAttempt = mapInvoiceAttempt(data);
-        return lastAttempt;
-      },
-      async failExpired(attempt, sessionId) {
-        const { error } = await admin.rpc('fail_invoice_checkout_attempt', {
-          p_attempt_id: attempt.attemptId,
-          p_stripe_checkout_session_id: sessionId,
-          p_reason: 'checkout_session_expired',
-        });
-        if (error) throw error;
-      },
-    });
-
-    if (result.kind === 'processing') {
-      return json(
-        {
-          error: 'payment_processing',
-          detail: payable.processingDetail,
-          ...invoiceAttemptFields(result.attempt, result.session.id),
-        },
-        409
-      );
-    }
-    return json({
-      url: result.url,
-      ...invoiceAttemptFields(result.attempt, result.session.id),
-      reused: result.reused,
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Invoice Checkout failed.';
-    const dbMessage = (error as any)?.message ?? '';
-    const fields = lastAttempt ? invoiceAttemptFields(lastAttempt) : {};
-
-    if (dbMessage.includes('invoice_checkout_payer_not_allowed')) {
-      return json({ error: 'invoice_not_found' }, 404);
-    }
-    // Colon-suffixed (`…bad_payment_method:<value>`) like the other 00397 error
-    // idioms — match by prefix, never equality. Only reachable if the DB
-    // vocabulary drifts ahead of this function's validation.
-    if (dbMessage.includes('invoice_checkout_bad_payment_method')) {
-      return json({ error: 'invalid_payment_method', detail, ...fields }, 400);
-    }
-    if (dbMessage.includes('invoice_checkout_reconciliation_required')) {
-      return json(
-        {
-          error: 'payment_reconciliation_required',
-          detail,
-          ...fields,
-        },
-        409
-      );
-    }
-    if (
-      dbMessage.includes('invoice_checkout_attempt_payer_mismatch') ||
-      dbMessage.includes('invoice_checkout_customer_mismatch')
-    ) {
-      return json({ error: 'checkout_payer_mismatch', detail, ...fields }, 409);
-    }
-    if (
-      dbMessage.includes('invoice_checkout_not_payable') ||
-      dbMessage.includes('invoice_checkout_nothing_due') ||
-      dbMessage.includes('invoice_checkout_attempt_terminal')
-    ) {
-      return json({ error: 'invoice_not_payable', detail, ...fields }, 409);
-    }
-    if (error instanceof InvoiceCheckoutIntegrityError) {
-      const status = error.code === 'checkout_persistence_failed' ? 500 : 502;
-      return json({ error: error.code, detail: error.message, ...fields }, status);
-    }
-    console.error('create-checkout-session: invoice claim failed', error);
-    return json({ error: 'checkout_claim_failed', detail, ...fields }, 500);
-  }
+  const linkUrl = await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoiceId);
+  return startInvoiceCheckout({
+    admin,
+    stripe,
+    json,
+    logTag: 'create-checkout-session',
+    actor: {
+      kind: 'payer',
+      payerId: caller.id,
+      stripeCustomerId: customer.customerId,
+      allowDesignerTest: INVOICE_CHECKOUT_DESIGNER_TEST_MODE,
+    },
+    target: {
+      invoiceId,
+      lineItemName: payable.lineItemName,
+      successUrl: payable.successUrl,
+      cancelUrl: payable.cancelUrl,
+      processingDetail: payable.processingDetail,
+      nonceReturnOrigin: linkUrl ? CLIENT_PORTAL_URL : null,
+    },
+    paymentMethod,
+  });
 }
 
 async function startCheckout(
@@ -1252,9 +960,9 @@ async function startCheckout(
   payable: Payable
 ): Promise<Response> {
   // ── Lazy Stripe customer for the paying profile ──────────────────────────
-  const customerResult = await ensureStripeCustomer(admin, stripe, caller);
-  if (customerResult instanceof Response) return customerResult;
-  const customerId = customerResult;
+  const customer = await ensureStripeCustomer(admin, stripe, caller.id);
+  if (!customer.ok) return json(checkoutCustomerFailureBody(customer), customer.status);
+  const customerId = customer.customerId;
   try {
     // ── Session reuse / stale-session cleanup ────────────────────────────
     if (payable.existingSessionId) {
@@ -1450,6 +1158,6 @@ Deno.serve(async (req: Request) => {
   // paymentMethod is deliberately dropped for po_payment / direct_order — those
   // rails carry no surcharge model and keep offering card + ACH together.
   return payableResult.payableType === 'invoice'
-    ? startInvoiceCheckout(admin, stripe, caller, payableResult, paymentMethod)
+    ? startSignedInInvoiceCheckout(admin, stripe, caller, payableResult, paymentMethod)
     : startCheckout(admin, stripe, caller, payableResult);
 });

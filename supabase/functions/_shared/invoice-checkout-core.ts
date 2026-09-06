@@ -7,7 +7,7 @@
  * persistence entirely with deterministic fakes.
  */
 
-import { clientProjectLink } from '../_shared/client-portal-links.ts';
+import { clientProjectLink } from './client-portal-links.ts';
 
 /** The two online rails a client may be steered onto. NULL = legacy (both). */
 export type InvoiceCheckoutPaymentMethod = 'card' | 'us_bank_account';
@@ -16,7 +16,19 @@ export interface InvoiceCheckoutAttempt {
   attemptId: string;
   paymentId: string;
   invoiceId: string;
-  payerId: string;
+  /**
+   * The signed-in payer, or null on the link rail. Exactly one of payerId /
+   * invoiceLinkId is set — the discriminated union the 00574 CHECK enforces.
+   */
+  payerId: string | null;
+  /** The invoice link this attempt belongs to, or null on the payer rail. */
+  invoiceLinkId: string | null;
+  /**
+   * The single-purpose nonce Stripe returns the payer through
+   * (/pay/return/<nonce>), so the permanent link token never enters Stripe's
+   * retained logs. Null on attempts claimed before 00574.
+   */
+  returnNonce: string | null;
   stripeCustomerId: string;
   /** The authoritative claimed invoice balance — NET, never including the fee. */
   amountCents: number;
@@ -153,6 +165,34 @@ export function invoiceCheckoutReturnAddress(
   return `${before}${separator}session_id={CHECKOUT_SESSION_ID}${fragment}`;
 }
 
+const RETURN_NONCE_PATTERN = /^[0-9a-f]{64}$/;
+
+/**
+ * Where Checkout hands an invoice payer back on BOTH rails once the invoice
+ * has a link (00574, S10): the attempt's single-purpose return nonce, never
+ * the permanent link token — a Session's success_url is visible in the Stripe
+ * dashboard, in event payloads, in webhook logs and in any export,
+ * indefinitely. The client portal's /pay/return/<nonce> route exchanges the
+ * nonce for the token server-side and 303s to /pay/<token>?checkout=….
+ *
+ * Stripe substitutes `{CHECKOUT_SESSION_ID}` by literal match, so the braces
+ * are written raw, exactly as invoiceCheckoutReturnAddress does.
+ */
+export function invoiceLinkReturnAddress(
+  clientPortalUrl: string,
+  returnNonce: string,
+  checkout: 'success' | 'cancelled'
+): string {
+  if (!RETURN_NONCE_PATTERN.test(returnNonce)) {
+    // Never interpolate an unexpected value into a URL Stripe will redirect
+    // to; the nonce is minted by the claim RPC under a CHECK constraint.
+    throw new Error('invoice Checkout return nonce is malformed');
+  }
+  const origin = clientPortalUrl.replace(/\/$/, '');
+  const address = `${origin}/pay/return/${returnNonce}?checkout=${checkout}`;
+  return checkout === 'success' ? `${address}&session_id={CHECKOUT_SESSION_ID}` : address;
+}
+
 export function assertInvoiceSessionIdentity(
   attempt: InvoiceCheckoutAttempt,
   session: InvoiceCheckoutSession
@@ -163,7 +203,11 @@ export function assertInvoiceSessionIdentity(
     metadata.payable_type !== 'invoice' ||
     metadata.invoice_id !== attempt.invoiceId ||
     metadata.checkout_attempt_id !== attempt.attemptId ||
-    metadata.payer_id !== attempt.payerId ||
+    // Exactly one identity term binds: a payer attempt must meet a session
+    // stamped with its payer_id, a link attempt one stamped with its
+    // invoice_link_id. The other term drops out, as payment_method does below.
+    (attempt.payerId !== null && metadata.payer_id !== attempt.payerId) ||
+    (attempt.invoiceLinkId !== null && metadata.invoice_link_id !== attempt.invoiceLinkId) ||
     // A rail-bound attempt must meet a session stamped with the same rail. A
     // legacy attempt (null) stamps no key and this term drops out entirely.
     (attempt.paymentMethod !== null && metadata.payment_method !== attempt.paymentMethod)

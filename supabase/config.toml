@@ -349,6 +349,13 @@ verify_jwt = false
 [functions.comms-mute]
 verify_jwt = false
 
+# The 64-hex invoice link token IS the credential, checked inside
+# resolve_invoice_link_for_checkout (SECURITY DEFINER, service_role-only, 00574).
+# verify_jwt = false so the gateway does not demand a caller JWT; the origin
+# check and CORS are in-code, as site-request-guest does.
+[functions.invoice-link-checkout]
+verify_jwt = false
+
 # Owner-authorized pre-auth login for ONE allowlisted shared test account
 # (tester@patina.cloud), for external testers with no mailbox access. There is
 # no caller session yet, so the gateway cannot verify a JWT here — the
