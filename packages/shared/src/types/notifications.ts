@@ -81,7 +81,12 @@ export type DigestFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'nev
  * reminders into a single digest email. Transactional sends (proposal sent,
  * invoice sent) are never affected.
  */
-export type ReminderCadence = 'immediate' | 'daily_digest';
+/**
+ * P-28 (00572). Three named cadences: 'right_away' | 'daily' | 'weekly_sunday'.
+ * The retired 'immediate' / 'daily_digest' spellings are normalised on write by
+ * the database trigger.
+ */
+export type ReminderCadence = 'right_away' | 'daily' | 'weekly_sunday';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTIFICATION PREFERENCES

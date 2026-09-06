@@ -32,7 +32,8 @@ const DEFAULT_PREFERENCES: Omit<
   type_seasonal_campaign: true,
   type_reengagement: true,
   digest_frequency: "weekly",
-  reminder_cadence: "immediate",
+  // The column default (00572): the quietest cadence that still answers on time.
+  reminder_cadence: "daily",
   quiet_hours_enabled: false,
   quiet_hours_start: "22:00",
   quiet_hours_end: "08:00",

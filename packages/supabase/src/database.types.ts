@@ -4092,6 +4092,39 @@ export type Database = {
           },
         ]
       }
+      decision_first_notice_attempts: {
+        Row: {
+          attempts: number
+          decision_id: string
+          last_attempt_at: string
+        }
+        Insert: {
+          attempts?: number
+          decision_id: string
+          last_attempt_at?: string
+        }
+        Update: {
+          attempts?: number
+          decision_id?: string
+          last_attempt_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decision_first_notice_attempts_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: true
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_first_notice_attempts_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: true
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+        ]
+      }
       decision_notifications: {
         Row: {
           created_at: string
@@ -4185,6 +4218,62 @@ export type Database = {
             columns: ["option_id"]
             isOneToOne: false
             referencedRelation: "client_decision_options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      decision_snoozes: {
+        Row: {
+          created_at: string
+          decision_id: string
+          id: string
+          kind: string
+          snoozed_until: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          decision_id: string
+          id?: string
+          kind: string
+          snoozed_until: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          decision_id?: string
+          id?: string
+          kind?: string
+          snoozed_until?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decision_snoozes_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_snoozes_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "decision_snoozes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_snoozes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -9250,6 +9339,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["notification_channel"]
           clicked_at: string | null
           created_at: string
+          deliver_after: string | null
           error: string | null
           id: string
           metadata: Json | null
@@ -9266,6 +9356,7 @@ export type Database = {
           channel: Database["public"]["Enums"]["notification_channel"]
           clicked_at?: string | null
           created_at?: string
+          deliver_after?: string | null
           error?: string | null
           id?: string
           metadata?: Json | null
@@ -9282,6 +9373,7 @@ export type Database = {
           channel?: Database["public"]["Enums"]["notification_channel"]
           clicked_at?: string | null
           created_at?: string
+          deliver_after?: string | null
           error?: string | null
           id?: string
           metadata?: Json | null
@@ -28479,6 +28571,7 @@ export type Database = {
         Args: { p_revision_id: string }
         Returns: Json
       }
+      _decision_first_notice_sweep_cutoff: { Args: never; Returns: string }
       _decision_selection_snapshot_safe: {
         Args: { p_snapshot: Json }
         Returns: Json
@@ -29435,6 +29528,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _why_author_display_name: { Args: { p_actor: string }; Returns: string }
       accept_client_scope_change_request: {
         Args: { p_project_id: string; p_request_id: string }
         Returns: Json
@@ -30031,6 +30125,7 @@ export type Database = {
         }
         Returns: Json
       }
+      backfill_why_author_display_names: { Args: never; Returns: number }
       batch_place_library_products_in_project: {
         Args: { p_request: Json }
         Returns: Json
@@ -32596,11 +32691,16 @@ export type Database = {
         Args: { item: Database["public"]["Tables"]["client_decisions"]["Row"] }
         Returns: string
       }
+      next_local_morning: {
+        Args: { p_from: string; p_zone: string }
+        Returns: string
+      }
       nomination_transition_is_legal: {
         Args: { p_from: string; p_to: string }
         Returns: boolean
       }
       normalize_phone_e164: { Args: { p_phone: string }; Returns: string }
+      notification_time_zone: { Args: { p_user_id: string }; Returns: string }
       notify_client_attention: {
         Args: {
           p_body: string
@@ -32829,6 +32929,10 @@ export type Database = {
       }
       publish_project_review: { Args: { p_request: Json }; Returns: Json }
       purge_client_account: { Args: { p_user_id: string }; Returns: string }
+      push_deliver_after: {
+        Args: { p_now?: string; p_user_id: string }
+        Returns: string
+      }
       react_to_feedback: {
         Args: { p_emoji: string; p_id: string }
         Returns: {
@@ -32934,6 +33038,10 @@ export type Database = {
           p_status: string
         }
         Returns: Json
+      }
+      record_decision_studio_handoff: {
+        Args: { p_decision_id: string }
+        Returns: string
       }
       record_invoice_payment: {
         Args: {
@@ -33096,6 +33204,7 @@ export type Database = {
         Args: { p_transmittal_id: string }
         Returns: Json
       }
+      release_due_client_pushes: { Args: { p_limit?: number }; Returns: number }
       release_install_window: {
         Args: {
           p_disclosed_impact?: Json
@@ -33900,6 +34009,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_decision_snooze: {
+        Args: { p_decision_id: string; p_kind: string }
+        Returns: Json
+      }
       set_document_client: {
         Args: {
           p_client_id: string
@@ -34554,6 +34667,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      sweep_decision_first_notices: {
+        Args: { p_limit?: number }
+        Returns: number
       }
       sweep_scan_pipeline_ingest: { Args: never; Returns: Json }
       sync_proposal_send_email_log: {
