@@ -12,11 +12,13 @@ import {
   decisionNotificationMetadata,
   decisionReleaseSentence,
   formatCostDelta,
+  isSnoozeActive,
   localWeekdayAndHour,
   normalizeReminderCadence,
   receiptOutcomeWord,
   renderDecisionEmail,
   renderDecisionReceiptEmail,
+  shouldFireDecisionInApp,
   supersededDeltaLines,
   supersededOpeningLine,
 } from "./decision-notify.ts";
@@ -961,6 +963,56 @@ Deno.test("a snooze silences the reminder until its hour, then stops", () => {
     decisionMailHold({ ...GATE_BASE, snoozedUntil: "infinity" }),
     "snoozed",
   );
+});
+
+Deno.test("isSnoozeActive reads one column the same way for letter and summary", () => {
+  const now = new Date("2026-10-07T12:00:00Z");
+  assertEquals(isSnoozeActive(null, now), false);
+  assertEquals(isSnoozeActive(undefined, now), false);
+  assertEquals(isSnoozeActive("2026-10-09T12:00:00Z", now), true);
+  assertEquals(isSnoozeActive("2026-10-06T12:00:00Z", now), false);
+  // 'never' is Postgres 'infinity', which is not a parseable date.
+  assertEquals(isSnoozeActive("infinity", now), true);
+  assertEquals(isSnoozeActive("-infinity", now), false);
+  // A value that is neither a date nor infinity is not a silence.
+  assertEquals(isSnoozeActive("soon", now), false);
+});
+
+Deno.test("a held approval does not re-arm the bell row it already wrote (r1 M5)", () => {
+  // Nothing is holding the letter: the row is written, as it always was.
+  assertEquals(shouldFireDecisionInApp({ hold: null, rowExists: true }), true);
+  assertEquals(shouldFireDecisionInApp({ hold: null, rowExists: false }), true);
+  // A standing quiet, and the line is already there: leave it exactly as she
+  // left it. The reminder cron runs hourly since 00572; without this a snoozed
+  // line would pop back to unread twenty-four times a day.
+  for (
+    const hold of [
+      "snoozed",
+      "quiet_after_overdue",
+      "type_disabled",
+      "email_channel_disabled",
+    ] as const
+  ) {
+    assertEquals(shouldFireDecisionInApp({ hold, rowExists: true }), false);
+    // But an approval with no line at all always gets one: R16 defers the
+    // push, never the record.
+    assertEquals(shouldFireDecisionInApp({ hold, rowExists: false }), true);
+  }
+
+  // The cadence hold is a hand-off, not a silence: the digest is built from
+  // this row's own freshness, so it must be re-armed or the batching reader
+  // hears nothing at all. The hours-long holds lift by themselves and their
+  // letter then stamps the approval out of the cron's window.
+  for (
+    const hold of [
+      "cadence_digest",
+      "sunday_quiet",
+      "before_local_morning",
+      "quiet_hours",
+    ] as const
+  ) {
+    assertEquals(shouldFireDecisionInApp({ hold, rowExists: true }), true);
+  }
 });
 
 Deno.test("a snooze never suppresses the overdue notice or a superseding edition (R16)", () => {

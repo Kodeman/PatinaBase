@@ -81,11 +81,18 @@
 --      attempt inside the last 30 minutes. `decision_first_notice_attempts`
 --      records the attempt itself, because a letter skipped by a preference
 --      gate writes no log row at all and would otherwise be retried 144 times.
---      CUTOFF: nothing published before `_decision_first_notice_sweep_cutoff()`
---      = 2026-09-05T00:00:00Z, the day 00568 (the publish-time producer this
---      sweep exists to cover for) landed on main with the Wave-1 integration
---      merge. An approval published before the producer existed was never owed
---      a first notice and must not be sent one now.
+--      It covers EVERY decision put to the client, Stage-2 approval or legacy
+--      choice, because 00568's trigger announces every one of them and this
+--      wave's Sunday and 8am gates can hold any of those letters.
+--
+--      CUTOFF: nothing published before `_decision_first_notice_sweep_cutoff()`,
+--      which is recorded once when this file applies as the LATER of
+--      2026-09-05T00:00:00Z (the day 00568 landed on main with the Wave-1
+--      integration merge) and that apply moment. Migrations run in order, so
+--      that moment is provably at or after 00568's own: the sweep is then
+--      structurally unable to mail a back catalogue, whatever date the constant
+--      guessed. An approval published before the producer existed was never
+--      owed a first notice and must not be sent one now.
 --
 --   6. THE WHY IS SIGNED WITH THE NAME THE STUDIO SHOWS (W2-n4). 00569 froze
 --      the composer's GIVEN name; the ruling says display name.
@@ -93,20 +100,31 @@
 --      that one resolution changed, and existing rows are backfilled from the
 --      'created' action receipt's actor.
 --
---   AND ONE SCHEDULE MOVES. `decision-reminders-daily` (00092, 09:00 UTC) is
---   replaced by `decision-reminders-hourly`. The Sunday rule owes her a Monday
---   letter "at 8am local"; a once-a-day cron at 09:00 UTC is 4am on the east
---   coast, so a not-before-8am-local gate on a daily run would have held the
---   American reminder every single day. Hourly, the gate releases at the first
---   run at or after 8am in her zone. No letter is duplicated: dedupe is
---   per-decision and unchanged (reminder_sent_at plus the notification_log
---   key on {decisionId, notice}).
+--   AND TWO SCHEDULES MOVE. `decision-reminders-daily` (00092, 09:00 UTC) is
+--   replaced by `decision-reminders-hourly`, and `notification-digest-daily`
+--   (00278, 15:00 UTC) by `notification-digest-hourly`. The Sunday rule owes
+--   her a Monday letter "at 8am local"; a once-a-day cron at 09:00 UTC is 4am
+--   on the east coast, so a not-before-8am-local gate on a daily run would have
+--   held the American reminder every single day. The summary owes the same
+--   promise and 15:00 UTC is 7am in California in winter. Hourly, the
+--   per-recipient gate releases each at the first run at or after 8am in HER
+--   zone. No letter is duplicated: dedupe is per-decision and unchanged
+--   (reminder_sent_at plus the notification_log key on {decisionId, notice}),
+--   and the digest keeps its 20-hour / six-day min-intervals.
 --
 -- Every redefined body is grafted from its latest prior definition:
 --   notify_client_attention                            ← 00569
 --   _create_project_approval_decision_checked          ← 00569
 -- (grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql
 --  | sort | tail -1 names 00569 for both.)
+--
+-- Round-1 review repairs folded into this file (it has never been applied to
+-- Strata): the release cron retires an envelope whose ask was answered while it
+-- waited (M4); the sweep covers legacy decisions (M7) and reads a cutoff
+-- recorded at apply time rather than a guessed constant (M8); the why backfill
+-- resolves an inherited sentence to its composer instead of the designer who
+-- reissued it (M6); and the digest cron goes hourly so the summary can keep the
+-- same 8am-local, never-Sunday promise as the letter (M3).
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql.
 --
@@ -638,7 +656,39 @@ DECLARE
   v_sent integer := 0;
 BEGIN
   FOR v_row IN
-    SELECT n.id, n.user_id, n.metadata
+    SELECT n.id, n.user_id, n.metadata,
+           -- Before this wave the envelope was minted and dispatched in the
+           -- same statement, so nothing could happen in between. A held one
+           -- can wait ten hours, and in those hours she may answer. Two
+           -- questions decide whether the phone may still ring:
+           --
+           --   • is the bell row still unopened? notify_client_attention
+           --     de-duplicates on (user, entity_type, entity_id) while unread
+           --     and the receipt branch marks that same row opened, so an
+           --     opened row means the ask has been seen or answered.
+           --   • is the ask itself still hers to answer? A decision that has
+           --     left 'pending' has been answered, withdrawn or superseded.
+           --
+           -- entity_id is compared as text (it was written as uuid::text), so
+           -- a malformed envelope can never raise a cast error inside a cron.
+           (
+             EXISTS (
+               SELECT 1
+                 FROM public.notification_log AS bell
+                WHERE bell.user_id = n.user_id
+                  AND bell.channel = 'in_app'
+                  AND bell.opened_at IS NULL
+                  AND bell.metadata->>'entity_type' = n.metadata->>'entity_type'
+                  AND bell.metadata->>'entity_id'   = n.metadata->>'entity_id'
+             )
+             AND NOT EXISTS (
+               SELECT 1
+                 FROM public.client_decisions AS decision
+                WHERE n.metadata->>'entity_type' = 'decision'
+                  AND decision.id::text = n.metadata->>'entity_id'
+                  AND decision.status <> 'pending'
+             )
+           ) AS still_waiting
       FROM public.notification_log AS n
      WHERE n.channel = 'push'
        AND n.status = 'queued'
@@ -647,6 +697,17 @@ BEGIN
      ORDER BY n.deliver_after
      LIMIT GREATEST(COALESCE(p_limit, 200), 1)
   LOOP
+    -- An answer overtook the envelope: retire it rather than ring at 8am
+    -- about something she settled at ten last night.
+    IF NOT v_row.still_waiting THEN
+      UPDATE public.notification_log
+         SET status = 'suppressed',
+             metadata = metadata || jsonb_build_object(
+               'release_skipped', 'answered_before_release')
+       WHERE id = v_row.id;
+      CONTINUE;
+    END IF;
+
     -- Claimed before dispatch so a second run cannot ring the same phone
     -- twice; apns-send stamps it delivered or failed from there.
     UPDATE public.notification_log
@@ -684,7 +745,10 @@ GRANT EXECUTE ON FUNCTION public.release_due_client_pushes(integer)
 COMMENT ON FUNCTION public.release_due_client_pushes(integer) IS
   'R16''s 8am release: dispatches queued push envelopes whose deliver_after has '
   'arrived and skips every row whose hour has not. Claims each row as sending '
-  'before invoking apns-send so a re-run cannot double-ring.';
+  'before invoking apns-send so a re-run cannot double-ring. An envelope whose '
+  'bell row has been opened, or whose decision has left ''pending'' while it '
+  'waited, is retired as suppressed instead of dispatched — a held push must '
+  'never ring about an ask she already answered.';
 
 -- ── 4. The quiet: the studio takes it from there ───────────────────────────
 
@@ -813,13 +877,57 @@ COMMENT ON TABLE public.decision_first_notice_attempts IS
   'notification_log row, so the sweep records its own attempts here and honours '
   'a 30-minute cooldown against them. Never read by any client surface.';
 
+-- The cutoff is recorded ONCE, at the moment this migration applies, rather
+-- than hard-coded to a date the author guessed. `supabase_migrations.
+-- schema_migrations` carries no applied-at column, so 00568's own apply moment
+-- cannot be read back — but migrations apply in order, so THIS migration's
+-- apply moment is provably at or after 00568's. Taking the later of that and
+-- the merge-day constant makes the sweep structurally incapable of mailing a
+-- back catalogue on a stack where 00568 landed later than the constant says
+-- (r1 M8). The cost is bounded and small: an approval published in the hours
+-- between 00568 and 00572 that missed its letter gets no retry, and the 72-hour
+-- window makes even that stop binding three days after this file applies.
+CREATE TABLE IF NOT EXISTS public.decision_first_notice_sweep_state (
+  singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+  cutoff_at timestamptz NOT NULL
+);
+
+ALTER TABLE public.decision_first_notice_sweep_state
+  ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS decision_first_notice_sweep_state_service
+  ON public.decision_first_notice_sweep_state;
+CREATE POLICY decision_first_notice_sweep_state_service
+  ON public.decision_first_notice_sweep_state
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
+
+REVOKE ALL ON TABLE public.decision_first_notice_sweep_state
+  FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.decision_first_notice_sweep_state TO service_role;
+
+COMMENT ON TABLE public.decision_first_notice_sweep_state IS
+  'One row. `cutoff_at` is the earliest send the first-notice retry sweep may '
+  'ever speak for: the later of 2026-09-05 (the day 00568 landed on main) and '
+  'the moment 00572 applied on this stack. Written once — a re-apply leaves '
+  'the original value standing.';
+
+INSERT INTO public.decision_first_notice_sweep_state (singleton, cutoff_at)
+VALUES (true, GREATEST('2026-09-05T00:00:00Z'::timestamptz, now()))
+ON CONFLICT (singleton) DO NOTHING;
+
 CREATE OR REPLACE FUNCTION public._decision_first_notice_sweep_cutoff()
 RETURNS timestamptz
 LANGUAGE sql
-IMMUTABLE
+STABLE
 SET search_path = public, pg_temp
 AS $$
-  SELECT '2026-09-05T00:00:00Z'::timestamptz;
+  SELECT COALESCE(
+    (SELECT state.cutoff_at
+       FROM public.decision_first_notice_sweep_state AS state
+      WHERE state.singleton),
+    '2026-09-05T00:00:00Z'::timestamptz
+  );
 $$;
 
 REVOKE ALL ON FUNCTION public._decision_first_notice_sweep_cutoff()
@@ -828,9 +936,10 @@ GRANT EXECUTE ON FUNCTION public._decision_first_notice_sweep_cutoff()
   TO service_role;
 
 COMMENT ON FUNCTION public._decision_first_notice_sweep_cutoff() IS
-  'The day 00568 — the publish-time first-notice producer — landed on main '
-  'with the Wave-1 integration merge. An approval published before it existed '
-  'was never owed a first notice and the sweep must never send one now.';
+  'The earliest send the sweep may speak for: the later of the day 00568 — the '
+  'publish-time first-notice producer — landed on main, and the moment 00572 '
+  'applied here. An approval published before the producer existed was never '
+  'owed a first notice and must never be sent one now.';
 
 CREATE OR REPLACE FUNCTION public.sweep_decision_first_notices(
   p_limit integer DEFAULT 100
@@ -845,18 +954,32 @@ DECLARE
   v_fired integer := 0;
 BEGIN
   FOR v_row IN
+    -- 00568's trigger announces EVERY decision put to the client — it carries
+    -- no approval_contract filter — and this wave's Sunday and 8am gates can
+    -- hold any of those letters. A sweep that only picked up Stage-2 asks
+    -- would leave a legacy choice silently unannounced with nothing to return
+    -- for it (r1 M7), so the selection mirrors the trigger's own edge and asks
+    -- for frozen evidence only where the contract requires it.
     SELECT d.id, d.designer_client_id
       FROM public.client_decisions AS d
-      JOIN public.project_approval_artifacts AS artifact
-        ON artifact.decision_id = d.id
-      JOIN public.project_decision_authority_snapshots AS snapshot
-        ON snapshot.decision_id = d.id
-     WHERE d.approval_contract = 'project_artifact_v1'
-       AND d.status = 'pending'
+     WHERE d.status = 'pending'
        AND d.court = 'client'
-       AND d.sent_at IS NOT NULL
-       AND d.sent_at >= now() - interval '72 hours'
-       AND d.sent_at >= public._decision_first_notice_sweep_cutoff()
+       AND COALESCE(d.sent_at, d.created_at) >= now() - interval '72 hours'
+       AND COALESCE(d.sent_at, d.created_at)
+             >= public._decision_first_notice_sweep_cutoff()
+       -- A Stage-2 ask with incomplete evidence is refused by the producer
+       -- anyway; re-inviting it 144 times a day would only fill the log.
+       AND (
+         d.approval_contract IS DISTINCT FROM 'project_artifact_v1'
+         OR (
+           EXISTS (SELECT 1 FROM public.project_approval_artifacts AS artifact
+                    WHERE artifact.decision_id = d.id)
+           AND EXISTS (SELECT 1
+                         FROM public.project_decision_authority_snapshots
+                              AS snapshot
+                        WHERE snapshot.decision_id = d.id)
+         )
+       )
        -- An approval past its date belongs to the overdue notice, not to a
        -- first notice arriving after the fact (R16's quiet).
        AND (d.due_date IS NULL OR d.due_date > now())
@@ -875,7 +998,7 @@ BEGIN
           WHERE attempt.decision_id = d.id
             AND attempt.last_attempt_at > now() - interval '30 minutes'
        )
-     ORDER BY d.sent_at
+     ORDER BY COALESCE(d.sent_at, d.created_at)
      LIMIT GREATEST(COALESCE(p_limit, 100), 1)
   LOOP
     INSERT INTO public.decision_first_notice_attempts
@@ -909,11 +1032,12 @@ GRANT EXECUTE ON FUNCTION public.sweep_decision_first_notices(integer)
 COMMENT ON FUNCTION public.sweep_decision_first_notices(integer) IS
   'Wave-1 carry R3-03: the first notice was a one-shot, so a single skip '
   '(quiet hours, a preference off at that instant, a Resend hiccup) silenced '
-  'an approval permanently. Re-invokes decision-first-notice for a pending '
-  'Stage-2 approval published in the last 72 hours with no {decisionId, '
-  'notice:''first''} email row and no attempt in the last 30 minutes. Never '
-  'for an approval published before 00568 landed, and never for one already '
-  'past its date.';
+  'an approval permanently. Re-invokes decision-first-notice for any pending '
+  'client-court decision — Stage-2 approval or legacy choice, the same edge '
+  '00568''s trigger announces on — published in the last 72 hours with no '
+  '{decisionId, notice:''first''} email row and no attempt in the last 30 '
+  'minutes. Never for an approval published before the cutoff, and never for '
+  'one already past its date.';
 
 -- ── The two crons ──────────────────────────────────────────────────────────
 
@@ -941,6 +1065,31 @@ SELECT cron.schedule(
   $$SELECT public.invoke_edge_function('decision-reminders', '{}'::jsonb);$$
 );
 
+-- The summary keeps the same hours as the letters. 00278 ran
+-- notification-digest once a day at 15:00 UTC — 07:00 in California in
+-- winter, and midnight in Tokyo on a Saturday for what is meant to be a Sunday
+-- summary. This wave holds the direct letter until 8am local and never mails
+-- on a Sunday; the digest is now the vehicle for the DEFAULT cadence, so it
+-- owes the same promise (r1 M3). A once-a-day cron cannot keep it — at 15:00
+-- UTC a Pacific reader is never inside her own morning — so the digest goes
+-- hourly and the per-reader gate (isDigestDue) decides the hour. The 20-hour
+-- and six-day min-intervals are unchanged, so twenty-four passes still send
+-- one summary.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'notification-digest-daily') THEN
+    PERFORM cron.unschedule('notification-digest-daily');
+  END IF;
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'notification-digest-hourly') THEN
+    PERFORM cron.unschedule('notification-digest-hourly');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'notification-digest-hourly',
+  '20 * * * *',
+  $$SELECT public.invoke_edge_function('notification-digest', '{}'::jsonb);$$
+);
+
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'client-push-window-release') THEN
     PERFORM cron.unschedule('client-push-window-release');
@@ -966,7 +1115,7 @@ SELECT cron.schedule(
 );
 
 DO $$ BEGIN
-  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. The Decision, Delivered (00572): decision-reminders-hourly on the hour -> the decision-reminders edge function, replacing 00092''s decision-reminders-daily at 09:00 UTC so the per-recipient not-before-8am-local gate has an hour to release into; client-push-window-release every 15 minutes -> public.release_due_client_pushes(200), dispatching push envelopes held outside 8am-8pm local; decision-first-notice-retry-sweep every 30 minutes -> public.sweep_decision_first_notices(100), re-inviting decision-first-notice for a published approval that never got its letter. Studio onboarding (00553): expire-stale-workspace-invites-daily at 07:40 UTC. Rendered Room v2 (00491): dispatch-scan-modal-sweep every 5 minutes. Rendered Room v2 (00501): expire-stale-upload-intents-daily at 07:15 UTC. Room View, Agent OS, BOH, Field Site Request, Mood Board, invoice/decision reminders, and earlier schedules are unchanged (see prior registry text / cron.job).'$C$;
+  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. The Decision, Delivered (00572): decision-reminders-hourly on the hour -> the decision-reminders edge function, replacing 00092''s decision-reminders-daily at 09:00 UTC so the per-recipient not-before-8am-local gate has an hour to release into; notification-digest-hourly at 20 past -> the notification-digest edge function, replacing 00278''s notification-digest-daily at 15:00 UTC for the same reason (the summary owes the same 8am-local, never-Sunday promise as the letter); client-push-window-release every 15 minutes -> public.release_due_client_pushes(200), dispatching push envelopes held outside 8am-8pm local; decision-first-notice-retry-sweep every 30 minutes -> public.sweep_decision_first_notices(100), re-inviting decision-first-notice for a published approval that never got its letter. Studio onboarding (00553): expire-stale-workspace-invites-daily at 07:40 UTC. Rendered Room v2 (00491): dispatch-scan-modal-sweep every 5 minutes. Rendered Room v2 (00501): expire-stale-upload-intents-daily at 07:15 UTC. Room View, Agent OS, BOH, Field Site Request, Mood Board, invoice/decision reminders, and earlier schedules are unchanged (see prior registry text / cron.job).'$C$;
 -- undefined_object joins the usual insufficient_privilege guard: the registry
 -- comment is documentation, and a stack without pg_cron installed must not fail
 -- the migration over a sentence.
@@ -1389,6 +1538,16 @@ COMMENT ON FUNCTION public._create_project_approval_decision_checked(
 -- since been deleted, or has no name at all, is left exactly as it is: an
 -- attribution is dropped, never invented.
 --
+-- ONE APPROVAL IS NOT ITS OWN AUTHOR (r1 M6). `supersede_project_approval_
+-- decision` (00569) carries an unchanged why — and the name beside it —
+-- forward onto the successor, precisely so an inherited sentence keeps the
+-- signature of whoever actually wrote it. But the successor's own 'created'
+-- receipt names the designer who REISSUED it, who is often someone else. So
+-- the author is resolved from the deepest ancestor still carrying that same
+-- sentence, walking `predecessor_decision_id` up the chain: the composer, not
+-- the reissuer. A row whose why differs from its predecessor's was written
+-- fresh and resolves from its own receipt, as before.
+--
 -- Kept as a function rather than a bare statement so the SQL tests can put a
 -- row in front of it and watch it move, and so a later repair can run it again.
 CREATE OR REPLACE FUNCTION public.backfill_why_author_display_names()
@@ -1411,14 +1570,49 @@ BEGIN
   ALTER TABLE public.project_approval_artifacts
     DISABLE TRIGGER a_guard_project_approval_artifact_edge_trg;
   BEGIN
+    WITH RECURSIVE composer AS (
+      -- Seed: every artifact that carries a sentence, standing on its own
+      -- decision. `project_approval_artifacts.decision_id` is UNIQUE (00463),
+      -- so there is exactly one row per step of the walk.
+      SELECT a.decision_id              AS target_decision,
+             d.id                       AS ancestor_id,
+             d.predecessor_decision_id  AS parent_id,
+             a.why                      AS why,
+             0                          AS depth
+        FROM public.project_approval_artifacts AS a
+        JOIN public.client_decisions AS d ON d.id = a.decision_id
+       WHERE a.why IS NOT NULL
+      UNION ALL
+      -- Step: up one edition, but only while the sentence is the SAME one.
+      -- A successor whose designer wrote a fresh why stops the walk there and
+      -- is attributed to whoever wrote that.
+      SELECT c.target_decision, p.id, p.predecessor_decision_id, c.why,
+             c.depth + 1
+        FROM composer AS c
+        JOIN public.client_decisions AS p ON p.id = c.parent_id
+        JOIN public.project_approval_artifacts AS pa
+          ON pa.decision_id = p.id
+         AND pa.why IS NOT DISTINCT FROM c.why
+       WHERE c.depth < 50
+    ),
+    origin AS (
+      SELECT DISTINCT ON (target_decision) target_decision, ancestor_id
+        FROM composer
+       ORDER BY target_decision, depth DESC
+    ),
+    resolved AS (
+      SELECT DISTINCT ON (origin.target_decision)
+             origin.target_decision AS decision_id,
+             public._why_author_display_name(receipt.actor_id) AS name
+        FROM origin
+        JOIN public.project_approval_action_receipts AS receipt
+          ON receipt.decision_id = origin.ancestor_id
+         AND receipt.action_kind = 'created'
+       ORDER BY origin.target_decision, receipt.created_at
+    )
     UPDATE public.project_approval_artifacts AS artifact
        SET why_author_name = resolved.name
-      FROM (
-        SELECT receipt.decision_id,
-               public._why_author_display_name(receipt.actor_id) AS name
-          FROM public.project_approval_action_receipts AS receipt
-         WHERE receipt.action_kind = 'created'
-      ) AS resolved
+      FROM resolved
      WHERE resolved.decision_id = artifact.decision_id
        AND artifact.why IS NOT NULL
        AND resolved.name IS NOT NULL
@@ -1443,7 +1637,9 @@ GRANT EXECUTE ON FUNCTION public.backfill_why_author_display_names()
 
 COMMENT ON FUNCTION public.backfill_why_author_display_names() IS
   'W2-n4 (00572): re-attributes a frozen why to its author''s DISPLAY name, '
-  'resolved from the approval''s immutable ''created'' receipt. Idempotent — a '
-  'second run moves nothing.';
+  'resolved from the immutable ''created'' receipt of the deepest edition still '
+  'carrying that same sentence — so an inherited why keeps its composer and is '
+  'never re-signed with the name of the designer who reissued it. Idempotent — '
+  'a second run moves nothing.';
 
 SELECT public.backfill_why_author_display_names();

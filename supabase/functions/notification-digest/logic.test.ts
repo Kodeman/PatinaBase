@@ -12,7 +12,9 @@ import {
   decisionDigestLink,
   decisionDigestTitle,
   digestCategoryForDecision,
+  digestWindowStart,
   dropDecisionsPastOverdue,
+  dropSnoozedDecisions,
   isDigestDue,
   isReminderDigestDue,
   isSundayLocal,
@@ -216,15 +218,89 @@ Deno.test("the weekly digest fires once a week, the daily one once a day", () =>
     isDigestDue("weekly_sunday", "2026-10-04T15:00:00Z", sunday, "UTC"),
     true,
   );
-  // The daily cadence keeps its own 20h guard, untouched.
+  // The daily cadence keeps its own 20h guard, untouched — read on a Monday,
+  // because Sunday is now its own refusal (below).
+  const monday = new Date("2026-10-12T15:00:00Z");
   assertEquals(
-    isDigestDue("daily", "2026-10-11T10:00:00Z", sunday, "UTC"),
+    isDigestDue("daily", "2026-10-12T10:00:00Z", monday, "UTC"),
     false,
   );
   assertEquals(
-    isDigestDue("daily", "2026-10-10T10:00:00Z", sunday, "UTC"),
+    isDigestDue("daily", "2026-10-11T10:00:00Z", monday, "UTC"),
     true,
   );
+});
+
+// ── r1 M3. The summary keeps the same hours as the letter ─────────────────
+
+Deno.test("no summary on a Sunday for the cadences that are not Sunday's", () => {
+  const sunday = new Date("2026-10-11T15:00:00Z");
+  assertEquals(isDigestDue("daily", null, sunday, "UTC"), false);
+  // Monday morning it goes out, as ux/03 promises.
+  assertEquals(
+    isDigestDue("daily", null, new Date("2026-10-12T13:00:00Z"), "UTC"),
+    true,
+  );
+  // The Sunday cadence is the exception: Sunday is the day she asked for.
+  assertEquals(isDigestDue("weekly_sunday", null, sunday, "UTC"), true);
+});
+
+Deno.test("no summary before 8am in her own zone, either cadence", () => {
+  // 15:00 UTC is 07:00 in Los Angeles in winter — the hour the old daily cron
+  // would have mailed her every single day.
+  const winterRun = new Date("2026-01-12T15:00:00Z"); // Monday
+  assertEquals(isDigestDue("daily", null, winterRun, "America/Los_Angeles"), false);
+  assertEquals(isDigestDue("daily", null, winterRun, "America/New_York"), true);
+
+  // The Sunday summary must not land at midnight in Tokyo.
+  const tokyoMidnight = new Date("2026-10-10T15:00:00Z"); // Sunday 00:00 JST
+  assertEquals(isDigestDue("weekly_sunday", null, tokyoMidnight, "Asia/Tokyo"), false);
+  const tokyoMorning = new Date("2026-10-10T23:00:00Z"); // Sunday 08:00 JST
+  assertEquals(isDigestDue("weekly_sunday", null, tokyoMorning, "Asia/Tokyo"), true);
+});
+
+Deno.test("the window stretches over a run that was skipped", () => {
+  const monday = new Date("2026-10-12T13:00:00Z");
+  // Nothing sent yet: one ordinary period back.
+  assertEquals(
+    digestWindowStart("daily", null, monday).toISOString(),
+    "2026-10-11T13:00:00.000Z",
+  );
+  // Last summary went out on Saturday — Sunday was skipped, so Monday's
+  // window reaches back to Saturday and Saturday's reminders survive.
+  assertEquals(
+    digestWindowStart("daily", "2026-10-10T13:00:00Z", monday).toISOString(),
+    "2026-10-10T13:00:00.000Z",
+  );
+  // A summary sent an hour ago never shrinks the window below its period.
+  assertEquals(
+    digestWindowStart("daily", "2026-10-12T12:00:00Z", monday).toISOString(),
+    "2026-10-11T13:00:00.000Z",
+  );
+  // And it never reaches back further than a fortnight.
+  assertEquals(
+    digestWindowStart("weekly_sunday", "2026-01-01T13:00:00Z", monday)
+      .toISOString(),
+    "2026-09-28T13:00:00.000Z",
+  );
+});
+
+// ── r1 B1. The snooze reaches the summary, not only the letter ────────────
+
+Deno.test("a snoozed approval is not in her summary either (P-28, R16)", () => {
+  const items: ReminderDigestItem[] = [
+    { category: "proposal", title: "A", link: null },
+    { category: "approval", title: "B", link: null, decisionId: "d-1" },
+    { category: "choice", title: "C", link: null, decisionId: "d-2" },
+  ];
+  assertEquals(dropSnoozedDecisions(items, []).length, 3);
+  const quiet = dropSnoozedDecisions(items, ["d-1"]);
+  assertEquals(quiet.length, 2);
+  assert(!quiet.some((item) => item.decisionId === "d-1"));
+  // Her snooze is per-approval: the other ask still stands in the summary,
+  // and a proposal nudge carries no decision id to be swept up with them.
+  assert(quiet.some((item) => item.decisionId === "d-2"));
+  assert(quiet.some((item) => item.category === "proposal"));
 });
 
 Deno.test("the ask and the choice are sorted by their contract, never by guess", () => {

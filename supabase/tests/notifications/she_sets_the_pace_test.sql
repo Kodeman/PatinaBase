@@ -23,6 +23,10 @@
 --   7. The studio hand-off row: the sentence, the rail, and its idempotency.
 --   8. The why is signed with the display name, and the backfill moves a row
 --      00569 signed with a given name.
+--   9. And an INHERITED why keeps its composer through the backfill, rather
+--      than being re-signed by the designer who reissued the edition.
+--  10. A push held overnight never rings about a decision that closed while it
+--      waited.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -63,7 +67,8 @@ INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, creat
 VALUES
   ('e7000000-0000-4000-8000-000000000001', 'sp-designer@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('e7000000-0000-4000-8000-000000000002', 'sp-client@test.invalid',   '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('e7000000-0000-4000-8000-000000000003', 'sp-stranger@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('e7000000-0000-4000-8000-000000000003', 'sp-stranger@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('e7000000-0000-4000-8000-000000000004', 'sp-peer@test.invalid',     '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 -- The designer carries BOTH names, and they differ in the way that matters:
 -- 00569 would freeze "Leah", the ruling asks for "Leah Kochaver".
@@ -71,7 +76,10 @@ INSERT INTO public.profiles (id, email, full_name, display_name, is_designer)
 VALUES
   ('e7000000-0000-4000-8000-000000000001', 'sp-designer@test.invalid', 'Leah Kochaver', 'Leah Kochaver', true),
   ('e7000000-0000-4000-8000-000000000002', 'sp-client@test.invalid',   'Anne Brenner',  NULL,            false),
-  ('e7000000-0000-4000-8000-000000000003', 'sp-stranger@test.invalid', 'Someone Else',  NULL,            false)
+  ('e7000000-0000-4000-8000-000000000003', 'sp-stranger@test.invalid', 'Someone Else',  NULL,            false),
+  -- The studio's other pair of hands: she reissues an edition she did not
+  -- compose, which is the whole point of the backfill assertions in §8.
+  ('e7000000-0000-4000-8000-000000000004', 'sp-peer@test.invalid',     'Marta Ashford', 'Marta Ashford',  true)
 ON CONFLICT (id) DO UPDATE
 SET full_name = EXCLUDED.full_name,
     display_name = EXCLUDED.display_name,
@@ -82,8 +90,11 @@ VALUES ('e7010000-0000-4000-8000-000000000001', 'design_studio', 'Middle West St
         'sp-middle-west-studio', 'active');
 
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
-VALUES ('e7011000-0000-4000-8000-000000000001', 'e7000000-0000-4000-8000-000000000001',
-        'e7010000-0000-4000-8000-000000000001', 'owner', 'active', now());
+VALUES
+  ('e7011000-0000-4000-8000-000000000001', 'e7000000-0000-4000-8000-000000000001',
+   'e7010000-0000-4000-8000-000000000001', 'owner', 'active', now()),
+  ('e7011000-0000-4000-8000-000000000002', 'e7000000-0000-4000-8000-000000000004',
+   'e7010000-0000-4000-8000-000000000001', 'admin', 'active', now());
 
 -- 00511: every project lead holds a designer-domain role.
 INSERT INTO public.user_roles (user_id, role_id, granted_by)
@@ -91,7 +102,7 @@ SELECT membership.user_id, role.id, membership.user_id
 FROM public.organization_members AS membership
 CROSS JOIN public.roles AS role
 WHERE membership.organization_id = 'e7010000-0000-4000-8000-000000000001'
-  AND membership.role = 'owner'
+  AND membership.role IN ('owner', 'admin')
   AND role.name = 'studio_owner';
 
 INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, client_email, status, source)
@@ -123,7 +134,8 @@ SELECT
   encode(extensions.digest(('sp-artifact-' || issue_no)::bytea, 'sha256'), 'hex'),
   4 + issue_no,
   'e7000000-0000-4000-8000-000000000001'::uuid
-FROM generate_series(1, 6) AS issue_no;
+-- Six for the fixtures below, two spares for the reissued editions in §8.
+FROM generate_series(1, 8) AS issue_no;
 
 CREATE TEMP TABLE sp_decisions (
   label text PRIMARY KEY,
@@ -186,10 +198,12 @@ SET LOCAL ROLE authenticated;
 -- The sweep's candidate, and the one carrying a why for the W2-n4 assertions.
 SELECT pg_temp.make_approval('fresh', 1, interval '3 days',
   'The pantry door swings into the hall now.');
--- Published long before 00568 existed.
-SELECT pg_temp.make_approval('catalogue', 2, interval '3 days');
--- Already written to.
-SELECT pg_temp.make_approval('written', 3, interval '3 days');
+-- Published long before 00568 existed. Carries a why so §8 can reissue it.
+SELECT pg_temp.make_approval('catalogue', 2, interval '3 days',
+  'The hall runner reads one width wider than we drew.');
+-- Already written to. Carries a why for the same reason.
+SELECT pg_temp.make_approval('written', 3, interval '3 days',
+  'The sconce sits four inches higher than the elevation.');
 -- Attempted eight minutes ago.
 SELECT pg_temp.make_approval('attempted', 4, interval '3 days');
 -- Its date passes while this test runs.
@@ -244,6 +258,20 @@ BEGIN
 END
 $backdate$;
 
+-- A LEGACY choice — no approval_contract, no frozen artifact — put to the same
+-- client a moment ago. 00568's trigger announces one of these exactly as it
+-- announces a Stage-2 approval, so the retry sweep owes it the same cover.
+INSERT INTO public.client_decisions
+  (id, designer_client_id, designer_id, project_id, title, status, court,
+   due_date, sent_at)
+VALUES
+  ('e7080000-0000-4000-8000-000000000001',
+   'e7030000-0000-4000-8000-000000000001',
+   'e7000000-0000-4000-8000-000000000001',
+   'e7040000-0000-4000-8000-000000000001',
+   'Which of the two runners?', 'pending', 'client',
+   now() + interval '3 days', now());
+
 -- The letter that already went out, and the attempt eight minutes ago.
 INSERT INTO public.notification_log
   (user_id, type, channel, status, template_id, metadata, sent_at)
@@ -277,6 +305,12 @@ DECLARE
   u_stranger uuid := 'e7000000-0000-4000-8000-000000000003';
   d_one      uuid;
   d_lapsing  uuid;
+  d_legacy   uuid := 'e7080000-0000-4000-8000-000000000001';
+  d_catalogue uuid;
+  d_written  uuid;
+  d_carry    uuid;
+  d_reask    uuid;
+  u_peer     uuid := 'e7000000-0000-4000-8000-000000000004';
   v_result   jsonb;
   v_until    timestamptz;
   v_count    integer;
@@ -491,6 +525,28 @@ BEGIN
   ASSERT public.release_due_client_pushes(50) = 0,
     'the second pass finds nothing';
 
+  -- r1 M4. A held envelope waits up to ten hours, and in those hours she may
+  -- answer. The bell row her answer marked read is what says so.
+  DELETE FROM public.notification_log WHERE user_id = u_client;
+  v_push := public.notify_client_attention(
+    u_client, 'decision', d_one, 'Approve the issued set', 'It is ready.',
+    '{}'::jsonb);
+  UPDATE public.notification_log
+     SET deliver_after = now() - interval '1 minute'
+   WHERE user_id = u_client AND channel = 'push';
+  UPDATE public.notification_log
+     SET opened_at = now(), status = 'opened'
+   WHERE user_id = u_client AND channel = 'in_app';
+
+  ASSERT public.release_due_client_pushes(50) = 0,
+    'a push whose bell row she already opened never rings';
+  ASSERT (SELECT status FROM public.notification_log
+           WHERE user_id = u_client AND channel = 'push')::text = 'suppressed',
+    'and the envelope is retired rather than left queued forever';
+
+  -- (The other half of this rule — an approval that has left her hands — is
+  -- asserted in §10, once the sweep sections have had the fixture they need.)
+
   -- ══ 5. The receipt is still silent (00569, regrafted) ════════════════════
 
   DELETE FROM public.notification_log WHERE user_id = u_client;
@@ -517,20 +573,34 @@ BEGIN
          now()
     FROM sp_decisions AS row WHERE row.label = 'written';
 
+  -- r1 M8. The cutoff is no longer a constant somebody guessed: it is recorded
+  -- when 00572 applies, as the later of the merge day and that moment. On any
+  -- stack where 00568 landed after 2026-09-05 the back catalogue is still out
+  -- of reach, because migrations apply in order.
   ASSERT public._decision_first_notice_sweep_cutoff()
-         = '2026-09-05T00:00:00Z'::timestamptz,
-    'the cutoff is the day 00568 landed — the back catalogue is never mailed';
+         >= '2026-09-05T00:00:00Z'::timestamptz,
+    'the cutoff is never earlier than the day 00568 landed on main';
+  ASSERT public._decision_first_notice_sweep_cutoff() <= now(),
+    'and never later than the moment this file applied';
+  ASSERT (SELECT count(*) FROM public.decision_first_notice_sweep_state) = 1,
+    'one row records it, and a re-apply leaves it standing';
 
-  -- The sweep dispatches for exactly one of the six: the approval that was
-  -- published, is still open, and never got a letter.
+  -- The sweep dispatches for two of the seven: the Stage-2 approval that was
+  -- published, is still open and never got a letter — and (r1 M7) the legacy
+  -- choice put to her in the same breath, which 00568's trigger announces on
+  -- exactly the same edge and this wave's Sunday and 8am gates can hold just
+  -- as easily.
   v_count := public.sweep_decision_first_notices(50);
-  ASSERT v_count = 1,
-    'the sweep sees exactly one candidate among the six fixtures — got ' || v_count;
-  ASSERT (SELECT count(*) FROM public.decision_first_notice_attempts) = 2,
-    'and recorded its attempt beside the one already on file';
+  ASSERT v_count = 2,
+    'the sweep sees the approval and the legacy choice — got ' || v_count;
+  ASSERT (SELECT count(*) FROM public.decision_first_notice_attempts) = 3,
+    'and recorded both attempts beside the one already on file';
   ASSERT (SELECT count(*) FROM public.decision_first_notice_attempts
            WHERE decision_id = d_one) = 1,
     'the attempt it recorded is the fresh approval''s';
+  ASSERT (SELECT count(*) FROM public.decision_first_notice_attempts
+           WHERE decision_id = d_legacy) = 1,
+    'and the legacy choice''s, which no earlier sweep would have covered';
   ASSERT (SELECT last_attempt_at FROM public.decision_first_notice_attempts
            WHERE decision_id = d_one) > now() - interval '1 minute',
     'the cooldown starts from that attempt, because a skipped letter logs nothing';
@@ -540,12 +610,12 @@ BEGIN
 
   -- Prove each exclusion is the one claimed, by lifting them one at a time.
   DELETE FROM public.decision_first_notice_attempts;
-  ASSERT public.sweep_decision_first_notices(50) = 2,
+  ASSERT public.sweep_decision_first_notices(50) = 3,
     'lifting the cooldown lets the approval attempted eight minutes ago back in';
 
   DELETE FROM public.decision_first_notice_attempts;
   DELETE FROM public.notification_log WHERE user_id = u_client;
-  ASSERT public.sweep_decision_first_notices(50) = 3,
+  ASSERT public.sweep_decision_first_notices(50) = 4,
     'and the approval already written to joins once its letter is gone';
 
   ASSERT (SELECT count(*) FROM public.decision_first_notice_attempts AS attempt
@@ -608,6 +678,122 @@ BEGIN
     'to the name the studio shows';
   ASSERT public.backfill_why_author_display_names() = 0,
     'and moves nothing on a second run';
+
+  -- ══ 9. An inherited why keeps its composer (r1 M6) ═══════════════════════
+  --
+  -- `supersede_project_approval_decision` (00569) carries an unchanged why —
+  -- and the name beside it — onto the successor, while the successor's own
+  -- 'created' receipt names whoever reissued it. A backfill that reads only
+  -- that receipt re-signs her sentence with someone else's name.
+
+  SELECT decision_id INTO d_catalogue FROM sp_decisions WHERE label = 'catalogue';
+  SELECT decision_id INTO d_written   FROM sp_decisions WHERE label = 'written';
+
+  PERFORM pg_temp.assume_actor(u_peer);
+
+  -- Silence from the reissuer: the predecessor's line carries forward.
+  v_result := public.supersede_project_approval_decision(
+    d_catalogue,
+    jsonb_build_object(
+      'title', 'Approve the reissued hall set',
+      'question', 'Does the reissued set read right to you?',
+      'dueAt', (now() + interval '9 days')::text,
+      'artifactKind', 'plan_issue',
+      'artifactId', 'e7070000-0000-4000-8000-000000000007',
+      'costCentsDelta', 0,
+      'scheduleDaysDelta', 0,
+      'leadTimeDaysDelta', 0
+    ),
+    (SELECT updated_at FROM public.client_decisions WHERE id = d_catalogue),
+    'sp-supersede-carry'
+  );
+  d_carry := (v_result->>'successorDecisionId')::uuid;
+
+  -- The reissuer re-asks in her own words: the new line is hers.
+  v_result := public.supersede_project_approval_decision(
+    d_written,
+    jsonb_build_object(
+      'title', 'Approve the reissued sconce set',
+      'question', 'Does the reissued set read right to you?',
+      'dueAt', (now() + interval '9 days')::text,
+      'artifactKind', 'plan_issue',
+      'artifactId', 'e7070000-0000-4000-8000-000000000008',
+      'costCentsDelta', 0,
+      'scheduleDaysDelta', 0,
+      'leadTimeDaysDelta', 0
+    ),
+    (SELECT updated_at FROM public.client_decisions WHERE id = d_written),
+    'sp-supersede-ask',
+    'You asked us to drop the sconce back to the drawn height.'
+  );
+  d_reask := (v_result->>'successorDecisionId')::uuid;
+
+  PERFORM pg_temp.assume_actor(NULL);
+
+  ASSERT (SELECT why_author_name FROM public.project_approval_artifacts
+           WHERE decision_id = d_carry) = 'Leah Kochaver',
+    'an inherited line is signed by whoever wrote it, not whoever reissued it';
+  ASSERT (SELECT why_author_name FROM public.project_approval_artifacts
+           WHERE decision_id = d_reask) = 'Marta Ashford',
+    'and a re-asked line is signed by the designer who re-asked it';
+
+  -- Now put all three back the way 00569 would have frozen them — given names
+  -- — and let the backfill find them.
+  ALTER TABLE public.project_approval_artifacts
+    DISABLE TRIGGER a_guard_project_approval_artifact_edge_trg;
+  UPDATE public.project_approval_artifacts
+     SET why_author_name = 'Leah'
+   WHERE decision_id IN (d_catalogue, d_carry);
+  UPDATE public.project_approval_artifacts
+     SET why_author_name = 'Marta' WHERE decision_id = d_reask;
+  ALTER TABLE public.project_approval_artifacts
+    ENABLE TRIGGER a_guard_project_approval_artifact_edge_trg;
+
+  v_count := public.backfill_why_author_display_names();
+  ASSERT v_count = 3,
+    'the backfill moves the three given names — got ' || v_count;
+  ASSERT (SELECT why_author_name FROM public.project_approval_artifacts
+           WHERE decision_id = d_carry) = 'Leah Kochaver',
+    'the inherited line goes back to its composer, never to the reissuer';
+  ASSERT (SELECT why_author_name FROM public.project_approval_artifacts
+           WHERE decision_id = d_catalogue) = 'Leah Kochaver',
+    'the edition she composed keeps her display name';
+  ASSERT (SELECT why_author_name FROM public.project_approval_artifacts
+           WHERE decision_id = d_reask) = 'Marta Ashford',
+    'and a line written fresh on a reissue is signed by whoever wrote it';
+  ASSERT public.backfill_why_author_display_names() = 0,
+    'a second run over a chain moves nothing';
+
+  -- ══ 10. A held push never rings about an ask she has answered (r1 M4) ════
+  --
+  -- The bell row is still unopened here — the only thing that has changed is
+  -- the decision itself. An envelope minted at ten at night and released at
+  -- eight the next morning must not announce an ask that closed in between.
+
+  DELETE FROM public.notification_log WHERE user_id = u_client;
+  v_push := public.notify_client_attention(
+    u_client, 'decision', d_legacy, 'A choice is waiting', 'Two runners.',
+    '{}'::jsonb);
+  UPDATE public.notification_log
+     SET deliver_after = now() - interval '1 minute'
+   WHERE user_id = u_client AND channel = 'push';
+  ASSERT (SELECT count(*) FROM public.notification_log
+           WHERE user_id = u_client AND channel = 'in_app'
+             AND opened_at IS NULL) = 1,
+    'the bell row is unopened, so only the decision''s own state can hold this';
+
+  -- 00399 gates a legacy decision write on its own id; this is the lever the
+  -- product uses, not a way around the guard.
+  PERFORM set_config('app.client_decision_write_id', d_legacy::text, true);
+  UPDATE public.client_decisions
+     SET status = 'expired', updated_at = now() WHERE id = d_legacy;
+  PERFORM set_config('app.client_decision_write_id', '', true);
+
+  ASSERT public.release_due_client_pushes(50) = 0,
+    'a push for a decision that is no longer pending never rings';
+  ASSERT (SELECT status FROM public.notification_log
+           WHERE user_id = u_client AND channel = 'push')::text = 'suppressed',
+    'and it is retired rather than left queued forever';
 
   RAISE NOTICE 'she_sets_the_pace_test: all assertions passed';
 END $$;

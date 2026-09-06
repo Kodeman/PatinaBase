@@ -1,7 +1,8 @@
 // Supabase Edge Function: notification-digest
 //
-// Cron-triggered daily at 15:00 UTC (migration 00278). For every CLIENT on a
-// BATCHING cadence — 'daily', or 'weekly_sunday' on a Sunday in her own zone
+// Cron-triggered hourly at 20 past (migration 00572, replacing 00278's daily
+// 15:00 UTC run so the per-reader 8am-local gate has an hour to release into).
+// For every CLIENT on a BATCHING cadence — 'daily', or 'weekly_sunday' on a Sunday in her own zone
 // (00572) — rolls the window's UNREAD non-urgent reminders into a SINGLE email
 // instead of the individual nudge emails those senders suppressed:
 //
@@ -29,13 +30,15 @@ import {
   buildReminderDigestEmail,
   decisionDigestLink,
   decisionDigestTitle,
-  DIGEST_WINDOW_MS,
   type DigestPeriod,
   digestCategoryForDecision,
+  digestWindowStart,
   dropDecisionsPastOverdue,
+  dropSnoozedDecisions,
   isDigestDue,
   type ReminderDigestItem,
 } from "./logic.ts";
+import { isSnoozeActive } from "../_shared/decision-notify.ts";
 import {
   type EmbeddedApprovalArtifact,
   resolveApprovalArtifactCitation,
@@ -46,10 +49,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CLIENT_PORTAL_URL = Deno.env.get("CLIENT_PORTAL_URL") ??
   "https://client.patina.cloud";
-
-// Look-back window per cadence (00572): a day for 'daily', a week for
-// 'weekly_sunday'. The min-interval guard prevents double-send either way.
-const WINDOW_MS = DIGEST_WINDOW_MS;
 
 const PAGE = 200;
 
@@ -84,10 +83,43 @@ async function decisionsPastOverdue(
     .map((row) => row.decision_id);
 }
 
+/**
+ * P-28 (r1 B1). The approvals this reader has told Patina to hold, and the
+ * hour each hold ends. A snoozed approval sends nothing until then — in a
+ * summary as much as in a letter — except the two notices R16 exempts, neither
+ * of which is ever batched here.
+ *
+ * Fails open, exactly as the direct-mail gate does: a snooze that cannot be
+ * read must not become a silence nobody asked for.
+ */
+async function snoozedDecisions(
+  supabase: SupabaseClient,
+  userId: string,
+  decisionIds: string[],
+  now: Date,
+): Promise<string[]> {
+  if (decisionIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("decision_snoozes")
+    .select("decision_id, snoozed_until")
+    .eq("user_id", userId)
+    .in("decision_id", decisionIds);
+  if (error) {
+    console.warn("[notification-digest] snooze lookup failed", error);
+    return [];
+  }
+  return ((data ?? []) as Array<
+    { decision_id: string; snoozed_until: string | null }
+  >)
+    .filter((row) => isSnoozeActive(row.snoozed_until, now))
+    .map((row) => row.decision_id);
+}
+
 async function collectItems(
   supabase: SupabaseClient,
   userId: string,
   sinceIso: string,
+  now: Date,
 ): Promise<ReminderDigestItem[]> {
   const items: ReminderDigestItem[] = [];
 
@@ -186,13 +218,15 @@ async function collectItems(
     });
   }
 
-  return dropDecisionsPastOverdue(
-    items,
-    await decisionsPastOverdue(
-      supabase,
-      userId,
-      items.flatMap((item) => item.decisionId ? [item.decisionId] : []),
+  const decisionIds = items.flatMap((item) =>
+    item.decisionId ? [item.decisionId] : []
+  );
+  return dropSnoozedDecisions(
+    dropDecisionsPastOverdue(
+      items,
+      await decisionsPastOverdue(supabase, userId, decisionIds),
     ),
+    await snoozedDecisions(supabase, userId, decisionIds, now),
   );
 }
 
@@ -241,9 +275,15 @@ async function dispatchReminderDigests(
           continue;
         }
 
-        const sinceIso = new Date(now.getTime() - WINDOW_MS[period])
-          .toISOString();
-        const items = await collectItems(supabase, pref.user_id, sinceIso);
+        // One period back, or as far as the last summary actually sent when
+        // a run was skipped — a daily reader is never mailed on Sunday, and
+        // Saturday's reminders must not fall through that gap (r1 M3).
+        const sinceIso = digestWindowStart(
+          period,
+          pref.last_reminder_digest_sent_at,
+          now,
+        ).toISOString();
+        const items = await collectItems(supabase, pref.user_id, sinceIso, now);
         if (items.length === 0) {
           // Nothing accumulated — leave the watermark so a reminder arriving
           // later today is still picked up on the next run.

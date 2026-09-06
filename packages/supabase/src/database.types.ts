@@ -4125,6 +4125,21 @@ export type Database = {
           },
         ]
       }
+      decision_first_notice_sweep_state: {
+        Row: {
+          cutoff_at: string
+          singleton: boolean
+        }
+        Insert: {
+          cutoff_at: string
+          singleton?: boolean
+        }
+        Update: {
+          cutoff_at?: string
+          singleton?: boolean
+        }
+        Relationships: []
+      }
       decision_notifications: {
         Row: {
           created_at: string

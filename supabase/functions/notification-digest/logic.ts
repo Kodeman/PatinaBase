@@ -10,6 +10,7 @@ import {
   spacer,
 } from "../_shared/branded-email.ts";
 import type { ApprovalArtifactCitation } from "../_shared/decision-notify.ts";
+import { localWeekdayAndHour } from "../_shared/decision-notify.ts";
 import { clientDecisionLink } from "../_shared/client-portal-links.ts";
 
 const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
@@ -54,6 +55,28 @@ export function dropDecisionsPastOverdue(
 ): ReminderDigestItem[] {
   if (overdueDecisionIds.length === 0) return items;
   const quiet = new Set(overdueDecisionIds);
+  return items.filter((item) =>
+    !(item.decisionId && quiet.has(item.decisionId))
+  );
+}
+
+/**
+ * P-28's snooze, on the digest side (r1 B1). A snoozed approval sends nothing
+ * until its hour — and a summary is still an automated letter about it. The
+ * direct-mail gate reads the same table; the digest had been reading none of
+ * it, so the default cadence delivered nightly what the snooze had silenced.
+ *
+ * R16's exception for a superseding edition needs no clause here: a successor
+ * is its own `client_decisions` row with its own id, so a snooze set on the
+ * edition she answered cannot reach the new one, and the announcement of a
+ * new edition mails direct rather than batching (decisionMailHold).
+ */
+export function dropSnoozedDecisions(
+  items: ReminderDigestItem[],
+  snoozedDecisionIds: readonly string[],
+): ReminderDigestItem[] {
+  if (snoozedDecisionIds.length === 0) return items;
+  const quiet = new Set(snoozedDecisionIds);
   return items.filter((item) =>
     !(item.decisionId && quiet.has(item.decisionId))
   );
@@ -107,19 +130,61 @@ export function isSundayLocal(now: Date, timeZone: string): boolean {
   return weekday === "Sun";
 }
 
-/** Whether this reader's digest is due now, for the cadence she chose. */
+/** The hour before which no automated approval mail goes out (ux/03 §6.2). */
+const LOCAL_MORNING_HOUR = 8;
+
+/**
+ * Whether this reader's digest is due now, for the cadence she chose.
+ *
+ * The summary keeps the same hours as the letter (r1 M3). The direct-mail gate
+ * refuses Sunday and refuses anything before 8am local; the digest is the
+ * vehicle for the DEFAULT cadence, so it owes the same promise — otherwise the
+ * quietest choice on the list is the one that mails at seven in the morning,
+ * on a Sunday. `weekly_sunday` is the one cadence that mails ON Sunday, and it
+ * waits for her morning like everything else. The cron runs hourly (00572) so
+ * that this gate has an hour to release into.
+ */
 export function isDigestDue(
   period: DigestPeriod,
   lastSentAt: string | null | undefined,
   now: Date,
   timeZone: string,
 ): boolean {
-  if (period === "daily") return isReminderDigestDue(lastSentAt, now);
-  if (!isSundayLocal(now, timeZone)) return false;
+  const { weekday, hour } = localWeekdayAndHour(now, timeZone);
+  if (hour < LOCAL_MORNING_HOUR) return false;
+  if (period === "daily") {
+    if (weekday === 0) return false;
+    return isReminderDigestDue(lastSentAt, now);
+  }
+  if (weekday !== 0) return false;
   if (!lastSentAt) return true;
   const last = new Date(lastSentAt).getTime();
   if (Number.isNaN(last)) return true;
   return now.getTime() - last >= WEEKLY_MIN_INTERVAL_MS;
+}
+
+// A summary may reach back a long way when a run was skipped, but never
+// indefinitely: an item unread for a fortnight is not news.
+const DIGEST_MAX_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Where this summary's window starts. Ordinarily one period back — but a daily
+ * reader is not mailed on Sunday, so Monday's summary has to reach back past
+ * the run that never happened or Saturday's reminders fall through the floor
+ * (r1 M3). The window therefore stretches to the last digest actually sent,
+ * capped at a fortnight.
+ */
+export function digestWindowStart(
+  period: DigestPeriod,
+  lastSentAt: string | null | undefined,
+  now: Date,
+): Date {
+  const floor = now.getTime() - DIGEST_MAX_WINDOW_MS;
+  const ordinary = now.getTime() - DIGEST_WINDOW_MS[period];
+  if (!lastSentAt) return new Date(Math.max(floor, ordinary));
+  const last = new Date(lastSentAt).getTime();
+  if (Number.isNaN(last)) return new Date(Math.max(floor, ordinary));
+  return new Date(Math.max(floor, Math.min(ordinary, last)));
 }
 
 function escapeHtml(s: string): string {

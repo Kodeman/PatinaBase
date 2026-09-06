@@ -100,6 +100,16 @@ export function normalizeReminderCadence(
   }
 }
 
+/**
+ * The recipient's own standing settings, which hold a letter for reasons that
+ * have nothing to do with cadence: a type switched off, the email channel
+ * closed, or her quiet hours.
+ */
+export type DeliveryGateReason =
+  | "type_disabled"
+  | "email_channel_disabled"
+  | "quiet_hours";
+
 /** Why a letter is not going out on this pass, or null when it is. */
 export type DecisionMailHold =
   | "cadence_digest"
@@ -166,23 +176,34 @@ export function localWeekdayAndHour(
  *     attention / release_due_client_pushes): a letter that lands in an inbox
  *     at nine at night has not woken anybody.
  */
+/**
+ * Is this snooze still standing at `now`? One reading of the column for every
+ * surface that must honour it — the direct letter and the summary alike.
+ * 'infinity' parses as NaN through PostgREST; a snooze with no end is a
+ * standing quiet, not a parse failure to shrug off.
+ */
+export function isSnoozeActive(
+  snoozedUntil: string | null | undefined,
+  now: Date,
+): boolean {
+  if (!snoozedUntil) return false;
+  const until = new Date(snoozedUntil).getTime();
+  if (Number.isNaN(until)) {
+    return snoozedUntil.trim().toLowerCase().startsWith("infinity");
+  }
+  return until > now.getTime();
+}
+
 export function decisionMailHold(gate: DecisionMailGate): DecisionMailHold | null {
   if (gate.kind === "decision_resolved") return null;
   if (gate.kind === "decision_overdue") return null;
 
   if (gate.overdueAlreadySent) return "quiet_after_overdue";
 
-  if (!gate.isSupersedingEdition && gate.snoozedUntil) {
-    const until = new Date(gate.snoozedUntil).getTime();
-    // 'infinity' parses as NaN through PostgREST; a snooze with no end is a
-    // standing quiet, not a parse failure to shrug off.
-    if (Number.isNaN(until)) {
-      if (gate.snoozedUntil.trim().toLowerCase().startsWith("infinity")) {
-        return "snoozed";
-      }
-    } else if (until > gate.now.getTime()) {
-      return "snoozed";
-    }
+  if (
+    !gate.isSupersedingEdition && isSnoozeActive(gate.snoozedUntil, gate.now)
+  ) {
+    return "snoozed";
   }
 
   const breaksTheDigest = gate.notice === "first" || gate.isSupersedingEdition;
@@ -1335,6 +1356,71 @@ async function decisionSnoozedUntil(
  * rather than from the mail log: the promise is about the notice, not about
  * whether one particular letter happened to send.
  */
+/**
+ * Does the bell row for this (decision, kind) already exist?
+ *
+ * A failure to read answers false, so the row is written: the in-app line is
+ * the one thing R16 never defers, and an unwritten one is worse than a
+ * refreshed one.
+ */
+async function decisionInAppRowExists(
+  supabase: SupabaseClient,
+  decisionId: string,
+  kind: DecisionNotificationKind,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("decision_notifications")
+    .select("id")
+    .eq("decision_id", decisionId)
+    .eq("kind", kind)
+    .limit(1);
+  if (error) {
+    console.warn("decision-notify: in-app row lookup failed", error);
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * A hold that will not lift by itself: she has said no, or the conversation is
+ * over. The cadence hold is NOT one of these — it is a hand-off to the digest,
+ * which is built from the freshness of the very row the RPC re-arms — and
+ * neither are the hours-long ones (Sunday, before her morning, her own quiet
+ * hours), which lift on their own and whose letter then stamps the approval
+ * out of the cron's window.
+ */
+const STANDING_QUIET: ReadonlySet<string> = new Set<string>([
+  "snoozed",
+  "quiet_after_overdue",
+  "type_disabled",
+  "email_channel_disabled",
+]);
+
+/**
+ * Whether this pass may call the spine RPC.
+ *
+ * `_enqueue_decision_notification` (00466) is idempotent about the ROW but not
+ * about its state: a service-role re-call sets `read_at = NULL` and moves
+ * `created_at` forward, which is right when a letter is going out or being
+ * handed to the digest, and wrong when Patina has been asked to be quiet.
+ * Since 00572 the reminder cron runs hourly, so a snoozed approval would
+ * otherwise be re-armed twenty-four times a day — her line popping back to
+ * unread every hour, and its refreshed timestamp keeping it inside the digest
+ * window forever (r1 M5).
+ *
+ * So: write the row when there is none, when the letter is going out, or when
+ * the hold will lift on its own. Never re-arm a line that is already standing
+ * into a silence she asked for.
+ */
+export function shouldFireDecisionInApp(args: {
+  hold: DecisionMailHold | DeliveryGateReason | null;
+  rowExists: boolean;
+}): boolean {
+  if (!args.hold) return true;
+  if (!args.rowExists) return true;
+  return !STANDING_QUIET.has(args.hold);
+}
+
 async function decisionOverdueAlreadySent(
   supabase: SupabaseClient,
   decisionId: string,
@@ -1368,10 +1454,71 @@ export async function deliverDecisionNotification(
   recipient: DecisionRecipient,
   cobrand: DecisionCobrand = {},
 ): Promise<DeliverDecisionNotificationResult> {
-  // 1. In-app row via the frozen spine RPC (idempotent).
-  const inApp = await fireDecisionInApp(supabase, decision.id, kind);
+  // 1. The gate comes FIRST (r1 M5). Every reason a letter might not go out on
+  // this pass is decided before the spine RPC is called, because the RPC
+  // re-arms an existing bell row — unread again, created_at moved forward —
+  // and on an hourly cron that would keep a deliberately quiet approval
+  // permanently fresh. The row is still written whenever there is none: the
+  // in-app line is never deferred, only never re-armed for nothing.
+  //
+  // The recipient's zone also decides which weekday her due date is, so it is
+  // hoisted out of the gate and handed to the renderer.
+  let timeZone = DEFAULT_TIME_ZONE;
+  let held: DecisionMailHold | DeliveryGateReason | null = null;
+  if (recipient.userId) {
+    const pref = await loadPreferences(supabase, recipient.userId);
+    timeZone = pref.timezone?.trim() || DEFAULT_TIME_ZONE;
 
-  // 2. No email target → in-app only (not-yet-signed-up client, etc.).
+    const typeCol = KIND_TO_PREF_COLUMN[kind];
+    const typeEnabled = pref[typeCol] !== false; // null/undefined ⇒ default on
+    if (!typeEnabled) {
+      held = "type_disabled";
+    } else if (pref.channels_email === false) {
+      held = "email_channel_disabled";
+    } else {
+      // R16's one gate (00572): the cadence, the snooze she set, the Sunday
+      // rule, the morning floor, and the quiet after the overdue notice — all
+      // decided by decisionMailHold, which is a pure function and is tested as
+      // one. A hold loses nothing: the digest batches it, or the hourly cron
+      // returns for it.
+      held = decisionMailHold({
+        kind,
+        notice: decisionNotice(decision),
+        isSupersedingEdition: Boolean(decision.supersedes),
+        cadence: normalizeReminderCadence(pref.reminder_cadence),
+        timeZone,
+        now: new Date(),
+        snoozedUntil: await decisionSnoozedUntil(
+          supabase,
+          recipient.userId,
+          decision.id,
+        ),
+        overdueAlreadySent: kind === "decision_required"
+          ? await decisionOverdueAlreadySent(supabase, decision.id)
+          : false,
+      });
+
+      // Her own quiet hours, unchanged from Wave 1: overdue is time-critical
+      // and bypasses them; required/resolved defer and the cron re-attempts.
+      if (!held && kind !== "decision_overdue" && isQuietHours(pref)) {
+        held = "quiet_hours";
+      }
+    }
+  }
+
+  // 2. The bell row, written unless it is already standing and quiet is what
+  // this pass owes her.
+  const mayFire = shouldFireDecisionInApp({
+    hold: held,
+    rowExists: held
+      ? await decisionInAppRowExists(supabase, decision.id, kind)
+      : false,
+  });
+  const inApp = mayFire
+    ? await fireDecisionInApp(supabase, decision.id, kind)
+    : { ok: true, id: null };
+
+  // 3. No email target → in-app only (not-yet-signed-up client, etc.).
   if (!recipient.email) {
     return {
       inAppOk: inApp.ok,
@@ -1381,74 +1528,13 @@ export async function deliverDecisionNotification(
     };
   }
 
-  // 3. Preference / quiet-hours gate (only when we know the auth user).
-  // The recipient's zone also decides which weekday her due date is, so it is
-  // hoisted out of the gate and handed to the renderer.
-  let timeZone = DEFAULT_TIME_ZONE;
-  if (recipient.userId) {
-    const pref = await loadPreferences(supabase, recipient.userId);
-    timeZone = pref.timezone?.trim() || DEFAULT_TIME_ZONE;
-
-    const typeCol = KIND_TO_PREF_COLUMN[kind];
-    const typeEnabled = pref[typeCol] !== false; // null/undefined ⇒ default on
-    if (!typeEnabled) {
-      return {
-        inAppOk: inApp.ok,
-        emailSent: false,
-        emailSkipped: true,
-        reason: "type_disabled",
-      };
-    }
-
-    if (pref.channels_email === false) {
-      return {
-        inAppOk: inApp.ok,
-        emailSent: false,
-        emailSkipped: true,
-        reason: "email_channel_disabled",
-      };
-    }
-
-    // R16's one gate (00572): the cadence, the snooze she set, the Sunday
-    // rule, the morning floor, and the quiet after the overdue notice — all
-    // decided by decisionMailHold, which is a pure function and is tested as
-    // one. The in-app row already fired (step 1), so a hold loses nothing:
-    // the digest batches it, or the hourly cron returns for it.
-    const hold = decisionMailHold({
-      kind,
-      notice: decisionNotice(decision),
-      isSupersedingEdition: Boolean(decision.supersedes),
-      cadence: normalizeReminderCadence(pref.reminder_cadence),
-      timeZone,
-      now: new Date(),
-      snoozedUntil: await decisionSnoozedUntil(
-        supabase,
-        recipient.userId,
-        decision.id,
-      ),
-      overdueAlreadySent: kind === "decision_required"
-        ? await decisionOverdueAlreadySent(supabase, decision.id)
-        : false,
-    });
-    if (hold) {
-      return {
-        inAppOk: inApp.ok,
-        emailSent: false,
-        emailSkipped: true,
-        reason: hold,
-      };
-    }
-
-    // Her own quiet hours, unchanged from Wave 1: overdue is time-critical and
-    // bypasses them; required/resolved defer and the cron re-attempts.
-    if (kind !== "decision_overdue" && isQuietHours(pref)) {
-      return {
-        inAppOk: inApp.ok,
-        emailSent: false,
-        emailSkipped: true,
-        reason: "quiet_hours",
-      };
-    }
+  if (held) {
+    return {
+      inAppOk: inApp.ok,
+      emailSent: false,
+      emailSkipped: true,
+      reason: held,
+    };
   }
 
   // 4. Email idempotency: already logged for this (decision, kind)?
