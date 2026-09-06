@@ -359,3 +359,13 @@ the scratch database was dropped at the end.
    R16 says the record is never deferred; only the re-arm is hers to switch off.
 4. Round-0 advisories 3, 4, 5 and 7 and round-1 advisories 2 and 3 stand
    unchanged. Advisory 6 is closed by M8; round-1 advisory 1 is restated above.
+5. **`deno fmt` and the pre-commit prettier check disagree on this tree.** The
+   files this lane touched under `supabase/functions/` are Deno sources: `deno
+   fmt --config supabase/functions/deno.json --check` is clean on the two
+   import blocks this round rewrote, and the husky hook's prettier warning on
+   the same file is advisory (it wants a different member order). Four files —
+   `_shared/decision-notify.ts`, `decision-first-notice/logic.ts`,
+   `notification-digest/logic.ts` and the two `logic.test.ts` — carry `deno fmt`
+   drift that predates this round (verified against `HEAD~1`: the same four
+   files, the same lines). Left alone rather than reformatted, so the round-2
+   diff stays readable.
