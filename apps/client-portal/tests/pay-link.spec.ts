@@ -105,6 +105,13 @@ async function mintInvoice(options: MintOptions = {}): Promise<MintedInvoice> {
   const invoiceId = randomUUID();
 
   if (!houseless) {
+    // `studio_id` is explicit here for the same reason the houseless invoice
+    // carries one: the seeded designer is an active owner of TWO active design
+    // studios (Leah Hartwell and Local Dev Studio, supabase/seed), so
+    // `set_project_studio_id` cannot discover a single candidate and raises
+    // `studio_id_not_designer_studio`. Stamping the studio the resolver picks
+    // also keeps the project and its invoice on the same anchor, which
+    // `set_invoice_studio_id` requires (`project.studio_id = NEW.studio_id`).
     const { error: projectErr } = await db.from("projects").insert({
       id: projectId,
       name: projectName,
@@ -115,6 +122,7 @@ async function mintInvoice(options: MintOptions = {}): Promise<MintedInvoice> {
       client_id: CLIENT_ID,
       designer_id: DESIGNER_ID,
       created_by: DESIGNER_ID,
+      studio_id: await designerStudioId(),
     });
     if (projectErr) throw projectErr;
   }
@@ -168,10 +176,20 @@ async function mintInvoice(options: MintOptions = {}): Promise<MintedInvoice> {
   ]);
   if (lineErr) throw lineErr;
 
-  // Issue it — the trigger mints the link on this status write.
-  const { error: issueErr } = await db.rpc("issue_invoice", {
-    p_invoice_id: invoiceId,
-  });
+  // Issue it — the trigger mints the link on this status write (00574:
+  // `invoice_link_mint_on_issue`, AFTER UPDATE OF status, WHEN NEW.status IN
+  // ('sent','partially_paid','paid')).
+  //
+  // The status write is made directly rather than through `issue_invoice`:
+  // 00412 and 00511 revoked that RPC from service_role and granted it to
+  // `authenticated` alone, so calling it with this client 42501s
+  // (`permission denied for function issue_invoice`). The trigger and
+  // `ensure_invoice_link` both key off the status alone, so the honest path
+  // for a service-role fixture is the UPDATE the RPC itself performs.
+  const { error: issueErr } = await db
+    .from("invoices")
+    .update({ status: "sent", sent_at: new Date().toISOString() })
+    .eq("id", invoiceId);
   if (issueErr) throw issueErr;
 
   if (paid) {
@@ -365,12 +383,30 @@ test.describe("the standing invoice (00574)", () => {
     // `stripe_idempotency_key`) and a state CHECK that demands a session id
     // for `session_created`. The RPC is also what stamps `return_nonce`, which
     // is the whole point of the hop under test.
+    // The customer is stamped on the LINK first, exactly as the real path
+    // does it (`_shared/invoice-checkout-stripe.ts` calls
+    // `set_invoice_link_stripe_customer`, a compare-and-set that returns the
+    // winning customer, before the driver claims the attempt).
+    // `claim_invoice_link_checkout_attempt` raises
+    // `invoice_checkout_customer_mismatch` while the link still carries no
+    // customer, so the two calls cannot be reordered nor the first skipped.
+    const customerId = `cus_e2e_${randomUUID().slice(0, 8)}`;
+    const { data: linkCustomer, error: customerErr } = await admin().rpc(
+      "set_invoice_link_stripe_customer",
+      {
+        p_link_id: minted.linkId,
+        p_stripe_customer_id: customerId,
+      },
+    );
+    expect(customerErr).toBeNull();
+    expect(linkCustomer).toBe(customerId);
+
     const { error: claimErr } = await admin().rpc(
       "claim_invoice_link_checkout_attempt",
       {
         p_invoice_id: minted.invoiceId,
         p_invoice_link_id: minted.linkId,
-        p_stripe_customer_id: `cus_e2e_${randomUUID().slice(0, 8)}`,
+        p_stripe_customer_id: customerId,
         p_payment_method: "card",
       },
     );
