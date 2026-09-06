@@ -43,15 +43,11 @@ type FakeResponse = {
   headers: { get(name: string): string | null };
 };
 
-/** The two-`eq` + maybeSingle chain the route walks. */
-function stubClient(row: unknown) {
-  const maybeSingle = jest.fn().mockResolvedValue({ data: row, error: null });
-  const eqLink = jest.fn(() => ({ maybeSingle }));
-  const eqNonce = jest.fn(() => ({ eq: eqLink }));
-  const select = jest.fn(() => ({ eq: eqNonce }));
-  const from = jest.fn(() => ({ select }));
-  jest.mocked(createServiceClient).mockReturnValue({ from } as never);
-  return { from, select, eqNonce, eqLink };
+/** §2.6's single-purpose RPC — one call, a `text` return, no embed. */
+function stubClient(token: unknown, error: unknown = null) {
+  const rpc = jest.fn().mockResolvedValue({ data: token, error });
+  jest.mocked(createServiceClient).mockReturnValue({ rpc } as never);
+  return { rpc };
 }
 
 function call(search = "", nonce = NONCE): Promise<FakeResponse> {
@@ -65,22 +61,24 @@ function call(search = "", nonce = NONCE): Promise<FakeResponse> {
 }
 
 beforeEach(() => {
-  jest.mocked(payLinkRequestAllowed).mockResolvedValue(true);
+  jest
+    .mocked(payLinkRequestAllowed)
+    .mockResolvedValue({ allowed: true, limiterMissing: false });
 });
 
 describe("GET /pay/return/[nonce]", () => {
   it("303s to the sheet, carrying the return params Stripe sent", async () => {
-    const chain = stubClient({
-      invoice_links: { token: TOKEN, status: "active" },
-    });
+    const chain = stubClient(TOKEN);
 
     const response = await call(
       "?checkout=success&session_id=cs_1&payment_id=pay_1",
     );
 
-    expect(chain.from).toHaveBeenCalledWith("invoice_checkout_attempts");
-    expect(chain.eqNonce).toHaveBeenCalledWith("return_nonce", NONCE);
-    expect(chain.eqLink).toHaveBeenCalledWith("invoice_links.status", "active");
+    // S-1: the designed single-purpose RPC, not a hand-rolled embed whose
+    // object-vs-array shape nothing proves.
+    expect(chain.rpc).toHaveBeenCalledWith("resolve_invoice_return_nonce", {
+      p_nonce: NONCE,
+    });
     expect(response.status).toBe(303);
 
     const location = new URL(response.headers.get("location") as string);
@@ -94,14 +92,14 @@ describe("GET /pay/return/[nonce]", () => {
   });
 
   it("carries a cancelled return the same way", async () => {
-    stubClient({ invoice_links: { token: TOKEN, status: "active" } });
+    stubClient(TOKEN);
     const response = await call("?checkout=cancelled");
     const location = new URL(response.headers.get("location") as string);
     expect(location.searchParams.get("checkout")).toBe("cancelled");
   });
 
   it("drops anything else appended to the return address", async () => {
-    stubClient({ invoice_links: { token: TOKEN, status: "active" } });
+    stubClient(TOKEN);
     const response = await call(
       "?checkout=success&next=https%3A%2F%2Felsewhere.test&foo=bar",
     );
@@ -123,7 +121,9 @@ describe("GET /pay/return/[nonce]", () => {
       "https://client.patina.test/pay/dead",
     );
 
-    jest.mocked(payLinkRequestAllowed).mockResolvedValue(false);
+    jest
+      .mocked(payLinkRequestAllowed)
+      .mockResolvedValue({ allowed: false, limiterMissing: false });
     const limited = await call("?checkout=success");
     expect(limited.headers.get("location")).toBe(
       "https://client.patina.test/pay/dead",
@@ -131,9 +131,7 @@ describe("GET /pay/return/[nonce]", () => {
   });
 
   it("never 303s to something that is not a token", async () => {
-    stubClient({
-      invoice_links: { token: "https://elsewhere.test", status: "active" },
-    });
+    stubClient("https://elsewhere.test");
     const response = await call("?checkout=success");
     expect(response.headers.get("location")).toBe(
       "https://client.patina.test/pay/dead",

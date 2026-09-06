@@ -17,6 +17,20 @@ import type { InvoiceLinkSettling, InvoiceLinkWithdrawn } from "./invoice-link";
    flight: the invoice was withdrawn, and the sheet says so in the studio's own
    name rather than pretending the address never existed. ────────────────── */
 
+/**
+ * The two rules the terminal sheets need for their print-only line. They are
+ * deliberately NOT imported from `invoice-sheet.tsx`: that file is
+ * `"use client"`, and pulling a constant out of it would drag the whole sheet
+ * — chooser, poll and all — into the bundle of a page that has no act.
+ */
+const TERMINAL_PRINT_RULES = `
+[data-pay-terminal] [data-pay-print="only"] { display: none; }
+@media print {
+  @page { size: letter; margin: 0.5in; }
+  [data-pay-terminal] [data-pay-print="only"] { display: block; }
+}
+`;
+
 export function DeadLink() {
   return (
     <div className="flex justify-center px-5 pb-[120px] pt-10">
@@ -85,7 +99,11 @@ function TerminalSheet({
   testId: string;
 }) {
   return (
-    <div className="flex justify-center px-5 pb-[120px] pt-10">
+    <div
+      data-pay-terminal
+      className="flex justify-center px-5 pb-[120px] pt-10"
+    >
+      <style>{TERMINAL_PRINT_RULES}</style>
       <main
         className="flex w-full max-w-[1060px] flex-col gap-7 border border-[var(--border-subtle)] px-8 pb-9 pt-10 min-[920px]:px-11"
         data-testid={testId}
@@ -108,8 +126,16 @@ function TerminalSheet({
           )}
         </section>
 
-        <footer className="border-t border-[var(--border-default)] pt-[18px] font-mono text-[11.5px] tracking-[0.03em] text-[var(--color-quiet-ink)]">
-          Prepared by {studioName} · Sent through Patina
+        <footer className="flex flex-col gap-1.5 border-t border-[var(--border-default)] pt-[18px] font-mono text-[11.5px] tracking-[0.03em] text-[var(--color-quiet-ink)]">
+          <span>Prepared by {studioName} · Sent through Patina</span>
+          {/* P-2/S18: the browser stamps the bearer URL into the print header
+              on THESE sheets exactly as it does on the payable one, so the
+              warning is needed here for the same reason. `DeadLink` is the one
+              exception and stays bare — it has no letterhead, no colophon, and
+              no live link to warn anybody about. */}
+          <span data-pay-print="only">
+            This sheet carries a payment link. Treat it like a check.
+          </span>
         </footer>
       </main>
     </div>

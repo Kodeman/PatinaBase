@@ -129,7 +129,11 @@ export async function middleware(req: NextRequest) {
   // the feature exists for, has no profile row to have one with. The prefix
   // deliberately covers /pay/return/<nonce> (the Stripe return hop) and
   // /pay/dead (the static sheet it lands on when the nonce names nothing).
-  const isPayPage = req.nextUrl.pathname.startsWith('/pay/');
+  // S-10: bare `/pay` too, so this and app-chrome's `PUBLIC_PREFIXES` agree
+  // about the same prefix. Without it `/pay` was chrome-less but not public,
+  // and would have produced `callbackUrl=/pay`.
+  const isPayPage =
+    req.nextUrl.pathname === '/pay' || req.nextUrl.pathname.startsWith('/pay/');
   // /piece/[id] is the public face of a shared piece (SP-03). A homeowner texts
   // the link to her husband, who has no Patina account and may never have one;
   // redirecting him to /auth/signin is the same dead end the share already was.

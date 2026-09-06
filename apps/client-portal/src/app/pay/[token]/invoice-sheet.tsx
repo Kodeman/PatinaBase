@@ -38,7 +38,25 @@ import type {
    prints the charged figure on the payment row, because that is a fact.
    ───────────────────────────────────────────────────────────────────────── */
 
-const PRINT_RULES = `
+const SHEET_RULES = `
+/* D-1 — the act's inks, as tokens rather than a literal. The mockup's
+   --btn-bg-hover is #1F1D1A in light and #FFFAF0 in dark; the hardcoded
+   literal was the light value, which would have gone dark-on-dark the moment
+   dark mode was exercised on the page's only payment control. Keyed on the
+   portal's own darkMode strategy (tailwind.config.ts: darkMode: ['class']),
+   NOT on prefers-color-scheme — nothing in this portal defines dark values for
+   --text-primary and friends yet, so flipping the button alone on a system
+   preference would be the regression, not the fix. */
+[data-pay-sheet] {
+  --pay-act-bg: var(--color-charcoal);
+  --pay-act-fg: var(--color-off-white);
+  --pay-act-bg-hover: #1F1D1A;
+}
+.dark [data-pay-sheet] {
+  --pay-act-bg: #F0E9DD;
+  --pay-act-fg: #1D1914;
+  --pay-act-bg-hover: #FFFAF0;
+}
 [data-pay-print="only"] { display: none; }
 @media print {
   @page { size: letter; margin: 0.5in; }
@@ -162,7 +180,9 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
     : payload.pay.processing;
 
   const currency = invoice.currency;
-  const paid = balanceCents <= 0;
+  // M-5: a $0.00 invoice that was never paid would otherwise read "Paid in
+  // full" with a null paid_at and an empty payments list.
+  const paid = balanceCents <= 0 && invoice.total_cents > 0;
   const overdueDays = daysPastDue(invoice.due_date);
 
   // The sheet's own re-read, polled while a return waits to be confirmed. It
@@ -230,6 +250,11 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
     designerName,
   ]);
 
+  /* M-6 — the precedence ladder, recorded so it is not silently reordered:
+     paid > processing > past due > partly paid > awaiting. A part-paid overdue
+     invoice therefore reads "Past due · 22 days" and loses the "Partly paid"
+     word, because lateness is the louder fact and the money already received
+     is still standing in the figures immediately below. */
   const eyebrow = useMemo(() => {
     const dueSuffix = invoice.due_date
       ? ` · due ${formatShortDate(invoice.due_date)}`
@@ -285,16 +310,33 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
      together; marking three of them live would triple-announce. It says the
      figure that moved and nothing else — and it says it once on mount too, so
      a screen-reader user who never touches the chooser still hears what the
-     pre-selected row charges. */
+     pre-selected row charges.
+
+     A-2: the check branch adds one clause, because choosing "Mail a check"
+     reveals a payee, an address and a memo-line instruction that a sighted
+     reader can see appear and a screen-reader user otherwise cannot. It stays
+     ONE region — a second permanent live node would double-announce.
+
+     M-2: an aria-live node only speaks when its text CHANGES, so two methods
+     quoting an identical total (a studio at card_surcharge_bps = 0, or a
+     balance small enough that the ACH formula rounds to zero) would announce
+     the first and stay silent on the second. The trailing NBSP alternates to
+     force a change; it is whitespace and is not spoken. */
   useEffect(() => {
     if (!showChooser) return;
     const timer = setTimeout(() => {
-      setLiveMessage(
-        `Total to pay ${formatCurrency(totalToPayCents, currency)}`,
+      const sentence =
+        method === "check"
+          ? `Total to pay ${formatCurrency(totalToPayCents, currency)}. Mailing details below.`
+          : `Total to pay ${formatCurrency(totalToPayCents, currency)}`;
+      setLiveMessage((previous) =>
+        previous.replace(/\u00A0$/, "") === sentence
+          ? `${sentence}\u00A0`
+          : sentence,
       );
     }, 200);
     return () => clearTimeout(timer);
-  }, [showChooser, totalToPayCents, currency]);
+  }, [showChooser, totalToPayCents, currency, method]);
 
   const handleMethodChange = (next: InvoicePaymentUIMethod) => {
     setMethod(next);
@@ -320,9 +362,11 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
     setSubmitting(true);
     setRefusal(null);
     try {
-      if (method === "check") {
-        payLinkEvents.checkIntent({ amountCents: balanceCents, currency });
-      } else {
+      // M-3: `paymentStarted` fires BEFORE the POST on purpose — it precedes a
+      // navigation away and rides `sendBeacon`, so it counts attempts, not
+      // redirects. `checkIntent` navigates nowhere and has no such excuse, so
+      // it fires only once the studio has actually been told.
+      if (method !== "check") {
         payLinkEvents.paymentStarted({
           method,
           amountCents: balanceCents,
@@ -344,6 +388,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
       if (!response.ok) throw new Error(body?.error ?? "checkout_failed");
       if (method === "check") {
         setCheckNotified(true);
+        payLinkEvents.checkIntent({ amountCents: balanceCents, currency });
         return;
       }
       if (!body?.url) throw new Error("checkout_failed");
@@ -367,7 +412,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
     confirmState === "confirming"
       ? "Confirming your payment…"
       : confirmState === "unconfirmed"
-        ? "Checkout came back, but Patina hasn't confirmed a payment yet. Don't send another one until this settles."
+        ? "Checkout came back, but Patina hasn't confirmed a payment yet. Don't send another one until this settles — refresh this page in a minute to check again."
         : showReturnNotice
           ? "You left before paying. Nothing was charged."
           : null;
@@ -380,7 +425,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
       className="flex justify-center px-5 pb-[120px] pt-10"
       data-testid="pay-sheet"
     >
-      <style>{PRINT_RULES}</style>
+      <style>{SHEET_RULES}</style>
 
       <main
         data-pay-sheet
@@ -442,7 +487,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                     type="button"
                     aria-label="Dismiss this message"
                     onClick={() => setNoticeDismissed(true)}
-                    className="-my-3 -mr-3.5 h-11 w-11 flex-none font-mono text-[15px] text-[var(--text-muted)]"
+                    className="-my-3 -mr-3.5 h-11 w-11 flex-none font-mono text-[15px] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--color-clay-ink)]"
                   >
                     ×
                   </button>
@@ -483,6 +528,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
 
             {processing && (
               <p
+                data-pay-print="hide"
                 data-testid="pay-processing-notice"
                 className="border border-[var(--border-subtle)] bg-[var(--bg-warm)] px-3.5 py-3 text-[14px] leading-[1.5] text-[var(--text-body)]"
               >
@@ -499,6 +545,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                   balanceCents={balanceCents}
                   currency={currency}
                   cardSurchargeBps={paymentOptions.card_surcharge_bps}
+                  rails={payload.pay.rails}
                   disabled={submitting}
                   payeeName={studioName}
                   invoiceLabel={invoiceLabel}
@@ -602,7 +649,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                     onClick={() => void handleAct()}
                     disabled={submitting}
                     data-testid="pay-act"
-                    className="block min-h-[50px] w-full border border-[var(--color-charcoal)] bg-[var(--color-charcoal)] px-[18px] py-3.5 text-[15px] font-medium text-[var(--color-off-white)] transition-colors hover:bg-[#1F1D1A] disabled:opacity-70"
+                    className="block min-h-[50px] w-full border border-[var(--pay-act-bg)] bg-[var(--pay-act-bg)] px-[18px] py-3.5 text-[15px] font-medium text-[var(--pay-act-fg)] transition-colors hover:border-[var(--pay-act-bg-hover)] hover:bg-[var(--pay-act-bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--color-clay-ink)] disabled:opacity-70"
                   >
                     {method === "check"
                       ? `Let ${designerFirst} know a check is coming`
@@ -715,7 +762,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
               type="button"
               data-pay-print="hide"
               onClick={() => window.print()}
-              className="min-h-[44px] self-start py-3 text-[14px] text-[var(--color-clay-ink)] underline underline-offset-[3px]"
+              className="min-h-[44px] self-start py-3 text-[14px] text-[var(--color-clay-ink)] underline underline-offset-[3px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--color-clay-ink)]"
             >
               Print / save PDF
             </button>

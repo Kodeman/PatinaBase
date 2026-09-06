@@ -136,6 +136,20 @@ describe('client middleware Universal Link exemption', () => {
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(response).toBeDefined();
+
+    // T-6: the case is named "no callbackUrl", so it must actually look for
+    // one. Asserting only that nothing redirected would keep passing if a
+    // future middleware built a callbackUrl WITHOUT redirecting — which is
+    // precisely S11's stated failure mode.
+    expect(
+      JSON.stringify((NextResponse.redirect as jest.Mock).mock.calls),
+    ).not.toContain("callbackUrl");
+    const headers = (response as unknown as { headers: Map<string, string> })
+      .headers;
+    for (const value of headers.values()) {
+      expect(value).not.toContain("a".repeat(64));
+      expect(value).not.toContain("b".repeat(64));
+    }
   });
 
   it('lets an unauthenticated guest through to /rfq/[token] without a sign-in redirect', async () => {
@@ -150,6 +164,20 @@ describe('client middleware Universal Link exemption', () => {
     } as never);
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(response).toBeDefined();
+
+    // T-6: the case is named "no callbackUrl", so it must actually look for
+    // one. Asserting only that nothing redirected would keep passing if a
+    // future middleware built a callbackUrl WITHOUT redirecting — which is
+    // precisely S11's stated failure mode.
+    expect(
+      JSON.stringify((NextResponse.redirect as jest.Mock).mock.calls),
+    ).not.toContain("callbackUrl");
+    const headers = (response as unknown as { headers: Map<string, string> })
+      .headers;
+    for (const value of headers.values()) {
+      expect(value).not.toContain("a".repeat(64));
+      expect(value).not.toContain("b".repeat(64));
+    }
   });
 
   it('preserves pathname and query in the post-sign-in callback', async () => {
@@ -574,6 +602,20 @@ describe('client middleware retired-route map', () => {
     const response = await visit('/preferences/unsubscribe', 'token=abc');
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(response).toBeDefined();
+
+    // T-6: the case is named "no callbackUrl", so it must actually look for
+    // one. Asserting only that nothing redirected would keep passing if a
+    // future middleware built a callbackUrl WITHOUT redirecting — which is
+    // precisely S11's stated failure mode.
+    expect(
+      JSON.stringify((NextResponse.redirect as jest.Mock).mock.calls),
+    ).not.toContain("callbackUrl");
+    const headers = (response as unknown as { headers: Map<string, string> })
+      .headers;
+    for (const value of headers.values()) {
+      expect(value).not.toContain("a".repeat(64));
+      expect(value).not.toContain("b".repeat(64));
+    }
   });
 
   it('does not fold /preferences/unsubscribe for a signed-in recipient either', async () => {

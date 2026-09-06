@@ -62,11 +62,14 @@ const payable = {
     memo: "never travels twice",
   },
   payments: [{ amount_cents: 760_500, status: "succeeded" }],
+  pay: { rails: ["us_bank_account", "card", "check"], processing: false },
   studio: { name: "Quist Interiors" },
 };
 
 beforeEach(() => {
-  jest.mocked(payLinkRequestAllowed).mockResolvedValue(true);
+  jest
+    .mocked(payLinkRequestAllowed)
+    .mockResolvedValue({ allowed: true, limiterMissing: false });
   jest.mocked(resolveInvoiceLink).mockReset();
 });
 
@@ -85,10 +88,14 @@ describe("GET /pay/[token]/state", () => {
       "balance_cents",
       "kind",
       "payments",
+      "processing",
       "status",
     ]);
     expect(response.body.status).toBe("partially_paid");
     expect(response.body.balance_cents).toBe(912_500);
+    // I-7: `processing` is server-authoritative on the poll as well as on the
+    // SSR payload, so the sheet reads one definition of the word, not two.
+    expect(response.body.processing).toBe(false);
     expect(JSON.stringify(response.body)).not.toContain("never travels twice");
     expect(JSON.stringify(response.body)).not.toContain("Quist Interiors");
   });
@@ -99,7 +106,9 @@ describe("GET /pay/[token]/state", () => {
     expect(dead.status).toBe(404);
     expect(dead.body).toEqual({ error: "invoice_not_found" });
 
-    jest.mocked(payLinkRequestAllowed).mockResolvedValue(false);
+    jest
+      .mocked(payLinkRequestAllowed)
+      .mockResolvedValue({ allowed: false, limiterMissing: false });
     const limited = await call();
     expect(limited.status).toBe(404);
     expect(limited.body).toEqual({ error: "invoice_not_found" });

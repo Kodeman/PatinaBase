@@ -95,10 +95,14 @@
       // Environments do not inherit top-level bindings — an env block that
       // carries `services` carries every binding or none. Without this,
       // staging would silently run with no limiter at all (S4).
+      //
+      // Its OWN namespace id (S-9): the counter is per-namespace-per-IP, so
+      // sharing 1001 with prod would let a staging probe spend a real
+      // visitor's budget on the production sheet.
       "ratelimits": [
         {
           "name": "PAY_LINK_RATELIMIT",
-          "namespace_id": "1001",
+          "namespace_id": "1002",
           "simple": { "limit": 30, "period": 60 }
         }
       ]

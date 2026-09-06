@@ -7,6 +7,7 @@ import {
   resolveInvoiceLink,
 } from "./invoice-link";
 import { InvoiceSheet } from "./invoice-sheet";
+import { PayLinkBeacon } from "./pay-link-beacon";
 import { DeadLink, SettlingSheet, WithdrawnSheet } from "./settling-sheet";
 
 export const dynamic = "force-dynamic";
@@ -32,16 +33,57 @@ export default async function PayLinkPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  if (!INVOICE_LINK_TOKEN_PATTERN.test(token)) return <DeadLink />;
+  if (!INVOICE_LINK_TOKEN_PATTERN.test(token)) {
+    return (
+      <>
+        <DeadLink />
+        <PayLinkBeacon sheet="dead" />
+      </>
+    );
+  }
 
   const requestHeaders = await headers();
-  if (!(await payLinkRequestAllowed(requestHeaders))) return <DeadLink />;
+  const { allowed, limiterMissing } =
+    await payLinkRequestAllowed(requestHeaders);
+  if (!allowed) {
+    return (
+      <>
+        <DeadLink />
+        <PayLinkBeacon sheet="dead" limiterMissing={limiterMissing} />
+      </>
+    );
+  }
 
   const resolved = await resolveInvoiceLink(token);
-  if (!resolved) return <DeadLink />;
-  if (resolved.kind === "settling") return <SettlingSheet payload={resolved} />;
-  if (resolved.kind === "withdrawn")
-    return <WithdrawnSheet payload={resolved} />;
+  if (!resolved) {
+    return (
+      <>
+        <DeadLink />
+        <PayLinkBeacon sheet="dead" limiterMissing={limiterMissing} />
+      </>
+    );
+  }
+  if (resolved.kind === "settling") {
+    return (
+      <>
+        <SettlingSheet payload={resolved} />
+        <PayLinkBeacon sheet="settling" limiterMissing={limiterMissing} />
+      </>
+    );
+  }
+  if (resolved.kind === "withdrawn") {
+    return (
+      <>
+        <WithdrawnSheet payload={resolved} />
+        <PayLinkBeacon limiterMissing={limiterMissing} />
+      </>
+    );
+  }
 
-  return <InvoiceSheet token={token} payload={resolved} />;
+  return (
+    <>
+      <InvoiceSheet token={token} payload={resolved} />
+      <PayLinkBeacon limiterMissing={limiterMissing} />
+    </>
+  );
 }

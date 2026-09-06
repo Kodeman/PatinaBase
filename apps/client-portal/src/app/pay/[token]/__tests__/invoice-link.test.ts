@@ -9,6 +9,7 @@ import {
   carriesForbiddenKey,
   parseResolvedInvoiceLink,
   payLinkRequestAllowed,
+  resetLimiterAbsenceReport,
   resolveInvoiceLink,
   INVOICE_LINK_TOKEN_PATTERN,
 } from "../invoice-link";
@@ -115,8 +116,32 @@ describe("carriesForbiddenKey", () => {
     }
   });
 
+  // S-7: families, not just spellings. `stripe_account` and `stripe_status`
+  // are neither listed nor `_id`-suffixed, and `client_email` is not `email`.
+  it("finds whole families the exact list does not name", () => {
+    for (const key of [
+      "stripe_account",
+      "stripe_status",
+      "client_email",
+      "payer_name",
+      "billing_email",
+    ]) {
+      expect(carriesForbiddenKey({ studio: { [key]: "x" } })).toBe(true);
+    }
+  });
+
   it("passes the contract payload untouched", () => {
     expect(carriesForbiddenKey(valePayload())).toBe(false);
+    // The legitimate keys nearest those families must survive.
+    for (const key of [
+      "payment_options",
+      "paid_at",
+      "project_name",
+      "client_display_name",
+      "payments",
+    ]) {
+      expect(carriesForbiddenKey({ [key]: "x" })).toBe(false);
+    }
   });
 });
 
@@ -131,6 +156,21 @@ describe("parseResolvedInvoiceLink", () => {
 
   it("unwraps a single-row array, as PostgREST returns it", () => {
     expect(parseResolvedInvoiceLink([valePayload()])?.kind).toBe("invoice");
+  });
+
+  // S-8: taking [0] from a multi-row response would drop the rest WITHOUT the
+  // forbidden-key walk ever seeing them.
+  it("refuses a multi-row response rather than reading the first row", () => {
+    expect(parseResolvedInvoiceLink([valePayload(), valePayload()])).toBeNull();
+    expect(parseResolvedInvoiceLink([])).toBeNull();
+  });
+
+  // I-4: the specification spells the discriminator two ways (v2 §3.1 `sheet`,
+  // K5 `kind`), so both are read — but a payload claiming to be two different
+  // sheets at once is incoherent and dies whole.
+  it("refuses a payload carrying both spellings with different values", () => {
+    const confused = { ...valePayload(), kind: "settling" };
+    expect(parseResolvedInvoiceLink(confused)).toBeNull();
   });
 
   it("kills a payload carrying a forbidden key at depth", () => {
@@ -235,7 +275,37 @@ describe("resolveInvoiceLink", () => {
 });
 
 describe("payLinkRequestAllowed", () => {
-  it("opens in development when no Worker binding is reachable", async () => {
-    await expect(payLinkRequestAllowed(new Headers())).resolves.toBe(true);
+  it("opens in development when no Worker binding is reachable, and says so", async () => {
+    await expect(payLinkRequestAllowed(new Headers())).resolves.toEqual({
+      allowed: true,
+      limiterMissing: true,
+    });
+  });
+
+  // S-6: a typo'd binding name in production would otherwise write one error
+  // line per page view, per state poll (every 3s during a return) and per
+  // checkout. Flooding a log is the same thing as saying nothing.
+  it("reports an absent binding once per isolate, not once per request", async () => {
+    const previous = process.env.NODE_ENV;
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "production",
+      configurable: true,
+    });
+    resetLimiterAbsenceReport();
+
+    await payLinkRequestAllowed(new Headers());
+    await payLinkRequestAllowed(new Headers());
+    await payLinkRequestAllowed(new Headers());
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0]).toContain("pay_link_ratelimit_missing");
+
+    spy.mockRestore();
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: previous,
+      configurable: true,
+    });
+    resetLimiterAbsenceReport();
   });
 });

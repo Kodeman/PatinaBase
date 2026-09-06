@@ -32,7 +32,8 @@ export async function POST(
 
   // Over-limit and malformed answer alike, and say nothing more than the page
   // would: this route must not be a cheaper oracle than the sheet it serves.
-  if (!(await payLinkRequestAllowed(new Headers(request.headers)))) {
+  const { allowed } = await payLinkRequestAllowed(new Headers(request.headers));
+  if (!allowed) {
     return NextResponse.json(
       { error: "invoice_not_found" },
       { status: 404, headers: PRIVATE_HEADERS },
@@ -66,10 +67,12 @@ export async function POST(
     );
   }
 
-  // The portal's own address, which is what the function's origin check
-  // compares against (CLIENT_PORTAL_URL).
-  const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
-
+  // NO `Origin` header, deliberately (S-4). §4.1 designed this server-side hop
+  // as the Origin-ABSENT branch — the function 403s any Origin that is not
+  // byte-equal to its `CLIENT_PORTAL_URL` secret, so sending one would make
+  // every guest checkout depend on `NEXT_PUBLIC_APP_URL` matching that secret
+  // in all three environments. A trailing slash or an unset staging secret
+  // would turn the whole till into "Unable to open the payment page just now."
   try {
     const response = await fetch(
       `${supabaseUrl}/functions/v1/invoice-link-checkout`,
@@ -79,7 +82,6 @@ export async function POST(
           "Content-Type": "application/json",
           apikey: anonKey,
           Authorization: `Bearer ${anonKey}`,
-          Origin: origin,
         },
         body: JSON.stringify({ token, method }),
       },

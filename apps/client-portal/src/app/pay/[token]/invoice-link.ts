@@ -127,10 +127,21 @@ const FORBIDDEN_KEYS = new Set([
   "reference",
   "recorded_by",
   "note",
+  "client_email",
+  "payer_name",
 ]);
 
 /** `id`, `invoice_id`, `payerId` — every identifier spelling the payload bans. */
 const IDENTIFIER_KEY = /^id$|_id$|Id$/;
+
+/**
+ * Families rather than spellings (S-7). The exact list above catches the keys
+ * §3.1 names; these catch the ones it means. `stripe_account` and
+ * `stripe_status` are neither `_id`-suffixed nor listed, and the payload has no
+ * legitimate key in any of these families — `payment_options`, `paid_at`,
+ * `project_name` and `client_display_name` are all clear.
+ */
+const FORBIDDEN_KEY_FAMILY = /^stripe_|^payer_|_email$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -142,6 +153,7 @@ export function carriesForbiddenKey(value: unknown): boolean {
   return Object.entries(value).some(
     ([key, entry]) =>
       FORBIDDEN_KEYS.has(key) ||
+      FORBIDDEN_KEY_FAMILY.test(key) ||
       IDENTIFIER_KEY.test(key) ||
       carriesForbiddenKey(entry),
   );
@@ -276,14 +288,27 @@ function parseInvoice(value: unknown): InvoiceLinkInvoice | null {
 }
 
 /**
- * The discriminator is read from `sheet` or `kind`: §3.1 spells the payable and
- * settling sheets with `sheet`, K5 spells the withdrawn one with `kind`. Both
- * are accepted so the page does not depend on which word the migration lands.
+ * The discriminator is read from `sheet` or `kind`.
+ *
+ * I-4 asked for one word, and the specification does not have one: v2 §3.1
+ * spells the payable and settling sheets `"sheet"`, K5 spells the withdrawn one
+ * `{ kind: 'withdrawn' }`, and K4–K11 win over v2 where they conflict. Picking
+ * either word here bets the ENTIRE surface on which one 00574 emits — guess
+ * wrong and every invoice in the wild renders as a dead link.
+ *
+ * So the tolerance stays until W1's SQL pins one, and the hardening I-4
+ * actually wants goes in instead: a payload carrying BOTH spellings with
+ * different values is incoherent and dies whole. Tightening this to a single
+ * word is a W3 exit criterion, once `resolve_invoice_link`'s SQL test asserts
+ * which word it is.
  */
 function readDiscriminator(candidate: Record<string, unknown>): string | null {
   const sheet = candidate.sheet;
-  if (typeof sheet === "string") return sheet;
   const kind = candidate.kind;
+  if (typeof sheet === "string" && typeof kind === "string" && sheet !== kind) {
+    return null;
+  }
+  if (typeof sheet === "string") return sheet;
   if (typeof kind === "string") return kind;
   return null;
 }
@@ -291,6 +316,10 @@ function readDiscriminator(candidate: Record<string, unknown>): string | null {
 export function parseResolvedInvoiceLink(
   value: unknown,
 ): ResolvedInvoiceLink | null {
+  // S-8: exactly one row, or nothing. Taking `[0]` from a multi-row response
+  // would drop the rest WITHOUT the forbidden-key walk ever seeing them. The
+  // RPC returns one jsonb today, so this is a guard, not a branch.
+  if (Array.isArray(value) && value.length !== 1) return null;
   const candidate = Array.isArray(value) ? value[0] : value;
   if (!isRecord(candidate)) return null;
   if (carriesForbiddenKey(candidate)) return null;
@@ -446,8 +475,18 @@ interface RateLimiterBinding {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
+/**
+ * S-6: once per isolate, not once per request. A typo'd binding name would
+ * otherwise write one error line per page view, per `state` poll (every 3s
+ * during a return) and per `checkout` — turning the loud signal S4 asked for
+ * into log flooding, which is the same thing as silence.
+ */
+let limiterAbsenceReported = false;
+
 function reportMissingLimiter(): void {
   if (process.env.NODE_ENV !== "production") return;
+  if (limiterAbsenceReported) return;
+  limiterAbsenceReported = true;
   console.error(
     JSON.stringify({
       level: "error",
@@ -456,6 +495,14 @@ function reportMissingLimiter(): void {
       binding: PAY_LINK_RATELIMIT_BINDING,
     }),
   );
+}
+
+/**
+ * @internal Test seam — the latch above is module state, and a suite that
+ * asserts the log line must be able to re-arm it.
+ */
+export function resetLimiterAbsenceReport(): void {
+  limiterAbsenceReported = false;
 }
 
 async function resolveLimiter(): Promise<RateLimiterBinding | null> {
@@ -473,26 +520,38 @@ async function resolveLimiter(): Promise<RateLimiterBinding | null> {
   return null;
 }
 
-/**
- * True when this request may proceed. Over-limit renders the dead sheet, never
- * a "too many attempts" sentence: that would be an oracle telling a guesser
- * that guessing is worth continuing.
- */
+export interface PayLinkRateLimitOutcome {
+  /**
+   * Whether this request may proceed. Over-limit renders the dead sheet, never
+   * a "too many attempts" sentence: that would be an oracle telling a guesser
+   * that guessing is worth continuing.
+   */
+  allowed: boolean;
+  /**
+   * The binding could not be reached at all. In development that is ordinary
+   * (there is no Worker); in production it means the only brute-force control
+   * is off, which is what S4 asked to be told about loudly. The page carries
+   * this to the browser so the PostHog half of S4 can actually fire — there is
+   * no server-side PostHog client in this portal.
+   */
+  limiterMissing: boolean;
+}
+
 export async function payLinkRequestAllowed(
   headers: Headers,
-): Promise<boolean> {
+): Promise<PayLinkRateLimitOutcome> {
   const limiter = await resolveLimiter();
   if (!limiter) {
     reportMissingLimiter();
-    return true;
+    return { allowed: true, limiterMissing: true };
   }
   try {
     const { success } = await limiter.limit({
       key: headers.get("cf-connecting-ip") ?? "unknown",
     });
-    return success;
+    return { allowed: success, limiterMissing: false };
   } catch {
     reportMissingLimiter();
-    return true;
+    return { allowed: true, limiterMissing: true };
   }
 }

@@ -26,7 +26,8 @@ export async function GET(
 ) {
   const { token } = await params;
 
-  if (!(await payLinkRequestAllowed(new Headers(request.headers)))) {
+  const { allowed } = await payLinkRequestAllowed(new Headers(request.headers));
+  if (!allowed) {
     return NextResponse.json(
       { error: "invoice_not_found" },
       { status: 404, headers: PRIVATE_HEADERS },
@@ -55,6 +56,11 @@ export async function GET(
       amount_paid_cents: resolved.invoice.amount_paid_cents,
       balance_cents: resolved.invoice.balance_cents,
       payments: resolved.payments,
+      // I-7: `processing` is server-authoritative on the SSR payload, so it is
+      // server-authoritative here too. Deriving it from `payments[]` on the
+      // poll only (which G8 permits) would leave two definitions of one word,
+      // and they would disagree the day the resolver counts `requires_refund`.
+      processing: resolved.pay.processing,
     },
     { headers: PRIVATE_HEADERS },
   );

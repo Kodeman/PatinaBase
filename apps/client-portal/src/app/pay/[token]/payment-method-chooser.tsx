@@ -7,6 +7,8 @@ import {
   CHECK_REMIT_FALLBACK,
 } from "@patina/shared";
 
+import type { PayRail } from "./invoice-link";
+
 /* ── HOW WOULD YOU LIKE TO PAY? ──────────────────────────────────────────────
    The letterbox's chooser (`components/threshold/payment-method-chooser.tsx`),
    copied — not moved — onto the standing invoice and re-cut for it. Two things
@@ -46,6 +48,13 @@ export interface PaymentMethodChooserProps {
   currency: string;
   /** The studio's configured card_surcharge_bps, already coalesced (G5). */
   cardSurchargeBps: number;
+  /**
+   * The rails the payload says are open. All three today (§3.1), but the page
+   * must never offer one the guest endpoint would then 404 — the refusal
+   * surfaces as "Unable to open the payment page just now", which reads as a
+   * Patina fault rather than a rail the studio turned off (I-5).
+   */
+  rails: PayRail[];
   /** A pay-path call is in flight — locks every option. */
   disabled?: boolean;
   /** Who the check is written to — the studio, never the designer. */
@@ -62,6 +71,7 @@ export function PaymentMethodChooser({
   balanceCents,
   currency,
   cardSurchargeBps,
+  rails,
   disabled = false,
   payeeName,
   invoiceLabel,
@@ -70,7 +80,7 @@ export function PaymentMethodChooser({
   const achFee = achSurchargeCents(balanceCents);
   const cardFee = cardSurchargeCents(balanceCents, cardSurchargeBps);
 
-  const options: PaymentOption[] = [
+  const allOptions: PaymentOption[] = [
     {
       value: "us_bank_account",
       label: "Bank transfer",
@@ -90,6 +100,8 @@ export function PaymentMethodChooser({
       note: "No fee.",
     },
   ];
+
+  const options = allOptions.filter((option) => rails.includes(option.value));
 
   const remitTo = checkRemitTo?.trim() || CHECK_REMIT_FALLBACK;
 
@@ -122,10 +134,16 @@ export function PaymentMethodChooser({
               data-method={option.value}
               data-checked={checked ? "true" : undefined}
               className={[
-                "relative block min-h-[56px] cursor-pointer border-b py-3.5 pl-10 pr-3.5",
+                // A-3: both states carry a full 1px border — transparent when
+                // unchecked — so selecting a row cannot nudge the group by a
+                // pixel. A-1: the focus ring is drawn on the ROW, not on the
+                // 15px dot, because the row is the control a keyboard user is
+                // standing on and this is a payment surface.
+                "relative -my-px block min-h-[56px] cursor-pointer border py-3.5 pl-10 pr-3.5",
+                "[&:has(:focus-visible)]:outline [&:has(:focus-visible)]:outline-2 [&:has(:focus-visible)]:outline-offset-[3px] [&:has(:focus-visible)]:outline-[var(--color-clay-ink)]",
                 checked
-                  ? "-my-px border border-[var(--color-clay-ink)] bg-[var(--bg-surface)]"
-                  : "border-b-[var(--border-subtle)]",
+                  ? "border-[var(--color-clay-ink)] bg-[var(--bg-surface)]"
+                  : "border-transparent border-b-[var(--border-subtle)]",
               ].join(" ")}
               style={{ opacity: disabled ? 0.6 : 1 }}
             >
@@ -145,7 +163,6 @@ export function PaymentMethodChooser({
                   checked
                     ? 'border-[var(--color-clay-ink)] after:absolute after:inset-[3px] after:rounded-full after:bg-[var(--color-clay-ink)] after:content-[""]'
                     : "border-[var(--text-muted)]",
-                  "peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-[3px] peer-focus-visible:outline-[var(--color-clay-ink)]",
                 ].join(" ")}
               />
               <span className="flex items-baseline justify-between gap-3">

@@ -1,18 +1,29 @@
 import { test, expect } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 
 // The Invoice, Standing Alone (00574) — /pay/[token] is a login-less, public
 // invoice with a till on it, resolved server-side by the raw 64-hex token.
 // This drives the real route against the LOCAL stack (never Strata),
-// following plans-link.spec.ts / share-link.spec.ts:
-//   - the invoice is a service-role INSERT at 'draft', then ISSUED through the
-//     honest RPC, because the link is minted by the trigger on that status
-//     write and nothing else may mint it;
-//   - the token comes back from `ensure_invoice_link`, never from a hand-rolled
-//     insert, so this exercises the same path the four letter producers use.
+// following plans-link.spec.ts / share-link.spec.ts.
 //
-// Cleanup: rows are left in place under a throwaway project. This is the LOCAL
+// Every fixture is minted through the honest path, because every shortcut is
+// refused by a constraint that exists for a reason:
+//   - the invoice is INSERTed at 'draft' and then ISSUED, because the link is
+//     minted by the trigger on that status write and by nothing else;
+//   - a test that voids gets its OWN payment-free mint: the legacy
+//     `void_invoice` body raises `has collected payments and cannot be voided`
+//     when `amount_paid_cents <> 0`, and the payable fixture deliberately
+//     carries $7,605.00 so the three rows quote $9,130.00 / $9,398.75 /
+//     $9,125.00;
+//   - the houseless invoice carries an explicit `studio_id`, because
+//     `set_invoice_studio_id`'s `project_id IS NULL` arm raises
+//     `studio_id_not_designer_studio` without one (00571);
+//   - the checkout attempt is claimed through W1's own
+//     `claim_invoice_link_checkout_attempt`, because a raw insert misses four
+//     NOT NULL columns and the `session_created` state CHECK.
+//
+// Cleanup: rows are left in place under throwaway projects. This is the LOCAL
 // stack and `supabase db reset` is the broom.
 
 const LOCAL_URL = "http://127.0.0.1:54321";
@@ -32,41 +43,69 @@ const SERVICE_JWT = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const DESIGNER_ID = "a0000000-0000-0000-0000-000000000004";
 const CLIENT_ID = "a0000000-0000-0000-0000-000000000005";
 
-const admin = createClient(LOCAL_URL, SERVICE_JWT, {
-  auth: { persistSession: false },
-});
+// Constructed LAZILY: supabase-js throws `supabaseKey is required.` from its
+// constructor, so building this at module scope would crash the import and an
+// operator who forgot the export would meet that instead of the sentence
+// below (T-4).
+let adminClient: SupabaseClient | null = null;
+function admin(): SupabaseClient {
+  if (!adminClient) {
+    expect(
+      SERVICE_JWT,
+      "SUPABASE_SERVICE_ROLE_KEY must be exported from the LOCAL stack (see the note at the top of this file)",
+    ).not.toBe("");
+    adminClient = createClient(LOCAL_URL, SERVICE_JWT, {
+      auth: { persistSession: false },
+    });
+  }
+  return adminClient;
+}
 
-// Fail loudly rather than minting nothing and asserting a dead link by
-// accident — every test here needs an honestly minted invoice.
-test.beforeAll(() => {
-  expect(
-    SERVICE_JWT,
-    "SUPABASE_SERVICE_ROLE_KEY must be exported from the LOCAL stack (see the note above)",
-  ).not.toBe("");
-});
+interface MintOptions {
+  /** Land a part payment, so the balance is $9,125.00. Default true. */
+  paid?: boolean;
+  /** A studio invoice with no house — needs an explicit studio_id (T-2). */
+  houseless?: boolean;
+}
 
 interface MintedInvoice {
   invoiceId: string;
+  linkId: string;
   projectId: string;
   projectName: string;
   token: string;
 }
 
+/** The designer's active design studio, resolved the way the resolver does. */
+async function designerStudioId(): Promise<string> {
+  const { data, error } = await admin().rpc("resolve_studio_identity", {
+    p_designer_id: DESIGNER_ID,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  const studioId = (row as { studio_id?: string } | null)?.studio_id;
+  expect(
+    studioId,
+    "the seeded designer must belong to an active design studio",
+  ).toBeTruthy();
+  return studioId as string;
+}
+
 /**
- * A $9,125.00 balance on a $16,730.00 invoice — the design's own fixture, so
- * the three arrived-at totals are $9,130.00 / $9,398.75 / $9,125.00 and a
- * regression in the surcharge formula fails here loudly.
+ * A $16,730.00 invoice, $7,605.00 received unless `paid: false` — the design's
+ * own fixture, so the three arrived-at totals are $9,130.00 / $9,398.75 /
+ * $9,125.00 and a regression in the surcharge formula fails here loudly.
  */
-async function mintInvoice(
-  options: { houseless?: boolean } = {},
-): Promise<MintedInvoice> {
+async function mintInvoice(options: MintOptions = {}): Promise<MintedInvoice> {
+  const { paid = true, houseless = false } = options;
+  const db = admin();
   const suffix = randomUUID().slice(0, 8);
   const projectId = randomUUID();
   const projectName = `Pay E2E ${suffix}`;
   const invoiceId = randomUUID();
 
-  if (!options.houseless) {
-    const { error: projectErr } = await admin.from("projects").insert({
+  if (!houseless) {
+    const { error: projectErr } = await db.from("projects").insert({
       id: projectId,
       name: projectName,
       status: "active",
@@ -83,13 +122,14 @@ async function mintInvoice(
   // Draft first. Every writer of `status = 'sent'` in the codebase is an
   // UPDATE, and the mint trigger fires on exactly that transition — inserting
   // an already-sent invoice would mint nothing.
-  const { error: invoiceErr } = await admin.from("invoices").insert({
+  const { error: invoiceErr } = await db.from("invoices").insert({
     id: invoiceId,
-    project_id: options.houseless ? null : projectId,
+    project_id: houseless ? null : projectId,
+    studio_id: houseless ? await designerStudioId() : null,
     designer_id: DESIGNER_ID,
     client_id: CLIENT_ID,
     invoice_number: `E2E-${suffix}`,
-    title: options.houseless
+    title: houseless
       ? "Design consultation · June"
       : "Furnishings, second delivery",
     status: "draft",
@@ -106,7 +146,7 @@ async function mintInvoice(
   });
   if (invoiceErr) throw invoiceErr;
 
-  const { error: lineErr } = await admin.from("invoice_line_items").insert([
+  const { error: lineErr } = await db.from("invoice_line_items").insert([
     {
       invoice_id: invoiceId,
       kind: "adhoc",
@@ -129,34 +169,42 @@ async function mintInvoice(
   if (lineErr) throw lineErr;
 
   // Issue it — the trigger mints the link on this status write.
-  const { error: issueErr } = await admin.rpc("issue_invoice", {
+  const { error: issueErr } = await db.rpc("issue_invoice", {
     p_invoice_id: invoiceId,
   });
   if (issueErr) throw issueErr;
 
-  // A part payment, so the sheet renders the partially-paid ladder and the
-  // balance the three rows quote is $9,125.00 rather than the whole invoice.
-  const { error: paymentErr } = await admin.from("invoice_payments").insert({
-    invoice_id: invoiceId,
-    amount_cents: 760_500,
-    surcharge_cents: 0,
-    method: "check",
-    status: "succeeded",
-    received_at: new Date().toISOString(),
-  });
-  if (paymentErr) throw paymentErr;
+  if (paid) {
+    // A part payment, so the balance the three rows quote is $9,125.00 rather
+    // than the whole invoice.
+    const { error: paymentErr } = await db.from("invoice_payments").insert({
+      invoice_id: invoiceId,
+      amount_cents: 760_500,
+      surcharge_cents: 0,
+      method: "check",
+      status: "succeeded",
+      received_at: new Date().toISOString(),
+    });
+    if (paymentErr) throw paymentErr;
+  }
 
-  const { data: token, error: linkErr } = await admin.rpc(
-    "ensure_invoice_link",
-    {
-      p_invoice_id: invoiceId,
-    },
-  );
+  const { data: token, error: linkErr } = await db.rpc("ensure_invoice_link", {
+    p_invoice_id: invoiceId,
+  });
   if (linkErr) throw linkErr;
   expect(token).toMatch(/^[0-9a-f]{64}$/);
 
+  const { data: link, error: linkRowErr } = await db
+    .from("invoice_links")
+    .select("id")
+    .eq("invoice_id", invoiceId)
+    .eq("status", "active")
+    .single();
+  if (linkRowErr) throw linkRowErr;
+
   return {
     invoiceId,
+    linkId: (link as { id: string }).id,
     projectId,
     projectName,
     token: token as unknown as string,
@@ -249,12 +297,13 @@ test.describe("the standing invoice (00574)", () => {
       "balance_cents",
       "kind",
       "payments",
+      "processing",
       "status",
     ]);
     expect(state.balance_cents).toBe(912_500);
 
     // ── Revoke (a Regenerate) → the link is dead ──
-    const { error: revokeErr } = await admin
+    const { error: revokeErr } = await admin()
       .from("invoice_links")
       .update({ status: "revoked", revoked_at: new Date().toISOString() })
       .eq("invoice_id", minted.invoiceId)
@@ -284,9 +333,13 @@ test.describe("the standing invoice (00574)", () => {
   test("void puts the sheet into withdrawn, and the till is gone", async ({
     page,
   }) => {
-    const minted = await mintInvoice();
+    // Its OWN mint, with no payment: `_void_invoice_authorized_legacy_00397`
+    // raises `has collected payments and cannot be voided` when
+    // `amount_paid_cents <> 0` (T-1). The payable fixture above needs that
+    // payment; this one needs its absence, so they cannot share a mint.
+    const minted = await mintInvoice({ paid: false });
 
-    const { error: voidErr } = await admin.rpc("void_invoice", {
+    const { error: voidErr } = await admin().rpc("void_invoice", {
       p_invoice_id: minted.invoiceId,
       p_reason: "e2e",
     });
@@ -306,24 +359,32 @@ test.describe("the standing invoice (00574)", () => {
   }) => {
     const minted = await mintInvoice();
 
-    const nonce = "f".repeat(64);
-    const { error: attemptErr } = await admin
+    // Claimed through W1's own RPC, never a raw insert (T-3): the attempts
+    // table carries four NOT NULL columns the test has no business inventing
+    // (`stripe_customer_id`, `amount_cents`, `currency`,
+    // `stripe_idempotency_key`) and a state CHECK that demands a session id
+    // for `session_created`. The RPC is also what stamps `return_nonce`, which
+    // is the whole point of the hop under test.
+    const { error: claimErr } = await admin().rpc(
+      "claim_invoice_link_checkout_attempt",
+      {
+        p_invoice_id: minted.invoiceId,
+        p_invoice_link_id: minted.linkId,
+        p_stripe_customer_id: `cus_e2e_${randomUUID().slice(0, 8)}`,
+        p_payment_method: "card",
+      },
+    );
+    expect(claimErr).toBeNull();
+
+    const { data: attempt, error: attemptErr } = await admin()
       .from("invoice_checkout_attempts")
-      .insert({
-        invoice_id: minted.invoiceId,
-        state: "session_created",
-        payment_method: "card",
-        return_nonce: nonce,
-        invoice_link_id: (
-          await admin
-            .from("invoice_links")
-            .select("id")
-            .eq("invoice_id", minted.invoiceId)
-            .eq("status", "active")
-            .single()
-        ).data?.id,
-      });
+      .select("return_nonce")
+      .eq("invoice_id", minted.invoiceId)
+      .not("return_nonce", "is", null)
+      .single();
     expect(attemptErr).toBeNull();
+    const nonce = (attempt as { return_nonce: string }).return_nonce;
+    expect(nonce).toMatch(/^[0-9a-f]{64}$/);
 
     const hop = await page.request.get(
       `/pay/return/${nonce}?checkout=success&session_id=cs_1`,

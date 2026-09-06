@@ -37,53 +37,33 @@ const CARRIED_PARAMS = [
   "payment_id",
 ] as const;
 
-interface NonceLookupRow {
-  invoice_links: { token: string; status: string } | null;
-}
-
 /**
  * The attempt's active link token, or null.
  *
- * service_role reads both tables directly: `invoice_checkout_attempts` carries
- * the nonce, `invoice_links` carries the token, and the join is the whole
- * lookup. A revoked or closed link resolves to nothing, so a return that comes
- * back after a Regenerate dies rather than reopening a retired address.
+ * §2.6's `resolve_invoice_return_nonce(p_nonce) RETURNS text` is called rather
+ * than reading the two tables directly (S-1/I-2/I-3). Two reasons, and the
+ * second is the load-bearing one:
+ *
+ *  - the "active link only" rule then lives in ONE place instead of two;
+ *  - a hand-rolled PostgREST embed needs a structural cast asserting that
+ *    `invoice_links` comes back as an OBJECT rather than an array. Nothing in
+ *    the code, the generated types or a passing test proves that, the cast
+ *    would keep compiling unchanged after W1 lands — silently suppressing the
+ *    very shape error it hides — and if it were ever wrong, every return from
+ *    Stripe on BOTH rails would 303 to `/pay/dead`.
  */
 async function resolveReturnNonce(nonce: string): Promise<string | null> {
   try {
-    // W1-TYPES: cast removed at integration — 00574 adds `invoice_links` and
-    // the attempt's `return_nonce` / `invoice_link_id` columns, at which point
-    // the generated Database types carry both the table and the relation.
-    const admin = createServiceClient() as unknown as {
-      from(table: string): {
-        select(columns: string): {
-          eq(
-            column: string,
-            value: string,
-          ): {
-            eq(
-              column: string,
-              value: string,
-            ): {
-              maybeSingle(): Promise<{
-                data: NonceLookupRow | null;
-                error: unknown;
-              }>;
-            };
-          };
-        };
-      };
-    };
-
-    const { data, error } = await admin
-      .from("invoice_checkout_attempts")
-      .select("invoice_links!inner(token, status)")
-      .eq("return_nonce", nonce)
-      .eq("invoice_links.status", "active")
-      .maybeSingle();
-
-    if (error || !data) return null;
-    const token = data.invoice_links?.token;
+    const admin = createServiceClient();
+    const { data, error } = await admin.rpc(
+      // W1-TYPES: cast removed at integration — W1 regenerates
+      // database.types.ts with resolve_invoice_return_nonce; until then the
+      // generated Database carries no such function name.
+      "resolve_invoice_return_nonce" as never,
+      { p_nonce: nonce } as never,
+    );
+    if (error) return null;
+    const token = data as unknown;
     return typeof token === "string" && NONCE_PATTERN.test(token)
       ? token
       : null;
@@ -104,8 +84,8 @@ export async function GET(
       headers: PRIVATE_HEADERS,
     });
 
-  if (!(await payLinkRequestAllowed(new Headers(request.headers))))
-    return dead();
+  const { allowed } = await payLinkRequestAllowed(new Headers(request.headers));
+  if (!allowed) return dead();
   if (!NONCE_PATTERN.test(nonce)) return dead();
 
   const token = await resolveReturnNonce(nonce);

@@ -17,10 +17,16 @@ import {
   within,
 } from "@testing-library/react";
 
-import { resetCheckoutReturn } from "@/lib/threshold/checkout-return";
+import {
+  CONFIRM_POLL_INTERVAL_MS,
+  CONFIRM_POLL_TIMEOUT_MS,
+  resetCheckoutReturn,
+} from "@/lib/threshold/checkout-return";
+import { payLinkEvents } from "@/lib/analytics/events";
 
 import PayDeadPage from "../../dead/page";
 import { InvoiceSheet } from "../invoice-sheet";
+import { PayLinkBeacon } from "../pay-link-beacon";
 import { DeadLink, SettlingSheet, WithdrawnSheet } from "../settling-sheet";
 import type { InvoiceLinkPayload } from "../invoice-link";
 
@@ -312,6 +318,12 @@ describe("the states", () => {
     expect(screen.getByTestId("pay-processing-notice")).toHaveTextContent(
       "Your bank transfer is on its way",
     );
+    // P-1: a screen-only status sentence must not print into an accounting
+    // inbox, where it reads as a claim about the document.
+    expect(screen.getByTestId("pay-processing-notice")).toHaveAttribute(
+      "data-pay-print",
+      "hide",
+    );
     expect(screen.queryByTestId("pay-chooser")).not.toBeInTheDocument();
     expect(screen.queryByTestId("pay-act")).not.toBeInTheDocument();
     expect(screen.getByText("Payment processing")).toBeInTheDocument();
@@ -386,6 +398,77 @@ describe("the states", () => {
     );
     expect(screen.queryByTestId("pay-chooser")).not.toBeInTheDocument();
     expect(screen.queryByTestId("pay-act")).not.toBeInTheDocument();
+  });
+
+  // T-5, first half: the state the brief singles out as behaviourally
+  // load-bearing and which had no test at all.
+  it("returned unconfirmed — says so, offers no second payment, and names the way out", async () => {
+    jest.useFakeTimers();
+    try {
+      standAt("?checkout=success&session_id=cs_1");
+      render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+
+      await act(async () => {
+        jest.advanceTimersByTime(
+          CONFIRM_POLL_TIMEOUT_MS + CONFIRM_POLL_INTERVAL_MS,
+        );
+      });
+
+      const notice = screen.getByTestId("pay-return-notice");
+      expect(notice).toHaveTextContent(
+        "Checkout came back, but Patina hasn't confirmed a payment yet.",
+      );
+      // M-4: hiding the act is right; leaving the reader with no way forward
+      // was not.
+      expect(notice).toHaveTextContent("refresh this page in a minute");
+      expect(screen.queryByTestId("pay-act")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("pay-chooser")).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // T-5, second half: the poll answers, and the sheet becomes the receipt.
+  it("returned confirmed — the poll settles it and the sheet becomes a receipt", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        kind: "invoice",
+        status: "paid",
+        amount_paid_cents: 1_673_000,
+        balance_cents: 0,
+        payments: [],
+        processing: false,
+      }),
+    }) as unknown as typeof fetch;
+
+    jest.useFakeTimers();
+    try {
+      standAt("?checkout=success&session_id=cs_1");
+      render(
+        <InvoiceSheet
+          token={TOKEN}
+          payload={vale({ paid_at: "2026-08-12T18:00:00+00:00" })}
+        />,
+      );
+
+      // The wait is a 3s interval, not a microtask — the sheet reads its own
+      // row rather than believing `?checkout=success`.
+      await act(async () => {
+        jest.advanceTimersByTime(CONFIRM_POLL_INTERVAL_MS + 1);
+      });
+      await act(async () => {});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `/pay/${TOKEN}/state`,
+        expect.objectContaining({ cache: "no-store" }),
+      );
+      expect(screen.getByText("Paid in full · 12 August")).toBeInTheDocument();
+      expect(payLinkEvents.paymentCompleted).toHaveBeenCalled();
+      expect(screen.queryByTestId("pay-return-notice")).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
@@ -548,5 +631,41 @@ describe("the sheets with no act", () => {
       screen.getByText("Invoice was withdrawn by the studio."),
     ).toBeInTheDocument();
     expect(screen.getByText("prepared by Nora Quist")).toBeInTheDocument();
+  });
+});
+
+// S-5: `deadLink`, `settling` and `rateLimitBindingMissing` were declared in
+// §9 and unreachable — the terminal sheets are server components with no
+// browser analytics path, and there is no server-side PostHog client in this
+// portal. The beacon is the mouth they were missing.
+describe("PayLinkBeacon", () => {
+  it("reports a dead sheet, and nothing else", () => {
+    render(<PayLinkBeacon sheet="dead" />);
+    expect(payLinkEvents.deadLink).toHaveBeenCalledTimes(1);
+    expect(payLinkEvents.settling).not.toHaveBeenCalled();
+    expect(payLinkEvents.rateLimitBindingMissing).not.toHaveBeenCalled();
+  });
+
+  it("reports a settling sheet", () => {
+    render(<PayLinkBeacon sheet="settling" />);
+    expect(payLinkEvents.settling).toHaveBeenCalledTimes(1);
+    expect(payLinkEvents.deadLink).not.toHaveBeenCalled();
+  });
+
+  it("carries S4's other half — the limiter binding is absent in production", () => {
+    render(<PayLinkBeacon limiterMissing />);
+    expect(payLinkEvents.rateLimitBindingMissing).toHaveBeenCalledTimes(1);
+  });
+
+  it("says nothing on an ordinary payable sheet", () => {
+    render(<PayLinkBeacon />);
+    expect(payLinkEvents.deadLink).not.toHaveBeenCalled();
+    expect(payLinkEvents.settling).not.toHaveBeenCalled();
+    expect(payLinkEvents.rateLimitBindingMissing).not.toHaveBeenCalled();
+  });
+
+  it("renders nothing at all", () => {
+    const { container } = render(<PayLinkBeacon sheet="dead" />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

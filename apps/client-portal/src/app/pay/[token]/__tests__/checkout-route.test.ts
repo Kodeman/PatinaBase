@@ -57,7 +57,9 @@ function call(body: unknown, token = TOKEN): Promise<FakeResponse> {
 const OLD_ENV = process.env;
 
 beforeEach(() => {
-  jest.mocked(payLinkRequestAllowed).mockResolvedValue(true);
+  jest
+    .mocked(payLinkRequestAllowed)
+    .mockResolvedValue({ allowed: true, limiterMissing: false });
   process.env = {
     ...OLD_ENV,
     NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.test",
@@ -76,7 +78,7 @@ afterEach(() => {
 });
 
 describe("POST /pay/[token]/checkout", () => {
-  it("calls the guest function with the token, the anon key and the portal origin", async () => {
+  it("calls the guest function with the token and the anon key, and NO Origin", async () => {
     const response = await call({ method: "us_bank_account" });
 
     expect(global.fetch).toHaveBeenCalledWith(
@@ -87,10 +89,16 @@ describe("POST /pay/[token]/checkout", () => {
         headers: expect.objectContaining({
           apikey: "anon-key",
           Authorization: "Bearer anon-key",
-          Origin: "https://client.patina.cloud",
         }),
       }),
     );
+    // S-4: the function's Origin-ABSENT branch is the designed path for this
+    // server-side hop. Sending one would make every guest checkout depend on
+    // NEXT_PUBLIC_APP_URL byte-matching the function's CLIENT_PORTAL_URL
+    // secret in all three environments — one trailing slash and the till 403s.
+    const sentHeaders = (global.fetch as jest.Mock).mock.calls[0][1]
+      .headers as Record<string, string>;
+    expect(Object.keys(sentHeaders)).not.toContain("Origin");
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
       url: "https://checkout.stripe.com/c/pay/cs_test_1",
@@ -136,7 +144,9 @@ describe("POST /pay/[token]/checkout", () => {
     expect(malformed.status).toBe(404);
     expect(malformed.body).toEqual({ error: "invoice_not_found" });
 
-    jest.mocked(payLinkRequestAllowed).mockResolvedValue(false);
+    jest
+      .mocked(payLinkRequestAllowed)
+      .mockResolvedValue({ allowed: false, limiterMissing: false });
     const limited = await call({ method: "card" });
     expect(limited.status).toBe(404);
     expect(limited.body).toEqual({ error: "invoice_not_found" });

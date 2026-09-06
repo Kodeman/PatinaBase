@@ -12,6 +12,9 @@ import {
   PaymentMethodChooser,
   type InvoicePaymentUIMethod,
 } from "../payment-method-chooser";
+import type { PayRail } from "../invoice-link";
+
+const ALL_RAILS: PayRail[] = ["us_bank_account", "card", "check"];
 
 type HarnessProps = {
   method?: InvoicePaymentUIMethod;
@@ -21,6 +24,7 @@ type HarnessProps = {
   payeeName?: string;
   invoiceLabel?: string;
   checkRemitTo?: string | null;
+  rails?: PayRail[];
 };
 
 function Harness({
@@ -31,6 +35,7 @@ function Harness({
   payeeName = "Quist Interiors",
   invoiceLabel = "Invoice No. 4",
   checkRemitTo = null,
+  rails = ALL_RAILS,
 }: HarnessProps) {
   const [current, setCurrent] = useState<InvoicePaymentUIMethod>(
     method ?? "us_bank_account",
@@ -42,6 +47,7 @@ function Harness({
       balanceCents={balanceCents}
       currency="USD"
       cardSurchargeBps={cardSurchargeBps}
+      rails={rails}
       disabled={disabled}
       payeeName={payeeName}
       invoiceLabel={invoiceLabel}
@@ -145,6 +151,24 @@ describe("PaymentMethodChooser — on the standing invoice", () => {
       screen.getByText(
         "Quist Interiors 412 Walnut Street, Suite 3 Des Moines, IA 50309",
       ),
+    ).toBeInTheDocument();
+  });
+
+  // I-5: `pay.rails` was parsed, validated and never read. The day a studio
+  // turns card off, the page must stop offering it — otherwise the guest picks
+  // it and the guest endpoint answers 404 through a sentence that reads as a
+  // Patina fault.
+  it("offers only the rails the payload names", () => {
+    render(<Harness rails={["us_bank_account", "check"]} />);
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    expect(
+      screen.queryByRole("radio", { name: /^card/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: /bank transfer/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: /mail a check/i }),
     ).toBeInTheDocument();
   });
 
