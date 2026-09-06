@@ -345,3 +345,83 @@ the second run is the row above.
 4. **Deploy set is unchanged.** No migration, no edge function. `@patina/supabase` changed, so the
    client-portal Worker must be rebuilt through `infra/deploy-portal.sh` (which rebuilds workspace
    dists) rather than deployed from a stale dist.
+
+---
+
+## 9 · Final fixes — the round-2 walks, closed
+
+Round 2 (`walk-ios-r2.md`, `walk-web-r2.md`) left one major on each surface and the round-1
+minors and nits standing. **Everything named in either walk is closed on this branch.** Nothing
+else was touched, and no finding was closed by moving a document rather than the code — except
+`W3R1-n3`, which *is* a document.
+
+Tip at the start of this round: `a5295a963` (docs); code through `da8f6811b`.
+
+### The two majors
+
+| Item | Files | What changed |
+|---|---|---|
+| **`W3R2-M1`** (major) | `StudioHubView.swift`, `StudioHubViewModel.swift`, `StudioQueueModels.swift` | On a cold first entry the hub read "Awaiting you, **zero** things awaiting you / Nothing needs a decision." under a summary saying **eight** things needed her eye, and held that reading for as long as she stayed. Two causes. `isLoading` is false for the frames between mount and the `.task` firing, so the hub fell through to its sections and drew every one as empty — the branch now waits on `hasLoaded`. And the approvals leg is deliberately not a `failures` entry (it is the second half of one decision feed), so a projection read that did not answer produced no notice, no staleness line and no error card, only an empty section: new `hasLoadedProjection` holds every empty sentence AND every count word until the merge lands, and `load(retryingProjection:)` asks once more when it has not. The empty sentence also moves — "decision" is a choice between named alternatives and this section holds approvals too — to **"Nothing needs your answer."** |
+| **`W3W-R2-01`** (major) + **`W3W-R1-05`** | `00573`, `use-project-approvals.ts`, `lib/record-of-decision.ts`, `record-sheet.tsx`, both record routes | The keepsake derived its signature block from the OUTCOME — approved therefore `electronic_signature` therefore "Signed electronically by typed name.", under an unconditional heading "Signed". So every approval answered before 00569 (every approval standing in production) printed a provenance claim its row cannot substantiate over an empty name line, and a RETURNED record was headed with the word for the act she did not perform. 00573 now projects `clientConsentMethod`, and `signatureBlock` composes the sheet **from the row**: `electronic_signature` + name → "Signed" / "Signed electronically by typed name: {name}."; `click_through` → "Confirmed" / "Confirmed by press-and-hold.", no name at all; `paper` → "Signed on paper."; NULL → **"Recorded" / "Recorded on {date}."**, no signature claim and no empty name line. |
+
+### The nits and minors, all of them
+
+| Item | Files | What changed |
+|---|---|---|
+| **`W3R1-n2`** | `PatinaStamp.swift`, `DecisionDetailView.swift`, `instruments/stamp.tsx` | A settled option choice was stamped APPROVED. Twelfth state on both surfaces: **CHOSEN**, mocha, doubled, tilted — APPROVED's twin in every dial but the word. The legacy iOS rail stamps by what the act was; a client sign-off, which carries no options by design, keeps APPROVED. `previously.tsx`'s "Answered" is deliberately untouched: it is a retired NOTE's lifecycle word, not a mark, and the web renders no option choice today. |
+| **`W3R2-n1`** | `RecordOfDecision.swift`, `ProposalsViewModel.swift`, `ProjectApprovalBlock.swift` | Two pieces of the same paper carried different letterheads. `RecordOfDecision.masthead(projectId:projects:)` is now the only resolution for both rails. The seal sentence keeps the stricter `W2R1-m2` rule — it names a house or nothing. |
+| **`W3R1-n3`** | `iose-notes.md` | Amended in place (not rewritten): `d2e6eefb7` restored the inline optional signature to the spread, so an option choice **can** be signed; what was removed is the modal consent step. |
+| **`W3R1-n1`** | `00572`, `she_sets_the_pace_test.sql`, `DecisionPace.swift`, `approval-ask.tsx` | `set_decision_snooze` refuses a hold on an approval past its date — `RAISE EXCEPTION 'decision_past_due' USING ERRCODE = 'check_violation'`. The rule lived at two clients and one downstream reader; it lives at the write now. Both surfaces map the token onto the refusal sentence they already draw in the act's place, so a screen that raced the date says the rule rather than "that didn't save". |
+| **`W3R2-n2`** | `00572` | "Tomorrow morning" is `next_local_morning(zone, now)` — the next 8am local. The old `date_trunc('day', now) + 1 day + 8h` read right at nine in the evening and held the reminders thirty-two hours at a quarter past midnight. Same answer as before on every choice made after 8am. |
+| **`W3W-R1-06`** | `approval-ask.tsx` | The leaf of a thread — the newest edition, the one actually asking her something — drew "Review previous edition" as its one act. `revisionAct` points forward or returns nothing; the predecessor keeps "Review revised edition". No backward act was reinstated elsewhere. |
+| **`W3W-R1-07`** | `details-sheet.tsx` | The legacy "Digest frequency" group is gone from the homeowner's sheet — it stood directly above the reminder cadence, was itself set, and nothing said which governed approval mail. The column stays and so does any studio-side use; the reconciliation is what goes. |
+| **`W3W-R1-09`** | `approval-ask.tsx` | "Don't remind me" now says iOS's sentence word for word — *"I'll hold the reminders. Choose again here whenever you want them back."* — and "When it's due" is not offered on an undated approval (`snoozeActsOffered`, mirroring `DecisionSnooze.offered(hasDueDate:)`). |
+| **`W3W-R1-04`** | `use-commercial-client.ts`, `lib/threshold/refusal.ts`, both record routes | A 403 is answered once and reads "This record could not be found." at once. New `isPermissionRefusal` (SQLSTATE `42501` / status 403, the repo's own idiom) and `retryUnlessRefused` — React Query's three tries for a bad moment, none for a closed door. |
+| **`W3W-R1-08`** + **`W3W-R1-n1`** | `record-sheet.tsx` | Three landmarks — banner (toolbar), main (sheet), contentinfo (maker's mark) — so axe's `region` rule has nothing outside one; the inner letterhead is a plain block, not a second `<header>`, so `landmark-unique` cannot fire either. Print CSS forces `html`/`body` white as well as the sheet. |
+| **`W3W-R1-n2`** | `approval-ask.tsx` | The date line reads **"Due August 31 · past its date"** in body ink — words, never the retired one, never a colour. Same refusal the money rail keeps with "Past due · {date}". |
+| **`W3W-R1-n3`** | `details-sheet.tsx` | "Re-engagement" → **"Occasional notes from your studio"**. |
+
+Deliberately not closed, and why: **`W3W-R2-n1`** (two approvals on one artifact edition print the
+same MARK) is provenance of the drawing, which is what the checksum is; it was raised as "worth a
+line in the docs if not a change in the code" and no ruling asked for the change. **`W3W-R2-n2`**
+(the four Remind-me acts carry no `aria-pressed`) is recorded in the walk as a deliberate choice.
+
+### Tests added or moved
+
+`StudioHubProjectionTests.swift` (new, 8 cases — loading / answered-empty / answered-non-empty,
+plus the failed-projection shape and the retry); `PatinaStampTests` +2; `RecordOfDecisionTests` +3;
+`record-of-decision.test.ts` rewritten onto `signatureBlock` (7 cases, all four column values);
+`refusal.test.ts` (new, 9 cases); the decision record page +4 (Recorded / stored-method /
+paper / landmarks) and its 403 case; the proposal record page +2; `approval-ask.test.tsx` +6
+(leaf-has-no-act, the two snooze-offer cases, the past-due refusal, the two date-line cases);
+`details-sheet.test.tsx` +2; `use-project-approvals.test.ts` +1.
+
+### Gates on the final tip
+
+| Gate | Result |
+|---|---|
+| `IOS_GATE_UDID=B6AD6271-… ios-gate.sh all` | **PASS**, exit 0 — `** BUILD SUCCEEDED **`, **2725 tests in 291 suites passed, 2 known issues**, `✓ lint-delta: no new warnings in touched files`. Log: `ios-gate-final-r2.log` |
+| walk-app rebuild → `.build/DerivedDataWalk/…/Debug-iphonesimulator/Patina.app` | **PASS** — `** BUILD SUCCEEDED **`, exit 0. `codesign -dv`: `Identifier=cloud.patina.app`, `Signature=adhoc`, `Format=app bundle with Mach-O universal (x86_64 arm64)`, `Sealed Resources version=2 rules=10 files=61`. The fix is in the bundle: `nm -a Patina.debug.dylib \| grep -c isAwaitingProjection` → **4** |
+| `pnpm --filter @patina/client-portal type-check` | **PASS** — `tsc --noEmit`, no output |
+| `pnpm --filter @patina/client-portal test` | **PASS** — **123 suites, 1841 tests**, 0 failed (122/1817 at the walk-fix tip) |
+| `pnpm --filter @patina/supabase type-check` / `test` | **PASS** — no output; **85 files, 1024 tests**, 12 skipped, 0 failed |
+| `supabase db reset` + `scripts/run-sql-tests.sh` | **PASS** — reset clean, then **159 total · 138 green · 21 expected-fail · 0 unexpected · effective-green 159/159**. `she_sets_the_pace_test.sql` **PASS**. Logs: `sql-tests-final.log` |
+
+Two SwiftLint ceilings were paid on the way, both by moving lines rather than by silencing a rule:
+`StudioHubView`'s badge helpers moved into the file's existing private extension (`type_body_length`
+300), and `DecisionsViewModel` is at exactly 500 lines (`file_length`) with the new flag's whole
+note living in `DecisionPace.swift`.
+
+### Notes for the deploy
+
+1. **The deploy set grows by one migration.** `00572` and `00573` were both edited **in place** —
+   branch-only files, unapplied on Strata, recorded in `stack-reset-notice.md`. Both must be
+   pushed; `00573` redefines `get_project_decision_reviews`, so anything that redefines it after
+   00573 must carry `clientSignature` **and** `clientConsentMethod` forward.
+2. **No edge function changed**, and no `_shared` module — no importer redeploy is owed.
+3. **`@patina/supabase` changed** (the projection's two new keys), so the client-portal Worker is
+   built through `infra/deploy-portal.sh`, never from a stale dist.
+4. **Prettier drift is inherited**, as in every prior round: `prettier --check` fails on the base
+   versions of the client-portal files this round touched. Nothing was reformatted.
+5. **The local stack was reset from this branch's tree** at the end of this round. A peer program
+   needing its own unmerged schema re-resets from its own worktree.
