@@ -62,6 +62,29 @@ extension DecisionDetailViewModel {
         DecisionSnooze.offered(hasDueDate: approvalReview?.dueAt != nil)
     }
 
+    /// The snooze already standing on this approval, read back on the way in.
+    ///
+    /// `r3 M1`. `chosenSnooze` was written by the act and by nothing else, so
+    /// the "Remind me" menu came back on the next visit as though she had
+    /// never asked — and under `never`, whose sentence now says to choose
+    /// again HERE, the screen has to be able to show what "again" is changing.
+    ///
+    /// A failed read leaves the sentence unsaid rather than guessing: silence
+    /// about a hold is recoverable, a hold announced over a row that is not
+    /// there is not. An expired hold is the same case — `standing(…)` refuses
+    /// it, and the menu stands where the stale sentence would have.
+    func loadSnooze(decisionId: String?, now: Date = Date()) async {
+        guard let decisionId, !decisionId.isEmpty else { return }
+        do {
+            let row = try await fetchDecisionSnooze(decisionId)
+            chosenSnooze = DecisionSnooze.standing(
+                kind: row?.kind, snoozedUntil: row?.snoozedUntil, now: now
+            )
+        } catch {
+            MoneyFailureCopy.log("decision snooze read", error)
+        }
+    }
+
     /// Ask Patina to wait.
     ///
     /// The confirmation is written only on success: a sentence saying "I'll

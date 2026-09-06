@@ -151,8 +151,10 @@ struct DecisionPaceTests {
         #expect(DecisionSnooze.sunday.holdsUntil == "I’ll hold the reminders until Sunday.")
         #expect(DecisionSnooze.whenDue.holdsUntil
                 == "I’ll hold the reminders until the day it’s due.")
+        // `r3 M1`. The other three name an hour the row carries; this one
+        // named a condition nothing in the rail can detect.
         #expect(DecisionSnooze.never.holdsUntil
-                == "I’ll hold the reminders until you come back.")
+                == "I’ll hold the reminders. Choose again here whenever you want them back.")
 
         #expect(DecisionPaceCopy.theTwoThatStillReachHer
                 == "If the date passes or a new edition arrives, I’ll still say so.")
@@ -181,11 +183,23 @@ struct DecisionPaceTests {
     /// `never` is the one that most wants to over-promise: 00572 stores it as
     /// `snoozed_until = 'infinity'`, which is a standing quiet for the
     /// reminder leg and nothing more.
+    ///
+    /// `r3 M1`. It also wants to promise an END it cannot keep. "Until you
+    /// come back" named a condition nothing in the rail watches for — the row
+    /// stores `infinity` and no leg lifts it — so the sentence names the act
+    /// that ends the hold instead, which is the menu drawn beside it.
     @Test("the standing snooze promises a standing hold, not a standing silence")
     func theStandingSnoozeIsStillInterrupted() {
         let said = DecisionSnooze.never.confirmation
-        #expect(said.contains("until you come back"))
+        #expect(said == "I’ll hold the reminders. Choose again here whenever you want them back. "
+                + "If the date passes or a new edition arrives, I’ll still say so.")
+        #expect(said.contains("Choose again here"))
         #expect(said.contains("If the date passes or a new edition arrives"))
+        // The end condition Patina cannot detect, in every spelling it took.
+        for undetectable in ["until you come back", "when you come back", "when you’re ready"] {
+            #expect(!said.lowercased().contains(undetectable),
+                    "the standing snooze promises \(undetectable), which nothing detects")
+        }
         #expect(DecisionSnooze.never.label == "Don’t remind me — I’ll come back")
     }
 
@@ -328,6 +342,13 @@ struct DecisionPaceTests {
         #expect(code.contains("DecisionPaceCopy.onlyTheRemindersWait"))
         #expect(code.contains("DecisionPaceCopy.pastItsDate"))
         #expect(code.contains("viewModel.canSnoozeApproval()"))
+        // `r3 M1`: the act is drawn whether or not a snooze already stands.
+        // `never`'s sentence says to choose again HERE, and a menu that
+        // vanished the moment she chose would leave the hold with no way back.
+        let said = try #require(code.range(of: "approval.snooze.confirmation"))
+        let act = try #require(code.range(of: "accessibilityIdentifier(\"approval.snooze\")"))
+        #expect(!code[said.upperBound..<act.lowerBound].contains("else"),
+                "the act is drawn only while no snooze stands")
         // r2 M2: the reason is drawn on its own predicate, never on the date
         // alone — answering leaves `canRespond` true underneath it.
         #expect(code.contains("viewModel.approvalPaceIsHeldByDate()"))
@@ -376,4 +397,96 @@ struct DecisionPaceTests {
             from: try JSONSerialization.data(withJSONObject: row)
         )
     }
+}
+
+/// `P-28` / `r3 M1`. The snooze, read back.
+///
+/// Its own suite rather than four more cases on `DecisionPaceTests`: that
+/// struct is at SwiftLint's 300-line `type_body_length`, the same limit that
+/// split `DecisionDetailViewModel+Pace.swift` off its class.
+@MainActor
+struct DecisionSnoozeReadBackTests {
+
+    /// A hold she set is the server's, not the screen's: it has to survive the
+    /// screen going away. `standing(…)` is the honest half of that — a hold
+    /// that has already lifted is not a hold, and drawing "until Sunday" on
+    /// the Monday after is the same lie in the other direction.
+    @Test("a row still holding is read back; one that has lifted is not")
+    func aStandingRowIsReadBack() {
+        let now = ISO8601DateParsing.date(from: "2026-09-06T12:00:00Z")!
+
+        #expect(DecisionSnooze.standing(
+            kind: "sunday", snoozedUntil: "2026-09-07T12:00:00Z", now: now
+        ) == .sunday)
+
+        // 'never' and a dateless 'when_due' are both stored as infinity.
+        #expect(DecisionSnooze.standing(
+            kind: "never", snoozedUntil: "infinity", now: now
+        ) == .never)
+
+        // Lifted, so the act is offered again rather than a stale sentence.
+        #expect(DecisionSnooze.standing(
+            kind: "tomorrow_morning", snoozedUntil: "2026-09-05T12:00:00Z", now: now
+        ) == nil)
+
+        // Nothing to say, and nothing invented from a shape we do not know.
+        #expect(DecisionSnooze.standing(kind: nil, snoozedUntil: nil, now: now) == nil)
+        #expect(DecisionSnooze.standing(kind: "sunday", snoozedUntil: nil, now: now) == nil)
+        #expect(DecisionSnooze.standing(
+            kind: "next_year", snoozedUntil: "infinity", now: now
+        ) == nil)
+        #expect(DecisionSnooze.standing(
+            kind: "sunday", snoozedUntil: "not-a-date", now: now
+        ) == nil)
+    }
+
+    @Test("the standing snooze survives re-entering the approval")
+    func theSnoozeSurvivesReEntry() async throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review()
+        viewModel.fetchDecisionSnooze = { _ in
+            RemoteDecisionSnooze(kind: "never", snoozedUntil: "infinity")
+        }
+
+        #expect(viewModel.chosenSnooze == nil)
+        await viewModel.loadSnooze(
+            decisionId: ProjectApprovalFixture.decisionId, now: beforeDue
+        )
+        #expect(viewModel.chosenSnooze == .never)
+    }
+
+    /// A read that failed says nothing. Silence about a hold is recoverable;
+    /// a hold announced over a row that is not there is not.
+    @Test("a read that did not land leaves the act where it was")
+    func aFailedReadSaysNothing() async throws {
+        struct Boom: Error {}
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review()
+        viewModel.fetchDecisionSnooze = { _ in throw Boom() }
+
+        await viewModel.loadSnooze(
+            decisionId: ProjectApprovalFixture.decisionId, now: beforeDue
+        )
+        #expect(viewModel.chosenSnooze == nil)
+        #expect(!viewModel.snoozeFailed, "a failed READ is not a failed write")
+    }
+
+    /// The row is read where the block that draws it lives, and the read is
+    /// the table the write lands in.
+    @Test("the approval reads its snooze back off the table the act writes")
+    func theSnoozeIsReadBackFromTheTable() throws {
+        let load = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Decisions/ViewModels/DecisionsViewModel.swift")
+        )
+        #expect(load.contains("await loadSnooze(decisionId: approvalDecisionId)"))
+
+        let client = SourceScan.code(
+            in: try SourcePin.read("Patina/Core/Network/DecisionsAPIClient+Pace.swift")
+        )
+        #expect(client.contains("\"decision_snoozes\""))
+        #expect(client.contains("\"kind,snoozed_until\""))
+    }
+
+    /// The fixture's `dueAt` is 2026-09-11.
+    private let beforeDue = ISO8601DateParsing.date(from: "2026-09-04T00:00:00Z")!
 }

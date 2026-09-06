@@ -118,23 +118,26 @@ struct ProjectApprovalScreen: View {
                         .foregroundStyle(PatinaColors.Text.primary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("approval.snooze.confirmation")
-                } else {
-                    Menu {
-                        ForEach(viewModel.snoozeOptions) { option in
-                            Button(option.label) {
-                                Task { await viewModel.snoozeApproval(option) }
-                            }
-                        }
-                    } label: {
-                        Text(DecisionPaceCopy.remindMe)
-                            .font(PatinaTypography.bodySmallMedium)
-                            .foregroundStyle(PatinaColors.Text.interactive)
-                            .frame(minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .disabled(viewModel.isSnoozing)
-                    .accessibilityIdentifier("approval.snooze")
                 }
+                // `r3 M1`: the act stays. The hold now survives the screen
+                // (`loadSnooze`), and a menu that disappeared on the way out
+                // would leave a standing snooze with no way back — which is
+                // exactly what `never`'s sentence promises there is.
+                Menu {
+                    ForEach(viewModel.snoozeOptions) { option in
+                        Button(option.label) {
+                            Task { await viewModel.snoozeApproval(option) }
+                        }
+                    }
+                } label: {
+                    Text(DecisionPaceCopy.remindMe)
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .disabled(viewModel.isSnoozing)
+                .accessibilityIdentifier("approval.snooze")
                 Text(DecisionPaceCopy.onlyTheRemindersWait)
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)

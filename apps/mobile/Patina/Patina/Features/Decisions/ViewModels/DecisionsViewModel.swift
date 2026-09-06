@@ -74,8 +74,8 @@ final class DecisionDetailViewModel {
 
     // MARK: - P-28 · the pace
 
-    /// The snooze recorded in this session, so the screen can say when Patina
-    /// will ask next. The row itself is the server's; this is the sentence.
+    /// The snooze standing on this approval. Written when she chooses one and
+    /// read back off `decision_snoozes` on the way in (`r3 M1`).
     var chosenSnooze: DecisionSnooze?
     var isSnoozing: Bool = false
     var snoozeFailed: Bool = false
@@ -88,6 +88,12 @@ final class DecisionDetailViewModel {
         try await DecisionsAPIClient.shared.setDecisionSnooze(
             decisionId: decisionId, kind: kind
         )
+    }
+
+    /// The read half of the same seam: her standing row on this approval.
+    @ObservationIgnored
+    var fetchDecisionSnooze: (String) async throws -> RemoteDecisionSnooze? = {
+        try await DecisionsAPIClient.shared.decisionSnooze(decisionId: $0)
     }
 
     /// Whichever ceremony this decision belongs to.
@@ -230,6 +236,8 @@ final class DecisionDetailViewModel {
         // CAS and read "We couldn't record your response."
         await markViewed(decisionId: decisionId)
         await loadApprovalReview(decisionId: decisionId)
+        // `r3 M1`: read where the pace block can draw it, and only there.
+        if approvalReview != nil { await loadSnooze(decisionId: approvalDecisionId) }
         await resolveDiscussThread()
         // Seed local selection from whatever the server already has, so a
         // re-open of a resolved decision shows the choice without re-asking.

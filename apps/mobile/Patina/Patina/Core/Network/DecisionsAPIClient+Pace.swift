@@ -12,8 +12,33 @@
 //
 
 import Foundation
+import Supabase
 
 extension DecisionsAPIClient {
+
+    /// `P-28` / `r3 M1`. The snooze already standing on this approval.
+    ///
+    /// The write was the only half that existed, so the choice lived exactly
+    /// as long as the screen did. RLS hands back her own row and nobody
+    /// else's (`decision_snoozes_owner_select`, 00572), which is why this is a
+    /// plain table read rather than another RPC: there is nothing to filter
+    /// that the policy does not already filter.
+    ///
+    /// A list rather than `.single()`: the table's `UNIQUE (user_id,
+    /// decision_id)` makes at most one row possible — a snooze is replaced,
+    /// never stacked — and `.single()` answers the ordinary case (she has
+    /// never snoozed this one) with a thrown PGRST116, which would draw the
+    /// failure sentence over an approval nothing is wrong with.
+    public func decisionSnooze(decisionId: String) async throws -> RemoteDecisionSnooze? {
+        let rows: [RemoteDecisionSnooze] = try await supabase.database
+            .from("decision_snoozes")
+            .select("kind,snoozed_until")
+            .eq("decision_id", value: decisionId)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
+    }
 
     /// `P-28`. Ask Patina to wait, on ONE approval.
     ///

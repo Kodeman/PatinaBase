@@ -112,7 +112,12 @@ public enum DecisionSnooze: String, CaseIterable, Identifiable, Sendable {
         case .tomorrowMorning: return "I’ll hold the reminders until tomorrow morning."
         case .sunday: return "I’ll hold the reminders until Sunday."
         case .whenDue: return "I’ll hold the reminders until the day it’s due."
-        case .never: return "I’ll hold the reminders until you come back."
+        // `r3 M1`. The other three name an hour the row itself carries;
+        // "until you come back" named a condition Patina cannot detect —
+        // `snoozed_until = 'infinity'` never lifts, and nothing in the rail
+        // watches for a return. So it names the act that ends the hold
+        // instead, which is the menu this sentence is drawn beside.
+        case .never: return "I’ll hold the reminders. Choose again here whenever you want them back."
         }
     }
 
@@ -134,6 +139,40 @@ public enum DecisionSnooze: String, CaseIterable, Identifiable, Sendable {
     /// "When it's due" on an approval with no due date is an invented timing.
     static func offered(hasDueDate: Bool) -> [DecisionSnooze] {
         allCases.filter { hasDueDate || $0 != .whenDue }
+    }
+
+    /// The snooze a stored row still stands for, or nil.
+    ///
+    /// `r3 M1`: the choice was held in the session only, so re-entering the
+    /// approval forgot it and offered the menu again as if nothing had been
+    /// asked. Read back, the row has to be read HONESTLY — a hold that has
+    /// already lifted is not a hold, and drawing "I’ll hold the reminders
+    /// until Sunday" on the Monday after would be the same lie in the other
+    /// direction. `snoozed_until = 'infinity'` (`never`, and a dateless
+    /// `when_due`) never lifts, and Postgres serialises it as the word.
+    static func standing(
+        kind: String?,
+        snoozedUntil: String?,
+        now: Date = Date()
+    ) -> DecisionSnooze? {
+        guard let kind, let snooze = DecisionSnooze(rawValue: kind) else { return nil }
+        guard let raw = snoozedUntil?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        if raw == "infinity" { return snooze }
+        guard let until = ISO8601DateParsing.date(from: raw) else { return nil }
+        return until > now ? snooze : nil
+    }
+}
+
+/// One row of `decision_snoozes`, as the reader's own copy of it (00572).
+/// Two columns: what she chose, and until when. The rest is bookkeeping.
+public struct RemoteDecisionSnooze: Decodable, Sendable, Equatable {
+    public let kind: String?
+    public let snoozedUntil: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case snoozedUntil = "snoozed_until"
     }
 }
 
