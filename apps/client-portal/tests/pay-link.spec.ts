@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 
@@ -229,6 +229,42 @@ async function mintInvoice(options: MintOptions = {}): Promise<MintedInvoice> {
   };
 }
 
+/* The solo household `threshold.spec.ts` drives: one house, one sent invoice
+   (supabase/seed/the-client-page.sql). Reused rather than re-seeded so this
+   file still parks nothing. */
+const SOLO_PROJECT_ID = "b0000000-0000-0000-0000-00000000c0d1";
+const SOLO_INVOICE_ID = "b0000000-0000-0000-0000-00000000cc01";
+
+/**
+ * The password leg of the sign-in form, pressed the way `threshold.spec.ts`
+ * presses it: the disclosure is server-rendered before React attaches, so an
+ * early click is swallowed silently and the button must be retried until the
+ * password field it controls actually opens.
+ */
+async function signInAsSoloClient(page: Page): Promise<void> {
+  await page.goto("/auth/signin", { waitUntil: "domcontentloaded" });
+
+  const disclosure = page
+    .getByRole("button", {
+      name: /sign in with email|use email and password instead/i,
+    })
+    .first();
+  const password = page.getByLabel(/password/i).first();
+  await expect(async () => {
+    await disclosure.waitFor({ state: "visible", timeout: 30_000 });
+    await disclosure.click();
+    await password.waitFor({ state: "visible", timeout: 5_000 });
+  }).toPass({ timeout: 120_000 });
+
+  await page.getByLabel(/email/i).first().fill("client-solo@patina.dev");
+  await password.fill("password123");
+  await page.getByRole("button", { name: /^sign in$/i }).click();
+  await page.waitForURL((url) => !url.pathname.includes("/auth/signin"), {
+    timeout: 60_000,
+    waitUntil: "domcontentloaded",
+  });
+}
+
 test.describe("the standing invoice (00574)", () => {
   test("renders the sheet, moves the three figures together, and dies on revoke", async ({
     page,
@@ -455,6 +491,70 @@ test.describe("the standing invoice (00574)", () => {
     await expect(page.getByTestId("pay-dead-link")).toBeVisible({
       timeout: 20000,
     });
+  });
+
+  /* ── F6: the letterbox names the invoice without ever fetching it ─────────
+     Opening the house signed-in must cost the pay link nothing: a request to
+     `/pay/` here would record a view on the link and spend the page's
+     rate-limit budget on a letter nobody opened.
+
+     What this does NOT prove is `letterbox.tsx`'s `prefetch={false}`. The
+     suite runs against `next dev`, which disables prefetching outright, so
+     this test passes just as green with that prop deleted — measured, not
+     assumed. The prop is asserted where it can be: `letterbox.test.tsx`
+     ('never warms the pay page by scrolling past it'), which does go red when
+     it is removed. This test guards the server-rendered and client-effect
+     paths instead — a beacon, a loader or a warm-up fetch that reached
+     `/pay/` would fail here and nowhere else.
+
+     The seeded invoice is `sent` but carries no link — 00574's backfill runs
+     with the migrations, before the seeds load. `ensure_invoice_link` is
+     idempotent and purely additive, so minting one here makes the action
+     render without moving any figure `threshold.spec.ts` reads off this same
+     fixture. ─────────────────────────────────────────────────────────────── */
+  test("the letterbox names the invoice without ever requesting it", async ({
+    page,
+  }) => {
+    const { data: token, error: linkErr } = await admin().rpc(
+      "ensure_invoice_link",
+      { p_invoice_id: SOLO_INVOICE_ID },
+    );
+    expect(linkErr).toBeNull();
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+
+    const payRequests: string[] = [];
+    page.on("request", (request) => {
+      const { pathname } = new URL(request.url());
+      if (pathname === "/pay" || pathname.startsWith("/pay/")) {
+        payRequests.push(`${request.method()} ${pathname}`);
+      }
+    });
+
+    await signInAsSoloClient(page);
+    await page.goto(`/projects/${SOLO_PROJECT_ID}`, {
+      waitUntil: "domcontentloaded",
+    });
+    // The house is the absence of the hold, not the presence of the doorplate
+    // (threshold.tsx holds everything below it until the letter has answered).
+    await expect(page.getByTestId("doorplate")).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(page.getByTestId("threshold-hold")).toHaveCount(0, {
+      timeout: 90_000,
+    });
+
+    // Not a vacuous assertion: the action is on the page, at this token.
+    const openInvoice = page.getByRole("link", { name: /open the invoice/i });
+    await expect(openInvoice).toBeVisible();
+    await expect(openInvoice).toHaveAttribute(
+      "href",
+      `/pay/${token as string}`,
+    );
+
+    expect(
+      payRequests,
+      "the letterbox must not warm /pay/ before the client asks for it",
+    ).toEqual([]);
   });
 
   test("the sheet reflows at 390px with no horizontal scroll", async ({
