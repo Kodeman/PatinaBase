@@ -745,7 +745,7 @@ BEGIN
   ), 'browser role must not execute service checkout claim';
   ASSERT NOT has_function_privilege(
     'authenticated',
-    'public.recover_invoice_checkout_session_evidence(uuid,uuid,text,text)',
+    'public.recover_invoice_checkout_session_evidence(uuid,uuid,text,text,uuid)',
     'EXECUTE'
   ), 'browser role must not execute signed-session evidence recovery';
   ASSERT NOT has_table_privilege(
