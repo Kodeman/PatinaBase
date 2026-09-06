@@ -3,7 +3,9 @@ import {
   checksumMark,
   consentMethodForOutcome,
   consentSentence,
+  recordStampStateForApproval,
   releasedWorkSentence,
+  supersededNoteSentence,
 } from '../record-of-decision';
 
 /* P-26. The words on the keepsake, tested apart from the sheet that prints
@@ -98,5 +100,69 @@ describe('releasedWorkSentence', () => {
     expect(releasedWorkSentence([])).toBeNull();
     expect(releasedWorkSentence(null)).toBeNull();
     expect(releasedWorkSentence(['   '])).toBeNull();
+  });
+});
+
+describe('recordStampStateForApproval', () => {
+  it('presses her outcome, even after the studio issued a later edition', () => {
+    expect(
+      recordStampStateForApproval({ disposition: 'superseded', outcome: 'approved' }),
+    ).toBe('approved');
+    expect(
+      recordStampStateForApproval({
+        disposition: 'superseded',
+        outcome: 'changes_requested',
+      }),
+    ).toBe('returned');
+    expect(
+      recordStampStateForApproval({
+        disposition: 'superseded',
+        outcome: 'needs_discussion',
+      }),
+    ).toBe('held');
+  });
+
+  it('presses the plain outcome on a live record', () => {
+    expect(
+      recordStampStateForApproval({ disposition: 'active', outcome: 'approved' }),
+    ).toBe('approved');
+  });
+
+  it('falls to the disposition only when there is no answer to print', () => {
+    expect(
+      recordStampStateForApproval({ disposition: 'withdrawn', outcome: null }),
+    ).toBe('withdrawn');
+    expect(
+      recordStampStateForApproval({ disposition: 'superseded', outcome: null }),
+    ).toBe('superseded');
+    expect(recordStampStateForApproval({ disposition: 'active', outcome: null })).toBe(
+      'awaiting',
+    );
+  });
+});
+
+describe('supersededNoteSentence', () => {
+  it('states the later edition and dates it', () => {
+    expect(supersededNoteSentence('14 August 2026')).toBe(
+      'A later edition replaced this one on 14 August 2026.',
+    );
+  });
+
+  it('says it without a day rather than inventing one', () => {
+    expect(supersededNoteSentence(null)).toBe(
+      'A later edition has since replaced this one.',
+    );
+    expect(supersededNoteSentence('   ')).toBe(
+      'A later edition has since replaced this one.',
+    );
+  });
+
+  it('never says her answer was undone or reopened (P-27)', () => {
+    for (const sentence of [
+      supersededNoteSentence('14 August 2026'),
+      supersededNoteSentence(null),
+    ]) {
+      expect(sentence).not.toMatch(/undone|reopen|invalid|no longer|cancell?ed|void/i);
+    }
   });
 });

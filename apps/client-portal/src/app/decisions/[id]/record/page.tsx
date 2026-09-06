@@ -5,11 +5,12 @@ import { Loader2 } from 'lucide-react';
 import { useMyProjectApprovalReviews, useStudioIdentity } from '@patina/supabase';
 
 import { RecordSheet } from '@/components/record/record-sheet';
-import { stampStateForApproval } from '@/components/threshold/instruments/stamp';
 import {
   checksumMark,
   consentMethodForOutcome,
   consentSentence,
+  recordStampStateForApproval,
+  supersededNoteSentence,
 } from '@/lib/record-of-decision';
 import { parseSourceDate } from '@/lib/threshold/derive';
 
@@ -87,6 +88,28 @@ export default function DecisionRecordPage({
   const answeredAt = parseSourceDate(approval.respondedAt);
   const method = consentMethodForOutcome(approval.outcome);
 
+  /* A superseded edition she ALREADY ANSWERED keeps her own outcome as the
+     mark — the doorstep's precedence, which puts SUPERSEDED first so the dead
+     edition never reads plainly RETURNED beside the live one, is the wrong
+     rule for a sheet that records her act. The supersession is said instead,
+     in prose, under the mark. The day is the successor's issued date, read off
+     the successor's own row; the projection carries no `supersededAt`, and the
+     sheet does not invent one. */
+  const successor = approval.successorDecisionId
+    ? ((reviews.data ?? []).find(
+        (row) => row.decisionId === approval.successorDecisionId,
+      ) ?? null)
+    : null;
+  const successorIssued = successor
+    ? (parseSourceDate(successor.sentAt) ?? parseSourceDate(successor.createdAt))
+    : null;
+  const stampNote =
+    approval.disposition === 'superseded' && approval.outcome !== null
+      ? supersededNoteSentence(
+          successorIssued ? LONG_DATE.format(successorIssued) : null,
+        )
+      : null;
+
   return (
     <RecordSheet
       studioName={identity.data?.name?.trim() || 'Your studio'}
@@ -97,9 +120,10 @@ export default function DecisionRecordPage({
         issued ? ` · Issued ${LONG_DATE.format(issued)}` : ''
       }`}
       question={approval.question}
-      stampState={stampStateForApproval(approval)}
+      stampState={recordStampStateForApproval(approval)}
       stampDateLabel={answeredAt ? DAY_MONTH.format(answeredAt) : null}
       stampSubject={`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
+      stampNote={stampNote}
       /* Her typed name, carried by the projection since 00573. Only Approve
          takes a name — Return and Hold are press-and-hold only (ruled
          2026-09-05) — so on those two outcomes, and on any approval answered

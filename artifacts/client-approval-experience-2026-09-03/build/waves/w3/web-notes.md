@@ -360,3 +360,44 @@ pnpm --filter @patina/types type-check     → clean
    by a ruling — see W3W-07 above. Kody may still overturn it.
 3. **Prettier drift is still inherited**, on the same files as before; the base versions warn
    identically. Confirmed by running `prettier --check` against `HEAD~1`'s copies.
+
+## Fix round 2 — W3W-22 (major)
+
+**The finding.** The keepsake reused `stampStateForApproval`, whose precedence
+puts disposition ahead of outcome. That precedence is right on the doorstep — a
+superseded edition must not read plainly RETURNED beside the live one — and
+wrong on paper: she approves Edition 3, the studio issues Edition 4, she presses
+"Keep a copy", and the sheet stamps SUPERSEDED over her typed name and "Signed
+electronically by typed name." P-26 asks for her outcome as the mark, and P-27
+forbids copy that says her earlier answer was undone.
+
+**The fix.** The sheet has its own rule now, and the doorstep keeps its.
+
+- `src/lib/record-of-decision.ts` — new `recordStampStateForApproval`
+  (outcome first: approved / returned / held; disposition only decides a record
+  with no answer to print, which is every withdrawal — 00465 allows withdrawal
+  only on `draft`/`pending`) and `supersededNoteSentence`.
+- `src/components/record/record-sheet.tsx` — new optional `stampNote`, prose
+  under the mark. Never a second stamp.
+- `src/app/decisions/[id]/record/page.tsx` — passes the new mapping, and on a
+  superseded record she answered prints "A later edition replaced this one on
+  {date}." The day is the SUCCESSOR's own issued date, found in the same
+  `list_my_project_decision_reviews` read; the projection carries no
+  `supersededAt` and the sheet invents no timing, so a successor the read
+  cannot see gets "A later edition has since replaced this one." with no day.
+- `stampStateForApproval` is untouched — the doorstep's precedence stands.
+
+The proposal record sheet is unaffected: it maps `signed` / `signed_on_paper`
+from the signature row and never consults a disposition.
+
+**Tests.** `src/lib/__tests__/record-of-decision.test.ts` — outcome-first for
+all three outcomes under `superseded`, disposition-only fallback, both
+supersession sentences, and a refusal test that the note never says
+undone/reopened/invalid/void. `src/app/decisions/[id]/record/__tests__/page.test.tsx`
+— her APPROVED mark plus the dated note when the successor row is visible, the
+undated note when it is not, no note on an ordinary record, and WITHDRAWN still
+pressed when there is no answer.
+
+**Gates.** `pnpm --filter @patina/client-portal type-check` clean;
+`pnpm --filter @patina/client-portal test` 122 suites / 1776 tests passed
+(coverage floor held). No hooks touched this round.

@@ -157,6 +157,97 @@ describe('/decisions/[id]/record — the owner', () => {
     expect(screen.queryByTestId('record-signed-name')).not.toBeInTheDocument();
   });
 
+  /**
+   * The doorstep stamps SUPERSEDED ahead of any outcome, so a dead edition
+   * never reads plainly RETURNED beside the live one. On the keepsake that
+   * precedence would print SUPERSEDED over her typed name — telling her the
+   * answer she gave was undone. Her outcome wins here; the later edition is
+   * a line of prose under the mark.
+   */
+  it('keeps her outcome as the mark after a later edition replaced it', async () => {
+    reviewsHook.mockReturnValue({
+      data: [
+        { ...ANSWERED, disposition: 'superseded', successorDecisionId: 'dec-2' },
+        {
+          ...ANSWERED,
+          decisionId: 'dec-2',
+          artifactVersion: 4,
+          outcome: null,
+          lifecycleStatus: 'pending',
+          predecessorDecisionId: 'dec-1',
+          successorDecisionId: null,
+          sentAt: '2026-08-14T09:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.getByTestId('record-stamp')).toHaveAttribute(
+      'data-stamp-state',
+      'approved',
+    );
+    expect(screen.getByTestId('record-stamp-note')).toHaveTextContent(
+      'A later edition replaced this one on 14 August 2026.',
+    );
+    expect(screen.getByTestId('record-signed-name')).toHaveTextContent('Harper Vale');
+    expect(screen.getByTestId('record-consent')).toHaveTextContent(
+      'Signed electronically by typed name.',
+    );
+  });
+
+  it('dates the supersession only from the successor’s own row', async () => {
+    reviewsHook.mockReturnValue({
+      // The successor is a different lead's; this read cannot see it.
+      data: [{ ...ANSWERED, disposition: 'superseded', successorDecisionId: 'dec-2' }],
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.getByTestId('record-stamp-note')).toHaveTextContent(
+      'A later edition has since replaced this one.',
+    );
+    expect(screen.getByTestId('record-stamp')).toHaveAttribute(
+      'data-stamp-state',
+      'approved',
+    );
+  });
+
+  it('says nothing about a later edition on a record that has none', async () => {
+    await renderPage();
+    expect(screen.queryByTestId('record-stamp-note')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Withdrawal is only ever possible before she answers (00465), so a record
+   * with no outcome still prints the disposition's own mark.
+   */
+  it('presses WITHDRAWN when there is no answer to print', async () => {
+    reviewsHook.mockReturnValue({
+      data: [
+        {
+          ...ANSWERED,
+          outcome: null,
+          clientSignature: null,
+          lifecycleStatus: 'expired',
+          disposition: 'withdrawn',
+          respondedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.getByTestId('record-stamp')).toHaveAttribute(
+      'data-stamp-state',
+      'withdrawn',
+    );
+    expect(screen.queryByTestId('record-stamp-note')).not.toBeInTheDocument();
+  });
+
   it('hangs the studio’s own mark on the letterhead when it has one', async () => {
     identityHook.mockReturnValue({
       data: { name: 'Quist Interiors', logoUrl: 'https://cdn.patina.test/quist.png' },

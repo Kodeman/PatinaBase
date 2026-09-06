@@ -49,6 +49,13 @@ export interface RecordSheetProps {
   stampDateLabel?: string | null;
   /** What the mark is about, under the word. */
   stampSubject: string;
+  /**
+   * A fact about the EDITION, said in prose under her mark — never a second
+   * mark, and never a word that undoes the first one. Today this carries the
+   * supersession note, so a record she answered keeps her own outcome as the
+   * stamp (P-27).
+   */
+  stampNote?: string | null;
   /** The name she typed, when the record carries one. */
   signedName?: string | null;
   /** When she answered, already in words. */
@@ -76,6 +83,7 @@ export function RecordSheet({
   stampState,
   stampDateLabel = null,
   stampSubject,
+  stampNote = null,
   signedName = null,
   signedOn = null,
   consentSentence = null,
@@ -230,6 +238,19 @@ export function RecordSheet({
               {stampSubject}
             </Stamp>
           </p>
+          {stampNote && (
+            <p
+              data-testid="record-stamp-note"
+              style={{
+                fontSize: '0.9rem',
+                lineHeight: 1.6,
+                marginTop: '0.75rem',
+                maxWidth: '52ch',
+              }}
+            >
+              {stampNote}
+            </p>
+          )}
           {releaseSentence && (
             <p
               data-testid="record-release"

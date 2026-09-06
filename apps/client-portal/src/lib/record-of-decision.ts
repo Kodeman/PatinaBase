@@ -120,3 +120,57 @@ export function releasedWorkSentence(
     ? `It releases ${counted} piece that was waiting on it.`
     : `It releases ${counted} pieces that were waiting on it.`;
 }
+
+/**
+ * Which mark the KEEPSAKE presses.
+ *
+ * The doorstep's rule (`stampStateForApproval`) puts disposition ahead of
+ * outcome, so a superseded edition never reads plainly RETURNED beside the
+ * live one that replaced it. On paper that precedence is wrong: the sheet is
+ * the record of HER act, and stamping SUPERSEDED over her typed name tells her
+ * the answer she gave was undone — which it was not, and which P-27 forbids
+ * the copy from ever implying. So here the outcome wins, and the supersession,
+ * which is a fact about the edition rather than about her answer, becomes a
+ * line of prose under the mark.
+ *
+ * Disposition still decides for a record with no outcome — a request the
+ * studio withdrew before she answered has nothing else to say.
+ */
+export function recordStampStateForApproval(approval: {
+  disposition: string;
+  outcome: string | null;
+}): RecordStampState {
+  if (approval.outcome === 'approved') return 'approved';
+  if (approval.outcome === 'changes_requested') return 'returned';
+  if (approval.outcome === 'needs_discussion') return 'held';
+  if (approval.disposition === 'withdrawn') return 'withdrawn';
+  if (approval.disposition === 'superseded') return 'superseded';
+  return 'awaiting';
+}
+
+/** The subset of the stamp vocabulary a Stage-2 record can print. */
+export type RecordStampState =
+  | 'approved'
+  | 'returned'
+  | 'held'
+  | 'withdrawn'
+  | 'superseded'
+  | 'awaiting';
+
+/**
+ * The supersession, said as prose under her mark.
+ *
+ * Never "undone", never "reopened", never "no longer valid" (P-27): a later
+ * edition exists, and that is the whole of the claim. The date is the day the
+ * successor was issued, read off the successor's own row — the projection
+ * carries no `supersededAt`, and a keepsake does not invent timing, so a
+ * successor the read cannot see or date gets the sentence without a day.
+ */
+export function supersededNoteSentence(
+  replacedOn: string | null | undefined,
+): string {
+  const day = replacedOn?.trim();
+  return day
+    ? `A later edition replaced this one on ${day}.`
+    : 'A later edition has since replaced this one.';
+}
