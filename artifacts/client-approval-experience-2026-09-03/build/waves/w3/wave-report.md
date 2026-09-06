@@ -239,3 +239,53 @@ New this pass, against the test suite rather than the product:
 
 Carried, unchanged: Prettier warns on files these lanes touched; it warned identically on the
 base versions in Waves 1 and 2, and the hook itself says it is advisory locally.
+
+---
+
+## 7 · Carry fixes — the two open majors, closed
+
+Both `fix`-verdict majors from §6 are now closed on this branch. Lane log:
+`carry-fix-notes.md`. Nothing else in either review was touched; every standing minor and nit
+listed there is still standing.
+
+| Item | Commit | What changed |
+|---|---|---|
+| **backend `M-R3-01`** | `98ead8ebe` | `notification-digest` gives the already-mailed check its own 24-hour floor. New pure helper `directMailWindowStart(windowStart, now)` = the LATER of the summary's window start and `now − 24 h`; `collectItems` passes that to `decisionsMailedDirect` and keeps `digestWindowStart` for its own collection. ux/03 §282 counts days; the digest was applying it over a period, so `weekly_sunday` dropped every approval announced that week (each mails its first notice direct) out of the Sunday summary, and its reminder never mailed either — it was held `cadence_digest` with `reminder_sent_at` stamped. |
+| **iose `R3-M1`** | `3066f8c6e` | `DecisionSnooze.never.holdsUntil` is now *"I'll hold the reminders. Choose again here whenever you want them back."* — the act that ends the hold, not a return nothing detects. `confirmation` still appends `theTwoThatStillReachHer`, so `R16`'s two exceptions are still spoken. Pinned as a full-string equality plus a loop over the forbidden end-conditions. |
+| **iose `R3-M1`, second half** | `3066f8c6e` | The chosen snooze now survives re-entry: `DecisionsAPIClient.decisionSnooze(decisionId:)` reads `decision_snoozes` (own row, `decision_snoozes_owner_select`), `DecisionSnooze.standing(kind:snoozedUntil:now:)` refuses a hold that has already lifted, and `loadSnooze` runs in `load(decisionId:)` when a projection arrived. A failed read says nothing and never sets `snoozeFailed`. |
+| **`R3-m2`, as a consequence** | `3066f8c6e` | The "Remind me" menu is drawn whether or not a snooze stands — the new sentence says *choose again HERE*, and with the read-back the old `if/else` would have hidden the control permanently. Identifiers unchanged; pinned structurally (no `else` between the two accessibility ids). |
+
+### Gates on the carry-fix tip
+
+| Gate | Result |
+|---|---|
+| `deno test --config supabase/functions/deno.json notification-digest/logic.test.ts` | **PASS** — **24 passed, 0 failed** (22 before; +2 for `M-R3-01`) |
+| `deno test --config supabase/functions/deno.json _shared/` | **PASS** — **284 passed, 0 failed** |
+| `deno check --config supabase/functions/deno.json notification-digest/index.ts` | **PASS** |
+| root `deno.lock` | **absent** — the shared config was passed on every run |
+| `IOS_GATE_UDID=B6AD6271-… ios-gate.sh all` | **PASS**, exit 0 — `** BUILD SUCCEEDED **`, **2708 tests in 290 suites passed, 2 known issues** (2704/289 before; +4 tests, +1 suite), `✓ lint-delta: no new warnings in touched files` |
+| walk-app rebuild → `.build/DerivedDataWalk/…/Debug-iphonesimulator/Patina.app` | **PASS** — `** BUILD SUCCEEDED **` |
+| `supabase db reset` / SQL tests / client-portal / designer-portal / packages | **NOT RUN, and not owed** — no migration, no SQL, no portal and no package file changed; the iOS read goes through the table's existing SELECT policy |
+
+The gate ran twice. The first run built and tested green but **failed `lint-delta`** with two new
+warnings the fix itself introduced: `DecisionsViewModel.swift` crossed `file_length` (505 > 500) and
+`DecisionPaceTests.swift` crossed `type_body_length` (312 > 300). Closed by compressing the view
+model's added comments and moving the four read-back tests into their own suite,
+`DecisionSnoozeReadBackTests`, in the same file — the same split the file's own header describes.
+The two known issues are the pre-existing `BrandVoiceLint` "curated_mix" and
+`RoomLifecycleTests.theTodayRailFollowsALocalDelete` pair both iOS lanes have reported since Wave 1.
+
+### Advisories
+
+1. **`n-R3-05` shrinks but does not close.** `decisionsMailedDirect`'s `.limit(200)` still has no
+   `order`. It now pages a day rather than a period, so a reader would need 200+
+   `decision_required` email rows inside 24 hours to hit it.
+2. **`R3-n3` reaches one more reader.** `theTwoThatStillReachHer` is appended to every
+   confirmation, including on an undated approval where "If the date passes" points at no date —
+   and the read-back means that sentence is now drawn on re-entry, not only in the session that
+   chose it. The string is unchanged; the exposure is wider.
+3. **Deploy set is unchanged except one function.** `notification-digest` must be redeployed;
+   `_shared` was not edited, so its importers are not owed a redeploy for this fix. No migration.
+4. **Prettier drift is inherited**, as in Waves 1 and 2: `prettier --check` fails on the base
+   versions of all three `notification-digest` files at `42d9057e4`. Nothing was reformatted, and
+   `deno fmt --check` is clean for every line these commits added.
