@@ -42,7 +42,16 @@ export const notificationPrioritySchema = z.enum(['critical', 'high', 'normal', 
 
 export const digestFrequencySchema = z.enum(['daily', 'weekly', 'biweekly', 'monthly', 'never']);
 
-export const reminderCadenceSchema = z.enum(['immediate', 'daily_digest', 'weekly_digest']);
+// P-28 (00572). The three named cadences the picker offers, plus the two
+// retired spellings, which a client running an older build may still send and
+// the database normalises on write.
+export const reminderCadenceSchema = z.enum([
+  'right_away',
+  'daily',
+  'weekly_sunday',
+  'immediate',
+  'daily_digest',
+]);
 
 // ─── Preference update schema ────────────────────────────────────────────
 

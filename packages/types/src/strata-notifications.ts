@@ -60,7 +60,13 @@ export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 
 export type DigestFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'never';
 
-export type ReminderCadence = 'immediate' | 'daily_digest';
+/**
+ * P-28 (00572). The three cadences, in the words the picker shows: "Tell me
+ * right away" · "Once a day" · "Once a week, on Sunday". The two retired
+ * spellings ('immediate', 'daily_digest') are normalised on write by the
+ * database trigger and are never stored again.
+ */
+export type ReminderCadence = 'right_away' | 'daily' | 'weekly_sunday';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTIFICATION PREFERENCES

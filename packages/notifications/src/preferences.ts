@@ -37,7 +37,7 @@ export const DEFAULT_PREFERENCES: Omit<NotificationPreferences, 'id' | 'user_id'
   type_reengagement: true,
 
   digest_frequency: 'weekly',
-  reminder_cadence: 'immediate',
+  reminder_cadence: 'daily',
 
   quiet_hours_enabled: false,
   quiet_hours_start: '22:00',
@@ -75,26 +75,40 @@ export async function getUserPreferences(
 }
 
 /**
- * Resolve a user's reminder cadence, defaulting to `immediate` for any
- * missing/legacy/invalid value (fail-open to the historical behaviour where
- * every reminder emailed immediately).
+ * Resolve a user's reminder cadence (P-28, 00572).
+ *
+ * The two retired spellings map forward — 'immediate' → 'right_away',
+ * 'daily_digest' → 'daily' — because a preferences row written by an older
+ * client reaches this code before the database trigger has normalised it.
+ * Anything else falls to the column's own default, 'daily': the quietest
+ * cadence that still gets a real answer on time, since the first notice and
+ * the overdue notice always break the digest.
  */
 export function getReminderCadence(
   preferences: Pick<NotificationPreferences, 'reminder_cadence'>
 ): ReminderCadence {
-  return preferences?.reminder_cadence === 'daily_digest'
-    ? 'daily_digest'
-    : 'immediate';
+  switch (preferences?.reminder_cadence as string | undefined) {
+    case 'right_away':
+    case 'immediate':
+      return 'right_away';
+    case 'weekly_sunday':
+      return 'weekly_sunday';
+    case 'daily':
+    case 'daily_digest':
+    default:
+      return 'daily';
+  }
 }
 
 /**
- * True when the user has opted non-urgent reminders into the daily digest
- * (so the nudge senders should skip the direct email).
+ * True when the user's reminders are batched into a summary rather than sent
+ * as they fire (so the nudge senders should skip the direct email). Both
+ * batching cadences count.
  */
 export function isReminderDigestUser(
   preferences: Pick<NotificationPreferences, 'reminder_cadence'>
 ): boolean {
-  return getReminderCadence(preferences) === 'daily_digest';
+  return getReminderCadence(preferences) !== 'right_away';
 }
 
 /**

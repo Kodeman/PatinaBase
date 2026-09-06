@@ -76,17 +76,19 @@ export type DigestFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'nev
 
 /**
  * Cadence for non-urgent CLIENT reminder emails (proposal nudges, approval
- * reminders). `immediate` sends each reminder as it fires; `daily_digest`
- * suppresses the direct email (the in-app row still lands) and rolls the day's
- * reminders into a single digest email; `weekly_digest` rolls them into one
- * Sunday letter. Transactional sends (proposal sent, invoice sent) are never
+ * reminders). `right_away` sends each reminder as it fires; `daily` suppresses
+ * the direct email (the in-app row still lands) and rolls the day's reminders
+ * into a single digest email; `weekly_sunday` rolls them into one Sunday
+ * letter. Transactional sends (proposal sent, invoice sent) are never
  * affected, and neither is the overdue notice.
  *
- * P-28 widened this from two values to three. The client portal says them in
- * plain words — "Tell me right away" · "Once a day" · "Once a week, on
- * Sunday" — and never in these tokens.
+ * P-28 (00572) widened this from two values to three. The retired
+ * `immediate` / `daily_digest` spellings are normalised on write by the
+ * database trigger. The client portal says the three in plain words — "Tell me
+ * right away" · "Once a day" · "Once a week, on Sunday" — never in these
+ * tokens.
  */
-export type ReminderCadence = 'immediate' | 'daily_digest' | 'weekly_digest';
+export type ReminderCadence = 'right_away' | 'daily' | 'weekly_sunday';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTIFICATION PREFERENCES

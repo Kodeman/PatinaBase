@@ -128,25 +128,22 @@ const DIGEST_OPTIONS: Array<{
 ];
 
 /**
- * P-28. Three cadences, in her words rather than in the column's — the tokens
- * `immediate` / `daily_digest` / `weekly_digest` never reach the page.
+ * P-28 (00572). Three cadences, in her words rather than in the column's — the
+ * tokens `right_away` / `daily` / `weekly_sunday` never reach the page.
  *
- * The default is the quietest cadence that still gets a real answer on time,
- * and it is NOT chosen here: `useNotificationPreferences` seeds `immediate`
- * for a client with no row yet, and this list only says what each one means.
- *
- * A cadence the widened column does not yet accept is refused by the RPC, and
- * the section says "Could not save." rather than showing a choice that
- * silently did not take. A row still carrying one of the two old values reads
- * back correctly here, because both survive the widening.
+ * The default is `daily`, the quietest cadence that still gets a real answer
+ * on time: the first notice and the notice that an approval has passed its
+ * date both break the summary, so batching the rest costs her nothing. It is
+ * the column's own DEFAULT and the fallback below, and the two retired
+ * spellings a row may still carry are normalised on write by the database.
  */
 const REMINDER_OPTIONS: Array<{
   value: NotificationPreferences["reminder_cadence"];
   label: string;
 }> = [
-  { value: "immediate", label: "Tell me right away" },
-  { value: "daily_digest", label: "Once a day" },
-  { value: "weekly_digest", label: "Once a week, on Sunday" },
+  { value: "right_away", label: "Tell me right away" },
+  { value: "daily", label: "Once a day" },
+  { value: "weekly_sunday", label: "Once a week, on Sunday" },
 ];
 
 const COMMON_TIMEZONES = [
@@ -523,12 +520,21 @@ function NotificationsSection() {
             </p>
             {/* P-28 / R16. The floor holds whether or not she sets hours of
                 her own, so it is stated as a fact about Patina rather than as
-                a setting she has to find. */}
+                a setting she has to find — and it names its two exceptions,
+                because a promise the system does not keep is worse than no
+                promise. `decisionMailHold` holds approval mail before 8am
+                local and all of Sunday and lets the passed-date notice
+                through; the weekly summary is the one thing sent ON Sunday;
+                `push_deliver_after` is the 8am–8pm half. */}
             <p
               data-testid="details-quiet-floor"
               className="mt-1 text-[13px] text-[var(--text-body)]"
             >
-              Patina never sends approval mail before 8am or after 8pm, or on Sunday.
+              Approval mail waits for the morning: nothing before 8am in your
+              time zone, and nothing on Sunday — except the weekly summary, if
+              that is the pace you choose. A notification on your phone keeps
+              the same hours and stops at 8pm. The notice that an approval has
+              passed its date is the one thing that never waits.
             </p>
             <PrefToggle
               label="Enable quiet hours"
@@ -633,7 +639,7 @@ function NotificationsSection() {
                     name="details-reminder-cadence"
                     value={opt.value}
                     checked={
-                      (prefs.reminder_cadence ?? "immediate") === opt.value
+                      (prefs.reminder_cadence ?? "daily") === opt.value
                     }
                     onChange={() => update({ reminder_cadence: opt.value })}
                     className="h-4 w-4 border border-current"
