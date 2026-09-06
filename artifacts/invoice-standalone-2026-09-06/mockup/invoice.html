@@ -1,0 +1,948 @@
+<meta charset="utf-8">
+<title>Invoice No. 4 · Quist Interiors</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Inter:wght@400;500&family=DM+Mono:wght@400;500&display=swap');
+
+/* ── Tokens ───────────────────────────────────────────────────────────────
+   Paper is the whole idea: the desk ground, the sheet laid on it, and one
+   deeper stock the chooser sits in. Depth is stacked edges, never shadow.  */
+:root {
+  --desk:      #FAF7F2;
+  --paper:     #FCFAF6;
+  --stock:     #F1EBE2;
+  --lift:      #FCFAF6;
+  --sheet-front: #F7F2EB;
+  --ink:       #2C2926;
+  --body:      #5C4A3C;
+  --muted:     #4E4339;
+  --faint:     #65594E;
+  --rule:      rgba(44,41,38,0.18);
+  --rule-soft: rgba(44,41,38,0.09);
+  --clay:      #C4A57B;
+  --clay-ink:  #7C5E30;
+  --btn-bg:    #2C2926;
+  --btn-fg:    #FAF7F2;
+  --btn-bg-hover: #1F1D1A;
+
+  --f-display: 'Playfair Display', 'Iowan Old Style', Georgia, serif;
+  --f-text:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --f-mono:    'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk:      #15120E;
+    --paper:     #1D1914;
+    --stock:     #181410;
+    --lift:      #262019;
+    --sheet-front: #262019;
+    --ink:       #F4EFE6;
+    --body:      #D8CAB8;
+    --muted:     #BCAC97;
+    --faint:     #A99884;
+    --rule:      rgba(244,239,230,0.20);
+    --rule-soft: rgba(244,239,230,0.10);
+    --clay:      #C4A57B;
+    --clay-ink:  #D8B87E;
+    --btn-bg:    #F0E9DD;
+    --btn-fg:    #1D1914;
+    --btn-bg-hover: #FFFAF0;
+  }
+}
+:root[data-theme="dark"] {
+  --desk:      #15120E;
+  --paper:     #1D1914;
+  --stock:     #181410;
+  --lift:      #262019;
+  --sheet-front: #262019;
+  --ink:       #F4EFE6;
+  --body:      #D8CAB8;
+  --muted:     #BCAC97;
+  --faint:     #A99884;
+  --rule:      rgba(244,239,230,0.20);
+  --rule-soft: rgba(244,239,230,0.10);
+  --clay:      #C4A57B;
+  --clay-ink:  #D8B87E;
+  --btn-bg:    #F0E9DD;
+  --btn-fg:    #1D1914;
+  --btn-bg-hover: #FFFAF0;
+}
+
+/* ── Ground ─────────────────────────────────────────────────────────────── */
+body {
+  background: var(--desk);
+  color: var(--body);
+  font-family: var(--f-text);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+h1, h2, h3, p, ul, ol, dl, figure { margin: 0; }
+ul { list-style: none; padding: 0; }
+
+.desk {
+  padding: 40px 20px 120px;
+  display: flex;
+  justify-content: center;
+}
+.sheet {
+  background: var(--paper);
+  border: 1px solid var(--rule-soft);
+  width: 100%;
+  max-width: 1060px;
+  padding: 40px 32px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ── Shared type roles ──────────────────────────────────────────────────── */
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.label {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.section-head {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.figure { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.quiet { color: var(--faint); font-size: 13px; line-height: 1.55; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+a { color: var(--clay-ink); text-underline-offset: 3px; }
+:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 3px;
+}
+
+/* ── Letterhead ─────────────────────────────────────────────────────────── */
+.letterhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rule);
+}
+.wordmark {
+  font-family: var(--f-display);
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.005em;
+  color: var(--ink);
+}
+.letterhead-meta { font-family: var(--f-mono); font-size: 12px; color: var(--muted); line-height: 1.5; }
+.letterhead-right { font-family: var(--f-mono); font-size: 12px; color: var(--faint); }
+
+/* ── Eyebrow + title ────────────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.title-block { display: flex; flex-direction: column; gap: 6px; }
+.invoice-no {
+  font-family: var(--f-display);
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.subject { font-size: 16px; color: var(--body); }
+.from-studio { font-family: var(--f-mono); font-size: 12px; color: var(--faint); }
+
+/* ── The two measures ───────────────────────────────────────────────────── */
+.sheet-grid { display: flex; flex-direction: column; gap: 34px; }
+@media (min-width: 920px) {
+  .sheet { padding: 44px 44px 38px; }
+  .sheet-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 328px;
+    column-gap: 0;
+    row-gap: 30px;
+    align-items: start;
+  }
+  .title-block { grid-column: 1; grid-row: 1; padding-right: 40px; }
+  .money       { grid-column: 2; grid-row: 1 / span 2; align-self: stretch;
+                 border-left: 1px solid var(--rule); padding-left: 36px; }
+  .record      { grid-column: 1; grid-row: 2; padding-right: 40px; }
+}
+.money  { display: flex; flex-direction: column; gap: 26px; min-width: 0; }
+.record { display: flex; flex-direction: column; gap: 34px; min-width: 0; }
+
+/* ── The three figures ──────────────────────────────────────────────────── */
+.standing { display: flex; flex-direction: column; gap: 9px; }
+.standing-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.standing-row .figure { font-size: 14px; }
+.standing-row.balance { padding-top: 9px; border-top: 1px solid var(--rule); }
+.standing-row.balance .figure { font-size: 25px; letter-spacing: -0.01em; }
+.standing-row.balance .label { color: var(--ink); }
+.due-line { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
+/* ── Notices ────────────────────────────────────────────────────────────── */
+.notice {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--stock);
+  border: 1px solid var(--rule-soft);
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--body);
+}
+.notice p { min-width: 0; }
+.notice-dismiss {
+  flex: none;
+  width: 44px; height: 44px; margin: -11px -12px -11px 0;
+  background: none; border: 0; cursor: pointer;
+  color: var(--muted); font-size: 15px; font-family: var(--f-mono);
+}
+
+/* ── The chooser ────────────────────────────────────────────────────────── */
+.chooser { display: flex; flex-direction: column; gap: 12px; }
+.chooser-lede { font-size: 13px; line-height: 1.5; color: var(--faint); }
+.rows { background: transparent; border-top: 1px solid var(--rule-soft); }
+.row {
+  display: block; position: relative;
+  min-height: 56px;
+  padding: 13px 14px 13px 40px;
+  cursor: pointer;
+  background: transparent;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.row[data-checked] {
+  background: var(--sheet-front);
+  border: 1px solid var(--clay-ink);
+  margin: -1px 0;
+}
+.row input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.dot {
+  position: absolute; left: 14px; top: 18px;
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 1px solid var(--muted);
+  background: transparent;
+}
+.row[data-checked] .dot { border-color: var(--clay-ink); border-width: 1px; }
+.row[data-checked] .dot::after {
+  content: ""; position: absolute; inset: 3px; border-radius: 50%;
+  background: var(--clay-ink);
+}
+.row input:focus-visible ~ .dot { outline: 2px solid var(--clay-ink); outline-offset: 3px; }
+.row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.row-name { font-size: 15px; color: var(--body); }
+.row[data-checked] .row-name { color: var(--ink); font-weight: 500; }
+.row-total { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); }
+.row-note { font-size: 12.5px; line-height: 1.45; color: var(--faint); margin-top: 2px; }
+
+/* ── Check panel ────────────────────────────────────────────────────────── */
+.check-panel {
+  background: var(--lift);
+  border: 1px solid var(--rule);
+  padding: 16px 16px 18px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.check-panel h3 { font-size: 13px; font-weight: 500; color: var(--muted); }
+.check-panel h3 strong { color: var(--ink); font-weight: 500; }
+.remit { font-size: 16px; line-height: 1.5; color: var(--ink); white-space: pre-line; }
+.memo-line { font-size: 14px; color: var(--body); }
+
+/* ── Totals ─────────────────────────────────────────────────────────────── */
+.totals { display: flex; flex-direction: column; gap: 8px; }
+.totals-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.totals-row span:first-child { font-size: 13.5px; color: var(--body); }
+.totals-row .figure { font-size: 14px; }
+.totals-row.pay {
+  padding-top: 12px; margin-top: 4px;
+  border-top: 1px solid var(--rule);
+  align-items: baseline;
+}
+.totals-row.pay span:first-child { font-size: 13.5px; color: var(--ink); }
+.totals-row.pay .figure {
+  font-family: var(--f-display);
+  font-size: 29px;
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+/* ── Acts ───────────────────────────────────────────────────────────────── */
+.act {
+  display: block; width: 100%;
+  min-height: 50px; padding: 14px 18px;
+  background: var(--btn-bg); color: var(--btn-fg);
+  border: 1px solid var(--btn-bg);
+  font-family: var(--f-text); font-size: 15px; font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.act:hover { background: var(--btn-bg-hover); border-color: var(--btn-bg-hover); }
+.act-done { font-size: 14px; color: var(--muted); min-height: 50px; display: flex; align-items: center; }
+.act-quiet {
+  background: none; border: 0; padding: 12px 0; min-height: 44px;
+  font-family: var(--f-text); font-size: 14px; color: var(--clay-ink);
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+  align-self: flex-start;
+}
+
+/* ── The record ─────────────────────────────────────────────────────────── */
+.lines { display: flex; flex-direction: column; }
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem 6.5rem;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.line-name { font-size: 15.5px; color: var(--ink); }
+.line-qty { font-family: var(--f-mono); font-size: 12px; color: var(--faint); text-align: right; }
+.line-amount { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); text-align: right; }
+.line-meta { grid-column: 1 / -1; font-family: var(--f-mono); font-size: 11.5px; color: var(--faint); }
+.block { display: flex; flex-direction: column; gap: 14px; }
+.memo { font-size: 16px; line-height: 1.7; color: var(--body); max-width: 62ch; }
+.payment { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--rule-soft); }
+.payment-what { font-size: 14.5px; color: var(--ink); }
+.payment-when { font-family: var(--f-mono); font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+.payment .figure { font-size: 14px; }
+
+/* ── Foot ───────────────────────────────────────────────────────────────── */
+.colophon {
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.print-only { display: none; }
+
+/* ── Terminal sheets ────────────────────────────────────────────────────── */
+.terminal { display: flex; flex-direction: column; gap: 14px; max-width: 52ch; }
+.terminal p { font-size: 16.5px; line-height: 1.65; color: var(--body); }
+.terminal .invoice-no { font-size: 26px; }
+.dead-sheet {
+  background: var(--paper);
+  border: 1px solid var(--rule-soft);
+  width: 100%; max-width: 560px;
+  padding: 56px 32px;
+  text-align: center;
+}
+.dead-sheet p { font-size: 17px; line-height: 1.7; color: var(--body); }
+
+/* ── Mockup dev strip (not part of the page) ────────────────────────────── */
+.devstrip {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--stock);
+  border-top: 1px solid var(--rule);
+  padding: 8px 12px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  font-family: var(--f-mono); font-size: 11px;
+}
+.devstrip-tag { color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; padding-right: 4px; }
+.devstrip button {
+  font-family: var(--f-mono); font-size: 11px;
+  background: var(--paper); color: var(--body);
+  border: 1px solid var(--rule); padding: 6px 9px; cursor: pointer;
+}
+.devstrip button[aria-pressed="true"] { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
+.devstrip details { width: 100%; color: var(--muted); }
+.devstrip summary { cursor: pointer; padding: 4px 0; }
+.devstrip pre {
+  margin: 4px 0 0; padding: 10px; overflow-x: auto;
+  background: var(--paper); border: 1px solid var(--rule-soft);
+  font-family: var(--f-mono); font-size: 11px; line-height: 1.6; color: var(--body);
+}
+
+[hidden] { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+/* ── Print ──────────────────────────────────────────────────────────────── */
+@media print {
+  @page { size: letter; margin: 0.5in; }
+  body { background: #fff; }
+  .desk { padding: 0; display: block; }
+  .sheet { max-width: none; border: 0; padding: 0; gap: 20px; }
+  .sheet-grid { display: block; }
+  .money, .record { border-left: 0; padding-left: 0; padding-right: 0; display: block; }
+  .money > * + *, .record > * + * { margin-top: 22px; }
+  .devstrip, .chooser, .act, .act-quiet, .act-done, .notice,
+  .totals-row.fee, .totals-row.pay, .check-panel { display: none !important; }
+  .print-only { display: block; }
+  .line, .payment { break-inside: avoid; }
+}
+</style>
+
+<div class="desk">
+
+  <!-- ── The dead link: no letterhead, no amounts ──────────────────────── -->
+  <section class="dead-sheet" id="deadSheet" hidden aria-labelledby="deadHead">
+    <h1 id="deadHead" class="sr-only">This link is no longer good</h1>
+    <p>This link is no longer good. If you were sent an invoice, ask the studio for a fresh link.</p>
+  </section>
+
+  <main class="sheet" id="sheet">
+
+    <header class="letterhead" id="letterhead">
+      <div>
+        <div class="wordmark" id="studioName">Quist Interiors</div>
+        <div class="letterhead-meta" id="studioMeta">Des Moines, Iowa · prepared by Nora Quist</div>
+      </div>
+      <div class="letterhead-right" id="studioSite">quistinteriors.com</div>
+    </header>
+
+    <!-- ── The settling sheet: void with a payment in flight ───────────── -->
+    <section class="terminal" id="settlingSheet" hidden>
+      <h1 class="invoice-no">Invoice No. 4</h1>
+      <p>A payment on this invoice is being sorted out by Quist Interiors.</p>
+      <p class="quiet">Nora Quist · quistinteriors.com · There is nothing to pay here in the meantime.</p>
+    </section>
+
+    <p class="eyebrow" id="eyebrow">Awaiting payment · due 15 August</p>
+
+    <div class="sheet-grid" id="grid">
+
+      <div class="title-block">
+        <h1 class="invoice-no" id="invoiceNo">Invoice No. 4</h1>
+        <p class="subject" id="subject">The Vale residence · from Nora Quist</p>
+        <p class="from-studio" id="fromStudio" hidden>from the studio</p>
+      </div>
+
+      <!-- The money column. DOM order is the phone's; desktop places it right. -->
+      <div class="money" id="money">
+
+        <div class="notice" id="returnNotice" hidden>
+          <p id="returnNoticeText"></p>
+          <button type="button" class="notice-dismiss" id="returnDismiss" aria-label="Dismiss this message" hidden>&times;</button>
+        </div>
+
+        <div class="standing">
+          <div class="standing-row">
+            <span class="label">Total</span>
+            <span class="figure" id="figTotal">$16,730.00</span>
+          </div>
+          <div class="standing-row" id="receivedRow">
+            <span class="label">Received</span>
+            <span class="figure" id="figReceived">$7,605.00</span>
+          </div>
+          <div class="standing-row balance">
+            <span class="label" id="balanceLabel">Balance due</span>
+            <span class="figure" id="figBalance">$9,125.00</span>
+          </div>
+          <p class="due-line" id="dueLine">due 15 August 2026</p>
+        </div>
+
+        <p class="notice" id="processingNotice" hidden>
+          Your bank transfer is on its way — it usually settles in 3–5 business days.
+        </p>
+
+        <section class="chooser" id="chooser" aria-labelledby="chooserHead">
+          <h2 class="section-head" id="chooserHead">How would you like to pay?</h2>
+          <p class="chooser-lede">Each row shows what you would pay in full.</p>
+
+          <div class="rows" role="radiogroup" aria-labelledby="chooserHead" id="rows">
+            <label class="row" data-method="us_bank_account" data-checked>
+              <input type="radio" name="method" value="us_bank_account" checked>
+              <span class="dot" aria-hidden="true"></span>
+              <span class="row-top">
+                <span class="row-name">Bank transfer</span>
+                <span class="row-total" id="rowTotalAch">$9,130.00</span>
+              </span>
+              <span class="row-note" id="rowNoteAch">+ $5.00 · Bank transfer costs the least to process.</span>
+            </label>
+
+            <label class="row" data-method="card">
+              <input type="radio" name="method" value="card">
+              <span class="dot" aria-hidden="true"></span>
+              <span class="row-top">
+                <span class="row-name">Card</span>
+                <span class="row-total" id="rowTotalCard">$9,398.75</span>
+              </span>
+              <span class="row-note" id="rowNoteCard">+ $273.75 · This covers what card processing costs.</span>
+            </label>
+
+            <label class="row" data-method="check">
+              <input type="radio" name="method" value="check">
+              <span class="dot" aria-hidden="true"></span>
+              <span class="row-top">
+                <span class="row-name">Mail a check</span>
+                <span class="row-total" id="rowTotalCheck">$9,125.00</span>
+              </span>
+              <span class="row-note">No fee.</span>
+            </label>
+          </div>
+
+          <div class="check-panel" id="checkPanel" hidden role="group" aria-labelledby="checkPanelHead">
+            <h3 id="checkPanelHead">Mail your check to <strong id="checkPayee">Quist Interiors</strong></h3>
+            <p class="remit" id="checkRemit">412 Walnut Street, Suite 3
+Des Moines, IA 50309</p>
+            <p class="memo-line" id="checkMemo">Write Invoice No. 4 on the memo line.</p>
+          </div>
+        </section>
+
+        <section class="totals" id="totals" aria-label="What this comes to">
+          <div class="totals-row">
+            <span>Subtotal</span><span class="figure" id="totSubtotal">$16,730.00</span>
+          </div>
+          <div class="totals-row" id="totReceivedRow">
+            <span>Received</span><span class="figure" id="totReceived">−$7,605.00</span>
+          </div>
+          <div class="totals-row">
+            <span>Balance</span><span class="figure" id="totBalance">$9,125.00</span>
+          </div>
+          <div class="totals-row fee" id="feeRow">
+            <span id="feeLabel">Bank transfer fee</span><span class="figure" id="feeFigure">$5.00</span>
+          </div>
+          <div class="totals-row pay" id="payRow">
+            <span>Total to pay</span><span class="figure" id="totalToPay">$9,130.00</span>
+          </div>
+        </section>
+
+        <div id="actSlot">
+          <button type="button" class="act" id="act">Pay $9,130.00</button>
+          <p class="act-done" id="actDone" hidden>Nora has been notified.</p>
+        </div>
+
+        <p class="sr-only" aria-live="polite" id="live"></p>
+      </div>
+
+      <!-- The record -->
+      <div class="record" id="record">
+
+        <section class="block">
+          <h2 class="section-head">What&rsquo;s included</h2>
+          <div class="lines" id="lines"></div>
+        </section>
+
+        <section class="block" id="memoBlock">
+          <h2 class="section-head" id="memoHead">A note from Nora</h2>
+          <p class="memo" id="memoText"></p>
+        </section>
+
+        <section class="block">
+          <h2 class="section-head">Payments</h2>
+          <div id="payments"></div>
+        </section>
+
+        <button type="button" class="act-quiet" id="printAct">Print / save PDF</button>
+      </div>
+    </div>
+
+    <footer class="colophon">
+      <span id="colophonLine">Prepared by Quist Interiors · Sent through Patina</span>
+      <span class="print-only">This sheet carries a payment link. Treat it like a check.</span>
+    </footer>
+  </main>
+</div>
+
+<div class="devstrip" id="devstrip">
+  <span class="devstrip-tag">Mockup states</span>
+  <span id="devButtons"></span>
+  <details>
+    <summary>The surcharge arithmetic, as this page computes it</summary>
+    <pre>
+// packages/shared/src/invoice/index.ts:169-223 — integer half-up
+const fee = (cents, bps) =&gt; Math.floor((cents * bps + 5000) / 10000);
+
+function surchargeCents(balanceCents, method, cardBps) {
+  if (method === 'us_bank_account') return Math.min(fee(balanceCents, 80), 500);
+  if (method === 'card')            return fee(balanceCents, cardBps);
+  return 0; // check
+}
+
+// balance 912500 → ACH 500 ($5.00) · card 27375 ($273.75) · check 0</pre>
+  </details>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── The arithmetic, quoted from packages/shared/src/invoice/index.ts ──── */
+  function fee(cents, bps) {
+    return Math.floor((cents * bps + 5000) / 10000);
+  }
+  function surchargeCents(balanceCents, method, cardBps) {
+    if (method === 'us_bank_account') return Math.min(fee(balanceCents, 80), 500);
+    if (method === 'card') return fee(balanceCents, cardBps);
+    return 0;
+  }
+  var fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+  function money(cents) { return fmt.format(cents / 100); }
+
+  /* ── Fixtures ─────────────────────────────────────────────────────────── */
+  var VALE = {
+    studio: 'Quist Interiors',
+    studioMeta: 'Des Moines, Iowa · prepared by Nora Quist',
+    site: 'quistinteriors.com',
+    designerFirst: 'Nora',
+    number: 'Invoice No. 4',
+    subject: 'The Vale residence · from Nora Quist',
+    houseless: false,
+    due: 'due 15 August 2026',
+    totalCents: 1673000,
+    receivedCents: 760500,
+    cardBps: 300,
+    remitTo: '412 Walnut Street, Suite 3\nDes Moines, IA 50309',
+    memo: 'The credenza left Harmon’s bench in Dayton on the 28th and the paintwork was finished the same week. Everything on this bill is standing in the house.',
+    lines: [
+      { name: 'Sconces — pair', meta: 'Harmon Bench Works', qty: 2, cents: 234000 },
+      { name: 'Drapery, living room', meta: '', qty: 1, cents: 289000 },
+      { name: 'Runner, stair', meta: '', qty: 1, cents: 166000 },
+      { name: 'Walnut credenza', meta: 'Harmon Bench Works, Dayton', qty: 1, cents: 840000 },
+      { name: 'Paintwork', meta: 'Prairie Coat Painting', qty: 1, cents: 144000 }
+    ],
+    payments: [
+      { what: 'Bank transfer', when: 'Received 5 August 2026', cents: 760500 }
+    ]
+  };
+
+  var STUDIO = {
+    studio: 'Middle West Studio',
+    studioMeta: 'Des Moines, Iowa · prepared by Leah Kochaver',
+    site: 'middlewest.studio',
+    designerFirst: 'Leah',
+    number: 'Invoice No. 4',
+    subject: 'Design consultation · June',
+    houseless: true,
+    due: '',
+    totalCents: 67500,
+    receivedCents: 0,
+    cardBps: 300,
+    remitTo: null,
+    memo: 'Three hours in June, walking the plans and the trade list. Billed at the rate we agreed.',
+    lines: [
+      { name: 'Design consultation, 3 hours', meta: '', qty: 1, cents: 67500 }
+    ],
+    payments: []
+  };
+
+  var CHECK_REMIT_FALLBACK = 'Contact your designer for mailing details';
+
+  /* ── States ───────────────────────────────────────────────────────────── */
+  var STATES = {
+    'open': {
+      label: 'open', fixture: VALE,
+      eyebrow: 'Awaiting payment · due 15 August'
+    },
+    'past-due': {
+      label: 'past-due', fixture: VALE,
+      eyebrow: 'Past due · 22 days'
+    },
+    'partial': {
+      label: 'partial', fixture: VALE,
+      eyebrow: 'Partly paid · due 15 August'
+    },
+    'processing': {
+      label: 'processing', fixture: VALE,
+      eyebrow: 'Payment on its way · due 15 August',
+      chooser: false, act: false, feeRow: false, payRow: false,
+      processing: true,
+      extraPayments: [{ what: 'Bank transfer', when: 'Payment processing', cents: 912500 }]
+    },
+    'paid': {
+      label: 'paid', fixture: VALE,
+      eyebrow: 'Paid in full · 12 August',
+      chooser: false, act: false, feeRow: false, payRow: false,
+      balanceLabel: 'Balance',
+      receivedOverride: 1673000,
+      hideDue: true,
+      extraPayments: [{
+        what: 'Bank transfer · + $5.00 processing fee ($9,130.00 charged)',
+        when: 'Received 12 August 2026', cents: 912500
+      }]
+    },
+    'returned-cancelled': {
+      label: 'returned-cancelled', fixture: VALE,
+      eyebrow: 'Awaiting payment · due 15 August',
+      notice: 'You left before paying. Nothing was charged.',
+      noticeDismissible: true
+    },
+    'returned-confirming': {
+      label: 'returned-confirming', fixture: VALE,
+      eyebrow: 'Awaiting payment · due 15 August',
+      notice: 'Confirming your payment…',
+      chooser: false, act: false, feeRow: false, payRow: false,
+      flipTo: 'paid'
+    },
+    'settling': {
+      label: 'settling', fixture: VALE, settling: true
+    },
+    'studio': {
+      label: 'studio', fixture: STUDIO,
+      eyebrow: 'Awaiting payment'
+    },
+    'dead': {
+      label: 'dead', fixture: VALE, dead: true
+    }
+  };
+  var ORDER = ['open', 'past-due', 'partial', 'processing', 'paid',
+               'returned-cancelled', 'returned-confirming', 'settling', 'studio', 'dead'];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var method = 'us_bank_account';
+  var stateKey = 'open';
+  var flipTimer = null;
+  var noticeDismissed = false;
+  var checkNotified = false;
+
+  /* ── Render ───────────────────────────────────────────────────────────── */
+  function render() {
+    var st = STATES[stateKey];
+    var fx = st.fixture;
+    var balance = st.balanceOverride != null
+      ? st.balanceOverride
+      : (st.receivedOverride != null ? fx.totalCents - st.receivedOverride
+                                     : fx.totalCents - fx.receivedCents);
+    var received = st.receivedOverride != null ? st.receivedOverride : fx.receivedCents;
+
+    document.documentElement.setAttribute('data-state', stateKey);
+
+    /* Terminal sheets first. */
+    $('deadSheet').hidden = !st.dead;
+    $('sheet').hidden = !!st.dead;
+    if (st.dead) { paintDevStrip(); return; }
+
+    $('settlingSheet').hidden = !st.settling;
+    $('grid').hidden = !!st.settling;
+    $('eyebrow').hidden = !!st.settling;
+    document.querySelector('.colophon').hidden = false;
+
+    /* Letterhead. */
+    $('studioName').textContent = fx.studio;
+    $('studioMeta').textContent = fx.studioMeta;
+    $('studioSite').textContent = fx.site;
+    $('colophonLine').textContent = 'Prepared by ' + fx.studio + ' · Sent through Patina';
+    if (st.settling) { paintDevStrip(); return; }
+
+    /* Eyebrow, title. */
+    $('eyebrow').textContent = st.eyebrow || '';
+    $('invoiceNo').textContent = fx.number;
+    $('subject').textContent = fx.houseless
+      ? fx.subject + ' · from ' + fx.designerFirst + ' Kochaver'
+      : fx.subject;
+    $('fromStudio').hidden = !fx.houseless;
+
+    /* The three figures. */
+    $('figTotal').textContent = money(fx.totalCents);
+    $('figReceived').textContent = money(received);
+    $('receivedRow').hidden = received === 0;
+    $('figBalance').textContent = money(balance);
+    $('balanceLabel').textContent = st.balanceLabel || 'Balance due';
+    $('dueLine').textContent = fx.due;
+    $('dueLine').hidden = !fx.due || !!st.hideDue;
+
+    /* Return / processing notices. */
+    var showNotice = !!st.notice && !(st.noticeDismissible && noticeDismissed);
+    $('returnNotice').hidden = !showNotice;
+    $('returnNoticeText').textContent = st.notice || '';
+    $('returnDismiss').hidden = !st.noticeDismissible;
+    $('processingNotice').hidden = !st.processing;
+
+    /* Chooser. */
+    var showChooser = st.chooser !== false;
+    $('chooser').hidden = !showChooser;
+
+    var achFee = surchargeCents(balance, 'us_bank_account', fx.cardBps);
+    var cardFee = surchargeCents(balance, 'card', fx.cardBps);
+    $('rowTotalAch').textContent = money(balance + achFee);
+    $('rowTotalCard').textContent = money(balance + cardFee);
+    $('rowTotalCheck').textContent = money(balance);
+    $('rowNoteAch').textContent = '+ ' + money(achFee) + ' · Bank transfer costs the least to process.';
+    $('rowNoteCard').textContent = '+ ' + money(cardFee) + ' · This covers what card processing costs.';
+
+    Array.prototype.forEach.call(document.querySelectorAll('.row'), function (row) {
+      var on = row.getAttribute('data-method') === method;
+      if (on) { row.setAttribute('data-checked', ''); } else { row.removeAttribute('data-checked'); }
+      row.querySelector('input').checked = on;
+    });
+
+    /* Check panel. */
+    var onCheck = method === 'check';
+    $('checkPanel').hidden = !onCheck || !showChooser;
+    $('checkPayee').textContent = fx.studio;
+    $('checkRemit').textContent = fx.remitTo || CHECK_REMIT_FALLBACK;
+    $('checkMemo').textContent = 'Write ' + fx.number + ' on the memo line.';
+
+    /* Totals. */
+    var feeNow = surchargeCents(balance, method, fx.cardBps);
+    $('totSubtotal').textContent = money(fx.totalCents);
+    $('totReceived').textContent = '−' + money(received);
+    $('totReceivedRow').hidden = received === 0;
+    $('totBalance').textContent = money(balance);
+    $('feeRow').hidden = st.feeRow === false || onCheck;
+    $('feeLabel').textContent = method === 'card' ? 'Card processing fee' : 'Bank transfer fee';
+    $('feeFigure').textContent = money(feeNow);
+    $('payRow').hidden = st.payRow === false;
+    $('totalToPay').textContent = money(balance + feeNow);
+
+    /* The act. */
+    var showAct = st.act !== false;
+    $('actSlot').hidden = !showAct;
+    if (showAct) {
+      var done = onCheck && checkNotified;
+      $('act').hidden = done;
+      $('actDone').hidden = !done;
+      $('actDone').textContent = fx.designerFirst + ' has been notified.';
+      $('act').textContent = onCheck
+        ? 'Let ' + fx.designerFirst + ' know a check is coming'
+        : 'Pay ' + money(balance + feeNow);
+    }
+
+    /* The record. */
+    $('lines').innerHTML = '';
+    fx.lines.forEach(function (l) {
+      var row = document.createElement('div');
+      row.className = 'line';
+      var name = document.createElement('span');
+      name.className = 'line-name'; name.textContent = l.name;
+      var qty = document.createElement('span');
+      qty.className = 'line-qty'; qty.textContent = String(l.qty);
+      var amt = document.createElement('span');
+      amt.className = 'line-amount'; amt.textContent = money(l.cents);
+      row.appendChild(name); row.appendChild(qty); row.appendChild(amt);
+      if (l.meta) {
+        var meta = document.createElement('span');
+        meta.className = 'line-meta'; meta.textContent = l.meta;
+        row.appendChild(meta);
+      }
+      $('lines').appendChild(row);
+    });
+
+    $('memoHead').textContent = 'A note from ' + fx.designerFirst;
+    $('memoText').textContent = fx.memo;
+
+    var pays = fx.payments.concat(st.extraPayments || []);
+    $('payments').innerHTML = '';
+    if (!pays.length) {
+      var none = document.createElement('p');
+      none.className = 'quiet';
+      none.textContent = 'No payments recorded yet.';
+      $('payments').appendChild(none);
+    }
+    pays.forEach(function (p) {
+      var row = document.createElement('div');
+      row.className = 'payment';
+      var left = document.createElement('div');
+      var what = document.createElement('p');
+      what.className = 'payment-what'; what.textContent = p.what;
+      var when = document.createElement('p');
+      when.className = 'payment-when'; when.textContent = p.when;
+      left.appendChild(what); left.appendChild(when);
+      var amt = document.createElement('span');
+      amt.className = 'figure'; amt.textContent = money(p.cents);
+      row.appendChild(left); row.appendChild(amt);
+      $('payments').appendChild(row);
+    });
+
+    paintDevStrip();
+  }
+
+  /* The one live region: it announces the figure that moved, nothing else. */
+  function announce() {
+    var st = STATES[stateKey];
+    var fx = st.fixture;
+    var balance = st.receivedOverride != null
+      ? fx.totalCents - st.receivedOverride
+      : fx.totalCents - fx.receivedCents;
+    $('live').textContent = 'Total to pay ' + money(balance + surchargeCents(balance, method, fx.cardBps));
+  }
+
+  function paintDevStrip() {
+    Array.prototype.forEach.call($('devButtons').children, function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-key') === stateKey ? 'true' : 'false');
+    });
+  }
+
+  function setState(key, push) {
+    if (!STATES[key]) key = 'open';
+    if (flipTimer) { clearTimeout(flipTimer); flipTimer = null; }
+    stateKey = key;
+    noticeDismissed = false;
+    checkNotified = false;
+    method = 'us_bank_account';
+    render();
+    if (push) {
+      var url = new URL(window.location.href);
+      url.searchParams.set('state', key);
+      history.replaceState(null, '', url);
+    }
+    if (STATES[key].flipTo) {
+      flipTimer = setTimeout(function () {
+        stateKey = STATES[key].flipTo;
+        render();
+      }, 2000);
+    }
+  }
+
+  /* ── Wiring ───────────────────────────────────────────────────────────── */
+  ORDER.forEach(function (key) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = STATES[key].label;
+    b.setAttribute('data-key', key);
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', function () { setState(key, true); });
+    $('devButtons').appendChild(b);
+  });
+
+  $('rows').addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'method') {
+      method = e.target.value;
+      checkNotified = false;
+      render();
+      announce();
+    }
+  });
+
+  $('act').addEventListener('click', function () {
+    if (method === 'check') { checkNotified = true; render(); }
+  });
+
+  $('returnDismiss').addEventListener('click', function () {
+    noticeDismissed = true;
+    render();
+  });
+
+  $('printAct').addEventListener('click', function () { window.print(); });
+
+  /* ?nostrip=1 hides the mockup dev strip for a clean screenshot capture. */
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('nostrip') === '1') {
+    $('devstrip').hidden = true;
+    document.querySelector('.desk').style.paddingBottom = '48px';
+  }
+
+  setState(params.get('state') || 'open', false);
+
+  /* One announcement on mount, after the state is applied: a screen-reader user
+     who never touches the chooser still hears what the pre-selected row charges.
+     Only the states that render a chooser have a figure to announce. */
+  (function announceOnMount() {
+    var st = STATES[stateKey];
+    if (st.dead || st.settling || st.chooser === false) return;
+    setTimeout(announce, 200);
+  })();
+})();
+</script>

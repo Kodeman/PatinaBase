@@ -1,0 +1,1225 @@
+<title>The Invoice, Standing Alone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   Tokens. Paper is the whole idea, so the deck stands on the same stock as
+   the page it presents: apps/client-portal globals.css + the mockup's own.
+   ───────────────────────────────────────────────────────────────────────── */
+:root{
+  --desk:#FAF7F2;
+  --paper:#FCFAF6;
+  --stock:#F1EBE2;
+  --rule:rgba(44,41,38,0.16);
+  --rule-2:rgba(44,41,38,0.30);
+  --ink:#2C2926;
+  --body:#4A453F;
+  --mocha:#5C4A3C;
+  --muted:#5E574E;
+  --faint:#6E6659;
+  --clay:#C4A57B;
+  --clay-ink:#7C5E30;
+  --btn-bg:#2C2926;
+  --btn-fg:#FCFAF6;
+  --font-display:"Playfair Display","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --font-mono:"DM Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --desk:#15120E; --paper:#1D1914; --stock:#231E18;
+    --rule:rgba(244,239,230,0.18); --rule-2:rgba(244,239,230,0.34);
+    --ink:#F4EFE6; --body:#CFC3B3; --mocha:#D8CAB8; --muted:#B4A896; --faint:#9E9382;
+    --clay:#C4A57B; --clay-ink:#D8B87E;
+    --btn-bg:#F0E9DD; --btn-fg:#1D1914;
+  }
+}
+:root[data-theme="dark"]{
+  --desk:#15120E; --paper:#1D1914; --stock:#231E18;
+  --rule:rgba(244,239,230,0.18); --rule-2:rgba(244,239,230,0.34);
+  --ink:#F4EFE6; --body:#CFC3B3; --mocha:#D8CAB8; --muted:#B4A896; --faint:#9E9382;
+  --clay:#C4A57B; --clay-ink:#D8B87E;
+  --btn-bg:#F0E9DD; --btn-fg:#1D1914;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--desk);
+  color:var(--body);
+  font-family:var(--font-body);
+  font-size:16.5px;
+  line-height:1.68;
+  -webkit-font-smoothing:antialiased;
+  margin:0;
+}
+.shell{max-width:1180px;margin:0 auto;padding:0 20px 7rem;}
+p,li{max-width:68ch;}
+a{color:var(--clay-ink);text-decoration:none;border-bottom:1px solid var(--rule-2);}
+a:hover{border-bottom-color:var(--clay-ink);}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--clay-ink);outline-offset:3px;}
+code{font-family:var(--font-mono);font-size:.82em;color:var(--mocha);overflow-wrap:anywhere;}
+strong{color:var(--ink);font-weight:600;}
+em{font-style:italic;}
+.scrollx{overflow-x:auto;}
+
+/* ── running index ─────────────────────────────────────────────────────── */
+.index{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.04em;line-height:1.5;padding:2rem 0 1.2rem;border-bottom:1px solid var(--rule);margin-bottom:1rem;}
+.index .idxhead{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0 0 1rem;}
+.index ol{list-style:none;margin:0;padding:0;display:grid;gap:.5rem 2rem;grid-template-columns:repeat(auto-fill,minmax(17rem,1fr));}
+.index li{max-width:none;}
+.index a{color:var(--muted);border-bottom:none;display:grid;grid-template-columns:1.8rem 1fr;gap:.3rem;}
+.index a:hover{color:var(--ink);}
+.index .n{color:var(--faint);font-variant-numeric:tabular-nums;}
+
+/* ── masthead ──────────────────────────────────────────────────────────── */
+.masthead{padding:3.4rem 0 2.4rem;border-bottom:1.5px solid var(--ink);}
+.masthead h1{font-family:var(--font-display);font-size:clamp(2.5rem,6vw,4.3rem);line-height:1.03;font-weight:500;color:var(--ink);margin:1.3rem 0 1.2rem;text-wrap:balance;letter-spacing:-.012em;max-width:16ch;}
+.standing{font-family:var(--font-display);font-style:italic;font-size:clamp(1.1rem,2.3vw,1.45rem);line-height:1.45;color:var(--mocha);max-width:46ch;margin:0 0 2.1rem;}
+.masthead-meta{display:flex;flex-wrap:wrap;gap:1.6rem 3rem;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+.masthead-meta div{max-width:24ch;}
+.masthead-meta b{display:block;color:var(--faint);font-weight:400;margin-bottom:.4rem;}
+.masthead-meta span{display:block;text-transform:none;letter-spacing:.01em;font-size:12.5px;color:var(--body);font-family:var(--font-body);}
+
+/* ── sections ──────────────────────────────────────────────────────────── */
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0;}
+section{padding-top:4.4rem;scroll-margin-top:1.5rem;}
+.opener{border-top:1px solid var(--rule);padding-top:1.1rem;margin-bottom:1.6rem;}
+section > h2{font-family:var(--font-display);font-size:clamp(1.75rem,3.5vw,2.6rem);line-height:1.13;font-weight:500;color:var(--ink);margin:.65rem 0 0;text-wrap:balance;max-width:22ch;}
+h3{font-family:var(--font-display);font-size:1.3rem;line-height:1.28;font-weight:500;color:var(--ink);margin:2.6rem 0 .7rem;text-wrap:balance;max-width:34ch;}
+h4{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);font-weight:500;margin:2rem 0 .7rem;}
+.lede{font-size:1.1rem;color:var(--body);}
+.lede strong{color:var(--ink);}
+.mono{font-family:var(--font-mono);font-size:.82em;color:var(--muted);}
+.ref{font-family:var(--font-mono);font-size:.73em;letter-spacing:.01em;color:var(--faint);overflow-wrap:anywhere;}
+blockquote{margin:1.5rem 0;padding-left:1.1rem;border-left:2px solid var(--clay);font-family:var(--font-display);font-style:italic;font-size:1.12rem;line-height:1.5;color:var(--mocha);}
+blockquote p{max-width:54ch;margin:0 0 .5rem;}
+blockquote p:last-child{margin:0;}
+hr{border:none;border-top:1px solid var(--rule);margin:2.4rem 0;}
+ul.plain{padding-left:1.1rem;}
+ul.plain li{margin:.35rem 0;}
+ol.steps{padding-left:1.3rem;}
+ol.steps li{margin:.45rem 0;}
+.cols{display:grid;gap:2rem;grid-template-columns:minmax(0,1fr);}
+@media (min-width:820px){.cols-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}}
+.note{border-left:2px solid var(--rule-2);padding-left:1rem;margin:1.5rem 0;color:var(--muted);font-size:.94rem;}
+.note p{max-width:62ch;}
+
+/* ── tables ────────────────────────────────────────────────────────────── */
+.tablewrap{overflow-x:auto;margin:1.3rem 0 1.8rem;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--rule-2);}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45;}
+th,td{text-align:left;vertical-align:top;padding:.7rem .9rem .7rem 0;border-bottom:1px solid var(--rule);}
+th{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:500;}
+td{color:var(--body);}
+tbody tr:last-child td{border-bottom:none;}
+.tight td,.tight th{font-size:13.5px;padding-top:.6rem;padding-bottom:.6rem;}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;}
+.w-id{width:4.4rem;font-family:var(--font-mono);font-size:12px;color:var(--clay-ink);white-space:nowrap;}
+.w-name{min-width:10rem;}
+.w-wide{min-width:19rem;}
+.w-mid{min-width:14rem;}
+th.c3{min-width:15rem;}
+
+/* ── code + sketches ───────────────────────────────────────────────────── */
+pre{font-family:var(--font-mono);font-size:12px;line-height:1.55;color:var(--ink);background:var(--paper);border:1px solid var(--rule);padding:1rem 1.1rem;margin:1.2rem 0;overflow-x:auto;}
+pre.sketch{font-size:11px;line-height:1.42;color:var(--muted);background:none;border:none;border-left:1px solid var(--rule);padding:.2rem 0 .2rem 1rem;margin:.9rem 0 1.2rem;}
+.dl{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:1.2rem 0;border-top:1px solid var(--rule);}
+.dl > div{display:grid;grid-template-columns:minmax(0,1fr);gap:.15rem;padding:.75rem 0;border-bottom:1px solid var(--rule);}
+@media (min-width:760px){.dl > div{grid-template-columns:11rem minmax(0,1fr);gap:1.4rem;}}
+.dl dt{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding-top:.2rem;}
+.dl dd{margin:0;max-width:64ch;}
+
+/* ── figures / svg ─────────────────────────────────────────────────────── */
+figure{margin:1.6rem 0 1.8rem;}
+figure svg{display:block;width:100%;height:auto;}
+figcaption{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:.8rem;}
+.figwrap{overflow-x:auto;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:1.5rem 0;}
+.figwrap > svg{min-width:520px;}
+.d-box{fill:var(--paper);stroke:var(--rule-2);stroke-width:1;}
+.d-box-stock{fill:var(--stock);stroke:var(--rule-2);stroke-width:1;}
+.d-box-ink{fill:var(--ink);stroke:none;}
+.d-t{fill:var(--ink);font-family:var(--font-body);font-size:12.5px;}
+.d-t-inv{fill:var(--paper);font-family:var(--font-body);font-size:12.5px;}
+.d-m{fill:var(--muted);font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;}
+.d-lbl{fill:var(--faint);font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;}
+.d-clay{fill:var(--clay-ink);font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;}
+.d-line{stroke:var(--rule-2);stroke-width:1;fill:none;}
+.d-life{stroke:var(--rule);stroke-width:1;stroke-dasharray:3 4;fill:none;}
+.d-arrow{stroke:var(--clay-ink);stroke-width:1.2;fill:none;}
+.d-head{fill:var(--clay-ink);}
+.d-dead{stroke:var(--rule-2);stroke-width:1;stroke-dasharray:4 4;fill:none;}
+
+/* ── plates: the page, drawn in its own hand ───────────────────────────── */
+.plates{display:grid;gap:1.8rem;grid-template-columns:minmax(0,1fr);margin:1.6rem 0;}
+@media (min-width:900px){.plates.p2{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start;}}
+.platefig{margin:0;}
+.platecap{font-family:var(--font-mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin:0 0 .6rem;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
+.platecap .st{color:var(--clay-ink);}
+.plate{background:var(--paper);border:1px solid var(--rule);padding:16px 15px 14px;font-size:11.5px;line-height:1.5;color:var(--ink);}
+.plate.phone{max-width:288px;padding:14px 13px 12px;}
+.plate .ph{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:7px;border-bottom:1px solid var(--rule);}
+.plate .wm{font-family:var(--font-display);font-size:15px;line-height:1.2;color:var(--ink);}
+.plate .phmeta,.plate .phsite{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.03em;color:var(--faint);}
+.plate .eyeb{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:9px 0 7px;}
+.plate .g2{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;}
+@media (min-width:640px){.plate .g2{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:0 18px;}}
+.plate .rec{min-width:0;}
+.plate .mon{min-width:0;}
+@media (min-width:640px){.plate .mon{border-left:1px solid var(--rule);padding-left:16px;}}
+.plate .no{font-family:var(--font-display);font-size:20px;line-height:1.15;color:var(--ink);margin:0 0 2px;}
+.plate .subj{font-size:11.5px;color:var(--mocha);margin:0 0 3px;}
+.plate .fromstudio{font-family:var(--font-mono);font-size:9px;color:var(--faint);margin:0;}
+.plate .sh{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);padding-bottom:6px;border-bottom:1px solid var(--rule);margin:14px 0 0;}
+.plate .line{display:grid;grid-template-columns:minmax(0,1fr) 1.6rem 4.4rem;gap:.5rem;padding:7px 0;border-bottom:1px solid var(--rule);align-items:baseline;}
+.plate .line .lname{color:var(--ink);}
+.plate .line .lsub{display:block;font-family:var(--font-mono);font-size:8.5px;color:var(--faint);}
+.plate .line .lq,.plate .line .lamt{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--ink);font-size:11px;}
+.plate .line .lq{color:var(--faint);font-size:9px;}
+.plate .memo{font-size:11.5px;color:var(--mocha);margin:8px 0 0;}
+.plate .figrow{display:flex;justify-content:space-between;gap:1rem;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:10.5px;padding:3px 0;}
+.plate .figrow .k{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);}
+.plate .figrow .v{color:var(--ink);}
+.plate .balance{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding-top:8px;margin-top:6px;border-top:1px solid var(--rule);}
+.plate .balance .k{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);}
+.plate .balance .v{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:19px;color:var(--ink);}
+.plate .due{font-family:var(--font-mono);font-size:9px;color:var(--faint);margin:2px 0 0;}
+.plate .chooserhead{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:14px 0 0;padding-bottom:6px;border-bottom:1px solid var(--rule);}
+.plate .chooserlede{font-size:10.5px;color:var(--mocha);margin:7px 0 8px;}
+.plate .rows{border:1px solid var(--rule);}
+.plate .row{display:grid;grid-template-columns:14px minmax(0,1fr);gap:8px;padding:8px 9px;background:var(--stock);border-bottom:1px solid var(--rule);}
+.plate .row:last-child{border-bottom:none;}
+.plate .row.on{background:var(--paper);}
+.plate .dot{width:11px;height:11px;border-radius:50%;border:1px solid var(--rule-2);margin-top:3px;}
+.plate .row.on .dot{border-color:var(--clay-ink);box-shadow:inset 0 0 0 2.5px var(--paper),inset 0 0 0 8px var(--clay-ink);}
+.plate .rtop{display:flex;justify-content:space-between;gap:.6rem;align-items:baseline;}
+.plate .rname{font-size:11.5px;color:var(--ink);}
+.plate .rtot{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:11px;color:var(--ink);}
+.plate .rnote{display:block;font-size:10px;line-height:1.42;color:var(--faint);margin-top:1px;}
+.plate .tot{margin-top:12px;}
+.plate .tot .figrow{border-bottom:none;}
+.plate .tot .fee{color:var(--mocha);}
+.plate .tot .pay{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;border-top:1px solid var(--rule);margin-top:6px;padding-top:8px;}
+.plate .tot .pay .k{font-size:11.5px;color:var(--ink);}
+.plate .tot .pay .v{font-family:var(--font-display);font-size:19px;color:var(--ink);}
+.plate .btn{display:block;width:100%;text-align:center;background:var(--btn-bg);color:var(--btn-fg);font-size:11.5px;padding:9px 10px;margin-top:11px;}
+.plate .quietact{display:inline-block;font-size:11px;color:var(--clay-ink);border-bottom:1px solid var(--clay);margin-top:12px;}
+.plate .colo{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:8.5px;color:var(--faint);margin-top:16px;padding-top:9px;border-top:1px solid var(--rule);}
+.plate .checkpanel{border-top:1px solid var(--rule);margin-top:0;padding:9px;background:var(--paper);font-size:10.5px;}
+.plate .checkpanel .rem{font-family:var(--font-mono);font-size:10px;color:var(--ink);white-space:pre-line;margin:4px 0;}
+.plate.dead{display:flex;align-items:center;justify-content:center;min-height:150px;text-align:center;color:var(--muted);font-size:12px;}
+.plate.settling .set{padding:6px 0 4px;}
+.plate .paidrow{display:grid;grid-template-columns:minmax(0,1fr) 4.4rem;gap:.5rem;padding:7px 0;border-bottom:1px solid var(--rule);}
+.plate .paidrow .psub{display:block;font-family:var(--font-mono);font-size:8.5px;color:var(--faint);}
+.plate .paidrow .pamt{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:11px;text-align:right;color:var(--ink);}
+
+/* ── waves ─────────────────────────────────────────────────────────────── */
+.wave{border-top:1px solid var(--rule);padding:1.6rem 0 .4rem;}
+.wave:first-of-type{border-top:1.5px solid var(--ink);}
+.wave-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:.6rem 1.2rem;margin-bottom:.6rem;}
+.wave-head .wid{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;color:var(--clay-ink);}
+.wave-head h3{margin:0;font-size:1.2rem;}
+.wave-head .size{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-left:auto;}
+.wave dl{margin:0;}
+
+details{margin:1.2rem 0;border-top:1px solid var(--rule);padding-top:.8rem;}
+summary{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--clay-ink);cursor:pointer;}
+details[open] summary{margin-bottom:.8rem;}
+
+.foot{margin-top:4rem;border-top:1.5px solid var(--ink);padding-top:1.4rem;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--faint);}
+.foot p{max-width:70ch;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+
+<div class="shell">
+
+<header class="masthead" id="top">
+  <p class="eyebrow">Patina · The Document · Design, architecture, delivery</p>
+  <h1>The Invoice, Standing Alone</h1>
+  <p class="standing">A bill you can open with a link, read without an account, and settle on the page — with the real total moving as you choose how to pay.</p>
+  <div class="masthead-meta">
+    <div><b>Asked by</b><span>Kody, 6 September 2026</span></div>
+    <div><b>Prepared</b><span>6 September 2026</span></div>
+    <div><b>Status</b><span>Designed, architected, reviewed. Nothing built.</span></div>
+    <div><b>Migration</b><span>00574 — mint at build time</span></div>
+    <div><b>Reads in</b><span>About twenty minutes. The rulings owed are §12.</span></div>
+  </div>
+</header>
+
+<nav class="index" aria-label="Contents">
+  <p class="idxhead">Contents</p>
+  <ol>
+    <li><a href="#ask"><span class="n">1</span><span>The ask</span></a></li>
+    <li><a href="#vision"><span class="n">2</span><span>The vision test</span></a></li>
+    <li><a href="#was"><span class="n">3</span><span>What the page was</span></a></li>
+    <li><a href="#directions"><span class="n">4</span><span>Three directions, and the pick</span></a></li>
+    <li><a href="#page"><span class="n">5</span><span>The page</span></a></li>
+    <li><a href="#mechanic"><span class="n">6</span><span>The toggle and the total</span></a></li>
+    <li><a href="#system"><span class="n">7</span><span>The system</span></a></li>
+    <li><a href="#security"><span class="n">8</span><span>Security posture</span></a></li>
+    <li><a href="#review"><span class="n">9</span><span>What the review caught</span></a></li>
+    <li><a href="#waves"><span class="n">10</span><span>The waves</span></a></li>
+    <li><a href="#risks"><span class="n">11</span><span>Risk register</span></a></li>
+    <li><a href="#rulings"><span class="n">12</span><span>Rulings owed Kody</span></a></li>
+    <li><a href="#colophon"><span class="n">13</span><span>Colophon</span></a></li>
+  </ol>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="ask">
+  <div class="opener">
+    <p class="eyebrow">1 · The ask</p>
+    <h2>An invoice should not need an account.</h2>
+  </div>
+
+  <p class="lede">Kody asked for one thing with three parts: <strong>invoices must be stand-alone pages, viewable with just a link and no account</strong>, with the <strong>payment method chosen on the page</strong> and the <strong>real total to pay moving live</strong> as the method toggles. He also asked us to go and look at what the invoice page was before the client-page cutover, assemble a team to design and architect the invoicing system around it, and present it as a deck and a full-fidelity mockup.</p>
+
+  <p>Everything after this paragraph is that work. The design is settled, the architecture is verified line by line against the code it cites, an adversarial reviewer attacked both and found forty-nine things, and the deck ends with four rulings only Kody can make. The build is a separate request.</p>
+
+  <h4>The three rulings that bind everything below</h4>
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-id">#</th><th>Ruling</th></tr></thead>
+    <tbody>
+      <tr><td class="w-id">K1</td><td><strong>One pay surface.</strong> The stand-alone page <em>is</em> the invoice, for everyone. Email links, the letterbox, iOS and Stripe return URLs all land there. The letterbox becomes a ledger line and an "Open the invoice" act; settling in place is retired. This supersedes R135's clause "the acts never leave the page — including the toll," and is logged as a new R-number when built.</td></tr>
+      <tr><td class="w-id">K2</td><td><strong>Full invoice; the link lives with the invoice.</strong> Anyone holding the link sees letterhead, lines, totals, memo and payments, and can pay the balance. It is valid while the invoice is open, stays as a receipt after payment, and dies on void. The designer can regenerate it — revoke and reissue — from the folio.</td></tr>
+      <tr><td class="w-id">K3</td><td><strong>The deck carries design, architecture and delivery</strong> — migration numbers, deploy order, gates and rollback — so that "ship it" can follow directly from it.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="vision">
+  <div class="opener">
+    <p class="eyebrow">2 · The vision test</p>
+    <h2>Four questions, before a line is written.</h2>
+  </div>
+
+  <p class="lede">Every feature answers four questions before it is built: which surface, which studio moment, which stream, which promise. This one answers all four without strain.</p>
+
+  <div class="tablewrap"><table class="tight">
+    <tbody>
+      <tr><td class="w-name"><strong>Surface</strong></td><td>The Document. The client page is the Document's homeowner face (R135), and <code>/pay/&lt;token&gt;</code> is that same face with the account taken out of the way. It is not a fourth surface.</td></tr>
+      <tr><td><strong>Studio moment</strong></td><td>The studio bills a homeowner who has never signed into anything. Today that homeowner's bill arrives, opens a sign-in wall, and turns into a phone call to the designer. The studio's second hire spends the afternoon on it.</td></tr>
+      <tr><td><strong>Stream</strong></td><td>Both. The margin stream directly — this is the till, and it is currently locked behind a password the payer does not have. The subscription floor indirectly: a studio whose bills get paid without a support thread stays.</td></tr>
+      <tr><td><strong>Promise</strong></td><td>Vision §4, twice. <em>No hidden fees</em>: the page shows all three arrived-at totals at once, before the reader touches anything, and never folds a fee into a balance. <em>You won't notice Patina</em>: the letterhead is the studio's, the person named is the designer, and Patina is one line at the foot of the sheet.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>It passes on all four. The one place it presses on the promise is the host — an account-less homeowner is sent to <code>client.patina.cloud</code>, a name written for the account holder they are not. That was weighed and ruled: the host stands, because K2 makes these URLs permanent and a later move to a prettier domain would break every link already in the wild. It is recorded as a decision in §12, not left as an omission.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="was">
+  <div class="opener">
+    <p class="eyebrow">3 · What the page was, what it is now</p>
+    <h2>The parts were right. The order was wrong, and then it was deleted.</h2>
+  </div>
+
+  <p class="lede">There was a real invoice page, and it did nearly everything this program asks for — except stand alone. It was deleted two days ago, on 4 September, as part of the client-page cutover. We recovered it from git and read it top to bottom.</p>
+
+  <h3>The page, recovered</h3>
+  <p><code>git show 923c0e935^:apps/client-portal/src/app/invoices/[invoiceId]/page.tsx</code> — 752 lines, deleted in <code>923c0e935</code> ("retire old portal — routes, api, hooks, tests"), merged to main as <code>d95bb80a0</code>. Top to bottom it carried:</p>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-id">&nbsp;</th><th>Element</th><th class="c3">Note</th></tr></thead>
+    <tbody>
+      <tr><td class="w-id">1</td><td>Back link → <code>/invoices</code></td><td>—</td></tr>
+      <tr><td class="w-id">2</td><td>Checkout-return banners</td><td>Seven states: confirming · confirmed · processing · unconfirmed · failed · refunded · requires_refund, plus a dismissible <em>cancelled</em></td></tr>
+      <tr><td class="w-id">3</td><td>Status eyebrow, <code>&lt;h1&gt;</code> invoice number, "{project} · from {designer}"</td><td>Beside it: <strong>Pay $X</strong> and <em>Print / save PDF</em></td></tr>
+      <tr><td class="w-id">4</td><td>Three-up Total / Paid / Balance</td><td><em>Due {date}</em> beneath the balance</td></tr>
+      <tr><td class="w-id">5</td><td><code>&lt;PaymentMethodChooser&gt;</code></td><td>Bank transfer (ACH) "Preferred · lowest fee" / Card / Mail a check, each with a live fee label</td></tr>
+      <tr><td class="w-id">6</td><td>Processing-payment notice</td><td>—</td></tr>
+      <tr><td class="w-id">7</td><td>Line items, under <em>What's included</em></td><td>Design time annotated with hours; qty × unit when qty ≠ 1</td></tr>
+      <tr><td class="w-id">8</td><td>Totals block</td><td>Subtotal / Tax / Total / Paid / Balance due, then <strong>the fee row and "Total to pay"</strong></td></tr>
+      <tr><td class="w-id">9</td><td>Note from the designer</td><td>The memo</td></tr>
+      <tr><td class="w-id">10</td><td>Payments</td><td>Row per payment, with the charged figure where a fee was collected</td></tr>
+      <tr><td class="w-id">11</td><td>Void footnote</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The Pay button's label carried the live total and swapped a Landmark icon for a CreditCard one as the method changed. The arithmetic under it is still in the repo, untouched, at <code>packages/shared/src/invoice/index.ts:169-223</code>.</p>
+
+  <p>Its one real defect was geometry. The chooser sat in a full-width grid <em>above</em> "What's included"; the fee row and Total to pay sat in a narrow column <em>below</em> the whole line-item list. Toggling a radio moved a number the reader could not see. The live total appeared twice — once in the Pay button at the top, once in the totals at the bottom — with the entire invoice between them.</p>
+
+  <h3>What the cutover did</h3>
+  <p>The stand-alone route is gone. <code>/invoices/&lt;id&gt;</code> is now 308-folded by middleware to <code>/?invoice=&lt;id&gt;#letterbox</code> (<code>middleware.ts:264-290</code>, mapping at <code>lib/retired-routes.ts:63,145-152</code>). Only <code>/invoices/[invoiceId]/print</code> survives as a real route, and it is still session-gated.</p>
+  <p>The chooser survived near-verbatim into <code>components/threshold/payment-method-chooser.tsx</code> — same three options, same arithmetic, same check panel. What did not survive is the <em>presentation of the money</em>: the fee row and "Total to pay" were replaced by a single sentence at <code>settlement.tsx:183-192</code> — <em>"You will be charged $9,398.75 — the balance and a $273.75 processing fee."</em> The maths is byte-identical; the table is gone.</p>
+
+  <h3>The wall a homeowner hits today</h3>
+  <p>Every invoice letter Patina sends points at <code>${CLIENT_PORTAL_URL}/invoices/&lt;id&gt;</code> — <code>invoice-send:259</code>, <code>invoice-reminders:353</code>, and both webhook letters at <code>stripe-webhook:418,517</code>. That path folds to the letterbox, and <code>/</code> is explicitly not in the public list (<code>middleware.ts:148-152</code>). A homeowner without an account is bounced to <code>/auth/signin?callbackUrl=…</code> and stops there. Every invoice read in the database is <code>authenticated</code>-only RLS (00178, 00571); <code>create-checkout-session</code> runs <code>verify_jwt=true</code> and proves the caller is <code>invoice.client_id</code>. There is no token, no anon policy, and no public invoice surface anywhere in the product.</p>
+
+  <figure>
+    <div class="figwrap">
+    <svg viewBox="0 0 760 208" role="img" aria-label="Today the emailed invoice link folds to the letterbox behind a sign-in wall. After this change it opens the invoice directly.">
+      <text x="0" y="12" class="d-lbl">TODAY</text>
+      <rect x="0" y="24" width="132" height="38" class="d-box"/>
+      <text x="12" y="41" class="d-t">The letter</text>
+      <text x="12" y="55" class="d-m">invoice-send:259</text>
+      <path d="M132 43 L 158 43" class="d-arrow"/><path d="M158 43 l -6 -3.5 v 7 z" class="d-head"/>
+      <rect x="160" y="24" width="150" height="38" class="d-box"/>
+      <text x="172" y="41" class="d-t">/invoices/&lt;id&gt;</text>
+      <text x="172" y="55" class="d-m">iOS claims this path</text>
+      <path d="M310 43 L 350 43" class="d-arrow"/><path d="M350 43 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="312" y="34" class="d-clay">308</text>
+      <rect x="352" y="24" width="176" height="38" class="d-box"/>
+      <text x="364" y="41" class="d-t">/?invoice=&lt;id&gt;#letterbox</text>
+      <text x="364" y="55" class="d-m">middleware.ts:264-290</text>
+      <path d="M528 43 L 568 43" class="d-arrow"/><path d="M568 43 l -6 -3.5 v 7 z" class="d-head"/>
+      <rect x="570" y="24" width="190" height="38" class="d-box-stock"/>
+      <text x="582" y="41" class="d-t">Sign in</text>
+      <text x="582" y="55" class="d-m">they have no account</text>
+      <line x1="570" y1="24" x2="760" y2="62" class="d-dead"/>
+      <line x1="0" y1="92" x2="760" y2="92" class="d-line"/>
+      <text x="0" y="122" class="d-lbl">AFTER</text>
+      <rect x="0" y="134" width="132" height="38" class="d-box"/>
+      <text x="12" y="151" class="d-t">The letter</text>
+      <text x="12" y="165" class="d-m">the link builder</text>
+      <path d="M132 153 L 158 153" class="d-arrow"/><path d="M158 153 l -6 -3.5 v 7 z" class="d-head"/>
+      <rect x="160" y="134" width="176" height="38" class="d-box"/>
+      <text x="172" y="151" class="d-t">/pay/&lt;64 hex&gt;</text>
+      <text x="172" y="165" class="d-m">absent from the AASA</text>
+      <path d="M336 153 L 376 153" class="d-arrow"/><path d="M376 153 l -6 -3.5 v 7 z" class="d-head"/>
+      <rect x="378" y="134" width="382" height="38" class="d-box-ink"/>
+      <text x="392" y="151" class="d-t-inv">The invoice — read it, and settle it</text>
+      <text x="392" y="165" class="d-m" style="fill:var(--clay)">no account, any device, forwardable</text>
+      <text x="0" y="196" class="d-m">The letterbox keeps its ledger line and gains one act: Open the invoice.</text>
+    </svg>
+    </div>
+    <figcaption>The homeowner's path, before and after</figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="directions">
+  <div class="opener">
+    <p class="eyebrow">4 · Three directions, and the pick</p>
+    <h2>Where the pay decision sits relative to the record.</h2>
+  </div>
+
+  <p class="lede">Three directions, one axis. At the foot of the letter, as a remittance slip. Beside it, in a money column. In front of it, as a counter. All three share the paper, the faces, the arithmetic and the nine states; they differ in structure, in what the typography argues, and in what they cost to build.</p>
+
+  <h3>A · The Remittance</h3>
+  <p>A studio letter on Document paper with a remittance slip at its foot. Below a dotted perforation reading <em>Detach and return with your payment</em> sits the only bordered block on the sheet: the three ways to pay, the amount, and the act. Because there is exactly one "total to pay" figure anywhere on the page, the toggle has nowhere to be ambiguous — choosing a method re-inks the stub itself. Playfair carries the letterhead and one other thing, the slip's amount; the moment your eye crosses the perforation the type changes register from letter to instrument. Its cost is honest: the fee is below the fold, and on a phone the slip is two screens down.</p>
+  <div class="scrollx"><pre class="sketch">┌────────────────────────────────────────────────────┐
+│  QUIST INTERIORS                 quistinteriors.com│
+│  Des Moines, Iowa · prepared by Nora Quist         │
+│ ─────────────────────────────────────────────────  │
+│  INVOICE NO. 4      ISSUED 1 AUG     DUE 15 AUG    │
+│                                                    │
+│  The Vale residence                                │
+│  for Harper Vale                                   │
+│                                                    │
+│  Sconces, pair — Ilse 12 in.           $2,340.00   │
+│  Drapery, library and lounge           $2,890.00   │
+│  ⋯                                                 │
+└──────────────────── fold ──────────────────────────┘
+   below: totals · the perforation · the slip</pre></div>
+
+  <h3>B · The Statement</h3>
+  <p>The deleted page's bones, re-set on Document paper, with the chooser moved into a money column so the toggle and the number it moves sit forty pixels apart. Two measures on desktop: the record on the left — lines, memo, payments — and a standing column on the right holding the figures, the chooser, the totals stack, the fee row, Total to pay and the act. One column of the eye, top to bottom: <em>what you owe → how you'd like to pay → what that comes to → the act.</em> The column is not a card. It has no border, no fill, no shadow — a single hairline rule separates it from the record, the way a ledger separates its money column from its narrative, and that rule is the only structural device on the page.</p>
+  <div class="scrollx"><pre class="sketch">┌───────────────────────────────────────────────────────────┐
+│ QUIST INTERIORS  Des Moines · Nora Quist   quistinteriors │
+│ ────────────────────────────────────────────────────────  │
+│ Invoice No. 4                │ TOTAL          $16,730.00  │
+│ The Vale residence           │ RECEIVED        $7,605.00  │
+│                            ╎ │ BALANCE DUE     $9,125.00  │
+│ WHAT'S INCLUDED            ╎ │ due 15 August 2026         │
+│ Sconces, pair    $2,340.00 ╎ │ ─────────────────────────  │
+│ Drapery, living  $2,890.00 ╎ │ HOW WOULD YOU LIKE TO PAY? │
+│ Runner, stair    $1,660.00 ╎ │ (•) Bank transfer $9,130.00│
+│ Walnut credenza  $8,400.00 ╎ │     + $5.00                │
+│ Paintwork        $1,440.00 ╎ │ ( ) Card          $9,398.75│
+│                            ╎ │ ( ) Mail a check  $9,125.00│
+└─────────────── fold ───────╎─┴────────────────────────────┘
+      below-left: memo · payments   below-right: totals ·
+                                    TOTAL TO PAY · [ Pay ]</pre></div>
+
+  <h3>C · The Counter</h3>
+  <p>Pay first. The three ways to pay, each carrying the whole figure you would actually pay by that route, are the first thing on the page; the invoice unfolds beneath as the record. Selection is a change of voice, not a border — the chosen row's total promotes from mono to Playfair and the other two stay mono. On a paid invoice the counter is not disabled, it is gone, and the record stands alone as a receipt. Its cost, stated plainly by its own author: it asks for a payment decision before showing what is being bought, which demotes the record — and the record is the relationship.</p>
+  <div class="scrollx"><pre class="sketch">┌────────────────────────────────────────────────────────┐
+│ QUIST INTERIORS · Des Moines · prepared by Nora Quist   │
+│ INVOICE NO. 4 · THE VALE RESIDENCE · FOR HARPER VALE    │
+│ ─────────────────────────────────────────────────────   │
+│ $9,125.00 stands due on 15 August.                     │
+│                                                        │
+│ THREE WAYS TO SETTLE IT                                │
+│ ─────────────────────────────────────────────────────   │
+│ (•) Bank transfer  $9,130.00  the balance and $5.00    │
+│ ( ) Card           $9,398.75  the balance and $273.75  │
+│ ( ) Mail a check   $9,125.00  the balance, nothing else│
+│                                                        │
+│   [ Pay $9,130.00 by bank transfer ]   Print / save PDF│
+└───────────────────── fold ─────────────────────────────┘
+    below: THE RECORD — what's included · totals · memo</pre></div>
+
+  <h3>How they compare</h3>
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-mid">&nbsp;</th><th class="c3">A · The Remittance</th><th class="c3">B · The Statement</th><th class="c3">C · The Counter</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Answers the ask</strong><span class="ref"> link · no account · method on the page · total moves</span></td><td>Yes — but the mechanic is at the foot</td><td><strong>Yes, and the toggle sits beside the number it moves</strong></td><td>Yes — and the mechanic is the page's opening</td></tr>
+      <tr><td><strong>First-viewport clarity</strong></td><td>Letterhead, house, what's owed. The ways to pay are below the fold</td><td>Figures, the whole chooser with all three totals, the top of the totals stack</td><td>Everything needed to choose, on both breakpoints</td></tr>
+      <tr><td><strong>Fee transparency</strong></td><td>Good — one fee, one place, one explanation. Needs a scroll and a toggle</td><td><strong>Very good</strong> — three totals visible, fee separate from balance</td><td><strong>Best</strong> — three real totals, unprompted, before any interaction</td></tr>
+      <tr><td><strong>Phone at 390</strong></td><td>Weakest: two screens to the slip</td><td>Strong: money column first, then the record</td><td><strong>Strongest</strong>: the choice is complete above the fold</td></tr>
+      <tr><td><strong>Print</strong></td><td><strong>Best</strong> — prints a mailable remittance stub</td><td>Very good — a conventional invoice a bookkeeper will accept</td><td>Clean, but print and screen are visibly different objects</td></tr>
+      <tr><td><strong>Studio invoice, no house</strong></td><td>Natural — a letter needs no house</td><td>Natural — the sub-line already carries the title</td><td>Natural, but the doorplate line grows long</td></tr>
+      <tr><td><strong>Build cost</strong></td><td>Highest — a new letter layout, a new slip, an unlike-anything print sheet</td><td><strong>Lowest</strong> — chooser, totals stack and arithmetic all exist; the work is layout, letterhead, states, print</td><td>Middle — a new counter and a promotion device</td></tr>
+      <tr><td><strong>Vision fit</strong></td><td><strong>Highest</strong> — paper, provenance, Patina invisible</td><td>High — record and money stand as equals</td><td>Mixed — §4's "no hidden fees" at its strongest, "the record is the relationship" at its weakest</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The pick: B, with two borrowings</h3>
+  <p><strong>Build B, The Statement.</strong> Three reasons, in order of weight.</p>
+  <ol class="steps">
+    <li><strong>It fixes the one real defect in the page Kody asked us to look at.</strong> The old page put the entire line-item list between the chooser and the number it moved. Kody's ask centres precisely on that mechanic. B is the only direction where the motion happens inside a single column of the eye, and it gets there by moving components that already exist rather than inventing an object.</li>
+    <li><strong>It honours K2 without ranking the record against the money.</strong> A link-holder who came to read the bill and one who came to settle it are served by the same first viewport, side by side. A wins on beauty by putting the till two screens down; C wins on speed by demoting the record. B refuses the trade — which is what Vision §4 asks for.</li>
+    <li><strong>It is the cheapest and least risky.</strong> The chooser, the totals stack, the surcharge arithmetic and every state's copy already exist in the repo.</li>
+  </ol>
+
+  <p><strong>Borrowed from C:</strong> all three arrived-at totals on the chooser rows, so a reader sees $9,130.00 / $9,398.75 / $9,125.00 at once. It costs one span per row and converts "no hidden fees" from a claim into something the reader can see without touching anything. B keeps its single moving <em>Total to pay</em> as the promoted figure; the three row totals never move, and their stillness is what makes the moving one legible.</p>
+  <p><strong>Borrowed from A:</strong> the studio-first letterhead — which does trust-work B's statement band does not — and the print-only colophon line, <em>"This sheet carries a payment link. Treat it like a check."</em></p>
+
+  <h3>What the review corrected in the design</h3>
+  <p>The adversarial reviewer found five design defects that were load-bearing. All five are folded into the mockup and the architecture.</p>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-id">#</th><th class="w-mid">The defect</th><th class="c3">The correction</th></tr></thead>
+    <tbody>
+      <tr><td class="w-id">G1</td><td><strong>No spelled-out money.</strong> All three directions built a standing sentence — <em>"Nine thousand one hundred twenty-five dollars stands due…"</em> — on <code>moneyInWords</code>. That instrument does not spell money in words. Its body is <code>Intl.NumberFormat(… maximumFractionDigits: 0)</code>: it returns "$9,125" and <strong>rounds the cents away</strong>.</td><td><code>moneyInWords</code> is banned from this page. Every figure is <code>formatCurrency</code>, including inside accessible names. On a page whose purpose is to charge an exact figure, a rounding formatter on the payable amount is a money defect.</td></tr>
+      <tr><td class="w-id">G2</td><td><strong>The fixture arithmetic.</strong> The design carried an $18,250 invoice total. The fixture pins only the balance — $9,125 due 15 August; the $61,400-of-$85,000 pair beside it in the brief is the <em>project agreement</em>, not the invoice. The design's own "$1,520 gap" was an artefact of a made-up total.</td><td>Total is the named line sum: <strong>$16,730.00</strong>. Received <strong>$7,605.00</strong>. $16,730 − $7,605 = <strong>$9,125.00</strong>, the canonical balance. No invented rooms, no elision, no rounded total. Composing all three named amounts onto Invoice No. 4 is the mockup's own arrangement, and this deck says so.</td></tr>
+      <tr><td class="w-id">G3</td><td><strong>"The lowest fee of the three" is false.</strong> Mail a check is $0. The string was inherited from the deleted chooser's <em>Preferred · lowest fee</em> chip, and it survived into a direction that shows all three totals side by side — so the page would state a falsehood the reader could disprove one row down.</td><td>The claim is dropped. The three figures do the work: <code>+ $5.00</code> beside <code>+ $273.75</code> beside <code>No fee.</code></td></tr>
+      <tr><td class="w-id">G4</td><td><strong>The fee sentences over-claimed.</strong> "The fee is what the payment rail costs; Quist Interiors doesn't add to it" asserts exact cost recovery. Card is a per-studio rate defaulting to 300 bps; Stripe's US card price is 2.9% + $0.30, which on the charged total of $9,398.75 is $272.86 — close to the 300 bps surcharge of $273.75, but not equal to it. A studio set below 300, or a bank transfer at 0.8% capped at $5.00 against Stripe's own ACH pricing, diverges further. And "rail" is payments jargon a homeowner will not read.</td><td>Card: <em>"This covers what card processing costs."</em> Bank transfer: <em>"Bank transfer costs the least to process."</em> Check: <em>"No fee."</em> No equation, no "doesn't add to it," no "rail."</td></tr>
+      <tr><td class="w-id">G5</td><td><strong>The card rate is never unknown.</strong> All three directions designed an em-dash "rate unknown" state that held the act. But <code>claim_invoice_checkout_attempt</code> does <code>coalesce(v_card_bps, 300)</code> immediately before charging (<code>00428:254-257</code>), and <code>studio_billing_settings</code> rows are written only by a studio admin — no backfill, no trigger — so most studios have no row. The held state would have disabled card payment across the board.</td><td><code>card_surcharge_bps</code> is always the coalesced integer, 300 by default. The em-dash and the held act are deleted everywhere. Similarly <code>check_remit_to</code> is NULL for the same majority, so the tested <code>CHECK_REMIT_FALLBACK</code> — "Contact your designer for mailing details" — is the common case, not an edge.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Two more design rulings fell out of the same pass. <strong>The "no payer" state is gone</strong> (G7): the link-payer path is built, so the payer's existence stops being a UI concept and the check-only variant is deleted. And the recommendation's claim that the guest sheet and the designer's folio are "the same document" was <strong>dropped</strong> (G6) — status is said on this page and coloured in the folio, and until the folio's colour is cleaned up, the sheets differ in exactly the dimension the design changed. That cleanup is a follow-up, not folded in.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="page">
+  <div class="opener">
+    <p class="eyebrow">5 · The page</p>
+    <h2>Six plates from the built mockup.</h2>
+  </div>
+
+  <p class="lede">The mockup is real and interactive — the chooser drives the fee row, the Total to pay and the act's label off the exact <code>onlineSurchargeCents</code> arithmetic, and ten states are switchable from a strip at the foot. <a href="https://claude.ai/code/artifact/e6dfee10-5fff-4b3e-8cb0-244d3e13fe7e">Open the page</a> to toggle it yourself. What follows is drawn in the page's own hand at a reduced scale.</p>
+
+  <div class="plates">
+    <figure class="platefig">
+      <p class="platecap"><span>Plate 1 · The first viewport, desktop</span><span class="st">state: open</span></p>
+      <div class="plate">
+        <div class="ph">
+          <div><div class="wm">Quist Interiors</div><div class="phmeta">Des Moines, Iowa · prepared by Nora Quist</div></div>
+          <div class="phsite">quistinteriors.com</div>
+        </div>
+        <p class="eyeb">Awaiting payment · due 15 August</p>
+        <div class="g2">
+          <div class="rec">
+            <p class="no">Invoice No. 4</p>
+            <p class="subj">The Vale residence · from Nora Quist</p>
+            <p class="sh">What's included</p>
+            <div class="line"><span><span class="lname">Sconces, pair</span><span class="lsub">Harmon Bench Works</span></span><span class="lq">2</span><span class="lamt">$2,340.00</span></div>
+            <div class="line"><span class="lname">Drapery, living room</span><span class="lq">1</span><span class="lamt">$2,890.00</span></div>
+            <div class="line"><span class="lname">Runner, stair</span><span class="lq">1</span><span class="lamt">$1,660.00</span></div>
+            <div class="line"><span><span class="lname">Walnut credenza</span><span class="lsub">Harmon Bench Works, Dayton</span></span><span class="lq">1</span><span class="lamt">$8,400.00</span></div>
+            <div class="line"><span><span class="lname">Paintwork</span><span class="lsub">Prairie Coat Painting</span></span><span class="lq">1</span><span class="lamt">$1,440.00</span></div>
+            <p class="sh">A note from Nora</p>
+            <p class="memo">The credenza left Harmon's bench in Dayton on the 28th and the paintwork finished the same week. Everything on this bill is standing in the house.</p>
+            <p class="sh">Payments</p>
+            <div class="paidrow"><span><span class="lname">Bank transfer</span><span class="psub">Received 5 August 2026</span></span><span class="pamt">$7,605.00</span></div>
+            <span class="quietact">Print / save PDF</span>
+          </div>
+          <div class="mon">
+            <div class="figrow"><span class="k">Total</span><span class="v">$16,730.00</span></div>
+            <div class="figrow"><span class="k">Received</span><span class="v">$7,605.00</span></div>
+            <div class="balance"><span class="k">Balance due</span><span class="v">$9,125.00</span></div>
+            <p class="due">due 15 August 2026</p>
+            <p class="chooserhead">How would you like to pay?</p>
+            <p class="chooserlede">Each row shows what you would pay in full.</p>
+            <div class="rows">
+              <div class="row on"><span class="dot"></span><span><span class="rtop"><span class="rname">Bank transfer</span><span class="rtot">$9,130.00</span></span><span class="rnote">+ $5.00 · Bank transfer costs the least to process.</span></span></div>
+              <div class="row"><span class="dot"></span><span><span class="rtop"><span class="rname">Card</span><span class="rtot">$9,398.75</span></span><span class="rnote">+ $273.75 · This covers what card processing costs.</span></span></div>
+              <div class="row"><span class="dot"></span><span><span class="rtop"><span class="rname">Mail a check</span><span class="rtot">$9,125.00</span></span><span class="rnote">No fee.</span></span></div>
+            </div>
+            <div class="tot">
+              <div class="figrow"><span class="k">Subtotal</span><span class="v">$16,730.00</span></div>
+              <div class="figrow"><span class="k">Received</span><span class="v">−$7,605.00</span></div>
+              <div class="figrow"><span class="k">Balance</span><span class="v">$9,125.00</span></div>
+              <div class="figrow fee"><span class="k">Bank transfer fee</span><span class="v">$5.00</span></div>
+              <div class="pay"><span class="k">Total to pay</span><span class="v">$9,130.00</span></div>
+            </div>
+            <span class="btn">Pay $9,130.00</span>
+          </div>
+        </div>
+        <div class="colo"><span>Prepared by Quist Interiors · Sent through Patina</span></div>
+      </div>
+      <figcaption>The record left, the money right, one hairline between them</figcaption>
+    </figure>
+  </div>
+
+  <div class="plates p2">
+    <figure class="platefig">
+      <p class="platecap"><span>Plate 2 · Phone, 390</span><span class="st">the money column comes first</span></p>
+      <div class="plate phone">
+        <div class="ph">
+          <div><div class="wm">Quist Interiors</div><div class="phmeta">Des Moines · Nora Quist</div></div>
+        </div>
+        <p class="eyeb">Awaiting payment · due 15 August</p>
+        <p class="no">Invoice No. 4</p>
+        <p class="subj">The Vale residence · from Nora Quist</p>
+        <div class="figrow"><span class="k">Total</span><span class="v">$16,730.00</span></div>
+        <div class="figrow"><span class="k">Received</span><span class="v">$7,605.00</span></div>
+        <div class="balance"><span class="k">Balance due</span><span class="v">$9,125.00</span></div>
+        <p class="due">due 15 August 2026</p>
+        <p class="chooserhead">How would you like to pay?</p>
+        <div class="rows" style="margin-top:8px">
+          <div class="row on"><span class="dot"></span><span><span class="rtop"><span class="rname">Bank transfer</span><span class="rtot">$9,130.00</span></span><span class="rnote">+ $5.00 · costs the least to process.</span></span></div>
+          <div class="row"><span class="dot"></span><span><span class="rtop"><span class="rname">Card</span><span class="rtot">$9,398.75</span></span><span class="rnote">+ $273.75</span></span></div>
+          <div class="row"><span class="dot"></span><span><span class="rtop"><span class="rname">Mail a check</span><span class="rtot">$9,125.00</span></span><span class="rnote">No fee.</span></span></div>
+        </div>
+        <div class="tot">
+          <div class="figrow fee"><span class="k">Bank transfer fee</span><span class="v">$5.00</span></div>
+          <div class="pay"><span class="k">Total to pay</span><span class="v">$9,130.00</span></div>
+        </div>
+        <span class="btn">Pay $9,130.00</span>
+        <p class="due" style="margin-top:10px">below: what's included · memo · payments</p>
+      </div>
+      <figcaption>DOM order follows the phone; desktop places the column with <code>order</code>, so tab order never disagrees with the page</figcaption>
+    </figure>
+
+    <figure class="platefig">
+      <p class="platecap"><span>Plate 3 · The receipt</span><span class="st">state: paid</span></p>
+      <div class="plate">
+        <div class="ph">
+          <div><div class="wm">Quist Interiors</div><div class="phmeta">Des Moines, Iowa · prepared by Nora Quist</div></div>
+          <div class="phsite">quistinteriors.com</div>
+        </div>
+        <p class="eyeb">Paid in full · 12 August</p>
+        <p class="no">Invoice No. 4</p>
+        <p class="subj">The Vale residence · from Nora Quist</p>
+        <div class="figrow"><span class="k">Total</span><span class="v">$16,730.00</span></div>
+        <div class="figrow"><span class="k">Received</span><span class="v">$16,730.00</span></div>
+        <div class="balance"><span class="k">Balance</span><span class="v">$0.00</span></div>
+        <p class="sh">Payments</p>
+        <div class="paidrow"><span><span class="lname">Bank transfer</span><span class="psub">Received 5 August 2026</span></span><span class="pamt">$7,605.00</span></div>
+        <div class="paidrow"><span><span class="lname">Bank transfer · + $5.00 processing fee ($9,130.00 charged)</span><span class="psub">Received 12 August 2026</span></span><span class="pamt">$9,125.00</span></div>
+        <span class="quietact">Print / save PDF</span>
+        <div class="colo"><span>Prepared by Quist Interiors · Sent through Patina</span></div>
+      </div>
+      <figcaption>The chooser, the fee row, Total to pay and the act all leave. A receipt with a greyed-out Pay button is not a receipt.</figcaption>
+    </figure>
+  </div>
+
+  <div class="plates p2">
+    <figure class="platefig">
+      <p class="platecap"><span>Plate 4 · An invoice with no house</span><span class="st">state: studio</span></p>
+      <div class="plate">
+        <div class="ph">
+          <div><div class="wm">Middle West Studio</div><div class="phmeta">Des Moines, Iowa · prepared by Leah Kochaver</div></div>
+          <div class="phsite">middlewest.studio</div>
+        </div>
+        <p class="eyeb">Awaiting payment</p>
+        <p class="no">Invoice No. 4</p>
+        <p class="subj">Design consultation · June · from Leah Kochaver</p>
+        <p class="fromstudio">from the studio</p>
+        <p class="sh">What's included</p>
+        <div class="line"><span class="lname">Design consultation, 3 hours</span><span class="lq">1</span><span class="lamt">$675.00</span></div>
+        <div class="figrow" style="margin-top:12px"><span class="k">Total</span><span class="v">$675.00</span></div>
+        <div class="balance"><span class="k">Balance due</span><span class="v">$675.00</span></div>
+        <div class="rows" style="margin-top:10px">
+          <div class="row on"><span class="dot"></span><span><span class="rtop"><span class="rname">Bank transfer</span><span class="rtot">$680.00</span></span><span class="rnote">+ $5.00 · Bank transfer costs the least to process.</span></span></div>
+          <div class="row"><span class="dot"></span><span><span class="rtop"><span class="rname">Card</span><span class="rtot">$695.25</span></span><span class="rnote">+ $20.25 · This covers what card processing costs.</span></span></div>
+          <div class="row"><span class="dot"></span><span><span class="rtop"><span class="rname">Mail a check</span><span class="rtot">$675.00</span></span><span class="rnote">No fee.</span></span></div>
+        </div>
+        <div class="colo"><span>Prepared by Middle West Studio · Sent through Patina</span></div>
+      </div>
+      <figcaption>The title stands where a house name would. The ACH cap holds at $5.00 on $675.00 too; card at 300&nbsp;bps is $20.25.</figcaption>
+    </figure>
+
+    <div>
+      <figure class="platefig">
+        <p class="platecap"><span>Plate 5 · The dead link</span><span class="st">state: dead</span></p>
+        <div class="plate dead">
+          <p style="max-width:34ch">This link is no longer good. If you were sent an invoice, ask the studio for a fresh link.</p>
+        </div>
+        <figcaption>No letterhead, no studio name, no amount — so void, revoked and never-existed are one sheet</figcaption>
+      </figure>
+
+      <figure class="platefig" style="margin-top:1.8rem">
+        <p class="platecap"><span>Plate 6 · The settling sheet</span><span class="st">void, money in flight</span></p>
+        <div class="plate settling">
+          <div class="ph">
+            <div><div class="wm">Quist Interiors</div><div class="phmeta">Des Moines, Iowa · prepared by Nora Quist</div></div>
+            <div class="phsite">quistinteriors.com</div>
+          </div>
+          <div class="set">
+            <p class="no" style="margin-top:10px">Invoice No. 4</p>
+            <p class="subj">A payment on this invoice is being sorted out by Quist Interiors.</p>
+            <p class="due">Nora Quist · quistinteriors.com · There is nothing to pay here in the meantime.</p>
+          </div>
+        </div>
+        <figcaption>Someone charged real money seconds before the studio voided the invoice is not told "this link is no longer good"</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <div class="note">
+    <p>Five more states exist in the mockup and are not plated here: <strong>partially paid</strong> (Total and Balance stand as visibly different numbers, and every figure the chooser computes runs off the balance, never the total — the old page's own fix, kept verbatim), <strong>past due</strong> (a second mono line, <code>past due · 22 days</code>, in the same ink — Vision §6 bans red status, and this is a deliberate departure from two shipped surfaces), <strong>ACH processing</strong> (the chooser is replaced in place by a sentence; the figures stay), and the two <strong>checkout returns</strong> — confirming and cancelled — which are sentences in the money column, because that is where money news belongs.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="mechanic">
+  <div class="opener">
+    <p class="eyebrow">6 · The toggle and the total</p>
+    <h2>Three things move. Three things hold still.</h2>
+  </div>
+
+  <p class="lede">This is the mechanic Kody asked for, and it is the whole reason direction B won: the radio and the number it changes sit forty pixels apart, inside one column of the eye. Selecting a row moves exactly three things and nothing else on the page shifts.</p>
+
+  <figure>
+    <div class="figwrap">
+    <svg viewBox="0 0 760 322" role="img" aria-label="Selecting a payment row moves the fee row, the Total to pay figure and the act's label. The three arrived-at totals on the rows do not move.">
+      <text x="0" y="14" class="d-lbl">WHAT HOLDS STILL — THE THREE ARRIVED-AT TOTALS</text>
+      <rect x="0" y="26" width="330" height="118" class="d-box-stock"/>
+      <rect x="0" y="26" width="330" height="40" class="d-box"/>
+      <circle cx="18" cy="46" r="5.5" fill="none" stroke="var(--clay-ink)" stroke-width="1.2"/><circle cx="18" cy="46" r="2.4" class="d-head"/>
+      <text x="34" y="43" class="d-t">Bank transfer</text><text x="248" y="43" class="d-t" text-anchor="end" style="font-family:var(--font-mono);font-size:11.5px">$9,130.00</text>
+      <text x="34" y="58" class="d-m">+ $5.00 · costs the least to process</text>
+      <circle cx="18" cy="86" r="5.5" fill="none" stroke="var(--rule-2)" stroke-width="1.2"/>
+      <text x="34" y="83" class="d-t">Card</text><text x="248" y="83" class="d-t" text-anchor="end" style="font-family:var(--font-mono);font-size:11.5px">$9,398.75</text>
+      <text x="34" y="98" class="d-m">+ $273.75 · what card processing costs</text>
+      <circle cx="18" cy="124" r="5.5" fill="none" stroke="var(--rule-2)" stroke-width="1.2"/>
+      <text x="34" y="121" class="d-t">Mail a check</text><text x="248" y="121" class="d-t" text-anchor="end" style="font-family:var(--font-mono);font-size:11.5px">$9,125.00</text>
+      <text x="34" y="136" class="d-m">No fee.</text>
+      <text x="0" y="188" class="d-m">Constants of the invoice. Their stillness</text>
+      <text x="0" y="204" class="d-m">is what makes the moving figure legible.</text>
+
+      <path d="M336 84 L 396 84" class="d-arrow"/><path d="M396 84 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="342" y="76" class="d-clay">one click</text>
+
+      <text x="404" y="14" class="d-lbl">WHAT MOVES — TOGETHER, ANNOUNCED ONCE</text>
+      <rect x="404" y="26" width="356" height="30" class="d-box"/>
+      <text x="418" y="45" class="d-t">Bank transfer fee</text><text x="746" y="45" class="d-t" text-anchor="end" style="font-family:var(--font-mono);font-size:11.5px">$5.00</text>
+      <text x="404" y="70" class="d-lbl">1 · THE FEE ROW — ITS LABEL AND ITS FIGURE</text>
+
+      <rect x="404" y="80" width="356" height="34" class="d-box"/>
+      <text x="418" y="102" class="d-t">Total to pay</text><text x="746" y="103" text-anchor="end" class="d-t" style="font-family:var(--font-display);font-size:17px">$9,130.00</text>
+      <text x="404" y="128" class="d-lbl">2 · THE ONE PROMOTED FIGURE</text>
+
+      <rect x="404" y="138" width="356" height="32" class="d-box-ink"/>
+      <text x="582" y="159" text-anchor="middle" class="d-t-inv">Pay $9,130.00</text>
+      <text x="404" y="184" class="d-lbl">3 · THE ACT'S LABEL — ONE ACT, THREE OUTCOMES</text>
+
+      <line x1="404" y1="200" x2="760" y2="200" class="d-line"/>
+      <text x="404" y="220" class="d-m">On check: no fee row, Total to pay</text>
+      <text x="404" y="236" class="d-m">$9,125.00, and the act becomes</text>
+      <text x="404" y="252" class="d-m">“Let Nora know a check is coming”.</text>
+      <text x="404" y="280" class="d-m">One hidden aria-live node speaks the</text>
+      <text x="404" y="296" class="d-m">change once, and names only what moved:</text>
+      <text x="404" y="316" class="d-clay">“Total to pay $9,130.00”</text>
+    </svg>
+    </div>
+    <figcaption>The mechanic, in full</figcaption>
+  </figure>
+
+  <h3>The arithmetic, quoted exactly</h3>
+  <p>From <code>packages/shared/src/invoice/index.ts:169-223</code>, unchanged at HEAD and already shared with the SQL twin <code>invoice_payment_surcharge_cents</code> (00428). One rounding formula, integer half-up:</p>
+
+<pre>surchargeFormula(cents, bps) = Math.floor((cents * bps + 5000) / 10000)
+
+ACH_SURCHARGE_BPS        =  80      // 0.8%
+ACH_SURCHARGE_CAP_CENTS  = 500      // $5.00, and the cap is what binds here
+DEFAULT_CARD_SURCHARGE_BPS = 300    // always coalesced; never null (G5)
+check                    =   0</pre>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-name">Method</th><th class="w-mid">Rate</th><th>Fee on $9,125.00</th><th>Total to pay</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Bank transfer</strong></td><td>80 bps, capped at $5.00</td><td class="num">$5.00 <span class="ref">formula gives $73.00; the cap holds</span></td><td class="num"><strong>$9,130.00</strong></td></tr>
+      <tr><td><strong>Card</strong></td><td>studio <code>card_surcharge_bps</code>, 300 by default</td><td class="num">$273.75</td><td class="num"><strong>$9,398.75</strong></td></tr>
+      <tr><td><strong>Mail a check</strong></td><td>none</td><td class="num">$0.00</td><td class="num"><strong>$9,125.00</strong></td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Two invariants from 00428 bind every figure on the page. <strong>Net and surcharge are separate rows, always</strong> — the fee is never folded into the balance, so the reader can see the toll and the debt apart from each other. And <strong>never under-quote</strong>: where a rate could be in doubt the platform quotes the rate it will actually charge, because over-quoting is survivable and under-quoting is not.</p>
+
+  <h3>The copy, settled</h3>
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-mid">Slot</th><th>String</th></tr></thead>
+    <tbody>
+      <tr><td>Chooser heading</td><td>How would you like to pay?</td></tr>
+      <tr><td>Chooser lede</td><td>Each row shows what you would pay in full.</td></tr>
+      <tr><td>Bank transfer row</td><td>Bank transfer · $9,130.00 · <em>+ $5.00 · Bank transfer costs the least to process.</em></td></tr>
+      <tr><td>Card row</td><td>Card · $9,398.75 · <em>+ $273.75 · This covers what card processing costs.</em></td></tr>
+      <tr><td>Check row</td><td>Mail a check · $9,125.00 · <em>No fee.</em></td></tr>
+      <tr><td>Fee row label</td><td>Bank transfer fee · Card processing fee · <em>(absent on check)</em></td></tr>
+      <tr><td>Total row</td><td>Total to pay</td></tr>
+      <tr><td>Act, online</td><td>Pay $9,130.00</td></tr>
+      <tr><td>Act, check</td><td>Let Nora know a check is coming → <em>Nora has been notified.</em></td></tr>
+      <tr><td>Check panel</td><td>Mail your check to <strong>Quist Interiors</strong> · the address · <em>Write Invoice No. 4 on the memo line.</em></td></tr>
+      <tr><td>Check panel, no address</td><td>Contact your designer for mailing details <span class="ref">the tested CHECK_REMIT_FALLBACK — the common case, not an edge</span></td></tr>
+      <tr><td>Past due</td><td>past due · 22 days <span class="ref">same ink; no colour</span></td></tr>
+      <tr><td>ACH processing</td><td>A bank transfer of $9,125.00 is on its way. The balance updates when it clears.</td></tr>
+      <tr><td>Dead link</td><td>This link is no longer good. If you were sent an invoice, ask the studio for a fresh link.</td></tr>
+      <tr><td>Settling sheet</td><td>A payment on this invoice is being sorted out by Quist Interiors.</td></tr>
+      <tr><td>Colophon</td><td>Prepared by Quist Interiors · Sent through Patina</td></tr>
+      <tr><td>Colophon, print only</td><td>This sheet carries a payment link. Treat it like a check.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The payee rule the design could not find in code is implicit in the payload's own shape: <code>studio</code> carries a name, a logo and a website — an entity's letterhead — while <code>designer_display_name</code> is a bare human name. So the <strong>studio</strong> is the payee on the envelope, and the <strong>designer</strong> is the person you tell. That is right for a two-studio designer and for a houseless studio invoice alike.</p>
+
+  <p>ACH stays first and pre-selected. Nothing in the vision forbids putting a route first, and there is a non-self-interested reason to lead with it: it is the cheaper of the two routes that settle immediately, and a check costs the homeowner a stamp and the designer three weeks of chasing. What Patina is not entitled to is a false claim beside it — which is why G3 and G4 were fixed rather than argued. With three real totals visible at once and check plainly marked $0, the reader can see the nudge and overrule it in one click.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="system">
+  <div class="opener">
+    <p class="eyebrow">7 · The system</p>
+    <h2>One table, one resolver, one guest endpoint.</h2>
+  </div>
+
+  <p class="lede">Everything below is from the verified system design, and every claim in it was re-opened against the file it cites. Section references are to that document.</p>
+
+  <h3>The link — <code>public.invoice_links</code> <span class="ref">§2.1–§2.3</span></h3>
+  <p>A side table, not columns on <code>invoices</code>: the invoice UPDATE paths are hash-pinned, and a side table keeps a revoke history. It stores the <strong>raw token</strong>, deliberately. Four server producers must re-emit the <em>same</em> link for the invoice's life or K2's "stays as a receipt" fails; hash-only would force a remint on every send. The hash's only value — "a database read yields no working link" — is void with the raw token in the adjacent column anyway. Protection is the table's posture: RLS on with <strong>zero policies</strong>, and all grants revoked from <code>PUBLIC</code>, <code>anon</code> and <code>authenticated</code>. Only <code>service_role</code> can touch it. The comparison case, <code>00548</code>'s board shares, hashes because its resolver is anon-callable from a browser; ours is not.</p>
+
+  <div class="dl">
+    <div><dt>Token</dt><dd><code>encode(extensions.gen_random_bytes(32),'hex')</code> — 256 bits, schema-qualified per the 00282 incident, with a <code>^[0-9a-f]{64}$</code> CHECK and a unique index.</dd></div>
+    <div><dt>Statuses</dt><dd><code>active</code> (payable, then a receipt) · <code>revoked</code> (a Regenerate) · <code>closed</code> (set by <code>void_invoice</code>). One partial unique index enforces one active link per invoice.</dd></div>
+    <div><dt>Minting</dt><dd>An <code>AFTER UPDATE OF status</code> trigger on <code>invoices</code>, firing on <code>sent</code>, <code>partially_paid</code> or <code>paid</code>. Proven against every writer: <code>public.issue_invoice</code> (status write at <code>00318:181-190</code>), <code>app_private.issue_invoice_for_actor</code> which <em>duplicates</em> rather than delegates (<code>00511:4071-4080</code> — the ceremony path, and the reason a trigger beats editing <code>issue_invoice</code>), the trade-draw and executed-on-paper paths which insert <code>draft</code> then call <code>issue_invoice</code>, and <code>apply_invoice_payment_effects</code>, which can move a draft straight to <code>partially_paid</code>. All nineteen migration inserts use <code>draft</code>; nothing inserts an invoice already sent.</dd></div>
+    <div><dt>Never raises</dt><dd>The trigger is <code>SECURITY DEFINER</code> and sits on the money path, so its body ends <code>EXCEPTION WHEN OTHERS THEN RETURN NEW</code>. A missing link is recoverable through <code>ensure_invoice_link</code>; a failed payment settlement is not.</dd></div>
+    <div><dt>Backfill</dt><dd>Every <code>sent | partially_paid | paid</code> invoice gets a token in the migration. Draft and void are skipped.</dd></div>
+  </div>
+
+  <h3>The read path <span class="ref">§3</span></h3>
+  <p><code>resolve_invoice_link(p_token, p_record_view default true)</code> returns one scrubbed <code>jsonb</code> and is granted to <code>authenticated</code> and <code>service_role</code> — <strong>not <code>anon</code></strong>, mirroring <code>resolve_plan_transmittal</code> (<code>00429:1908-1911</code>). It is called only server-side, from a <code>server-only</code> module with the service client. It is VOLATILE, because it writes <code>view_count</code>.</p>
+  <p>The payload carries the invoice's numbers and dates, its line items, its payments, the studio's letterhead, the designer's and client's display names, <code>payment_options</code> and <code>pay.rails</code> / <code>pay.processing</code>. It carries <strong>no uuid at any depth</strong>. The forbidden list is explicit: every <code>*_id</code>, <code>internal_notes</code>, any email or phone, every Stripe identifier, <code>void_reason</code>, <code>voided_at</code>, the A/R and reminder columns, the token itself, the return nonce, and each payment's <code>reference</code>, <code>recorded_by</code> and <code>note</code>. It is enforced <strong>twice</strong> — a SQL assertion that walks the payload's keys, and a recursive TypeScript parser that rejects a forbidden key at any depth before the page ever renders.</p>
+  <p>The letterhead comes from <code>resolve_studio_identity(p_project_id =&gt; …, p_designer_id =&gt; …, p_studio_id =&gt; …)</code> (<code>00571:1318</code>), all three named. That is the two-studio fix: a designer who works under two studios must never send a bill under the wrong name.</p>
+
+  <h4>Dead-link semantics, and the one exception</h4>
+  <p>A malformed token, an unknown token, a revoked link, a draft invoice and a void invoice with nothing in flight all return <strong>the same NULL</strong>, and the page renders one dead sheet. No timing branch, no oracle, no difference a prober can measure.</p>
+  <p>The exception is the <strong>settling sheet</strong>. A <code>closed</code> link whose invoice carries a <code>pending</code> or <code>requires_refund</code> payment resolves to a minimal payload — letterhead, invoice number, one sentence, studio contact; no amounts, no chooser, no act. Without it, a guest charged real money seconds before the studio voided the invoice is told "This link is no longer good," with no receipt and no address to write to. <code>void_invoice</code> refusing while an attempt is <code>processing</code> closes the common half of that window; the settling sheet closes the rest.</p>
+
+  <h3>The guest rail <span class="ref">§4</span></h3>
+  <p>A new edge function, <code>invoice-link-checkout</code>, with <code>verify_jwt = false</code> — the tenth such function in the repo, alongside <code>stripe-webhook</code>, <code>fulfillment-evidence</code> and <code>site-request-guest</code>. It takes <code>{ token, method }</code> where method is <code>card</code>, <code>us_bank_account</code> or <code>check</code>. <code>create-checkout-session</code> is <strong>not</strong> flipped public: it serves PO payments and direct orders for signed-in callers and for iOS, and its every branch stays byte-identical.</p>
+
+  <div class="dl">
+    <div><dt>Origin-gated</dt><dd>No wildcard CORS. The function accepts a request whose <code>Origin</code> is absent — the Worker's own server-side call — or equal to <code>CLIENT_PORTAL_URL</code>. Anything else is 403. iOS opens the <em>page</em>, not the function.</dd></div>
+    <div><dt>Uniform errors</dt><dd>Malformed, unknown, revoked, closed, draft, void or zero-balance all collapse to <code>404 invoice_not_found</code>. A constant response floor equalises the timing difference between a valid token's round trip and an invalid one's regex test.</dd></div>
+    <div><dt>The link payer</dt><dd>The payer is <code>coalesce(invoices.client_id, projects.client_id)</code> where one exists. Where none does — and that is the <strong>core population</strong>, not an edge — the link itself is the identity. A rostered household that never signed up has no <code>profiles</code> row at all: <code>00018:2-5</code> dropped <code>designer_clients.client_id NOT NULL</code>, and <code>profiles.id</code> is a primary key referencing <code>auth.users</code>. The rejected alternative was a synthetic payer, which means minting a real Supabase auth account for a homeowner who never asked for one, silently, at the moment they click Pay.</dd></div>
+    <div><dt>First-class identity</dt><dd><code>invoice_link_id</code> becomes a first-class identity term <strong>everywhere <code>payer_id</code> is one</strong> — the attempt table under an exclusive-or CHECK, the Stripe metadata on both Session and PaymentIntent, <code>assertInvoiceSessionIdentity</code>, the webhook's own <code>invoice-checkout-integrity.ts</code>, and <code>finalize_invoice_checkout_attempt</code> / <code>recover_invoice_checkout_session_evidence</code>, both of which gain <code>p_invoice_link_id</code>. Not a nullable column only the claim function knows about.</dd></div>
+    <div><dt>Actor change</dt><dd>A stranger who opens a link Checkout and walks away must not lock the household out of paying its own invoice. The payer/customer check moves <em>below</em> the supersede branch and <code>'actor_changed'</code> joins the supersede reasons: fail the stale pending payment, mark the attempt superseded, return the session id so the caller can expire it. Belt-and-braces, an hourly pg_cron sweep flips <code>claimed</code> and <code>session_created</code> attempts older than 24 hours to <code>expired</code>, with a <code>job_runs</code> row. <code>processing</code> is <strong>never</strong> swept — that is ACH money in flight.</dd></div>
+    <div><dt>The return nonce</dt><dd>A Stripe Session's <code>success_url</code> is visible in the dashboard, in event payloads, in webhook logs and in any export, indefinitely. The token is a permanent bearer credential, so it does not go there. Each attempt carries a 32-byte <code>return_nonce</code>; Stripe returns to <code>/pay/return/&lt;nonce&gt;</code>, a route that resolves the nonce server-side and 303s to <code>/pay/&lt;token&gt;</code> with the same query. Applied to <strong>both</strong> rails, so Stripe never sees a token at all.</dd></div>
+    <div><dt>The receipt reaches someone</dt><dd>In the exact payer-less case this feature exists for, today's <code>resolveRecipient</code> resolves nothing and short-circuits: no receipt, no failure letter, no inbox row. So the webhook persists the email Checkout collects onto <code>invoice_links.payer_email</code> and addresses the letter there. The folio then tells the designer the truth: <em>"the receipt goes to the address they give at checkout."</em></dd></div>
+  </div>
+
+  <figure>
+    <div class="figwrap">
+    <svg viewBox="0 0 760 424" role="img" aria-label="Sequence of a guest payment: the homeowner opens the emailed link, the Worker route calls the edge function, which claims an attempt in Postgres and opens a Stripe Checkout session; Stripe returns through a nonce route and the webhook settles the payment and sends the receipt.">
+      <text x="0" y="12" class="d-lbl">A GUEST PAYMENT, END TO END</text>
+      <rect x="0" y="26" width="112" height="26" class="d-box"/><text x="56" y="43" text-anchor="middle" class="d-t">Homeowner</text>
+      <rect x="140" y="26" width="132" height="26" class="d-box"/><text x="206" y="43" text-anchor="middle" class="d-t">/pay Worker route</text>
+      <rect x="300" y="26" width="150" height="26" class="d-box"/><text x="375" y="43" text-anchor="middle" class="d-t">invoice-link-checkout</text>
+      <rect x="478" y="26" width="110" height="26" class="d-box"/><text x="533" y="43" text-anchor="middle" class="d-t">Postgres</text>
+      <rect x="616" y="26" width="144" height="26" class="d-box"/><text x="688" y="43" text-anchor="middle" class="d-t">Stripe</text>
+      <line x1="56" y1="52" x2="56" y2="404" class="d-life"/>
+      <line x1="206" y1="52" x2="206" y2="404" class="d-life"/>
+      <line x1="375" y1="52" x2="375" y2="404" class="d-life"/>
+      <line x1="533" y1="52" x2="533" y2="404" class="d-life"/>
+      <line x1="688" y1="52" x2="688" y2="404" class="d-life"/>
+
+      <path d="M56 76 L 200 76" class="d-arrow"/><path d="M206 76 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="62" y="70" class="d-m">opens /pay/&lt;token&gt; from the letter</text>
+      <path d="M206 100 L 527 100" class="d-arrow"/><path d="M533 100 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="212" y="94" class="d-m">rate-limit, then resolve_invoice_link — one scrubbed payload, no uuids</text>
+      <path d="M527 122 L 212 122" class="d-arrow" stroke-dasharray="4 3"/><path d="M206 122 l 6 -3.5 v 7 z" class="d-head"/>
+      <text x="212" y="138" class="d-m">the sheet renders; the chooser is client-side arithmetic only</text>
+
+      <line x1="0" y1="152" x2="760" y2="152" class="d-line"/>
+      <path d="M56 176 L 200 176" class="d-arrow"/><path d="M206 176 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="62" y="170" class="d-m">Pay $9,130.00</text>
+      <path d="M206 200 L 369 200" class="d-arrow"/><path d="M375 200 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="212" y="194" class="d-m">same-origin POST {token, method} — no Origin header</text>
+      <path d="M375 224 L 527 224" class="d-arrow"/><path d="M533 224 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="381" y="218" class="d-m">claim_invoice_link_checkout_attempt</text>
+      <text x="381" y="240" class="d-m">stamps invoice_link_id + return_nonce</text>
+      <path d="M375 264 L 682 264" class="d-arrow"/><path d="M688 264 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="381" y="258" class="d-m">create Session — metadata carries invoice_link_id</text>
+      <path d="M682 288 L 62 288" class="d-arrow" stroke-dasharray="4 3"/><path d="M56 288 l 6 -3.5 v 7 z" class="d-head"/>
+      <text x="62" y="282" class="d-clay">the payer is on Stripe's page; success_url carries the nonce, not the token</text>
+
+      <line x1="0" y1="304" x2="760" y2="304" class="d-line"/>
+      <path d="M688 328 L 212 328" class="d-arrow"/><path d="M206 328 l 6 -3.5 v 7 z" class="d-head"/>
+      <text x="212" y="322" class="d-m">returns to /pay/return/&lt;nonce&gt; → 303 → /pay/&lt;token&gt;?checkout=success</text>
+      <path d="M688 352 L 539 352" class="d-arrow"/><path d="M533 352 l 6 -3.5 v 7 z" class="d-head"/>
+      <text x="381" y="346" class="d-m">webhook: settle, capture payer_email, send the receipt</text>
+      <path d="M206 376 L 527 376" class="d-arrow"/><path d="M533 376 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="212" y="370" class="d-m">the page polls /state until the payload itself says paid</text>
+      <text x="212" y="398" class="d-clay">?checkout=success is never trusted — only the payload's own status and amounts</text>
+    </svg>
+    </div>
+    <figcaption>The guest pay path <span class="ref">§4.1, §4.5, §4.6, §5</span></figcaption>
+  </figure>
+
+  <figure>
+    <div class="figwrap">
+    <svg viewBox="0 0 760 340" role="img" aria-label="Entity diagram: invoices owns invoice_links; invoice_checkout_attempts references either a payer or a link, exclusively; invoice_payments settles from an attempt.">
+      <rect x="0" y="16" width="180" height="98" class="d-box"/>
+      <text x="14" y="38" class="d-t">invoices</text>
+      <line x1="0" y1="48" x2="180" y2="48" class="d-line"/>
+      <text x="14" y="66" class="d-m">status · client_id</text>
+      <text x="14" y="82" class="d-m">project_id · studio_id</text>
+      <text x="14" y="98" class="d-m">total · paid · balance</text>
+      <text x="0" y="130" class="d-lbl">UNCHANGED</text>
+
+      <path d="M180 62 L 294 62" class="d-arrow"/><path d="M300 62 l -6 -3.5 v 7 z" class="d-head"/>
+      <text x="186" y="52" class="d-clay">1 — 0..1 active</text>
+
+      <rect x="300" y="16" width="222" height="130" class="d-box-stock"/>
+      <text x="314" y="38" class="d-t">invoice_links</text>
+      <line x1="300" y1="48" x2="522" y2="48" class="d-line"/>
+      <text x="314" y="66" class="d-m">token  ← 64 hex, unique, raw</text>
+      <text x="314" y="82" class="d-m">status  active|revoked|closed</text>
+      <text x="314" y="98" class="d-m">stripe_customer_id ← link payer</text>
+      <text x="314" y="114" class="d-m">payer_email  ← from Checkout</text>
+      <text x="314" y="130" class="d-m">view_count  last_viewed_at</text>
+      <text x="300" y="162" class="d-lbl">NEW · RLS ON, ZERO POLICIES, SERVICE_ROLE ONLY</text>
+
+      <path d="M411 146 L 411 194" class="d-arrow"/><path d="M411 200 l -3.5 -6 h 7 z" class="d-head"/>
+
+      <rect x="230" y="200" width="300" height="112" class="d-box"/>
+      <text x="244" y="222" class="d-t">invoice_checkout_attempts</text>
+      <line x1="230" y1="232" x2="530" y2="232" class="d-line"/>
+      <text x="244" y="250" class="d-clay">payer_id  ⊕  invoice_link_id</text>
+      <text x="244" y="266" class="d-m">return_nonce ← 32 bytes, unique</text>
+      <text x="244" y="282" class="d-m">state  claimed · session_created</text>
+      <text x="244" y="298" class="d-m">processing · expired · superseded</text>
+      <text x="230" y="330" class="d-lbl">EXCLUSIVE-OR CHECK — A REAL DISCRIMINATED UNION</text>
+
+      <path d="M530 249 L 560 249" class="d-arrow"/><path d="M566 249 l -6 -3.5 v 7 z" class="d-head"/>
+      <rect x="566" y="200" width="194" height="94" class="d-box"/>
+      <text x="580" y="222" class="d-t">invoice_payments</text>
+      <line x1="566" y1="232" x2="760" y2="232" class="d-line"/>
+      <text x="580" y="250" class="d-m">amount · surcharge</text>
+      <text x="580" y="266" class="d-m">status · recorded_by</text>
+      <text x="580" y="282" class="d-m">NULL on a link attempt</text>
+
+      <rect x="540" y="16" width="220" height="130" class="d-box"/>
+      <text x="554" y="38" class="d-t">The five money RPCs</text>
+      <line x1="540" y1="48" x2="760" y2="48" class="d-line"/>
+      <text x="554" y="66" class="d-m">claim_invoice_checkout_attempt</text>
+      <text x="554" y="82" class="d-m">claim_invoice_link_… (sibling)</text>
+      <text x="554" y="98" class="d-m">finalize_… + p_invoice_link_id</text>
+      <text x="554" y="114" class="d-m">recover_… + p_invoice_link_id</text>
+      <text x="554" y="130" class="d-m">_void_invoice_…_legacy_00397</text>
+    </svg>
+    </div>
+    <figcaption>What the migration adds, and what it leaves alone <span class="ref">§2.1, §2.4, §2.5</span></figcaption>
+  </figure>
+
+  <h3>The letters, and the surfaces that point at the page <span class="ref">§5–§8</span></h3>
+  <p>A new <code>_shared/invoice-links.ts</code> gives the functions <code>invoiceLinkUrl</code>, <code>invoiceReturnUrl</code> and <code>ensureInvoiceLinkUrl</code>. Four letters change one line each: the receipt and the ACH-failure notice in the webhook, the send letter, and the reminder. Each becomes <code>await ensureInvoiceLinkUrl(...) ?? &lt;today's literal&gt;</code> — <strong>a null return is the safety valve</strong>, so a letter never ships a broken address, it just falls back to today's behaviour.</p>
+  <p>Two consequences are stated rather than discovered later. A comment sitting directly above the line being edited records the opposite ruling — <em>"/invoices/&lt;id&gt; stays: the Patina iOS app claims /invoices/* in its applinks entitlement"</em> — so after this change a signed-in iOS client's receipt link opens Safari, not the app. That is a legitimate K1 consequence; the comment is rewritten in the same commit and the reversal is recorded in the DECISIONS entry. And the in-app inbox's <code>deep_link</code> stays <code>/invoices/&lt;id&gt;</code>, because it routes the iOS inbox by id — so the emailed link and the inbox link for the same event now land on different surfaces. Harmless, and said out loud so nobody "fixes" it.</p>
+
+  <figure>
+    <div class="figwrap">
+    <svg viewBox="0 0 760 288" role="img" aria-label="Four surfaces — the letters, the letterbox, the folio and iOS — all point at one page.">
+      <text x="0" y="12" class="d-lbl">FOUR SURFACES, ONE PAGE</text>
+      <rect x="0" y="26" width="212" height="42" class="d-box"/>
+      <text x="14" y="45" class="d-t">The letters</text>
+      <text x="14" y="60" class="d-m">send · reminders · receipt · failure</text>
+      <rect x="0" y="80" width="212" height="42" class="d-box"/>
+      <text x="14" y="99" class="d-t">The letterbox</text>
+      <text x="14" y="114" class="d-m">ledger line + “Open the invoice”</text>
+      <rect x="0" y="134" width="212" height="42" class="d-box"/>
+      <text x="14" y="153" class="d-t">The folio</text>
+      <text x="14" y="168" class="d-m">Copy link · Regenerate</text>
+      <rect x="0" y="188" width="212" height="42" class="d-box"/>
+      <text x="14" y="207" class="d-t">iOS · Patina</text>
+      <text x="14" y="222" class="d-m">Pay opens SafariView</text>
+
+      <path d="M212 47 C 300 47, 300 128, 386 128" class="d-arrow"/>
+      <path d="M212 101 C 300 101, 300 128, 386 128" class="d-arrow"/>
+      <path d="M212 155 C 300 155, 300 128, 386 128" class="d-arrow"/>
+      <path d="M212 209 C 300 209, 300 128, 386 128" class="d-arrow"/>
+      <path d="M392 128 l -6 -3.5 v 7 z" class="d-head"/>
+
+      <rect x="392" y="96" width="368" height="64" class="d-box-ink"/>
+      <text x="412" y="124" class="d-t-inv" style="font-size:15px">client.patina.cloud/pay/&lt;token&gt;</text>
+      <text x="412" y="144" class="d-m" style="fill:var(--clay)">the invoice, and the till — no account required</text>
+
+      <text x="392" y="188" class="d-m">Absent from the AASA, so the app never</text>
+      <text x="392" y="204" class="d-m">intercepts it — that is the control, and a</text>
+      <text x="392" y="220" class="d-m">test asserts it. A claimed /pay/* would open</text>
+      <text x="392" y="236" class="d-m">an app with no pay screen, and dead-end the</text>
+      <text x="392" y="252" class="d-m">one person the feature is for.</text>
+      <text x="392" y="278" class="d-clay">Stripe returns here too, through the nonce route.</text>
+    </svg>
+    </div>
+    <figcaption>K1 in one picture <span class="ref">§6, §7, §8</span></figcaption>
+  </figure>
+
+  <h3>The signed-in surfaces <span class="ref">§6, §7, §8</span></h3>
+  <p>The <strong>letterbox</strong> keeps its ledger line — number, balance, due — and gains one act, <em>Open the invoice</em>. Settle-in-place and the separate print sheet are retired, but <strong>not in the same deploy</strong>: the page ships additively first, both surfaces live, and the retirement is a later, separately revertible step after the functions have soaked. The <strong>folio</strong> gains <em>Copy link</em> for every non-draft, non-void invoice, and <em>Regenerate</em> — which refuses while a payment is in progress, because the Stripe return address is bound to the old attempt. The <strong>print</strong> sheet folds into the token page as a <code>@media print</code> block, which is also where the print-only colophon line lives. <strong>iOS</strong> keeps its native invoice screen; its Pay button swaps <code>create-checkout-session</code> for <code>get_invoice_link</code> and opens <code>/pay/&lt;token&gt;</code> in the SafariView it already presents. The legacy path stays valid until that build ships.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="security">
+  <div class="opener">
+    <p class="eyebrow">8 · Security posture</p>
+    <h2>Entropy is the control. Everything else is friction.</h2>
+  </div>
+
+  <p class="lede">Twelve rows, condensed from the design's full table. The honest framing matters as much as the mechanisms: a 256-bit token is the boundary, and the rate limiter is friction — not the other way round.</p>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-mid">Concern</th><th class="c3">Mechanism</th><th class="w-name">Where</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Enumeration</strong></td><td>256-bit token, unique index, and a <code>^[0-9a-f]{64}$</code> gate before any round trip. Entropy is the control; the limiter is friction, not the boundary.</td><td class="ref">00574 · invoice-link.ts</td></tr>
+      <tr><td><strong>Existence oracle</strong></td><td>Malformed, unknown, revoked, closed-without-a-live-payment, draft and void all return one NULL and one dead sheet. The function collapses them to a single 404, with a constant response floor so a valid token's round trip is not measurably slower than a regex test.</td><td class="ref">resolve_invoice_link · invoice-link-checkout</td></tr>
+      <tr><td><strong>Brute force</strong></td><td>A Cloudflare <code>ratelimits</code> binding, 30/minute per <code>cf-connecting-ip</code>, on <strong>all four</strong> routes — the page, <code>state</code>, <code>checkout</code> and <code>pay/return</code>. The <code>state</code> route was the cheaper, uncounted oracle and is now covered.</td><td class="ref">wrangler.jsonc · four route modules</td></tr>
+      <tr><td><strong>A limiter that isn't there</strong></td><td>This would be the first rate-limit binding in the repo. It fails open in dev and <strong>fails loud in production</strong>: a missing binding logs an error and emits an analytics event. A smoke step proves 31 rapid requests produce a dead link, so a typo'd binding name cannot silently disable the only brute-force control behind a green deploy.</td><td class="ref">invoice-link.ts · deploy step 5</td></tr>
+      <tr><td><strong>Three allowlists, plus the PWA one</strong></td><td>The middleware public list, the chrome's public prefixes and the analytics redaction list all need <code>/pay</code>. The fourth is the one nobody checks: <code>next-pwa</code>'s <code>NetworkFirst</code> catch-all, and <strong>Cache Storage does not honour <code>no-store</code></strong>. A <code>NetworkOnly</code> entry goes in ahead of it for all six bearer prefixes.</td><td class="ref">middleware.ts · app-chrome.tsx · posthog.ts:83 · next.config.js:19-36</td></tr>
+      <tr><td><strong>No-store, noindex</strong></td><td><code>Cache-Control: private, no-store</code> plus <code>X-Robots-Tag: noindex, nofollow</code>, widened from the plans page to <strong>every</strong> bearer prefix in the same wave. Four such routes have carried neither header since they shipped; this deck does not pretend it was already a house rule.</td><td class="ref">middleware.ts:144-147</td></tr>
+      <tr><td><strong>The token in Stripe's logs</strong></td><td><strong>Removed entirely</strong> by the return nonce, on both rails. A Session's <code>success_url</code> is retained in the dashboard, in event payloads, in webhook logs and in any export, indefinitely — and a permanent bearer credential does not belong there.</td><td class="ref">00574 · pay/return/[nonce]</td></tr>
+      <tr><td><strong>The token in analytics</strong></td><td><code>pay</code> joins the hex-bearer redaction pattern. It is a <code>before_send</code> hook, so autocapture is covered too, and a named test case asserts redaction in the URL, the referrer, an autocaptured href and a nested value. The event property whitelist is exactly seven keys and contains no id, no name, no address.</td><td class="ref">posthog.ts:83 · posthog-privacy.test.ts</td></tr>
+      <tr><td><strong>The token in a sign-in URL</strong></td><td><code>isPublicPage</code> prevents <code>/pay/&lt;64hex&gt;</code> ever reaching the two <code>callbackUrl</code> builders. A test pins it, so a future middleware reorder cannot put the token into a sign-in URL, browser history and server logs.</td><td class="ref">middleware.ts:172,232 · use-auth.ts:130</td></tr>
+      <tr><td><strong>Payload leakage</strong></td><td>The forbidden-key list is enforced <strong>twice</strong> — a SQL assertion walking the payload and a recursive TypeScript parser that rejects a forbidden key at any depth.</td><td class="ref">§3.1</td></tr>
+      <tr><td><strong>The link holder pays as the household</strong></td><td>Named, not hidden. Someone holding the link can open a Checkout attributed to the household payer. They pay with their own instrument, the ledger is unchanged, and on the link-payer branch the receipt goes to the address they type. This is a property of "anyone with the link can pay it," which is K2.</td><td class="ref">accepted</td></tr>
+      <tr><td><strong>The token prints</strong></td><td>Browsers stamp the URL into the print header and no stylesheet can suppress it. Accepted, with one print-only line in the studio's voice at the foot of the sheet: <em>"This sheet carries a payment link. Treat it like a check."</em></td><td class="ref">invoice-sheet.tsx</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Two standing conditions are not mechanisms but preconditions. <strong>Strata auto-grants <code>anon</code> EXECUTE</strong> on new functions — it predates the 2026-05-30 flip — so every one of the ten new functions carries an explicit <code>REVOKE … FROM PUBLIC, anon</code>, and all ten signatures are registered in the ACL contract tests with an assertion that <code>anon</code> holds EXECUTE on none of them. And the <strong><code>STRIPE_SECRET_KEY</code> account mismatch</strong> recorded in <code>docs/ops/stripe-rail-verification.md</code> must be fixed before any guest payment is real. It is a precondition on the whole feature, not a follow-up.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="review">
+  <div class="opener">
+    <p class="eyebrow">9 · What the review caught</p>
+    <h2>Forty-nine findings, seven of them blockers.</h2>
+  </div>
+
+  <p class="lede">A separate reviewer, in a separate context, attacked the design and the architecture against the code they cite, with no severity filter. It returned <strong>49 findings — 7 blockers, 17 major, 21 minor, 4 nits</strong> — and one sentence that shaped the rest of the program: <em>"do not ship W1 as written."</em> All seven blockers are fixed in the architecture this deck presents.</p>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-id">#</th><th class="w-mid">The finding</th><th class="c3">Why it mattered</th><th class="c3">The ruling</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="w-id">M1</td>
+        <td><code>create-checkout-session</code> throws on a falsy <code>payer_id</code> at <code>:853</code>, and the reconcile path repeats it at <code>:973</code>.</td>
+        <td>A link claim echoes <code>payer_id NULL</code>, so <strong>every guest checkout would throw before reaching Stripe</strong>. The feature would not have worked once.</td>
+        <td>Widen <code>payerId</code> to <code>string | null</code>, add <code>invoiceLinkId</code>, and replace both truthiness guards with "exactly one of <code>payer_id</code> / <code>invoice_link_id</code> is present" — matching the database CHECK.</td>
+      </tr>
+      <tr>
+        <td class="w-id">M2</td>
+        <td>The webhook carries its <em>own</em> identity assertion in <code>invoice-checkout-integrity.ts</code>, independent of the shared one, and the design treated the webhook as a letters-only edit.</td>
+        <td>On a link attempt all three sides are NULL, so both terms evaluate false and <strong>drop out silently</strong> — no error, just a weaker check. The guest rail would settle on customer id, invoice id and attempt id alone, and nobody would notice until an incident.</td>
+        <td><code>invoice_link_id</code> joins the select at <code>:207</code>, the two claim types, and the mismatch expression. A tampered-link-id case goes in beside the existing tampered-payer one.</td>
+      </tr>
+      <tr>
+        <td class="w-id">M3</td>
+        <td><code>claim_invoice_checkout_attempt</code> raises on an actor change at <code>00428:294-296</code>, <em>above</em> the supersede branch — and nothing in 573 migrations sweeps a stale attempt.</td>
+        <td>Today it is unreachable, because only the household can claim. The link rail makes it a lockout: <strong>one stranger who opens a link Checkout and walks away blocks the household from paying its own invoice, permanently.</strong> The design had sold this as a safety property.</td>
+        <td>Move the check below the supersede branch and add <code>'actor_changed'</code> as a supersede reason. Add an hourly pg_cron sweep for abandoned attempts older than 24 hours, never touching <code>processing</code>. Three cases pinned in SQL.</td>
+      </tr>
+      <tr>
+        <td class="w-id">S1</td>
+        <td>A <strong>fourth</strong> allowlist: <code>next-pwa</code>'s <code>NetworkFirst</code> catch-all, with a 30-day cache. Cache Storage does not honour <code>no-store</code>, so the middleware header would not have covered it.</td>
+        <td>On a non-OpenNext build, every <code>/pay/&lt;token&gt;</code> response — a full invoice plus a live pay link — would be stored in the visitor's browser for a month, keyed by the token URL.</td>
+        <td>A <code>NetworkOnly</code> entry before the catch-all for all six bearer prefixes, asserted in Playwright. Re-checking the claim found the catch-all is <strong>inert on the deployed Worker</strong> — <code>withPWA</code> is the identity function under OpenNext and <code>public/sw.js</code> is gitignored — so this deck does <em>not</em> claim production is caching pay links today. The one-line fix ships anyway, because it protects preview builds and fails safe if the PWA is re-enabled.</td>
+      </tr>
+      <tr>
+        <td class="w-id">G1</td>
+        <td><code>moneyInWords</code> does not spell money in words, and rounds cents away.</td>
+        <td>Three directions built their standing sentence on it. A $9,125.49 balance would have read "$9,125" beside a Pay button charging $9,130.49.</td>
+        <td>Banned from this page. Every figure is <code>formatCurrency</code>, including inside accessible names.</td>
+      </tr>
+      <tr>
+        <td class="w-id">G2</td>
+        <td>The $18,250 invoice total was invented; the fixture pins only the balance.</td>
+        <td>The design's own "$1,520 gap" was an artefact of the fabrication, and both proposed remedies preserved it.</td>
+        <td>Total $16,730.00, received $7,605.00, balance $9,125.00. Every visible figure now derives from a fixture amount or arithmetic on one.</td>
+      </tr>
+      <tr>
+        <td class="w-id">G5</td>
+        <td>The design chose "send a null card rate and hold the act." The code had already ruled the other way.</td>
+        <td><code>studio_billing_settings</code> rows are written only by a studio admin — no backfill, no trigger — so <strong>most studios have no row</strong>, and the held state would have disabled card payment for almost every invoice Patina sends.</td>
+        <td>Always the coalesced 300. The em-dash and the held act are deleted from all three directions.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <h3>Three things the architecture had to adapt</h3>
+  <p>Not every ruling survived contact with the code. Three are worth recording, because each one would have been a silent defect.</p>
+  <ul class="plain">
+    <li><strong><code>designer_clients</code> has no project key.</strong> The ruling said the receipt fallback should key on designer plus the invoice's project. That column does not exist. The implementable form is: <code>invoice_links.payer_email</code> first, then designer plus <code>client_id IS NULL</code> through <code>maybeSingle()</code> — which resolves only when exactly one email-only roster row exists, matching the unique index, and returns null otherwise. This is the one ruling not applicable verbatim, and it is reported as such.</li>
+    <li><strong>The PWA cache does not reach the deployed Worker.</strong> See S1 above. The fix ships; the claim is corrected.</li>
+    <li><strong><code>void_invoice</code>'s body is the renamed legacy function.</strong> The edits go into <code>_void_invoice_authorized_legacy_00397</code>, not into <code>public.void_invoice</code> — which is now a thin authority wrapper created at <code>00397:1454-1477</code>. Grafting from the wrong one would silently drop the authorization wrapper.</li>
+  </ul>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="waves">
+  <div class="opener">
+    <p class="eyebrow">10 · The waves</p>
+    <h2>Five steps, each of which rolls back alone.</h2>
+  </div>
+
+  <p class="lede">Migration <strong>00574</strong> — the head on main is 00573, and the number is re-checked at build time because peer sessions mint too. One migration file, five deploy steps, and a deliberate split so that nothing a homeowner reaches is removed while <code>/pay</code> links are new in the wild.</p>
+
+  <div class="wave">
+    <div class="wave-head"><span class="wid">W1</span><h3>The link and the guest rail</h3><span class="size">Large · own worktree</span></div>
+    <div class="dl">
+      <div><dt>Files</dt><dd><code>00574_invoice_links.sql</code> and the regenerated legacy-grants seed · four new or moved <code>_shared/</code> modules — links, the lifted checkout core and its test, the Stripe customer helper, the driver, the check-intent core · <code>invoice-link-checkout/index.ts</code> · edits to <code>create-checkout-session</code> (imports, the payer parameter, the two guards, the nonce return URLs) · <code>stripe-webhook</code> and its integrity module · <code>invoice-check-intent</code> as a thin adapter · <code>config.toml</code> · the new SQL suite, the two ACL suites, and the pinned signature literal at <code>invoice_checkout_integrity_test.sql:748</code>.</dd></div>
+      <div><dt>Gate</dt><dd><code>pnpm supabase:reset</code>, then the four psql suites, then <code>pnpm db:generate &amp;&amp; git diff --exit-code packages/supabase/src/database.types.ts</code>, then <code>deno test --allow-all --config supabase/functions/deno.json supabase/functions</code>, then the token-in-logs grep.</dd></div>
+      <div><dt>Exit</dt><dd>A token resolves clean. Guest checkout opens a session for <strong>both</strong> a household-payer invoice and a payer-less one. An actor change supersedes rather than raising. <code>anon</code> holds EXECUTE on none of the ten new functions.</dd></div>
+    </div>
+  </div>
+
+  <div class="wave">
+    <div class="wave-head"><span class="wid">W2</span><h3>The page, purely additive</h3><span class="size">Large · own worktree</span></div>
+    <div class="dl">
+      <div><dt>Files</dt><dd><code>app/pay/[token]/</code> — page, the server-only resolver with its forbidden-key parser, the sheet, the settling sheet, the moved chooser, and the <code>checkout</code> and <code>state</code> routes · <code>app/pay/return/[nonce]/route.ts</code> · <code>middleware.ts</code> for all bearer prefixes · <code>app-chrome.tsx</code> · <code>next.config.js</code> for the <code>NetworkOnly</code> entry · the analytics redaction and its test · <code>checkout-return.ts</code> for the hash parameter · <code>wrangler.jsonc</code> · <code>tests/pay-link.spec.ts</code>.</dd></div>
+      <div><dt>Gate</dt><dd><code>pnpm --filter @patina/client-portal type-check test</code> and <code>env -u CI pnpm --filter @patina/client-portal test:e2e -- --project=chromium tests/pay-link.spec.ts</code>.</dd></div>
+      <div><dt>Exit</dt><dd>Ten states render. The toggle moves the fee row, Total to pay and the act's label together. 390px has no horizontal scroll. Print collapses to a document with the colophon. <code>caches</code> holds nothing for <code>/pay/</code>. The token never reaches analytics. <strong>The letterbox and the print sheet are untouched and live.</strong></dd></div>
+    </div>
+  </div>
+
+  <div class="wave">
+    <div class="wave-head"><span class="wid">W3</span><h3>Producers, the folio, and the deploy chain</h3><span class="size">Medium · after W2</span></div>
+    <div class="dl">
+      <div><dt>Files</dt><dd>The four letters and the comment above the receipt one · <code>resolveRecipient</code> · <code>invoice-folio.tsx</code> for Copy link and Regenerate · the two new hooks in <code>use-invoices.ts</code> and their barrel exports · <code>packages/utils/src/invoice-link.ts</code> and its barrel.</dd></div>
+      <div><dt>Gate</dt><dd><code>pnpm --filter @patina/utils type-check</code> and <code>pnpm turbo build --filter=@patina/utils</code> — the package is dist-resolved · <code>@patina/supabase</code> · <code>designer-portal type-check lint test</code> · <code>admin-portal build</code>, the repo's strictest gate, because <code>@patina/utils</code> changed.</dd></div>
+      <div><dt>Exit</dt><dd>Every producer emits <code>/pay/&lt;token&gt;</code>. Regenerate refuses mid-payment. A payer-less receipt reaches the Checkout-collected email.</dd></div>
+    </div>
+  </div>
+
+  <div class="wave">
+    <div class="wave-head"><span class="wid">W3b</span><h3>The retirement</h3><span class="size">Small · after soak</span></div>
+    <div class="dl">
+      <div><dt>Files</dt><dd>Delete <code>components/threshold/settlement.tsx</code> and its tests · the letterbox's checkout hooks and its <code>Settlement</code> render, replaced by one "Open the invoice" act · delete <code>app/invoices/[invoiceId]/print/</code> · relax <code>retired-routes.ts</code> so <code>/invoices/&lt;id&gt;/print</code> folds instead of 404ing, and update the comment recording the opposite ruling.</dd></div>
+      <div><dt>Why separate</dt><dd>This is the finding that reshaped the plan. Adding the page and removing settle-in-place in one deploy makes a rollback impossible on the one surface a homeowner reaches: revert it and every <code>/pay</code> link already in the wild 404s. Split, both surfaces are live for the soak and every step reverts alone.</dd></div>
+    </div>
+  </div>
+
+  <div class="wave">
+    <div class="wave-head"><span class="wid">W4</span><h3>iOS, and the record</h3><span class="size">Small · last</span></div>
+    <div class="dl">
+      <div><dt>Files</dt><dd><code>InvoicesAPIClient.swift</code> and <code>InvoiceDetailView.swift</code> — Pay calls <code>get_invoice_link</code> and opens <code>/pay/&lt;token&gt;</code> in the existing SafariView · <strong>R137</strong> in <code>DECISIONS.md</code>, recording K1's supersession of R135's "the acts never leave the page" <em>and</em> the reversal of the <code>/invoices/*</code> applinks ruling · the analytics dashboard · the follow-ups (folio colour, and <code>pay.patina.cloud</code> ruled never).</dd></div>
+      <div><dt>Gate</dt><dd>A Release-scheme simulator launch and a device pass. The unit scheme is Debug-only, so a Release launch is the only gate that catches a <code>#if DEBUG</code>-masked trap.</dd></div>
+    </div>
+  </div>
+
+  <h3>The deploy chain, and why that order</h3>
+  <p>The house order is migrations → functions → services → portals. This ships with one <strong>reasoned deviation</strong>, and the reason is already written in the code: <code>/pay/[token]</code> and <code>/pay/return/[nonce]</code> must exist before any function can emit them as a return address.</p>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-id">#</th><th class="w-mid">Step</th><th class="c3">Why here</th><th class="c3">Rollback</th></tr></thead>
+    <tbody>
+      <tr><td class="w-id">0</td><td>Commit <code>00574</code> and the regenerated <code>00-legacy-grants.sql</code> <strong>together</strong></td><td>The seed is a repo artifact for local resets, not a production action. It was listed as a deploy step; it is not one.</td><td class="ref">n/a</td></tr>
+      <tr><td class="w-id">1</td><td><code>supabase db push</code></td><td>House law. Additive: the backfill makes every open invoice linkable, and nothing points at a link yet.</td><td><code>DROP TRIGGER invoice_link_mint_on_issue</code> freezes minting without breaking a live link; <code>cron.unschedule</code> stops the sweep. <code>payer_id DROP NOT NULL</code> cannot be reversed once a link attempt exists — which is why the blockers had to be right the first time.</td></tr>
+      <tr><td class="w-id">2</td><td><code>./infra/deploy-portal.sh client</code></td><td><strong>The deviation.</strong> The routes must exist before any function emits them. Purely additive — the letterbox and the print sheet stay live.</td><td>Redeploy the prior commit. <code>/pay</code> links 404, so revert step 4 first — but nothing a homeowner reaches through the letterbox is lost, because W2 removed nothing.</td></tr>
+      <tr><td class="w-id">3</td><td><code>./infra/deploy-portal.sh designer</code></td><td>Copy link and Regenerate against a working route. The script rebuilds workspace dists first; a raw OpenNext build would ship a stale one.</td><td>Redeploy the prior commit. Copy link disappears; links keep working.</td></tr>
+      <tr><td class="w-id">4</td><td>Re-grep the <code>_shared</code> importer set, then deploy the six functions — <code>invoice-link-checkout --no-verify-jwt</code> plus <code>create-checkout-session</code>, <code>stripe-webhook</code>, <code>invoice-send</code>, <code>invoice-reminders</code>, <code>invoice-check-intent</code></td><td>The letters and the return URLs flip here. The importer set is re-grepped rather than read from a document, because moving a module into <code>_shared/</code> is exactly the change that grows it.</td><td>Redeploy each function's prior version: the letters revert to <code>/invoices/&lt;id&gt;</code>, and any <code>/pay</code> link already in the wild <strong>still works</strong>, because step 2 is still deployed.</td></tr>
+      <tr><td class="w-id">5</td><td>Smoke</td><td>No zone Cache Rule matches <code>/pay/*</code> · <code>wrangler deployments list</code>, reading the <strong>bottom</strong> row · real response headers on a real token · <code>caches.keys()</code> empty · <strong>a sandbox card payment on a payer-less invoice, end to end</strong>, then confirm the receipt was addressed to the Checkout-collected email · 31 rapid requests produce a dead link · the cron job exists and <code>job_runs</code> gains a row within the hour · <code>wrangler tail</code>.</td><td class="ref"><code>/api/version</code> proves liveness only</td></tr>
+      <tr><td class="w-id">6</td><td>W3b, later, after soak</td><td>Retire settle-in-place and the print sheet.</td><td>Reverts independently of everything else.</td></tr>
+      <tr><td class="w-id">7</td><td>iOS (W4)</td><td>The legacy JWT path stays valid until then.</td><td class="ref">app store timeline</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>W1 and W2 run in parallel in separate worktrees; W2 stubs its RPC calls until W1's migration lands locally. W3 serialises after both. W1 gets a second review pass after its fixes, because the <code>payer_id</code> widening is genuinely irreversible.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="risks">
+  <div class="opener">
+    <p class="eyebrow">11 · Risk register</p>
+    <h2>Nine ways this goes wrong.</h2>
+  </div>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-mid">Risk</th><th>Likely</th><th>Impact</th><th class="c3">Mitigation</th><th class="w-name">Owner</th></tr></thead>
+    <tbody>
+      <tr><td><strong>The Stripe account mismatch is still unfixed when the first guest pays.</strong> Two accounts are in play and the key almost certainly holds the sandbox one.</td><td>Medium</td><td>Severe — a homeowner's real payment lands nowhere</td><td>Treated as a <strong>precondition</strong>, not a follow-up. Step 5's smoke is a real sandbox payment; live cannot open until the key is confirmed.</td><td>Kody</td></tr>
+      <tr><td><strong>The rate-limit binding is absent or misnamed in production.</strong> First binding of its kind in the repo.</td><td>Medium</td><td>Moderate — the brute-force friction silently disappears behind a green deploy</td><td>Fails loud: an error log and an analytics event when <code>NODE_ENV</code> is production and the binding is missing. A smoke step proves 31 rapid requests hit the dead link.</td><td>W2 author</td></tr>
+      <tr><td><strong>A link is forwarded to someone the studio did not intend.</strong> K2 makes the link the credential.</td><td>High over time</td><td>Moderate — the holder sees the invoice and can pay it</td><td>Inherent to the ask and named openly in §8. Regenerate revokes in one click from the folio; void closes the link; the print sheet carries the "treat it like a check" line.</td><td>Design</td></tr>
+      <tr><td><strong>The guest rail settles on customer id alone</strong> because one of the four identity consumers was missed.</td><td>Low, after the fixes</td><td>Severe — a money-integrity hole nobody notices until an incident</td><td><code>invoice_link_id</code> as a first-class term in all four places, an exclusive-or CHECK as a real discriminated union, tampered-link-id cases in both the Deno and SQL suites, and a second review pass on W1.</td><td>W1 author + reviewer</td></tr>
+      <tr><td><strong>An abandoned guest Checkout locks the household out</strong> of paying its own invoice.</td><td>Medium</td><td>Severe if unmitigated — permanent, with no self-service recovery</td><td>Actor change supersedes instead of raising, plus an hourly sweep of attempts older than 24 hours. <code>processing</code> is never swept. Three cases pinned in SQL.</td><td>W1 author</td></tr>
+      <tr><td><strong>A guest is charged, then the invoice is voided</strong> — or regenerated — under them.</td><td>Low</td><td>Severe to that one person: charged, no receipt, a bare dead link</td><td><code>void_invoice</code> refuses while an attempt is <code>processing</code>; the settling sheet covers the rest; Regenerate refuses while an attempt is live and says why.</td><td>W1 author</td></tr>
+      <tr><td><strong>A payer-less receipt reaches nobody.</strong> Today's recipient resolution returns null in exactly the case this feature exists for.</td><td>Was certain; now mitigated</td><td>Moderate — silence after a real payment</td><td>Checkout's collected email is persisted to the link and the letter is addressed there, with a roster fallback. Step 5's smoke confirms an addressed receipt on a payer-less invoice.</td><td>W1 + W3</td></tr>
+      <tr><td><strong>A rollback strands live links.</strong> Reverting the client portal 404s every link already sent.</td><td>Low</td><td>Moderate — a public surface goes dark</td><td>The retirement is split out (W3b). W2 removes nothing, so functions can revert without the portal, and the portal's own revert leaves the letterbox intact.</td><td>Deploy owner</td></tr>
+      <tr><td><strong>A migration number collision</strong> with a peer session.</td><td>Medium — it has happened</td><td>Low, if caught; a failed push if not</td><td>00574 is re-checked at build time with <code>ls supabase/migrations | tail</code>, never assumed from this deck.</td><td>W1 author</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="rulings">
+  <div class="opener">
+    <p class="eyebrow">12 · Rulings owed Kody</p>
+    <h2>Four, each with a recommendation.</h2>
+  </div>
+
+  <p class="lede">Everything else the program raised has been ruled — including the seven the architect left open and the six the design lead left open. These four need Kody.</p>
+
+  <div class="dl">
+    <div>
+      <dt>1 · Namespace id</dt>
+      <dd><strong>The <code>PAY_LINK_RATELIMIT</code> namespace id.</strong> Cloudflare rate-limit namespaces are account-scoped integers chosen by the author, and no Patina Worker has one today. <em>Recommendation:</em> pick any unused integer and record it, so no future Worker reuses it. It must be settled before W2 ships, and the fail-loud behaviour above is what catches it if it isn't.</dd>
+    </div>
+    <div>
+      <dt>2 · Void</dt>
+      <dd><strong>"Withdrawn by {studio}" versus the bare dead link.</strong> K2 says dead, and the dead sheet deliberately carries no letterhead, no studio name and no amount, so void, revoked and never-existed are indistinguishable. The softer state genuinely leaks nothing — the token is unguessable, so naming the studio to its holder tells them what they already knew. <em>Recommendation:</em> keep dead for now. The settling sheet (Plate 6) now exists, so the softer state is a two-line variation on a sheet Kody can look at rather than an abstract choice.</dd>
+    </div>
+    <div>
+      <dt>3 · Stripe receipts</dt>
+      <dd><strong>Are Stripe's own receipt emails switched on in live mode?</strong> They are dashboard-gated and off by default in test mode. <em>Recommendation:</em> turn them on. Patina's own receipt is the primary letter and now reaches the Checkout-collected email, but a payment page's first guest payment is the wrong moment to discover that neither party sent anything.</dd>
+    </div>
+    <div>
+      <dt>4 · The Stripe key</dt>
+      <dd><strong>The standing <code>STRIPE_SECRET_KEY</code> account mismatch</strong> (<code>docs/ops/stripe-rail-verification.md</code>). Two different Stripe accounts are in play and the key almost certainly still holds the sandbox account's. <em>Recommendation:</em> fix it before W1 ships, not before W4. This is a precondition on the whole feature — every other guard in this deck assumes the money goes somewhere real.</dd>
+    </div>
+  </div>
+
+  <h3>Decisions recorded, not asked</h3>
+  <p>Three were ruled during the program and are noted here so nobody reopens them by accident. <strong>The host is <code>client.patina.cloud/pay/&lt;token&gt;</code></strong> — one Worker, one AASA, no new DNS or environment split, and <code>pay.patina.cloud</code> is ruled never, because K2 makes these URLs permanent. <strong>Links do not expire</strong>, for the same reason. And <strong><code>view_count</code> is kept for support diagnostics and not surfaced</strong> — a homeowner should not feel watched, and putting "opened 3 times, last Tuesday" in front of the studio is exactly the edge Vision §6 guards.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="colophon">
+  <div class="opener">
+    <p class="eyebrow">13 · Colophon</p>
+    <h2>How this was made.</h2>
+  </div>
+
+  <p class="lede">Twelve files in <code>artifacts/invoice-standalone-2026-09-06/</code>, produced by eleven subagents across twelve dispatches — three read-only surveys and one architecture blueprint before the team was assembled; a scribe; the design lead; the architect, in two passes; the adversarial reviewer; the mockup builder; a render pass; the deck builder; and the deck reviewer — with an orchestrator that planned and reviewed between steps and never wrote a deliverable itself. Every agent was read-only on repo code; no migration was minted, no function deployed, nothing shipped.</p>
+
+  <div class="tablewrap"><table class="tight">
+    <thead><tr><th class="w-mid">File</th><th class="c3">What it is</th></tr></thead>
+    <tbody>
+      <tr><td><code>proposal.html</code></td><td>This deck.</td></tr>
+      <tr><td><code>mockup/invoice.html</code></td><td>The full-fidelity page, interactive, ten states, live surcharge arithmetic, print stylesheet — with <code>shots/</code>, 21 rendered shots: ten states × two viewports, plus the print rendering of the open sheet.</td></tr>
+      <tr><td><code>brief.md</code></td><td>The approved plan: the verified facts, rulings K1–K3, the team, and the first architecture blueprint.</td></tr>
+      <tr><td><code>discovery/01-current-rail.md</code></td><td>The invoice data model, RLS, edge functions, surcharge math, hooks and emails as they stand on main.</td></tr>
+      <tr><td><code>discovery/02-old-page.md</code></td><td>The pre-cutover page, recovered from git, structure and arithmetic.</td></tr>
+      <tr><td><code>discovery/03-guest-link-and-stripe-patterns.md</code></td><td>The seven existing token surfaces, the anon-grant idiom, the Stripe session and webhook contracts.</td></tr>
+      <tr><td><code>discovery/04-blueprint.md</code></td><td>The first blueprint, verified against code.</td></tr>
+      <tr><td><code>design/01-directions.md</code></td><td>Three directions, nine states each, the comparison and the recommendation.</td></tr>
+      <tr><td><code>architecture/02-system-design.md</code></td><td>The system of record. 566 lines, every claim re-opened against the file it cites. Everything technical in this deck traces to it.</td></tr>
+      <tr><td><code>review/03-adversarial.md</code></td><td>49 findings — 7 blockers, 17 major, 21 minor, 4 nits — with confidence and severity on every one, and no severity filter.</td></tr>
+      <tr><td><code>review/04-rulings.md</code></td><td>The synthesis: a ruling on all 49, the direction picked, and the waves revised.</td></tr>
+      <tr><td><code>review/07-deck-review.md</code></td><td>A separate pass over the mockup and this deck: every number and citation checked back against the architecture and the code.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="mono">Fixture throughout: the Vale residence, Des Moines · Harper Vale · Nora Quist of Quist Interiors · Invoice No. 4 · $16,730.00 billed, $7,605.00 received, balance $9,125.00 due 15 August 2026 · and one studio invoice with no house, Middle West Studio's June design consultation at $675.00. The balance and its due date are the canonical fixture; composing the three named line amounts onto Invoice No. 4 is this program's own arrangement, and every other figure on every plate is arithmetic on those.</p>
+
+  <div class="foot">
+    <p>Prepared 6 September 2026 · Patina · The Document · Design, architecture and delivery for one page that stands alone. Nothing here is built. A "ship it" starts at §10, step 0.</p>
+  </div>
+</section>
+
+</div>
