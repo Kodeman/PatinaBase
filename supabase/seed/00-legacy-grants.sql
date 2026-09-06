@@ -5404,18 +5404,6 @@ END $g$;
 
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00397_billing_checkout_integrity.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00397_billing_checkout_integrity.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.fail_invoice_checkout_attempt(uuid, text, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -5423,18 +5411,6 @@ END $g$;
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.fail_invoice_checkout_attempt(uuid, text, text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00397_billing_checkout_integrity.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00397_billing_checkout_integrity.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -8885,30 +8861,6 @@ END $g$;
 -- 00428_invoice_payment_method_surcharge.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean, text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00428_invoice_payment_method_surcharge.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00428_invoice_payment_method_surcharge.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00428_invoice_payment_method_surcharge.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00428_invoice_payment_method_surcharge.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -13229,5 +13181,59 @@ END $g$;
 -- 00572_she_sets_the_pace.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.backfill_why_author_display_names() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00573_approval_record_typed_name.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_reviews(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00573_approval_record_typed_name.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_reviews(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00574_invoice_links.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.invoice_links FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00574_invoice_links.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON TABLE public.invoice_links TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00574_invoice_links.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mint_invoice_link_on_issue() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00574_invoice_links.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._void_invoice_authorized_legacy_00397(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00574_invoice_links.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mint_invoice_link_on_issue(), public.ensure_invoice_link(uuid), public.resolve_invoice_link(text, boolean), public.resolve_invoice_link_for_checkout(text), public.resolve_invoice_return_nonce(text), public.set_invoice_link_stripe_customer(uuid, text), public.set_invoice_link_payer_email(uuid, text), public.claim_invoice_link_checkout_attempt(uuid, uuid, text, text), public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean, text), public.finalize_invoice_checkout_attempt(uuid, uuid, text, text, uuid), public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text, uuid), public.regenerate_invoice_link(uuid), public.get_invoice_link(uuid), public.expire_stale_invoice_checkout_attempts(interval) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00574_invoice_links.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ensure_invoice_link(uuid), public.resolve_invoice_link(text, boolean), public.resolve_invoice_link_for_checkout(text), public.resolve_invoice_return_nonce(text), public.set_invoice_link_stripe_customer(uuid, text), public.set_invoice_link_payer_email(uuid, text), public.claim_invoice_link_checkout_attempt(uuid, uuid, text, text), public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean, text), public.finalize_invoice_checkout_attempt(uuid, uuid, text, text, uuid), public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text, uuid), public.regenerate_invoice_link(uuid), public.get_invoice_link(uuid), public.expire_stale_invoice_checkout_attempts(interval) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00574_invoice_links.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_invoice_link(text, boolean), public.regenerate_invoice_link(uuid), public.get_invoice_link(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

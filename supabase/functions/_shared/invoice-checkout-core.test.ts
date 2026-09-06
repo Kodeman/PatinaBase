@@ -6,9 +6,11 @@ import {
   type InvoiceCheckoutSession,
   invoiceCheckoutReturnAddress,
   invoiceCheckoutReturnUrl,
+  invoiceLinkReturnAddress,
   reconcileInvoiceCheckoutSession,
   runInvoiceCheckout,
 } from './invoice-checkout-core.ts';
+import { invoiceSessionMetadata } from './invoice-checkout-driver.ts';
 
 function attempt(overrides: Partial<InvoiceCheckoutAttempt> = {}): InvoiceCheckoutAttempt {
   return {
@@ -16,6 +18,8 @@ function attempt(overrides: Partial<InvoiceCheckoutAttempt> = {}): InvoiceChecko
     paymentId: 'payment-1',
     invoiceId: 'invoice-1',
     payerId: 'client-1',
+    invoiceLinkId: null,
+    returnNonce: null,
     stripeCustomerId: 'cus_client_1',
     amountCents: 12_500,
     // Defaults describe a LEGACY attempt: no rail, no fee. Every pre-surcharge
@@ -44,20 +48,8 @@ function sessionFor(
     amountTotal: claimed.amountCents + claimed.surchargeCents,
     currency: claimed.currency,
     customerId: claimed.stripeCustomerId,
-    metadata: {
-      payable_type: 'invoice',
-      invoice_id: claimed.invoiceId,
-      checkout_attempt_id: claimed.attemptId,
-      payer_id: claimed.payerId,
-      // A legacy attempt stamps no rail keys at all — the session stays byte
-      // identical to the pre-surcharge one.
-      ...(claimed.paymentMethod
-        ? {
-            payment_method: claimed.paymentMethod,
-            surcharge_cents: String(claimed.surchargeCents),
-          }
-        : {}),
-    },
+    // The function that actually stamps Stripe (review F8), not a hand copy.
+    metadata: invoiceSessionMetadata(claimed),
     ...overrides,
   };
 }
@@ -511,4 +503,155 @@ Deno.test('invoice Checkout: expired exact session is closed before one fresh cl
   assertEquals(result.kind, 'ready');
   assertEquals(claims, 2);
   assertEquals(failed, ['attempt-expired']);
+});
+
+// ── The link rail (00574) ────────────────────────────────────────────────────
+
+const NONCE = 'a'.repeat(64);
+
+Deno.test('invoice link Checkout: the return address carries the nonce, never a token', () => {
+  assertEquals(
+    invoiceLinkReturnAddress('https://client.test', NONCE, 'success'),
+    `https://client.test/pay/return/${NONCE}?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+  );
+  assertEquals(
+    invoiceLinkReturnAddress('https://client.test/', NONCE, 'cancelled'),
+    `https://client.test/pay/return/${NONCE}?checkout=cancelled`
+  );
+  // The claim's own evidence rides after the nonce address exactly as it does
+  // after the letterbox address.
+  assertEquals(
+    invoiceCheckoutReturnUrl(invoiceLinkReturnAddress('https://client.test', NONCE, 'cancelled'), {
+      attemptId: 'a1',
+      paymentId: 'p1',
+    }),
+    `https://client.test/pay/return/${NONCE}?checkout=cancelled&checkout_attempt_id=a1&payment_id=p1`
+  );
+  for (const bad of ['', 'not-hex', NONCE.slice(1), NONCE + 'a', NONCE.toUpperCase()]) {
+    let threw = false;
+    try {
+      invoiceLinkReturnAddress('https://client.test', bad, 'success');
+    } catch {
+      threw = true;
+    }
+    assertEquals(threw, true, `malformed nonce must throw: ${JSON.stringify(bad)}`);
+  }
+});
+
+function linkAttempt(overrides: Partial<InvoiceCheckoutAttempt> = {}): InvoiceCheckoutAttempt {
+  return attempt({
+    payerId: null,
+    invoiceLinkId: 'link-1',
+    returnNonce: NONCE,
+    stripeCustomerId: 'cus_link_1',
+    paymentMethod: 'card',
+    surchargeCents: 375,
+    ...overrides,
+  });
+}
+
+Deno.test('invoice link Checkout: a link-shaped claim runs to a ready session on the link identity', async () => {
+  const claimed = linkAttempt();
+  let created: InvoiceCheckoutSession | null = null;
+  const result = await runInvoiceCheckout({
+    claim: async () => claimed,
+    retrieveSession: async () => {
+      throw new Error('not expected');
+    },
+    createSession: async (value) => {
+      created = sessionFor(value);
+      return created;
+    },
+    finalize: async (value, sessionId) => ({
+      ...value,
+      state: 'session_created',
+      stripeCheckoutSessionId: sessionId,
+    }),
+    failExpired: async () => {
+      throw new Error('not expected');
+    },
+  });
+  assertEquals(result.kind, 'ready');
+  if (result.kind !== 'ready') return;
+  assertEquals(result.attempt.payerId, null);
+  assertEquals(result.attempt.invoiceLinkId, 'link-1');
+  assertEquals(result.attempt.returnNonce, NONCE);
+  // The session carries the link and no payer key at all — never "null".
+  assertEquals(created!.metadata.invoice_link_id, 'link-1');
+  assertEquals('payer_id' in created!.metadata, false);
+  assertEquals(created!.amountTotal, 12_500 + 375);
+});
+
+Deno.test('invoice link Checkout: a tampered or missing invoice_link_id is never reused', async () => {
+  const claimed = linkAttempt({
+    stripeCheckoutSessionId: 'cs_attempt_1',
+    state: 'session_created',
+  });
+  const good = sessionFor(claimed);
+  const { invoice_link_id: _dropped, ...withoutLink } = good.metadata;
+  for (const badSession of [
+    sessionFor(claimed, { metadata: { ...good.metadata, invoice_link_id: 'link-foreign' } }),
+    sessionFor(claimed, { metadata: withoutLink }),
+    sessionFor(claimed, { customerId: 'cus_foreign' }),
+  ]) {
+    await assertRejects(
+      () =>
+        runInvoiceCheckout({
+          claim: async () => claimed,
+          retrieveSession: async () => badSession,
+          createSession: async () => badSession,
+          finalize: async (value) => value,
+          failExpired: async () => {},
+        }),
+      InvoiceCheckoutIntegrityError,
+      'does not belong'
+    );
+  }
+  // The exact session is still reused.
+  const ok = await runInvoiceCheckout({
+    claim: async () => claimed,
+    retrieveSession: async () => good,
+    createSession: async () => {
+      throw new Error('must reuse');
+    },
+    finalize: async () => {
+      throw new Error('already finalized');
+    },
+    failExpired: async () => {
+      throw new Error('not expired');
+    },
+  });
+  assertEquals(ok.kind, 'ready');
+});
+
+Deno.test('invoice link Checkout: a payer attempt ignores a stray invoice_link_id and a link attempt ignores a stray payer_id', async () => {
+  // The other rail's key is not this attempt's identity term; the customer,
+  // attempt id and the bound key still are.
+  const payer = attempt({ stripeCheckoutSessionId: 'cs_attempt_1', state: 'session_created' });
+  const payerSession = sessionFor(payer, {
+    metadata: { ...sessionFor(payer).metadata, invoice_link_id: 'link-stray' },
+  });
+  const link = linkAttempt({ stripeCheckoutSessionId: 'cs_attempt_1', state: 'session_created' });
+  const linkSession = sessionFor(link, {
+    metadata: { ...sessionFor(link).metadata, payer_id: 'client-stray' },
+  });
+  for (const [claimed, session] of [
+    [payer, payerSession],
+    [link, linkSession],
+  ] as const) {
+    const result = await runInvoiceCheckout({
+      claim: async () => claimed,
+      retrieveSession: async () => session,
+      createSession: async () => {
+        throw new Error('must reuse');
+      },
+      finalize: async () => {
+        throw new Error('already finalized');
+      },
+      failExpired: async () => {
+        throw new Error('not expired');
+      },
+    });
+    assertEquals(result.kind, 'ready');
+  }
 });
