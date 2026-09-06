@@ -226,7 +226,7 @@ function PartRow({
                 <span
                   aria-label="Required"
                   title="Required"
-                  className="ml-1.5 text-[var(--color-clay)]"
+                  className="ml-1.5 text-[var(--color-clay-ink)]"
                 >
                   ·
                 </span>
