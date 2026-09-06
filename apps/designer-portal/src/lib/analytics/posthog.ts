@@ -72,13 +72,20 @@ export function isAnalyticsPossible(): boolean {
 // hex, so it stays its own pattern rather than folding into the generic one.
 const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
 
-// /share, /rfq, /evidence, and /plans all mint the same 64-char lowercase-hex
-// bearer (document_shares, trade_rfq_tokens, fulfillment_mint_evidence_token,
-// plan_transmittal_tokens). The plan-room transmittal link is the reason this
-// exists on the designer side: the ceremony renders a raw token once, and an
-// autocaptured href or referrer must never carry it off the machine.
+// /share, /rfq, /evidence, /plans, and /pay all mint the same 64-char
+// lowercase-hex bearer (document_shares, trade_rfq_tokens,
+// fulfillment_mint_evidence_token, plan_transmittal_tokens, invoice_links).
+// The plan-room transmittal link is the reason this exists on the designer
+// side: the ceremony renders a raw token once, and an autocaptured href or
+// referrer must never carry it off the machine. /pay is the one that reaches
+// a till: invoice-folio.tsx renders the raw `/pay/<token>` client invoice URL
+// as an anchor's href and text, and that token is a PERMANENT credential
+// that stays live for the invoice's life — a raw autocapture would leave a
+// standing payment capability sitting in an analytics store. The optional
+// `return/` segment covers `/pay/return/<64-hex nonce>`.
 // Ported from apps/client-portal/src/lib/analytics/posthog.ts — keep in sync.
-const HEX_BEARER_IN_URL = /\/(share|rfq|evidence|plans)\/[0-9a-f]{64}(?![0-9a-f])/gi;
+const HEX_BEARER_IN_URL =
+  /\/(share|rfq|evidence|plans|pay)\/(?:return\/)?[0-9a-f]{64}(?![0-9a-f])/gi;
 
 function redactBearerPaths(value: string): string {
   return value
