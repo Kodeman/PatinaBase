@@ -76,7 +76,11 @@ struct ProposalListView: View {
     private func section(_ title: String, _ proposals: [RemoteProposal], accent: Color) -> some View {
         if !proposals.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("\(title) (\(proposals.count))")
+                // `W2R1-n3` / `P-24` residue: the eyebrow counts in words,
+                // like every other count a homeowner reads. Past twelve
+                // `PatinaCount` hands back figures, which is the web's own
+                // cutoff.
+                Text("\(title) (\(PatinaCount.inWords(proposals.count)))")
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.4)
                     .textCase(.uppercase)
@@ -152,7 +156,12 @@ private struct ProposalRowCard: View {
                     if let expiry = expiryLine {
                         Text(expiry.text)
                             .font(PatinaTypography.captionSmall)
-                            .foregroundStyle(expiry.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.muted)
+                            // `IOSC-R3-01`: body ink, never the error ramp.
+                            // The Wave-1-close ruling covers every surface —
+                            // "a passed date is a fact, not an alarm" — and
+                            // the invoice rail already obeyed it while the two
+                            // proposal surfaces were never moved.
+                            .foregroundStyle(expiry.isPastDue ? PatinaColors.Text.primary : PatinaColors.Text.muted)
                     }
                 }
             }
