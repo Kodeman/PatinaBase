@@ -89,6 +89,10 @@ type ScoredActionLinkProps = ScoredActionBaseProps &
     href: string;
     disabled?: boolean;
     onClick?: (event: MouseEvent<HTMLAnchorElement>) => void | Promise<void>;
+    /** next/link's own prop — already forwarded with the rest of the anchor
+     *  props below. Named here so an act can decline viewport prefetching,
+     *  which a bearer-token route must (00574 · the pay link). */
+    prefetch?: boolean;
   };
 
 export type ScoredActionProps = ScoredActionButtonProps | ScoredActionLinkProps;

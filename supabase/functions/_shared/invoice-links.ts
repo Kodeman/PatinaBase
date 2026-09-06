@@ -65,3 +65,22 @@ export async function ensureInvoiceLinkUrl(
     return null;
   }
 }
+
+/**
+ * The address a LETTER puts in front of a client: the invoice's own
+ * `/pay/<token>`, or — when there is no link to be had (a draft, a void, a
+ * failed mint) — today's signed-in `/invoices/<id>` form. The fallback lives
+ * here, beside the helper it guards, so both producers share one definition of
+ * "never ship a broken address" (M7) and a test can exercise the real thing.
+ *
+ * Asked per letter and never cached, so a Regenerate is honored by the next
+ * send.
+ */
+export async function letterPortalUrl(
+  admin: InvoiceLinkRpcClient,
+  baseUrl: string,
+  invoiceId: string
+): Promise<string> {
+  const link = await ensureInvoiceLinkUrl(admin, baseUrl, invoiceId);
+  return link ?? `${baseUrl.replace(/\/$/, '')}/invoices/${invoiceId}`;
+}

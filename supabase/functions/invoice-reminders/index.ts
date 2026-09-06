@@ -65,7 +65,7 @@ import {
   invoiceForClause,
   invoiceSubjectName,
 } from '../_shared/invoice-subject.ts';
-import { ensureInvoiceLinkUrl } from '../_shared/invoice-links.ts';
+import { letterPortalUrl } from '../_shared/invoice-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -350,9 +350,7 @@ Deno.serve(async (_req: Request) => {
     // address. The link is re-asked per letter and never cached, so a
     // Regenerate is honored by the next reminder. metadata.deep_link below
     // stays `/invoices/<id>`: it routes the iOS inbox by id (I2).
-    const portalUrl =
-      (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
-      `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
+    const portalUrl = await letterPortalUrl(admin, CLIENT_PORTAL_URL, invoice.id);
 
     const rendered = STAGE_BUILDERS[stage]({
       invoiceNumber,

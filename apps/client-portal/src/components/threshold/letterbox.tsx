@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useInvoiceLink, type Invoice } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
-import { invoiceLinkUrl } from '@patina/utils';
+import { invoiceLinkPath } from '@patina/utils';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
@@ -134,12 +134,10 @@ export function Letterbox({
 
   // The letter's own address (00574 · K1) — the whole invoice on one page, and
   // the till on it. Additive here: the settle-in-place below stays until W3b.
+  // `/pay/[token]` is a route of this very portal, so the root-relative path is
+  // the whole address: correct on the server and the client alike, with no
+  // origin to read and nothing to reconcile at hydration.
   const { data: invoiceLink } = useInvoiceLink(invoice?.id ?? null);
-  // Read after mount so the first client render matches the server's, which
-  // has no window. Same origin either way, so the relative form is correct
-  // until it resolves.
-  const [origin, setOrigin] = useState('');
-  useEffect(() => setOrigin(window.location.origin), []);
 
   // The return from the till. A return that names an order belongs to the road,
   // not to the letterbox — and a return naming a letter this house is not
@@ -278,7 +276,11 @@ export function Letterbox({
                 regionKey="letterbox"
                 surfaceKey="the_threshold"
                 variant="primary"
-                href={invoiceLinkUrl(origin, invoiceLink.token)}
+                href={invoiceLinkPath(invoiceLink.token)}
+                // Never warmed by scrolling past: a prefetch that ever renders
+                // would record a view and spend the pay page's rate-limit
+                // budget on a letter nobody opened.
+                prefetch={false}
               >
                 Open the invoice
               </ScoredAction>

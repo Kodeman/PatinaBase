@@ -568,7 +568,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     const open = screen.getByRole('link', { name: 'Open the invoice' });
-    expect(open).toHaveAttribute('href', `https://client.test/pay/${LINK_TOKEN}`);
+    expect(open).toHaveAttribute('href', `/pay/${LINK_TOKEN}`);
   });
 
   it('keeps the letterbox, the print sheet and the settle-in-place beside it', async () => {

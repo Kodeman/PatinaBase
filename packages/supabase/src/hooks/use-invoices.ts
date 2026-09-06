@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { OnlinePaymentMethod } from '@patina/shared/invoice';
+import { isLikelyInvoiceLinkToken } from '@patina/utils';
 
 export type { OnlinePaymentMethod };
 
@@ -372,8 +373,24 @@ async function recomputeDraftTotals(supabase: any, invoiceId: string): Promise<v
  * @patina/supabase use-project-v2 = ['project-payment-milestones', id] /
  * ['project-financials', id]) and the earnings caches.
  */
-function invalidateInvoiceEffects(queryClient: QueryClient, projectId?: string | null) {
+/**
+ * `invoiceId` is passed by the acts that move an invoice's LINK state (00574):
+ * issue mints one, send/record-payment/void change what it resolves to. The
+ * folio's recovery band and its two link acts read `['invoice-link', id]`, and
+ * the designer portal's staleTime is five minutes — without this the band tells
+ * the designer the invoice has no link at the one moment it just got one.
+ * Voiding invalidates too: the link survives as `closed` and still resolves,
+ * to K5's withdrawn sheet rather than to a dead page.
+ */
+function invalidateInvoiceEffects(
+  queryClient: QueryClient,
+  projectId?: string | null,
+  invoiceId?: string | null,
+) {
   queryClient.invalidateQueries({ queryKey: ['invoices'] });
+  if (invoiceId) {
+    queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
+  }
   if (projectId) {
     queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
     queryClient.invalidateQueries({ queryKey: ['project-payment-milestones', projectId] });
@@ -989,8 +1006,8 @@ export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
       if (error) throw error;
       return data as Invoice;
     },
-    onSuccess: (invoice, { projectId }) => {
-      invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id);
+    onSuccess: (invoice, { projectId, invoiceId }) => {
+      invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id, invoiceId);
     },
   });
 }
@@ -1034,8 +1051,8 @@ export function useRecordPayment(options?: { errorSurface?: 'inline' }) {
       if (error) throw error;
       return data as InvoicePayment;
     },
-    onSuccess: (_payment, { projectId }) => {
-      invalidateInvoiceEffects(queryClient, projectId);
+    onSuccess: (_payment, { projectId, invoiceId }) => {
+      invalidateInvoiceEffects(queryClient, projectId, invoiceId);
     },
   });
 }
@@ -1094,8 +1111,8 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
       if (data?.error) throw new Error(data.detail ?? data.error);
       return data;
     },
-    onSuccess: (_data, { projectId }) => {
-      invalidateInvoiceEffects(queryClient, projectId);
+    onSuccess: (_data, { projectId, invoiceId }) => {
+      invalidateInvoiceEffects(queryClient, projectId, invoiceId);
     },
   });
 }
@@ -1267,9 +1284,13 @@ export interface InvoiceLink {
 function parseInvoiceLink(data: unknown): InvoiceLink | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
   const row = data as Record<string, unknown>;
-  if (typeof row.token !== 'string') return null;
+  // The token shape is gated here, as the edge-function twin gates it
+  // (`_shared/invoice-links.ts`): a malformed value is still a secret-shaped
+  // one, and must never reach a clipboard or an href. "No link" is a state
+  // every consumer already draws, so a bad row reads as none.
+  if (!isLikelyInvoiceLinkToken(row.token as string | null | undefined)) return null;
   if (row.status !== 'active' && row.status !== 'closed') return null;
-  return { token: row.token, status: row.status };
+  return { token: row.token as string, status: row.status };
 }
 
 /**
@@ -1283,14 +1304,28 @@ function parseInvoiceLink(data: unknown): InvoiceLink | null {
 export function useInvoiceLink(invoiceId: string | null | undefined) {
   return useQuery({
     queryKey: ['invoice-link', invoiceId],
+    // The neighbour precedent (useInvoicePaymentOptions): a config read must
+    // never block or shout on the pay path. `get_invoice_link` raises
+    // `invoice_not_found` for every authority failure, and the folio is
+    // reachable by a studio co-member whose SELECT is broader than
+    // can_manage_invoice — so a refusal is an expected answer, not an
+    // incident. It resolves to null, which every consumer draws as "no link",
+    // rather than throwing a raw Postgres string into the global toast.
+    meta: { errorSurface: 'silent' as const },
     queryFn: async (): Promise<InvoiceLink | null> => {
-      const supabase = getSupabase();
-      const { data, error } = await supabase.rpc('get_invoice_link', {
-        p_invoice_id: invoiceId as string,
-      });
-      if (error) throw error;
-      return parseInvoiceLink(data);
+      try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.rpc('get_invoice_link', {
+          p_invoice_id: invoiceId!,
+        });
+        if (error) return null;
+        return parseInvoiceLink(data);
+      } catch {
+        return null;
+      }
     },
+    // A deliberate refusal is not a flake; retrying it costs three round trips.
+    retry: false,
     enabled: !!invoiceId,
   });
 }
@@ -1353,6 +1388,11 @@ export function useRegenerateInvoiceLink(options?: { errorSurface?: 'inline' }) 
       return { token: data, status: 'active' };
     },
     onSuccess: (link, { invoiceId }) => {
+      // Both writes are deliberate: setQueryData echoes the new token at once,
+      // so the folio cannot copy the dead one during the refetch (React Query
+      // serves the previous value while a query is invalidated but in flight);
+      // the invalidate then re-reads get_invoice_link, which stays the
+      // authority on status.
       queryClient.setQueryData(['invoice-link', invoiceId], link);
       void queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
     },
@@ -1442,8 +1482,8 @@ export function useVoidInvoice(options?: { errorSurface?: 'inline' }) {
       if (error) throw error;
       return data as Invoice;
     },
-    onSuccess: (invoice, { projectId }) => {
-      invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id);
+    onSuccess: (invoice, { projectId, invoiceId }) => {
+      invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id, invoiceId);
     },
   });
 }
