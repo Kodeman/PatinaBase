@@ -196,9 +196,16 @@ export interface ComposerStudio {
  * line appears only when this returns more than one (S8); one studio is used
  * silently. `useOrganizations()` already returns active MEMBERSHIPS only, so
  * the remaining filter is on the organization itself.
+ *
+ * Sorted by name (id breaks a tie): the membership query carries no ORDER BY,
+ * so the first row is Postgres physical order and would otherwise decide which
+ * studio a two-studio designer silently bills from — wrong letterhead, wrong
+ * number sequence, and a number burnt on issue.
  */
 export function activeDesignStudios<T extends ComposerStudio>(orgs: T[]): T[] {
-  return orgs.filter((o) => o.type === 'design_studio' && o.status === 'active');
+  return orgs
+    .filter((o) => o.type === 'design_studio' && o.status === 'active')
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
 export interface StudioInvoiceDraft {

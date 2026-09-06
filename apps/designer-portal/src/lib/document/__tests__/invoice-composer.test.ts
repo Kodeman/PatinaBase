@@ -285,6 +285,39 @@ describe('activeDesignStudios', () => {
     ]);
     expect(result).toHaveLength(2);
   });
+
+  it('orders by name, so the silent default never rides on row order', () => {
+    const verona = studio({ id: 'studio-2', name: 'Verona Interiors' });
+    const middleWest = studio({});
+    const arden = studio({ id: 'studio-3', name: 'Arden & Co.' });
+
+    const oneWay = activeDesignStudios([verona, middleWest, arden]);
+    const other = activeDesignStudios([middleWest, arden, verona]);
+
+    expect(oneWay.map((s) => s.name)).toEqual([
+      'Arden & Co.',
+      'Middle West Studio',
+      'Verona Interiors',
+    ]);
+    expect(other.map((s) => s.id)).toEqual(oneWay.map((s) => s.id));
+  });
+
+  it('breaks a same-name tie on id, so the first row is still fixed', () => {
+    const result = activeDesignStudios([
+      studio({ id: 'studio-b' }),
+      studio({ id: 'studio-a' }),
+    ]);
+    expect(result.map((s) => s.id)).toEqual(['studio-a', 'studio-b']);
+  });
+
+  it('leaves the caller\u2019s array untouched', () => {
+    const input = [
+      studio({ id: 'studio-2', name: 'Verona Interiors' }),
+      studio({}),
+    ];
+    activeDesignStudios(input);
+    expect(input.map((s) => s.id)).toEqual(['studio-2', 'studio-1']);
+  });
 });
 
 describe('STUDIO_TARGET', () => {
