@@ -392,15 +392,22 @@ BEGIN
 
   PERFORM pg_temp.assume_actor(u_client);
 
+  -- `W3R2-n2`. "Tomorrow morning" is the NEXT 8am local, not the calendar day
+  -- after this one. Chosen at a quarter past midnight the old arithmetic held
+  -- the reminders thirty-two hours, when the morning she was plainly asking
+  -- for was seven hours away. The assertion cannot name a date — the suite
+  -- runs at whatever hour it runs — so it names the property: the next 8am,
+  -- and never more than a day out.
   v_result := public.set_decision_snooze(d_one, 'tomorrow_morning');
   v_until := (SELECT snoozed_until FROM public.decision_snoozes
                WHERE user_id = u_client AND decision_id = d_one);
   ASSERT v_until > now(), 'tomorrow morning is in the future';
   ASSERT extract(hour FROM (v_until AT TIME ZONE 'America/New_York')) = 8,
     'tomorrow morning is 8am in HER zone';
-  ASSERT (v_until AT TIME ZONE 'America/New_York')::date
-         = ((now() AT TIME ZONE 'America/New_York')::date + 1),
-    'tomorrow morning is tomorrow, not today';
+  ASSERT v_until = public.next_local_morning('America/New_York', now()),
+    'tomorrow morning is the next 8am local, not the calendar day plus one';
+  ASSERT v_until <= now() + interval '1 day',
+    'and never more than a day out — after midnight it is this morning';
   ASSERT v_result->>'timeZone' = 'America/New_York',
     'the RPC says which zone it computed in';
 
@@ -454,6 +461,25 @@ BEGIN
     RAISE EXCEPTION 'an unknown snooze kind must be refused';
   EXCEPTION WHEN invalid_parameter_value THEN NULL;
   END;
+
+  -- `W3R1-n1`. The overdue notice is the last thing Patina says, so no hold
+  -- may bury it — and until now that rule lived at two clients and one
+  -- downstream reader rather than at the write. `d_lapsing`'s date is a day
+  -- behind us; every kind is refused on it, by the same token both clients
+  -- map onto the sentence they already draw in the act's place.
+  FOR v_text IN SELECT unnest(ARRAY['tomorrow_morning', 'sunday', 'when_due', 'never'])
+  LOOP
+    BEGIN
+      PERFORM public.set_decision_snooze(d_lapsing, v_text);
+      RAISE EXCEPTION 'a snooze on a past-due approval must be refused (%)', v_text;
+    EXCEPTION WHEN check_violation THEN
+      ASSERT SQLERRM = 'decision_past_due',
+        'the refusal names itself: ' || SQLERRM;
+    END;
+  END LOOP;
+  ASSERT (SELECT count(*) FROM public.decision_snoozes
+           WHERE decision_id = d_lapsing) = 0,
+    'and nothing was written by the attempt';
 
   -- A stranger — including a studio co-member — cannot silence her mail.
   PERFORM pg_temp.assume_actor(u_stranger);

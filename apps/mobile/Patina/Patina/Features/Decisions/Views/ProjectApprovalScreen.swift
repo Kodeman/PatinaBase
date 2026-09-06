@@ -143,7 +143,9 @@ struct ProjectApprovalScreen: View {
                     .foregroundStyle(PatinaColors.Text.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 if viewModel.snoozeFailed {
-                    Text(DecisionPaceCopy.snoozeFailed)
+                    Text(viewModel.snoozeRefusedByDate
+                         ? DecisionPaceCopy.pastItsDate
+                         : DecisionPaceCopy.snoozeFailed)
                         .font(PatinaTypography.caption)
                         .foregroundStyle(PatinaColors.Text.secondary)
                         .fixedSize(horizontal: false, vertical: true)

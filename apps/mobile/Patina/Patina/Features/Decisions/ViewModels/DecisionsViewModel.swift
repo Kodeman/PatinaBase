@@ -79,6 +79,7 @@ final class DecisionDetailViewModel {
     var chosenSnooze: DecisionSnooze?
     var isSnoozing: Bool = false
     var snoozeFailed: Bool = false
+    var snoozeRefusedByDate: Bool = false  // `W3R1-n1` — see DecisionPace.swift
 
     /// `set_decision_snooze`, behind a seam — the same reason as every other
     /// act on this class: the singleton actor's network call is not reachable

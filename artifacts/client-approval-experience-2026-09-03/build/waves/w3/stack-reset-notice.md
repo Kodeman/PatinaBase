@@ -52,3 +52,24 @@ orchestrator's handshake.
   The shared local stack is reset from this merged tree. `supabase status` local before the
   reset: `API_URL http://127.0.0.1:54321`, `DB_URL postgresql://postgres:postgres@127.0.0.1:54322/postgres`.
   No prod endpoint touched.
+
+- 2026-09-06 — **final fix round** (`approvals/w3-integration`, worktree
+  `agent-cae-w3-integration`). The two walkers released the stack. **Two Wave 3 migrations were
+  edited IN PLACE** — both are branch-only files that no ledger anywhere has applied (Strata's
+  head is main's, and neither file is on main), which is the same reasoning that authorised the
+  00572 edit:
+  - `00572_she_sets_the_pace.sql` — `set_decision_snooze` now refuses a hold on an approval past
+    its date (`RAISE EXCEPTION 'decision_past_due' USING ERRCODE = 'check_violation'`, closing
+    `W3R1-n1`), and `tomorrow_morning` computes `next_local_morning(zone, now)` — the next 8am
+    local rather than calendar-day-plus-one, closing `W3R2-n2`.
+  - `00573_approval_record_typed_name.sql` — the Stage-2 projection carries
+    `clientConsentMethod` beside `clientSignature`, so the printed Record of Decision states her
+    provenance from the row instead of inferring it from the outcome (`W3W-R2-01`). Recorded
+    here rather than assumed: it is the same class of file and the same call as 00572's.
+
+  `supabase db reset` was then run from this worktree's `supabase/` directory — replaying main's
+  ledger through 00571 plus Wave 3's 00572 and 00573 — followed by `scripts/run-sql-tests.sh`.
+  Local only: `API_URL http://127.0.0.1:54321`,
+  `DB_URL postgresql://postgres:postgres@127.0.0.1:54322/postgres`. No prod endpoint touched.
+  ⚠ The reset replays this branch's tree, so a peer program's uncommitted local schema is gone
+  again — the same "last reset wins" recovery applies (re-reset from that program's worktree).

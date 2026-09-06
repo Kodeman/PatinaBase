@@ -410,6 +410,18 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
+  -- `W3R1-n1`. The refusal lives at the WRITE, not only at the two reads.
+  -- R16 makes the overdue notice the last thing Patina says before it goes
+  -- quiet, so no snooze may bury it — and until now that rule was kept by the
+  -- web hiding the acts, iOS hiding the acts, and `decision-notify` returning
+  -- null for `decision_overdue` before it ever consulted a hold. Three
+  -- readers agreeing is not a rule; this is. The message is the token both
+  -- clients map onto their existing refusal sentence.
+  IF v_decision.due_date IS NOT NULL AND v_decision.due_date < v_now THEN
+    RAISE EXCEPTION 'decision_past_due'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   v_zone := public.notification_time_zone(v_actor);
 
   IF v_kind = 'never' THEN
@@ -437,9 +449,14 @@ BEGIN
              v_decision.due_date - interval '1 day' - interval '1 minute')
     END;
   ELSIF v_kind = 'tomorrow_morning' THEN
-    v_local := v_now AT TIME ZONE v_zone;
-    v_until := (date_trunc('day', v_local) + interval '1 day'
-                 + interval '8 hours') AT TIME ZONE v_zone;
+    -- `W3R2-n2`. The NEXT 8am local, not the calendar day after this one.
+    -- `date_trunc('day', now) + 1 day + 8h` reads right at nine in the
+    -- evening and wrong at a quarter past midnight, where it held the
+    -- reminders thirty-two hours instead of the seven the homeowner was
+    -- plainly asking for. `next_local_morning` is the release hour the push
+    -- window and `when_due` already use, and it is the same answer as the old
+    -- arithmetic on every choice made after 8am.
+    v_until := public.next_local_morning(v_zone, v_now);
   ELSE
     -- 'sunday' — the next Sunday at 8am local, strictly after now. Sunday
     -- morning before eight is still this Sunday; Sunday afternoon is the next.
@@ -479,9 +496,13 @@ COMMENT ON FUNCTION public.set_decision_snooze(uuid, text) IS
   'Computes snoozed_until in the caller''s own zone (notification_time_zone) '
   'and refuses any caller the approval is not addressed to. ''when_due'' lifts '
   'at the last 8am local before the due moment, so the letter arrives on the '
-  'day with the date still ahead of it rather than after it has passed. Never '
-  'suppresses the overdue notice or a superseding edition (R16) — that '
-  'exception lives in the delivery chokepoint.';
+  'day with the date still ahead of it rather than after it has passed. '
+  '''tomorrow_morning'' is the NEXT 8am local (next_local_morning), which after '
+  'midnight is the morning she is about to see. Refuses a snooze on an '
+  'approval already past its date (SQLSTATE 23514, ''decision_past_due''): the '
+  'overdue notice is the last thing Patina says, and no hold may bury it. '
+  'Never suppresses the overdue notice or a superseding edition (R16) — that '
+  'exception lives in the delivery chokepoint too.';
 
 -- ── 3. The hour it may ring ────────────────────────────────────────────────
 

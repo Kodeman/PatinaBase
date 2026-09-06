@@ -228,4 +228,14 @@ enum DecisionPaceCopy {
     /// sentence says exactly that much.
     static let snoozeFailed =
         "That didn’t save. The approval is still yours to answer whenever you like."
+
+    /// `W3R1-n1`. 00572 now refuses a snooze on an approval past its date, and
+    /// says so in one token. A screen that raced the date — offered the act on
+    /// a review it fetched before the date passed — hears it, and prints the
+    /// rule it would have printed had it known, not "that didn't save".
+    static let pastDueRefusalToken = "decision_past_due"
+
+    static func isPastDueRefusal(_ error: Error) -> Bool {
+        "\(error)\(error.localizedDescription)".contains(pastDueRefusalToken)
+    }
 }

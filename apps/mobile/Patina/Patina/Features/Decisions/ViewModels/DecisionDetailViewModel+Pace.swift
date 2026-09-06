@@ -96,12 +96,14 @@ extension DecisionDetailViewModel {
               let decisionId = approvalDecisionId else { return }
         isSnoozing = true
         snoozeFailed = false
+        snoozeRefusedByDate = false
         defer { isSnoozing = false }
         do {
             try await setDecisionSnooze(decisionId, kind)
             chosenSnooze = kind
         } catch {
             MoneyFailureCopy.log("decision snooze", error)
+            snoozeRefusedByDate = DecisionPaceCopy.isPastDueRefusal(error)
             snoozeFailed = true
         }
     }
