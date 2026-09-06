@@ -56,6 +56,7 @@ hold lands on `/` or `/projects/[projectId]` opened to an anchor —
 | `/decisions/[id]` | `#approval-<decisionId>` — the standing ask's own element id, so a client with several is put in front of the one the mail named. An answered decision is no longer drawn, the fragment does not resolve, and she lands at the top of the page, which is the doorstep. |
 | `/proposals`, `/proposals/[id]`, `/proposals/[id]/sign` | `#door` |
 | `/invoices`, `/invoices/[id]` | `#letterbox` |
+| `/invoices/[id]/print` | `#letterbox` — the printable sheet is retired (W3b, 00574); the invoice's own address (`/pay/[token]`) carries print now. |
 | `/budget` | `#ledger` |
 | `/documents` | `#mat-papers` |
 | `/orders` | `#road` |
@@ -77,6 +78,9 @@ tree:
 
 - `/auth/*` — sign-in, magic link, and session handling.
 - `/share/[token]` and other token-bearing links a studio hands out.
+- `/pay/[token]` — the public, account-less invoice page (00574): letterhead,
+  lines, totals, memo, payments and the toll to settle them, on a link the
+  studio hands out; no sign-in required.
 - `/preferences/unsubscribe` — made **public** as part of this cutover (it
   was bouncing signed-out recipients). It never unsubscribes anyone on a GET:
   a public GET that mutates is taken by link scanners, mail proxies and

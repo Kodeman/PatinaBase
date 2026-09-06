@@ -416,6 +416,9 @@ describe('client middleware retired-route map', () => {
     ['/proposals/prop-1', '/', '#door'],
     ['/proposals/prop-1/sign', '/', '#door'],
     ['/invoices/inv-1', '/', '#letterbox'],
+    // W3b (00574): the printable sheet is retired; the old print URL now
+    // folds exactly like `/invoices/<id>`.
+    ['/invoices/inv-1/print', '/', '#letterbox'],
     ['/messages/thread-1', '/', '#note'],
     ['/scans/scan-1', '/', '#doorstep'],
     ['/settings/notifications/thread-1', '/', '#mat'],
@@ -500,7 +503,6 @@ describe('client middleware retired-route map', () => {
 
   it.each([
     '/projects/proj-1',
-    '/invoices/inv-1/print',
     '/piece/abc',
     '/quiz',
   ])('leaves %s alone', async (pathname) => {

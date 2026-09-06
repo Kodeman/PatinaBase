@@ -89,13 +89,17 @@ function stripTrailingSlash(pathname: string): string {
  * Not mapped on purpose:
  *  - `/preferences/unsubscribe` — a public outcome page, kept (and made public
  *    in the middleware, which used to bounce signed-out recipients to sign-in).
- *  - `/invoices/<id>/print` — the printable invoice has no in-page equivalent.
  *  - `/decisions/<id>/record` and `/proposals/<id>/record` — the Record of
  *    Decision (P-26), on the same carve-out and for the same reason: a sheet
  *    that exists to be printed has no section of the page it could fold onto,
  *    and folding it would send "Keep a copy" back to the ask it was pressed
  *    on. They are print sheets, not a new zone; every other address under
  *    `/decisions` and `/proposals` still folds.
+ *
+ * `/invoices/<id>/print` no longer belongs on that list (W3b, 00574): the
+ * printable sheet is retired in favour of the invoice's own standalone
+ * address, so the old print URL now folds exactly like `/invoices/<id>` —
+ * third segment and all.
  */
 export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null {
   const path = stripTrailingSlash(pathname);
@@ -143,14 +147,19 @@ export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null 
     }
 
     // `/invoices/<id>` — the letterbox reads `?invoice=` to name which one.
-    // `/invoices/<id>/print` keeps its own page, as the two record sheets do.
-    case 'invoices':
-      if (segments.length !== 2) return null;
+    // `/invoices/<id>/print` folds the same way (W3b): the printable sheet is
+    // retired, and the invoice's own standalone address (`/pay/<token>`)
+    // carries the print affordance now — unlike the two Record of Decision
+    // sheets above, this one has a real in-page equivalent to land on.
+    case 'invoices': {
+      const named = segments.length === 2 || (segments.length === 3 && third === 'print');
+      if (!named) return null;
       return {
         path: '/',
         anchor: 'letterbox',
         ...(ID_SEGMENT.test(second) ? { params: { invoice: second } } : {}),
       };
+    }
 
     // `/messages/<threadId>` never had a page; the note is where the studio's
     // words live now.

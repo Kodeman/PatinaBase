@@ -56,8 +56,12 @@ describe('the instruments that already named their house', () => {
     });
   });
 
-  it('leaves the printable invoice its own page', () => {
-    expect(retiredRouteTarget('/invoices/inv-1/print')).toBeNull();
+  it('folds the printable invoice like the invoice itself (W3b — the sheet is retired)', () => {
+    expect(retiredRouteTarget('/invoices/inv-1/print')).toEqual({
+      path: '/',
+      anchor: 'letterbox',
+      params: { invoice: 'inv-1' },
+    });
   });
 
   /**
