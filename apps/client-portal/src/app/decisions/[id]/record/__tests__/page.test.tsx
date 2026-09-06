@@ -53,6 +53,7 @@ const ANSWERED: ProjectApprovalReview = {
   authorityRevision: 3,
   predecessorDecisionId: null,
   successorDecisionId: null,
+  clientSignature: 'Harper Vale',
   createdAt: '2026-08-01T12:00:00Z',
   sentAt: '2026-08-02T12:00:00Z',
   respondedAt: '2026-08-12T15:00:00Z',
@@ -105,12 +106,27 @@ describe('/decisions/[id]/record — the owner', () => {
       'data-stamp-state',
       'approved',
     );
+    expect(screen.getByTestId('record-signed-name')).toHaveTextContent('Harper Vale');
     expect(screen.getByTestId('record-signed-on')).toHaveTextContent(
       'Answered 12 August 2026',
     );
     expect(screen.getByTestId('record-consent')).toHaveTextContent(
       'Signed electronically by typed name.',
     );
+  });
+
+  /**
+   * P-26 asks for her typed name AND the date. The projection carries the name
+   * only from 00573; an older read has none to give, and the sheet prints no
+   * name rather than an empty rule where one should be. The consent sentence
+   * still says the method either way.
+   */
+  it('prints no name for a projection older than 00573', async () => {
+    const { clientSignature: _dropped, ...older } = ANSWERED;
+    reviewsHook.mockReturnValue({ data: [older], isLoading: false, isError: false });
+    await renderPage();
+
+    expect(screen.queryByTestId('record-signed-name')).not.toBeInTheDocument();
   });
 
   it('presses the maker’s mark at the plate’s edge — twelve characters (R6)', async () => {
@@ -123,7 +139,9 @@ describe('/decisions/[id]/record — the owner', () => {
 
   it('says click-through on a Return, which carries no typed name', async () => {
     reviewsHook.mockReturnValue({
-      data: [{ ...ANSWERED, outcome: 'changes_requested' }],
+      // Only Approve takes a name (ruled 2026-09-05); the column is left
+      // NULL on Return and Hold, so the sheet has none to print.
+      data: [{ ...ANSWERED, outcome: 'changes_requested', clientSignature: null }],
       isLoading: false,
       isError: false,
     });

@@ -100,15 +100,13 @@ export default function DecisionRecordPage({
       stampState={stampStateForApproval(approval)}
       stampDateLabel={answeredAt ? DAY_MONTH.format(answeredAt) : null}
       stampSubject={`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-      /* The typed name is not on this sheet, because no client-side read
-         carries it: `list_my_project_decision_reviews` projects the outcome
-         and the date, and `client_signature` is written by
-         `respond_project_approval` into a column the projection has never
-         selected. The consent sentence is derived from the outcome instead —
-         the same fact from the other side, ruled 2026-09-05 — and the sheet
-         states nothing it cannot source. Widening the projection by one key
-         is what puts her name here; it is owed, and it is a migration this
-         lane does not own. */
+      /* Her typed name, carried by the projection since 00573. Only Approve
+         takes a name — Return and Hold are press-and-hold only (ruled
+         2026-09-05) — so on those two outcomes, and on any approval answered
+         before 00569, the line is simply absent rather than blank: the sheet
+         states nothing it cannot source. The consent sentence below says the
+         method in either case. */
+      signedName={approval.clientSignature?.trim() || null}
       signedOn={answeredAt ? `Answered ${LONG_DATE.format(answeredAt)}` : null}
       consentSentence={consentSentence(method)}
       checksum={checksumMark(approval.artifactChecksum)}
