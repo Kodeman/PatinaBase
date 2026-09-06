@@ -2318,6 +2318,7 @@ DECLARE
 BEGIN
   FOREACH v_sig IN ARRAY ARRAY[
     'public.ensure_invoice_link(uuid)',
+    'public.resolve_invoice_link(text,boolean)',
     'public.resolve_invoice_link_for_checkout(text)',
     'public.resolve_invoice_return_nonce(text)',
     'public.set_invoice_link_stripe_customer(uuid,text)',
@@ -2339,8 +2340,11 @@ BEGIN
       format('agent_writer must not execute %s', v_sig);
   END LOOP;
 
+  -- J33: resolve_invoice_link left this list for the service-only one above.
+  -- The portal reaches it through its service client, and the per-IP limiter
+  -- that rations this token oracle lives in the portal — an authenticated
+  -- PostgREST caller holding EXECUTE would walk straight past it.
   FOREACH v_sig IN ARRAY ARRAY[
-    'public.resolve_invoice_link(text,boolean)',
     'public.regenerate_invoice_link(uuid)',
     'public.get_invoice_link(uuid)'
   ] LOOP

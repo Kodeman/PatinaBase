@@ -13234,6 +13234,6 @@ END $g$;
 
 -- 00574_invoice_links.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.resolve_invoice_link(text, boolean), public.regenerate_invoice_link(uuid), public.get_invoice_link(uuid) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.regenerate_invoice_link(uuid), public.get_invoice_link(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

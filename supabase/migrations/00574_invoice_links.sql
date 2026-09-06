@@ -331,12 +331,18 @@ BEGIN
       OR v_attempt.invoice_link_id IS NOT NULL
       OR v_attempt.stripe_customer_id IS DISTINCT FROM p_stripe_customer_id;
 
-    -- Review F1: money in flight is never superseded. A processing attempt
-    -- carries a stamped PaymentIntent — a bank debit already initiated — so a
-    -- different actor waits, exactly as void_invoice does (M10). The rail /
-    -- balance supersede on a same-actor processing attempt is 00428's and is
-    -- deliberately not widened here.
-    IF v_attempt.state = 'processing' AND v_actor_changed THEN
+    -- Review F1, widened by J2026-09 (J3): money in flight is never
+    -- superseded — by ANY actor, for ANY reason. A processing attempt carries
+    -- a stamped PaymentIntent: a bank debit already initiated, which
+    -- stripe.checkout.sessions.expire cannot recall. Superseding it fails the
+    -- pending row, opens a second session, and lets the original debit settle
+    -- onto the failed row — an overpayment the studio must refund by hand.
+    -- The guard was once scoped to a changed actor, on the reasoning that a
+    -- same-actor rail change was 00428's business and one authenticated tab.
+    -- On a bearer link there is no session and no single tab: a stale tab or
+    -- a hand-made POST to the unauthenticated /pay/<token>/checkout reaches
+    -- here as the SAME actor. So the state alone decides.
+    IF v_attempt.state = 'processing' THEN
       RAISE EXCEPTION 'invoice_checkout_in_progress';
     END IF;
 
@@ -574,8 +580,11 @@ BEGIN
       OR v_attempt.invoice_link_id IS DISTINCT FROM p_invoice_link_id
       OR v_attempt.stripe_customer_id IS DISTINCT FROM p_stripe_customer_id;
 
-    -- Review F1: never supersede money in flight (see the household claim).
-    IF v_attempt.state = 'processing' AND v_actor_changed THEN
+    -- Review F1 / J3: never supersede money in flight, whoever asks and
+    -- whatever changed — see the household claim for why the actor test came
+    -- out. This is the rail the reasoning was written for: no session, no
+    -- single tab, and an unauthenticated POST reaches here as the same actor.
+    IF v_attempt.state = 'processing' THEN
       RAISE EXCEPTION 'invoice_checkout_in_progress';
     END IF;
 
@@ -1085,6 +1094,7 @@ DECLARE
   v_lines          jsonb;
   v_payments       jsonb;
   v_processing     boolean;
+  v_requires_refund boolean;
   v_in_flight      boolean;
   v_dead           boolean;
   v_kind           text;
@@ -1144,11 +1154,18 @@ BEGIN
   FROM profiles pr WHERE pr.id = v_invoice.designer_id;
 
   IF v_dead THEN
+    -- J13: the same PaymentIntent rule payments[]/pay.processing apply at
+    -- :1245 (F3). A pending row with no stamped PI is a claim nobody paid —
+    -- an abandoned Checkout, not money in flight — and without this the
+    -- withdrawn sheet would read "settling" forever behind one such row.
     v_in_flight := EXISTS (
       SELECT 1 FROM invoice_payments
       WHERE invoice_id = v_invoice.id
         AND method = 'stripe'
-        AND status IN ('pending','requires_refund')
+        AND (
+          (status = 'pending' AND stripe_payment_intent_id IS NOT NULL)
+          OR status = 'requires_refund'
+        )
     );
     v_kind := CASE WHEN v_in_flight THEN 'settling' ELSE 'withdrawn' END;
     RETURN jsonb_build_object(
@@ -1237,8 +1254,9 @@ BEGIN
            'rail', p.stripe_payment_method_type,
            'received_at', p.received_at
          ) ORDER BY coalesce(p.received_at, p.created_at), p.id), '[]'::jsonb),
-         coalesce(bool_or(p.status = 'pending'), false)
-  INTO v_payments, v_processing
+         coalesce(bool_or(p.status = 'pending'), false),
+         coalesce(bool_or(p.status = 'requires_refund'), false)
+  INTO v_payments, v_processing, v_requires_refund
   FROM invoice_payments p
   WHERE p.invoice_id = v_invoice.id
     AND p.status <> 'failed'
@@ -1286,14 +1304,21 @@ BEGIN
     ),
     'pay', jsonb_build_object(
       'rails', jsonb_build_array('us_bank_account', 'card', 'check'),
-      'processing', v_processing
+      'processing', v_processing,
+      -- J2: a requires_refund row is money that arrived and does NOT match the
+      -- invoice — an overpayment or a gross mismatch, which only the studio can
+      -- settle with Stripe. The balance reads as owing again while it stands,
+      -- so re-offering Pay on top of it invites a second wrong payment and a
+      -- second refund. The till closes until the row is resolved; the sheet
+      -- says so in words rather than showing a dead button.
+      'payable', NOT v_requires_refund
     )
   );
 END;
 $$;
 
 COMMENT ON FUNCTION public.resolve_invoice_link(text, boolean) IS
-  'The only guest read path for /pay/<token>. Called through the client portal''s service client (authenticated + service_role hold EXECUTE, anon never). Validates the 64-hex token, bumps view_count when p_record_view, and returns one narrow jsonb discriminated by kind (sheet is an alias for now): invoice (the payable sheet — no uuids, no emails, no internal notes, no Stripe ids, no token; studio.location is the studio address''s City, State; line_items[].attribution is the FF&E maker name), withdrawn (closed link / void invoice, K5), settling (closed with a PaymentIntent-stamped pending or a requires_refund payment, M10), or NULL for malformed/unknown/revoked/draft. pay.processing and payments[] count only PaymentIntent-stamped pending rows (F3).';
+  'The only guest read path for /pay/<token>. Called through the client portal''s service client (authenticated + service_role hold EXECUTE, anon never). Validates the 64-hex token, bumps view_count when p_record_view, and returns one narrow jsonb discriminated by kind (sheet is an alias for now): invoice (the payable sheet — no uuids, no emails, no internal notes, no Stripe ids, no token; studio.location is the studio address''s City, State; line_items[].attribution is the FF&E maker name), withdrawn (closed link / void invoice, K5), settling (closed with a PaymentIntent-stamped pending or a requires_refund payment, M10), or NULL for malformed/unknown/revoked/draft. pay.processing and payments[] count only PaymentIntent-stamped pending rows (F3); payments[] also carries requires_refund/refunded rows, which the sheet labels honestly, and pay.payable is false while a requires_refund row stands (J2).';
 
 -- Ids only, for invoice-link-checkout. Rows only when the link is active, the
 -- invoice is sent/partially_paid and the balance is positive.
@@ -1467,7 +1492,16 @@ BEGIN
     encode(extensions.gen_random_bytes(32), 'hex'),
     (SELECT pr.id FROM profiles pr WHERE pr.id = auth.uid())
   )
+  ON CONFLICT (invoice_id) WHERE status = 'active' DO NOTHING
   RETURNING token INTO v_token;
+  -- J19: a letter going out (ensure_invoice_link) can win the partial unique
+  -- index between the revoke above and this insert. Re-read the winner rather
+  -- than surfacing a raw unique_violation to the folio, exactly as
+  -- ensure_invoice_link does at :1041-1046.
+  IF v_token IS NULL THEN
+    SELECT token INTO v_token
+    FROM invoice_links WHERE invoice_id = p_invoice_id AND status = 'active';
+  END IF;
   RETURN v_token;
 END;
 $$;
@@ -1712,11 +1746,13 @@ GRANT EXECUTE ON FUNCTION
   public.expire_stale_invoice_checkout_attempts(interval)
 TO service_role;
 
--- resolve_invoice_link mirrors resolve_plan_transmittal (00429:1908-1911):
--- authenticated + service_role, never anon — it is called only from the
--- client portal's service client. The two folio RPCs are browser-callable.
+-- J33: resolve_invoice_link is NOT granted to authenticated. It is reached
+-- only through the client portal's service client, and the portal is where the
+-- per-IP limiter lives; a signed-in PostgREST caller holding the grant would
+-- walk straight past that limiter and inflate view_count on any token it
+-- guessed. service_role above is the whole of its access. The two folio RPCs
+-- below are genuinely browser-callable and keep the grant.
 GRANT EXECUTE ON FUNCTION
-  public.resolve_invoice_link(text, boolean),
   public.regenerate_invoice_link(uuid),
   public.get_invoice_link(uuid)
 TO authenticated;

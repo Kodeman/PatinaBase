@@ -297,6 +297,11 @@ DECLARE
   v_sig text;
   v_service_only text[] := ARRAY[
     'public.ensure_invoice_link(uuid)',
+    -- J33: resolve_invoice_link is service-only. The portal's per-IP limiter
+    -- is the only thing rationing this token oracle, and it lives in the
+    -- portal; an authenticated PostgREST caller holding EXECUTE would walk
+    -- past it and inflate view_count on any token it guessed.
+    'public.resolve_invoice_link(text,boolean)',
     'public.resolve_invoice_link_for_checkout(text)',
     'public.resolve_invoice_return_nonce(text)',
     'public.set_invoice_link_stripe_customer(uuid,text)',
@@ -308,7 +313,6 @@ DECLARE
     'public.expire_stale_invoice_checkout_attempts(interval)'
   ];
   v_browser text[] := ARRAY[
-    'public.resolve_invoice_link(text,boolean)',
     'public.regenerate_invoice_link(uuid)',
     'public.get_invoice_link(uuid)'
   ];
@@ -1195,11 +1199,37 @@ BEGIN
   ASSERT (SELECT status = 'pending' FROM public.invoice_payments
           WHERE id = (v_claim->>'payment_id')::uuid),
     'F1 A: the in-flight payment is untouched';
-  -- The same actor may still re-enter its own processing attempt.
-  ASSERT (public.claim_invoice_checkout_attempt(
-    'a5745000-0000-4000-8000-000000000042', 'a5740000-0000-4000-8000-000000000004',
-    'cus_links_client', false, 'card'))->>'attempt_id' = v_claim->>'attempt_id',
-    'the household re-enters its own processing attempt';
+  -- ── J3: money in flight is never superseded — ANY actor, ANY reason ──
+  -- The hole this closes: the SAME actor switching rails took the supersede
+  -- branch, which failed the pending ACH row and opened a second session. The
+  -- original debit still settled — onto that failed row — as an overpayment
+  -- needing a manual refund. stripe.checkout.sessions.expire cannot recall an
+  -- ACH debit, so the only correct answer is to refuse.
+  v_error := NULL;
+  BEGIN
+    PERFORM public.claim_invoice_checkout_attempt(
+      'a5745000-0000-4000-8000-000000000042', 'a5740000-0000-4000-8000-000000000004',
+      'cus_links_client', false, 'us_bank_account');
+  EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
+  ASSERT v_error = 'invoice_checkout_in_progress',
+    format('J3: same actor changing rails on a processing attempt must wait, got %L', v_error);
+
+  -- Not even an identical re-claim: once the debit is initiated there is
+  -- nothing to re-enter, and the sheet says so instead of reopening a till.
+  v_error := NULL;
+  BEGIN
+    PERFORM public.claim_invoice_checkout_attempt(
+      'a5745000-0000-4000-8000-000000000042', 'a5740000-0000-4000-8000-000000000004',
+      'cus_links_client', false, 'card');
+  EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
+  ASSERT v_error = 'invoice_checkout_in_progress',
+    format('J3: same actor re-claiming its own processing attempt must wait, got %L', v_error);
+
+  ASSERT (SELECT state = 'processing' FROM public.invoice_checkout_attempts
+          WHERE id = (v_claim->>'attempt_id')::uuid)
+     AND (SELECT status = 'pending' FROM public.invoice_payments
+          WHERE id = (v_claim->>'payment_id')::uuid),
+    'J3: neither refusal moved the attempt or its payment';
 END;
 $$;
 RESET ROLE;
@@ -1404,13 +1434,22 @@ BEGIN
          = 'withdrawn',
     'a void with its attempt closed is withdrawn';
 
-  -- closed + pending: a Stripe row still pending on the void invoice.
+  -- closed + pending: a Stripe row still pending on the void invoice. J13: the
+  -- PaymentIntent stamp is what makes it money in flight, here as at :1245 —
+  -- an unstamped pending row is an abandoned Checkout, and the split must not
+  -- read it as settling.
   INSERT INTO public.invoice_payments (invoice_id, amount_cents, method, status, note)
   VALUES ('a5745000-0000-4000-8000-000000000036', 10000, 'stripe', 'pending', 'late')
   RETURNING id INTO v_pending;
   v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token36'));
+  ASSERT v->>'kind' = 'withdrawn',
+    format('J13: closed + PI-less pending is withdrawn, not settling: %s', v);
+
+  UPDATE public.invoice_payments SET stripe_payment_intent_id = 'pi_36_late'
+  WHERE id = v_pending;
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token36'));
   ASSERT v->>'kind' = 'settling' AND v->>'sheet' = 'settling',
-    format('closed + pending renders settling: %s', v);
+    format('closed + PI-stamped pending renders settling: %s', v);
   ASSERT v->'invoice'->>'number' = 'INV-L-36' AND v->'studio'->>'name' = 'Links Studio One',
     'settling carries the letterhead and number';
   ASSERT NOT (v ? 'line_items') AND NOT (v ? 'pay') AND NOT (v->'invoice' ? 'balance_cents'),
@@ -1516,6 +1555,54 @@ BEGIN
      AND v_claim->'superseded_session_id' = 'null'::jsonb
      AND v_claim->>'state' = 'claimed',
     format('the new link claims fresh after the sweep: %s', v_claim);
+END;
+$$;
+RESET ROLE;
+
+-- ── J2: a requires_refund row closes the till, and is never "Received" ─────
+-- Last in the file: it settles money onto invoice 31, whose own assertions are
+-- long done. K11 has Kody refund a live charge in the Stripe dashboard and
+-- then read this sheet, so this is the state he will actually meet.
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_token text := (SELECT value FROM links_state WHERE label = 'token31');
+  v jsonb;
+  v_payment uuid;
+BEGIN
+  v := public.resolve_invoice_link(v_token, false);
+  ASSERT (v->'pay'->>'payable')::boolean = true,
+    format('J2: a clean payable sheet opens the till: %s', v->'pay');
+
+  -- An overpayment / gross mismatch: money arrived that does not match the
+  -- invoice, and only the studio can settle it with Stripe.
+  INSERT INTO public.invoice_payments
+    (invoice_id, amount_cents, method, status, stripe_payment_intent_id, received_at)
+  VALUES ('a5745000-0000-4000-8000-000000000031', 10300, 'stripe', 'requires_refund',
+          'pi_31_over', now())
+  RETURNING id INTO v_payment;
+
+  v := public.resolve_invoice_link(v_token, false);
+  ASSERT EXISTS (SELECT 1 FROM jsonb_array_elements(v->'payments') p
+                 WHERE p->>'status' = 'requires_refund'),
+    format('J2: the requires_refund row is emitted so the sheet can name it: %s', v->'payments');
+  ASSERT (v->'pay'->>'payable')::boolean = false,
+    format('J2: the till closes while a requires_refund row stands: %s', v->'pay');
+
+  -- Refunded: the money is back with the payer and the balance is owed again,
+  -- so the row stays visible (labelled a refund) and the till reopens.
+  UPDATE public.invoice_payments SET status = 'refunded' WHERE id = v_payment;
+  v := public.resolve_invoice_link(v_token, false);
+  ASSERT EXISTS (SELECT 1 FROM jsonb_array_elements(v->'payments') p
+                 WHERE p->>'status' = 'refunded'),
+    format('J2: a refunded row is still emitted, never hidden: %s', v->'payments');
+  ASSERT (v->'pay'->>'payable')::boolean = true,
+    format('J2: a settled refund reopens the till: %s', v->'pay');
+
+  -- Neither row was ever 'succeeded' — the status the sheet renders "Received".
+  ASSERT NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v->'payments') p
+                     WHERE p->>'status' = 'succeeded'),
+    format('J2: nothing here may read as Received: %s', v->'payments');
 END;
 $$;
 RESET ROLE;
