@@ -126,9 +126,67 @@ struct DecisionPaceTests {
         #expect(DecisionSnooze.sunday.rawValue == "sunday")
         #expect(DecisionSnooze.whenDue.rawValue == "when_due")
         #expect(DecisionSnooze.never.rawValue == "never")
-        #expect(DecisionSnooze.sunday.confirmation == "I’ll ask you Sunday.")
         #expect(DecisionPaceCopy.onlyTheRemindersWait
                 == "Still yours to answer; only the reminders wait.")
+    }
+
+    /// `r2 M1`. Every confirmation, pinned — not just one of the four. The
+    /// sentence Patina says back is the only place it can promise something
+    /// `R16` will make it break, and the string that did so
+    /// ("I won’t ask again") was the one case this suite did not pin.
+    ///
+    /// Two rules, and both halves of every sentence carry them:
+    ///
+    ///   • It says what the SNOOZE does — hold the reminders — not what
+    ///     Patina will do at that hour. `decisionMailHold` runs the cadence
+    ///     gate after the snooze lifts, so "I’ll ask you tomorrow morning"
+    ///     under `weekly_sunday` names a day Patina will not speak on.
+    ///   • It names the two legs no snooze holds. `decision_overdue` returns
+    ///     from `decisionMailHold` before the snooze test, and a superseding
+    ///     edition is exempted from it.
+    @Test("every confirmation says what the snooze holds, and what it cannot")
+    func everyConfirmationIsHonestAboutTheHold() {
+        #expect(DecisionSnooze.tomorrowMorning.holdsUntil
+                == "I’ll hold the reminders until tomorrow morning.")
+        #expect(DecisionSnooze.sunday.holdsUntil == "I’ll hold the reminders until Sunday.")
+        #expect(DecisionSnooze.whenDue.holdsUntil
+                == "I’ll hold the reminders until the day it’s due.")
+        #expect(DecisionSnooze.never.holdsUntil
+                == "I’ll hold the reminders until you come back.")
+
+        #expect(DecisionPaceCopy.theTwoThatStillReachHer
+                == "If the date passes or a new edition arrives, I’ll still say so.")
+
+        for kind in DecisionSnooze.allCases {
+            let said = kind.confirmation
+            #expect(said == "\(kind.holdsUntil) \(DecisionPaceCopy.theTwoThatStillReachHer)")
+
+            // The promise R16 makes Patina break, in every spelling it took.
+            for broken in ["won’t ask again", "won’t ask", "never ask", "silence"] {
+                #expect(!said.lowercased().contains(broken),
+                        "\(kind.rawValue) promises \(broken), which R16 overrides")
+            }
+            // It promises a HOLD, never an hour Patina will speak at.
+            #expect(!said.contains("I’ll ask you"),
+                    "\(kind.rawValue) names an hour the cadence gate may not keep")
+            #expect(said.contains("hold the reminders"))
+            #expect(said.contains("I’ll still say so"))
+
+            for word in ["overdue", "sorry", "gate", "task", "dashboard"] {
+                #expect(!said.lowercased().contains(word), "\(kind.rawValue) says \(word)")
+            }
+        }
+    }
+
+    /// `never` is the one that most wants to over-promise: 00572 stores it as
+    /// `snoozed_until = 'infinity'`, which is a standing quiet for the
+    /// reminder leg and nothing more.
+    @Test("the standing snooze promises a standing hold, not a standing silence")
+    func theStandingSnoozeIsStillInterrupted() {
+        let said = DecisionSnooze.never.confirmation
+        #expect(said.contains("until you come back"))
+        #expect(said.contains("If the date passes or a new edition arrives"))
+        #expect(DecisionSnooze.never.label == "Don’t remind me — I’ll come back")
     }
 
     /// "When it's due" on an approval with no date is an invented timing.
@@ -195,6 +253,46 @@ struct DecisionPaceTests {
         #expect(!viewModel.canSnoozeApproval(now: Self.beforeDue))
     }
 
+    /// `r2 M2`. The reason drawn in the act’s place is not "not snoozeable
+    /// and past its date" — answering an approval sets `answeredOutcome` and
+    /// never refetches the review, so `canRespond` stays true and a past-due
+    /// approval she has just answered would print "the reminders stay until
+    /// it’s answered" directly beneath her own mark.
+    @Test("a past-due approval she has answered draws neither the act nor the reason")
+    func anAnsweredPastDueApprovalSaysNothing() throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review()
+        viewModel.answeredOutcome = .approved
+
+        // The trap: every leg the old branch tested still reads "past due".
+        #expect(viewModel.approvalIsPastDue(now: Self.afterDue))
+        #expect(viewModel.approvalReview?.canRespond == true)
+        #expect(!viewModel.canSnoozeApproval(now: Self.afterDue))
+
+        #expect(!viewModel.approvalPaceIsHeldByDate(now: Self.afterDue),
+                "the past-due line draws under an approval she has answered")
+    }
+
+    /// Unanswered and past its date is the one case the reason exists for.
+    @Test("a past-due approval still open says the reminders stay")
+    func anOpenPastDueApprovalSaysTheReminderStays() throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review()
+
+        #expect(viewModel.approvalPaceIsHeldByDate(now: Self.afterDue))
+        #expect(!viewModel.approvalPaceIsHeldByDate(now: Self.beforeDue))
+    }
+
+    /// A reader who is not the one being asked is told nothing about a pace
+    /// that was never hers to set (`IOSC-R2-07`, applied to the reason too).
+    @Test("a reader who is not the one asked is given no past-due reason either")
+    func anObserverIsGivenNoReason() throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.approvalReview = try ProjectApprovalFixture.review(viewerRole: "studio")
+
+        #expect(!viewModel.approvalPaceIsHeldByDate(now: Self.afterDue))
+    }
+
     /// A studio co-member is not the one being asked, so the pace is not hers
     /// to set either (`IOSC-R2-07`'s rule, applied to this act).
     @Test("a reader who is not the one asked is offered no snooze")
@@ -230,6 +328,10 @@ struct DecisionPaceTests {
         #expect(code.contains("DecisionPaceCopy.onlyTheRemindersWait"))
         #expect(code.contains("DecisionPaceCopy.pastItsDate"))
         #expect(code.contains("viewModel.canSnoozeApproval()"))
+        // r2 M2: the reason is drawn on its own predicate, never on the date
+        // alone — answering leaves `canRespond` true underneath it.
+        #expect(code.contains("viewModel.approvalPaceIsHeldByDate()"))
+        #expect(!code.contains("viewModel.approvalReview?.canRespond == true"))
         // R8 / the refusals: the past-due line is a fact about the paper.
         for word in ["overdue", "sorry", "failed to", "you didn"] {
             #expect(!DecisionPaceCopy.pastItsDate.lowercased().contains(word),

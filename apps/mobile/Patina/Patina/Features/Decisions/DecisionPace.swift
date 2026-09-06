@@ -100,15 +100,34 @@ public enum DecisionSnooze: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// What Patina says back, once. `R16`'s register: it names when it will
-    /// ask, and never what she has failed to do.
-    var confirmation: String {
+    /// When the held reminders are let go again.
+    ///
+    /// Deliberately not "I’ll ask you Sunday" (`r2 M1`). A snooze only
+    /// UNBLOCKS the letter at its hour — `decisionMailHold` then runs the
+    /// cadence gate underneath it, so under "Once a week, on Sunday" a Tuesday
+    /// hour is a day Patina will not speak on. What the snooze itself does is
+    /// hold, and holding is all this half of the sentence claims.
+    var holdsUntil: String {
         switch self {
-        case .tomorrowMorning: return "I’ll ask you tomorrow morning."
-        case .sunday: return "I’ll ask you Sunday."
-        case .whenDue: return "I’ll ask you on the day it’s due."
-        case .never: return "I won’t ask again. It’s here when you want it."
+        case .tomorrowMorning: return "I’ll hold the reminders until tomorrow morning."
+        case .sunday: return "I’ll hold the reminders until Sunday."
+        case .whenDue: return "I’ll hold the reminders until the day it’s due."
+        case .never: return "I’ll hold the reminders until you come back."
         }
+    }
+
+    /// What Patina says back, once: what the snooze moves, and the two things
+    /// it cannot move.
+    ///
+    /// `R16` is not negotiable server-side and must not be softened here.
+    /// `decisionMailHold` returns `null` for `decision_overdue` BEFORE the
+    /// snooze test, and exempts a superseding edition from it
+    /// (`!gate.isSupersedingEdition && isSnoozeActive(…)`). So no snooze —
+    /// not even `never`, which 00572 stores as `snoozed_until = 'infinity'` —
+    /// buys silence about a passed date or a new edition, and the sentence
+    /// says so rather than promising a quiet Patina will break.
+    var confirmation: String {
+        "\(holdsUntil) \(DecisionPaceCopy.theTwoThatStillReachHer)"
     }
 
     /// The four, minus the one that needs a date the approval does not have.
@@ -153,6 +172,12 @@ enum DecisionPaceCopy {
     /// move. No guilt, no apology, and no claim that anything has been
     /// resolved by waiting.
     static let onlyTheRemindersWait = "Still yours to answer; only the reminders wait."
+
+    /// The two legs no snooze holds (`R16`). Said as the exception it is, in
+    /// the same breath as the hold — a promise of silence Patina intends to
+    /// break is worse than no snooze at all.
+    static let theTwoThatStillReachHer =
+        "If the date passes or a new edition arrives, I’ll still say so."
 
     /// `R16`: the overdue notice cannot be snoozed, so the act is not offered
     /// over one. Stated as a fact about the paper, never about her — there is
