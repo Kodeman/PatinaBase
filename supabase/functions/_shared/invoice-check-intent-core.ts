@@ -140,7 +140,16 @@ export function checkIntentDepsFor(admin: SupabaseClient): CheckIntentDeps {
 
 export async function runInvoiceCheckIntent(
   invoice: CheckIntentInvoice,
-  opts: { designerPortalUrl: string; deps: CheckIntentDeps }
+  opts: {
+    designerPortalUrl: string;
+    deps: CheckIntentDeps;
+    /**
+     * The guest/link rail's resolved display name (F14) — the household
+     * profile's name, else the designer's email-only roster name. The payer
+     * rail leaves this unset; invoice.client already names the payer there.
+     */
+    clientDisplayName?: string | null;
+  }
 ): Promise<CheckIntentOutcome> {
   const { deps } = opts;
   const now = deps.now ?? Date.now;
@@ -151,7 +160,8 @@ export async function runInvoiceCheckIntent(
   // The designer's own line must lead with something; her letter's "for …"
   // clause simply closes early when the invoice names nothing.
   const deskName = invoiceDeskName(invoice);
-  const clientName = invoice.client?.full_name?.trim() || 'Your client';
+  const clientName =
+    opts.clientDisplayName?.trim() || invoice.client?.full_name?.trim() || 'Your client';
   const designerName =
     invoice.designer?.full_name?.trim() || invoice.designer?.business_name?.trim() || null;
   const folioUrl = `${opts.designerPortalUrl}/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`;
@@ -217,7 +227,7 @@ export async function runInvoiceCheckIntent(
         invoiceNumber,
         projectName,
         designerName,
-        clientName: invoice.client?.full_name ?? null,
+        clientName,
         balanceCents,
         portalUrl: folioUrl,
         currency: invoice.currency,

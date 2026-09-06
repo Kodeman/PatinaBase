@@ -206,8 +206,12 @@ export function assertInvoiceSessionIdentity(
     // Exactly one identity term binds: a payer attempt must meet a session
     // stamped with its payer_id, a link attempt one stamped with its
     // invoice_link_id. The other term drops out, as payment_method does below.
+    // The two terms are mutually exclusive (00574) — a session stamped with
+    // BOTH is rejected too, not just one carrying the wrong value.
     (attempt.payerId !== null && metadata.payer_id !== attempt.payerId) ||
     (attempt.invoiceLinkId !== null && metadata.invoice_link_id !== attempt.invoiceLinkId) ||
+    (attempt.payerId !== null && 'invoice_link_id' in metadata) ||
+    (attempt.invoiceLinkId !== null && 'payer_id' in metadata) ||
     // A rail-bound attempt must meet a session stamped with the same rail. A
     // legacy attempt (null) stamps no key and this term drops out entirely.
     (attempt.paymentMethod !== null && metadata.payment_method !== attempt.paymentMethod)

@@ -14,11 +14,11 @@
 //   403 forbidden_origin              — Origin present and ≠ CLIENT_PORTAL_URL
 //   404 invoice_not_found             — malformed / unknown / revoked / closed
 //                                       token, draft / void invoice, no balance
-//   400 bad_payment_method
+//   400 bad_payment_method | invalid_payment_method
 //   409 invoice_not_payable | checkout_payer_mismatch |
 //       payment_reconciliation_required | payment_processing
 //   500 stripe_not_configured | lookup_failed | customer_persistence_failed |
-//       notification_failed
+//       notification_failed | invoice_link_not_found | checkout_claim_failed
 //   502 stripe_error
 //
 // CORS is NOT wildcard (S3/S12). The browser reaches this only through the
@@ -180,6 +180,7 @@ Deno.serve(async (req: Request) => {
     const outcome = await runInvoiceCheckIntent(invoice, {
       designerPortalUrl: DESIGNER_PORTAL_URL,
       deps: checkIntentDepsFor(admin),
+      clientDisplayName: target.client_display_name,
     });
     if (!outcome.ok) {
       return json({ error: outcome.error, detail: outcome.detail }, 500);

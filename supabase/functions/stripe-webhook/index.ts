@@ -111,7 +111,10 @@ import {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
+const CLIENT_PORTAL_URL = (Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud').replace(
+  /\/$/,
+  ''
+);
 // Designer-facing links (refund notices go to the designer's portal invoice).
 const DESIGNER_PORTAL_URL = Deno.env.get('DESIGNER_PORTAL_URL') ?? 'https://app.patina.cloud';
 
@@ -147,6 +150,12 @@ interface PaymentRow {
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
   stripe_payment_method_type: string | null;
+  /**
+   * The identity-verified attempt's link id (00574 M5) — populated only by
+   * resolveClaimedPaymentRow, from the attempt it just resolved and validated,
+   * never from raw session/PI metadata. null on every other resolution path.
+   */
+  resolved_invoice_link_id?: string | null;
 }
 
 interface InvoiceJoined {
@@ -201,6 +210,11 @@ async function resolveClaimedPaymentRow(
     currency: string | null;
   }
 ): Promise<PaymentRow> {
+  // Captured from loadAttempt below so the caller can source the link id from
+  // the identity-verified attempt (00574 M5) rather than raw session/PI
+  // metadata — set only once resolveExactClaimedPayment has loaded the row,
+  // and returned regardless of outcome (a throw below discards it anyway).
+  let resolvedInvoiceLinkId: string | null = null;
   const payment = (await resolveExactClaimedPayment(
     {
       async loadAttempt(attemptId) {
@@ -212,6 +226,7 @@ async function resolveClaimedPaymentRow(
           .eq('id', attemptId)
           .maybeSingle();
         if (error) throw new Error(`failed to load Checkout attempt: ${error.message}`);
+        resolvedInvoiceLinkId = (data as ClaimedCheckoutAttempt | null)?.invoice_link_id ?? null;
         return data as ClaimedCheckoutAttempt | null;
       },
       async loadPayment(attemptId) {
@@ -250,7 +265,7 @@ async function resolveClaimedPaymentRow(
     },
   });
 
-  return payment;
+  return { ...payment, resolved_invoice_link_id: resolvedInvoiceLinkId };
 }
 
 /** Resolve the invoice_payments row: session id → PI id → latest pending stripe row on the invoice. */
@@ -657,22 +672,6 @@ async function handleSessionCompleted(admin: SupabaseClient, event: Stripe.Event
   const { sessionId, paymentIntentId, invoiceId } = sessionIds(session);
   const checkoutAttemptId = session.metadata?.checkout_attempt_id ?? null;
 
-  // M5 (00574): the address Checkout collected is the only one a payer-less
-  // household has. Persist it on the link before anything can fail, so the
-  // receipt (or the failure letter) has somewhere to go. Best effort — a
-  // settlement never waits on it, and only the link id is ever logged.
-  const invoiceLinkId = session.metadata?.invoice_link_id ?? null;
-  const collectedEmail = session.customer_details?.email ?? null;
-  if (invoiceLinkId && collectedEmail) {
-    const { error: emailErr } = await admin.rpc('set_invoice_link_payer_email', {
-      p_link_id: invoiceLinkId,
-      p_email: collectedEmail,
-    });
-    if (emailErr) {
-      console.error('stripe-webhook: payer_email capture failed', invoiceLinkId, emailErr.message);
-    }
-  }
-
   let row = checkoutAttemptId
     ? await resolveClaimedPaymentRow(admin, {
         attemptId: checkoutAttemptId,
@@ -711,6 +710,23 @@ async function handleSessionCompleted(admin: SupabaseClient, event: Stripe.Event
   if (!row) {
     console.warn('stripe-webhook: no payment row resolvable for session', sessionId);
     return;
+  }
+
+  // M5 (00574): the address Checkout collected is the only one a payer-less
+  // household has. Persist it once the payment row's identity is confirmed —
+  // the link id comes from the resolved, identity-verified attempt, never raw
+  // session metadata read before that check ran. Best effort — a settlement
+  // never waits on it, and only the link id is ever logged.
+  const invoiceLinkId = row.resolved_invoice_link_id ?? null;
+  const collectedEmail = session.customer_details?.email ?? null;
+  if (invoiceLinkId && collectedEmail) {
+    const { error: emailErr } = await admin.rpc('set_invoice_link_payer_email', {
+      p_link_id: invoiceLinkId,
+      p_email: collectedEmail,
+    });
+    if (emailErr) {
+      console.error('stripe-webhook: payer_email capture failed', invoiceLinkId, emailErr.message);
+    }
   }
 
   if (session.payment_status === 'paid') {

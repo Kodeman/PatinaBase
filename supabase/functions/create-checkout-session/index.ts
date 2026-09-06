@@ -95,7 +95,10 @@ import {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
-const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
+const CLIENT_PORTAL_URL = (Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud').replace(
+  /\/$/,
+  ''
+);
 const DESIGNER_PORTAL_URL = Deno.env.get('DESIGNER_PORTAL_URL') ?? 'https://app.patina.cloud';
 const INVOICE_CHECKOUT_DESIGNER_TEST_MODE =
   Deno.env.get('INVOICE_CHECKOUT_DESIGNER_TEST_MODE') === 'true' &&

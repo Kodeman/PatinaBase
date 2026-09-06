@@ -624,9 +624,10 @@ Deno.test('invoice link Checkout: a tampered or missing invoice_link_id is never
   assertEquals(ok.kind, 'ready');
 });
 
-Deno.test('invoice link Checkout: a payer attempt ignores a stray invoice_link_id and a link attempt ignores a stray payer_id', async () => {
-  // The other rail's key is not this attempt's identity term; the customer,
-  // attempt id and the bound key still are.
+Deno.test('invoice Checkout: a session carrying BOTH identity terms is rejected, even when the bound one is correct (J20)', async () => {
+  // The two identity terms are mutually exclusive (00574 XOR). A session that
+  // also carries the OTHER rail's key — forged, replayed, or merged from a
+  // different attempt — must never pass just because the bound term matches.
   const payer = attempt({ stripeCheckoutSessionId: 'cs_attempt_1', state: 'session_created' });
   const payerSession = sessionFor(payer, {
     metadata: { ...sessionFor(payer).metadata, invoice_link_id: 'link-stray' },
@@ -639,19 +640,23 @@ Deno.test('invoice link Checkout: a payer attempt ignores a stray invoice_link_i
     [payer, payerSession],
     [link, linkSession],
   ] as const) {
-    const result = await runInvoiceCheckout({
-      claim: async () => claimed,
-      retrieveSession: async () => session,
-      createSession: async () => {
-        throw new Error('must reuse');
-      },
-      finalize: async () => {
-        throw new Error('already finalized');
-      },
-      failExpired: async () => {
-        throw new Error('not expired');
-      },
-    });
-    assertEquals(result.kind, 'ready');
+    await assertRejects(
+      () =>
+        runInvoiceCheckout({
+          claim: async () => claimed,
+          retrieveSession: async () => session,
+          createSession: async () => {
+            throw new Error('must reuse');
+          },
+          finalize: async () => {
+            throw new Error('already finalized');
+          },
+          failExpired: async () => {
+            throw new Error('not expired');
+          },
+        }),
+      InvoiceCheckoutIntegrityError,
+      'does not belong'
+    );
   }
 });

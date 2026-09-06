@@ -56,7 +56,7 @@ Deno.test('driver metadata: a rail-bound payer attempt adds payment_method + sur
   });
 });
 
-Deno.test('driver metadata: a link attempt stamps invoice_link_id, no payer_id key, no surcharge_cents', () => {
+Deno.test('driver metadata: a link attempt stamps invoice_link_id, no payer_id key, and surcharge_cents too (J25)', () => {
   const metadata = invoiceSessionMetadata(
     attempt({ payerId: null, invoiceLinkId: 'link-1', paymentMethod: 'us_bank_account', surchargeCents: 80 })
   );
@@ -66,6 +66,7 @@ Deno.test('driver metadata: a link attempt stamps invoice_link_id, no payer_id k
     checkout_attempt_id: 'attempt-1',
     invoice_link_id: 'link-1',
     payment_method: 'us_bank_account',
+    surcharge_cents: '80',
   });
   assertEquals('payer_id' in metadata, false);
   for (const value of Object.values(metadata)) assertEquals(value === 'null', false);

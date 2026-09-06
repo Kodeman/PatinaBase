@@ -177,3 +177,27 @@ Deno.test('check intent: a payer-less studio invoice names the studio invoice an
   );
   assertEquals(d.notices[0].metadata.project_id, null);
 });
+
+Deno.test('check intent (J26): the guest/link rail names the resolved client_display_name, not "Your client"', async () => {
+  const d = deps();
+  await runInvoiceCheckIntent(
+    invoice({ client_id: null, client: null, project_id: null, project: null, title: 'Consultation, September' }),
+    { designerPortalUrl: 'https://app.test', deps: d.value, clientDisplayName: 'Harper Lee' }
+  );
+  assertEquals(
+    d.notices[0].metadata.message,
+    'Consultation, September: Harper Lee is mailing a check for $9,125.00 toward INV-0004. Record it when it arrives.'
+  );
+});
+
+Deno.test('check intent (J26): an absent/blank client_display_name falls back to "Your client" on the guest rail', async () => {
+  const d = deps();
+  await runInvoiceCheckIntent(
+    invoice({ client_id: null, client: null, project_id: null, project: null, title: 'Consultation, September' }),
+    { designerPortalUrl: 'https://app.test', deps: d.value, clientDisplayName: '   ' }
+  );
+  assertEquals(
+    d.notices[0].metadata.message,
+    'Consultation, September: Your client is mailing a check for $9,125.00 toward INV-0004. Record it when it arrives.'
+  );
+});

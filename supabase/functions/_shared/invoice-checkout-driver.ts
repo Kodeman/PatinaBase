@@ -170,8 +170,9 @@ export function invoiceAttemptFields(attempt: InvoiceCheckoutAttempt, sessionId?
 /**
  * The exact metadata key set per rail (M6). Payer rail: today's set,
  * unchanged. Link rail: payable_type, invoice_id, checkout_attempt_id,
- * invoice_link_id, payment_method. A legacy (null-rail) payer attempt stamps
- * no rail keys, so its session stays byte-identical to the pre-surcharge one.
+ * invoice_link_id, payment_method, surcharge_cents. A legacy (null-rail)
+ * attempt stamps no rail keys, so its session stays byte-identical to the
+ * pre-surcharge one.
  */
 export function invoiceSessionMetadata(attempt: InvoiceCheckoutAttempt): Record<string, string> {
   return {
@@ -183,9 +184,9 @@ export function invoiceSessionMetadata(attempt: InvoiceCheckoutAttempt): Record<
     ...(attempt.paymentMethod
       ? {
           payment_method: attempt.paymentMethod,
-          ...(attempt.payerId !== null
-            ? { surcharge_cents: String(attempt.surchargeCents) }
-            : {}),
+          // J25: stamped on both rails so reconciliation can read it off
+          // either kind of attempt, not just the payer one.
+          surcharge_cents: String(attempt.surchargeCents),
         }
       : {}),
   };
