@@ -507,6 +507,8 @@ export function InvoiceComposer({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Design consultation · Sept 2026"
+              // 00571 bounds the regarding line at 200 characters.
+              maxLength={200}
               className={INPUT}
             />
           </label>

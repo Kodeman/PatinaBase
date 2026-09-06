@@ -280,6 +280,43 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(screen.queryByText(/payment milestones and time entries/)).not.toBeInTheDocument();
   });
 
+  it('retires the number and withdraws the letter — the studio folio note after a void', async () => {
+    mockInvoice = {
+      ...invoice,
+      project_id: null,
+      project: undefined,
+      title: 'Design consultation, September',
+    };
+    mockVoid.mockResolvedValue(undefined);
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+    fireEvent.change(screen.getByLabelText('Void reason'), {
+      target: { value: 'duplicate' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Void invoice' }));
+
+    expect(
+      await screen.findByText('invoice voided · the number retired, the letter withdrawn'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/milestones and time released/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the milestone-and-time note on a house invoice after a void', async () => {
+    mockVoid.mockResolvedValue(undefined);
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+    fireEvent.change(screen.getByLabelText('Void reason'), {
+      target: { value: 'duplicate' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Void invoice' }));
+
+    expect(
+      await screen.findByText('invoice voided · linked milestones and time released'),
+    ).toBeInTheDocument();
+  });
+
   it('keeps the milestone-and-time void copy on a house invoice', () => {
     render(<InvoiceFolio invoiceId="invoice-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Void' }));

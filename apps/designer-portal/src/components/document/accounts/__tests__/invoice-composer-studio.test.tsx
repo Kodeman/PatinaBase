@@ -129,6 +129,78 @@ describe('InvoiceComposer · studio mode', () => {
     expect(screen.getByLabelText('Studio')).toBeInTheDocument();
   });
 
+  // 00571 draws only against an ACTIVE, NON-GUEST membership. A guest studio
+  // offered here is an option whose only answer is `insufficient_privilege`.
+  it('never offers a studio the designer is only a guest of', () => {
+    mockOrganizations = [
+      {
+        id: 'studio-1',
+        name: 'Middle West Studio',
+        type: 'design_studio',
+        status: 'active',
+        membership: { role: 'owner', status: 'active' },
+      },
+      {
+        id: 'studio-guest',
+        name: 'Arden & Co.',
+        type: 'design_studio',
+        status: 'active',
+        membership: { role: 'guest', status: 'active' },
+      },
+    ];
+    render(<InvoiceComposer context={{}} onDrafted={jest.fn()} />);
+    pickStudio();
+
+    // One studio left, so the line is not drawn at all (S8).
+    expect(screen.queryByLabelText('Studio')).not.toBeInTheDocument();
+    expect(screen.queryByText('Arden & Co.')).not.toBeInTheDocument();
+  });
+
+  it('keeps the name sort once a guest studio is dropped from the list', () => {
+    mockOrganizations = [
+      {
+        id: 'studio-2',
+        name: 'Verona Interiors',
+        type: 'design_studio',
+        status: 'active',
+        membership: { role: 'member', status: 'active' },
+      },
+      {
+        id: 'studio-guest',
+        name: 'Arden & Co.',
+        type: 'design_studio',
+        status: 'active',
+        membership: { role: 'guest', status: 'active' },
+      },
+      {
+        id: 'studio-1',
+        name: 'Middle West Studio',
+        type: 'design_studio',
+        status: 'active',
+        membership: { role: 'owner', status: 'active' },
+      },
+    ];
+    render(<InvoiceComposer context={{}} onDrafted={jest.fn()} />);
+    pickStudio();
+
+    const select = screen.getByLabelText('Studio') as HTMLSelectElement;
+    expect(
+      Array.from(select.options).map((option) => option.textContent),
+    ).toEqual(['Middle West Studio', 'Verona Interiors']);
+    expect(select.value).toBe('studio-1');
+  });
+
+  // 00571 bounds the regarding line at 200 characters; the field says so
+  // rather than letting the draw be refused on a title already typed.
+  it('bounds the regarding line at the 200 characters 00571 allows', () => {
+    render(<InvoiceComposer context={{}} onDrafted={jest.fn()} />);
+    pickStudio();
+
+    expect(
+      screen.getByPlaceholderText('Design consultation · Sept 2026'),
+    ).toHaveAttribute('maxLength', '200');
+  });
+
   it('holds the Draft act until household, regarding and a priced line are all there', () => {
     render(<InvoiceComposer context={{}} onDrafted={jest.fn()} />);
     pickStudio();

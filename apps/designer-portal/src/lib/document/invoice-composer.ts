@@ -189,13 +189,18 @@ export interface ComposerStudio {
   name: string;
   type: string;
   status: string;
+  membership?: { role?: string | null; status?: string | null } | null;
 }
 
 /**
  * The design studios the designer can draw a studio invoice for. The studio
  * line appears only when this returns more than one (S8); one studio is used
- * silently. `useOrganizations()` already returns active MEMBERSHIPS only, so
- * the remaining filter is on the organization itself.
+ * silently.
+ *
+ * The membership is filtered here as well as the organization: 00571 authorizes
+ * the draw against an ACTIVE, NON-GUEST membership of the named studio, so a
+ * guest membership offered in this list is an option whose only answer is
+ * `insufficient_privilege` raised verbatim into the composer's error band.
  *
  * Sorted by name (id breaks a tie): the membership query carries no ORDER BY,
  * so the first row is Postgres physical order and would otherwise decide which
@@ -204,7 +209,13 @@ export interface ComposerStudio {
  */
 export function activeDesignStudios<T extends ComposerStudio>(orgs: T[]): T[] {
   return orgs
-    .filter((o) => o.type === 'design_studio' && o.status === 'active')
+    .filter(
+      (o) =>
+        o.type === 'design_studio' &&
+        o.status === 'active' &&
+        o.membership?.role !== 'guest' &&
+        (o.membership?.status ?? 'active') === 'active',
+    )
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 

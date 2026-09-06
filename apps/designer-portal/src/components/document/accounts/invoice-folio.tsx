@@ -310,7 +310,11 @@ export function InvoiceFolio({
         projectId: invoice.project_id ?? undefined,
         reason: voidReason.trim(),
       });
-      setNote('invoice voided · linked milestones and time released');
+      setNote(
+        documentProjectId
+          ? 'invoice voided · linked milestones and time released'
+          : 'invoice voided · the number retired, the letter withdrawn',
+      );
       setAct(null);
       setVoidReason('');
       void qc.invalidateQueries({ queryKey: ['document-state'] });

@@ -278,6 +278,45 @@ describe('activeDesignStudios', () => {
     expect(result.map((s) => s.id)).toEqual(['studio-1']);
   });
 
+  // 00571 draws only against an ACTIVE, NON-GUEST membership of the named
+  // studio. A guest membership offered here is an option whose only answer is
+  // `insufficient_privilege`, raised verbatim into the composer's error band.
+  it('drops a guest membership, whose draw 00571 refuses', () => {
+    const result = activeDesignStudios([
+      studio({}),
+      studio({
+        id: 'studio-guest',
+        name: 'Arden & Co.',
+        membership: { role: 'guest', status: 'active' },
+      }),
+    ]);
+    expect(result.map((s) => s.id)).toEqual(['studio-1']);
+  });
+
+  it('drops a membership that is not active', () => {
+    const result = activeDesignStudios([
+      studio({}),
+      studio({
+        id: 'studio-invited',
+        name: 'Arden & Co.',
+        membership: { role: 'member', status: 'invited' },
+      }),
+    ]);
+    expect(result.map((s) => s.id)).toEqual(['studio-1']);
+  });
+
+  it('keeps an active non-guest membership', () => {
+    const result = activeDesignStudios([
+      studio({ membership: { role: 'owner', status: 'active' } }),
+      studio({
+        id: 'studio-2',
+        name: 'Verona Interiors',
+        membership: { role: 'member', status: 'active' },
+      }),
+    ]);
+    expect(result.map((s) => s.id)).toEqual(['studio-1', 'studio-2']);
+  });
+
   it('reports the two-studio case the studio line is gated on (S8)', () => {
     const result = activeDesignStudios([
       studio({}),
