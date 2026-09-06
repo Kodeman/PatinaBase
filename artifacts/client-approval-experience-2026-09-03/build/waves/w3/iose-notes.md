@@ -45,11 +45,24 @@ buttons and sent every tap into `DecisionConsentSheet`.
   `EnvironmentValues.decisionZoomNamespace`. Under Reduce Motion neither the zoom nor the push's
   slide is drawn (`W2R2-n1`'s rule, applied to a push).
 
-**One deliberate removal, flagged for the reviewer.** The option path no longer opens
+**One deliberate removal, flagged for the reviewer.**
+
+> ⚠ **Amended 2026-09-06 (`W3R1-n3`).** The paragraph below describes the shape as it stood when
+> these notes were written, and one sentence of it has been false since the round-1 walk fixes.
+> `d2e6eefb7` RESTORED the signature to the spread: the two- and three-option screens carry an
+> inline, optional field — "Sign it, if you'd like / Optional. Type your full legal name and your
+> choice is recorded as signed; leave it empty and it is recorded as confirmed in Patina." —
+> walked on screen in round 2 (`walk-ios-r2.md` §1, shots `06`, `10`). **An option choice CAN be
+> signed.** What was removed is the modal `DecisionConsentSheet` STEP, not the signature.
+> Everything else below stands.
+
+The option path no longer opens
 `DecisionConsentSheet`. The held act IS the consent, recorded as `click_through` with no
-signature — which is exactly what that sheet sent on its default path (its "Add my signature"
-toggle rested OFF), and the token the mid-Wave-2 ruling reserves for an act with no name on it.
-The cost is that an option choice can no longer be e-signed. Reasoning: P-30's whole point is
+signature *where she leaves the field empty* — which is exactly what that sheet sent on its
+default path (its "Add my signature" toggle rested OFF), and the token the mid-Wave-2 ruling
+reserves for an act with no name on it.
+~~The cost is that an option choice can no longer be e-signed.~~ (Struck by the amendment above:
+the inline field carries the typed name where she wants one.) Reasoning: P-30's whole point is
 "one named act" replacing a stack of submit buttons, and a press-and-hold whose only effect is
 to open a second Approve button is that stack wearing a gesture — `HoldToActButton`'s own
 contract ("held is not friction for its own sake") refuses it. The ruled signature moment is
