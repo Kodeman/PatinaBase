@@ -127,13 +127,20 @@ const DIGEST_OPTIONS: Array<{
   { value: "monthly", label: "Monthly" },
 ];
 
+/**
+ * P-28 (00572). Three cadences, in her words rather than in the column's — the
+ * tokens `right_away` / `daily` / `weekly_sunday` never reach the page.
+ *
+ * The default is `daily`, the quietest cadence that still gets a real answer
+ * on time: the first notice and the notice that an approval has passed its
+ * date both break the summary, so batching the rest costs her nothing. It is
+ * the column's own DEFAULT and the fallback below, and the two retired
+ * spellings a row may still carry are normalised on write by the database.
+ */
 const REMINDER_OPTIONS: Array<{
   value: NotificationPreferences["reminder_cadence"];
   label: string;
 }> = [
-  // P-28 (00572): three named cadences, in her words. The default is "Once a
-  // day" — the quietest one that still gets a real answer on time, because the
-  // first notice and the overdue notice always break the summary.
   { value: "right_away", label: "Tell me right away" },
   { value: "daily", label: "Once a day" },
   { value: "weekly_sunday", label: "Once a week, on Sunday" },
@@ -511,6 +518,24 @@ function NotificationsSection() {
             <p className="text-[13px] text-[var(--text-muted)]">
               Pause non-urgent notifications during set hours.
             </p>
+            {/* P-28 / R16. The floor holds whether or not she sets hours of
+                her own, so it is stated as a fact about Patina rather than as
+                a setting she has to find — and it names its two exceptions,
+                because a promise the system does not keep is worse than no
+                promise. `decisionMailHold` holds approval mail before 8am
+                local and all of Sunday and lets the passed-date notice
+                through; the weekly summary is the one thing sent ON Sunday;
+                `push_deliver_after` is the 8am–8pm half. */}
+            <p
+              data-testid="details-quiet-floor"
+              className="mt-1 text-[13px] text-[var(--text-body)]"
+            >
+              Approval mail waits for the morning: nothing before 8am in your
+              time zone, and nothing on Sunday — except the weekly summary, if
+              that is the pace you choose. A notification on your phone keeps
+              the same hours and stops at 8pm. The notice that an approval has
+              passed its date is the one thing that never waits.
+            </p>
             <PrefToggle
               label="Enable quiet hours"
               checked={prefs.quiet_hours_enabled}
@@ -599,7 +624,8 @@ function NotificationsSection() {
             <p className="text-[13px] text-[var(--text-muted)]">
               How gentle nudges — proposal reminders and approval requests —
               reach you. A new proposal and invoice reminders are time-sensitive
-              and always arrive right away, regardless of this setting.
+              and always arrive right away, regardless of this setting. So does
+              the notice that an approval has passed its date.
             </p>
             <fieldset className="mt-2 flex flex-col gap-1.5">
               <legend className="sr-only">Reminder cadence</legend>

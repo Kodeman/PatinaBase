@@ -95,6 +95,13 @@ export interface ProjectApprovalReview {
   authorityRevision: number | null;
   predecessorDecisionId: string | null;
   successorDecisionId: string | null;
+  /**
+   * P-26 — the name she typed when she signed, so the printed Record of
+   * Decision can say who answered and not only how. Carried by the projection
+   * from 00573; null on Return and Hold (press-and-hold only, no name), on
+   * every approval answered before 00569, and on any older projection.
+   */
+  clientSignature?: string | null;
   createdAt: string;
   sentAt: string | null;
   respondedAt: string | null;
@@ -207,6 +214,7 @@ export async function invalidateProjectApprovalQueries(
 }
 
 type ProjectApprovalRpcName =
+  | 'set_decision_snooze'
   | 'set_project_decision_authority'
   | 'create_project_approval_decision'
   | 'confirm_project_decision_review'
@@ -364,6 +372,8 @@ export function parseProjectApprovalReview(
         : null,
     predecessorDecisionId: nullableString(row, 'predecessorDecisionId'),
     successorDecisionId: nullableString(row, 'successorDecisionId'),
+    // Arrived with 00573; an older projection simply has no name to give.
+    clientSignature: nullableString(row, 'clientSignature'),
     createdAt: stringValue(row, 'createdAt', label),
     sentAt: nullableString(row, 'sentAt'),
     respondedAt: nullableString(row, 'respondedAt'),
@@ -724,6 +734,68 @@ export function useRespondProjectApproval() {
         }),
       ),
   );
+}
+
+/* ── P-28 · she sets the pace, per approval ─────────────────────────────────
+   A snooze moves the REMINDERS and nothing else. The approval stays open, her
+   answer stays hers to give, and two classes of mail ignore this setting
+   entirely: the overdue notice (it is the last thing Patina says before it
+   goes quiet, and burying it would leave her with nothing at all) and a
+   superseding edition (a new edition is news, not a reminder).
+
+   The four choices are SYMBOLIC, not timestamps. "Tomorrow morning" and
+   "Sunday" are questions about her wall calendar, and "when it's due" is a
+   date only the row knows; resolving them server-side keeps one answer for
+   the mail, the push and the in-app row, where a client-computed instant would
+   drift the moment she crossed a timezone.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The four kinds `set_decision_snooze` accepts (00572). `never` is "don't
+ * remind me — I'll come back": it stands the reminders down until the overdue
+ * notice, which no snooze suppresses.
+ */
+export type DecisionSnoozeChoice =
+  | 'tomorrow_morning'
+  | 'sunday'
+  | 'when_due'
+  | 'never';
+
+export interface DecisionSnoozeInput extends ProjectApprovalInvalidationScope {
+  decisionId: string;
+  choice: DecisionSnoozeChoice;
+}
+
+/**
+ * Stand this approval's reminders down (P-28).
+ *
+ * Rides the same invalidation rail every authoritative Stage-2 mutation uses,
+ * so the ask redraws with the snooze it was just given rather than with the
+ * one it had a moment ago.
+ */
+export function useSetDecisionSnooze() {
+  const queryClient = useQueryClient();
+  return approvalMutation(queryClient, async (input: DecisionSnoozeInput) => {
+    // The RPC resolves her zone itself (notification_time_zone), so the
+    // browser sends no timezone: two clocks would eventually disagree and the
+    // server's is the one the mail, the push and the in-app row are minted on.
+    const row = asRecord(
+      await runRpc('set_decision_snooze', {
+        p_decision_id: input.decisionId,
+        p_kind: input.choice,
+      }),
+      'Decision snooze',
+    );
+    // This RPC answers about the SNOOZE, not about the approval: it returns
+    // decisionId / kind / snoozedUntil / timeZone and no projectId. Demanding
+    // one here would report a snooze that landed as a snooze that failed, so
+    // the invalidation rail takes the projectId the caller already carries.
+    return {
+      ...row,
+      projectId: input.projectId,
+      decisionId: stringValue(row, 'decisionId', 'Decision snooze'),
+    } as ProjectApprovalActionResult;
+  });
 }
 
 export function useWithdrawProjectApproval() {

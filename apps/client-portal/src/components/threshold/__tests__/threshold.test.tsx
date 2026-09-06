@@ -78,6 +78,7 @@ jest.mock('@patina/supabase', () => ({
   // The doorstep ask answers in place now; these are its boundary.
   useConfirmProjectApprovalReview: jest.fn(),
   useRespondProjectApproval: jest.fn(),
+  useSetDecisionSnooze: jest.fn(),
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
@@ -159,6 +160,7 @@ import {
   useMyProjectApprovalReviews,
   usePreviousReadingMark,
   useRespondProjectApproval,
+  useSetDecisionSnooze,
   useProjectInvoices,
   useProjectNotes,
   useProjectParties,
@@ -503,6 +505,10 @@ beforeEach(() => {
     isPending: false,
   });
   (useRespondProjectApproval as jest.Mock).mockReturnValue({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  });
+  (useSetDecisionSnooze as jest.Mock).mockReturnValue({
     mutateAsync: jest.fn(),
     isPending: false,
   });

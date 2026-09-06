@@ -21,6 +21,7 @@ jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useConfirmProjectApprovalReview: jest.fn(),
   useRespondProjectApproval: jest.fn(),
+  useSetDecisionSnooze: jest.fn(),
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
@@ -50,6 +51,7 @@ import {
   useDecisionComments,
   useDecisionRealtime,
   useRespondProjectApproval,
+  useSetDecisionSnooze,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
@@ -64,6 +66,7 @@ import {
 
 const confirmHook = useConfirmProjectApprovalReview as jest.Mock;
 const respondHook = useRespondProjectApproval as jest.Mock;
+const snoozeHook = useSetDecisionSnooze as jest.Mock;
 const commentsHook = useDecisionComments as jest.Mock;
 const createCommentHook = useCreateDecisionComment as jest.Mock;
 const realtimeHook = useDecisionRealtime as jest.Mock;
@@ -74,6 +77,7 @@ const respondMutate = jest.fn();
 const confirmMutate = jest.fn();
 const commentMutate = jest.fn();
 const commentMutateAsync = jest.fn();
+const snoozeMutateAsync = jest.fn();
 
 const APPROVAL: ProjectApprovalReview = {
   decisionId: 'dec-1',
@@ -173,6 +177,8 @@ beforeEach(() => {
 
   confirmHook.mockReturnValue({ mutateAsync: confirmMutate, isPending: false });
   respondHook.mockReturnValue({ mutateAsync: respondMutate, isPending: false });
+  snoozeMutateAsync.mockReset().mockResolvedValue({});
+  snoozeHook.mockReturnValue({ mutateAsync: snoozeMutateAsync, isPending: false });
   commentsHook.mockReturnValue({ data: [], isLoading: false, isError: false });
   commentMutateAsync.mockReset().mockResolvedValue({});
   createCommentHook.mockReturnValue({
@@ -251,23 +257,139 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(variants.size).toBe(1);
   });
 
-  it('names the figure the cost moves from when the edition carries a baseline', () => {
+  /**
+   * R11's baseline. It used to be read off `costBaselineCents`, a field no
+   * projection has ever carried, so the sentence never once printed. It is now
+   * PRODUCED: the edition's own budget total, minus the delta the approval
+   * declares, is the figure the cost moves from.
+   */
+  it('names the figure the cost moves from, from the edition’s own budget', () => {
+    budgetHook.mockReturnValue({
+      data: {
+        id: 'budget-9',
+        projectId: 'proj-1',
+        version: 3,
+        state: 'published' as const,
+        currency: 'USD',
+        lowTotalCents: 4_000_000,
+        targetTotalCents: 4_812_000,
+        highTotalCents: 6_000_000,
+        lines: [],
+        checkpoint: {
+          id: 'cp-1',
+          state: 'published' as const,
+          publishedAt: '2026-08-02T12:00:00Z',
+          acknowledgedAt: null,
+          overrideReason: null,
+          evidenceFingerprint: 'a'.repeat(64),
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
     render(
       <ApprovalAsk
-        approval={
-          {
-            ...APPROVAL,
-            costCentsDelta: 124_000,
-            scheduleDaysDelta: 0,
-            leadTimeDaysDelta: 0,
-            costBaselineCents: 4_688_000,
-          } as ProjectApprovalReview
-        }
+        approval={{
+          ...APPROVAL,
+          artifactKind: 'budget_version',
+          artifactId: 'budget-9',
+          costCentsDelta: 124_000,
+          scheduleDaysDelta: 0,
+          leadTimeDaysDelta: 0,
+        }}
       />,
     );
 
     expect(screen.getByTestId('approval-impact-sentence')).toHaveTextContent(
       '$46,880 becomes $48,120',
+    );
+  });
+
+  it('falls back to the delta alone when the budget in hand is not this edition', () => {
+    budgetHook.mockReturnValue({
+      data: {
+        id: 'budget-9',
+        projectId: 'proj-1',
+        // A later working budget than the one the edition froze.
+        version: 4,
+        state: 'published' as const,
+        currency: 'USD',
+        lowTotalCents: 4_000_000,
+        targetTotalCents: 4_812_000,
+        highTotalCents: 6_000_000,
+        lines: [],
+        checkpoint: {
+          id: 'cp-1',
+          state: 'published' as const,
+          publishedAt: '2026-08-02T12:00:00Z',
+          acknowledgedAt: null,
+          overrideReason: null,
+          evidenceFingerprint: 'a'.repeat(64),
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          artifactKind: 'budget_version',
+          artifactId: 'budget-9',
+          costCentsDelta: 124_000,
+          scheduleDaysDelta: 0,
+          leadTimeDaysDelta: 0,
+        }}
+      />,
+    );
+
+    const sentence = screen.getByTestId('approval-impact-sentence');
+    expect(sentence).toHaveTextContent('The cost rises by $1,240');
+    expect(sentence).not.toHaveTextContent('becomes');
+  });
+
+  it('speaks no baseline over a cost that did not move', () => {
+    budgetHook.mockReturnValue({
+      data: {
+        id: 'budget-9',
+        projectId: 'proj-1',
+        version: 3,
+        state: 'published' as const,
+        currency: 'USD',
+        lowTotalCents: 4_000_000,
+        targetTotalCents: 4_812_000,
+        highTotalCents: 6_000_000,
+        lines: [],
+        checkpoint: {
+          id: 'cp-1',
+          state: 'published' as const,
+          publishedAt: '2026-08-02T12:00:00Z',
+          acknowledgedAt: null,
+          overrideReason: null,
+          evidenceFingerprint: 'a'.repeat(64),
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          artifactKind: 'budget_version',
+          artifactId: 'budget-9',
+          costCentsDelta: 0,
+          scheduleDaysDelta: 4,
+          leadTimeDaysDelta: 0,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('approval-impact-sentence')).toHaveTextContent(
+      'The cost does not change',
     );
   });
 
@@ -333,6 +455,24 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(await screen.findByTestId('approval-stamp')).toHaveTextContent(/^APPROVED/);
     expect(screen.queryByTestId('immutability-sentence')).not.toBeInTheDocument();
+  });
+
+  /**
+   * P-26. "Keep a copy" appears beside the mark the moment the act returns —
+   * not before it, because there is nothing to keep until there is an answer
+   * — and opens the record in a new tab rather than taking her off a page she
+   * may still be reading.
+   */
+  it('offers the keepsake the moment the mark is pressed, and not before', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    expect(screen.queryByRole('link', { name: 'Keep a copy' })).not.toBeInTheDocument();
+
+    await answer(/^approve$/i);
+    await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
+
+    const keep = await screen.findByRole('link', { name: 'Keep a copy' });
+    expect(keep).toHaveAttribute('href', '/decisions/dec-1/record');
+    expect(keep).toHaveAttribute('target', '_blank');
   });
 
   it('names the consequence and takes a second beat before recording an outcome', () => {
@@ -581,6 +721,270 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       screen.queryByRole('link', { name: 'Review revised edition' }),
     ).not.toBeInTheDocument();
   });
+
+  /**
+   * P-27. Both links used to be drawn, which asked her to choose a direction
+   * through her own history. One act, and the forward one wins: the revised
+   * edition is where the conversation is.
+   */
+  it('keeps ONE act along the thread, and points it forward', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, predecessorDecisionId: 'dec-0', successorDecisionId: 'dec-2' }}
+        anchoredDecisionIds={['dec-0', 'dec-1', 'dec-2']}
+      />,
+    );
+
+    const acts = within(screen.getByTestId('approval-revisions')).getAllByRole('link');
+    expect(acts).toHaveLength(1);
+    expect(acts[0]).toHaveTextContent('Review revised edition');
+    expect(acts[0]).toHaveAttribute('href', '#approval-dec-2');
+  });
+});
+
+/* ── P-28 · she sets the pace, on this one approval ───────────────────────── */
+
+describe('ApprovalAsk — remind me', () => {
+  it('offers the four words under the ask, and says what a snooze does NOT do', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    const snooze = screen.getByTestId('approval-snooze');
+    expect(snooze).toHaveTextContent('Remind me');
+    for (const label of [
+      'Tomorrow morning',
+      'Sunday',
+      "When it's due",
+      "Don't remind me",
+    ]) {
+      expect(within(snooze).getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    // The approval is not deferred; only the reminders are.
+    expect(snooze).toHaveTextContent('Still yours to answer; only the reminders wait.');
+  });
+
+  it('stands the reminders down with the choice she pressed, and says so', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sunday' }));
+
+    await waitFor(() => expect(snoozeMutateAsync).toHaveBeenCalledTimes(1));
+    expect(snoozeMutateAsync.mock.calls[0][0]).toEqual({
+      projectId: 'proj-1',
+      decisionId: 'dec-1',
+      choice: 'sunday',
+    });
+    expect(await screen.findByTestId('approval-snooze-said')).toHaveTextContent(
+      "I'll ask you Sunday.",
+    );
+  });
+
+  it('sends the three other choices by their own words', async () => {
+    for (const [label, choice] of [
+      ['Tomorrow morning', 'tomorrow_morning'],
+      ["When it's due", 'when_due'],
+      // The RPC's own fourth kind (00572). 'none' raises
+      // `unsupported snooze kind` at the database.
+      ["Don't remind me", 'never'],
+    ] as const) {
+      snoozeMutateAsync.mockClear();
+      const { unmount } = render(<ApprovalAsk approval={APPROVAL} />);
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      await waitFor(() => expect(snoozeMutateAsync).toHaveBeenCalledTimes(1));
+      expect(snoozeMutateAsync.mock.calls[0][0].choice).toBe(choice);
+      unmount();
+    }
+  });
+
+  /**
+   * "Don't remind me" is not "never tell me". A snooze moves the reminders;
+   * the notice that an approval has passed its date is the last thing Patina
+   * says before it hands the item back to the studio, and no snooze buries it.
+   */
+  it('says plainly that even "don’t remind me" runs out at the date', async () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: "Don't remind me" }));
+
+    expect(await screen.findByTestId('approval-snooze-said')).toHaveTextContent(
+      "I won't remind you again until it's past its date.",
+    );
+  });
+
+  it('offers no snooze over an approval past its date, and says why', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, isOverdue: true }} />);
+
+    expect(screen.queryByTestId('approval-snooze')).not.toBeInTheDocument();
+    const line = screen.getByTestId('approval-snooze-past-due');
+    expect(line).toHaveTextContent('This one is past its date, so its notice stands.');
+    // The retired word never reaches a homeowner.
+    expect(line.textContent).not.toMatch(/overdue/i);
+  });
+
+  it('offers no snooze on a gate she has already answered', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, outcome: 'approved', lifecycleStatus: 'responded' }}
+      />,
+    );
+
+    expect(screen.queryByTestId('approval-snooze')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('approval-snooze-past-due')).not.toBeInTheDocument();
+  });
+
+  it('offers no snooze to a reader who is not the one it waits on', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, viewerRole: 'studio' }} />);
+    expect(screen.queryByTestId('approval-snooze')).not.toBeInTheDocument();
+  });
+
+  it('says it refused in the house’s own words, never the database’s', async () => {
+    snoozeMutateAsync.mockRejectedValue(
+      new Error('new row violates row-level security policy for table "client_decisions"'),
+    );
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sunday' }));
+
+    const refusal = await screen.findByRole('alert');
+    expect(refusal).toHaveTextContent('The reminders could not be set just now. Try again.');
+    expect(refusal.textContent).not.toMatch(/row-level security|client_decisions/);
+  });
+});
+
+/* ── P-27 · the successor read as one thread ──────────────────────────────── */
+
+describe('ApprovalAsk — the thread', () => {
+  const ANSWERED_BEFORE: ProjectApprovalReview = {
+    ...APPROVAL,
+    decisionId: 'dec-0',
+    artifactVersion: 2,
+    costCentsDelta: 120_000,
+    scheduleDaysDelta: 0,
+    leadTimeDaysDelta: 0,
+    outcome: 'changes_requested',
+    lifecycleStatus: 'responded',
+    disposition: 'superseded',
+    respondedAt: '2026-08-12T15:00:00Z',
+  };
+
+  const SUCCESSOR: ProjectApprovalReview = {
+    ...APPROVAL,
+    decisionId: 'dec-1',
+    artifactVersion: 4,
+    predecessorDecisionId: 'dec-0',
+    costCentsDelta: 80_000,
+    scheduleDaysDelta: 6,
+    leadTimeDaysDelta: 0,
+  };
+
+  it('opens by saying what it replaces, in the words of the answer she gave', () => {
+    render(<ApprovalAsk approval={SUCCESSOR} predecessor={ANSWERED_BEFORE} />);
+
+    expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
+      'Edition 4 replaces the edition you returned on August 12.',
+    );
+  });
+
+  it('says approved and held in the same grammar', () => {
+    const { rerender } = render(
+      <ApprovalAsk
+        approval={SUCCESSOR}
+        predecessor={{ ...ANSWERED_BEFORE, outcome: 'approved' }}
+      />,
+    );
+    expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
+      'the edition you approved on August 12',
+    );
+
+    rerender(
+      <ApprovalAsk
+        approval={SUCCESSOR}
+        predecessor={{ ...ANSWERED_BEFORE, outcome: 'needs_discussion' }}
+      />,
+    );
+    expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
+      'the edition you held on August 12',
+    );
+  });
+
+  /** A successor is a new decision, never a reopening of the old one. */
+  it('never says her earlier answer was undone or reopened', () => {
+    const { container } = render(
+      <ApprovalAsk approval={SUCCESSOR} predecessor={ANSWERED_BEFORE} />,
+    );
+    expect(container.textContent).not.toMatch(/undone|reopen|reversed|void|no longer counts/i);
+  });
+
+  it('states what changed since her last answer, from the two projections', () => {
+    render(<ApprovalAsk approval={SUCCESSOR} predecessor={ANSWERED_BEFORE} />);
+
+    const block = screen.getByTestId('approval-changed-since');
+    expect(block).toHaveTextContent('What changed since your last answer');
+    // $1,200 asked before, $800 now, and six days of schedule that were not
+    // being asked for at all.
+    expect(block).toHaveTextContent(
+      'The cost falls by $400, the schedule moves out by six days, and the lead time does not change.',
+    );
+  });
+
+  it('names a retitled edition beside what it moved', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...SUCCESSOR, artifactTitle: 'Library elevations, revised' }}
+        predecessor={ANSWERED_BEFORE}
+      />,
+    );
+
+    expect(screen.getByTestId('approval-changed-since')).toHaveTextContent(
+      'It is titled “Library elevations, revised”; the one you answered was “Library elevations”.',
+    );
+  });
+
+  it('says the studio issued a new edition, and no more, when nothing computable differs', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...SUCCESSOR, costCentsDelta: 120_000, scheduleDaysDelta: 0 }}
+        predecessor={ANSWERED_BEFORE}
+      />,
+    );
+
+    const block = screen.getByTestId('approval-changed-since');
+    expect(block).toHaveTextContent('The studio issued a new edition.');
+    expect(block).not.toHaveTextContent('cost');
+    expect(block).not.toHaveTextContent('schedule');
+  });
+
+  it('claims no thread at all when the predecessor’s row is not in hand', () => {
+    render(<ApprovalAsk approval={SUCCESSOR} />);
+
+    expect(screen.queryByTestId('approval-continuation')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('approval-changed-since')).not.toBeInTheDocument();
+  });
+
+  /**
+   * "Since your last answer" is a false heading over an edition she never
+   * answered — a predecessor withdrawn before she reached it, say.
+   */
+  it('claims no last answer over a predecessor that carries none', () => {
+    render(
+      <ApprovalAsk
+        approval={SUCCESSOR}
+        predecessor={{
+          ...ANSWERED_BEFORE,
+          outcome: null,
+          disposition: 'withdrawn',
+          respondedAt: null,
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('approval-continuation')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('approval-changed-since')).not.toBeInTheDocument();
+  });
+
+  it('opens nothing on an edition that follows nothing', () => {
+    render(<ApprovalAsk approval={APPROVAL} predecessor={ANSWERED_BEFORE} />);
+    expect(screen.queryByTestId('approval-continuation')).not.toBeInTheDocument();
+  });
 });
 
 describe('the artifact, shown', () => {
@@ -806,7 +1210,12 @@ describe('ApprovalAsk — a budget edition', () => {
   it('reads no budget at all for an edition that is not a budget', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
     expect(screen.queryByTestId('approval-budget')).not.toBeInTheDocument();
-    expect(budgetHook).not.toHaveBeenCalled();
+    // The ask itself asks for the edition's budget to produce R11's baseline,
+    // and hands the read an empty project id on every other kind — which is
+    // how `useProjectWorkingBudget` stays disabled. The plate's own read is
+    // never mounted at all.
+    expect(budgetHook).toHaveBeenCalledWith('');
+    expect(budgetHook).not.toHaveBeenCalledWith('proj-1');
   });
 });
 
@@ -926,12 +1335,16 @@ describe('ApprovalReceipt', () => {
     expect(receipt).toHaveAttribute('id', 'approval-dec-1');
     expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('APPROVED 14 August');
     expect(receipt).toHaveTextContent('Library elevations · Edition 3');
-    // The only act on a closed approval reads its discussion; nothing on it
-    // can be changed, and it links nowhere.
+    // Nothing on a closed approval can be changed. The one button reads its
+    // discussion; the one link is P-26's keepsake, which leaves the page only
+    // in a new tab and changes nothing when it does.
     const acts = screen.getAllByRole('button');
     expect(acts).toHaveLength(1);
     expect(acts[0]).toHaveTextContent('Read the discussion');
-    expect(receipt.querySelector('a')).toBeNull();
+    const links = Array.from(receipt.querySelectorAll('a'));
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/decisions/dec-1/record');
+    expect(links[0]).toHaveTextContent('Keep a copy');
   });
 
   it('says the disposition ahead of the outcome on a superseded edition', () => {
@@ -981,13 +1394,82 @@ describe('ApprovalReceipt', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
     const thread = screen.getByTestId('approval-discussion');
-    expect(thread).toHaveAttribute('aria-label', 'Discussion about Library elevations');
+    expect(thread).toHaveAttribute(
+      'aria-label',
+      'Discussion about Library elevations · Edition 3',
+    );
     expect(thread).not.toHaveAttribute('aria-labelledby');
     expect(
-      screen.getByRole('region', { name: 'Discussion about Library elevations' }),
+      screen.getByRole('region', {
+        name: 'Discussion about Library elevations · Edition 3',
+      }),
     ).toBeInTheDocument();
     // The heading a reader sees is unchanged.
     expect(thread).toHaveTextContent('The discussion');
+  });
+
+  /**
+   * `W3-04`. The title alone was not enough. A returned edition and the
+   * edition that replaced it stand on the same doorstep under the same
+   * artifact title, so two landmarks read identically and `landmark-unique`
+   * fails on the pair. The edition number tells them apart.
+   */
+  it('tells two editions of one artifact apart', () => {
+    const { unmount } = render(
+      <ApprovalAsk approval={{ ...APPROVAL, artifactVersion: 2 }} />,
+    );
+    const second = screen
+      .getByTestId('approval-discussion')
+      .getAttribute('aria-label');
+    unmount();
+
+    render(<ApprovalAsk approval={{ ...APPROVAL, artifactVersion: 3 }} />);
+    const third = screen.getByTestId('approval-discussion').getAttribute('aria-label');
+
+    expect(second).toBe('Discussion about Library elevations · Edition 2');
+    expect(third).toBe('Discussion about Library elevations · Edition 3');
+    expect(second).not.toBe(third);
+  });
+
+  it('falls back to the decision id when the edition has no title to name', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, artifactTitle: '' }} />);
+
+    expect(screen.getByTestId('approval-discussion')).toHaveAttribute(
+      'aria-label',
+      'Discussion about approval dec-1',
+    );
+  });
+
+  /**
+   * P-26. The keepsake is offered where the mark is — and only where there is
+   * a mark of HERS to keep. A gate withdrawn before any answer carries a
+   * disposition and no outcome, and there is no decision on it to print.
+   */
+  it('offers the keepsake beside the mark on a record she answered', () => {
+    render(
+      <ApprovalReceipt
+        approval={{
+          ...APPROVAL,
+          outcome: 'approved',
+          respondedAt: '2026-08-12T15:00:00Z',
+        }}
+      />,
+    );
+
+    const keep = screen.getByRole('link', { name: 'Keep a copy' });
+    expect(keep).toHaveAttribute('href', '/decisions/dec-1/record');
+    expect(keep).toHaveAttribute('target', '_blank');
+    expect(keep).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('offers no keepsake of a gate withdrawn before she answered', () => {
+    render(
+      <ApprovalReceipt
+        approval={{ ...APPROVAL, outcome: null, disposition: 'withdrawn' }}
+      />,
+    );
+
+    expect(screen.queryByRole('link', { name: 'Keep a copy' })).not.toBeInTheDocument();
   });
 
   it('says nothing about an approval that is still open', () => {
@@ -1031,6 +1513,145 @@ describe('ApprovalRecords', () => {
   it('says nothing when no approval has closed', () => {
     const { container } = render(<ApprovalRecords approvals={[]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  /* ── P-27 · the fold opens for the record the address named ────────────── */
+
+  describe('the address that names a folded record', () => {
+    const many = [
+      closed('a', '2026-08-14T12:00:00Z'),
+      closed('b', '2026-08-13T12:00:00Z'),
+      closed('c', '2026-08-12T12:00:00Z'),
+      closed('d', '2026-08-11T12:00:00Z'),
+      closed('e', '2026-08-10T12:00:00Z'),
+    ];
+
+    afterEach(() => {
+      window.location.hash = '';
+    });
+
+    /**
+     * Wave 1's re-map risk #4. `/decisions/<id>` folds onto `#approval-<id>`,
+     * and a receipt or supersession mail can name the fifth closed approval on
+     * a house whose pile shows three. The fragment resolved to nothing, the
+     * browser left her at the top of the page, and the letter she came to
+     * answer appeared to have been about nothing at all.
+     */
+    it('opens the fold for a record beyond the three the pile shows', async () => {
+      window.location.hash = '#approval-e';
+      render(<ApprovalRecords approvals={many} />);
+
+      await waitFor(() =>
+        expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(5),
+      );
+      expect(document.getElementById('approval-e')).not.toBeNull();
+      // The fold's own act is gone with the fold.
+      expect(
+        screen.queryByRole('button', { name: /^read the earlier approvals$/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('leaves the fold shut for a record already standing open', () => {
+      window.location.hash = '#approval-b';
+      render(<ApprovalRecords approvals={many} />);
+
+      expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
+    });
+
+    it('leaves the fold shut for an address that names no record here', () => {
+      window.location.hash = '#approval-not-on-this-house';
+      render(<ApprovalRecords approvals={many} />);
+
+      expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
+    });
+
+    /**
+     * A supersession notice names the SUCCESSOR, and the successor is an open
+     * ask — not a record. The fold is not what is hiding it, so the ask puts
+     * her in front of itself. Without this the letter that matters most,
+     * "there is a new edition", still landed her at the top of the page.
+     */
+    it('scrolls to an OPEN ask the address names, not only to a record', async () => {
+      const scrollIntoView = jest.fn();
+      window.location.hash = '#approval-dec-1';
+      render(<ApprovalAsk approval={APPROVAL} />);
+
+      const ask = document.getElementById('approval-dec-1');
+      expect(ask).not.toBeNull();
+      (ask as HTMLElement).scrollIntoView = scrollIntoView;
+
+      await act(async () => {
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    });
+
+    it('leaves an ask alone when the address names some other approval', async () => {
+      const scrollIntoView = jest.fn();
+      window.location.hash = '#approval-somebody-else';
+      render(<ApprovalAsk approval={APPROVAL} />);
+
+      const ask = document.getElementById('approval-dec-1');
+      (ask as HTMLElement).scrollIntoView = scrollIntoView;
+
+      await act(async () => {
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    });
+
+    it('opens the fold when the address changes under her', async () => {
+      render(<ApprovalRecords approvals={many} />);
+      expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
+
+      await act(async () => {
+        window.location.hash = '#approval-d';
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+
+      await waitFor(() =>
+        expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(5),
+      );
+    });
+  });
+});
+
+/* ── P-27 · a superseded record points forward ─────────────────────────────── */
+
+describe('ApprovalReceipt — the way forward', () => {
+  const superseded: ProjectApprovalReview = {
+    ...APPROVAL,
+    outcome: 'changes_requested',
+    lifecycleStatus: 'responded',
+    disposition: 'superseded',
+    respondedAt: '2026-08-12T15:00:00Z',
+    successorDecisionId: 'dec-2',
+  };
+
+  it('offers the revised edition when it stands on this page', () => {
+    render(<ApprovalReceipt approval={superseded} anchoredDecisionIds={['dec-1', 'dec-2']} />);
+
+    const forward = screen.getByTestId('approval-receipt-forward');
+    expect(forward).toHaveTextContent('Review revised edition');
+    expect(forward).toHaveAttribute('href', '#approval-dec-2');
+  });
+
+  it('claims no revised edition the page is not drawing', () => {
+    render(<ApprovalReceipt approval={superseded} anchoredDecisionIds={['dec-1']} />);
+    expect(screen.queryByTestId('approval-receipt-forward')).not.toBeInTheDocument();
+  });
+
+  /** Backwards is not a way forward: a record does not point at its own past. */
+  it('never points a closed record back at the edition before it', () => {
+    render(
+      <ApprovalReceipt
+        approval={{ ...superseded, successorDecisionId: null, predecessorDecisionId: 'dec-0' }}
+        anchoredDecisionIds={['dec-0', 'dec-1']}
+      />,
+    );
+    expect(screen.queryByTestId('approval-receipt-forward')).not.toBeInTheDocument();
   });
 });
 

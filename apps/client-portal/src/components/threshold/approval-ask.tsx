@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import {
   useConfirmProjectApprovalReview,
@@ -8,7 +8,9 @@ import {
   useDecisionComments,
   useDecisionRealtime,
   useRespondProjectApproval,
+  useSetDecisionSnooze,
   type DecisionComment,
+  type DecisionSnoozeChoice,
   type ProjectApprovalOutcome,
   type ProjectApprovalReview,
 } from '@patina/supabase';
@@ -24,6 +26,7 @@ import {
   countInWords,
 } from '@/components/threshold/instruments/standing-sentence';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
+import type { WorkingBudgetVersion } from '@/lib/commercial-documents';
 import { useAuth } from '@/hooks/use-auth';
 import {
   isClientActionableProjectApproval,
@@ -166,8 +169,10 @@ function moneyExact(cents: number, currency: string): string {
  * A gate that is neither open nor answered — withdrawn, or superseded by a
  * later edition — is history too, and stood on no surface at all until it was
  * filed here. It reads as its own word (Withdrawn / Superseded, ahead of any
- * outcome, the precedence `stampStateForApproval` keeps) and carries no act
- * and no revision link: a closed edition is read, not navigated from.
+ * outcome, the precedence `stampStateForApproval` keeps). Nothing on it can be
+ * changed; P-27 gives it one act that changes nothing — the way FORWARD, to
+ * the edition that replaced it, so a superseded record is not the dead end at
+ * the end of the thread.
  *
  * `asks` wins over `records` — an id may anchor exactly one element on the
  * page, and the `#approval-<id>` links depend on it.
@@ -232,6 +237,106 @@ function whyAuthorOf(approval: ProjectApprovalReview): string | null {
   return typeof name === 'string' && name.trim().length > 0 ? name.trim() : null;
 }
 
+/* ── THE THREAD ──────────────────────────────────────────────────────────────
+   P-27. A superseded approval and the edition that replaced it are one
+   conversation, and they used to read as two bare links. The successor opens
+   by saying what it follows and what moved since she last answered.
+
+   IT NEVER SAYS UNDONE. A successor is a NEW decision, not a reopening: her
+   earlier answer stands on its own record and is not taken back by the
+   edition that came after it. So the line is "replaces the edition you
+   approved", never "your approval was reversed", and nothing here reaches for
+   the words reopened, undone or void.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** What she did last time, in the past tense the outcome words take. */
+const OUTCOME_IN_PAST: Record<ProjectApprovalOutcome, string> = {
+  approved: 'approved',
+  changes_requested: 'returned',
+  needs_discussion: 'held',
+};
+
+/**
+ * "Edition 4 replaces the edition you returned on August 12."
+ *
+ * Null unless the predecessor is in hand AND carries an answer of hers with a
+ * date on it. A predecessor withdrawn before she ever answered is not "the
+ * edition you ...", and a sentence that has to guess which verb goes in the
+ * blank is a sentence this surface does not write.
+ */
+export function successionLine(
+  edition: number,
+  predecessor: Pick<ProjectApprovalReview, 'outcome' | 'respondedAt'> | null | undefined,
+): string | null {
+  const outcome = predecessor?.outcome;
+  if (!outcome) return null;
+  const at = parseSourceDate(predecessor?.respondedAt);
+  if (!at) return null;
+  return `Edition ${edition} replaces the edition you ${OUTCOME_IN_PAST[outcome]} on ${LONG_MONTH_DAY.format(
+    at,
+  )}.`;
+}
+
+/**
+ * The single act along the thread, forward first.
+ *
+ * Only a sibling that is itself anchored on this page is offered — an
+ * `#approval-<id>` link to a row the doorstep is not drawing lands nowhere.
+ */
+export function revisionAct(
+  approval: Pick<ProjectApprovalReview, 'predecessorDecisionId' | 'successorDecisionId'>,
+  anchoredDecisionIds: readonly string[],
+): { id: string; label: string } | null {
+  const successor = approval.successorDecisionId;
+  if (successor && anchoredDecisionIds.includes(successor)) {
+    return { id: successor, label: 'Review revised edition' };
+  }
+  const predecessor = approval.predecessorDecisionId;
+  if (predecessor && anchoredDecisionIds.includes(predecessor)) {
+    return { id: predecessor, label: 'Review previous edition' };
+  }
+  return null;
+}
+
+/** The fallback, when the two projections differ in nothing she can read. */
+export const NEW_EDITION_ONLY = 'The studio issued a new edition.';
+
+/**
+ * What changed between the edition she answered and the one in front of her,
+ * computed from the two projections and nothing else.
+ *
+ * The title/version is one line; the three deltas are the standing sentence's
+ * own weighing grammar, run over the DIFFERENCE between the two asks — so
+ * "the cost rises by $400" here means this edition asks four hundred dollars
+ * more than the last one did, which is the question she actually has.
+ *
+ * When nothing computable differs it says the studio issued a new edition and
+ * no more. Inventing a reason the projection does not carry would be the
+ * surface speaking for the designer.
+ */
+export function whatChangedSince(
+  predecessor: ProjectApprovalReview,
+  current: ProjectApprovalReview,
+): string[] {
+  const lines: string[] = [];
+
+  const was = predecessor.artifactTitle.trim();
+  const now = current.artifactTitle.trim();
+  if (was && now && was !== now) {
+    lines.push(`It is titled \u201C${now}\u201D; the one you answered was \u201C${was}\u201D.`);
+  }
+
+  const moved = approvalWeighing({
+    costCentsDelta: current.costCentsDelta - predecessor.costCentsDelta,
+    scheduleDaysDelta: current.scheduleDaysDelta - predecessor.scheduleDaysDelta,
+    leadTimeDaysDelta: current.leadTimeDaysDelta - predecessor.leadTimeDaysDelta,
+  });
+  // An empty ledger is the composer's own word for "all three are zero".
+  if (moved.ledger) lines.push(moved.sentence);
+
+  return lines.length > 0 ? lines : [NEW_EDITION_ONLY];
+}
+
 /**
  * The artifact, shown.
  *
@@ -289,6 +394,28 @@ function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
   );
 }
 
+/**
+ * Fail closed: a working budget stands for the edition on the page ONLY when
+ * its id, its version and its evidence fingerprint all match the frozen
+ * artifact. Two readers depend on this — the figures inside the plate, and the
+ * cost baseline the weighing sentence speaks (R11) — so the predicate is one
+ * function and cannot drift between them.
+ */
+export function budgetIsTheEdition(
+  budget: WorkingBudgetVersion | null | undefined,
+  approval: Pick<
+    ProjectApprovalReview,
+    'artifactId' | 'artifactVersion' | 'artifactChecksum'
+  >,
+): budget is WorkingBudgetVersion {
+  return (
+    !!budget &&
+    budget.id === approval.artifactId &&
+    budget.version === approval.artifactVersion &&
+    budget.checkpoint?.evidenceFingerprint === approval.artifactChecksum
+  );
+}
+
 function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
   const workingBudget = useProjectWorkingBudget(approval.projectId);
   const budget = workingBudget.data;
@@ -296,12 +423,7 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
   // behind it. On a phone the breakdown buries the act, so it folds — and only
   // there: at reading width the whole of it stands open with no control at all.
   const [breakdownOpen, setBreakdownOpen] = useState(false);
-  // Fail closed: the figures are shown only when the edition on the page and
-  // the budget the query returned are provably the same document.
-  const matchesArtifact =
-    budget?.id === approval.artifactId &&
-    budget.version === approval.artifactVersion &&
-    budget.checkpoint?.evidenceFingerprint === approval.artifactChecksum;
+  const matchesArtifact = budgetIsTheEdition(budget, approval);
 
   return (
     <div className="mt-4 max-w-[52ch]" data-testid="approval-budget">
@@ -391,6 +513,7 @@ function BudgetInEdition({ approval }: { approval: ProjectApprovalReview }) {
 function Discussion({
   decisionId,
   artifactTitle,
+  artifactVersion,
   readOnly = false,
   designerGivenName,
   studioName,
@@ -404,6 +527,14 @@ function Discussion({
    * The edition's own title is what makes this one itself.
    */
   artifactTitle?: string | null;
+  /**
+   * `W3-04`. The title alone is not enough: a returned edition and the
+   * edition that replaced it stand on the same doorstep under the same title,
+   * so two landmarks read identically and axe's `landmark-unique` fails on the
+   * pair. The edition number is what tells them apart — and where there is no
+   * title at all, the decision's own id does.
+   */
+  artifactVersion?: number | null;
   readOnly?: boolean;
   designerGivenName?: string | null;
   studioName?: string | null;
@@ -423,7 +554,11 @@ function Discussion({
   // the accessible name. `aria-label` wins over `aria-labelledby`, which is
   // why the heading keeps its id for the eye and gives up naming the landmark.
   const named = artifactTitle?.trim();
-  const landmarkName = named ? `Discussion about ${named}` : 'The discussion';
+  const landmarkName = named
+    ? typeof artifactVersion === 'number'
+      ? `Discussion about ${named} · Edition ${artifactVersion}`
+      : `Discussion about ${named}`
+    : `Discussion about approval ${decisionId}`;
   const written = (comments.data ?? []) as DecisionComment[];
 
   function post() {
@@ -550,14 +685,24 @@ function Discussion({
  */
 export function ApprovalReceipt({
   approval,
+  anchoredDecisionIds = [],
   designerGivenName,
   studioName,
 }: {
   approval: ProjectApprovalReview;
+  /**
+   * P-27. A closed record whose successor stands on this page keeps ONE act,
+   * and it points forward: a superseded edition that says nothing about the
+   * edition that replaced it is a dead end at the end of a thread. Nothing
+   * else on a closed record can be acted on, and this changes nothing — it
+   * moves her along the page she is already standing on.
+   */
+  anchoredDecisionIds?: readonly string[];
   designerGivenName?: string | null;
   studioName?: string | null;
 }) {
   const [reading, setReading] = useState(false);
+  const forward = revisionAct(approval, anchoredDecisionIds);
   const closed = approval.outcome !== null || approval.disposition !== 'active';
   const stampedAt = parseSourceDate(approval.respondedAt);
   const headingId = `approval-record-${approval.decisionId}`;
@@ -595,6 +740,18 @@ export function ApprovalReceipt({
           {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
         </Stamp>
       </p>
+      {forward?.label === 'Review revised edition' && (
+        <p className="mt-3">
+          <a
+            data-testid="approval-receipt-forward"
+            href={`#approval-${forward.id}`}
+            className="inline-flex min-h-11 items-center text-[15px] leading-normal underline"
+          >
+            {forward.label}
+          </a>
+        </p>
+      )}
+      {approval.outcome !== null && <KeepACopy decisionId={approval.decisionId} />}
       <div className="mt-3">
         <ScoredAction
           actionKey="read_approval_discussion"
@@ -613,6 +770,7 @@ export function ApprovalReceipt({
           <Discussion
             decisionId={approval.decisionId}
             artifactTitle={approval.artifactTitle}
+            artifactVersion={approval.artifactVersion}
             readOnly
             designerGivenName={designerGivenName}
             studioName={studioName}
@@ -620,6 +778,152 @@ export function ApprovalReceipt({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * P-26. The keepsake, offered where the mark is — and only once there is a
+ * mark to keep. It opens `/decisions/<id>/record` in a new tab rather than
+ * navigating: she is standing on a page she may still be reading, and a sheet
+ * for the drawer is not a place to send her away to.
+ */
+function KeepACopy({ decisionId }: { decisionId: string }) {
+  return (
+    <div className="mt-3">
+      <ScoredAction
+        actionKey="keep_approval_record"
+        regionKey="doorstep"
+        surfaceKey="the_threshold"
+        variant="tertiary"
+        href={`/decisions/${encodeURIComponent(decisionId)}/record`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Keep a copy
+      </ScoredAction>
+    </div>
+  );
+}
+
+/* ── P-28 · she sets the pace, on this one approval ──────────────────────────
+   Four words under the ask. A snooze moves the REMINDERS and nothing else:
+   the approval stays open, the answer stays hers, and the copy says so
+   directly rather than leaving her to wonder whether she has just deferred a
+   decision.
+
+   NEVER OVER A PAST DUE DATE. The overdue notice is the last thing Patina
+   says before it goes quiet and hands the item back to the studio; a snooze
+   that could bury it would leave her with nothing at all. So on an approval
+   past its date the acts are not drawn, and the surface says why instead of
+   offering something it would then refuse.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const SNOOZE_ACTS: Array<{
+  choice: DecisionSnoozeChoice;
+  label: string;
+  /** What she is told once it lands. Never a promise about the decision. */
+  confirmation: string;
+}> = [
+  {
+    choice: 'tomorrow_morning',
+    label: 'Tomorrow morning',
+    confirmation: "I'll ask you tomorrow morning.",
+  },
+  { choice: 'sunday', label: 'Sunday', confirmation: "I'll ask you Sunday." },
+  {
+    choice: 'when_due',
+    label: "When it's due",
+    confirmation: "I'll ask you when it's due.",
+  },
+  {
+    choice: 'never',
+    label: "Don't remind me",
+    confirmation: "I won't remind you again until it's past its date.",
+  },
+];
+
+/** The house sentence for a snooze that did not land. */
+const SNOOZE_REFUSED = 'The reminders could not be set just now. Try again.';
+
+function RemindMe({
+  approval,
+}: {
+  approval: Pick<ProjectApprovalReview, 'decisionId' | 'projectId' | 'isOverdue'>;
+}) {
+  const setSnooze = useSetDecisionSnooze();
+  const [said, setSaid] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+
+  if (approval.isOverdue) {
+    return (
+      <p
+        data-testid="approval-snooze-past-due"
+        className="mt-4 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+      >
+        This one is past its date, so its notice stands.
+      </p>
+    );
+  }
+
+  async function stand(act: (typeof SNOOZE_ACTS)[number]) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setError(null);
+    try {
+      await setSnooze.mutateAsync({
+        projectId: approval.projectId,
+        decisionId: approval.decisionId,
+        choice: act.choice,
+      });
+      setSaid(act.confirmation);
+    } catch (cause) {
+      setError(refusalSentence(cause, SNOOZE_REFUSED));
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  return (
+    <div className="mt-4 max-w-[52ch]" data-testid="approval-snooze">
+      <p className={EYEBROW_CLASS}>Remind me</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-5">
+        {SNOOZE_ACTS.map((act) => (
+          <ScoredAction
+            key={act.choice}
+            actionKey={`snooze_approval_${act.choice}`}
+            regionKey="doorstep"
+            surfaceKey="the_threshold"
+            variant="tertiary"
+            loading={setSnooze.isPending}
+            loadingLabel="Setting"
+            onClick={() => stand(act)}
+          >
+            {act.label}
+          </ScoredAction>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]">
+        Still yours to answer; only the reminders wait.
+      </p>
+      {said && (
+        <p
+          role="status"
+          data-testid="approval-snooze-said"
+          className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {said}
+        </p>
+      )}
+      {error && (
+        <p
+          role="alert"
+          className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
+        >
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -632,16 +936,72 @@ const RECORDS_SHOWN = 3;
  * stacked between the ask and the plan key. The pile is not counted at her:
  * how many she has answered is not a thing she is being asked to carry.
  */
+/**
+ * The decision id the page's address names — `#approval-<id>` — and a way to
+ * say she has been put in front of it.
+ *
+ * `/decisions/<id>` folds onto `#approval-<id>`, and every letter Patina sends
+ * about an approval carries that address: a receipt names a closed record, a
+ * supersession notice names the successor, which is an OPEN ask. Neither
+ * element exists when the browser resolves the fragment — the records fold is
+ * still shut and the asks have not rendered — so the browser gives up and
+ * leaves her at the top of the page.
+ *
+ * Both readers of this hook therefore do the scrolling themselves: the fold
+ * opens first and then scrolls, and an open ask scrolls to itself.
+ */
+function useAddressedApproval(): [string | null, () => void] {
+  const [seek, setSeek] = useState<string | null>(null);
+
+  useEffect(() => {
+    function named() {
+      const match = /^#approval-(.+)$/.exec(window.location.hash);
+      setSeek(match ? match[1] : null);
+    }
+    named();
+    window.addEventListener('hashchange', named);
+    return () => window.removeEventListener('hashchange', named);
+  }, []);
+
+  return [seek, useCallback(() => setSeek(null), [])];
+}
+
 export function ApprovalRecords({
   approvals,
+  anchoredDecisionIds = [],
   designerGivenName,
   studioName,
 }: {
   approvals: ProjectApprovalReview[];
+  anchoredDecisionIds?: readonly string[];
   designerGivenName?: string | null;
   studioName?: string | null;
 }) {
   const [all, setAll] = useState(false);
+  const [seek, seekAnswered] = useAddressedApproval();
+
+  /**
+   * P-27, and Wave 1's re-map risk #4.
+   *
+   * The fold opens itself for a named record, and then puts her in front of
+   * it — the browser has already given up on the fragment by the time the
+   * element exists.
+   */
+  useEffect(() => {
+    if (!seek) return;
+    const index = approvals.findIndex((row) => row.decisionId === seek);
+    // Not among the records at all: it is an open ask, which mounts its own
+    // element and scrolls to itself, or it is not on this house. Either way
+    // the fold is not what is hiding it.
+    if (index < 0) return;
+    if (index >= RECORDS_SHOWN && !all) {
+      setAll(true);
+      return;
+    }
+    document.getElementById(`approval-${seek}`)?.scrollIntoView?.();
+    seekAnswered();
+  }, [all, approvals, seek, seekAnswered]);
+
   if (approvals.length === 0) return null;
   const shown = all ? approvals : approvals.slice(0, RECORDS_SHOWN);
 
@@ -658,6 +1018,7 @@ export function ApprovalRecords({
         <ApprovalReceipt
           key={approval.decisionId}
           approval={approval}
+          anchoredDecisionIds={anchoredDecisionIds}
           designerGivenName={designerGivenName}
           studioName={studioName}
         />
@@ -681,6 +1042,13 @@ export function ApprovalRecords({
 
 export interface ApprovalAskProps {
   approval: ProjectApprovalReview;
+  /**
+   * P-27. The edition this one replaces, when the page holds its row. The
+   * continuation line and the "what changed" block are computed from the two
+   * projections side by side, so without the row there is nothing to compute
+   * and the ask reads exactly as it did before.
+   */
+  predecessor?: ProjectApprovalReview | null;
   /** Told the decision id once this ask's own act lands. */
   onAnswered?: (decisionId: string) => void;
   /** Decision ids that carry an `#approval-<id>` anchor on this page. */
@@ -693,6 +1061,7 @@ export interface ApprovalAskProps {
 
 export function ApprovalAsk({
   approval,
+  predecessor = null,
   onAnswered,
   anchoredDecisionIds = [],
   designerGivenName = null,
@@ -729,6 +1098,17 @@ export function ApprovalAsk({
   // press says the same thing twice in the designer's thread. Editing the note
   // before retrying makes it a different thing to say, so it is sent.
   const notePosted = useRef<string | null>(null);
+
+  // P-27. A supersession notice names the SUCCESSOR, and the successor is an
+  // open ask, not a record — so the ask puts her in front of itself when the
+  // address names it. Its element exists from the first paint; the browser had
+  // already given the fragment up before then.
+  const [addressed, addressSeen] = useAddressedApproval();
+  useEffect(() => {
+    if (addressed !== approval.decisionId) return;
+    document.getElementById(`approval-${approval.decisionId}`)?.scrollIntoView?.();
+    addressSeen();
+  }, [addressed, addressSeen, approval.decisionId]);
 
   /**
    * Whether the reader is the one this approval waits on. 00569 says which
@@ -793,6 +1173,35 @@ export function ApprovalAsk({
   // with the wrong date is not.
   const stampedAt = parseSourceDate(approval.respondedAt) ?? justAnswered?.at ?? null;
   const chosenAct = OUTCOME_ACTS.find((act) => act.outcome === chosen) ?? null;
+
+  /**
+   * R11's baseline, PRODUCED rather than read off a field no migration
+   * writes. It used to arrive through a cast at `costBaselineCents`, which no
+   * projection has ever carried, so the sentence R11 rules for — "$46,880
+   * becomes $48,120", the figure the delta moves FROM — never once printed.
+   *
+   * Where the artifact IS the budget, the edition's own total is a fact the
+   * surface already holds (the same fail-closed match the plate's figures
+   * stand on), and the total minus the delta the approval declares is the
+   * figure it moved from. Nothing else on the projection can produce one, so
+   * every other artifact kind keeps the delta-only sentence, which is the
+   * honest fallback and not a degraded one.
+   *
+   * Silent at a zero delta: "$48,120 becomes $48,120" is a sentence that says
+   * a thing did not happen twice.
+   */
+  const isBudgetEdition = approval.artifactKind === 'budget_version';
+  const editionBudget = useProjectWorkingBudget(
+    // Disabled for every other kind: the plate does not read a budget for
+    // them either, and a query that cannot produce a baseline should not run.
+    isBudgetEdition ? approval.projectId : '',
+  );
+  const baselineCents =
+    isBudgetEdition &&
+    approval.costCentsDelta !== 0 &&
+    budgetIsTheEdition(editionBudget.data, approval)
+      ? editionBudget.data.targetTotalCents - approval.costCentsDelta
+      : null;
   /** The designer, named where the copy has room for a name. */
   const designer = designerGivenName?.trim() || null;
   /** His one line about this edition, frozen with it, when the row carries one. */
@@ -817,13 +1226,16 @@ export function ApprovalAsk({
             approval.requiredReviewCount,
           )} reviews confirmed.`;
 
-  const revisions = [
-    { id: approval.predecessorDecisionId, label: 'Review previous edition' },
-    { id: approval.successorDecisionId, label: 'Review revised edition' },
-  ].filter(
-    (row): row is { id: string; label: string } =>
-      !!row.id && anchoredDecisionIds.includes(row.id),
-  );
+  /**
+   * ONE act along the thread, and the forward one wins (P-27).
+   *
+   * Both links used to be drawn, which put "Review previous edition" beside
+   * "Review revised edition" and asked her to pick a direction through her own
+   * history. The revised edition is where the conversation actually is; the
+   * one she answered is behind her, and the continuation line above already
+   * names it.
+   */
+  const forward = revisionAct(approval, anchoredDecisionIds);
 
   async function confirmExactEdition() {
     if (inFlight.current || !canConfirm || approval.authorityRevision === null) return;
@@ -911,20 +1323,27 @@ export function ApprovalAsk({
   // What the edition weighs, spoken once and then printed as figures. The
   // three deltas stand side by side and are never summed (R11), and a delta of
   // zero is said in words rather than left out — she is agreeing to all three.
-  //
-  // The baseline is read through a cast on purpose. `why` and `viewerRole` are
-  // now real fields because 00569 projects them; no migration projects a cost
-  // baseline, so typing one on ProjectApprovalReview would promise a field the
-  // mapper could only ever set to null. A cost delta beside the figure it moves
-  // from is a fact where the delta alone is a fragment, so the composer takes
-  // one the moment a projection carries it — and the cast goes with it.
   const weighing = approvalWeighing({
     costCentsDelta: approval.costCentsDelta,
     scheduleDaysDelta: approval.scheduleDaysDelta,
     leadTimeDaysDelta: approval.leadTimeDaysDelta,
-    costBaselineCents:
-      (approval as { costBaselineCents?: number | null }).costBaselineCents ?? null,
+    costBaselineCents: baselineCents,
   });
+
+  // P-27. Both are drawn only where the predecessor is in hand AND carries an
+  // answer of hers: "since your last answer" is a false heading over an
+  // edition she never answered, and a continuation line that cannot name the
+  // verb is a line this surface does not write.
+  const answeredBefore =
+    approval.predecessorDecisionId !== null &&
+    predecessor !== null &&
+    predecessor.decisionId === approval.predecessorDecisionId &&
+    predecessor.outcome !== null;
+  const continuation = answeredBefore
+    ? successionLine(approval.artifactVersion, predecessor)
+    : null;
+  const changedSince =
+    answeredBefore && continuation ? whatChangedSince(predecessor, approval) : null;
 
   // `data-never-dim` is spared the Since-Yesterday dim only while something is
   // actually owed on it: a gate she has reviewed and that now waits on the
@@ -953,6 +1372,17 @@ export function ApprovalAsk({
                 ? 'Your approval · read the edition first'
                 : 'Your approval · your answer is needed'}
       </p>
+      {/* P-27. The ask opens by saying what it follows, so the two editions
+          read as one conversation rather than as two asks with a link between
+          them. It never says her earlier answer was undone. */}
+      {continuation && (
+        <p
+          data-testid="approval-continuation"
+          className="mt-1.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+        >
+          {continuation}
+        </p>
+      )}
       <ArtifactPlate approval={approval} />
 
       {/* The ask is a thing someone said, so it is set as one: a pull-quote on
@@ -1035,6 +1465,28 @@ export function ApprovalAsk({
         )}
       </div>
 
+      {/* P-27. Beside the weighing, because it is the same reading one step
+          back: what this edition asks, against what the last one asked. */}
+      {changedSince && (
+        <section
+          data-testid="approval-changed-since"
+          aria-labelledby={`approval-changed-${approval.decisionId}`}
+          className="mt-4 max-w-[52ch]"
+        >
+          <h3 id={`approval-changed-${approval.decisionId}`} className={EYEBROW_CLASS}>
+            What changed since your last answer
+          </h3>
+          {changedSince.map((line) => (
+            <p
+              key={line}
+              className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]"
+            >
+              {line}
+            </p>
+          ))}
+        </section>
+      )}
+
       {recordedOutcome && (
         <p className="mt-4">
           <Stamp
@@ -1050,6 +1502,7 @@ export function ApprovalAsk({
           </Stamp>
         </p>
       )}
+      {recordedOutcome && <KeepACopy decisionId={approval.decisionId} />}
 
       <div className="mt-4">
         {!viewerAnswers && (
@@ -1251,6 +1704,14 @@ export function ApprovalAsk({
         </div>
       )}
 
+      {/* P-28. Under the ask, and only while something is actually waiting on
+          her: a gate she has answered, or one the studio now holds, has no
+          reminders left to stand down. */}
+      {viewerAnswers &&
+        !recordedOutcome &&
+        !awaitingStudioIssue &&
+        approval.disposition === 'active' && <RemindMe approval={approval} />}
+
       {notice && (
         <p
           role="status"
@@ -1267,30 +1728,25 @@ export function ApprovalAsk({
         </p>
       )}
 
-      {revisions.length > 0 && (
+      {forward && (
         <nav
-          aria-label="Approval revision history"
+          aria-label={`Approval revision history for ${approval.artifactTitle}`}
           data-testid="approval-revisions"
           className="mt-4"
         >
-          <ul className="flex flex-wrap gap-x-6">
-            {revisions.map((row) => (
-              <li key={row.id}>
-                <a
-                  href={`#approval-${row.id}`}
-                  className="inline-flex min-h-11 items-center text-[15px] leading-normal underline"
-                >
-                  {row.label}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <a
+            href={`#approval-${forward.id}`}
+            className="inline-flex min-h-11 items-center text-[15px] leading-normal underline"
+          >
+            {forward.label}
+          </a>
         </nav>
       )}
 
       <Discussion
         decisionId={approval.decisionId}
         artifactTitle={approval.artifactTitle}
+        artifactVersion={approval.artifactVersion}
         designerGivenName={designerGivenName}
         studioName={studioName}
         composerRef={setComposer}

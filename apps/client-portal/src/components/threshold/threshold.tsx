@@ -466,6 +466,11 @@ export function Threshold({
     anchoredDecisionIds,
     onAnswered: onApprovalAnswered,
   } = useDoorstepApprovals(projectApprovals);
+  // Every approval on this house, by its own id — the successor thread reads
+  // its predecessor's projection out of this, and nothing else needs it.
+  const approvalsById = new Map(
+    projectApprovals.map((approval) => [approval.decisionId, approval]),
+  );
   const approvals: ThresholdApproval[] = doorstepApprovals.map((approval) => ({
     id: approval.decisionId,
     title: approval.question,
@@ -927,6 +932,7 @@ export function Threshold({
       />
       <ApprovalRecords
         approvals={doorstepRecords}
+        anchoredDecisionIds={anchoredDecisionIds}
         designerGivenName={designerGivenName}
         studioName={studioName}
       />
@@ -988,6 +994,14 @@ export function Threshold({
         <ApprovalAsk
           key={approval.decisionId}
           approval={approval}
+          // P-27. The edition this one replaces, when the house holds its row
+          // — the continuation line and the "what changed" block are computed
+          // from the two projections side by side.
+          predecessor={
+            approval.predecessorDecisionId
+              ? (approvalsById.get(approval.predecessorDecisionId) ?? null)
+              : null
+          }
           onAnswered={onApprovalAnswered}
           anchoredDecisionIds={anchoredDecisionIds}
           designerGivenName={designerGivenName}

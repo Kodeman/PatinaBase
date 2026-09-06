@@ -94,6 +94,19 @@ describe('SpineGate', () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * `W3-03`. The kind line used to be painted with the phase's own ink mixed
+   * into charcoal — `color-mix(procurement 52%, charcoal)` composites to
+   * #8E7A37, 3.40:1 on this block's `--bg-warm` ground, below AA at an 11px
+   * register. It takes a text token now, and no gate may reintroduce a mix.
+   */
+  it('writes the kind line in a text token, never a phase mix', () => {
+    render(<SpineGate {...FURNISHINGS_GATE} />);
+    const kind = screen.getByTestId('spine-gate-kind');
+    expect(kind).toHaveClass('text-[var(--text-body)]');
+    expect(kind.getAttribute('style')).toBeNull();
+  });
+
   it('states the paper, its kind, its total, and what the deposit does on signing', () => {
     render(<SpineGate {...FURNISHINGS_GATE} />);
     expect(screen.getByText('Furnishings authorization No. 7')).toBeInTheDocument();

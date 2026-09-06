@@ -44,6 +44,7 @@ import {
   useMyProjectApprovalReviews,
   usePublishProjectApproval,
   useRespondProjectApproval,
+  useSetDecisionSnooze,
   useSetProjectDecisionAuthority,
   useSupersedeProjectApproval,
   useWithdrawProjectApproval,
@@ -322,6 +323,21 @@ describe('project approval sanitized reads', () => {
     expect(
       parseProjectApprovalReview({ ...REVIEW, viewerRole: 'owner' }),
     ).toEqual(expect.objectContaining({ viewerRole: null }));
+  });
+
+  // P-26 (00573). The typed name is what puts her signature on the printed
+  // Record of Decision; Return and Hold carry none, and neither does any
+  // projection older than 00573.
+  it('carries the typed name when the projection has one, and null when it has not', () => {
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, clientSignature: 'Leah Quist' }),
+    ).toEqual(expect.objectContaining({ clientSignature: 'Leah Quist' }));
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, clientSignature: null }),
+    ).toEqual(expect.objectContaining({ clientSignature: null }));
+    expect(parseProjectApprovalReview({ ...REVIEW })).toEqual(
+      expect.objectContaining({ clientSignature: null }),
+    );
   });
 });
 
@@ -621,6 +637,112 @@ describe('project approval authority and lifecycle RPCs', () => {
     });
 
     expect(rpc.mock.calls[0][1].p_payload).toEqual({ outcome: 'needs_discussion' });
+  });
+
+  /* ── P-28 · she sets the pace, per approval ───────────────────────────── */
+
+  /**
+   * The RPC 00572 declares is `set_decision_snooze(p_decision_id uuid, p_kind
+   * text)`. PostgREST resolves overloads by argument NAME, so a hook that
+   * posts `p_choice` — or a third `p_timezone` — resolves nothing and every
+   * press comes back PGRST202. The zone is resolved server-side
+   * (`notification_time_zone`), which is why the browser sends none.
+   */
+  it('calls the RPC by the signature 00572 declares — p_decision_id and p_kind, nothing else', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        decisionId: 'decision-1',
+        kind: 'sunday',
+        snoozedUntil: '2026-09-13T13:00:00.000Z',
+        timeZone: 'America/Chicago',
+      },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+
+    await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'sunday',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('set_decision_snooze', {
+      p_decision_id: 'decision-1',
+      p_kind: 'sunday',
+    });
+    expect(Object.keys(rpc.mock.calls[0][1])).toEqual(['p_decision_id', 'p_kind']);
+  });
+
+  /**
+   * The four kinds the RPC's own IN list accepts. `never` is the fourth —
+   * "don't remind me" — and any other spelling raises
+   * `unsupported snooze kind` at the database.
+   */
+  it('spells every kind the way the RPC accepts it', async () => {
+    for (const kind of ['tomorrow_morning', 'sunday', 'when_due', 'never'] as const) {
+      rpc.mockResolvedValue({ data: { decisionId: 'decision-1', kind }, error: null });
+      const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+      await snooze.mutationFn({
+        projectId: 'project-1',
+        decisionId: 'decision-1',
+        choice: kind,
+      });
+      expect(rpc.mock.calls.at(-1)?.[1].p_kind).toBe(kind);
+    }
+  });
+
+  /**
+   * The snooze RPC answers about the SNOOZE and returns no projectId. Demanding
+   * one would throw on a call that had already stood the reminders down, and
+   * the surface would tell her the reminders could not be set when they had.
+   */
+  it('accepts a return that carries no projectId, and takes the caller\'s own', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        decisionId: 'decision-1',
+        kind: 'never',
+        snoozedUntil: null,
+        timeZone: 'America/Chicago',
+      },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+
+    const result = (await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'never',
+    })) as { projectId: string; decisionId: string };
+
+    expect(result.projectId).toBe('project-1');
+    expect(result.decisionId).toBe('decision-1');
+  });
+
+  it('rides the approval invalidation rail, so the ask redraws with its snooze', async () => {
+    rpc.mockResolvedValue({
+      data: { decisionId: 'decision-1', kind: 'when_due' },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+    const result = await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'when_due',
+    });
+
+    invalidateQueries.mockClear();
+    await snooze.onSuccess?.(result, {
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'when_due',
+    });
+
+    const keys = (
+      invalidateQueries.mock.calls as unknown as Array<[{ queryKey: unknown }]>
+    ).map(([call]) => JSON.stringify(call.queryKey));
+    expect(keys).toContain(JSON.stringify(['project-approvals', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['my-project-approval-reviews']));
+    expect(keys).toContain(JSON.stringify(['project-approval', 'decision-1']));
   });
 
   it('uses the exact withdrawal and supersession signatures', async () => {

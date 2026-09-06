@@ -1,6 +1,9 @@
 'use client';
 
-import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+import {
+  countInWords,
+  moneyInWords,
+} from '@/components/threshold/instruments/standing-sentence';
 import { parseSourceDate, type HouseLedgerModel } from '@/lib/threshold/derive';
 import { owedDueLine } from '@/lib/threshold/standing';
 
@@ -42,9 +45,19 @@ function figure(cents: number | null | undefined): cents is number {
   return typeof cents === 'number' && Number.isFinite(cents) && cents > 0;
 }
 
-/** One open invoice is "the open invoice"; several are counted in words. */
+/**
+ * One open invoice is "the open invoice"; several are counted in words.
+ *
+ * P-24 residue: the several case printed the figure while the comment above it
+ * promised words, so a homeowner read "Owed across 2 open invoices" in a house
+ * whose every neighbouring sentence spells its counts. `countInWords` is the
+ * surface's one speller — words to twelve, figures past it, where the word
+ * stops helping.
+ */
 function owedWords(count: number): string {
-  return count > 1 ? `Owed across ${count} open invoices` : 'Owed on the open invoice';
+  return count > 1
+    ? `Owed across ${countInWords(count)} open invoices`
+    : 'Owed on the open invoice';
 }
 
 /**

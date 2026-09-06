@@ -102,7 +102,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
 
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3 })} />);
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      'Owed across 3 open invoices',
+      'Owed across three open invoices',
     );
   });
 
