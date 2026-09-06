@@ -471,10 +471,12 @@ BEGIN
   ASSERT v_row->>'why'
     = 'The island moved a foot; everything else is as we drew it.',
     'the frozen why did not survive into the client projection';
-  -- The composing designer's given name, frozen at compose time: 'W2 Designer'
-  -- reaches the homeowner as 'W2', the same first-token rule the email
-  -- sign-off applies.
-  ASSERT v_row->>'whyAuthorName' = 'W2',
+  -- The composing designer's DISPLAY name, frozen at compose time (W2-n4,
+  -- 00572). 00569 froze full_name's first token — 'W2' — and the Wave-2 walk
+  -- ruled that a studio signing its work "Leah Kochaver" must not have a client
+  -- read "— Leah" under the one sentence she wrote herself. This profile has no
+  -- display_name, so the whole full_name stands in.
+  ASSERT v_row->>'whyAuthorName' = 'W2 Designer',
     'the why reached the homeowner unattributed: '
     || COALESCE(v_row->>'whyAuthorName', '<null>');
   ASSERT v_row->>'viewerRole' = 'lead',
@@ -738,8 +740,8 @@ CROSS JOIN LATERAL public.publish_client_decision(
 WHERE create_row.label IN ('revise-carry-create', 'revise-ask-create')
 ORDER BY create_row.label;
 
--- Both reissues are made by the OTHER studio member, whose given name is
--- 'Peer' and not 'W2'. That is what makes the attribution assertions below
+-- Both reissues are made by the OTHER studio member, whose shown name is
+-- 'Peer Ashford' and not 'W2 Designer'. That is what makes the assertions below
 -- mean anything: an inherited line must keep the name of whoever wrote it,
 -- and a re-asked line must take the name of whoever reissued it.
 RESET ROLE;
@@ -805,7 +807,7 @@ BEGIN
   ASSERT v_carried = 'The island moved a foot; the rest is as we drew it.',
     'the revision dropped the line that explained the ask: '
     || COALESCE(v_carried, '<null>');
-  ASSERT v_carried_author = 'W2',
+  ASSERT v_carried_author = 'W2 Designer',
     'an inherited line was re-attributed to whoever reissued it: '
     || COALESCE(v_carried_author, '<null>');
 
@@ -818,7 +820,7 @@ BEGIN
   ASSERT v_reasked = 'You asked us to hold the island where it was.',
     'the composer could not re-ask the why on a revision: '
     || COALESCE(v_reasked, '<null>');
-  ASSERT v_reasked_author = 'Peer',
+  ASSERT v_reasked_author = 'Peer Ashford',
     'a re-asked line kept the predecessor''s name: '
     || COALESCE(v_reasked_author, '<null>');
 

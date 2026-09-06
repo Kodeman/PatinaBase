@@ -131,8 +131,12 @@ const REMINDER_OPTIONS: Array<{
   value: NotificationPreferences["reminder_cadence"];
   label: string;
 }> = [
-  { value: "immediate", label: "Right away" },
-  { value: "daily_digest", label: "Daily summary" },
+  // P-28 (00572): three named cadences, in her words. The default is "Once a
+  // day" — the quietest one that still gets a real answer on time, because the
+  // first notice and the overdue notice always break the summary.
+  { value: "right_away", label: "Tell me right away" },
+  { value: "daily", label: "Once a day" },
+  { value: "weekly_sunday", label: "Once a week, on Sunday" },
 ];
 
 const COMMON_TIMEZONES = [
@@ -609,7 +613,7 @@ function NotificationsSection() {
                     name="details-reminder-cadence"
                     value={opt.value}
                     checked={
-                      (prefs.reminder_cadence ?? "immediate") === opt.value
+                      (prefs.reminder_cadence ?? "daily") === opt.value
                     }
                     onChange={() => update({ reminder_cadence: opt.value })}
                     className="h-4 w-4 border border-current"

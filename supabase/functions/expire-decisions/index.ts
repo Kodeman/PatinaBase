@@ -144,6 +144,26 @@ Deno.serve(async (_req: Request) => {
         signature,
       );
       if (result.emailSent || result.inAppOk) overdueNotified++;
+
+      // R16. The overdue notice is the last automated letter about this
+      // approval; from here the studio chases by hand. So the moment the
+      // notice lands, the designer gets one line on her own inbox rail saying
+      // exactly that — otherwise the hand-off is a silence nobody was told
+      // about. Idempotent in SQL (00572): a second run writes no second line.
+      if (result.emailSent || result.inAppOk) {
+        const { error: handoffErr } = await supabase.rpc(
+          "record_decision_studio_handoff",
+          { p_decision_id: d.id },
+        );
+        if (handoffErr) {
+          console.warn(
+            "expire-decisions: studio hand-off row failed",
+            d.id,
+            handoffErr,
+          );
+        }
+      }
+
       if (
         result.emailSkipped &&
         result.reason &&

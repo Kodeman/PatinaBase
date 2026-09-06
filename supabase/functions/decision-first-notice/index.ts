@@ -25,6 +25,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   deliverDecisionNotification,
   resolveDecisionSignature,
@@ -34,7 +35,14 @@ import {
   type EmbeddedAuthoritySnapshot,
   resolveApprovalArtifactCitation,
   resolveFrozenLeadRecipient,
+  toOne,
 } from "../_shared/project-approval-notification.ts";
+import {
+  type ArtifactDeltas,
+  firstNoticeDisposition,
+  type PredecessorRow,
+  resolveSupersededEdition,
+} from "./logic.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -49,6 +57,8 @@ interface RaisedDecision {
   designer_id: string | null;
   project_id: string | null;
   approval_contract: string | null;
+  /** P-27: the edition this ask replaces, when it replaces one (00463). */
+  predecessor_decision_id: string | null;
   designer_client: {
     client_id: string | null;
     client_email: string | null;
@@ -76,6 +86,61 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/**
+ * The edition this one replaces, with the answer she gave it. A failed lookup
+ * is not fatal: the successor still deserves its letter, and the ordinary
+ * first notice is a true one.
+ */
+async function loadPredecessor(
+  supabase: SupabaseClient,
+  predecessorId: string,
+): Promise<PredecessorRow | null> {
+  const { data, error } = await supabase
+    .from("client_decisions")
+    .select(`
+      id, responded_at,
+      approval_artifact:project_approval_artifacts(
+        source_version, artifact_title,
+        cost_cents_delta, schedule_days_delta, lead_time_days_delta
+      ),
+      options:client_decision_options(approval_outcome, selected)
+    `)
+    .eq("id", predecessorId)
+    .maybeSingle();
+  if (error) {
+    console.warn(
+      "decision-first-notice: predecessor lookup failed",
+      predecessorId,
+      error,
+    );
+    return null;
+  }
+  return (data ?? null) as unknown as PredecessorRow | null;
+}
+
+/**
+ * Say what this attempt came to, so the retry sweep can stop (r2 B-R2-01).
+ * Non-fatal: a bookkeeping write must never cost a homeowner her letter. The
+ * cost of a lost write is one more sweep pass, not a lost notice.
+ */
+async function recordAttempt(
+  supabase: SupabaseClient,
+  decisionId: string,
+  disposition: string,
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    "record_decision_first_notice_attempt",
+    { p_decision_id: decisionId, p_disposition: disposition },
+  );
+  if (error) {
+    console.warn(
+      "decision-first-notice: attempt bookkeeping failed",
+      decisionId,
+      error,
+    );
+  }
+}
+
 Deno.serve(async (req: Request) => {
   let decisionId: string | undefined;
   try {
@@ -92,7 +157,7 @@ Deno.serve(async (req: Request) => {
     .from("client_decisions")
     .select(`
       id, title, status, court, due_date, sent_at, designer_id, project_id,
-      approval_contract,
+      approval_contract, predecessor_decision_id,
       designer_client:designer_clients(
         client_id,
         client_email,
@@ -101,7 +166,7 @@ Deno.serve(async (req: Request) => {
       ),
       approval_artifact:project_approval_artifacts(
         source_kind, source_version, artifact_hash, artifact_title, created_at, why,
-        why_author_name
+        why_author_name, cost_cents_delta, schedule_days_delta, lead_time_days_delta
       ),
       authority_snapshot:project_decision_authority_snapshots(
         decision_lead_id,
@@ -155,6 +220,23 @@ Deno.serve(async (req: Request) => {
     designerId: decision.designer_id,
   });
 
+  // P-27. A revision is a new decision, never a reopen — but it is not a
+  // stranger either. When this ask replaces one she has already seen, the
+  // letter opens on that thread and names what moved between the two frozen
+  // artifacts. An unresolvable predecessor simply yields the ordinary first
+  // notice: the letter never guesses at a delta it cannot compute.
+  const supersedes = decision.predecessor_decision_id
+    ? resolveSupersededEdition(
+      await loadPredecessor(supabase, decision.predecessor_decision_id),
+      toOne(
+        decision.approval_artifact as
+          | ArtifactDeltas
+          | ArtifactDeltas[]
+          | null,
+      ),
+    )
+    : null;
+
   const result = await deliverDecisionNotification(
     supabase,
     "decision_required",
@@ -165,6 +247,7 @@ Deno.serve(async (req: Request) => {
       artifact,
       sentAt: decision.sent_at,
       notice: "first",
+      supersedes,
     },
     recipient,
     signature,
@@ -180,11 +263,19 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // The sweep's stop condition. A letter that sends without writing a log row
+  // — the legacy client with no auth profile — used to leave the sweep with
+  // nothing to see, and it re-sent every half hour for three days.
+  const attempt = firstNoticeDisposition(result);
+  await recordAttempt(supabase, decision.id, attempt.disposition);
+
   return json({
     decision_id: decision.id,
     in_app_ok: result.inAppOk,
     email_sent: result.emailSent,
     email_skipped: result.emailSkipped,
     reason: result.reason ?? null,
+    disposition: attempt.disposition,
+    disposition_terminal: attempt.terminal,
   });
 });

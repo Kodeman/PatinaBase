@@ -8,11 +8,19 @@ import {
   classifyExistingDecisionEmailLogStatuses,
   type DecisionContext,
   decisionLogKey,
+  decisionMailHold,
   decisionNotificationMetadata,
   decisionReleaseSentence,
+  formatCostDelta,
+  isSnoozeActive,
+  localWeekdayAndHour,
+  normalizeReminderCadence,
   receiptOutcomeWord,
   renderDecisionEmail,
   renderDecisionReceiptEmail,
+  shouldFireDecisionInApp,
+  supersededDeltaLines,
+  supersededOpeningLine,
 } from "./decision-notify.ts";
 
 // The letters below assert the addresses a homeowner actually reads, so the
@@ -884,5 +892,388 @@ Deno.test("the receipt is signed by the studio and escapes the title", () => {
   assert(
     !rendered.html.includes("A workshop for interior designers"),
     "the studio signs the homeowner's receipt; Patina does not pitch under it",
+  );
+});
+
+// ── P-28 · R16. When Patina writes, and when it does not ───────────────────
+
+const GATE_BASE = {
+  kind: "decision_required" as const,
+  notice: "reminder" as const,
+  isSupersedingEdition: false,
+  cadence: "right_away" as const,
+  timeZone: "America/New_York",
+  // Wednesday 2026-10-07, 10:00 in New York.
+  now: new Date("2026-10-07T14:00:00Z"),
+  snoozedUntil: null as string | null,
+  overdueAlreadySent: false,
+};
+
+Deno.test("the retired cadence spellings normalise, and an unknown one is quiet", () => {
+  assertEquals(normalizeReminderCadence("immediate"), "right_away");
+  assertEquals(normalizeReminderCadence("daily_digest"), "daily");
+  assertEquals(normalizeReminderCadence("right_away"), "right_away");
+  assertEquals(normalizeReminderCadence("weekly_sunday"), "weekly_sunday");
+  // The column default, and the quietest cadence that still answers on time.
+  assertEquals(normalizeReminderCadence(null), "daily");
+  assertEquals(normalizeReminderCadence("whatever"), "daily");
+});
+
+Deno.test("an ordinary reminder goes out on a weekday morning", () => {
+  assertEquals(decisionMailHold(GATE_BASE), null);
+});
+
+Deno.test("a batching cadence folds the in-between reminder into the digest", () => {
+  assertEquals(
+    decisionMailHold({ ...GATE_BASE, cadence: "daily" }),
+    "cadence_digest",
+  );
+  assertEquals(
+    decisionMailHold({ ...GATE_BASE, cadence: "weekly_sunday" }),
+    "cadence_digest",
+  );
+});
+
+Deno.test("the first notice breaks every digest — news is not summary", () => {
+  for (const cadence of ["daily", "weekly_sunday"] as const) {
+    assertEquals(
+      decisionMailHold({ ...GATE_BASE, notice: "first", cadence }),
+      null,
+    );
+  }
+});
+
+Deno.test("a snooze silences the reminder until its hour, then stops", () => {
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      snoozedUntil: "2026-10-09T12:00:00Z",
+    }),
+    "snoozed",
+  );
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      snoozedUntil: "2026-10-06T12:00:00Z",
+    }),
+    null,
+  );
+  // 'never' arrives as Postgres 'infinity'.
+  assertEquals(
+    decisionMailHold({ ...GATE_BASE, snoozedUntil: "infinity" }),
+    "snoozed",
+  );
+});
+
+Deno.test("isSnoozeActive reads one column the same way for letter and summary", () => {
+  const now = new Date("2026-10-07T12:00:00Z");
+  assertEquals(isSnoozeActive(null, now), false);
+  assertEquals(isSnoozeActive(undefined, now), false);
+  assertEquals(isSnoozeActive("2026-10-09T12:00:00Z", now), true);
+  assertEquals(isSnoozeActive("2026-10-06T12:00:00Z", now), false);
+  // 'never' is Postgres 'infinity', which is not a parseable date.
+  assertEquals(isSnoozeActive("infinity", now), true);
+  assertEquals(isSnoozeActive("-infinity", now), false);
+  // A value that is neither a date nor infinity is not a silence.
+  assertEquals(isSnoozeActive("soon", now), false);
+});
+
+Deno.test("a held approval does not re-arm the bell row it already wrote (r1 M5, r2 M-R2-03)", () => {
+  // Nothing is holding the letter: the row is written, as it always was.
+  assertEquals(shouldFireDecisionInApp({ hold: null, rowExists: true }), true);
+  assertEquals(shouldFireDecisionInApp({ hold: null, rowExists: false }), true);
+
+  // EVERY hold leaves a standing line as she left it. The reminder cron runs
+  // hourly since 00572 and the first-notice sweep every half hour, so an
+  // hours-long hold that re-armed would flip her line back to unread some
+  // seventy times across one Sunday (r2 M-R2-03).
+  for (
+    const hold of [
+      "snoozed",
+      "quiet_after_overdue",
+      "sunday_quiet",
+      "before_local_morning",
+      "quiet_hours",
+    ] as const
+  ) {
+    assertEquals(shouldFireDecisionInApp({ hold, rowExists: true }), false);
+    // But an approval with no line at all always gets one: R16 defers the
+    // push, never the record.
+    assertEquals(shouldFireDecisionInApp({ hold, rowExists: false }), true);
+  }
+
+  // The cadence hold is a hand-off, not a silence: the digest is built from
+  // this row's own freshness, so it must be re-armed or the batching reader
+  // hears nothing at all.
+  assertEquals(
+    shouldFireDecisionInApp({ hold: "cadence_digest", rowExists: true }),
+    true,
+  );
+});
+
+Deno.test("the bell answers to the bell's own switch, never to an email one (r2 M-R2-05)", () => {
+  // channels_in_app off: her line stands as it is, whatever the letter is doing.
+  assertEquals(
+    shouldFireDecisionInApp({
+      hold: null,
+      rowExists: true,
+      inAppEnabled: false,
+    }),
+    false,
+  );
+  assertEquals(
+    shouldFireDecisionInApp({
+      hold: "cadence_digest",
+      rowExists: true,
+      inAppEnabled: false,
+    }),
+    false,
+  );
+  // Even then, an approval with no line at all gets one: R16 never defers the
+  // record.
+  assertEquals(
+    shouldFireDecisionInApp({
+      hold: null,
+      rowExists: false,
+      inAppEnabled: false,
+    }),
+    true,
+  );
+  // And the two EMAIL switches never reach this function at all — they are
+  // answered in deliverDecisionNotification, so a reader whose only remaining
+  // channel is the bell has it re-armed by every pass that would have mailed.
+  assertEquals(
+    shouldFireDecisionInApp({ hold: null, rowExists: true, inAppEnabled: true }),
+    true,
+  );
+});
+
+Deno.test("a snooze never suppresses the overdue notice or a superseding edition (R16)", () => {
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      kind: "decision_overdue",
+      snoozedUntil: "infinity",
+      cadence: "weekly_sunday",
+    }),
+    null,
+  );
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      notice: "first",
+      isSupersedingEdition: true,
+      snoozedUntil: "infinity",
+      cadence: "weekly_sunday",
+    }),
+    null,
+  );
+});
+
+Deno.test("after the overdue notice Patina goes quiet about that approval", () => {
+  for (const notice of ["first", "reminder"] as const) {
+    assertEquals(
+      decisionMailHold({ ...GATE_BASE, notice, overdueAlreadySent: true }),
+      "quiet_after_overdue",
+    );
+  }
+  // The overdue letter itself is what created the state; it is not gated by it.
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      kind: "decision_overdue",
+      overdueAlreadySent: true,
+    }),
+    null,
+  );
+});
+
+Deno.test("no automated approval mail on Sunday, and none before 8am local", () => {
+  // Sunday 2026-10-11, 10:00 in New York.
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      now: new Date("2026-10-11T14:00:00Z"),
+    }),
+    "sunday_quiet",
+  );
+  // Monday 2026-10-12, 05:00 in New York — the hour the daily cron used to run.
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      now: new Date("2026-10-12T09:00:00Z"),
+    }),
+    "before_local_morning",
+  );
+  // Monday 2026-10-12, 08:00 in New York — released.
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      now: new Date("2026-10-12T12:00:00Z"),
+    }),
+    null,
+  );
+});
+
+Deno.test("the Sunday rule is read in HER zone, not the cron's", () => {
+  // 2026-10-12T02:00Z is Monday in UTC and Sunday evening in Los Angeles.
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      timeZone: "America/Los_Angeles",
+      now: new Date("2026-10-12T02:00:00Z"),
+    }),
+    "sunday_quiet",
+  );
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      timeZone: "UTC",
+      now: new Date("2026-10-12T02:00:00Z"),
+    }),
+    "before_local_morning",
+  );
+});
+
+Deno.test("the designer's resolved letter answers to none of this", () => {
+  assertEquals(
+    decisionMailHold({
+      ...GATE_BASE,
+      kind: "decision_resolved",
+      cadence: "weekly_sunday",
+      snoozedUntil: "infinity",
+      overdueAlreadySent: true,
+      now: new Date("2026-10-11T05:00:00Z"),
+    }),
+    null,
+  );
+});
+
+Deno.test("localWeekdayAndHour reads midnight as hour zero", () => {
+  assertEquals(
+    localWeekdayAndHour(new Date("2026-10-12T04:00:00Z"), "America/New_York"),
+    { weekday: 1, hour: 0 },
+  );
+});
+
+// ── P-27. The successor read as one thread ─────────────────────────────────
+
+const SUCCESSOR: DecisionContext = {
+  ...STAGE2,
+  id: "decision-4",
+  artifact: {
+    kind: "plan_issue",
+    version: 4,
+    checksum: CHECKSUM,
+    title: "Kitchen plan set",
+    issuedAt: "2026-09-28T14:00:00Z",
+  },
+  notice: "first",
+  supersedes: {
+    version: 3,
+    title: "Kitchen plan set",
+    answeredOn: "2026-09-02T15:00:00Z",
+    answeredOutcome: "approved",
+    costCentsDelta: 124_000,
+    scheduleDaysDelta: 0,
+    leadTimeDaysDelta: -6,
+  },
+};
+
+Deno.test("the successor names her own answer and never undoes it", () => {
+  const rendered = renderDecisionEmail("decision_required", "Anne", SUCCESSOR, STUDIO);
+  assertStringIncludes(
+    rendered.html,
+    "Edition 4 replaces the edition you approved on September 2.",
+  );
+  assertStringIncludes(rendered.html, "Edition 3 stays in the record.");
+  for (const undoing of ["undo", "no longer", "cancel", "reopen", "invalid"]) {
+    assert(
+      !rendered.html.toLowerCase().includes(undoing),
+      `the letter must not imply the old answer was undone (${undoing})`,
+    );
+  }
+});
+
+Deno.test("the successor states the three deltas independently (R11)", () => {
+  const rendered = renderDecisionEmail("decision_required", "Anne", SUCCESSOR, STUDIO);
+  assertStringIncludes(rendered.html, "Cost: +$1,240 against edition 3.");
+  assertStringIncludes(rendered.html, "Schedule: unchanged from edition 3.");
+  assertStringIncludes(rendered.html, "Lead time: 6 days shorter than edition 3.");
+});
+
+Deno.test("the successor carries one forward act, on the approval's own address", () => {
+  const rendered = renderDecisionEmail("decision_required", "Anne", SUCCESSOR, STUDIO);
+  const doors = rendered.html.match(
+    /https:\/\/client\.patina\.cloud\/decisions\/decision-4/g,
+  ) ?? [];
+  assert(doors.length >= 1, "the successor's own door is in the letter");
+  assert(
+    !rendered.html.includes("/decisions/decision-3"),
+    "one forward act — never a second link back to the edition she answered",
+  );
+});
+
+Deno.test("with no computable delta the successor still opens on the thread", () => {
+  const rendered = renderDecisionEmail(
+    "decision_required",
+    "Anne",
+    {
+      ...SUCCESSOR,
+      supersedes: { version: 3, answeredOn: null, answeredOutcome: null },
+    },
+    STUDIO,
+  );
+  assertStringIncludes(rendered.html, "Edition 4 replaces edition 3.");
+  assertStringIncludes(rendered.html, "Edition 3 stays in the record.");
+  assert(
+    !rendered.html.includes("What changed:"),
+    "no delta section when there is no delta to state",
+  );
+});
+
+Deno.test("a first notice with no predecessor is unchanged", () => {
+  const rendered = renderDecisionEmail(
+    "decision_required",
+    "Anne",
+    { ...SUCCESSOR, supersedes: null },
+    STUDIO,
+  );
+  assertStringIncludes(rendered.html, "is ready, exactly as drawn.");
+  assert(!rendered.html.includes("replaces"));
+});
+
+Deno.test("a superseding edition is logged as one without changing the dedupe key", () => {
+  const metadata = decisionNotificationMetadata("decision_required", SUCCESSOR);
+  assertEquals(metadata.supersedesVersion, 3);
+  assertEquals(decisionLogKey("decision_required", SUCCESSOR), {
+    decisionId: "decision-4",
+    notice: "first",
+  });
+});
+
+Deno.test("a cost delta is signed, and zero is stated as unchanged", () => {
+  assertEquals(formatCostDelta(0), "$0");
+  assertEquals(formatCostDelta(124_000), "+$1,240");
+  assertEquals(formatCostDelta(-45_050), "−$450.50");
+  assertEquals(
+    supersededDeltaLines({ version: 2, costCentsDelta: 0 }),
+    ["Cost: unchanged from edition 2."],
+  );
+  assertEquals(supersededDeltaLines({ version: 2 }), []);
+});
+
+Deno.test("an unanswered predecessor is named by number, never by an answer", () => {
+  assertEquals(
+    supersededOpeningLine(4, { version: 3 }, "America/New_York"),
+    "Edition 4 replaces edition 3.",
+  );
+  assertEquals(
+    supersededOpeningLine(
+      4,
+      { version: 3, answeredOn: "2026-09-02T15:00:00Z", answeredOutcome: "returned" },
+      "America/New_York",
+    ),
+    "Edition 4 replaces the edition you returned on September 2.",
   );
 });
