@@ -298,4 +298,26 @@ describe('SP-20 — the stamp map stays inside desk-derivation.ts STAMP palette'
       expect(palette).toContain(stamp.getAttribute('data-stamp-color'));
     }
   });
+
+  // P-17 / R13 — SIGNED moved to mocha upstream; the folio dot is the same
+  // meaning at a smaller size and must not stay green behind it.
+  it('the signed folio dot follows SIGNED to mocha', () => {
+    const { container } = render(
+      <RedLetterZone
+        rows={[
+          {
+            key: 'proposal_signed',
+            kind: 'proposal_signed',
+            text: 'Signed — open the project',
+            actionLabel: null,
+            onAct: jest.fn(),
+            urgent: false,
+          },
+        ]}
+      />,
+    );
+
+    const stamp = container.querySelector('[data-need-stamp]');
+    expect(stamp).toHaveAttribute('data-stamp-color', 'var(--color-mocha)');
+  });
 });

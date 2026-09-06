@@ -55,8 +55,15 @@ describe('Previously', () => {
 
     const lines = screen.getAllByTestId('previously-line');
     expect(within(lines[0]).getByTestId('previously-date')).toHaveTextContent('12 March');
-    expect(within(lines[0]).getByTestId('previously-state')).toHaveTextContent('Signed');
-    expect(within(lines[1]).getByTestId('previously-state')).toHaveTextContent('Answered');
+    // The one word on this page that is also a stamp reads as the stamp reads
+    // it, in the stamp's own ink; the three note words are a lifecycle, not a
+    // mark, and read in the muted ink of the date beside them.
+    const signed = within(lines[0]).getByTestId('previously-state');
+    expect(signed).toHaveTextContent('SIGNED');
+    expect(signed).toHaveStyle({ color: 'var(--color-mocha)' });
+    const answered = within(lines[1]).getByTestId('previously-state');
+    expect(answered).toHaveTextContent('Answered');
+    expect(answered).toHaveStyle({ color: 'var(--text-muted)' });
     expect(within(lines[2]).getByTestId('previously-state')).toHaveTextContent('Standing');
     expect(within(lines[2]).getByTestId('previously-date')).toHaveTextContent('—');
   });

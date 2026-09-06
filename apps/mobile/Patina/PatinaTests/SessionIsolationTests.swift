@@ -144,6 +144,30 @@ struct SessionIsolationTests {
         #expect(!service.projectsLoaded)
     }
 
+    /// P-21 made `projectApprovals` speak in the first person — the Record's
+    /// afterglow row reads "You approved the budget." straight out of it — and
+    /// the reset did not clear it. Between a session change and the next
+    /// SUCCESSFUL refresh (an offline launch, a failed one) account B's Today
+    /// drew account A's act, over account A's document title.
+    @Test("an answered approval does not survive into the next account's Record")
+    func theAnsweredApprovalsAreClearedToo() throws {
+        let service = BadgeCountService.makeForTests()
+        service.applyProjectApprovalsForTesting([
+            try ProjectApprovalFixture.review(
+                lifecycleStatus: "responded", outcome: "approved",
+                respondedAt: "2026-09-03T09:30:00+00:00"
+            )
+        ])
+        #expect(service.projectApprovals.count == 1)
+        #expect(HouseRecordBuilder.answeredApprovalRows(service.projectApprovals).count == 1)
+
+        service.resetForSessionChange()
+
+        #expect(service.projectApprovals.isEmpty)
+        #expect(service.signedProposals.isEmpty)
+        #expect(HouseRecordBuilder.answeredApprovalRows(service.projectApprovals).isEmpty)
+    }
+
     // MARK: - The five other in-file resets, pinned at the source
 
     /// Each reset must name every field of the account's data its own file
@@ -159,6 +183,11 @@ struct SessionIsolationTests {
                     "proposalsAwaitingSignatureCount", "payableInvoiceCount",
                     "projectCount", "pendingDecisions", "pendingProposals",
                     "payableInvoices", "threadSummaries", "projects", "roster",
+                    // P-21's two afterglow sources. `projectApprovals` is the
+                    // sharper one: `answeredApprovalRows` reads it in the FIRST
+                    // person, so a row left behind puts account A's approval in
+                    // account B's mouth.
+                    "signedProposals", "projectApprovals",
                     "hasLoaded", "projectsLoaded", "lastRefreshFailed", "pendingRefresh",
                     // The refresh in the air is the previous account's; the
                     // token is what stops its rows landing after the reset.

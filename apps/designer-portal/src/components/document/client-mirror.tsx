@@ -147,8 +147,11 @@ export function ClientMirror({
                   <div key={d.id} className="border-b border-[var(--color-pearl)] py-2">
                     <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
                       {d.title}
+                      {/* Sage carries material state, never an answer. The
+                          mark the client sees is the mark the Desk and the
+                          Record page carry: mocha. */}
                       {d.status === 'responded' && (
-                        <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-sage-ink)]">
+                        <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-mocha)]">
                           answered{d.responded_at ? ` · ${fmtDay(d.responded_at)}` : ''}
                         </span>
                       )}

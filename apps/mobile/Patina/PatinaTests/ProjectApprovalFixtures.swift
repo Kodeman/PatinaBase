@@ -33,7 +33,18 @@ enum ProjectApprovalFixture {
         costCentsDelta: Int = 0,
         scheduleDaysDelta: Int = 0,
         leadTimeDaysDelta: Int = 0,
-        context: Any = "Leah asked the mill to hold the walnut."
+        context: Any = "Leah asked the mill to hold the walnut.",
+        /// One of the three `source_kind` values 00463:134-135 allows. Passed
+        /// as `NSNull()` for a projection written before the key existed.
+        artifactKind: Any = "spec_book_artifact",
+        /// Absent by default — that is the projection every build before the
+        /// Wave 2 migration returns.
+        viewerRole: Any = NSNull(),
+        /// `P-13`. Absent by default for the same reason: an approval composed
+        /// before 00569 carries no why, and the name is emitted only beside
+        /// one.
+        why: Any = NSNull(),
+        whyAuthorName: Any = NSNull()
     ) throws -> RemoteProjectApprovalReview {
         let row: [String: Any] = [
             "decisionId": decisionId,
@@ -41,13 +52,15 @@ enum ProjectApprovalFixture {
             "phaseId": "c0000000-0000-0000-0000-0000000000c1",
             "sectionKey": NSNull(),
             "authorityRevision": authorityRevision,
-            "artifactKind": "spec_book_artifact",
+            "artifactKind": artifactKind,
             "artifactId": "d0000000-0000-0000-0000-0000000000d1",
             "artifactVersion": 3,
             "artifactChecksum": String(repeating: "a", count: 64),
             "artifactTitle": "Kitchen millwork spec",
             "question": "Approve the kitchen millwork as drawn?",
             "context": context,
+            "why": why,
+            "whyAuthorName": whyAuthorName,
             "dueAt": "2026-09-11T00:00:00+00:00",
             "costCentsDelta": costCentsDelta,
             "scheduleDaysDelta": scheduleDaysDelta,
@@ -63,7 +76,8 @@ enum ProjectApprovalFixture {
             "createdAt": "2026-09-01T00:00:00+00:00",
             "sentAt": sentAt,
             "respondedAt": respondedAt,
-            "updatedAt": updatedAt
+            "updatedAt": updatedAt,
+            "viewerRole": viewerRole
         ]
         return try JSONDecoder().decode(
             RemoteProjectApprovalReview.self,

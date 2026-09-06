@@ -107,12 +107,22 @@ enum TodayExperience {
             // and is printed by the Companion footer on this same screen.
             // This move speaks for decisions alone, so it says so rather than
             // stacking a second, smaller number under the same sentence.
-            let noun = input.pendingDecisionCount == 1 ? "decision is" : "decisions are"
+            // `iosd4-M3`, three refusals in one sentence. "Approval" is the
+            // ask — "decision" belongs to a choice between named alternatives
+            // (the vocabulary ruling), and the Studio row two taps away has
+            // said Approvals since `iosd3-M1`. The figure becomes a word
+            // (P-24), as it already had everywhere else on this screen. And
+            // the mark goes: `checkmark.seal` drawn beside an OPEN obligation
+            // is a checkmark used as a status, which the refusals name — the
+            // same reason the Studio row carries a raised hand and not a
+            // check. Nothing replaces it; the card draws no tile at all.
+            let noun = input.pendingDecisionCount == 1 ? "approval is" : "approvals are"
             return TodayNextMove(
                 kind: .reviewDecisions,
-                title: "Review a project decision",
-                detail: "\(input.pendingDecisionCount) \(noun) waiting on you.",
-                symbol: "checkmark.seal",
+                title: "Review a project approval",
+                detail: "\(PatinaCount.inWordsCapitalized(input.pendingDecisionCount)) "
+                    + "\(noun) waiting on you.",
+                symbol: "",
                 targetID: nil
             )
         }

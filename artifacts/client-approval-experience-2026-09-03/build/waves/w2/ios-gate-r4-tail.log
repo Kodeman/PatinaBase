@@ -1,0 +1,42 @@
+# ios-gate all — round 4 (quiet machine), tail only. Full 11 MB log left uncommitted in the main checkout as ios-gate-w3.log.
+
+✔ Test advance_keepsStepWhoseAnchorMountsLate() passed after 0.908 seconds.
+✔ Test complete_writesPersistenceAndStops() passed after 0.001 seconds.
+✔ Test skip_writesAbandonmentAndStops() passed after 0.001 seconds.
+✔ Test skip_isIgnoredWhenInactive() passed after 0.001 seconds.
+✔ Test isShowingPopover_tracksActiveAnchor() passed after 0.001 seconds.
+✔ Test currentStepDescriptor_returnsActiveStepOnly() passed after 0.001 seconds.
+✔ Test stepNumberAndTotalSteps_areOneBased() passed after 0.001 seconds.
+✔ Test stepCaption_renumbersVisiblyWhenAnAnchorNeverMounts() passed after 0.025 seconds.
+✔ Test defaultModelUsesCanonicalTourKey() passed after 0.001 seconds.
+✔ Test defaultStepsMapToFirstLaunchSurfaceKeys() passed after 0.001 seconds.
+✔ Test defaultStepFallbacksMatchTheGlossary() passed after 0.001 seconds.
+✔ Test defaultStepFallbacksNameNothingTheAppRetired() passed after 0.001 seconds.
+✔ Test everyDefaultStepAnchorHasExactlyOneProductionMountPerRoot() passed after 0.408 seconds.
+✔ Test theTourStillRunsAllThreeStepsWhenEveryAnchorMounts() passed after 0.001 seconds.
+✔ Test defaultStepFallbacksNameNoHeartControl() passed after 0.001 seconds.
+✔ Test defaultStepsCarryConsumerFallbackCopy() passed after 0.001 seconds.
+✔ Test firstLaunchTourSurfaceKeys_areValidFormat() passed after 0.001 seconds.
+✔ Test firstLaunchTourSurfaceKeys_haveTourNamespace() passed after 0.001 seconds.
+✔ Test firstLaunchTourSurfaceKeys_areInAllKnownSet() passed after 0.001 seconds.
+✔ Test tourStepHelper_constructsWithFallback() passed after 0.001 seconds.
+✔ Test firstLaunchTourAnchor_rawValuesAreStable() passed after 0.001 seconds.
+✔ Test eachRootHostsExactlyOneTourModel() passed after 0.187 seconds.
+✔ Test theRecordAnchorMountsOnceAndIsUnconditional() passed after 0.001 seconds.
+✔ Test theRetiredAnchorIsInNoStepList() passed after 0.120 seconds.
+✔ Test aGuestWithAnEmptyRecordSeesStepOneOfTwo() passed after 0.024 seconds.
+✔ Test theTourCardIsPaintedInPatinaColours() passed after 0.003 seconds.
+✔ Test theTourKeepsItsThreeFallbackBodies() passed after 0.001 seconds.
+✔ Test stepOnesAnchorIsOnTheLaidOutHeader() passed after 0.001 seconds.
+✔ Test theScrimKeepsItsCutOutRatherThanItsSafeArea() passed after 0.001 seconds.
+✔ Test aDismissalBeforeThePopoverAppearedDoesNotAbandonTheTour() passed after 0.001 seconds.
+✔ Test aDismissalAfterThePopoverAppearedStillAbandonsTheTour() passed after 0.001 seconds.
+✔ Test aDismissalFromAnotherAnchorIsIgnored() passed after 0.001 seconds.
+✔ Test aTourThatWillNeverRunStopsBeingPending() passed after 0.001 seconds.
+✔ Test theRefusedPresentationGuardsStayWired() passed after 0.002 seconds.
+✔ Test theTourTitleWrapsRatherThanTruncating() passed after 0.002 seconds.
+✔ Suite FirstLaunchTourTests passed after 7.654 seconds.
+━ Test run with 2639 tests in 285 suites passed after 7.759 seconds with 2 known issues.
+** TEST SUCCEEDED **
+✓ lint-delta: no new warnings in touched files
+EXIT=0

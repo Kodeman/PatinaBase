@@ -411,5 +411,65 @@ struct ProjectApprovalDoorTests {
         #expect(badges.contains("fetchProjectApprovalReviews()"))
         #expect(badges.contains("Self.mergedDecisions("))
         #expect(badges.contains("pending: decisions, approvals: approvals, previous: pendingDecisions"))
+
+        // `W2R2-M1`: and the third surface. The hub used to read
+        // `client_decisions` alone, which 00467 hides her Stage-2 rows from.
+        let hub = try SourcePin.readCode(
+            "Patina/Features/Profile/ViewModels/StudioHubViewModel.swift"
+        )
+        #expect(hub.contains("fetchProjectApprovalReviews()"))
+        #expect(hub.contains("BadgeCountService.mergedDecisions("))
+    }
+
+    /// `W2R2-M1`, the behaviour behind the pin: with SIX Stage-2 approvals open
+    /// and nothing else, the hub said nothing was waiting — the row was built
+    /// from a read RLS empties. The hub's number is now Today's set.
+    @Test("the Studio hub counts the Stage-2 approvals Today counts")
+    func theStudioHubCountsStageTwoApprovals() throws {
+        let approval = try ProjectApprovalFixture.review()
+        let legacy = try ProjectApprovalFixture.decision(
+            contract: nil, id: Self.otherDecisionId
+        )
+        let today = try #require(BadgeCountService.mergedDecisions(
+            pending: [legacy], approvals: [approval], previous: []
+        ))
+
+        let hub = StudioHubViewModel()
+        hub.apply(StudioLoadResult(
+            projects: [],
+            // What `listPending` returns for a homeowner: her legacy rows only.
+            decisions: [legacy],
+            approvals: [approval],
+            proposals: [], invoices: [], documents: [], threads: [], notifications: []
+        ))
+
+        #expect(hub.attentionSummary.awaitingCount == today.count)
+        #expect(hub.attentionSummary.awaitingCount == 2)
+        let row = try #require(
+            hub.snapshot.sections
+                .first { $0.kind == .awaitingYou }?
+                .rows.first { $0.id == "awaiting.decisions" }
+        )
+        #expect(row.detail == "Two approvals are waiting on you")
+    }
+
+    /// The other half of the same finding: a homeowner whose only open asks are
+    /// Stage-2 approvals got no Awaiting-you row at all.
+    @Test("an approvals-only homeowner gets an Awaiting-you row")
+    func anApprovalsOnlyHomeownerGetsARow() throws {
+        let hub = StudioHubViewModel()
+        hub.apply(StudioLoadResult(
+            projects: [],
+            decisions: [],
+            approvals: [try ProjectApprovalFixture.review()],
+            proposals: [], invoices: [], documents: [], threads: [], notifications: []
+        ))
+
+        #expect(hub.attentionSummary.awaitingCount == 1)
+        #expect(
+            hub.snapshot.sections
+                .first { $0.kind == .awaitingYou }?
+                .rows.contains { $0.id == "awaiting.decisions" } == true
+        )
     }
 }

@@ -351,6 +351,8 @@ export type {
   ProjectApprovalLifecycleStatus,
   ProjectApprovalOutcome,
   ProjectApprovalDisposition,
+  ProjectApprovalViewerRole,
+  ProjectApprovalConsentMethod,
   ProjectApprovalReview,
   ProjectDecisionAuthority,
   ProjectApprovalCreatePayload,

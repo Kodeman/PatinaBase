@@ -29,6 +29,7 @@ import {
 } from '@/hooks/use-commercial-client';
 import { makingEvents } from '@/lib/analytics/events';
 
+import { HOLD_MS } from '../instruments/scored-action';
 import { WallGate } from '../wall-gate';
 
 const bundleMock = useClientCommercialDocument as jest.Mock;
@@ -67,6 +68,23 @@ const SELECTION: ClientSelection = {
   imageUrl: null,
   docCode: 'TS-02',
 };
+
+/**
+ * Accepting finished work is held, not tapped (P-18). Fake time covers the
+ * hold and is handed back before the mutation's promises are flushed.
+ */
+async function holdAccept() {
+  const target = screen.getByRole('button', { name: /accept/i });
+  jest.useFakeTimers();
+  fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+  act(() => {
+    jest.advanceTimersByTime(HOLD_MS);
+  });
+  jest.useRealTimers();
+  await act(async () => {
+    fireEvent.pointerUp(target);
+  });
+}
 
 const BUNDLE = {
   isLoading: false,
@@ -141,9 +159,11 @@ describe('WallGate', () => {
     renderGate();
     const hint = screen.getByTestId('wall-hint');
     expect(hint).toHaveTextContent('Type your full name to accept.');
+    // The act names the gesture as well as the hint, so the hint is one of
+    // the things describing it rather than the only one.
     expect(screen.getByRole('button', { name: /accept/i })).toHaveAttribute(
       'aria-describedby',
-      hint.id,
+      expect.stringContaining(hint.id),
     );
   });
 
@@ -187,16 +207,25 @@ describe('WallGate', () => {
     );
   });
 
-  it('refuses to accept without a typed name', async () => {
+  it('stays unlit until a name is on the rule, and accepts nothing', async () => {
     renderGate();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /accept/i }));
-    });
 
+    // No hold is spent on an act that cannot be taken: the word is unarmed
+    // until there is a name, the way the three other acts are.
+    const target = screen.getByRole('button', { name: /accept/i });
+    expect(target).toBeDisabled();
+    await holdAccept();
     expect(mutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Type your full name to accept the finished work.',
-    );
+
+    fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
+      target: { value: 'H' },
+    });
+    expect(target).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
+      target: { value: 'Harper Vale' },
+    });
+    expect(target).not.toBeDisabled();
   });
 
   it('accepts, heals the hatching and stamps what was released', async () => {
@@ -206,9 +235,7 @@ describe('WallGate', () => {
     fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
       target: { value: 'Harper Vale' },
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /accept/i }));
-    });
+    await holdAccept();
 
     expect(mutateAsync).toHaveBeenCalledWith('Harper Vale');
     expect(makingEvents.gateFollowed).toHaveBeenCalledWith({
@@ -218,7 +245,10 @@ describe('WallGate', () => {
     });
 
     const stamp = screen.getByTestId('wall-stamp');
-    expect(stamp).toHaveTextContent('Accepted');
+    // The house's one stamp — an acceptance of finished work is an approval,
+    // and it carries the same mark the doorstep's approvals carry.
+    expect(stamp).toHaveTextContent('APPROVED');
+    expect(stamp).toHaveAttribute('data-stamp-state', 'approved');
     expect(stamp).toHaveTextContent('$1,440 released');
     expect(stamp).toHaveTextContent('Prairie Coat Painting');
     expect(screen.getByTestId('wall-hatch')).toHaveAttribute('data-wall-state', 'settled');
@@ -232,14 +262,48 @@ describe('WallGate', () => {
     fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
       target: { value: 'Harper Vale' },
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /accept/i }));
-    });
+    await holdAccept();
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Unable to accept this work right now.',
     );
     expect(screen.getByRole('alert')).not.toHaveTextContent('42501');
     expect(screen.queryByTestId('wall-stamp')).not.toBeInTheDocument();
+  });
+
+  it('signs the acceptance on a ruled line, dated, and holds the act (P-18)', async () => {
+    renderGate();
+
+    const rule = screen.getByTestId('accept-trade-scope-name');
+    expect(rule).toHaveAttribute('autocomplete', 'name');
+    expect(screen.getByLabelText('Type your full name')).toBe(rule);
+    expect(screen.getByTestId('accept-trade-scope-name-date')).toHaveClass('font-mono');
+    expect(screen.getByTestId('accept-trade-scope-name-notice')).toHaveTextContent(
+      'Your typed name acts as your electronic signature.',
+    );
+
+    fireEvent.change(rule, { target: { value: 'Harper Vale' } });
+
+    // A tap is not the act, and neither is a hold let go of early.
+    const target = screen.getByRole('button', { name: /accept/i });
+    fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+    fireEvent.pointerUp(target);
+    fireEvent.click(target);
+    expect(mutateAsync).not.toHaveBeenCalled();
+
+    jest.useFakeTimers();
+    fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS - 1);
+    });
+    fireEvent.pointerUp(target);
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS * 2);
+    });
+    jest.useRealTimers();
+    expect(mutateAsync).not.toHaveBeenCalled();
+
+    await holdAccept();
+    expect(mutateAsync).toHaveBeenCalledWith('Harper Vale');
   });
 });

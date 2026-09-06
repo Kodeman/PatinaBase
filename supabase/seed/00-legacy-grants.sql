@@ -10564,24 +10564,6 @@ END $g$;
 
 -- 00463_project_approval_authority_evidence.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._create_project_approval_decision_checked( uuid, jsonb, text, uuid ) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00463_project_approval_authority_evidence.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.create_project_approval_decision(uuid, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00463_project_approval_authority_evidence.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.create_project_approval_decision(uuid, jsonb, text) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00463_project_approval_authority_evidence.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.confirm_project_decision_review(uuid, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -10655,18 +10637,6 @@ END $g$;
 -- 00464_project_approval_lifecycle.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.withdraw_project_approval_decision( uuid, timestamptz, text, text ) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00464_project_approval_lifecycle.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.supersede_project_approval_decision( uuid, jsonb, timestamptz, text ) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00464_project_approval_lifecycle.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.supersede_project_approval_decision( uuid, jsonb, timestamptz, text ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -12965,6 +12935,72 @@ END $g$;
 -- 00568_decision_first_notice_dispatch.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.decision_dispatch_first_notice() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._project_approval_release_sentence(text[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_project_approval_decision_checked( uuid, jsonb, text, uuid, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_project_approval_decision(uuid, jsonb, text, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_project_approval_decision(uuid, jsonb, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.supersede_project_approval_decision( uuid, jsonb, timestamptz, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.supersede_project_approval_decision( uuid, jsonb, timestamptz, text, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_reviews(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_reviews(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._respond_project_approval_checked( uuid, text, uuid, timestamptz, text, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.respond_project_approval( uuid, jsonb, timestamptz, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00569_approval_why_viewer_role_and_receipt.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.respond_project_approval( uuid, jsonb, timestamptz, text ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

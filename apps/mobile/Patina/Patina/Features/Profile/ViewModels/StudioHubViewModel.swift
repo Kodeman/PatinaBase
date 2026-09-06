@@ -36,6 +36,7 @@ final class StudioHubViewModel {
     private struct HeldSources {
         var projects: [RemoteProject] = []
         var decisions: [RemoteClientDecision] = []
+        var approvals: [RemoteProjectApprovalReview] = []
         var proposals: [RemoteProposal] = []
         var invoices: [RemoteInvoice] = []
         var documents: [RemoteProjectDocument] = []
@@ -43,7 +44,7 @@ final class StudioHubViewModel {
         var notifications: [RemoteNotification] = []
 
         var isEmpty: Bool {
-            projects.isEmpty && decisions.isEmpty && proposals.isEmpty
+            projects.isEmpty && decisions.isEmpty && approvals.isEmpty && proposals.isEmpty
                 && invoices.isEmpty && documents.isEmpty && threads.isEmpty
                 && notifications.isEmpty
         }
@@ -124,6 +125,7 @@ final class StudioHubViewModel {
 
         async let projects = Self.fetchProjects()
         async let decisions = Self.fetchDecisions()
+        async let approvals = Self.fetchProjectApprovals()
         async let proposals = Self.fetchProposals()
         async let invoices = Self.fetchInvoices()
         async let documents = Self.fetchDocuments()
@@ -143,9 +145,11 @@ final class StudioHubViewModel {
             threads,
             notifications
         )
+        let fetchedApprovals = await approvals
         let result = StudioLoadResult(
             projects: loaded.0,
             decisions: loaded.1,
+            approvals: fetchedApprovals,
             proposals: loaded.2,
             invoices: loaded.3,
             documents: loaded.4,
@@ -164,7 +168,20 @@ final class StudioHubViewModel {
         // the rows it last returned, so a failed fetch degrades the screen
         // instead of emptying it.
         held.projects = result.projects ?? held.projects
-        held.decisions = result.decisions ?? held.decisions
+        held.approvals = result.approvals ?? held.approvals
+        // `W2R2-M1`: `listPending` is a PostgREST read on `client_decisions`,
+        // and 00467 hides every Stage-2 row from the homeowner behind it — so
+        // the hub counted only her legacy rows while Today (through
+        // `BadgeCountService.mergedDecisions`) and "Awaiting your call"
+        // (through `DecisionsListViewModel`) counted both. Three surfaces, one
+        // merge: the hub reads the projection through the same function, and
+        // its number is Today's set.
+        held.decisions = BadgeCountService.mergedDecisions(
+            pending: result.decisions,
+            approvals: result.approvals,
+            previous: held.decisions,
+            projects: held.projects
+        ) ?? held.decisions
         held.proposals = result.proposals ?? held.proposals
         held.invoices = result.invoices ?? held.invoices
         held.documents = result.documents ?? held.documents
@@ -237,6 +254,10 @@ final class StudioHubViewModel {
         try? await DecisionsAPIClient.shared.listPending()
     }
 
+    nonisolated private static func fetchProjectApprovals() async -> [RemoteProjectApprovalReview]? {
+        try? await DecisionsAPIClient.shared.fetchProjectApprovalReviews()
+    }
+
     nonisolated private static func fetchProposals() async -> [RemoteProposal]? {
         try? await ProposalsAPIClient.shared.listProposals()
     }
@@ -261,6 +282,12 @@ final class StudioHubViewModel {
 struct StudioLoadResult {
     let projects: [RemoteProject]?
     let decisions: [RemoteClientDecision]?
+    /// The Stage-2 projection, merged into `decisions` before the queue is
+    /// built. Deliberately absent from `failures`: it is the second half of the
+    /// one decision feed, not a source of its own, and `mergedDecisions` gives
+    /// a failed half the same degrade every other source gets — the rows it
+    /// last returned.
+    let approvals: [RemoteProjectApprovalReview]?
     let proposals: [RemoteProposal]?
     let invoices: [RemoteInvoice]?
     let documents: [RemoteProjectDocument]?

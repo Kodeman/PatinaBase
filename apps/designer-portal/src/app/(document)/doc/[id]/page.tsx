@@ -3092,14 +3092,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           const approvedGate = (sectionGates ?? []).find(
             (g) => g.section_key === s.key && gateState(g) === 'approved',
           );
+          // P-17 / R13 — both marks are approval outcomes on the designer's own
+          // paper, so both read mocha (border and ink alike, the pigment at
+          // full strength). Sage keeps only its material senses elsewhere.
           const stamp =
             s.key === 'proposal' && seal
-              ? { label: `Signed · ${seal.date}`, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' }
+              ? {
+                  label: `Signed · ${seal.date}`,
+                  color: 'var(--color-mocha)',
+                  ink: 'var(--color-mocha)',
+                }
               : approvedGate
                 ? {
                     label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ''}`,
-                    color: 'var(--color-sage)',
-                    ink: 'var(--color-sage-ink)',
+                    color: 'var(--color-mocha)',
+                    ink: 'var(--color-mocha)',
                   }
                 : undefined;
 

@@ -56,10 +56,15 @@ struct ProposalListView: View {
         } else {
             VStack(alignment: .leading, spacing: 24) {
                 section("Awaiting your review", viewModel.pending, accent: PatinaColors.Text.interactive)
+                // `W2R1-M1`: mocha, not sage. Ruled 2026-09-05 — sage stops
+                // carrying approval meaning, and every SIGNED / APPROVED /
+                // answered mark moves to the mocha ink the stamps take.
+                // Sage was also ~2.2:1 here, under the 4.5:1 bar this eyebrow
+                // is held to as a text heading.
                 section(
                     ProposalStatusDisplay.acceptedSectionTitle,
                     viewModel.accepted,
-                    accent: PatinaColors.sage
+                    accent: PatinaColors.Stamp.mocha
                 )
                 section("Archive", viewModel.archived, accent: PatinaColors.Text.muted)
             }

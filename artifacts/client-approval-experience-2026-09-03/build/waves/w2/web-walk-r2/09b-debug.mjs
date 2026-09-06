@@ -1,0 +1,21 @@
+import { open, signIn, openHouse, askBy } from './lib.mjs';
+const { browser, page } = await open({ width: 1280, height: 1100 });
+await signIn(page);
+await openHouse(page);
+const ask = askBy(page, 'closet joinery');
+await ask.scrollIntoViewIfNeeded();
+const acts = ask.locator('[data-testid="approval-acts"]');
+await acts.locator('button').filter({ hasText: 'APPROVE' }).first().click();
+await page.waitForTimeout(400);
+await ask.locator('[data-testid="approval-signature"]').fill('Client User');
+await page.waitForTimeout(300);
+const submit = acts.locator('button').filter({ hasText: /SUBMIT/i }).first();
+await submit.scrollIntoViewIfNeeded();
+await page.waitForTimeout(300);
+const box = await submit.boundingBox();
+console.log('box', box, 'viewport', page.viewportSize());
+await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+await page.mouse.down();
+for (const d of [30, 100, 300]) { await page.waitForTimeout(d); console.log(d, await submit.evaluate((el) => el.getAttribute('data-hold-state') + ' fill=' + getComputedStyle(el).getPropertyValue('--hold-fill'))); }
+await page.mouse.up();
+await browser.close();

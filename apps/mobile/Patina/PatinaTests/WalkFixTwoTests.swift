@@ -105,7 +105,7 @@ struct WalkFixTwoTests {
     /// money figure split after the thousands group (shots 16, 17).
     @Test("the sign sheet’s value column holds one line")
     func theSignSheetValueHoldsOneLine() throws {
-        let source = try SourcePin.read("Patina/Features/Proposals/Views/ProposalSignSheet.swift")
+        let source = try SourcePin.read("Patina/Features/Proposals/Views/SignActView.swift")
         let block = try #require(source.range(of: "Text(line.value)"))
         let after = String(source[block.lowerBound...].prefix(400))
         #expect(after.contains(".lineLimit(1)"))

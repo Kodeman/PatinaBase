@@ -137,7 +137,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       );
       if (executeError) {
-        return NextResponse.json({ error: executeError.message || 'sign_failed' }, { status: 500 });
+        // The token, never the database's own sentence (`W1-02`). The door
+        // renders an unmapped refusal verbatim, so a raw Postgres message
+        // reached the client as the reason her signature did not take — a
+        // bare UUID and the words "access denied" on a legally consequential
+        // act. The detail stays here, in the server log, where it is useful.
+        console.error('furnishings execution failed', { proposalId: id, error: executeError.message });
+        return NextResponse.json({ error: 'sign_failed' }, { status: 500 });
       }
       const newlyExecuted = executeResult?.newly_executed === true || executeResult?.newlyExecuted === true;
       const depositInvoiceId = executeResult?.deposit_invoice_id ?? executeResult?.depositInvoiceId ?? null;
@@ -187,7 +193,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       );
       if (executeError) {
-        return NextResponse.json({ error: executeError.message || 'sign_failed' }, { status: 500 });
+        // The token, never the database's own sentence (`W1-02`).
+        console.error('trade scope execution failed', { proposalId: id, error: executeError.message });
+        return NextResponse.json({ error: 'sign_failed' }, { status: 500 });
       }
       const newlyExecuted = executeResult?.newly_executed === true || executeResult?.newlyExecuted === true;
       const depositInvoiceId = executeResult?.deposit_invoice_id ?? executeResult?.depositInvoiceId ?? null;
@@ -234,7 +242,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     );
     if (signError) {
-      return NextResponse.json({ error: signError.message || 'sign_failed' }, { status: 500 });
+      // The token, never the database's own sentence (`W1-02`).
+      console.error('design services signing failed', { proposalId: id, error: signError.message });
+      return NextResponse.json({ error: 'sign_failed' }, { status: 500 });
     }
 
     const newlyClientSigned = signResult?.newly_client_signed === true || signResult?.newlyClientSigned === true;

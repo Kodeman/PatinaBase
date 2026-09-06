@@ -13244,6 +13244,8 @@ export type Database = {
           source_kind: string
           source_snapshot: Json
           source_version: number
+          why: string | null
+          why_author_name: string | null
         }
         Insert: {
           artifact_hash: string
@@ -13263,6 +13265,8 @@ export type Database = {
           source_kind: string
           source_snapshot: Json
           source_version: number
+          why?: string | null
+          why_author_name?: string | null
         }
         Update: {
           artifact_hash?: string
@@ -13282,6 +13286,8 @@ export type Database = {
           source_kind?: string
           source_snapshot?: Json
           source_version?: number
+          why?: string | null
+          why_author_name?: string | null
         }
         Relationships: [
           {
@@ -28325,6 +28331,8 @@ export type Database = {
           p_payload: Json
           p_predecessor_decision_id: string
           p_project_id: string
+          p_why?: string
+          p_why_author_name?: string
         }
         Returns: Json
       }
@@ -28962,6 +28970,10 @@ export type Database = {
         Returns: Json
       }
       _project_approval_hash: { Args: { p_value: Json }; Returns: string }
+      _project_approval_release_sentence: {
+        Args: { p_names: string[] }
+        Returns: string
+      }
       _promote_configuration_to_library_impl: {
         Args: { p_configuration_id: string; p_name?: string }
         Returns: Json
@@ -30807,6 +30819,7 @@ export type Database = {
           p_idempotency_key: string
           p_payload: Json
           p_project_id: string
+          p_why?: string
         }
         Returns: Json
       }
@@ -34504,6 +34517,7 @@ export type Database = {
           p_expected_updated_at: string
           p_idempotency_key: string
           p_payload: Json
+          p_why?: string
         }
         Returns: Json
       }

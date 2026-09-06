@@ -1,0 +1,21 @@
+import { open, signIn, openHouse, t, askBy, holdPress } from './lib.mjs';
+const SH = '/Users/kody/Code/patina-merged/artifacts/client-approval-experience-2026-09-03/build/waves/w2/web-walk-shots-r2';
+const { browser, page } = await open({ width: 390, height: 844 });
+await signIn(page);
+await openHouse(page);
+const ask = askBy(page, 'closet joinery');
+await ask.scrollIntoViewIfNeeded(); await page.waitForTimeout(300);
+await ask.locator('[data-testid="approval-acts"] button').filter({ hasText: 'APPROVE' }).first().click();
+await page.waitForTimeout(400);
+await ask.screenshot({ path: `${SH}/23-approve-390.png` });
+await ask.locator('[data-testid="approval-signature"]').fill('Client User');
+const submit = ask.locator('[data-testid="approval-acts"] button').filter({ hasText: /SUBMIT/i }).first();
+await submit.scrollIntoViewIfNeeded(); await page.waitForTimeout(250);
+await holdPress(page, submit, 1400);
+await page.waitForTimeout(2500);
+console.log('stamp @390:', t(await ask.locator('[data-testid="approval-stamp"]').first().innerText().catch(() => '(absent)')));
+console.log('immut @390:', await ask.locator('[data-testid="immutability-sentence"]').count());
+await ask.screenshot({ path: `${SH}/23b-approved-390.png` });
+// the answered card's full text, for the vocabulary read
+console.log('CARD:', t(await ask.innerText()).slice(0, 600));
+await browser.close();

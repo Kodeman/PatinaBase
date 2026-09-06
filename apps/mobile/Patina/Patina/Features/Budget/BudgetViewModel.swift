@@ -252,7 +252,16 @@ enum PaymentTermsDisplay {
         case "net_60": return "Net 60"
         case "due_on_receipt": return "Due on receipt"
         case "custom": return "Custom terms"
-        default: return terms.replacingOccurrences(of: "_", with: " ").capitalized
+        default:
+            // `W2R2-n2`: humanize a SLUG; print prose verbatim. The seeded
+            // terms "Fifty percent on signature." came back through
+            // `.capitalized` as "Fifty Percent On Signature." — a title-casing
+            // pass rewriting a sentence the studio wrote, prepositions
+            // included. A slug has an underscore and no spaces; anything else
+            // is someone's own words and is set as they set them.
+            guard terms.contains("_"),
+                  !terms.contains(where: \.isWhitespace) else { return terms }
+            return terms.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 }

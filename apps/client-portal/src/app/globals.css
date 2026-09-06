@@ -10,6 +10,14 @@
   --color-pearl: #E5E2DD;
   --color-clay: #C4A57B;
   --color-aged-oak: #8B7355;
+  /* The same oak, taken to ink (`W1-04`). #8B7355 is 4.19:1 on paper, which
+     clears nothing at the 11px meta register this portal sets so much of its
+     quiet copy in — axe read 104 serious contrast failures on the doorstep,
+     39 of them inside a single approval. iOS moved its muted ink to this
+     value in `IOSC-R2-02`; the two surfaces now write the register in the
+     same ink. --color-aged-oak itself is unchanged: it is still the right
+     hairline and the right glyph. */
+  --color-oak-ink: #4E4339;
   --color-mocha: #5C4A3C;
   --color-charcoal: #2C2926;
   --color-sage: #A8B5A0;
@@ -20,12 +28,23 @@
      (GateStamp's `hold` variant) until a second caller needs it. */
   --color-gold: #E8C547;
 
+  /* ── The stamp's inks (P-17 / R13) ────────────────────────────────────────
+     The three pigments the eleven-state stamp presses, at the designer
+     portal's own values so one mark reads identically on both sides of the
+     table. Each is a darkened companion of a material pigment, taken to 4.5:1
+     on paper: a border has to read as a mark, not as a wash.
+     --color-terracotta-ink appears on exactly one state (DECLINED) and never
+     opposite a sage counterpart. */
+  --color-clay-ink: #7C5E30;
+  --color-terracotta-ink: #9C5340;
+  --color-golden-hour-ink: #79651E;
+
   /* Semantic aliases */
   --bg-primary: var(--color-off-white);
   --bg-surface: #FFFFFF;
   --text-primary: var(--color-charcoal);
   --text-body: var(--color-mocha);
-  --text-muted: var(--color-aged-oak);
+  --text-muted: var(--color-oak-ink);
   --border-default: var(--color-pearl);
   --border-subtle: rgba(229, 226, 221, 0.6);
   --accent-primary: var(--color-clay);
@@ -486,6 +505,83 @@ a:hover {
   .da-tertiary:active .da-label::before {
     transform: none;
     opacity: 1;
+  }
+}
+
+/* ── the held act (P-18) · the same ink, given a direction and a length ──────
+   A terminal act is held, not tapped, and what marks the holding is the ink
+   this grammar already floods on contact — clipped to a left-to-right inset
+   instead of a circle, so it fills ALONG the rule under the word. No bar, no
+   ring, no percentage: the rule inking to its end is the whole report.
+
+   These rules are last on purpose. `.da-act:hover/.da-act:active .da-pool`
+   above are (0,3,0) and would otherwise reclaim the circle exactly while the
+   finger is down, so each is answered here at equal specificity and later in
+   the cascade.
+
+   `--hold-fill` (0 or 1) and `--hold-ms` are parked on the control by
+   HoldAction. Stilled, the ink arrives at once and the hold keeps its length:
+   the wait is the deliberation; the fill was only ever its portrait. */
+.da-hold .da-pool,
+.da-hold:hover .da-pool,
+.da-hold:active .da-pool {
+  clip-path: inset(0 calc(100% * (1 - var(--hold-fill, 0))) 0 0);
+  transition: clip-path var(--hold-ms, 900ms) linear;
+}
+/* released, or never begun: the ink retreats quickly and says nothing about it */
+.da-hold[data-hold-state='idle'] .da-pool,
+.da-hold[data-hold-state='idle']:hover .da-pool,
+.da-hold[data-hold-state='idle']:active .da-pool {
+  transition: clip-path 180ms var(--ease-editorial);
+}
+/* the press snap is a tap's punctuation; a hold has none to give */
+.da-hold:active {
+  transform: none;
+}
+/* ── the held word turns over with the ink, on either path (`W1-03`) ────────
+   The inverted label above is hung on `:active`, and a keyboard hold never
+   gets it: `onKeyDown` calls preventDefault(), so Enter or Space floods the
+   pool while the word stays charcoal on charcoal — contrast 1.00, measured,
+   for the whole 900ms of a legally consequential act. The ink is what the
+   word is reading against, so the word is driven by the same state the ink
+   is: the hold, not the press. The pointer path keeps its own `:active`
+   rules and looks no different for it. */
+.da-primary.da-hold[data-hold-state='holding'],
+.da-danger.da-hold[data-hold-state='holding'] {
+  color: var(--color-off-white);
+  transition-property: color;
+  transition-duration: 120ms;
+  transition-delay: 60ms;
+  transition-timing-function: linear;
+}
+.da-primary.da-hold[data-hold-state='holding'] .da-leading,
+.da-primary.da-hold[data-hold-state='holding'] .da-trailing,
+.da-danger.da-hold[data-hold-state='holding'] .da-leading,
+.da-danger.da-hold[data-hold-state='holding'] .da-trailing {
+  color: var(--color-off-white);
+}
+/* `W2-03` in the round-2 walk: the stilling has to outrank the retreat.
+   The idle rule above carries an attribute selector — (0,3,0) — and these two
+   blocks were (0,2,0), so under `prefers-reduced-motion: reduce` the fill
+   arrived at once and then animated back over 180ms on release. A reader who
+   has turned motion off is shown the one moving thing left on the control.
+   The idle state is therefore named here too, at a weight that wins. */
+.da-hold-still .da-pool,
+.da-hold-still:hover .da-pool,
+.da-hold-still:active .da-pool,
+.da-hold-still.da-hold[data-hold-state='idle'] .da-pool,
+.da-hold-still.da-hold[data-hold-state='idle']:hover .da-pool,
+.da-hold-still.da-hold[data-hold-state='idle']:active .da-pool {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .da-hold .da-pool,
+  .da-hold:hover .da-pool,
+  .da-hold:active .da-pool,
+  .da-hold[data-hold-state='idle'] .da-pool,
+  .da-hold[data-hold-state='idle']:hover .da-pool,
+  .da-hold[data-hold-state='idle']:active .da-pool {
+    transition: none;
   }
 }
 

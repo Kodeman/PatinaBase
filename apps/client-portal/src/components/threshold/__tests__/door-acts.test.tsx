@@ -394,4 +394,40 @@ describe('DoorActs', () => {
     );
     expect(document.activeElement).not.toBe(document.body);
   });
+
+  it('docks its own row above the door’s act on a narrow viewport (W2-06)', () => {
+    renderActs();
+
+    // `W1-05` / `W2-06`: clearing the primary act's height was not enough.
+    // Measured at 390x844 with Sign docked at y=751, all four of these sat at
+    // y=840 / y=896 — off the bottom of the screen, reachable only by
+    // scrolling past the act they are alternatives to. So they dock too, as a
+    // compact row riding 61px up, directly on top of the primary's dock.
+    const acts = screen.getByTestId('door-acts');
+    // The same hook `[data-hold-dock]` gives the primary act, so a walk can
+    // measure both docks with one selector each.
+    expect(acts).toHaveAttribute('data-acts-dock');
+    expect(acts).toHaveClass('max-[600px]:sticky');
+    expect(acts).toHaveClass('max-[600px]:bottom-[61px]');
+    expect(acts).not.toHaveClass('max-[600px]:pb-16');
+    for (const label of ['Ask a question', 'Request a change', 'Decline']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  /**
+   * The dock is only a dock if it can travel, and a sticky box is constrained
+   * by its PARENT. Held inside a wrapper of its own height it would pin
+   * nothing — so the row's box is a direct child of the leaf, and the unfolded
+   * panels are its siblings rather than its children (they would otherwise be
+   * pinned to the bottom edge with it).
+   */
+  it('keeps the panels out of the docked box', async () => {
+    renderActs();
+    fireEvent.click(act('Ask a question'));
+
+    const acts = screen.getByTestId('door-acts');
+    const panel = await screen.findByTestId('door-ask-question-panel');
+    expect(acts).not.toContainElement(panel);
+  });
 });

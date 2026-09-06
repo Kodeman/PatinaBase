@@ -1,0 +1,11 @@
+import { open, signIn, openHouse, t, askBy } from './lib.mjs';
+const SH = '/Users/kody/Code/patina-merged/artifacts/client-approval-experience-2026-09-03/build/waves/w2/web-walk-shots-r1';
+const { browser, page } = await open({ width: 1280, height: 1100 });
+await signIn(page);
+await openHouse(page);
+const g7 = askBy(page, 'Approve the issued plan set? Awaiting studio publication.');
+await g7.scrollIntoViewIfNeeded(); await page.waitForTimeout(400);
+await g7.screenshot({ path: `${SH}/22-awaiting-studio-immutability.png` });
+console.log('G7 immutability:', t(await g7.locator('[data-testid="immutability-sentence"]').first().textContent()));
+console.log('G7 standing    :', t(await g7.innerText()).match(/Nothing is waiting on you\.|Your designer issues it next\./g));
+await browser.close();

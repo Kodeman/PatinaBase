@@ -215,7 +215,7 @@ struct DynamicTypeLayoutTests {
     @Test("the sign sheet’s term labels keep a column they fit in")
     func theSignSheetLabelColumnScales() throws {
         let code = SourceScan.code(
-            in: try SourcePin.read("Patina/Features/Proposals/Views/ProposalSignSheet.swift")
+            in: try SourcePin.read("Patina/Features/Proposals/Views/SignActView.swift")
         )
         #expect(!code.contains("frame(width: 78, alignment: .leading)"),
                 "the label column is still a hard 78 pt (C-06)")

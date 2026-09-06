@@ -4,7 +4,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CommercialDocumentKind } from '@patina/types';
 
-import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { HoldAction, ScoredAction } from '@/components/threshold/instruments/scored-action';
+import {
+  SignatureLine,
+  signatureIsComplete,
+} from '@/components/threshold/instruments/signature-line';
 import { SpineGate } from '@/components/threshold/instruments/spine-gate';
 import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
@@ -23,7 +27,6 @@ import { noteInBrief } from '@/lib/threshold/standing';
 
 import {
   KIND_LABEL,
-  SIGNATURE_NOTICE,
   consentLineFor,
   refusalSentence,
   signLabelFor,
@@ -99,6 +102,12 @@ export interface DoorGateProps {
    */
   note: NoteModel | null;
   projectId: string;
+  /**
+   * Fired the moment the signature lands, BEFORE the refetch that takes the
+   * paper out of the open papers. The Threshold answers it by keeping this
+   * mark and its paper for the rest of the visit, which is what leaves the
+   * receipt on the page (W3-01) instead of unmounting it mid-crossfade.
+   */
   onSigned?: () => void;
   /**
    * The first door on the page carries the page-level `#door` anchor that the
@@ -106,7 +115,7 @@ export interface DoorGateProps {
    * its own mark.
    */
   first?: boolean;
-  /** Who countersigns, where the kind's consent says someone does. */
+  /** The studio that holds the signature, named on the receipt and the pin. */
   studioName?: string | null;
 }
 
@@ -137,6 +146,15 @@ export function DoorGate({
 
   const doorwayRef = useRef<HTMLDivElement | null>(null);
   const swingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The wait that holds the refetch back until the leaf has finished (W2-01). */
+  const invalidateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Its resolver, so an unmount can let the refetch through rather than strand it. */
+  const releaseWait = useRef<(() => void) | null>(null);
+  /**
+   * Written beside `setSignedAt`, and read in the catch — where `signedAt`
+   * itself is still the value this render closed over.
+   */
+  const signedAtRef = useRef<Date | null>(null);
   // State is render-time, so two clicks in one tick both read `submitting`
   // false. The latch closes that; the shipped route has the same hole.
   const inFlight = useRef(false);
@@ -144,6 +162,11 @@ export function DoorGate({
   useEffect(
     () => () => {
       if (swingTimer.current) clearTimeout(swingTimer.current);
+      if (invalidateTimer.current) clearTimeout(invalidateTimer.current);
+      // Released, not just cancelled. The signature has landed by the time
+      // anything is waiting here, and a refetch that never runs leaves the
+      // signed paper standing on the doorstep until something else asks.
+      releaseWait.current?.();
     },
     [],
   );
@@ -180,7 +203,8 @@ export function DoorGate({
   // The same validation the shipped sign page runs. A declined paper is not
   // signable, so the block that asks for her name disarms with it — a page
   // may not go on offering an answer she has already given.
-  const ready = drawn && !declined && !expired && agreed && name.trim().length >= 2;
+  const ready =
+    drawn && !declined && !expired && agreed && signatureIsComplete(name);
 
   async function onSign() {
     if (!ready || inFlight.current) return;
@@ -206,17 +230,18 @@ export function DoorGate({
       };
       if (!response.ok) throw new Error(refusalSentence(body.error));
 
-      await invalidateSignedCommercialDocument(
-        queryClient,
-        proposal.id,
-        body.projectId ?? projectId,
-      );
       proposalClientEvents.signed({ proposalId: proposal.id, signedByName });
 
-      setSignedAt(new Date());
-      // The route pushes ?delivery=pending_retry so CommercialNotificationRecovery
-      // can offer the replay. The Threshold IS the page that param lands on, so
-      // the recovery is surfaced here instead of being navigated to.
+      const stampedAt = new Date();
+      signedAtRef.current = stampedAt;
+      setSignedAt(stampedAt);
+      // W3-02. The recovery lives here and only here: the retired
+      // /proposals/[id] route pushed ?delivery=pending_retry at a
+      // CommercialNotificationRecovery that no longer exists, and no other
+      // surface reads the state — the sign response is the only place it is
+      // ever spoken. So the block stands for as long as the door does, and
+      // the Threshold keeps a signed door standing for the rest of the visit
+      // (threshold.tsx, `sealedDoors`).
       setDeliveryPending(body.notificationDelivery?.state === 'pending_retry');
 
       const stilled =
@@ -236,8 +261,44 @@ export function DoorGate({
       }
       window.requestAnimationFrame(() => setReceiptInked(true));
       onSigned?.();
+
+      // W2-01. THE INVALIDATION GOES LAST, AND IT WAITS FOR THE LEAF.
+      //
+      // It used to be awaited first, and the refetch it triggers takes the
+      // signed paper out of the papers the Threshold draws doors from — so
+      // `renderDoor` returned null and this whole section unmounted about
+      // 40 ms after the POST answered, before the swinging state was ever
+      // set. Nothing of the ceremony was drawn: no leaf, no reopened head,
+      // and no receipt, which is where P-19's sentence lives. The paper was
+      // signed correctly the whole time; the door simply never moved.
+      //
+      // The state above is this component's own, so the leaf swings on it
+      // alone. The refetch is what ends the door, and it is allowed to end
+      // it only once the swing has run.
+      //
+      // W3-01. The refetch no longer ends the section either: `onSigned` has
+      // already told the Threshold to keep this mark and its paper, so what
+      // is left standing after the leaf goes is the header, the P-19 receipt
+      // and the delivery recovery — read for as long as she likes rather than
+      // for the 520 ms the swing lasted.
+      await new Promise<void>((resolve) => {
+        releaseWait.current = resolve;
+        invalidateTimer.current = setTimeout(resolve, stilled ? 0 : SWING_MS);
+      });
+      releaseWait.current = null;
+      await invalidateSignedCommercialDocument(
+        queryClient,
+        proposal.id,
+        body.projectId ?? projectId,
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : refusalSentence(null));
+      // A refusal is the only thing this may say. A signature that landed and
+      // then failed to refresh a cache has not failed, and must not be
+      // reported as one — so the invalidation above throws into a caught
+      // branch only when `signedAt` is still null.
+      if (!signedAtRef.current) {
+        setError(err instanceof Error ? err.message : refusalSentence(null));
+      }
     } finally {
       inFlight.current = false;
       setSubmitting(false);
@@ -268,9 +329,14 @@ export function DoorGate({
     }
   }
 
-  const countersigns = studioName?.trim() || 'the studio';
+  // RULED 2026-09-05 (P-19). "countersigns" is retired: this line used to
+  // promise a second act on every kind of paper, including a trade scope,
+  // whose own consent line is pinned never to assert one. What is true the
+  // moment the route answers is that the studio holds her name and a copy is
+  // hers — the same sentence the phone's seal says.
+  const holder = studioName?.trim() || 'Your studio';
   const receipt = signedAt
-    ? `${proposal.title} · signed ${DAY_MONTH.format(signedAt)} · ${countersigns} countersigns`
+    ? `${proposal.title} · signed ${DAY_MONTH.format(signedAt)} · ${holder} has your signature. You’ll have a copy.`
     : null;
 
   // The document's own total is authoritative: Σ clientLineTotalCents
@@ -494,36 +560,18 @@ export function DoorGate({
                     <span>{consentLineFor(kind)}</span>
                   </label>
 
-                  <label
-                    className="mt-4 block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]"
-                    htmlFor={nameId}
-                  >
-                    Type your full name
-                  </label>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-3">
-                    <input
+                  {/* The name goes on a rule with the day beside it, and the
+                      electronic-signature sentence is printed there rather
+                      than in the hint below — one paper says it once. */}
+                  <div className="mt-4">
+                    <SignatureLine
                       id={nameId}
-                      type="text"
+                      testId="door-sign-name"
                       value={name}
-                      autoComplete="name"
+                      onChange={setName}
                       disabled={submitting || !!signedAt || declined || expired}
-                      onChange={(event) => setName(event.target.value)}
-                      data-testid="door-sign-name"
-                      className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
+                      describedBy={hintId}
                     />
-                    <ScoredAction
-                      actionKey="gate_sign"
-                      regionKey="gate"
-                      surfaceKey="the_threshold"
-                      variant="primary"
-                      disabled={!ready}
-                      loading={submitting}
-                      loadingLabel="Signing"
-                      aria-describedby={hintId}
-                      onClick={onSign}
-                    >
-                      {signLabelFor(kind)}
-                    </ScoredAction>
                   </div>
                   <p
                     id={hintId}
@@ -539,8 +587,8 @@ export function DoorGate({
                           ? 'This paper could not be drawn just now. Reload to try again.'
                           : 'Drawing this paper.'
                         : ready
-                          ? `Ready when you are. ${SIGNATURE_NOTICE}`
-                          : `Type your full name and tick the line to sign. ${SIGNATURE_NOTICE}`}
+                          ? 'Ready when you are.'
+                          : 'Type your full name and tick the line to sign.'}
                   </p>
                   {/* A refused signature is a genuine error, so it takes the
                       error ink — NOT terracotta, which on this surface is the
@@ -558,6 +606,36 @@ export function DoorGate({
                 </div>
               }
             />
+
+            {/* THE ACT SITS ON THE LEAF, NOT IN THE GATE. It is the scored
+                primary of this door, and on a narrow viewport it docks: sticky
+                to the bottom edge for as long as the paper it belongs to is on
+                screen, so a long document cannot bury the one thing the door is
+                asking for, and the four answers below it stay reachable.
+
+                Sticky needs a containing block with room to travel, which is
+                the leaf — inside the gate's act slot it would have had a few
+                pixels of range and docked nothing. Fixed would have been worse:
+                the doorway carries `perspective` for the swing, which makes it
+                the containing block for anything fixed inside it. */}
+            {!signedAt && (
+              <HoldAction
+                actionKey="gate_sign"
+                regionKey="gate"
+                surfaceKey="the_threshold"
+                variant="primary"
+                presentation="mobile_dock"
+                verb="sign"
+                wrapperClassName="mt-5 max-[600px]:-mx-5 max-[600px]:px-5"
+                disabled={!ready}
+                loading={submitting}
+                loadingLabel="Signing"
+                aria-describedby={hintId}
+                onHold={onSign}
+              >
+                {signLabelFor(kind)}
+              </HoldAction>
+            )}
 
             {/* The other four answers the old /proposals/[id] page took, on
                 the leaf rather than at the end of a route. They stand only

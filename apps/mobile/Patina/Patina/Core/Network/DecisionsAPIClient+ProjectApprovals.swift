@@ -45,6 +45,67 @@ public enum ProjectApprovalOutcome: String, Codable, Sendable, CaseIterable {
     case needsDiscussion = "needs_discussion"
 }
 
+/// How the client consented. `client_decisions.client_consent_method` admits
+/// exactly two values (00464:549-553), and R2 closed drawn signatures
+/// permanently, so a typed name held under a press is the only act iOS has.
+public enum ProjectApprovalConsent {
+    /// `nonisolated`: the actor reads it, and the module's default isolation
+    /// would otherwise make a constant string a main-actor property.
+    nonisolated public static let electronicSignature = "electronic_signature"
+    /// A press and hold with no name on it. RULED 2026-09-05: Return and Hold
+    /// record a consent method too — never NULL — and this is the token
+    /// `client_decisions`' own check constraint and
+    /// `_respond_project_approval_checked` allowlist for it.
+    nonisolated public static let clickThrough = "click_through"
+}
+
+/// What the caller is to one Stage-2 approval.
+///
+/// 00467 admits two readers and the projection names which one this is. The
+/// spellings are normalised rather than matched byte-for-byte — the field is a
+/// Wave 2 migration this lane does not own, and a snake-cased, hyphenated or
+/// camel-cased variant of the same word must not change what a homeowner sees.
+public enum ProjectApprovalViewerRole: Sendable, Equatable {
+    /// The frozen decision lead. The ask is hers.
+    case answers
+    /// A studio co-member reading her own client app. She can see it; she is
+    /// not the one being asked.
+    case observes
+    /// The projection said nothing, or said something this build does not know.
+    case unspecified
+
+    /// Roles that ANSWER. Checked first, so a compound naming both (a
+    /// `client_lead`) reads as the answering one.
+    static let answering: Set<String> = [
+        "decisionlead", "lead", "client", "recipient", "owner", "clientlead"
+    ]
+    /// Roles that only WATCH.
+    ///
+    /// `household` is the projection's third real value (00569:884-888:
+    /// `lead` → `studio` → `household`) and it WATCHES: the migration's own
+    /// comment calls it "the project's client on a row whose frozen lead is
+    /// somebody else", reachable after a lead reassignment. Only the frozen
+    /// lead answers — `respond_project_approval` accepts nobody else — so a
+    /// household reader who is not the lead may neither be asked nor be told
+    /// she approved something the lead approved.
+    static let observing: Set<String> = [
+        "studiocomember", "comember", "studiomember", "studio", "designer",
+        "teammate", "observer", "viewer", "watcher", "household"
+    ]
+
+    public init(raw: String?) {
+        guard let raw else { self = .unspecified; return }
+        let key = raw.lowercased().filter(\.isLetter)
+        if key.isEmpty { self = .unspecified } else if Self.answering.contains(key) {
+            self = .answers
+        } else if Self.observing.contains(key) {
+            self = .observes
+        } else {
+            self = .unspecified
+        }
+    }
+}
+
 /// One Stage-2 approval, as the client-safe projection returns it.
 ///
 /// Every field is the RPC's own key — the projection is already camelCase, so
@@ -56,12 +117,29 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     public let decisionId: String
     public let projectId: String
     public let artifactId: String
+    /// `project_approval_artifacts.source_kind` — `plan_issue`,
+    /// `spec_book_artifact` or `budget_version` (00463:134-135), served as
+    /// `artifactKind` (00569:865). Optional so a projection written before
+    /// this key existed decodes rather than throwing; the copy that reads it
+    /// falls back to the unnamed edition.
+    public let artifactKind: String?
     public let artifactVersion: Int
     public let artifactChecksum: String
     public let artifactTitle: String
     public let question: String
     /// The designer's framing of the ask. Nullable in the artifact table.
     public let context: String?
+    /// `P-13`. The one line the designer wrote to explain the ask, frozen into
+    /// the immutable artifact beside the question (00569). Absent on every
+    /// approval composed before that migration, and on every projection an
+    /// older build wrote — both decode as nil, and the screen draws nothing.
+    public let why: String?
+    /// The name of the hand that WROTE that line, frozen with it (ruled
+    /// 2026-09-05). A studio has more than one designer and the sentence is
+    /// immutable and client-facing, so it is signed by its author or by
+    /// nobody — never by whoever holds the project on the day she reads it.
+    /// The projection emits it only alongside a why.
+    public let whyAuthorName: String?
     public let dueAt: String?
     public let costCentsDelta: Int
     public let scheduleDaysDelta: Int
@@ -86,6 +164,19 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     public let respondedAt: String?
     /// The CAS value `respond_project_approval` demands, echoed back verbatim.
     public let updatedAt: String
+    /// Who this caller is to this approval, when the projection says.
+    ///
+    /// `W1R2-M3`'s remainder, ruled at the Wave 1 close: 00467 lets two people
+    /// read a Stage-2 row — the frozen decision lead
+    /// (`snapshot.decision_lead_id = p_actor`) and any studio co-member
+    /// (`is_design_studio_comember(decision.designer_id)`) — and the projection
+    /// carried nothing to tell them apart, so a designer reading her own client
+    /// app saw her studio's approvals under NEEDS YOU. Wave 1 could only
+    /// subtract the drafts; this field subtracts the rest.
+    ///
+    /// Absent on every projection written before the Wave 2 migration, which
+    /// decodes as nil and behaves exactly as Wave 1 did.
+    public let viewerRole: String?
 
     public var id: String { decisionId }
 
@@ -93,6 +184,29 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     public var recordedOutcome: ProjectApprovalOutcome? {
         guard let outcome else { return nil }
         return ProjectApprovalOutcome(rawValue: outcome)
+    }
+
+    /// Whether this caller is the one the approval is asked OF.
+    ///
+    /// Default-INCLUDE, deliberately: a role the app does not recognise reads
+    /// as hers. Excluding an unknown spelling would silently drop a
+    /// homeowner's own obligations off every feed she has, which is a far
+    /// worse failure than the one this field exists to fix.
+    public var viewerAnswers: Bool { ProjectApprovalViewerRole(raw: viewerRole) != .observes }
+
+    /// The why as it is drawn. A whitespace-only line is no line at all — the
+    /// same reading the web's `whyOf` takes of the same field.
+    public var designerWhy: String? {
+        let trimmed = (why ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// The name under that line, and only under it: an attribution with no
+    /// sentence above it attributes nothing.
+    public var designerWhyAuthor: String? {
+        guard designerWhy != nil else { return nil }
+        let trimmed = (whyAuthorName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// The studio pulled this approval back.
@@ -105,6 +219,21 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// AHEAD of an outcome (`client-attention.ts:55-71`), so a superseded
     /// approval reads as superseded even when it also carries an answer.
     public var isClosedByDisposition: Bool { isWithdrawn || isSuperseded }
+
+    /// The ask ran out of time with nothing recorded on it.
+    ///
+    /// `W2R1-B1`. `client_decisions.status` is CHECK-constrained to
+    /// `draft | pending | responded | expired`, and a lapsed row is the fourth
+    /// way an approval closes — the one the ceremony had no branch for. It
+    /// satisfies neither disposition, it carries no outcome to name, and
+    /// `canRespond` is false, so the screen drew the question, the edition and
+    /// the impacts and then simply stopped: no mark, no sentence, no doors.
+    ///
+    /// An expired row that DOES carry an outcome is an answered approval —
+    /// the answer is the fact worth stating — so the outcome is read first.
+    public var isLapsed: Bool {
+        lifecycleStatus == "expired" && !isClosedByDisposition && outcome == nil
+    }
 
     /// Every reviewer the frozen snapshot requires has confirmed this exact
     /// edition. Counted, not drawn — the numbers never reach the screen (R5).
@@ -181,7 +310,10 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
     /// P-09's review confirmation is therefore WEB-ONLY for Wave 1; the
     /// viewer-role field that would let the phone carry it is a Wave 2
     /// migration item.
-    public var awaitsClientInFeed: Bool { awaitsClient && isPublished }
+    ///
+    /// Wave 2 adds `viewerRole` beside it: a row this caller does not ANSWER
+    /// never reaches a homeowner-facing feed at all, drafts or not.
+    public var awaitsClientInFeed: Bool { awaitsClient && isPublished && viewerAnswers }
 
     /// This approval as a row for the feeds that carry every waiting
     /// obligation: `BadgeCountService.pendingDecisions` (the NEEDS YOU
@@ -302,18 +434,49 @@ extension DecisionsAPIClient {
     }
 
     /// Record one of the three canonical outcomes against the edition the
-    /// client was reading. `expectedUpdatedAt` is the row's own `updatedAt`,
-    /// echoed back: the RPC answers `serialization_failure` if the approval
-    /// moved while the screen was open.
+    /// client was reading, signed with the typed legal name.
+    ///
+    /// `expectedUpdatedAt` is the row's own `updatedAt`, echoed back: the RPC
+    /// answers `serialization_failure` if the approval moved while the screen
+    /// was open.
+    ///
+    /// `P-18` / `R1`. `_respond_project_approval_checked` has carried
+    /// `p_client_consent_method` / `p_client_signature` since 00464 — it
+    /// validates them, writes the three 00117 consent columns, and hashes them
+    /// into the action receipt (`00464:630-636`, `:736-740`). What it did not
+    /// have was a way in: the public wrapper rejected every payload key but
+    /// `outcome`/`optionId` and passed `NULL, NULL` down. **Wave 2's single
+    /// migration, 00569, opens exactly those two keys** — the backend lane's
+    /// file, which redefines this wrapper anyway — and the names here are the
+    /// receipt's own. iOS ships no migration for this, and must not ship
+    /// ahead of one: before 00569 the pair is rejected as
+    /// `invalid_parameter_value`.
+    ///
+    /// A consent method without a signature, or the reverse, is a
+    /// `check_violation` server-side; the pair is therefore sent together or
+    /// not at all, and the caller gates on the two-character floor.
     public func respondToProjectApproval(
         decisionId: String,
         outcome: ProjectApprovalOutcome,
+        clientSignature: String,
         expectedUpdatedAt: String,
         idempotencyKey: String
     ) async throws {
+        var payload: [String: Any] = ["outcome": outcome.rawValue]
+        let signature = clientSignature.trimmingCharacters(in: .whitespacesAndNewlines)
+        if signature.isEmpty {
+            // Return and Hold: held, unsigned, and still recorded as consent
+            // given by hand rather than left NULL (RULED 2026-09-05). The
+            // checked function refuses a signature without a method, never a
+            // method without a signature.
+            payload["clientConsentMethod"] = ProjectApprovalConsent.clickThrough
+        } else {
+            payload["clientSignature"] = signature
+            payload["clientConsentMethod"] = ProjectApprovalConsent.electronicSignature
+        }
         _ = try await callRPC("respond_project_approval", body: [
             "p_decision_id": decisionId,
-            "p_payload": ["outcome": outcome.rawValue],
+            "p_payload": payload,
             "p_expected_updated_at": expectedUpdatedAt,
             "p_idempotency_key": idempotencyKey
         ])

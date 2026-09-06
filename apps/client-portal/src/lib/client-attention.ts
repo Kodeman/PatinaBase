@@ -58,8 +58,12 @@ export function projectApprovalAttentionLabel(
   if (approval.disposition === 'withdrawn') return 'Withdrawn';
   if (approval.disposition === 'superseded') return 'Superseded';
   if (approval.outcome === 'approved') return 'Approved';
-  if (approval.outcome === 'changes_requested') return 'Changes requested';
-  if (approval.outcome === 'needs_discussion') return 'Needs discussion';
+  // One outcome, one word, on the day she answers and on every visit after:
+  // `changes_requested` is RETURNED on the stamp and Returned in prose, and is
+  // never "Declined" — a commercial document is declined; an edition is sent
+  // back (P-16).
+  if (approval.outcome === 'changes_requested') return 'Returned';
+  if (approval.outcome === 'needs_discussion') return 'Held';
   if (isProjectApprovalAwaitingStudioIssue(approval)) {
     return 'Awaiting studio issue';
   }

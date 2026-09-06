@@ -183,4 +183,58 @@ struct WidgetProjectionTests {
         #expect(code.contains("id: \\.title") == false)
         #expect(code.contains("ForEach(snapshot.drawableRows, id: \\.self)"))
     }
+
+    // MARK: - R15 · the ceremony does not reach the Home Screen (iosd4-M1)
+
+    /// `P-21`'s afterglow rows are the reader's OWN acts — "You approved the
+    /// budget." — and they live in MOVED, which is exactly what this
+    /// projection carries. R15 rules the widget untouched by this program, so
+    /// the two kinds are subtracted here: the Home Screen carries what other
+    /// people did, never a report of the reader back to herself on a surface
+    /// she cannot answer from.
+    @Test("an afterglow row never reaches the widget")
+    func theAfterglowStaysOffTheWidget() {
+        let projected = snapshot(moved: [
+            row(
+                id: "approval-answered:d1", kind: .decisionAnswered,
+                route: .decisionDetail(decisionId: "d1")
+            ),
+            row(
+                id: "proposal-signed:p1", kind: .proposalSigned,
+                route: .proposalDetail(proposalId: "p1")
+            ),
+            row(
+                id: "order:direct:abc", kind: .orderMoved,
+                route: .orderDetail(orderId: "direct:abc")
+            )
+        ])
+
+        #expect(projected.movedRows.map(\.id) == ["order:direct:abc"])
+    }
+
+    /// A record whose whole MOVED half is her own acts projects nothing —
+    /// rather than the widget drawing a ceremony it has no part in.
+    @Test("a record of nothing but her own acts projects nothing")
+    func aRecordOfHerOwnActsProjectsNothing() {
+        let projected = snapshot(moved: [
+            row(
+                id: "approval-answered:d1", kind: .decisionAnswered,
+                route: .decisionDetail(decisionId: "d1")
+            ),
+            row(
+                id: "proposal-signed:p1", kind: .proposalSigned,
+                route: .proposalDetail(proposalId: "p1")
+            )
+        ])
+
+        #expect(projected.movedRows.isEmpty)
+    }
+
+    /// The subtraction is the KIND's own predicate, not a list of ids: a
+    /// future own-act kind is off the widget the day it is added.
+    @Test("the widget subtracts every own-act kind, by the predicate that names them")
+    func theWidgetSubtractsByThePredicate() throws {
+        let code = try SourcePin.readCode("Patina/Core/Persistence/WidgetSnapshot.swift")
+        #expect(code.contains("row.kind.isOwnAct"))
+    }
 }

@@ -271,6 +271,20 @@ struct BudgetAggregationTests {
         #expect(PaymentTermsDisplay.label(for: "custom") == "Custom terms")
         #expect(PaymentTermsDisplay.label(for: nil) == nil)
         #expect(PaymentTermsDisplay.label(for: "") == nil)
+        // An unlisted SLUG is still humanized.
+        #expect(PaymentTermsDisplay.label(for: "net_45") == "Net 45")
+        // `W2R2-n2`: a sentence the studio wrote is printed as they wrote it.
+        // The sign act's TERMS row read "Fifty Percent On Signature." over a
+        // stored "Fifty percent on signature." — a title-casing pass rewriting
+        // someone else's prose, prepositions and all.
+        #expect(
+            PaymentTermsDisplay.label(for: "Fifty percent on signature.")
+                == "Fifty percent on signature."
+        )
+        #expect(
+            PaymentTermsDisplay.label(for: "50% on signature, balance on delivery")
+                == "50% on signature, balance on delivery"
+        )
     }
 
     // MARK: - Route name

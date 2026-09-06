@@ -236,16 +236,32 @@ struct DecisionDetailView: View {
         }
     }
 
+    /// `P-17`. The sage `checkmark.seal.fill` is gone: a green check on the
+    /// most consequential state is exactly the read VISION §6 refuses, and a
+    /// glyph standing in for a state is what the stamp grammar replaces. The
+    /// sentence beside it carries the meaning, so the mark itself is hidden
+    /// from VoiceOver.
     private var resolvedBanner: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "checkmark.seal.fill")
-                .foregroundStyle(PatinaColors.sage)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            PatinaStamp(
+                state: Self.resolvedStamp,
+                recordedAt: viewModel.decision?.responded_at
+                    .flatMap(ISO8601DateParsing.date(from:))
+            )
             Text("You’ve responded to this decision")
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.sage)
+                .foregroundStyle(PatinaColors.Text.secondary)
         }
-        .padding(.top, 4)
+        .padding(.top, 8)
     }
+
+    /// Every client act on the legacy rail says yes to something: choosing a
+    /// named option, or giving a sign-off through `approve_client_signoff`.
+    /// There is no client-reachable path that records any other outcome on a
+    /// non-Stage-2 decision, so APPROVED is the one honest word here. The
+    /// Stage-2 ceremony, which has three, stamps its own in
+    /// `ProjectApprovalBlock`.
+    static let resolvedStamp: PatinaStamp.State = .approved
 
     private func optionCard(_ option: RemoteDecisionOption) -> some View {
         let isRecommended = option.is_recommended ?? false
@@ -320,7 +336,7 @@ struct DecisionDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(isSelected ? PatinaColors.sage : .clear, lineWidth: 1.5)
+                .stroke(isSelected ? PatinaColors.Stamp.mocha : .clear, lineWidth: 1.5)
         )
         .padding(.horizontal, 24)
     }
@@ -328,14 +344,15 @@ struct DecisionDetailView: View {
     @ViewBuilder
     private func optionAction(_ option: RemoteDecisionOption, isSelected: Bool, hasDetails: Bool) -> some View {
         if isSelected {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(PatinaColors.sage)
-                Text("Your choice")
-                    .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.sage)
-            }
-            .accessibilityIdentifier("decisionOption.selected")
+            // `W2R1-M2`: the word and the rule, in mocha. A filled sage
+            // checkmark broke three refusals at once on the screen one row
+            // from the ceremony — an icon standing in for status, a fill, and
+            // sage carrying approval meaning (ruled 2026-09-05: answered
+            // marks are mocha; sage keeps the material states).
+            Text("Your choice")
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Stamp.mocha)
+                .accessibilityIdentifier("decisionOption.selected")
         } else if !viewModel.isResolved {
             // Approval is contractual — a contentless card can't be chosen
             // here (R06); PatinaButton's isEnabled dims + disables.

@@ -30,7 +30,12 @@ struct DecisionListView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            MonoLabel(text: "DECISIONS")
+            // `iosd3-M1`, as carried at the Wave-2 close: this list holds
+            // approvals and option choices together, so it is titled for what
+            // it is doing — never DECISIONS, the narrower word, over a mixed
+            // list and over the Approvals row that opens it. `MonoLabel` sets
+            // the case.
+            MonoLabel(text: viewModel.eyebrow)
                 .tracking(2)
             // U22: kept static — the empty case names itself in
             // `emptyView`'s PatinaEmptyState below; repeating that exact
@@ -167,8 +172,11 @@ struct DecisionListView: View {
     /// that actually unblocks it — track an in-flight request if one
     /// exists, otherwise start one.
     private var emptyView: some View {
+        // `P-17`: no glyph. A check mark over "Nothing waiting on you" is a
+        // check mark used as status, which the stamp grammar replaces
+        // everywhere else on this rail and refuses outright here — there is
+        // no state to mark when there is nothing to mark.
         PatinaEmptyState(
-            icon: "checkmark.circle",
             title: "Nothing waiting on you",
             message: "When your designer needs a call from you, it lands here.",
             ctaTitle: studioCTATitle,

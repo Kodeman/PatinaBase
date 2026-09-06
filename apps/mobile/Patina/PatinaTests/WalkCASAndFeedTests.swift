@@ -57,7 +57,7 @@ struct ApprovalCASOrderTests {
         var stamped: String?
         let viewModel = DecisionDetailViewModel()
         viewModel.markDecisionViewed = { stamped = $0 }
-        viewModel.respondToApproval = { _, _, _, _ in }
+        viewModel.respondToApproval = { _, _, _, _, _ in }
         viewModel.approvalReview = try ProjectApprovalFixture.review()
         // The stamp is private; `load` reaches it, and the seam is what proves
         // the call site is no longer the singleton's network method.
@@ -83,11 +83,12 @@ struct ApprovalCASOrderTests {
             refetches += 1
             return try ProjectApprovalFixture.review(updatedAt: fresh)
         }
-        viewModel.respondToApproval = { _, _, expectedUpdatedAt, _ in
+        viewModel.respondToApproval = { _, _, _, expectedUpdatedAt, _ in
             sentValues.append(expectedUpdatedAt)
             if expectedUpdatedAt != fresh { throw Stale() }
         }
 
+        viewModel.typedSignature = "Margaret Whitfield"
         viewModel.chooseOutcome(.approved)
         await viewModel.submitApprovalResponse()
 
@@ -112,11 +113,12 @@ struct ApprovalCASOrderTests {
                 lifecycleStatus: "responded", outcome: "changes_requested"
             )
         }
-        viewModel.respondToApproval = { _, _, _, _ in
+        viewModel.respondToApproval = { _, _, _, _, _ in
             attempts += 1
             throw Boom()
         }
 
+        viewModel.typedSignature = "Margaret Whitfield"
         viewModel.chooseOutcome(.changesRequested)
         await viewModel.submitApprovalResponse()
 
@@ -134,11 +136,12 @@ struct ApprovalCASOrderTests {
         let viewModel = DecisionDetailViewModel()
         viewModel.approvalReview = try ProjectApprovalFixture.review()
         viewModel.fetchApprovalReview = { _ in try ProjectApprovalFixture.review() }
-        viewModel.respondToApproval = { _, _, _, _ in
+        viewModel.respondToApproval = { _, _, _, _, _ in
             attempts += 1
             throw Boom()
         }
 
+        viewModel.typedSignature = "Margaret Whitfield"
         viewModel.chooseOutcome(.needsDiscussion)
         await viewModel.submitApprovalResponse()
 
@@ -156,8 +159,9 @@ struct ApprovalCASOrderTests {
         let viewModel = DecisionDetailViewModel()
         viewModel.approvalReview = try ProjectApprovalFixture.review()
         viewModel.fetchApprovalReview = { _ in throw Boom() }
-        viewModel.respondToApproval = { _, _, _, _ in throw Boom() }
+        viewModel.respondToApproval = { _, _, _, _, _ in throw Boom() }
 
+        viewModel.typedSignature = "Margaret Whitfield"
         viewModel.chooseOutcome(.approved)
         await viewModel.submitApprovalResponse()
 
@@ -177,8 +181,10 @@ struct ApprovalCASOrderTests {
         let block = try SourcePin.readCode(
             "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
         )
+        // The guard is still exactly `outcomeLeg`'s — which since
+        // `IOSC-R2-07` also asks who is reading.
         let guarded = try #require(
-            block.range(of: "if !viewModel.hasAnsweredApproval, review.canRespond {")
+            block.range(of: "if !viewModel.hasAnsweredApproval, review.canRespond, review.viewerAnswers {")
         )
         let covered = String(block[guarded.upperBound...].prefix(200))
         #expect(covered.contains("ProjectApprovalCopy.immutability"))
@@ -269,7 +275,12 @@ struct ApprovalFeedGuardTests {
         let client = try SourcePin.readCode(
             "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
         )
-        #expect(client.contains("var awaitsClientInFeed: Bool { awaitsClient && isPublished }"))
+        // Wave 2 / P-21 widened the predicate with `viewerAnswers`: a row this
+        // caller does not ANSWER is not hers either, drafts or not. The pin
+        // carries all three clauses so dropping any one of them goes red.
+        #expect(client.contains(
+            "var awaitsClientInFeed: Bool { awaitsClient && isPublished && viewerAnswers }"
+        ))
     }
 
     /// `W1R2-M2`: the Studio hub's aggregate names its rows "approvals are
@@ -290,7 +301,10 @@ struct ApprovalFeedGuardTests {
         ))
         let row = try #require(snapshot.section(.awaitingYou).rows
             .first { $0.id == "awaiting.decisions" })
-        #expect(row.title == "Decision")
+        // Wave 2's vocabulary sweep: a group holding only approvals is named
+        // for what it holds. The issued row is a Stage-2 approval and the
+        // unissued one is filtered out, so this group is all approvals.
+        #expect(row.title == "Approval")
         #expect(row.detail == "Approve the kitchen millwork as drawn?")
         #expect(!row.detail.contains("Two approvals"))
 

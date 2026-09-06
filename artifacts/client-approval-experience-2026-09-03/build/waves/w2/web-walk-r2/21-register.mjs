@@ -1,0 +1,14 @@
+import { open, signIn, openHouse, t, askBy } from './lib.mjs';
+const SH = '/Users/kody/Code/patina-merged/artifacts/client-approval-experience-2026-09-03/build/waves/w2/web-walk-shots-r2';
+const { browser, page } = await open({ width: 1280, height: 1100 });
+await signIn(page);
+await openHouse(page);
+const a = askBy(page, 'terrace stair count');
+await a.scrollIntoViewIfNeeded(); await page.waitForTimeout(300);
+console.log('weighing:', t(await a.locator('[data-testid="approval-impact-sentence"]').first().innerText()));
+console.log('ledger  :', t(await a.locator('[data-testid="approval-impact-ledger"]').first().innerText()));
+console.log('why     :', t(await a.locator('[data-testid="approval-why"]').first().innerText()));
+console.log('attrib  :', t(await a.locator('[data-testid="approval-attribution"]').first().innerText()));
+console.log('mark    :', t(await a.locator('[data-testid="approval-makers-mark"]').first().innerText()), '| aria-hidden=', await a.locator('[data-testid="approval-makers-mark"]').first().getAttribute('aria-hidden'));
+await a.screenshot({ path: `${SH}/21-register-over-twenty.png` });
+await browser.close();
