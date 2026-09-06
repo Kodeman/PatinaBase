@@ -95,6 +95,13 @@ export interface ProjectApprovalReview {
   authorityRevision: number | null;
   predecessorDecisionId: string | null;
   successorDecisionId: string | null;
+  /**
+   * P-26 — the name she typed when she signed, so the printed Record of
+   * Decision can say who answered and not only how. Carried by the projection
+   * from 00573; null on Return and Hold (press-and-hold only, no name), on
+   * every approval answered before 00569, and on any older projection.
+   */
+  clientSignature?: string | null;
   createdAt: string;
   sentAt: string | null;
   respondedAt: string | null;
@@ -365,6 +372,8 @@ export function parseProjectApprovalReview(
         : null,
     predecessorDecisionId: nullableString(row, 'predecessorDecisionId'),
     successorDecisionId: nullableString(row, 'successorDecisionId'),
+    // Arrived with 00573; an older projection simply has no name to give.
+    clientSignature: nullableString(row, 'clientSignature'),
     createdAt: stringValue(row, 'createdAt', label),
     sentAt: nullableString(row, 'sentAt'),
     respondedAt: nullableString(row, 'respondedAt'),
@@ -742,24 +751,19 @@ export function useRespondProjectApproval() {
    ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * `none` is "don't remind me — I'll come back": it stands the reminders down
- * until the overdue notice, which no snooze suppresses.
+ * The four kinds `set_decision_snooze` accepts (00572). `never` is "don't
+ * remind me — I'll come back": it stands the reminders down until the overdue
+ * notice, which no snooze suppresses.
  */
 export type DecisionSnoozeChoice =
   | 'tomorrow_morning'
   | 'sunday'
   | 'when_due'
-  | 'none';
+  | 'never';
 
 export interface DecisionSnoozeInput extends ProjectApprovalInvalidationScope {
   decisionId: string;
   choice: DecisionSnoozeChoice;
-  /**
-   * The reader's own IANA zone, so "tomorrow morning" is eight o'clock on HER
-   * wall and not on the server's. Omitted when the browser cannot name one;
-   * the RPC then falls back to the stored notification-preference timezone.
-   */
-  timezone?: string | null;
 }
 
 /**
@@ -771,15 +775,27 @@ export interface DecisionSnoozeInput extends ProjectApprovalInvalidationScope {
  */
 export function useSetDecisionSnooze() {
   const queryClient = useQueryClient();
-  return approvalMutation(queryClient, async (input: DecisionSnoozeInput) =>
-    parseActionResult(
+  return approvalMutation(queryClient, async (input: DecisionSnoozeInput) => {
+    // The RPC resolves her zone itself (notification_time_zone), so the
+    // browser sends no timezone: two clocks would eventually disagree and the
+    // server's is the one the mail, the push and the in-app row are minted on.
+    const row = asRecord(
       await runRpc('set_decision_snooze', {
         p_decision_id: input.decisionId,
-        p_choice: input.choice,
-        p_timezone: input.timezone ?? null,
+        p_kind: input.choice,
       }),
-    ),
-  );
+      'Decision snooze',
+    );
+    // This RPC answers about the SNOOZE, not about the approval: it returns
+    // decisionId / kind / snoozedUntil / timeZone and no projectId. Demanding
+    // one here would report a snooze that landed as a snooze that failed, so
+    // the invalidation rail takes the projectId the caller already carries.
+    return {
+      ...row,
+      projectId: input.projectId,
+      decisionId: stringValue(row, 'decisionId', 'Decision snooze'),
+    } as ProjectApprovalActionResult;
+  });
 }
 
 export function useWithdrawProjectApproval() {

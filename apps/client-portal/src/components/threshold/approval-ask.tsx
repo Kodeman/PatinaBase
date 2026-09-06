@@ -836,7 +836,7 @@ const SNOOZE_ACTS: Array<{
     confirmation: "I'll ask you when it's due.",
   },
   {
-    choice: 'none',
+    choice: 'never',
     label: "Don't remind me",
     confirmation: "I won't remind you again until it's past its date.",
   },
@@ -875,12 +875,6 @@ function RemindMe({
         projectId: approval.projectId,
         decisionId: approval.decisionId,
         choice: act.choice,
-        // Her wall, not the server's. Absent where the browser cannot name
-        // one, and the RPC falls back to her stored preference then.
-        timezone:
-          typeof Intl === 'undefined'
-            ? null
-            : (Intl.DateTimeFormat().resolvedOptions().timeZone ?? null),
       });
       setSaid(act.confirmation);
     } catch (cause) {
@@ -942,6 +936,36 @@ const RECORDS_SHOWN = 3;
  * stacked between the ask and the plan key. The pile is not counted at her:
  * how many she has answered is not a thing she is being asked to carry.
  */
+/**
+ * The decision id the page's address names — `#approval-<id>` — and a way to
+ * say she has been put in front of it.
+ *
+ * `/decisions/<id>` folds onto `#approval-<id>`, and every letter Patina sends
+ * about an approval carries that address: a receipt names a closed record, a
+ * supersession notice names the successor, which is an OPEN ask. Neither
+ * element exists when the browser resolves the fragment — the records fold is
+ * still shut and the asks have not rendered — so the browser gives up and
+ * leaves her at the top of the page.
+ *
+ * Both readers of this hook therefore do the scrolling themselves: the fold
+ * opens first and then scrolls, and an open ask scrolls to itself.
+ */
+function useAddressedApproval(): [string | null, () => void] {
+  const [seek, setSeek] = useState<string | null>(null);
+
+  useEffect(() => {
+    function named() {
+      const match = /^#approval-(.+)$/.exec(window.location.hash);
+      setSeek(match ? match[1] : null);
+    }
+    named();
+    window.addEventListener('hashchange', named);
+    return () => window.removeEventListener('hashchange', named);
+  }, []);
+
+  return [seek, useCallback(() => setSeek(null), [])];
+}
+
 export function ApprovalRecords({
   approvals,
   anchoredDecisionIds = [],
@@ -954,45 +978,29 @@ export function ApprovalRecords({
   studioName?: string | null;
 }) {
   const [all, setAll] = useState(false);
-  /** The record the address named, until the page has put her in front of it. */
-  const [seek, setSeek] = useState<string | null>(null);
+  const [seek, seekAnswered] = useAddressedApproval();
 
   /**
    * P-27, and Wave 1's re-map risk #4.
-   *
-   * `/decisions/<id>` folds onto `#approval-<id>`, and a receipt mail or a
-   * supersession notice can name a record that is the fourth or fortieth
-   * closed approval on this house. The pile shows three. So the fragment
-   * resolved to nothing, the browser left her at the top of the page, and the
-   * letter she was answering appeared to have been about nothing at all.
    *
    * The fold opens itself for a named record, and then puts her in front of
    * it — the browser has already given up on the fragment by the time the
    * element exists.
    */
   useEffect(() => {
-    function named() {
-      const match = /^#approval-(.+)$/.exec(window.location.hash);
-      if (match) setSeek(match[1]);
-    }
-    named();
-    window.addEventListener('hashchange', named);
-    return () => window.removeEventListener('hashchange', named);
-  }, []);
-
-  useEffect(() => {
     if (!seek) return;
     const index = approvals.findIndex((row) => row.decisionId === seek);
-    // Not among the records at all: it is an open ask, or it is not on this
-    // house. Either way the fold is not what is hiding it.
+    // Not among the records at all: it is an open ask, which mounts its own
+    // element and scrolls to itself, or it is not on this house. Either way
+    // the fold is not what is hiding it.
     if (index < 0) return;
     if (index >= RECORDS_SHOWN && !all) {
       setAll(true);
       return;
     }
     document.getElementById(`approval-${seek}`)?.scrollIntoView?.();
-    setSeek(null);
-  }, [all, approvals, seek]);
+    seekAnswered();
+  }, [all, approvals, seek, seekAnswered]);
 
   if (approvals.length === 0) return null;
   const shown = all ? approvals : approvals.slice(0, RECORDS_SHOWN);
@@ -1090,6 +1098,17 @@ export function ApprovalAsk({
   // press says the same thing twice in the designer's thread. Editing the note
   // before retrying makes it a different thing to say, so it is sent.
   const notePosted = useRef<string | null>(null);
+
+  // P-27. A supersession notice names the SUCCESSOR, and the successor is an
+  // open ask, not a record — so the ask puts her in front of itself when the
+  // address names it. Its element exists from the first paint; the browser had
+  // already given the fragment up before then.
+  const [addressed, addressSeen] = useAddressedApproval();
+  useEffect(() => {
+    if (addressed !== approval.decisionId) return;
+    document.getElementById(`approval-${approval.decisionId}`)?.scrollIntoView?.();
+    addressSeen();
+  }, [addressed, addressSeen, approval.decisionId]);
 
   /**
    * Whether the reader is the one this approval waits on. 00569 says which

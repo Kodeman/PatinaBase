@@ -768,7 +768,7 @@ describe('ApprovalAsk — remind me', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sunday' }));
 
     await waitFor(() => expect(snoozeMutateAsync).toHaveBeenCalledTimes(1));
-    expect(snoozeMutateAsync.mock.calls[0][0]).toMatchObject({
+    expect(snoozeMutateAsync.mock.calls[0][0]).toEqual({
       projectId: 'proj-1',
       decisionId: 'dec-1',
       choice: 'sunday',
@@ -782,7 +782,9 @@ describe('ApprovalAsk — remind me', () => {
     for (const [label, choice] of [
       ['Tomorrow morning', 'tomorrow_morning'],
       ["When it's due", 'when_due'],
-      ["Don't remind me", 'none'],
+      // The RPC's own fourth kind (00572). 'none' raises
+      // `unsupported snooze kind` at the database.
+      ["Don't remind me", 'never'],
     ] as const) {
       snoozeMutateAsync.mockClear();
       const { unmount } = render(<ApprovalAsk approval={APPROVAL} />);
@@ -1561,6 +1563,43 @@ describe('ApprovalRecords', () => {
       render(<ApprovalRecords approvals={many} />);
 
       expect(screen.getAllByTestId('doorstep-approval-receipt')).toHaveLength(3);
+    });
+
+    /**
+     * A supersession notice names the SUCCESSOR, and the successor is an open
+     * ask — not a record. The fold is not what is hiding it, so the ask puts
+     * her in front of itself. Without this the letter that matters most,
+     * "there is a new edition", still landed her at the top of the page.
+     */
+    it('scrolls to an OPEN ask the address names, not only to a record', async () => {
+      const scrollIntoView = jest.fn();
+      window.location.hash = '#approval-dec-1';
+      render(<ApprovalAsk approval={APPROVAL} />);
+
+      const ask = document.getElementById('approval-dec-1');
+      expect(ask).not.toBeNull();
+      (ask as HTMLElement).scrollIntoView = scrollIntoView;
+
+      await act(async () => {
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    });
+
+    it('leaves an ask alone when the address names some other approval', async () => {
+      const scrollIntoView = jest.fn();
+      window.location.hash = '#approval-somebody-else';
+      render(<ApprovalAsk approval={APPROVAL} />);
+
+      const ask = document.getElementById('approval-dec-1');
+      (ask as HTMLElement).scrollIntoView = scrollIntoView;
+
+      await act(async () => {
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+
+      expect(scrollIntoView).not.toHaveBeenCalled();
     });
 
     it('opens the fold when the address changes under her', async () => {
