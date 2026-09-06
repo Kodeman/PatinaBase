@@ -220,7 +220,11 @@ describe("parseResolvedInvoiceLink", () => {
         source: "project",
       },
       designer_display_name: "Nora Quist",
-      contact: { name: "Nora Quist", website: "quistinteriors.com" },
+      contact: {
+        designer_display_name: "Nora Quist",
+        studio_name: "Quist Interiors",
+        website: "quistinteriors.com",
+      },
     });
     expect(parsed?.kind).toBe("withdrawn");
   });

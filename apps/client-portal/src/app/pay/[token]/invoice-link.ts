@@ -343,13 +343,21 @@ export function parseResolvedInvoiceLink(
     const rawContact = candidate.contact;
     let contact: InvoiceLinkWithdrawn["contact"] = null;
     if (isRecord(rawContact)) {
+      // 00574 emits the contact as
+      // `{ designer_display_name, studio_name, website }`. There is no `name`
+      // key, and reading one made every real withdrawn payload fail to parse
+      // and render the dead sheet instead. The sheet wants a single name to
+      // attribute the withdrawal to, so the designer's is preferred and the
+      // studio's is the fallback.
       if (
-        !nullableString(rawContact.name) ||
+        !nullableString(rawContact.designer_display_name) ||
+        !nullableString(rawContact.studio_name) ||
         !nullableString(rawContact.website)
       )
         return null;
       contact = {
-        name: rawContact.name ?? null,
+        name:
+          rawContact.designer_display_name ?? rawContact.studio_name ?? null,
         website: rawContact.website ?? null,
       };
     } else if (rawContact !== undefined && rawContact !== null) {
