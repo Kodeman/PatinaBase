@@ -1,0 +1,2175 @@
+<title>The Agreement, Composed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+:root{
+  --ground:#FAF7F2;
+  --paper:#FCFAF6;
+  --paper-inset:#F5F1EA;
+  --rule:#E5E2DD;
+  --rule-2:#CFC9C0;
+  --ink:#2C2926;
+  --body:#4A453F;
+  --mocha:#5C4A3C;
+  --clay:#C4A57B;
+  --clay-ink:#7C5E30;
+  --golden-hour-ink:#79651E;
+  --terracotta-ink:#9C5340;
+  --sage-ink:#5F6B57;
+  --muted:#635C53;
+  --faint:#726A5F;
+  --accent:#7C5E30;
+  --focus:#7C5E30;
+  --stamp-border:#5C4A3C;
+  --stamp-ink:#5C4A3C;
+  --font-display:"Playfair Display","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --font-body:"Newsreader","Iowan Old Style",Georgia,"Times New Roman",serif;
+  --font-mono:"DM Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#1F1C19;
+    --paper:#2A2622;
+    --paper-inset:#231F1C;
+    --rule:#3B3631;
+    --rule-2:#4C463F;
+    --ink:#EDE7DF;
+    --body:#C9C1B6;
+    --mocha:#C7AB92;
+    --clay:#D6B98F;
+    --clay-ink:#D6B98F;
+    --golden-hour-ink:#C9AE55;
+    --terracotta-ink:#D08A72;
+    --sage-ink:#9DAE93;
+    --muted:#ABA294;
+    --faint:#998F80;
+    --accent:#D6B98F;
+    --focus:#D6B98F;
+    --stamp-border:#C7AB92;
+    --stamp-ink:#C7AB92;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#1F1C19;
+  --paper:#2A2622;
+  --paper-inset:#231F1C;
+  --rule:#3B3631;
+  --rule-2:#4C463F;
+  --ink:#EDE7DF;
+  --body:#C9C1B6;
+  --mocha:#C7AB92;
+  --clay:#D6B98F;
+  --clay-ink:#D6B98F;
+  --golden-hour-ink:#C9AE55;
+  --terracotta-ink:#D08A72;
+  --sage-ink:#9DAE93;
+  --muted:#ABA294;
+  --faint:#998F80;
+  --accent:#D6B98F;
+  --focus:#D6B98F;
+  --stamp-border:#C7AB92;
+  --stamp-ink:#C7AB92;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--ground);
+  color:var(--body);
+  font-family:var(--font-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+.shell{
+  max-width:1360px;
+  margin:0 auto;
+  padding:0 20px 8rem;
+}
+main{max-width:none;}
+p,li{max-width:66ch;}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--rule-2);}
+a:hover{border-bottom-color:var(--accent);}
+a:focus-visible{outline:2px solid var(--focus);outline-offset:3px;}
+
+/* ---------- running index ---------- */
+.index{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.06em;
+  line-height:1.5;
+  padding:2rem 0 1rem;
+  border-bottom:1px solid var(--rule);
+  margin-bottom:2.5rem;
+}
+.index .idxhead{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0 0 .9rem;
+  font-weight:500;
+}
+.index ol{list-style:none;margin:0;padding:0;display:grid;gap:.5rem;}
+.index li{max-width:none;}
+.index a{
+  color:var(--muted);
+  border-bottom:none;
+  display:grid;
+  grid-template-columns:1.9rem 1fr;
+  gap:.3rem;
+}
+.index a:hover{color:var(--ink);}
+.index .n{color:var(--faint);font-variant-numeric:tabular-nums;}
+
+/* ---------- masthead ---------- */
+.masthead{padding:3.5rem 0 2.5rem;border-bottom:1.5px solid var(--ink);}
+.masthead .eyebrow{margin-bottom:1.4rem;}
+.masthead h1{
+  font-family:var(--font-display);
+  font-size:clamp(2.6rem,6vw,4.4rem);
+  line-height:1.02;
+  font-weight:500;
+  color:var(--ink);
+  margin:0 0 1.4rem;
+  text-wrap:balance;
+  letter-spacing:-.01em;
+}
+.standing{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:clamp(1.15rem,2.4vw,1.5rem);
+  line-height:1.45;
+  color:var(--mocha);
+  max-width:46ch;
+  margin:0 0 2.2rem;
+}
+.masthead-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:2rem 3rem;
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.masthead-meta div{max-width:26ch;}
+.masthead-meta b{display:block;color:var(--faint);font-weight:400;margin-bottom:.45rem;}
+.masthead-meta span{display:block;text-transform:none;letter-spacing:.02em;font-size:12px;color:var(--body);}
+
+/* ---------- section openers ---------- */
+.eyebrow{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0;
+}
+section{padding-top:4.5rem;scroll-margin-top:1.5rem;}
+.opener{border-top:1px solid var(--rule);padding-top:1.1rem;margin-bottom:2rem;}
+section > h2{
+  font-family:var(--font-display);
+  font-size:clamp(1.8rem,3.6vw,2.7rem);
+  line-height:1.12;
+  font-weight:500;
+  color:var(--ink);
+  margin:.7rem 0 0;
+  text-wrap:balance;
+  max-width:24ch;
+}
+h3{
+  font-family:var(--font-display);
+  font-size:1.35rem;
+  line-height:1.25;
+  font-weight:500;
+  color:var(--ink);
+  margin:2.8rem 0 .8rem;
+  text-wrap:balance;
+}
+/* .mono-head carries the old h4 presentation on an h3, so the heading outline never
+   skips a level while the mono eyebrow look is kept. */
+h4,h3.mono-head{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  font-weight:500;
+  margin:2rem 0 .7rem;
+}
+.lede{font-size:1.12rem;color:var(--body);}
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;
+}
+
+/* ---------- utilities ---------- */
+/* Mono floor: every mono run in this document computes to at least 12px, including
+   inline citations inside 13.5px table cells. */
+.mono{font-family:var(--font-mono);font-size:max(12px,.82em);letter-spacing:.02em;color:var(--muted);overflow-wrap:anywhere;}
+.ref{font-family:var(--font-mono);font-size:max(12px,.74em);letter-spacing:.02em;color:var(--faint);white-space:nowrap;}
+td .ref,th .ref,li .ref,p .ref,figcaption .ref,
+td .sim,th .sim,li .sim,p .sim,figcaption .sim,
+td .num,th .num,li .num,p .num,figcaption .num{white-space:normal;overflow-wrap:anywhere;}
+.quote{font-style:italic;color:var(--mocha);}
+.sim{font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;color:var(--faint);white-space:nowrap;}
+.unconf{font-family:var(--font-mono);font-size:12px;color:var(--terracotta-ink);letter-spacing:.02em;}
+.ftest{border-left:2px solid var(--rule-2);padding-left:1.1rem;margin:1.4rem 0 2.4rem;}
+.ftest p{font-family:var(--font-mono);font-size:12px;letter-spacing:.01em;line-height:1.75;color:var(--muted);margin:0 0 .55rem;max-width:74ch;}
+.ftest b{color:var(--ink);font-weight:500;}
+.cols{display:grid;gap:2.2rem;grid-template-columns:minmax(0,1fr);}
+@media (min-width:760px){ .cols-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} .cols-3{grid-template-columns:repeat(3,minmax(0,1fr));} }
+hr{border:none;border-top:1px solid var(--rule);margin:2.6rem 0;}
+.note{border-left:2px solid var(--rule-2);padding-left:1.1rem;color:var(--muted);font-size:.96rem;margin:1.4rem 0;max-width:74ch;}
+.caption{font-family:var(--font-mono);font-size:12px;line-height:1.7;color:var(--faint);margin:.7rem 0 0;max-width:80ch;letter-spacing:.01em;}
+
+/* ---------- stamp ---------- */
+.stamp{
+  display:inline-block;border:1.5px solid var(--stamp-border);border-radius:2px;
+  padding:.5rem .9rem;margin:1.8rem 0 0;
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--stamp-ink);
+}
+
+/* ---------- the short ledger ---------- */
+.ledger{list-style:none;counter-reset:led;margin:0;padding:0;display:grid;gap:1.1rem;}
+.ledger li{
+  counter-increment:led;position:relative;padding-left:2.6rem;max-width:74ch;
+  font-size:1.05rem;color:var(--ink);line-height:1.55;
+}
+.ledger li::before{
+  content:counter(led,decimal-leading-zero);position:absolute;left:0;top:.25rem;
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;color:var(--faint);
+}
+.ledger li b{font-weight:600;}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;position:relative;margin:1.4rem 0;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--rule-2);}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45;}
+th,td{
+  text-align:left;
+  vertical-align:top;
+  padding:.72rem .9rem .72rem 0;
+  border-bottom:1px solid var(--rule);
+}
+th{
+  font-family:var(--font-mono);
+  font-size:12px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--faint);
+  font-weight:500;
+  white-space:nowrap;
+}
+td{color:var(--body);}
+td strong{color:var(--ink);font-weight:600;}
+/* row headers keep the body register so <th scope="row"> looks like the cell it replaces */
+tbody th{
+  font-family:var(--font-body);font-size:inherit;text-transform:none;letter-spacing:normal;
+  color:var(--ink);font-weight:600;white-space:normal;
+}
+tbody tr:last-child td,tbody tr:last-child th{border-bottom:none;}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap;}
+.val{font-family:var(--font-mono);color:var(--faint);}
+.tight td,.tight th{font-size:13.5px;}
+.w-name{min-width:13rem;}
+.w-what{min-width:18rem;}
+.w-why{min-width:16rem;}
+.min720{min-width:720px;}
+.min900{min-width:900px;}
+.min1080{min-width:1080px;}
+.yes{color:var(--sage-ink);font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;}
+.partly{color:var(--golden-hour-ink);font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;}
+.no{color:var(--terracotta-ink);font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;}
+.dot{font-family:var(--font-mono);font-size:14px;color:var(--ink);text-align:center;}
+.dot-half{color:var(--golden-hour-ink);}
+.dot-none{color:var(--faint);}
+td.mid,th.mid{text-align:center;padding-right:0;}
+
+/* ---------- mockups ---------- */
+.mock{
+  margin:2rem 0 2.4rem;
+  border:1px solid var(--rule);
+  border-radius:2px;
+  background:var(--paper);
+  padding:1.5rem 1.4rem 1.2rem;
+}
+.mock .mock-cap{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 1.1rem;
+}
+.mock figcaption{
+  font-family:var(--font-mono);font-size:12px;line-height:1.7;color:var(--muted);
+  border-top:1px solid var(--rule);margin-top:1.2rem;padding-top:.8rem;letter-spacing:.01em;
+}
+.mock figcaption b{color:var(--ink);font-weight:500;}
+.mockscroll{overflow-x:auto;position:relative;}
+/* a register table that had to be put in a scroller keeps the register's own rules */
+.mockscroll > table.tight{border-top:1.5px solid var(--ink);border-bottom:1px solid var(--rule-2);margin:1.4rem 0;}
+.mock .mockscroll > table.tight{border-top:none;margin:0;}
+.mocktable{border-collapse:collapse;width:100%;font-size:14px;line-height:1.4;}
+.mocktable.wide6{min-width:660px;}
+.mocktable.wide5{min-width:560px;}
+.mocktable.wide4{min-width:420px;}
+.mocktable th{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);font-weight:400;padding:0 .9rem .5rem 0;
+  border-bottom:1px solid var(--rule-2);white-space:nowrap;vertical-align:bottom;
+}
+.mocktable td{
+  padding:.6rem .9rem .6rem 0;border-bottom:1px solid var(--rule);
+  vertical-align:top;color:var(--body);font-size:14px;
+}
+.mocktable tr:last-child td{border-bottom:none;}
+.mocktable .money,.mocktable th.money{text-align:right;padding-right:0;}
+.mocktable td.money{
+  font-family:var(--font-display);font-size:15px;color:var(--ink);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.mocktable td.code{font-family:var(--font-mono);font-size:12px;color:var(--muted);white-space:nowrap;}
+.mocktable td.item{color:var(--ink);min-width:11rem;}
+.mocktable td.pct{
+  font-family:var(--font-mono);font-size:13px;color:var(--muted);
+  font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;
+}
+.mocktable th.pct{text-align:right;}
+.mocktable tr.tot td{border-top:1.5px solid var(--ink);border-bottom:none;padding-top:.7rem;}
+.maker{display:block;font-family:var(--font-mono);font-size:12px;color:var(--faint);margin-top:.15rem;}
+
+/* mock instruments */
+.mockgrid{display:grid;gap:1.4rem;grid-template-columns:minmax(0,1fr);align-items:start;}
+@media (min-width:860px){
+  .mg-rail{grid-template-columns:15rem minmax(0,1fr);}
+  .mg-rail-3{grid-template-columns:14rem minmax(0,1fr) 15rem;}
+  .mg-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+}
+.mockpanel{border:1px solid var(--rule-2);border-radius:2px;background:var(--paper-inset);padding:1rem;}
+.mockpanel-plain{border:none;background:none;padding:0;}
+.mockhead{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 .7rem;
+}
+.letterhead{font-family:var(--font-display);font-size:1.3rem;color:var(--ink);letter-spacing:.01em;margin:0 0 .45rem;}
+.subhead{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;color:var(--muted);margin:0 0 .9rem;}
+.hair{border-top:1px solid var(--rule-2);margin:.7rem 0 1rem;}
+.counter{font-family:var(--font-mono);font-size:13px;color:var(--clay-ink);letter-spacing:.04em;margin:0 0 1rem;}
+
+.facet{border:1px solid var(--rule);border-radius:2px;background:var(--paper);padding:.75rem .85rem;margin-bottom:.6rem;}
+.facet .fnum{font-family:var(--font-mono);font-size:12px;color:var(--faint);letter-spacing:.1em;margin-right:.5rem;}
+.facet .ftitle{font-family:var(--font-body);font-size:15px;color:var(--ink);}
+.facet .fbody{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:.4rem;line-height:1.6;}
+.textarea{
+  display:block;border:1px solid var(--rule-2);background:var(--paper-inset);border-radius:2px;
+  padding:.45rem .55rem;margin-top:.4rem;font-family:var(--font-mono);font-size:12px;color:var(--body);
+  min-height:2.6rem;line-height:1.6;
+}
+.textarea.empty{color:var(--faint);}
+.field{
+  display:inline-block;border:1px solid var(--rule-2);background:var(--paper-inset);
+  border-radius:2px;padding:.26rem .5rem;font-family:var(--font-mono);font-size:13px;
+  color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.3;
+}
+.field.zero{color:var(--terracotta-ink);}
+.field.blank{color:var(--faint);}
+.selectmock{
+  display:inline-block;border:1px solid var(--rule-2);background:var(--paper-inset);border-radius:2px;
+  padding:.26rem 1.4rem .26rem .5rem;font-family:var(--font-mono);font-size:12px;color:var(--ink);
+  position:relative;white-space:normal;
+}
+.selectmock::after{content:"\25BE";position:absolute;right:.45rem;top:.24rem;color:var(--faint);}
+.chip{
+  display:inline-block;border:1px solid var(--rule-2);border-radius:999px;padding:.16rem .6rem;
+  font-family:var(--font-mono);font-size:12px;color:var(--muted);letter-spacing:.04em;
+}
+.chip.on{border-color:var(--mocha);color:var(--ink);background:var(--paper-inset);}
+.chip.src-studio{border-color:var(--clay);color:var(--clay-ink);}
+.chip.src-patina{border-color:var(--rule-2);color:var(--faint);}
+.chip.auth{border-color:var(--sage-ink);color:var(--sage-ink);}
+.chip.record{border-color:var(--rule-2);color:var(--faint);}
+/* selected state carries a glyph, not color alone */
+.chip.on::before{content:"\2713\00a0";}
+.chip.off::before{content:"\25CB\00a0";color:var(--faint);}
+.chipset{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0 0;}
+.btnmock{
+  display:inline-block;border:1px solid var(--ink);border-radius:2px;padding:.3rem .75rem;
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink);line-height:1.3;
+}
+.btnmock.quiet{border-color:var(--rule-2);color:var(--muted);}
+.btnmock.off{border-color:var(--rule-2);color:var(--faint);border-style:dashed;}
+.controlrow{display:flex;flex-wrap:wrap;gap:.6rem .9rem;align-items:center;margin:.9rem 0 0;}
+.controlrow .lab{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
+.readylist{list-style:none;margin:.6rem 0 0;padding:0;font-family:var(--font-mono);font-size:12px;line-height:1.75;color:var(--muted);}
+.readylist li{max-width:none;padding-left:1.1rem;position:relative;}
+.readylist li::before{content:"\25AB";position:absolute;left:0;color:var(--faint);}
+.readylist li.red{color:var(--terracotta-ink);}
+.readylist li.red::before{content:"\25AA";color:var(--terracotta-ink);}
+.readylist li.ok{color:var(--faint);}
+
+/* parts rail */
+.partlist{list-style:none;margin:0;padding:0;}
+.partlist li{
+  max-width:none;display:flex;gap:.5rem;align-items:baseline;
+  padding:.42rem .4rem;border-bottom:1px solid var(--rule);
+  font-family:var(--font-mono);font-size:12.5px;color:var(--body);letter-spacing:.01em;
+}
+.partlist li:last-child{border-bottom:none;}
+.partlist li.sel{background:var(--paper-inset);color:var(--ink);}
+.partlist .grip{color:var(--faint);letter-spacing:-.1em;}
+.partlist .kg{color:var(--clay-ink);width:1.2rem;display:inline-block;text-align:center;}
+.partlist .req{color:var(--terracotta-ink);}
+.partlist .rowend,.partlist .hoveract{margin-left:auto;color:var(--faint);white-space:nowrap;}
+.partlist .hoveract{font-style:italic;}
+.railfoot{border-top:1px solid var(--rule-2);margin-top:.7rem;padding-top:.6rem;display:flex;flex-wrap:wrap;gap:.5rem;}
+
+/* annotation callouts */
+.annlist{list-style:none;counter-reset:ann;margin:1rem 0 0;padding:0;display:grid;gap:.4rem;}
+.annlist li{
+  counter-increment:ann;position:relative;padding-left:2rem;max-width:78ch;
+  font-family:var(--font-mono);font-size:12px;line-height:1.65;color:var(--muted);letter-spacing:.01em;
+}
+.annlist li::before{
+  content:counter(ann);position:absolute;left:0;top:.1rem;
+  display:inline-block;width:1.35rem;height:1.35rem;line-height:1.3rem;text-align:center;
+  border:1px solid var(--rule-2);border-radius:999px;color:var(--faint);font-size:12px;
+}
+
+/* mono code block */
+pre.sketch{
+  font-family:var(--font-mono);font-size:12px;line-height:1.8;color:var(--muted);
+  background:var(--paper-inset);border:1px solid var(--rule);border-radius:2px;
+  padding:.9rem 1rem;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;margin:1.2rem 0;
+  max-width:none;
+}
+pre.sketch code{font-family:inherit;font-size:inherit;color:inherit;}
+pre.sketch b{color:var(--ink);font-weight:500;}
+
+/* ---------- box diagrams ---------- */
+.dwrap{margin:1.6rem 0;}
+.dgrid{display:grid;gap:.9rem;grid-template-columns:minmax(0,1fr);align-items:stretch;}
+@media (min-width:760px){ .dgrid-3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);} }
+.dcol{border:1px solid var(--rule-2);border-radius:2px;background:var(--paper);padding:.9rem;}
+.dcol > .dh{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 .7rem;
+}
+.dbox{
+  border:1px solid var(--rule);border-radius:2px;background:var(--paper-inset);
+  padding:.45rem .6rem;margin-bottom:.4rem;
+  font-family:var(--font-mono);font-size:12px;color:var(--body);line-height:1.55;
+}
+.dbox:last-child{margin-bottom:0;}
+.dbox b{color:var(--ink);font-weight:500;}
+.dbox .grip{color:var(--faint);letter-spacing:-.1em;margin-right:.35rem;}
+.dbox.strong{border-color:var(--mocha);}
+.darrow{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;color:var(--clay-ink);
+  text-align:center;padding:.2rem 0;
+}
+@media (min-width:760px){ .darrow.side{writing-mode:horizontal-tb;} }
+.chain{display:grid;gap:.5rem;grid-template-columns:minmax(0,1fr);align-items:center;margin:1.2rem 0;}
+@media (min-width:760px){ .chain{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);} }
+.chain .cbox{
+  border:1px solid var(--rule-2);border-radius:2px;background:var(--paper);padding:.6rem .7rem;
+  font-family:var(--font-mono);font-size:12px;color:var(--body);line-height:1.55;
+}
+.chain .cbox b{color:var(--ink);font-weight:500;display:block;}
+.chain .carr{font-family:var(--font-mono);font-size:13px;color:var(--clay-ink);text-align:center;}
+.flowstrip{display:grid;gap:.4rem;grid-template-columns:minmax(0,1fr);margin:1.4rem 0;align-items:stretch;}
+@media (min-width:900px){
+  .flowstrip{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;}
+  .flowstrip .fa::before{content:"\2192";}
+}
+.flowstrip .fa{font-family:var(--font-mono);font-size:13px;color:var(--clay-ink);text-align:center;}
+.flowstrip .fa::before{content:"\2193";}
+.flowstrip .st{
+  border:1px solid var(--rule-2);border-top:2px solid var(--rule-2);border-radius:2px;
+  background:var(--paper);padding:.7rem .75rem;height:100%;
+  font-family:var(--font-mono);font-size:12px;color:var(--body);line-height:1.6;
+}
+.flowstrip .st.isnew{border-top:2px solid var(--clay);border-color:var(--mocha);}
+.flowstrip .st .stn{display:block;color:var(--faint);letter-spacing:.14em;margin-bottom:.25rem;}
+
+/* ---------- client register (M5) ---------- */
+.doorpaper{
+  border:1px solid var(--rule-2);border-radius:2px;background:var(--paper);
+  padding:1.6rem 1.4rem;max-width:38rem;
+}
+.doorpaper .dtitle{font-family:var(--font-display);font-size:1.5rem;color:var(--ink);margin:0 0 .3rem;line-height:1.2;}
+.doorpaper .dsub{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;color:var(--faint);margin:0 0 1.2rem;}
+.doorpart{border-top:1px solid var(--rule);padding:.85rem 0;}
+.doorpart:first-of-type{border-top:1.5px solid var(--ink);}
+.doorpart .dey{font-family:var(--font-mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 .35rem;}
+.dtx{font-family:var(--font-body);font-size:15px;color:var(--body);line-height:1.6;}
+.dtx b{color:var(--ink);font-weight:500;}
+.leaf{
+  border:1px dashed var(--rule-2);border-radius:2px;background:var(--paper-inset);
+  padding:1rem;margin-top:1.2rem;max-width:38rem;
+}
+.leaf .lh{font-family:var(--font-mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay-ink);margin:0 0 .5rem;}
+.signline{border-top:1.5px solid var(--ink);margin-top:1.2rem;padding-top:.8rem;font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.8;}
+.signline b{color:var(--ink);font-weight:500;}
+
+/* ---------- proposals ---------- */
+.prop{border-top:1px solid var(--rule);padding:1.4rem 0 1.2rem;}
+.prop:last-of-type{border-bottom:1px solid var(--rule);}
+.prop h3{margin:0 0 .3rem;font-size:1.2rem;}
+.prop .who{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:0 0 .7rem;}
+.prop ul{margin:.3rem 0 .7rem;padding-left:1.2rem;}
+.prop li{margin-bottom:.25rem;color:var(--ink);font-size:15px;}
+.prop .reuse,.prop .waits{font-family:var(--font-mono);font-size:12px;line-height:1.7;color:var(--muted);margin:.2rem 0 0;max-width:78ch;overflow-wrap:anywhere;}
+.prop .waits b{color:var(--clay-ink);font-weight:500;}
+
+/* ---------- waves ---------- */
+.wave{border:1px solid var(--rule-2);border-top:2px solid var(--ink);border-radius:2px;background:var(--paper);padding:1.1rem 1rem;}
+.wave h3.mono-head{margin:0 0 .6rem;color:var(--ink);}
+.wave ul{margin:.4rem 0 .6rem;padding-left:1.1rem;}
+.wave li{font-size:14px;color:var(--body);margin-bottom:.3rem;}
+.wave .flag{font-family:var(--font-mono);font-size:12px;color:var(--clay-ink);letter-spacing:.04em;display:block;margin-top:.5rem;}
+
+/* ---------- rulings ---------- */
+.who{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:.5rem;}
+
+/* ---------- questions ---------- */
+.qgroup{border-top:1px solid var(--rule);padding:1.2rem 0 .4rem;}
+.qgroup h3.mono-head{margin:0 0 .8rem;}
+.qgroup ol{margin:0;padding-left:1.4rem;}
+.qgroup li{margin-bottom:.6rem;color:var(--ink);}
+
+/* ---------- sources ---------- */
+.srclist{list-style:none;margin:1rem 0 0;padding:0;display:grid;gap:.55rem;}
+.srclist li{max-width:78ch;font-size:14px;line-height:1.5;color:var(--muted);}
+.srclist .acc{font-family:var(--font-mono);font-size:12px;color:var(--faint);letter-spacing:.02em;}
+.citelist{list-style:none;margin:1rem 0 0;padding:0;display:grid;gap:.4rem;}
+.citelist li{max-width:none;font-family:var(--font-mono);font-size:12px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere;}
+.citelist li b{color:var(--ink);font-weight:500;}
+
+@media (max-width:600px){
+  .w-name{min-width:9rem;}
+  .w-what,.w-why{min-width:0;}
+  .mock{padding:1.1rem 1rem .9rem;}
+  .shell{padding:0 14px 6rem;}
+}
+@media (min-width:1100px){
+  .shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:0 4.5rem;}
+  .index{
+    grid-column:1;grid-row:1 / span 2;
+    position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;
+    border-bottom:none;border-right:1px solid var(--rule);
+    padding:3.9rem 1.5rem 3rem 0;margin-bottom:0;
+  }
+  .masthead{grid-column:2;grid-row:1;}
+  main{grid-column:2;grid-row:2;}
+}
+@media (max-width:1099px){
+  .index{border-top:1px solid var(--rule);padding-top:1.6rem;margin:2.4rem 0 2.5rem;}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important;transition:none !important;}
+}
+</style>
+
+<div class="shell" data-prose-total="900">
+
+<header class="masthead">
+  <p class="eyebrow">Patina &middot; The Document &middot; proposal for the Patina and Middle West Studio team &middot; 6 September 2026</p>
+  <h1>The Agreement,<br>Composed</h1>
+  <p class="standing">A studio's agreement is built from parts it owns. This document proposes the parts, the library that keeps them, and the turnkey class that holds the trades.</p>
+  <div class="masthead-meta">
+    <div><b>Prepared for</b><span>Kody &middot; build, infrastructure, operations</span><span>Leah and the Middle West Studio team &middot; design and practice. The mockups draw their studio by name.</span></div>
+    <div><b>Lanes</b><span>01 How studios contract</span><span>02 Design-build / turnkey</span><span>03 Software patterns and e-sign</span><span>04 The codebase today</span><span>05 Panel, simulated</span></div>
+    <div><b>Standing</b><span>Nothing here is built</span><span>Fifteen proposals, three waves, sixteen rulings</span></div>
+  </div>
+</header>
+
+<nav class="index" aria-label="Contents">
+  <p class="idxhead">Contents</p>
+  <ol>
+    <li><a href="#short"><span class="n">00</span><span>In short</span></a></li>
+    <li><a href="#asked"><span class="n">01</span><span>What was asked</span></a></li>
+    <li><a href="#today"><span class="n">02</span><span>Today — the floor</span></a></li>
+    <li><a href="#trade"><span class="n">03</span><span>How the trade contracts</span></a></li>
+    <li><a href="#model"><span class="n">04</span><span>Core + Parts</span></a></li>
+    <li><a href="#library"><span class="n">05</span><span>The Library</span></a></li>
+    <li><a href="#compose"><span class="n">06</span><span>Composing</span></a></li>
+    <li><a href="#client"><span class="n">07</span><span>The client's copy</span></a></li>
+    <li><a href="#turnkey"><span class="n">08</span><span>Turnkey</span></a></li>
+    <li><a href="#fixture"><span class="n">09</span><span>The fixtures</span></a></li>
+    <li><a href="#proposals"><span class="n">10</span><span>Proposals</span></a></li>
+    <li><a href="#waves"><span class="n">11</span><span>Waves</span></a></li>
+    <li><a href="#rulings"><span class="n">12</span><span>Rulings</span></a></li>
+    <li><a href="#out"><span class="n">13</span><span>What stays out</span></a></li>
+    <li><a href="#respond"><span class="n">14</span><span>How to respond</span></a></li>
+    <li><a href="#appendix"><span class="n">&mdash;</span><span>Appendix</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============================================================ 00 -->
+<section id="short" data-prose-cap="80">
+  <div class="opener"><p class="eyebrow">Zero</p><h2>In short</h2></div>
+
+  <ol class="ledger">
+    <li>Today the agreement is one fixed form: seven facets in code, one wide row, thirteen literal readiness checks, three hand-built renders.</li>
+    <li>The brief asked for four things: add and remove parts, keep studio templates, work in more shapes, and hold trades under one roof.</li>
+    <li>The trade already has the answer's shape: ASID sells a core agreement plus swappable schedules, its compensation schedule carrying nine numbered options.</li>
+    <li>Proposed: <b>Agreement = Core + ordered Parts</b>; a studio <b>Library</b> of parts and templates; a <b>turnkey class</b> built from the same parts, with a new studio-to-sub Trade Agreement beneath it.</li>
+    <li>Fifteen proposals in three waves. Wave 1 loosens today's room: one migration, and the client's copy does not change. Wave 3 is turnkey.</li>
+    <li>Sixteen rulings, each with a recommendation and an owner. Nothing is built.</li>
+  </ol>
+
+  <p class="stamp">Nothing was built &middot; document is the deliverable</p>
+</section>
+
+<!-- ============================================================ 01 -->
+<section id="asked" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">One</p><h2>What was asked</h2></div>
+
+  <p class="lede">Four asks arrived in one message, and the record behind them is thinner than the asks.</p>
+
+  <h3 class="mono-head">The brief, and what the record holds</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Ask</th><th scope="col">Source</th><th class="w-what" scope="col">Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row">Add and remove parts of the agreement</th>
+          <td>Kody's brief, 2026-09-06</td>
+          <td>Not possible — facets are JSX literals <span class="ref">04 §4</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Build and save template agreements for the studio</th>
+          <td>Kody's brief</td>
+          <td>Not possible — templates retired by R85; the retired table was per-user, not per-studio <span class="ref">04 §8, §9</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Operate in a more flexible way</th>
+          <td>Kody's brief</td>
+          <td>Only hourly + ceiling + retainer + cadence exist; flat, per-phase, %-of-cost, cost-plus have no representation <span class="ref">04 §1, 01 §2</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Turnkey shops holding subcontractors</th>
+          <td>Kody's brief</td>
+          <td>No design-build class, and no studio-to-sub contract of any kind <span class="ref">04 §8; see <a href="#turnkey">§8</a></span></td>
+        </tr>
+        <tr>
+          <th scope="row">&ldquo;The Drafting room from direction is really the design agreement&rdquo;</th>
+          <td>Tester note #43</td>
+          <td>Renamed to Contract Room 2026-09-04; help copy still says Drafting Room</td>
+        </tr>
+        <tr>
+          <th scope="row">&ldquo;Concept / Schematic &middot; Core &middot; Stage section is confusing&rdquo;</th>
+          <td>Tester note #44</td>
+          <td>Open</td>
+        </tr>
+        <tr>
+          <th scope="row">Facets pre-filled at $0; &ldquo;Not yet set&rdquo; shown on a document to sign; no dry-run before a real send</th>
+          <td>Codebase fact <span class="ref">commercial-document-shell.tsx:225, :235; service-agreement-preview.tsx:155, :180</span>; the pre-fill and dry-run from the approvals program</td>
+          <td>Open; <a href="#proposals">§10</a> P0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Two tester notes and one walked journey are the whole of the recorded designer feedback; the &ldquo;Not yet set&rdquo; row is a codebase fact, not something a walk caught. The simulated panel in lane 05 sharpened the questions. It is not evidence.</p>
+</section>
+
+<!-- ============================================================ 02 -->
+<section id="today" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Two</p><h2>Today — the floor</h2></div>
+
+  <p class="lede">The Contract Room is one form: seven facets in code, thirteen literal checks, one wide row behind it.</p>
+
+  <figure class="mock">
+    <p class="mock-cap">M0 &middot; Today &middot; The Contract Room, designer portal &middot; 1180px</p>
+    <div class="mockgrid mg-rail-3">
+
+      <div class="mockpanel mockpanel-plain">
+        <p class="mockhead">Room</p>
+        <p class="letterhead">The Contract Room</p>
+        <p class="subhead">Design Agreement</p>
+        <p class="counter">4 of 7 facets written</p>
+      </div>
+
+      <div class="mockpanel-plain">
+        <div class="facet">
+          <span class="fnum">01</span><span class="ftitle">Services &amp; deliverables</span>
+          <span class="textarea">Concept presentation / Design documentation / Selection schedules</span>
+        </div>
+        <div class="facet">
+          <span class="fnum">02</span><span class="ftitle">Exclusions</span>
+          <span class="textarea">Construction labor / Furnishings, freight, tax, and installation</span>
+        </div>
+        <div class="facet">
+          <span class="fnum">03</span><span class="ftitle">Role rates</span>
+          <div class="fbody">Principal <span class="field zero">$0</span> &nbsp; Designer <span class="field zero">$0</span></div>
+          <div class="controlrow"><span class="btnmock quiet">+ Add a role</span></div>
+        </div>
+        <div class="facet">
+          <span class="fnum">04</span><span class="ftitle">Rates &amp; ceiling</span>
+          <div class="fbody">Design authorization ceiling <span class="field zero">$0</span></div>
+          <div class="chipset">
+            <span class="chip">0</span><span class="chip">25</span><span class="chip">50</span><span class="chip">100</span><span class="chip">other</span>
+          </div>
+        </div>
+        <div class="facet">
+          <span class="fnum">05</span><span class="ftitle">Retainer</span>
+          <div class="fbody">Amount <span class="field zero">$0</span> &nbsp; Becomes active <span class="selectmock">immediate | retainer_paid</span></div>
+        </div>
+        <div class="facet">
+          <span class="fnum">06</span><span class="ftitle">Billing cadence</span>
+          <div class="fbody"><span class="selectmock">monthly | biweekly | milestone</span></div>
+        </div>
+        <div class="facet">
+          <span class="fnum">07</span><span class="ftitle">Terms</span>
+          <span class="textarea empty">&nbsp;</span>
+        </div>
+      </div>
+
+      <div class="mockpanel">
+        <p class="mockhead">Review &amp; send</p>
+        <p style="margin:0 0 .6rem"><span class="btnmock off">Review &amp; send</span></p>
+        <p class="mockhead" style="margin:1rem 0 .2rem">Readiness &middot; 3 of 13 checks unmet</p>
+        <p class="mockhead" style="margin:.2rem 0 .2rem;letter-spacing:.06em;text-transform:none">&#9642; unmet &nbsp; &#9643; met</p>
+        <ul class="readylist">
+          <li class="red">Add at least one role with an hourly rate.</li>
+          <li class="red">Set the design authorization ceiling.</li>
+          <li class="red">Write the agreement terms.</li>
+          <li class="ok">Only a design services agreement or addendum can use this send review.</li>
+          <li class="ok">Only a draft agreement can be sent.</li>
+          <li class="ok">Name the services included in this agreement.</li>
+          <li class="ok">Add at least one client deliverable.</li>
+          <li class="ok">State what is not included.</li>
+          <li class="ok">Set a valid retainer amount, including zero when none is due.</li>
+          <li class="ok">Choose when the agreement becomes active.</li>
+          <li class="ok">Set the furnishings deposit percent, including zero when none is due.</li>
+          <li class="ok">Choose a billing cadence.</li>
+          <li class="ok">Link a client with an email address.</li>
+        </ul>
+      </div>
+    </div>
+
+    <ol class="annlist">
+      <li>The order is the code's order. Seven facets, fixed, none addable, removable, renamable or reorderable <span class="ref">service-agreement-drafting-room.tsx:356-605</span>.</li>
+      <li>Ceiling, retainer and every role rate arrive pre-filled at $0 and read as written values, not as blanks.</li>
+      <li>The ceiling check is unconditional — <code class="mono">billingCeilingCents &lt;= 0</code> refuses the send <span class="ref">commercial-documents.ts:206-212</span>. A flat-fee studio cannot get past it.</li>
+      <li>Terms is one free-text field <span class="ref">00412:80</span>. Change orders, IP, photography, termination, disputes, insurance and the liability cap have nowhere else to go — the inventory is the simulated panel's <span class="sim">[05 §1]</span>, the single field is not.</li>
+    </ol>
+
+    <figcaption><b>M0</b> &middot; every string in the right rail is the production string, copied from <span class="ref">commercial-documents.ts:180-250</span>; the room is drawn from <span class="ref">service-agreement-drafting-room.tsx:268-269, :30-38, :67, :459, :563, :586</span>. The counter is 7 minus the unmet checks, ignoring the missing-client one and clamped at zero <span class="ref">:192-195, :269</span>.</figcaption>
+  </figure>
+
+  <h3 class="mono-head">The rigidity ledger</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th scope="col">#</th><th class="w-name" scope="col">Rigidity</th><th class="w-why" scope="col">Where</th><th class="w-what" scope="col">What a composed agreement changes</th></tr></thead>
+      <tbody>
+        <tr><th class="num" scope="row" id="rig1">1</th><td><strong>Seven fixed facets, JSX literals in fixed order</strong></td><td class="ref">service-agreement-drafting-room.tsx:356-605</td><td>The room renders from an ordered part list, not a hand-written section sequence.</td></tr>
+        <tr><th class="num" scope="row" id="rig2">2</th><td><strong>Fixed columns, not parts — one wide PK-per-proposal row</strong></td><td class="ref">00412:68-84</td><td>A part gets its own row with a kind, an order and a payload; the terms row survives only for the typed money the guards enforce.</td></tr>
+        <tr><th class="num" scope="row" id="rig3">3</th><td><strong>Hard-coded readiness, thirteen literal blockers</strong></td><td class="ref">commercial-documents.ts:180-250</td><td>Readiness derives from each part's own required-ness; the ceiling blocker <span class="ref">:211</span> becomes conditional.</td></tr>
+        <tr><th class="num" scope="row" id="rig4">4</th><td><strong>Fixed enums — cadence, activation policy, kind, state</strong></td><td class="ref">00412:75-78, :33-46; 00423:94-101</td><td>Widen the CHECKs per commercial shape, or adopt the un-CHECKed code-resident pattern <span class="ref">00417:87</span> for vocabulary that is not money.</td></tr>
+        <tr><th class="num" scope="row" id="rig5">5</th><td><strong>Freeze at draft exit, not at signature</strong></td><td class="ref">00423:440-461</td><td>Decide whether parts freeze at <code class="mono">sent</code> (today) or at <code class="mono">client_signed</code>; addendum/supersede is currently the only edit.</td></tr>
+        <tr><th class="num" scope="row" id="rig6">6</th><td><strong>No template layer — templates retired by ruling</strong></td><td class="ref">draft-proposal-opener.tsx:6-7; DECISIONS.md:2682</td><td>R85 is revisited or scoped: a studio template is a different object from the per-user <code class="mono">proposal_templates</code> it killed.</td></tr>
+        <tr><th class="num" scope="row" id="rig7">7</th><td><strong>No studio-level agreement defaults</strong></td><td class="ref">00428:42-51 (card fee + remit-to only)</td><td>A studio-scoped defaults table on the <code class="mono">board_templates</code> shape <span class="ref">00408:18-49</span>, reusing <code class="mono">is_active_studio_member</code> / <code class="mono">is_org_admin_or_owner</code>.</td></tr>
+        <tr><th class="num" scope="row" id="rig8">8</th><td><strong>Rates are the only repeatable; deliverables and exclusions are newline-split strings</strong></td><td class="ref">:459 vs :377-378, :399</td><td>Every list part gets identity and order, so an item can carry a note, an option flag, or a price.</td></tr>
+        <tr><th class="num" scope="row" id="rig9">9</th><td><strong>Fixed client render — three independent hard-coded structures</strong></td><td class="ref">commercial-document-shell.tsx:179-262; service-agreement-preview.tsx:91-244; consent-copy.ts:26-60</td><td>One part list drives all three surfaces, or the drift guard <span class="ref">consent-copy.test.ts:27</span> becomes unmaintainable.</td></tr>
+        <tr><th class="num" scope="row" id="rig10">10</th><td><strong>No agreement PDF</strong></td><td class="ref">spec-pdf/index.ts:15-22</td><td>A variable-shape agreement makes &ldquo;what did they actually sign&rdquo; harder, not easier, without a rendered artifact.</td></tr>
+        <tr><th class="num" scope="row" id="rig11">11</th><td><strong>Duplicated DTOs, already drifted</strong></td><td class="ref">packages/types/src/commercial.ts:41-55 vs commercial-documents.ts:1-8, 49-70</td><td>Collapse to one contract before adding a part model, or the drift multiplies by the number of part kinds.</td></tr>
+        <tr><th class="num" scope="row" id="rig12">12</th><td><strong>Closed fingerprint — table-level, not column-level</strong></td><td class="ref">00423:1214-1275</td><td>A new parts table folds into the hash in the same migration that creates it, or signed evidence silently stops covering what the client read.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="mono-head">Three renders of one agreement</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Surface</th><th scope="col">Where</th><th class="w-what" scope="col">What it hard-codes</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Designer preview</th><td class="ref">service-agreement-preview.tsx:91-244</td><td>Hand-written sections in a fixed order — five headings <span class="ref">:92, :100, :116, :126, :205</span> over the seven facets.</td></tr>
+        <tr><th scope="row">Client shell</th><td class="ref">commercial-document-shell.tsx:179-262</td><td>Its own headings, already diverged — the designer's copy says &ldquo;What you will receive&rdquo; <span class="ref">service-agreement-preview.tsx:100</span> where the client's says &ldquo;Deliverables&rdquo; <span class="ref">commercial-document-shell.tsx:203</span>.</td></tr>
+        <tr><th scope="row">Consent copy</th><td class="ref">consent-copy.ts:26-60</td><td>One sentence per kind, pinned by a disk-reading drift test <span class="ref">consent-copy.test.ts:27</span>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>A part list must drive all three, or the drift guard becomes unmaintainable.</p>
+
+  <h3 class="mono-head">Where the money truth lives</h3>
+  <div class="dwrap">
+    <div class="chain">
+      <div class="cbox"><b>proposals</b>kind, state</div>
+      <div class="carr">&rarr;</div>
+      <div class="cbox"><b>proposal_service_terms</b>one row per proposal</div>
+      <div class="carr">&rarr;<span class="mono"> at countersign</span></div>
+      <div class="cbox"><b>project_billing_authorities</b>ceiling &middot; retainer &middot; cadence &middot; rates</div>
+      <div class="carr">&rarr;</div>
+      <div class="cbox"><b>design time is authorized against this</b><span class="mono">00414:911-913</span></div>
+    </div>
+    <p>Only these four columns become authority <span class="ref">00566:788-797</span>, each re-CHECKed against the same closed enums <span class="ref">00412:145-152</span>. <a href="#model">§4</a> adds the parts layer to this chain.</p>
+  </div>
+</section>
+
+<!-- ============================================================ 03 -->
+<section id="trade" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Three</p><h2>How the trade contracts</h2></div>
+
+  <p class="lede">ASID sells a core agreement plus lettered schedules whose option labels are not published. Patina expresses two of the fee models below, and part of a third.</p>
+
+  <h3 class="mono-head">ASID's core + schedules, mapped to Patina today</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">ASID schedule</th><th class="w-what" scope="col">Patina part today</th><th scope="col">Coverage</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Core &mdash; Essential Core Agreement</th><td>Parties + project on the proposal</td><td><span class="partly">Partial</span> <span class="unconf">this document’s own mapping — lane 01’s table starts at Schedule A</span></td></tr>
+        <tr><th scope="row">A &mdash; Preliminary Project Information</th><td>none &mdash; no dedicated intake schedule</td><td><span class="no">Absent</span></td></tr>
+        <tr><th scope="row">B &mdash; Design Concept Services</th><td>Services &amp; deliverables</td><td><span class="partly">Partial</span> &mdash; phase language not modeled</td></tr>
+        <tr><th scope="row">C &mdash; Selection of Merchandise</th><td>Services &amp; deliverables</td><td><span class="partly">Partial</span></td></tr>
+        <tr><th scope="row">D &mdash; Purchasing Services <span class="mono">(5 options)</span></th><td>none</td><td><span class="no">Absent</span></td></tr>
+        <tr><th scope="row">E &mdash; Project Administration Services</th><td>Services &amp; deliverables</td><td><span class="partly">Partial</span></td></tr>
+        <tr><th scope="row">F &mdash; Designer Compensation <span class="mono">(9 options)</span></th><td>Role rates + ceiling + retainer + cadence</td><td><span class="partly">Partial</span> &mdash; flat/phase, %-of-cost, cost-plus, per-sq-ft unmodeled</td></tr>
+        <tr><th scope="row">G &mdash; Terms and Conditions of Sale</th><td>Furnishings deposit %</td><td><span class="partly">Partial</span></td></tr>
+        <tr><th scope="row">H &mdash; Termination Rights <span class="mono">(3 options)</span></th><td>Free-text terms</td><td><span class="no">Absent</span> as a structured part</td></tr>
+        <tr><th scope="row">I &mdash; Dispute Resolution <span class="mono">(2 options)</span></th><td>Free-text terms</td><td><span class="no">Absent</span> as a structured part</td></tr>
+        <tr><th scope="row">J / K &mdash; Additional Terms, Blank</th><td>Free-text terms</td><td><span class="yes">Present</span> as a catch-all</td></tr>
+        <tr><th scope="row">Exclusions <span class="mono">(no direct ASID analog)</span></th><td>Exclusions</td><td><span class="yes">Present</span> &mdash; nearest analogs are separately called-out scope-exclusion clauses</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption no-prose">Nine numbered compensation options in the residential package, eight in the commercial. The option labels themselves are paywalled &mdash; <span class="unconf">not confirmed</span> beyond the count.</p>
+
+  <h3 class="mono-head">Fee models in practice</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Model</th><th class="w-what" scope="col">Inputs</th><th scope="col">Yields a ceiling?</th><th scope="col">Expressible in Patina today</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Hourly</th><td>Rate card, per role</td><td>No, unless capped</td><td><span class="yes">Yes</span></td></tr>
+        <tr><th scope="row">Hourly with not-to-exceed</th><td>Rate card + cap amount</td><td>Yes &mdash; the cap</td><td><span class="yes">Yes</span> &mdash; via the ceiling</td></tr>
+        <tr><th scope="row">Flat / fixed fee, whole project</th><td>Scope definition, one number</td><td>Yes</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Flat fee per phase</th><td>Phase list, each priced</td><td>Yes, per phase</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Per-room / per-square-foot</th><td>Room count or measured area, a $/unit rate</td><td>Yes, once fixed</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Percentage of construction cost</th><td>Construction cost basis</td><td>Yes, once basis is fixed</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Percentage of furnishings spend</th><td>FF&amp;E budget line</td><td>Yes, once budget is fixed</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Cost-plus on purchases</th><td>Net cost basis, markup %</td><td>No &mdash; scales with what is bought</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Retail-minus / trade-discount sharing</th><td>Retail price, discount %, split ratio</td><td>No</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Design fee + procurement margin</th><td>Fee basis and a markup %</td><td>Partial &mdash; fee capped, procurement open</td><td><span class="partly">Partly</span> &mdash; deposit % exists, margin does not</td></tr>
+        <tr><th scope="row">Day rate / consultation</th><td>A day-rate figure</td><td>Yes, per engagement day</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">E-design package</th><td>Package tier definition</td><td>Yes</td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Monthly retainer / subscription</th><td>Monthly rate, minimum term</td><td>No &mdash; open-ended</td><td><span class="no">No</span> &mdash; Patina’s retainer is one amount with an activation policy <span class="ref">00412:74-76</span>, not a recurring fee</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="mono-head">Engagement variants &times; parts</h3>
+  <p class="caption no-prose">Legend: &#9679; standard &middot; &#9686; sometimes &middot; &mdash; not applicable. Column headings are abbreviated; the full part name is on each heading. Cell-level &#9686; placements are lane 01's own inference from the cited shapes, <span class="unconf">not sourced per cell</span>.</p>
+  <div class="mockscroll">
+    <table class="tight min1080">
+      <caption class="sr-only">Which contract parts each engagement variant typically carries.</caption>
+      <thead><tr>
+        <th class="w-name" scope="col">Variant</th><th class="mid" scope="col"><abbr title="Scope">Scope</abbr></th><th class="mid" scope="col"><abbr title="Phases">Phases</abbr></th><th class="mid" scope="col"><abbr title="Deliverables">Deliv.</abbr></th><th class="mid" scope="col"><abbr title="Exclusions">Excl.</abbr></th><th class="mid" scope="col"><abbr title="Rate card">Rate card</abbr></th><th class="mid" scope="col"><abbr title="Flat fee">Flat fee</abbr></th><th class="mid" scope="col"><abbr title="Retainer">Retainer</abbr></th><th class="mid" scope="col"><abbr title="Ceiling">Ceiling</abbr></th><th class="mid" scope="col"><abbr title="Procurement terms">Procure.</abbr></th><th class="mid" scope="col"><abbr title="Deposit percent">Deposit %</abbr></th><th class="mid" scope="col"><abbr title="Change orders">Change ord.</abbr></th><th class="mid" scope="col"><abbr title="Client responsibilities">Client resp.</abbr></th><th class="mid" scope="col"><abbr title="Ownership of drawings and IP">IP</abbr></th><th class="mid" scope="col"><abbr title="Photography rights">Photo</abbr></th><th class="mid" scope="col"><abbr title="Termination">Termin.</abbr></th><th class="mid" scope="col"><abbr title="Dispute resolution">Disputes</abbr></th><th class="mid" scope="col"><abbr title="Insurance">Insur.</abbr></th><th class="mid" scope="col"><abbr title="Limitation of liability cap">Liab. cap</abbr></th>
+      </tr></thead>
+      <tbody>
+        <tr><th scope="row">Full-service residential</th><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td></tr>
+        <tr><th scope="row">Consultation / hourly</th><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td></tr>
+        <tr><th scope="row">E-design</th><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td></tr>
+        <tr><th scope="row">Furnishings-only / purchasing</th><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td></tr>
+        <tr><th scope="row">Renovation w/ construction admin</th><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td></tr>
+        <tr><th scope="row">Phased / per-room</th><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td></tr>
+        <tr><th scope="row">Commercial</th><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid dot-half"><span aria-hidden="true">&#9686;</span><span class="sr-only">sometimes</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid dot-none"><span aria-hidden="true">&mdash;</span><span class="sr-only">not applicable</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td><td class="dot mid"><span aria-hidden="true">&#9679;</span><span class="sr-only">standard</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="mono-head">Patterns worth taking, and not</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th scope="col">Verdict</th><th class="w-name" scope="col">Pattern</th><th class="w-what" scope="col">Why</th><th scope="col">Source</th></tr></thead>
+      <tbody>
+        <tr><td><span class="yes">Steal</span></td><td><strong>Core agreement + numbered swappable schedules</strong></td><td>An industry body's own answer to the exact composability problem — one stable core, everything else pluggable and independently versioned.</td><td>ASID</td></tr>
+        <tr><td><span class="yes">Steal</span></td><td><strong>Change orders as a first-class linked object tied to the live budget</strong></td><td>Turns amendment from a paperwork problem into a data problem — the shape a parts-based agreement needs for post-signature edits.</td><td>Buildertrend, JobTread</td></tr>
+        <tr><td><span class="yes">Steal</span></td><td><strong>Per-project feature toggles, default-off, designer and client visibility separate</strong></td><td>The one surveyed tool documenting literal on/off toggles rather than only template choice. Contract-section grain <span class="unconf">not confirmed</span>.</td><td>Mydoma</td></tr>
+        <tr><td><span class="no">Avoid</span></td><td><strong>Signature gating payment with no fallback</strong></td><td>Collapses two distinct legal events — assent and payment — into one UI step with no documented escape hatch.</td><td>HoneyBook</td></tr>
+        <tr><td><span class="no">Avoid</span></td><td><strong>Clause libraries with undocumented per-clause versioning</strong></td><td>Neither vendor confirms what happens to a document already generated when its source clause is later edited; the ambiguity is the finding.</td><td>DocuSign, PandaDoc</td></tr>
+        <tr><td><span class="no">Avoid</span></td><td><strong>Uploading a whole external contract as the &ldquo;template&rdquo;</strong></td><td>The tool cannot know which paragraph is which clause, so no clause-level reuse, no per-part toggling, no structured amendment tracking.</td><td>Houzz Pro, Mydoma</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Patina’s fixed form meets the e-sign elements lane 03 lists, except a client-held reproducible copy (<a href="#rulings">R12</a>). Counsel to confirm; a composed form must meet them per part.</p>
+  <p class="caption no-prose">The elements <span class="ref">03 §3</span>: a typed name &middot; consent to transact &middot; identity with time and IP &middot; a tamper-evident record bound to the version &middot; a copy each party can reproduce. Press-and-hold as a distinct named gesture is <span class="unconf">not confirmed</span> in any surveyed source; typed names and click-to-accept are.</p>
+</section>
+
+<!-- ============================================================ 04 -->
+<section id="model" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Four</p><h2>The model &mdash; Agreement = Core + Parts</h2></div>
+
+  <p class="lede">An agreement is a small core that never moves plus an ordered list of parts that does. Prose stays prose; only typed money parts reach the terms row.</p>
+
+  <div class="dwrap">
+    <div class="mockhead">D1 &middot; One agreement, from parts</div>
+    <div class="dgrid dgrid-3">
+      <div class="dcol">
+        <div class="dh">Core &mdash; never removable</div>
+        <div class="dbox"><b>Parties</b> studio, client</div>
+        <div class="dbox"><b>House / project</b></div>
+        <div class="dbox"><b>Class</b> design_services &middot; consultation &middot; furnishings_services &middot; design_build &mdash; a class is narrower than a <code class="mono">document_kind</code>, not a synonym for one</div>
+        <div class="dbox"><b>Signature block</b> two parties, no more <span class="ref">00412:101</span></div>
+        <div class="dbox strong"><b>Evidence</b> fingerprint + record of decision</div>
+      </div>
+      <div class="dcol">
+        <div class="dh">Ordered parts &mdash; the document order</div>
+        <div class="dbox"><span class="grip">&#8942;&#8942;</span><b>clause</b> prose with merge fields</div>
+        <div class="dbox"><span class="grip">&#8942;&#8942;</span><b>list</b> ordered items, note + flag</div>
+        <div class="dbox"><span class="grip">&#8942;&#8942;</span><b>phases</b> on/off, optional fee</div>
+        <div class="dbox strong"><span class="grip">&#8942;&#8942;</span><b>schedule</b> one typed money shape</div>
+        <div class="dbox"><span class="grip">&#8942;&#8942;</span><b>attachment</b> its own leaf</div>
+        <div class="dbox"><span class="grip">&#8942;&#8942;</span><b>attestation</b> gates a template</div>
+        <div class="darrow">&uarr; materialize &mdash; from the Library</div>
+      </div>
+      <div class="dcol">
+        <div class="dh">Projections</div>
+        <div class="dbox"><b>proposal_service_terms</b> money parts project here at every save</div>
+        <div class="darrow">&darr; at countersign</div>
+        <div class="dbox strong"><b>project_billing_authorities</b> ceiling &middot; retainer &middot; cadence &middot; rates</div>
+        <div class="dbox"><b>Client copy</b> the same ordered parts, client-visible ones only</div>
+        <div class="dbox"><b>Record of decision</b> every client-visible part hashed</div>
+      </div>
+    </div>
+    <p class="caption no-prose">Three relations carry the whole model: <b>materialize</b> (Library into Parts), <b>project</b> (money parts into the terms row), <b>hash</b> (every client-visible part into the evidence digest). Only <em>materialize</em> is drawn as an arrow; a three-column box grid cannot carry the other two without pointing the wrong way when the columns stack.</p>
+  </div>
+
+  <h3 class="mono-head">Six kinds of part</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th scope="col">Kind</th><th class="w-name" scope="col">Holds</th><th scope="col">Typed money?</th><th class="w-what" scope="col">Examples</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code class="mono">clause</code></th><td>Prose with merge fields</td><td><span class="no">No</span></td><td>Terms, change orders, IP, photography, termination, disputes, insurance, liability cap</td></tr>
+        <tr><th scope="row"><code class="mono">list</code></th><td>Ordered items, each with a note + optional flag</td><td><span class="no">No</span></td><td>Deliverables, exclusions, client responsibilities</td></tr>
+        <tr><th scope="row"><code class="mono">phases</code></th><td>Checklist of phases, on or off. No money &mdash; a priced phase list is the <code class="mono">per_phase</code> schedule</td><td><span class="no">No</span></td><td>Programming &middot; schematic &middot; design development &middot; documentation &middot; procurement &middot; construction administration</td></tr>
+        <tr><th scope="row"><code class="mono">schedule</code></th><td>One typed money shape, chosen from the fifteen below</td><td><span class="yes">Yes</span></td><td>The fifteen variants below</td></tr>
+        <tr><th scope="row"><code class="mono">attachment</code></th><td>A standalone leaf rendered as its own page</td><td><span class="no">No</span></td><td>State cancellation notice, lien-waiver form, license certificate</td></tr>
+        <tr><th scope="row"><code class="mono">attestation</code></th><td>A studio statement with fields, gating a template</td><td><span class="no">No</span></td><td>Contractor licensing attestation</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="mono-head">Schedule variants &mdash; the typed money</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th scope="col">Variant</th><th class="w-what" scope="col">What it holds</th><th scope="col">Creates billing authority?</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code class="mono">rate_card</code></th><td>Role &rarr; hourly rate rows (today's role rates)</td><td><span class="yes">Yes</span></td></tr>
+        <tr><th scope="row"><code class="mono">ceiling</code></th><td>Not-to-exceed amount</td><td><span class="yes">Yes</span></td></tr>
+        <tr><th scope="row"><code class="mono">retainer</code></th><td>Amount + credit rule (credited / non-refundable / replenishing) + activation policy</td><td><span class="yes">Yes</span></td></tr>
+        <tr><th scope="row"><code class="mono">cadence</code></th><td>monthly &middot; biweekly &middot; milestone &middot; per draw</td><td><span class="yes">Yes</span></td></tr>
+        <tr><th scope="row"><code class="mono">flat</code></th><td>One number for a defined scope</td><td><span class="yes">Yes</span></td></tr>
+        <tr><th scope="row"><code class="mono">per_phase</code></th><td>Phase list, each independently priced</td><td><span class="yes">Yes</span></td></tr>
+        <tr><th scope="row"><code class="mono">percent_of_cost</code></th><td>% &times; construction cost basis</td><td><span class="partly">Record only until R9</span></td></tr>
+        <tr><th scope="row"><code class="mono">percent_of_spend</code></th><td>% &times; FF&amp;E budget</td><td><span class="partly">Record only until R9</span></td></tr>
+        <tr><th scope="row"><code class="mono">cost_plus</code></th><td>Markup on net, with a disclosure line</td><td><span class="partly">Record only until R9</span></td></tr>
+        <tr><th scope="row"><code class="mono">day_rate</code></th><td>Price per half-day or full day</td><td><span class="partly">Record only until R9</span></td></tr>
+        <tr><th scope="row"><code class="mono">package</code></th><td>Fixed price for a defined tier</td><td><span class="partly">Record only until R9</span></td></tr>
+        <tr><th scope="row"><code class="mono">procurement</code></th><td>Deposit %, markup basis, freight / receiving / storage / install handling, terms of sale</td><td><span class="partly">Record only until R9</span></td></tr>
+        <tr><th scope="row"><code class="mono">pricing_basis</code></th><td>fixed &middot; cost-plus &middot; cost-plus with GMP &middot; T&amp;M with NTE &mdash; carries the schedule of values</td><td><span class="partly">Record only until R9</span></td></tr>
+        <tr><th scope="row"><code class="mono">draws</code></th><td>Milestone or percent-complete draws; retainage % and release rule live here</td><td><span class="partly">Record only until R9</span></td></tr>
+        <tr><th scope="row"><code class="mono">allowances</code></th><td>Allowance lines with an overage / underage rule</td><td><span class="partly">Record only until R9</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption no-prose">Fifteen kept. <code class="mono">schedule_of_values</code> is merged into <code class="mono">pricing_basis</code> and <code class="mono">retainage</code> into <code class="mono">draws</code> rather than carried as variants of their own.</p>
+
+  <h3 class="mono-head">The projection rule</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th scope="col">#</th><th class="w-name" scope="col">Rule</th><th class="w-what" scope="col">Mechanism</th></tr></thead>
+      <tbody>
+        <tr><th class="num" scope="row">1</th><td><strong>Prose never becomes money</strong></td><td>Only <code class="mono">schedule</code> variants carry typed amounts; a clause can say anything and change nothing.</td></tr>
+        <tr><th class="num" scope="row">2</th><td><strong>Money parts project into <code class="mono">proposal_service_terms</code> at every save</strong></td><td>Countersign still snapshots the terms row <span class="ref">00566:788-797</span> &mdash; but five of the fifteen variants need columns and CHECKs that do not exist yet. The next table names each one.</td></tr>
+        <tr><th class="num" scope="row">3</th><td><strong>Parts freeze with the terms row at send; every client-visible part is hashed</strong></td><td>Attach to <code class="mono">guard_commercial_authored_child</code>'s <code class="mono">TG_TABLE_NAME</code> dispatch <span class="ref">00423:447-451</span>; extend <code class="mono">_commercial_document_fingerprint</code> <span class="ref">00423:1214-1275</span> in the same migration. Studio-only parts stay out of the client's digest, so a signature never attests to text the signer could not read.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="mono-head">What each money variant writes</h3>
+  <div class="mockscroll">
+    <table class="tight min1080">
+      <caption class="sr-only">For each money variant: the terms column it writes, the authority column it becomes, the CHECK constraints that must widen, the RPC that reads it, and the proposal that delivers it.</caption>
+      <thead><tr>
+        <th class="w-name" scope="col">Variant</th><th scope="col">Terms column</th><th scope="col">Authority column</th>
+        <th class="w-what" scope="col">CHECKs widened</th><th scope="col">RPC that reads it</th><th scope="col">Proposal</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row"><code class="mono">rate_card</code></th>
+          <td><code class="mono">proposal_service_rates</code></td>
+          <td><code class="mono">project_billing_authority_rates</code></td>
+          <td>none</td>
+          <td>time authorization <span class="ref">00414</span></td>
+          <td>today</td>
+        </tr>
+        <tr>
+          <th scope="row"><code class="mono">ceiling</code></th>
+          <td><code class="mono">billing_ceiling_cents</code></td>
+          <td>same</td>
+          <td><strong><code class="mono">billing_ceiling_cents integer NOT NULL CHECK (&gt;= 0)</code> <span class="ref">00412:73</span>, and its authority twin <span class="ref">00412:145</span>, become nullable; NULL = uncapped</strong> &mdash; and only when no <code class="mono">rate_card</code> part is present. Separately, the terms-and-rates refusals relax to &ldquo;required only when time is billed&rdquo; <span class="ref">00423:1608-1614; 00477:306-309; 00412:815-820</span></td>
+          <td><span class="ref">00414:911-913</span> learns NULL</td>
+          <td>P1 P2</td>
+        </tr>
+        <tr>
+          <th scope="row"><code class="mono">retainer</code> + credit rule</th>
+          <td><code class="mono">retainer_amount_cents</code> + new <code class="mono">retainer_credit_rule</code></td>
+          <td>same + the new column</td>
+          <td>new CHECK on the credit rule</td>
+          <td>countersign's retainer invoice <span class="ref">00566:765-784</span>; <em>replenishing</em> is record-only until R9</td>
+          <td>P5</td>
+        </tr>
+        <tr>
+          <th scope="row"><code class="mono">cadence</code></th>
+          <td><code class="mono">billing_cadence</code></td>
+          <td>same</td>
+          <td>CHECK widened to add <code class="mono">per_draw</code> on <em>both</em> rows <span class="ref">00412:77-78, :148</span></td>
+          <td>draw invoicing</td>
+          <td>P9 &mdash; Wave 3 only</td>
+        </tr>
+        <tr>
+          <th scope="row"><code class="mono">flat</code>, <code class="mono">per_phase</code></th>
+          <td>new: <code class="mono">fee_basis</code>, <code class="mono">fee_amount_cents</code>, <code class="mono">fee_schedule jsonb</code></td>
+          <td>new columns of the same names</td>
+          <td>new CHECK on <code class="mono">fee_basis</code></td>
+          <td>countersign snapshots them; invoicing learns to read them</td>
+          <td>P5</td>
+        </tr>
+        <tr>
+          <th scope="row"><code class="mono">procurement</code> <span class="mono">&mdash; deposit % only</span></th>
+          <td><code class="mono">furnishings_deposit_percent</code></td>
+          <td>&mdash; not snapshotted onto the authority</td>
+          <td>none</td>
+          <td><code class="mono">create_furnishings_authorization_from_schedule</code> <span class="ref">00422:370</span>. The variant's other fields &mdash; markup basis, freight, storage, terms of sale &mdash; are record-only</td>
+          <td>today</td>
+        </tr>
+        <tr>
+          <th scope="row">the other eight variants</th>
+          <td>payload <code class="mono">jsonb</code> on the part</td>
+          <td>none</td>
+          <td>none</td>
+          <td>nothing reads them</td>
+          <td>record-only until <a href="#rulings">R9</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The honest cost: five of the fifteen variants need a new column or a widened CHECK before they mean anything at billing time; eight mean nothing until R9.</p>
+
+  <h3 class="mono-head">Readiness, derived</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Condition</th><th class="w-why" scope="col">Today</th><th class="w-what" scope="col">Proposed</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Ceiling above $0</th><td>Hard check <span class="ref">:211</span>; the column is <code class="mono">NOT NULL</code> <span class="ref">00412:73</span></td><td>Required whenever a <code class="mono">rate_card</code> part is present. Removable only when no time is billed, and then the column is NULL, not zero &mdash; zero authorizes no hours at all <span class="ref">00414:911-913</span></td></tr>
+        <tr><th scope="row">At least one role rate</th><td>DB refusal <span class="ref">00477:306-309</span></td><td>Required only if the class bills time</td></tr>
+        <tr><th scope="row">Terms non-empty</th><td>One box, always required</td><td>Each <code class="mono">required</code> clause non-empty</td></tr>
+        <tr><th scope="row">Deliverables and exclusions</th><td>Two checks, always required</td><td>Each <code class="mono">required</code> list carries at least one item</td></tr>
+        <tr><th scope="row">Parties + signature block</th><td>Required</td><td>Unchanged &mdash; core</td></tr>
+        <tr><th scope="row">&ldquo;Not yet set&rdquo;</th><td>Renders on a document the client is asked to sign</td><td>Never renders on a sendable document</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="mock">
+    <p class="mock-cap">M1 &middot; Proposed &middot; The Contract Room, composed &middot; 1180px</p>
+    <div class="mockgrid mg-rail-3">
+
+      <div class="mockpanel">
+        <p class="mockhead">Parts &middot; 11 &nbsp;&nbsp; &bull; must be filled in</p>
+        <ul class="partlist">
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Services<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&#8801;</span>Deliverables<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&#8801;</span>Exclusions<span class="hoveract">&ctdot; Remove &middot; Rename &middot; Move</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">$</span>Role rates<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">$</span>Ceiling<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">$</span>Furnishings deposit</li>
+          <li class="sel"><span class="grip">&#8942;&#8942;</span><span class="kg">$</span>Retainer<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">$</span>Billing cadence</li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Change orders</li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Termination</li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Terms<span class="req">&bull;</span></li>
+        </ul>
+        <div class="railfoot">
+          <span class="btnmock quiet">+ Add a part</span>
+          <span class="btnmock quiet">Save as template&hellip;</span>
+        </div>
+      </div>
+
+      <div class="mockpanel-plain">
+        <p class="letterhead">Retainer</p>
+        <p class="subhead">Money &middot; must be filled in &middot; the client sees this</p>
+        <div class="hair"></div>
+        <div class="controlrow">
+          <span class="lab">Amount</span><span class="field">$5,000</span>
+          <span class="lab">Becomes active</span><span class="selectmock">when the retainer is paid</span>
+        </div>
+        <p class="mockhead" style="margin:1.1rem 0 .3rem">Credit rule</p>
+        <div class="chipset">
+          <span class="chip on">Credited</span><span class="chip off">Non-refundable</span><span class="chip off">Replenishing</span>
+        </div>
+      </div>
+
+      <div class="mockpanel">
+        <p class="mockhead">Review &amp; send</p>
+        <p style="margin:0 0 .6rem"><span class="btnmock">Review &amp; send</span></p>
+        <p class="counter" style="margin:.8rem 0 .2rem">3 of 11 parts need attention</p>
+        <ul class="readylist">
+          <li class="red">Services &mdash; name what is included</li>
+          <li class="red">Role rates &mdash; add at least one role</li>
+          <li class="red">Terms &mdash; write the agreement terms</li>
+        </ul>
+        <p class="mockhead" style="margin:1rem 0 .2rem">Satisfied</p>
+        <ul class="readylist">
+          <li class="ok">Deliverables &middot; 3 items</li>
+          <li class="ok">Ceiling &middot; $24,000</li>
+          <li class="ok">Retainer &middot; $5,000</li>
+        </ul>
+      </div>
+    </div>
+
+    <ol class="annlist">
+      <li>Order is the document order. Dragging a part changes what the client reads, in the designer's own sequence.</li>
+      <li>A removed part is absent, not blank. There is no empty heading on the client's copy where Exclusions used to be.</li>
+      <li>Required is a property of the part, not of the room, so readiness lists only the parts actually on this agreement. Remove a part and its check goes with it &mdash; except Ceiling, which a rate card keeps required (<a href="#rulings">R4</a>).</li>
+      <li>Nothing in this panel is a column name. The retainer part writes <code class="mono">retainer_amount_cents</code> and a new credit-rule column; that mechanism lives in the projection table above, not in the designer's face.</li>
+    </ol>
+
+    <figcaption><b>M1</b> &middot; the same paper as M0. Every difference is data: the rail is the ordered part list, the center is the selected part's editor for its kind, the right rail is readiness derived from each part's own required flag. Eleven parts &mdash; the standard template's nine, plus Change orders and Termination added from the Library.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <p class="mock-cap">M2 &middot; Proposed &middot; Add a part &middot; 720px sheet</p>
+    <p class="letterhead">Add a part</p>
+    <p class="subhead">From your Library</p>
+    <div class="hair"></div>
+    <div class="mockgrid mg-2">
+      <div>
+        <p class="mockhead">Parts</p>
+        <ul class="partlist">
+          <li><span class="kg">&para;</span>Cancellation<span class="rowend"><span class="chip src-studio">studio</span></span></li>
+          <li><span class="kg">&para;</span>Photography rights<span class="rowend"><span class="chip src-studio">studio</span></span></li>
+          <li><span class="kg">&para;</span>Ownership of drawings<span class="rowend"><span class="chip src-patina">patina</span></span></li>
+          <li><span class="kg">&para;</span>Insurance<span class="rowend"><span class="chip src-patina">patina</span></span></li>
+          <li><span class="kg">&para;</span>Dispute resolution<span class="rowend"><span class="chip src-patina">patina</span></span></li>
+          <li><span class="kg">&#8801;</span>Client responsibilities<span class="rowend"><span class="chip src-studio">studio</span></span></li>
+          <li><span class="kg">$</span>Procurement terms<span class="rowend"><span class="chip src-studio">studio</span></span></li>
+          <li><span class="kg">$</span>Flat fee<span class="rowend"><span class="chip src-patina">patina</span></span></li>
+          <li><span class="kg">$</span>Per-phase fee<span class="rowend"><span class="chip src-patina">patina</span></span></li>
+          <li><span class="kg">$</span>Percent of spend<span class="rowend"><span class="chip src-patina">patina</span></span></li>
+          <li><span class="kg">&#9633;</span>Notice of cancellation<span class="rowend"><span class="chip src-patina">patina</span></span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="mockhead">Blank</p>
+        <ul class="partlist">
+          <li><span class="kg">&para;</span>Clause</li>
+          <li><span class="kg">&#8801;</span>List</li>
+          <li><span class="kg">$</span>Money<span class="rowend"><span class="selectmock">Flat &middot; Per phase &middot; Rate card &middot; Retainer &middot; Ceiling &middot; Deposit &hellip;</span></span></li>
+          <li><span class="kg">&#9633;</span>Attachment</li>
+          <li><span class="kg">&#9744;</span>Phase checklist</li>
+          <li><span class="kg">&sect;</span>Attestation</li>
+        </ul>
+      </div>
+    </div>
+    <div class="railfoot"><span class="btnmock">Add to this agreement</span></div>
+    <figcaption><b>M2</b> &middot; the picker never invents a part. Every row on the left is a Library part &mdash; five clauses, one list, four money parts, one attachment, which is this studio's whole Library as counted in M4. On the right, an empty one of each of the six kinds.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ 05 -->
+<section id="library" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Five</p><h2>The Library</h2></div>
+
+  <p class="lede">A studio keeps its own shelf: parts it wrote, and templates that arrange them.</p>
+
+  <h3 class="mono-head">Two objects, one shape</h3>
+  <div class="mockscroll">
+    <table class="tight min900">
+      <thead><tr><th scope="col">Object</th><th scope="col">Table</th><th scope="col">Scope</th><th scope="col">Namespaced key</th><th scope="col">Who reads</th><th scope="col">Who writes</th><th scope="col">RPCs</th></tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row">Part</th>
+          <td><code class="mono">studio_agreement_parts</code></td>
+          <td>studio</td>
+          <td><code class="mono">studio.*</code> / <code class="mono">patina.*</code></td>
+          <td>seeded <code class="mono">patina.*</code> rows: all authenticated. Studio rows: <code class="mono">is_active_org_member</code> on an active studio <span class="ref">00408:135-143</span></td>
+          <td><code class="mono">is_org_admin_or_owner</code> <span class="ref">00484:604; <a href="#rulings">R3</a></span></td>
+          <td><code class="mono">save_agreement_part</code>, <code class="mono">materialize_agreement_part</code></td>
+        </tr>
+        <tr>
+          <th scope="row">Template</th>
+          <td><code class="mono">agreement_templates</code></td>
+          <td>seeded or studio (<code class="mono">kind</code>)</td>
+          <td><code class="mono">patina.*</code> seeded, <code class="mono">studio.*</code> studio</td>
+          <td>same &mdash; seeded rows carry <code class="mono">studio_id NULL</code>, so the read policy cannot key on studio membership alone</td>
+          <td><code class="mono">is_org_admin_or_owner</code> <span class="ref">00484:604; <a href="#rulings">R3</a></span></td>
+          <td><code class="mono">save_agreement_as_template</code>, <code class="mono">materialize_agreement_template</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <pre class="sketch no-prose"><code><b>agreement_templates</b>(id, kind seeded|studio, studio_id, template_key, class, title,
+                    parts jsonb[ordered: {part_key | inline, required, client_visible}],
+                    consent_key, created_by, updated_at)
+
+<b>studio_agreement_parts</b>(id, studio_id, kind, variant, part_key, title, payload jsonb,
+                       required_default, client_visible_default, created_by, updated_at)
+
+<b>proposal_agreement_parts</b>(proposal_id, position, kind, variant, part_key, title, payload jsonb,
+                         required, client_visible, source_template_key, source_part_id)
+                         -- snapshot at materialize, owner refs stripped
+                         -- (00408 save_board_as_template pattern)
+                         -- RLS: is_studio_comember via proposals, exactly as
+                         --      proposal_service_terms_studio_rw (00412:318-325)</code></pre>
+
+  <h3 class="mono-head">Four seeded templates</h3>
+  <div class="mockscroll">
+    <table class="tight min900">
+      <thead><tr><th class="w-name" scope="col">Template</th><th scope="col">Class</th><th class="w-what" scope="col">Parts in order</th><th scope="col">Money parts it carries</th></tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row">Design services (Patina standard)<span class="maker">today's seven facets as nine parts &mdash; Services and deliverables split in two, and the furnishings deposit lifted out of &ldquo;Rates &amp; ceiling&rdquo; into a typed part of its own. Every existing agreement reads as this template.</span></th>
+          <td><code class="mono">design_services</code></td>
+          <td>Services &middot; Deliverables &middot; Exclusions &middot; Role rates &middot; Ceiling &middot; Furnishings deposit &middot; Retainer &middot; Billing cadence &middot; Terms</td>
+          <td><code class="mono">rate_card</code>, <code class="mono">ceiling</code>, <code class="mono">retainer</code>, <code class="mono">cadence</code> &mdash; all four create billing authority. The deposit writes <code class="mono">furnishings_deposit_percent</code> <span class="ref">00422:370</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Consultation / hourly</th>
+          <td><code class="mono">consultation</code></td>
+          <td>Services &middot; Role rates &middot; Ceiling (optional) &middot; Terms &middot; Termination</td>
+          <td><code class="mono">rate_card</code>, <code class="mono">ceiling</code> &mdash; both create billing authority</td>
+        </tr>
+        <tr>
+          <th scope="row">Furnishings only</th>
+          <td><code class="mono">furnishings_services</code></td>
+          <td>Services &middot; Deliverables &middot; Procurement terms &middot; Deposit &middot; Change orders &middot; Terms of sale &middot; Termination</td>
+          <td><code class="mono">procurement</code> &mdash; only its deposit % is read today <span class="ref">00422:370</span>; the rest is <strong>record only</strong> until <a href="#rulings">R9</a>. <code class="mono">retainer</code> optional, and it does create authority</td>
+        </tr>
+        <tr>
+          <th scope="row">Design-build turnkey<span class="maker">gated: selectable only once the studio's licensing attestation is on file</span></th>
+          <td><code class="mono">design_build</code></td>
+          <td>see <a href="#turnkey">§8</a></td>
+          <td><code class="mono">pricing_basis</code>, <code class="mono">draws</code> (+retainage), <code class="mono">allowances</code> &mdash; all three <strong>record only</strong> until <a href="#rulings">R9</a>; nothing invoices off a draw schedule yet</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>R85 retired proposal templates because the seeded path covers the job; that table was per-user. A Library is a different object, feeding the same draft.</p>
+  <p>Class is a column on the parts snapshot; dispatch stays on kind, so Waves 1&ndash;2 touch no edge function.</p>
+  <p class="caption no-prose">Both objects sit on <code class="mono">board_templates</code>, the one template table already scoped to a studio rather than a person <span class="ref">00408:24, :37-49</span>. R85 at <span class="ref">DECISIONS.md:2680-2682</span>; the retired table's per-user RLS at <span class="ref">00063:19, :31-32</span>. The three classes above all keep <code class="mono">document_kind = 'design_services'</code>; <code class="mono">design_build</code> is a new kind &mdash; see P9.</p>
+
+  <figure class="mock">
+    <p class="mock-cap">M4 &middot; Proposed &middot; Account &rarr; Studio &rarr; Agreement Library &middot; 980px</p>
+    <div class="mockgrid mg-rail-3">
+      <div class="mockpanel">
+        <p class="mockhead">Billing</p>
+        <div class="controlrow"><span class="lab">Card fee (%)</span><span class="field">3.0</span></div>
+        <div class="controlrow"><span class="lab">Check remit-to</span><span class="field blank">Make checks payable to Middle West Studio LLC, 118 S Bedford St, Madison WI 53703</span></div>
+      </div>
+      <div class="mockpanel">
+        <p class="mockhead">Templates</p>
+        <ul class="partlist">
+          <li>Design services &mdash; Patina standard<span class="rowend"><span class="chip src-patina">patina</span></span></li>
+          <li>Full-service residential<span class="rowend"><span class="chip src-studio">studio</span></span></li>
+          <li>Kitchen consult<span class="rowend"><span class="chip src-studio">studio</span></span></li>
+        </ul>
+        <div class="railfoot">
+          <span class="btnmock quiet">Duplicate</span><span class="btnmock quiet">Edit</span><span class="btnmock quiet">Set as default</span>
+        </div>
+        <div class="railfoot"><span class="btnmock off">Save current agreement as template</span></div>
+      </div>
+      <div class="mockpanel">
+        <p class="mockhead">Parts</p>
+        <ul class="partlist">
+          <li><span class="kg">&para;</span>Clauses<span class="rowend">5</span></li>
+          <li><span class="kg">&#8801;</span>Lists<span class="rowend">1</span></li>
+          <li><span class="kg">$</span>Money parts<span class="rowend">4</span></li>
+          <li><span class="kg">&#9633;</span>Attachments<span class="rowend">1</span></li>
+        </ul>
+        <p class="mockhead" style="margin:1.4rem 0 .3rem">Defaults</p>
+        <div class="chipset">
+          <span class="chip">rate card</span><span class="chip">deposit 50%</span><span class="chip">cadence monthly</span><span class="chip">retainer rule Credited</span>
+        </div>
+      </div>
+    </div>
+    <ol class="annlist">
+      <li>Owners and admins edit here; every active member composes from it (<a href="#rulings">R3</a>).</li>
+      <li>The Billing card on the left is the deployed one, drawn from <span class="ref">account-studio-page.tsx:811-823 &mdash; the card-fee label at :821, the check remit-to described in the help copy at :813</span> and not restyled. The Library sits beside it.</li>
+      <li>The Defaults strip is P3; the dashed <em>Save current agreement as template</em> appears only when the page is opened from a draft.</li>
+      <li>Templates and Parts are two objects and are drawn as two panels &mdash; the counts are this studio's whole Library, and M2's picker lists exactly these eleven rows.</li>
+    </ol>
+    <figcaption><b>M4</b> &middot; the Library sits in the deployed account register beside the existing Billing card, reusing <code class="mono">board_templates</code>' ownership and namespacing <span class="ref">00408:24, :37-49, :129-143</span>.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ 06 -->
+<section id="compose" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Six</p><h2>Composing an agreement</h2></div>
+
+  <p class="lede">Five stations, and only the third is new. Discovery still seeds, send still freezes, countersign still writes authority.</p>
+
+  <div class="flowstrip">
+    <div class="st"><span class="stn">01</span>Discovery seeds the draft</div>
+    <div class="fa" aria-hidden="true"></div>
+    <div class="st"><span class="stn">02</span>Template materializes parts</div>
+    <div class="fa" aria-hidden="true"></div>
+    <div class="st isnew"><span class="stn">03 &middot; new</span>Compose: add &middot; remove &middot; reorder &middot; rename</div>
+    <div class="fa" aria-hidden="true"></div>
+    <div class="st"><span class="stn">04</span>Send: parts freeze, every client-visible part hashed</div>
+    <div class="fa" aria-hidden="true"></div>
+    <div class="st"><span class="stn">05</span>Countersign: money parts become authority; the record keeps the part set</div>
+  </div>
+
+  <h3 class="mono-head">What each act may touch</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Act</th><th scope="col">Draft</th><th scope="col">Sent</th><th scope="col">Executed</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Add, remove or reorder a part</th><td><span class="yes">Yes</span></td><td><span class="no">No</span></td><td><span class="no">No</span></td></tr>
+        <tr><th scope="row">Edit a clause</th><td><span class="yes">Yes</span></td><td><span class="no">No</span></td><td>Addendum</td></tr>
+        <tr><th scope="row">Edit a money part</th><td><span class="yes">Yes</span></td><td><span class="no">No</span></td><td>Addendum, and it re-projects &mdash; except the retainer, which <code class="mono">create_service_addendum</code> zeroes and forces to <code class="mono">immediate</code> today <span class="ref">00422:1870-1878</span>. P7 either excludes it or removes the zeroing under <a href="#rulings">R6</a></td></tr>
+        <tr><th scope="row">Save as template</th><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span> &mdash; snapshot</td><td><span class="yes">Yes</span></td></tr>
+        <tr><th scope="row">Supersede</th><td>&mdash;</td><td><span class="partly">New RPC, P7</span></td><td><span class="yes">Yes</span> &mdash; addendum countersign supersedes the prior authority <span class="ref">00566:761-763</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="mock">
+    <p class="mock-cap">M3 &middot; Proposed &middot; One part, three money shapes &middot; 3 &times; 360px</p>
+    <div class="cols cols-3">
+
+        <div class="mockpanel">
+          <p class="mockhead">Money part &middot; rate card</p>
+          <p class="letterhead" style="font-size:1.05rem">Rate card</p>
+          <div class="mockscroll">
+            <table class="mocktable">
+              <thead><tr><th scope="col">Role</th><th class="money" scope="col">Rate</th><th class="pct" scope="col">Hours</th><th class="money" scope="col">Fee</th></tr></thead>
+              <tbody>
+                <tr><td class="item">Principal</td><td class="money">$225/h</td><td class="pct">40</td><td class="money">$9,000</td></tr>
+                <tr><td class="item">Designer</td><td class="money">$165/h</td><td class="pct">60</td><td class="money">$9,900</td></tr>
+                <tr><td class="item">Design associate</td><td class="money">$110/h</td><td class="pct">30</td><td class="money">$3,300</td></tr>
+                <tr class="tot"><td class="item"><strong>Estimate</strong></td><td class="money"></td><td class="pct"></td><td class="money">$22,200</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="caption">Under the <span class="mono">$24,000</span> ceiling by <span class="mono">$1,800</span>.</p>
+          <div class="chipset"><span class="chip auth">creates authority</span></div>
+        </div>
+
+        <div class="mockpanel">
+          <p class="mockhead">Money part &middot; per phase &middot; illustrative</p>
+          <p class="letterhead" style="font-size:1.05rem">Flat fee per phase</p>
+          <div class="mockscroll">
+            <table class="mocktable">
+              <thead><tr><th scope="col">Phase</th><th class="money" scope="col">Fee</th></tr></thead>
+              <tbody>
+                <tr><td class="item">Concept</td><td class="money">$3,500</td></tr>
+                <tr><td class="item">Design development</td><td class="money">$4,500</td></tr>
+                <tr><td class="item">Documentation</td><td class="money">$3,000</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="caption"><b>Illustrative.</b> These three figures are drawn to show the shape of the part; they are not fixture figures and carry no claim.</p>
+          <div class="chipset"><span class="chip auth">creates authority</span></div>
+        </div>
+
+        <div class="mockpanel">
+          <p class="mockhead">Money part &middot; cost-plus &middot; illustrative</p>
+          <p class="letterhead" style="font-size:1.05rem">Cost-plus on purchases</p>
+          <div class="controlrow"><span class="lab">Markup on net</span><span class="field">30%</span></div>
+          <div class="controlrow"><span class="lab">Basis</span><span class="field blank">designer's net cost</span></div>
+          <p class="caption">Disclosure line on the client's copy: &ldquo;Furniture and materials are billed at our cost plus 30%. You will see both the cost and the markup on every invoice.&rdquo; <b>Illustrative</b> &mdash; the 30% is drawn, not a fixture figure.</p>
+          <div class="chipset"><span class="chip record">record only (R9)</span></div>
+        </div>
+
+    </div>
+    <figcaption><b>M3</b> &middot; one part kind, three money shapes, three different editors and three different consequences. The rate card is the Okonkwo fixture; the per-phase and cost-plus cards are labeled illustrative because their numbers are invented for the drawing.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <p class="mock-cap">M8 &middot; Proposed &middot; An addendum from parts &middot; 720px &middot; illustrative</p>
+    <p class="letterhead">Addendum 01</p>
+    <p class="subhead">the Okonkwo house &middot; changes one part</p>
+    <div class="hair"></div>
+    <div class="mockpanel">
+      <p class="mockhead">Money part &middot; ceiling</p>
+      <div class="controlrow">
+        <span class="lab">Was</span><span class="field blank">$24,000</span>
+        <span class="lab">Now</span><span class="field">$28,000</span>
+      </div>
+      <p class="mockhead" style="margin:1.1rem 0 .3rem">Why</p>
+      <p class="caption no-prose" style="margin:0">Added the study to the scope.</p>
+    </div>
+    <div class="signline">
+      <b>Signature</b> &mdash; typed name, press-and-hold to sign<br>
+      <span class="mono">Ada Okonkwo &middot; 6 Sep 2026 &middot; 24.16.8.201</span>
+    </div>
+    <div class="railfoot"><span class="btnmock">Send addendum</span></div>
+    <ol class="annlist">
+      <li>An addendum is a part set with a why, signed on its own &mdash; never a silent edit <span class="ref">03 §4</span>.</li>
+      <li>The <b>$28,000</b> is illustrative: it is drawn to show the mechanic and is not a fixture figure.</li>
+      <li>Countersigning an addendum supersedes the prior <em>authority</em> <span class="ref">00566:761-763</span>; the signed original stays on the record as the edition it was.</li>
+    </ol>
+    <figcaption><b>M8</b> &middot; reuses the 00422 addendum path and the approvals program's <code class="mono">why</code> column <span class="ref">00569</span>. <code class="mono">create_service_addendum</code> copies the whole origin terms row <span class="ref">00422:1870-1878</span>, so an addendum is a new edition carrying one changed part, not a patch.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ 07 -->
+<section id="client" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Seven</p><h2>The client's copy</h2></div>
+
+  <p class="lede">Three surfaces render the agreement today, each hand-built, and their headings have already drifted. One part list should drive all three &mdash; including the sentence the client consents to.</p>
+
+  <h3 class="mono-head">One part list, three surfaces</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Surface</th><th class="w-why" scope="col">Today</th><th class="w-what" scope="col">Proposed</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Designer preview</th><td>Five hand-built sections over the seven facets <span class="ref">service-agreement-preview.tsx:91-244</span></td><td>Rendered from <code class="mono">proposal_agreement_parts</code> in <code class="mono">position</code> order</td></tr>
+        <tr><th scope="row">Client door</th><td>Its own hand-built headings <span class="ref">commercial-document-shell.tsx:179-262</span></td><td>The same part list, filtered to <code class="mono">client_visible</code>; attachments render as leaves</td></tr>
+        <tr><th scope="row">Consent sentence</th><td>One sentence per kind, naming role rates, ceiling, retainer and terms whether or not the agreement has them <span class="ref">consent-copy.ts:59</span>, pinned byte-for-byte by a disk-reading test <span class="ref">consent-copy.test.ts:27</span></td><td><strong>Composed from the money parts actually present</strong>, not keyed by class &mdash; a flat-fee agreement with no retainer must not consent to one. Rendered once at send, hashed with the document, stored on the signature row <span class="ref">metadata, 00412:107</span>. The drift test pins the composer, not the strings</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="mock">
+    <p class="mock-cap">M5 &middot; Proposed &middot; The door, rendered from parts &middot; 620px client register</p>
+    <div class="doorpaper">
+      <p class="dtitle">Middle West Studio</p>
+      <p class="dsub">Design agreement &middot; the Okonkwo house, Madison</p>
+
+      <div class="doorpart"><p class="dey">Services</p><p class="dtx">Full-service interior design for the main floor and primary suite.</p></div>
+      <div class="doorpart"><p class="dey">What you will receive</p><p class="dtx">Concept presentation &middot; Design documentation &middot; Selection schedules</p></div>
+      <div class="doorpart"><p class="dey">Not included</p><p class="dtx">Construction labor &middot; Furnishings, freight, tax, and installation</p></div>
+      <div class="doorpart">
+        <p class="dey">How design time is billed</p>
+        <div class="mockscroll">
+          <table class="mocktable">
+            <thead class="sr-only"><tr><th scope="col">Role</th><th scope="col">Hourly rate</th></tr></thead>
+            <tbody>
+              <tr><td class="item">Principal</td><td class="money">$225/h</td></tr>
+              <tr><td class="item">Designer</td><td class="money">$165/h</td></tr>
+              <tr><td class="item">Design associate</td><td class="money">$110/h</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="doorpart"><p class="dey">Ceiling</p><p class="dtx"><b>$24,000</b> &mdash; design time is not billed past this without your written approval.</p></div>
+      <div class="doorpart"><p class="dey">Furnishings deposit</p><p class="dtx"><b>50%</b> of each furnishings order, due before it is placed.</p></div>
+      <div class="doorpart"><p class="dey">Retainer</p><p class="dtx"><b>$5,000</b>, credited against your first invoices.</p></div>
+      <div class="doorpart"><p class="dey">Billing cadence</p><p class="dtx">You will be invoiced <b>monthly</b>.</p></div>
+      <div class="doorpart"><p class="dey">Change orders</p><p class="dtx">Work beyond what is named above is agreed in writing, with its own fee, before it starts.</p></div>
+      <div class="doorpart"><p class="dey">Termination</p><p class="dtx">Either party may end this agreement with fourteen days' written notice.</p></div>
+      <div class="doorpart"><p class="dey">Terms</p><p class="dtx">Drawings and specifications remain the studio's property; you receive a license to use them for this house.</p></div>
+    </div>
+
+    <div class="leaf">
+      <p class="lh">Attachment A &middot; Notice of cancellation (Wisconsin)</p>
+      <div class="hair"></div>
+      <p class="dtx" style="margin:0 0 .6rem">You may cancel this transaction, without penalty or obligation, within three business days from the date above.</p>
+      <p class="signline" style="margin-top:.6rem;border-top:1px solid var(--rule-2)"><b>I received this</b> <span class="mono">&#9633;</span></p>
+      <p class="caption" style="margin-top:.6rem">Wave 3, counsel-gated &mdash; drawn here for shape only. Jurisdiction notices are seeded disabled until counsel reviews each state (<a href="#rulings">R11</a>), and ATCP 110 is a home-improvement rule, so whether it reaches a design-services agreement at all is counsel's call. Conspicuousness requirements are part of that review.</p>
+    </div>
+
+    <div class="signline" style="max-width:38rem">
+      <b>Sign</b> &mdash; type your full name, then press and hold<br>
+      <span class="mono">Ada Okonkwo</span><br>
+      <span class="mono">By signing you agree to a design agreement billed at the role rates above, capped at $24,000, with a $5,000 retainer credited against your invoices and a 50% deposit on furnishings, and you consent to transact electronically. A copy is kept for you.</span>
+    </div>
+
+    <ol class="annlist">
+      <li>Attachments are leaves, not paragraphs &mdash; their own rule, their own acknowledgement line, and body type, not fine print.</li>
+      <li>The consent sentence names the money parts this agreement actually has. Remove the retainer part and the clause about it goes too.</li>
+      <li>The record keeps the exact part set and its hash, so the evidence attests to what the client actually read.</li>
+      <li>Nothing here is a sentence carrying money. Cadence and deposit are their own parts, not lines inside Terms.</li>
+    </ol>
+    <figcaption><b>M5</b> &middot; client register &mdash; Playfair title, Newsreader body, mono rules, the Threshold's own typography. The eleven parts are M1's eleven, in M1's order, all of them client-visible on this agreement; the part titles are <em>proposed</em> and differ from the shell's headings today, which is the drift <a href="#today">§2</a> names. The leaf below the paper is not in M1's rail because jurisdiction notices are Wave 3.</figcaption>
+  </figure>
+
+  <h3 class="mono-head">The record keeps</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">What</th><th class="w-what" scope="col">Why it is there</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Part set &mdash; keys, titles, order</th><td>Proves which document existed, not merely that one did</td></tr>
+        <tr><th scope="row">A hash per client-visible part, and one for the document</th><td>Tamper-evident binding at the grain the client reads. Studio-only parts are outside the digest, so the signature never attests to text the signer could not see</td></tr>
+        <tr><th scope="row">Signer name, IP, time</th><td>Attribution</td></tr>
+        <tr><th scope="row">The consent sentence itself</th><td>Stored verbatim on the signature row <span class="ref">metadata, 00412:107</span> &mdash; composed per agreement, so a version number would not identify it</td></tr>
+        <tr><th scope="row">Attachments acknowledged</th><td>Jurisdiction notices are received, not merely bundled</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>This is the floor lane 03 describes, applied per part rather than per document. Whether it is enough is counsel's call, not this document's.</p>
+</section>
+
+<!-- ============================================================ 08 -->
+<section id="turnkey" data-prose-cap="70">
+  <div class="opener"><p class="eyebrow">Eight</p><h2>Turnkey &mdash; the design-build class</h2></div>
+
+  <p class="lede">A studio holding trades signs two documents, and Patina has neither. The prime is the client's &mdash; one agreement, two signatures. The subcontract is the trade's, and Patina has no object for it.</p>
+
+  <h3 class="mono-head">What the existing trade scope actually is</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Reading</th><th class="w-what" scope="col">Evidence</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">It is client-executed</th><td>The sign route dispatches <code class="mono">trade_scope</code> to <code class="mono">execute_trade_scope_with_trusted_ip</code> <span class="ref">route.ts:178-187</span>, and the RPC refuses without an authenticated client and a legal name <span class="ref">00423:1881</span>.</td></tr>
+        <tr><th scope="row">It carries the client's consent</th><td>&ldquo;I authorize this trade to begin the work&hellip;&rdquo; <span class="ref">consent-copy.ts:31</span> &mdash; the homeowner's sentence, not the sub's.</td></tr>
+        <tr><th scope="row">It carries the client's price</th><td><code class="mono">trade_scope_terms.client_price_cents</code> <span class="ref">00423:185</span>. The bid ledger behind it is studio-only.</td></tr>
+        <tr><th scope="row">Lane 02 says the same</th><td>The instrument &ldquo;should be diffed &hellip; before it can stand in as a real subcontract, not just an internal bid record&rdquo; <span class="ref">02 §7</span>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <div class="dwrap">
+    <div class="mockhead">D2 &middot; One prime above, Trade Agreements beneath</div>
+    <div class="dgrid">
+      <div class="dcol">
+        <div class="dh">The prime &mdash; client &harr; studio</div>
+        <div class="dbox strong"><b>design_build agreement</b> pricing basis &middot; schedule of values &middot; draws &middot; allowances &middot; sub disclosure &middot; change orders</div>
+        <div class="dbox"><b>Two signatures</b> client and studio &mdash; <code class="mono">commercial_document_signatures</code> unchanged <span class="ref">00412:101, :108</span></div>
+      </div>
+      <div class="darrow">&darr; the studio contracts each trade separately &mdash; the client is not a party to these</div>
+      <div class="dgrid dgrid-3">
+        <div class="dcol">
+          <div class="dh">Trade Agreement &middot; Cabinetry</div>
+          <div class="dbox strong"><b>studio_trade_agreements</b> <span class="mono">new, P14</span></div>
+          <div class="dbox">studio &harr; sub &middot; signed by token link, no login</div>
+        </div>
+        <div class="dcol">
+          <div class="dh">Trade Agreement &middot; Electrical</div>
+          <div class="dbox strong"><b>studio_trade_agreements</b> <span class="mono">new, P14</span></div>
+          <div class="dbox">scope &middot; price &middot; schedule &middot; flow-down &middot; retainage &middot; pay-when-paid &middot; insurance &middot; lien waivers</div>
+        </div>
+        <div class="dcol">
+          <div class="dh">Trade Agreement &middot; Plumbing</div>
+          <div class="dbox strong"><b>studio_trade_agreements</b> <span class="mono">new, P14</span></div>
+          <div class="dbox">its own signature table &mdash; not <code class="mono">commercial_document_signatures</code></div>
+        </div>
+      </div>
+      <div class="darrow">&middot; &middot; &middot; separately, and optionally &middot; &middot; &middot;</div>
+      <div class="dcol" style="border-style:dashed">
+        <div class="dh">Existing trade scope &mdash; optional, client-visible</div>
+        <div class="dbox">The client's per-trade authorization <span class="ref">00423</span>. Under a prime with a schedule of values the client has already authorized the whole job, so it is not used.</div>
+      </div>
+    </div>
+    <p class="caption no-prose">The prime is composed from the same parts as every other agreement in this document; only the parts differ. P14 proposes the sub-side object Patina lacks. Constraint 7 holds for the prime: the signature table admits exactly two parties, <code class="mono">party_role CHECK IN ('client','studio')</code> with <code class="mono">UNIQUE (proposal_id, party_role)</code> <span class="ref">00412:101, :108</span>. It is not reopened. A sub signs on the Trade Agreement's own table instead, by token link on the <code class="mono">trade_rfq_tokens</code> pattern <span class="ref">00424</span>, with identity from <code class="mono">studio_contacts</code> <span class="ref">00417</span>.</p>
+  </div>
+
+  <h3 class="mono-head">The Trade Agreement, against lane 02's eight essentials</h3>
+  <div class="mockscroll">
+    <table class="tight min720">
+      <thead><tr><th class="w-name" scope="col">Essential</th><th class="w-what" scope="col">What it holds</th><th scope="col">Where it comes from</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Scope</th><td>The drawings and specifications for this trade only</td><td>the prime's schedule of values line</td></tr>
+        <tr><th scope="row">Price</th><td>Lump sum or unit price, mapped to one or more schedule-of-values lines</td><td>the awarded bid</td></tr>
+        <tr><th scope="row">Schedule</th><td>Start date, duration, sequencing dependencies</td><td>the studio</td></tr>
+        <tr><th scope="row">Flow-down</th><td>The sub is bound by the prime's terms to the extent they apply to its scope</td><td>generated from the prime; wording by counsel (<a href="#rulings">R16</a>)</td></tr>
+        <tr><th scope="row">Retainage</th><td>Percentage withheld from the sub's progress payments and its release rule</td><td>the prime's draws part, mirrored down</td></tr>
+        <tr><th scope="row">Pay-when-paid</th><td>Payment to the sub within a stated number of days of the client's draw clearing</td><td>a clause part on the Trade Agreement</td></tr>
+        <tr><th scope="row">Insurance</th><td>A certificate naming the studio as additional insured, and what happens when it lapses</td><td>an attachment part, tracked per sub</td></tr>
+        <tr><th scope="row">Lien waivers</th><td>Conditional before each draw clears, unconditional after</td><td>an attachment per draw (P12)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The current trade-scope instrument covers none of flow-down, pay-when-paid, insurance certificates or lien waivers. Those four are the gap P14 closes, and why a Trade Agreement is a new object rather than a widened old one.</p>
+  <p class="caption no-prose">Source: lane 02 §7.</p>
+
+  <h3 class="mono-head">Contract structures</h3>
+  <div class="mockscroll">
+    <table class="tight min900">
+      <thead><tr><th class="w-name" scope="col">Structure</th><th scope="col">Who the client pays</th><th scope="col">Who holds subs</th><th scope="col">Construction risk</th><th scope="col">Licensing exposure</th><th scope="col">Patina class</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Single prime &mdash; design + build, one firm</th><td>The studio, one contract</td><td>The studio, on Trade Agreements</td><td>Studio carries full cost and schedule risk</td><td>Studio must hold the contractor license</td><td><code class="mono">design_build</code> + P14</td></tr>
+        <tr><th scope="row">Split &mdash; design + construction, same firm</th><td>The studio, two documents</td><td>The studio's construction side, on Trade Agreements</td><td>Construction risk under the construction agreement only</td><td>Construction entity must hold the license</td><td><code class="mono">design_services</code> + <code class="mono">design_build</code> + P14</td></tr>
+        <tr><th scope="row">Design + owner-held GC</th><td>The GC directly, plus a design fee to the studio</td><td>The GC &mdash; Patina holds nothing</td><td>GC carries all of it; the studio none</td><td>None &mdash; the studio never contracts with subs as a principal</td><td><code class="mono">design_services</code> today</td></tr>
+        <tr><th scope="row">CM at-risk</th><td>The studio, acting as CM</td><td>The studio, once GMP is set</td><td>Studio guarantees cost and schedule like a GC</td><td>Studio needs a contractor license</td><td><code class="mono">design_build</code>, pricing basis cost-plus with GMP</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="mono-head">The turnkey template, part by part</h3>
+  <div class="mockscroll">
+    <table class="tight min900">
+      <thead><tr><th class="w-name" scope="col">Part</th><th scope="col">Kind</th><th scope="col">Required</th><th scope="col">Client sees</th><th class="w-what" scope="col">Note</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Pricing basis</th><td>money &middot; pricing basis</td><td>yes</td><td>yes</td><td>fixed &middot; cost-plus &middot; cost-plus with GMP &middot; T&amp;M with NTE; carries the schedule of values</td></tr>
+        <tr><th scope="row">Draws</th><td>money &middot; draws</td><td>yes</td><td>yes</td><td>milestone or percent-complete; retainage % and release rule live here; each draw issues an invoice, reusing the <code class="mono">issue_trade_draw_invoice</code> shape <span class="ref">00423</span></td></tr>
+        <tr><th scope="row">Allowances</th><td>money &middot; allowances</td><td>optional</td><td>yes</td><td>overage / underage rule</td></tr>
+        <tr><th scope="row">Sub disclosure</th><td>clause &mdash; open-book or closed-book, one per contract</td><td>yes</td><td>yes</td><td>identities always; awarded prices per the open- or closed-book choice; the bid ledger never (<a href="#rulings">R13</a>)</td></tr>
+        <tr><th scope="row">Supervision fee vs markup</th><td>clause + a pricing-basis field</td><td>yes</td><td>yes</td><td>the no-double-count rule is enforced by the template, not by drafting</td></tr>
+        <tr><th scope="row">Change orders</th><td>clause</td><td>yes</td><td>yes</td><td>a first-class addendum that patches the schedule of values</td></tr>
+        <tr><th scope="row">Lien waivers</th><td>attachment per draw</td><td>optional</td><td>yes</td><td>conditional / unconditional &times; progress / final (P12); the sub side of the same exchange lives on the Trade Agreement</td></tr>
+        <tr><th scope="row">Licensing attestation</th><td>attestation</td><td><strong>gate</strong> &mdash; the template is not selectable without it</td><td>no</td><td>credential type &middot; number &middot; state &middot; expiry; self-attested (<a href="#rulings">R10</a>)</td></tr>
+        <tr><th scope="row">Notice of cancellation</th><td>attachment</td><td>jurisdiction-triggered</td><td>yes</td><td>WI ATCP 110 &middot; MN 325G &middot; IL &middot; CA BPC &sect;7159 &middot; NY &middot; MA 142A <span class="unconf">MA not confirmed &mdash; mass.gov 403 on re-fetch</span> &mdash; all seeded disabled until counsel reviews (<a href="#rulings">R11</a>)</td></tr>
+        <tr><th scope="row">Mandated contents</th><td>template checklist</td><td>jurisdiction-triggered</td><td>&mdash;</td><td>CA &sect;7159 items, WI ATCP 110 written-contract items</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="mock">
+    <p class="mock-cap">M6 &middot; Proposed &middot; The Halvorsen kitchen and mudroom, composed &middot; 1180px</p>
+
+    <div class="controlrow" style="margin:0 0 1rem">
+      <span class="chip">Cost basis $71,300</span>
+      <span class="chip">Fee 18% &middot; $12,834</span>
+      <span class="chip">GMP $84,134</span>
+      <span class="chip">Retainage 5%</span>
+      <span class="chip">Design fee (flat, separate) $11,000</span>
+    </div>
+
+    <div class="mockgrid mg-rail-3">
+      <div class="mockpanel">
+        <p class="mockhead">Parts &middot; 10 &nbsp;&nbsp; &bull; must be filled in</p>
+        <ul class="partlist">
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">$</span>Pricing basis<span class="req">&bull;</span></li>
+          <li class="sel"><span class="grip">&#8942;&#8942;</span><span class="kg">$</span>Draws<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">$</span>Allowances</li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Sub disclosure<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Supervision fee<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Change orders<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Termination</li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&para;</span>Terms<span class="req">&bull;</span></li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&#9633;</span>Attachment A &mdash; notice</li>
+          <li><span class="grip">&#8942;&#8942;</span><span class="kg">&#9633;</span>Attachment B &mdash; lien waiver form</li>
+        </ul>
+        <p class="caption" style="margin-top:.6rem">The schedule of values is carried by Pricing basis, not by a part of its own. Supervision fee is the no-double-count clause: on this agreement the 18% cost-plus fee <em>is</em> the supervision fee, so no sub markup is taken on top.</p>
+      </div>
+
+      <div class="mockpanel-plain">
+        <p class="letterhead">Draws</p>
+        <p class="subhead">Money part &middot; retainage 5% on work in place</p>
+        <div class="mockscroll">
+          <table class="mocktable wide5">
+            <thead><tr><th scope="col">Draw</th><th class="pct" scope="col">%</th><th class="money" scope="col">Gross</th><th class="money" scope="col">Retainage held</th><th class="money" scope="col">Net paid</th></tr></thead>
+            <tbody>
+              <tr><td class="item">Deposit at signing</td><td class="pct">10%</td><td class="money">$8,413.40</td><td class="money">$0</td><td class="money">$8,413.40</td></tr>
+              <tr><td class="item">Rough-in</td><td class="pct">30%</td><td class="money">$25,240.20</td><td class="money">$1,262.01</td><td class="money">$23,978.19</td></tr>
+              <tr><td class="item">Cabinets set</td><td class="pct">40%</td><td class="money">$33,653.60</td><td class="money">$1,682.68</td><td class="money">$31,970.92</td></tr>
+              <tr><td class="item">Substantial completion</td><td class="pct">20%</td><td class="money">$16,826.80</td><td class="money">$841.34</td><td class="money">$15,985.46</td></tr>
+              <tr><td class="item">Final &middot; retainage release</td><td class="pct">&mdash;</td><td class="money">&mdash;</td><td class="money">($3,786.03)</td><td class="money">$3,786.03</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mockpanel">
+        <p class="mockhead">Licensing</p>
+        <div class="dbox"><b>Attestation on file</b><br>WI Dwelling Contractor<br>expires 2027-03</div>
+        <p class="mockhead" style="margin:1.2rem 0 .3rem">Trade Agreements</p>
+        <div class="dbox">Cabinetry &amp; millwork <b>$38,000</b><br><span class="mono">signed 2 Sep</span></div>
+        <div class="dbox">Electrical <b>$9,500</b><br><span class="mono">sent, awaiting signature</span></div>
+        <div class="dbox">Plumbing <b>$7,200</b><br><span class="mono">draft</span></div>
+      </div>
+    </div>
+
+    <ol class="annlist">
+      <li>Each draw issues an invoice on the existing trade-draw shape. The client sees gross, retainage and net.</li>
+      <li>The right rail is the sub side: three Trade Agreements (P14), each a studio-to-sub contract the client is not party to. Their awarded prices reach the client only through the sub-disclosure clause; the competing bids never do (<a href="#rulings">R13</a>).</li>
+      <li>The design fee sits outside the cost basis by construction &mdash; it is billed under its own design-services agreement.</li>
+    </ol>
+    <figcaption><b>M6</b> &middot; every money figure here is from <code class="mono">source/fixtures.json</code> and recomputed by <code class="mono">check-fixture.mjs</code>; the dates and statuses are drawn. The full derivation is Ledger B in <a href="#fixture">§9</a>.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <p class="mock-cap">M7 &middot; Proposed &middot; The licensing attestation &mdash; the gate on the design-build template &middot; 620px sheet</p>
+    <p class="letterhead">Before this studio can use the design-build template</p>
+    <div class="hair"></div>
+    <div class="controlrow"><span class="lab">Credential type</span><span class="selectmock">WI Dwelling Contractor | MN Residential Building Contractor | CA CSLB | other</span></div>
+    <div class="controlrow"><span class="lab">Number</span><span class="field blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+      <span class="lab">State</span><span class="field blank">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+      <span class="lab">Expiry</span><span class="field blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div>
+    <div class="controlrow"><span class="mono">&#9633;</span><span class="lab" style="text-transform:none;letter-spacing:.02em">I attest this credential is current and covers the work in this agreement</span></div>
+    <p class="caption" style="margin-top:1rem">Patina helps you assemble and send agreements from parts you write and own. It is not a law firm and does not give legal advice &mdash; have an attorney review your templates before use.</p>
+    <div class="railfoot"><span class="btnmock">Save attestation</span></div>
+    <ol class="annlist">
+      <li>Patina stores, never verifies (<a href="#rulings">R10</a>).</li>
+      <li>This gates the design-build template: a studio cannot select it until the attestation is on file (<a href="#rulings">R10</a>, D-1). It gates one template, not the studio's other agreements.</li>
+      <li>The checkbox wording is a placeholder &mdash; counsel writes it, along with whether storing credentials creates exposure of its own (<a href="#rulings">R10</a>).</li>
+    </ol>
+    <figcaption><b>M7</b> &middot; the standing disclaimer is the wording recommended in <span class="ref">03 §5</span>; it rides every template, not only this sheet.</figcaption>
+  </figure>
+
+  <h3 class="mono-head">Licensing in six states</h3>
+  <div class="mockscroll">
+    <table class="tight min720">
+      <thead><tr><th scope="col">State</th><th class="w-what" scope="col">Rule</th><th class="w-why" scope="col">Threshold / exception</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Wisconsin</th><td>Dwelling Contractor credential, with a Qualifier attached to the entity</td><td>Qualifier needs a 12-hour approved course, no exam. No de-minimis dollar exemption found &mdash; <span class="unconf">not confirmed</span> rather than none</td></tr>
+        <tr><th scope="row">Illinois</th><td>No statewide license; a written contract is mandated instead</td><td>$1,000 triggers the written-contract mandate, not a license. Municipalities layer their own</td></tr>
+        <tr><th scope="row">Minnesota</th><td>Residential Building Contractor / Remodeler license</td><td>Required once contracting directly with a homeowner and offering more than one special skill; exempt under $15,000 gross annual receipts with a Certificate of Exemption</td></tr>
+        <tr><th scope="row">California</th><td>Contractor's license</td><td>Once a single project, labor plus materials, exceeds $1,000 &mdash; raised from $500 on 1 Jan 2025 (AB 2622). Exemption holds only with no workers hired and no permit needed</td></tr>
+        <tr><th scope="row">New York</th><td>No statewide license; registration is local</td><td>NYC, Nassau, Suffolk, Westchester, Putnam, Rockland and Buffalo each require it. An unlicensed party may be unable to enforce the contract or collect</td></tr>
+        <tr><th scope="row">Massachusetts</th><td><span class="unconf">Not confirmed</span> &mdash; mass.gov returned 403 on re-fetch</td><td>142A's mandated contract terms and separate-page cancellation notice are carried over from the seed brief, not independently verified. P11 seeds MA last</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption no-prose">Rule cells state the rule; thresholds and exceptions sit in the third column. Sources in Appendix B, lane 02.</p>
+</section>
+
+<!-- ============================================================ 09 -->
+<section id="fixture" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Nine</p><h2>The fixtures</h2></div>
+
+  <p class="lede">Two houses carry every money figure below. The houses and clients are invented, the studio name is Leah's own, and the arithmetic is checked by a script beside this file.</p>
+
+  <h3>Ledger A &middot; the Okonkwo house, Madison</h3>
+  <div class="mockscroll">
+    <table class="tight min720">
+      <thead><tr><th class="w-name" scope="col">Line</th><th scope="col">Rate</th><th scope="col">Hours</th><th class="w-why" scope="col">Figure</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Studio</th><td>&mdash;</td><td>&mdash;</td><td class="val">Middle West Studio</td></tr>
+        <tr><th scope="row">Engagement</th><td>&mdash;</td><td>&mdash;</td><td class="val">design services</td></tr>
+        <tr><th scope="row">Principal</th><td class="num">$225/h</td><td class="num">40 hours</td><td class="num">$9,000</td></tr>
+        <tr><th scope="row">Designer</th><td class="num">$165/h</td><td class="num">60 hours</td><td class="num">$9,900</td></tr>
+        <tr><th scope="row">Design associate</th><td class="num">$110/h</td><td class="num">30 hours</td><td class="num">$3,300</td></tr>
+        <tr><th scope="row">Fee estimate total</th><td>&mdash;</td><td>&mdash;</td><td class="num"><strong>$22,200</strong></td></tr>
+        <tr><th scope="row">Retainer</th><td>&mdash;</td><td>&mdash;</td><td class="num">$5,000</td></tr>
+        <tr><th scope="row">Design authorization ceiling</th><td>&mdash;</td><td>&mdash;</td><td class="num">$24,000</td></tr>
+        <tr><th scope="row">Headroom under ceiling</th><td>&mdash;</td><td>&mdash;</td><td class="num">$1,800</td></tr>
+        <tr><th scope="row">Furnishings deposit</th><td>&mdash;</td><td>&mdash;</td><td class="num">50%</td></tr>
+        <tr><th scope="row">Billing cadence</th><td>&mdash;</td><td>&mdash;</td><td class="val">monthly</td></tr>
+        <tr><th scope="row">Month one billed</th><td>&mdash;</td><td>&mdash;</td><td class="num">$6,150</td></tr>
+        <tr><th scope="row">First invoice due (after retainer credit)</th><td>&mdash;</td><td>&mdash;</td><td class="num"><strong>$1,150</strong></td></tr>
+        <tr><th scope="row">Furnishings wave</th><td>&mdash;</td><td>&mdash;</td><td class="num">$31,400</td></tr>
+        <tr><th scope="row">Furnishings deposit due</th><td>&mdash;</td><td>&mdash;</td><td class="num"><strong>$15,700</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Ledger B &middot; the Halvorsen kitchen and mudroom, Middleton</h3>
+  <p class="caption no-prose">Engagement: <b>turnkey design-build</b>. Cost-plus fee <b>18%</b> on the cost of the work, retainage <b>5%</b> on work in place.</p>
+
+  <h3 class="mono-head">Cost basis, and the schedule of values it produces</h3>
+  <div class="mockscroll">
+    <table class="tight min720">
+      <caption class="sr-only">Each cost line and the schedule-of-values line it produces once the 18% fee is pro-rated across it.</caption>
+      <thead><tr><th class="w-name" scope="col">Line</th><th scope="col">Cost basis</th><th scope="col">Schedule of values <span class="mono">(cost &times; 1.18)</span></th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Cabinetry &amp; millwork</th><td class="num">$38,000</td><td class="num">$44,840</td></tr>
+        <tr><th scope="row">Electrical</th><td class="num">$9,500</td><td class="num">$11,210</td></tr>
+        <tr><th scope="row">Plumbing</th><td class="num">$7,200</td><td class="num">$8,496</td></tr>
+        <tr><th scope="row">General conditions / site</th><td class="num">$6,300</td><td class="num">$7,434</td></tr>
+        <tr><th scope="row">Tile allowance</th><td class="num">$4,000</td><td class="num">$4,720</td></tr>
+        <tr><th scope="row">Plumbing fixtures allowance</th><td class="num">$3,500</td><td class="num">$4,130</td></tr>
+        <tr><th scope="row">Lighting allowance</th><td class="num">$2,800</td><td class="num">$3,304</td></tr>
+        <tr><th scope="row">Cost basis</th><td class="num"><strong>$71,300</strong></td><td>&mdash;</td></tr>
+        <tr><th scope="row">Fee &mdash; 18% of the cost basis</th><td class="num"><strong>$12,834</strong></td><td>&mdash;</td></tr>
+        <tr><th scope="row">GMP</th><td class="num"><strong>$84,134</strong></td><td class="num"><strong>$84,134</strong> <span class="mono">schedule of values total</span></td></tr>
+        <tr><th scope="row">Design fee (flat, separate)</th><td class="num">$11,000</td><td>outside the GMP</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>A design choice, stated: this document pro-rates the 18% fee across every schedule-of-values line, and <a href="#rulings">R13</a> must rule that together with the open- or closed-book choice.</p>
+  <p class="caption no-prose">Lane 02 §8's worked example keeps the schedule of values at cost and shows the fee as one separate line &mdash; the <b>$71,300</b> cost basis plus a <b>$12,834</b> fee, both above. Pro-rating is what a GMP draw schedule normally bills against, but it also lets a client divide any line by 1.18 and recover a sub's price: intended under open-book, not under closed-book.</p>
+
+  <h3 class="mono-head">Draws, retainage and the release</h3>
+  <div class="mockscroll">
+    <table class="tight min900">
+      <thead><tr><th class="w-name" scope="col">Draw</th><th scope="col">%</th><th scope="col">Gross</th><th scope="col">Retainage held</th><th scope="col">Retainage cumulative</th><th scope="col">Net paid</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Deposit at signing</th><td class="num">10%</td><td class="num">$8,413.40</td><td class="num">$0</td><td class="num">&mdash;</td><td class="num">$8,413.40</td></tr>
+        <tr><th scope="row">Rough-in</th><td class="num">30%</td><td class="num">$25,240.20</td><td class="num">$1,262.01</td><td class="num">$1,262.01</td><td class="num">$23,978.19</td></tr>
+        <tr><th scope="row">Cabinets set</th><td class="num">40%</td><td class="num">$33,653.60</td><td class="num">$1,682.68</td><td class="num">$2,944.69</td><td class="num">$31,970.92</td></tr>
+        <tr><th scope="row">Substantial completion</th><td class="num">20%</td><td class="num">$16,826.80</td><td class="num">$841.34</td><td class="num">$3,786.03</td><td class="num">$15,985.46</td></tr>
+        <tr><th scope="row">Total retainage withheld</th><td>&mdash;</td><td>&mdash;</td><td class="num"><strong>$3,786.03</strong></td><td>&mdash;</td><td>&mdash;</td></tr>
+        <tr><th scope="row">Final retainage release</th><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td class="num"><strong>$3,786.03</strong></td></tr>
+        <tr><th scope="row">Total paid (all draws + final release)</th><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td class="num"><strong>$84,134</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="caption no-prose">Figures recomputed by <code class="mono">source/check-fixture.mjs</code>; the design fee sits outside the cost-plus basis by construction. Figures drawn rather than derived, and labeled as such wherever they appear: the three per-phase fees and the 30% markup in M3, and the addendum ceiling in M8.</p>
+</section>
+
+<!-- ============================================================ 10 -->
+<section id="proposals" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Ten</p><h2>Proposals</h2></div>
+
+  <p class="lede">Fifteen, numbered P0 through P14. Each names what changes, what it reuses, and the ruling it waits on. Nothing here is built.</p>
+
+  <div class="prop">
+    <h3>P0 &middot; Fix the floor</h3>
+    <p class="who no-prose">Wave 1 &middot; Effort S&ndash;M</p>
+    <ul>
+      <li>Collapse the duplicated DTOs to <code class="mono">packages/types/src/commercial.ts</code>; the ceiling blocker becomes conditional.</li>
+      <li>&ldquo;Not yet set&rdquo; never renders on a sendable document; help copy &ldquo;Drafting Room&rdquo; &rarr; &ldquo;Contract Room&rdquo; across four Sanity loader inputs.</li>
+      <li>The three renders keep their own code for now; one renderer arrives with P6, when there is a part list for it to read.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses <code class="mono">commercial-documents.ts:180-250</code>, <code class="mono">consent-copy.ts</code>.</p>
+    <p class="waits no-prose"><b>Waits on</b> nothing.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P1 &middot; Parts on today's agreement</h3>
+    <p class="who no-prose">Wave 1 &middot; Effort M</p>
+    <ul>
+      <li><code class="mono">proposal_agreement_parts</code> + guard dispatch + fingerprint fold, all in one migration. No template table yet.</li>
+      <li>The room renders from the part list; add, remove, reorder and rename while draft.</li>
+      <li>The nine standard parts are seeded from a code-resident list in <code class="mono">packages/types</code> &mdash; the <code class="mono">studio-config.ts</code> vocabulary pattern &mdash; not from a template row. The template object arrives in P4.</li>
+      <li><code class="mono">proposal_service_terms</code> becomes the projection of the money parts.</li>
+      <li><b>Refusals that must relax:</b> <code class="mono">billing_ceiling_cents</code> becomes nullable <span class="ref">00412:73</span>; the send guard <span class="ref">00423:1608-1614</span>, the sign-time refusal <span class="ref">00477:306-309</span> and the authority CHECK <span class="ref">00412:815-820</span> all learn &ldquo;required only when time is billed&rdquo;; <code class="mono">00414:911-913</code> learns NULL as uncapped.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses <code class="mono">guard_commercial_authored_child</code> <span class="ref">00423:447-461</span>, <code class="mono">_commercial_document_fingerprint</code> <span class="ref">00423:1214-1275</span>, <code class="mono">upsert_design_services_draft</code> <span class="ref">00422</span>. Edge functions touched: none.</p>
+    <p class="waits no-prose"><b>Waits on</b> R1, R4, R5, R6.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P2 &middot; Readiness from composition</h3>
+    <p class="who no-prose">Wave 1 &middot; Effort S</p>
+    <ul>
+      <li>Required per part, plus a class-level floor.</li>
+      <li>The thirteen literal checks become derived ones; the ceiling check survives only where a rate card does.</li>
+      <li>Carries the client half of P1's relaxations: no &ldquo;Not yet set&rdquo; on a sendable document, and no refusal for a ceiling a flat-fee agreement never had.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses <code class="mono">assessServiceAgreementReadiness</code> <span class="ref">commercial-documents.ts:162-250</span>.</p>
+    <p class="waits no-prose"><b>Waits on</b> R4.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P3 &middot; Studio agreement defaults</h3>
+    <p class="who no-prose">Wave 1 &middot; Effort S&ndash;M</p>
+    <ul>
+      <li>A Defaults strip in Account &rarr; Studio: rate card, deposit %, cadence, retainer rule, default exclusions.</li>
+      <li>Discovery seeding reads it.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses <code class="mono">studio_billing_settings</code> <span class="ref">00428:42-51</span> RLS shape and the <code class="mono">account-studio-page.tsx</code> Billing card. Extends <code class="mono">upsert_design_services_draft</code>'s ten literal seeding keys <span class="ref">00422:1754-1766</span> &mdash; a defaults strip needs that RPC edited, not merely read.</p>
+    <p class="waits no-prose"><b>Waits on</b> R3.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P4 &middot; The Library</h3>
+    <p class="who no-prose">Wave 2 &middot; Effort M</p>
+    <ul>
+      <li><code class="mono">studio_agreement_parts</code>, <code class="mono">agreement_templates</code>, save-as-template, materialize.</li>
+      <li>The picker (M2) and the Library page (M4).</li>
+      <li>Four seeded templates.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses <code class="mono">board_templates</code> <span class="ref">00408</span> shape and its RPC pair.</p>
+    <p class="waits no-prose"><b>Waits on</b> R1, R2, R3, R7.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P5 &middot; Fee schedules</h3>
+    <p class="who no-prose">Wave 2 &middot; Effort M&ndash;L</p>
+    <ul>
+      <li>The fifteen variants.</li>
+      <li><code class="mono">flat</code> and <code class="mono">per_phase</code> project into authority; percent and cost-plus are record only.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses the <code class="mono">proposal_service_rates</code> shape for rate cards.</p>
+    <p class="waits no-prose"><b>Waits on</b> R9.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P6 &middot; The client's copy from parts</h3>
+    <p class="who no-prose">Wave 2 &middot; Effort M</p>
+    <ul>
+      <li>Door render from parts; the consent sentence composed from the money parts present; attachments as leaves.</li>
+      <li>The record keeps the part set and its hashes.</li>
+      <li>A frozen HTML snapshot at execution.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses <code class="mono">door-gate.tsx</code>, <code class="mono">consent-copy.ts</code> and its drift test (which learns to pin the composer, not the strings), <code class="mono">get_client_commercial_document_bundle</code>. Delivers the one renderer P0 defers. Edge functions touched: none &mdash; class stays inside <code class="mono">document_kind = 'design_services'</code>.</p>
+    <p class="waits no-prose"><b>Waits on</b> R8, R12.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P7 &middot; Addenda from parts</h3>
+    <p class="who no-prose">Wave 2 &middot; Effort M</p>
+    <ul>
+      <li><code class="mono">create_service_addendum</code> composes a part set with a why; money parts re-project.</li>
+      <li>Resolve the retainer rule: 00422 zeroes the retainer and forces <code class="mono">immediate</code> on every addendum <span class="ref">00422:1870-1878</span>. Either the retainer is excluded from addenda or the zeroing goes, under R6.</li>
+      <li>State changes stay under the existing GUC discipline <span class="ref">00477:134-139, :207-227</span>.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses the 00422 addendum path and the approvals program's <code class="mono">why</code> column <span class="ref">00569</span>.</p>
+    <p class="waits no-prose"><b>Waits on</b> R6.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P8 &middot; Change history on parts</h3>
+    <p class="who no-prose">Wave 2 &middot; Effort S</p>
+    <ul>
+      <li>Who, when and why on each part edit, visible in the room.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses the <code class="mono">why</code> pattern.</p>
+    <p class="waits no-prose"><b>Waits on</b> nothing.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P9 &middot; The turnkey class</h3>
+    <p class="who no-prose">Wave 3 &middot; Effort L</p>
+    <ul>
+      <li><code class="mono">design_build</code> template; <code class="mono">pricing_basis</code> (which carries the schedule of values), <code class="mono">draws</code> with retainage, <code class="mono">allowances</code>.</li>
+      <li>Sub disclosure; the supervision-versus-markup rule; each draw issues an invoice.</li>
+      <li><b>A new <code class="mono">document_kind</code>, and everything closed against it:</b> the <code class="mono">proposals</code> CHECK <span class="ref">00423:94-101</span>, the <code class="mono">project_commercial_documents</code> CHECK <span class="ref">00412:115-117</span>, the sign route's fail-closed dispatch <span class="ref">route.ts:273</span>, proposal-send's five parallel ternaries <span class="ref">handler.ts:240-259</span>, the notify policy's <code class="mono">SERVICES_KINDS</code> <span class="ref">policy.ts:69</span>, and the consent drift test.</li>
+      <li><code class="mono">billing_cadence</code> gains <code class="mono">per_draw</code> on both the terms and authority CHECKs <span class="ref">00412:77-78, :148</span>.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses <code class="mono">trade_scope_draws</code> and <code class="mono">issue_trade_draw_invoice</code> <span class="ref">00423</span>, <code class="mono">studio_contacts</code> <span class="ref">00417:40, :58</span>, <code class="mono">project_parties</code> <span class="ref">00212:30-31; 00419:44-49</span>. Edge functions touched: <code class="mono">proposal-send</code>, <code class="mono">commercial-document-notify</code>.</p>
+    <p class="waits no-prose"><b>Waits on</b> R13.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P10 &middot; Licensing attestation</h3>
+    <p class="who no-prose">Wave 3 &middot; Effort S</p>
+    <ul>
+      <li>An <code class="mono">attestation</code> part plus a studio setting. The design-build template is selectable only once the attestation is on file &mdash; the gate D-1 rules for.</li>
+    </ul>
+    <p class="waits no-prose"><b>Waits on</b> R10.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P11 &middot; Jurisdiction attachments</h3>
+    <p class="who no-prose">Wave 3 &middot; Effort M</p>
+    <ul>
+      <li>Seeded notices for WI, MN, IL, CA, NY and MA &mdash; <span class="unconf">MA not confirmed: mass.gov returned 403 on re-fetch, so its row is carried over from the seed brief and is seeded last</span> &mdash; plus mandated-contents checklists, all disabled until counsel reviews each.</li>
+    </ul>
+    <p class="waits no-prose"><b>Waits on</b> R11.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P12 &middot; Lien waivers per draw</h3>
+    <p class="who no-prose">Wave 3 &middot; Effort M</p>
+    <ul>
+      <li>An attachment per draw, tracked.</li>
+    </ul>
+    <p class="waits no-prose"><b>Waits on</b> nothing.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P13 &middot; Sign and pay in one step</h3>
+    <p class="who no-prose">Wave 3 &middot; Effort M</p>
+    <ul>
+      <li>Retainer or deposit offered on the door after signature, never gating it. Lifecycle moves stay under the existing GUC discipline <span class="ref">00477:134-139, :207-227</span>.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses the studio-invoice rail <span class="ref">00571</span> and Stripe Checkout.</p>
+    <p class="waits no-prose"><b>Waits on</b> R15.</p>
+  </div>
+
+  <div class="prop">
+    <h3>P14 &middot; The subcontract</h3>
+    <p class="who no-prose">Wave 3 &middot; Effort L</p>
+    <ul>
+      <li><code class="mono">studio_trade_agreements</code> &mdash; a new object whose two parties are the studio and the sub, composed from the same parts as everything else in this document.</li>
+      <li>Carries lane 02 §7's eight essentials: scope, price, schedule, flow-down, retainage, pay-when-paid, insurance certificates, lien waivers. The four the existing trade scope has no room for &mdash; flow-down, pay-when-paid, insurance, lien waivers &mdash; are the reason it is a new table.</li>
+      <li>The sub is not a Patina user and does not become one: they sign by token link, no login, identity from <code class="mono">studio_contacts</code>.</li>
+      <li>Signature rows live on the Trade Agreement's own table. <code class="mono">commercial_document_signatures</code> keeps its two-party constraint untouched <span class="ref">00412:101, :108</span>.</li>
+      <li>The existing trade scope survives as an optional client-visible per-trade authorization; under a prime with a schedule of values it is not used.</li>
+    </ul>
+    <p class="reuse no-prose">Reuses the <code class="mono">trade_rfq_tokens</code> token-link pattern <span class="ref">00424</span>, <code class="mono">studio_contacts</code> <span class="ref">00417:40, :58</span>, <code class="mono">trade_scope_draws</code> <span class="ref">00423</span>. Edge functions touched: a sub-side send, shaped on <code class="mono">proposal-send</code>.</p>
+    <p class="waits no-prose"><b>Waits on</b> R16, and on R13 for what the client sees of it.</p>
+  </div>
+
+  <p class="caption no-prose">Effort key: <b>S</b> = days &middot; <b>M</b> = a sprint &middot; <b>L</b> = more than one.</p>
+</section>
+
+<!-- ============================================================ 11 -->
+<section id="waves" data-prose-cap="50">
+  <div class="opener"><p class="eyebrow">Eleven</p><h2>Waves</h2></div>
+
+  <div class="cols cols-3">
+    <div class="wave">
+      <h3 class="mono-head">Wave 1 &middot; Loosen the room</h3>
+      <ul><li>P0 &middot; Fix the floor</li><li>P1 &middot; Parts on today's agreement</li><li>P2 &middot; Readiness from composition</li><li>P3 &middot; Studio agreement defaults</li></ul>
+      <p>A studio that changes nothing gets today's agreement, unchanged.</p>
+      <span class="flag">One migration &mdash; parts, guard, fingerprint &middot; flag <code class="mono">agreement-parts</code>, fail-closed</span>
+    </div>
+    <div class="wave">
+      <h3 class="mono-head">Wave 2 &middot; The Library</h3>
+      <ul><li>P4 &middot; The Library</li><li>P5 &middot; Fee schedules</li><li>P6 &middot; The client's copy from parts</li><li>P7 &middot; Addenda from parts</li><li>P8 &middot; Change history on parts</li></ul>
+      <p class="caption no-prose">Four seeded templates, the picker, the door from parts.</p>
+      <span class="flag">Flag <code class="mono">agreement-library</code></span>
+    </div>
+    <div class="wave">
+      <h3 class="mono-head">Wave 3 &middot; Turnkey</h3>
+      <ul><li>P9 &middot; The turnkey class</li><li>P10 &middot; Licensing attestation</li><li>P11 &middot; Jurisdiction attachments</li><li>P12 &middot; Lien waivers per draw</li><li>P13 &middot; Sign and pay in one step</li><li>P14 &middot; The subcontract</li></ul>
+      <p>A studio shape not yet on record &mdash; Leah's studio holds no subs, so this waits for a real one. Counsel review sits inside the wave.</p>
+      <span class="flag">Gate: the design-build template is selectable only with an attestation on file</span>
+    </div>
+  </div>
+
+  <p>No wave reopens the prime's signature table or writes outside definer RPCs.</p>
+</section>
+
+<!-- ============================================================ 12 -->
+<section id="rulings" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Twelve</p><h2>Rulings</h2></div>
+
+  <p class="lede">Each of these is a recommendation, not a decision. The owner column names who rules; disagreement is the useful response.</p>
+
+  <div class="mockscroll">
+    <table class="tight min900">
+      <thead><tr><th scope="col">#</th><th class="w-name" scope="col">Ruling</th><th class="w-what" scope="col">Recommendation</th><th scope="col">Owner</th><th scope="col">Blocks</th></tr></thead>
+      <tbody>
+        <tr><th class="num" scope="row" id="r1">R1</th><td><strong>Does R85 bind agreement templates?</strong></td><td>No &mdash; a studio Library is a different object from the retired per-user table</td><td>Kody</td><td class="num">P1 P4</td></tr>
+        <tr><th class="num" scope="row" id="r2">R2</th><td><strong>Template scope</strong></td><td>Studio, never person; &ldquo;mine&rdquo; is a filter, not a scope</td><td>Kody</td><td class="num">P4</td></tr>
+        <tr><th class="num" scope="row" id="r3">R3</th><td><strong>Who edits the Library</strong></td><td>Owners and admins edit; every active member composes from it</td><td>Leah (practice)</td><td class="num">P3 P4</td></tr>
+        <tr><th class="num" scope="row" id="r4">R4</th><td><strong>The floor &mdash; what can never be removed</strong></td><td>Parties and the signature block. A class that bills time keeps a ceiling part, required; the ceiling is removable only when no rate card is present, and then the column is NULL, not zero. Everything else is removable, Exclusions included</td><td>Kody</td><td class="num">P1 P2</td></tr>
+        <tr><th class="num" scope="row" id="r5">R5</th><td><strong>Prose never carries money</strong></td><td>Yes; only money parts project into terms and authority</td><td>Kody</td><td class="num">P1</td></tr>
+        <tr><th class="num" scope="row" id="r6">R6</th><td><strong>When parts freeze</strong></td><td>At send, today's rule; unsend is supersede. Carries the retainer question: 00422 zeroes the retainer on every addendum today</td><td>Kody</td><td class="num">P1 P7</td></tr>
+        <tr><th class="num" scope="row" id="r7">R7</th><td><strong>Names</strong></td><td>Agreement &middot; Part &middot; Library &middot; Template &middot; Addendum &middot; Trade Agreement &mdash; never &ldquo;clause library&rdquo; or &ldquo;contract builder&rdquo; in the studio's face</td><td>Leah (ear)</td><td class="num">P4</td></tr>
+        <tr><th class="num" scope="row" id="r8">R8</th><td><strong>Client copy order and visibility</strong></td><td>Designer's order; per-part client visibility for studio-only notes; <code class="mono">client_visibility_tier</code> unchanged</td><td>Kody</td><td class="num">P6</td></tr>
+        <tr><th class="num" scope="row" id="r9">R9</th><td><strong>Which fee variants create billing authority in Wave 2</strong></td><td>Rate card, ceiling, retainer, cadence, flat, per-phase. Percent, cost-plus and the rest stay record-only until invoicing reads them</td><td>Kody</td><td class="num">P5</td></tr>
+        <tr><th class="num" scope="row" id="r10">R10</th><td><strong>Licensing attestation</strong></td><td>Self-attested with credential fields; Patina stores, never verifies. Counsel writes the wording &mdash; and rules whether storing credentials creates exposure of its own</td><td>Counsel</td><td class="num">P10</td></tr>
+        <tr><th class="num" scope="row" id="r11">R11</th><td><strong>Jurisdiction notices</strong></td><td>Seeded and disabled until counsel reviews each state, including whether a design-services agreement is in scope at all and what conspicuousness each requires</td><td>Counsel</td><td class="num">P11</td></tr>
+        <tr><th class="num" scope="row" id="r12">R12</th><td><strong>What the client can keep</strong></td><td>A frozen HTML snapshot at execution in Wave 2, downloadable by the client. A PDF when a client asks, not before</td><td>Kody</td><td class="num">P6</td></tr>
+        <tr><th class="num" scope="row" id="r13">R13</th><td><strong>What the client sees of subs</strong></td><td>Identities always; awarded prices per the open- or closed-book clause; the bid ledger never. Rules the pro-rated schedule of values with it &mdash; a closed-book contract cannot pro-rate a disclosed fee</td><td>Leah</td><td class="num">P9 P14</td></tr>
+        <tr><th class="num" scope="row" id="r14">R14</th><td><strong>Permissions inside the room</strong></td><td>Pending Q7. The simulated panel raised it <span class="sim">[disagreement 4]</span>; a real answer from a real studio should settle it</td><td>Kody</td><td class="num">&mdash;</td></tr>
+        <tr><th class="num" scope="row" id="r15">R15</th><td><strong>Sign and pay in one step</strong></td><td>Offer after signature; never gate the signature on payment</td><td>Kody</td><td class="num">P13</td></tr>
+        <tr><th class="num" scope="row" id="r16">R16</th><td><strong>Do subs sign inside Patina?</strong></td><td>Yes, by token link, no login &mdash; on the Trade Agreement's own signature table, never the prime's. Counsel writes the flow-down wording</td><td>Kody + counsel</td><td class="num">P14</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ 13 -->
+<section id="out" data-prose-cap="50">
+  <div class="opener"><p class="eyebrow">Thirteen</p><h2>What stays out</h2></div>
+
+  <p class="lede">Two of these are closed by an earlier ruling. The rest are recommendations, and the ruling that owns each one is named.</p>
+
+  <ul>
+    <li><strong>Drawn signatures</strong> &mdash; closed, approvals R2.</li>
+    <li><strong>A co-signer login</strong> &mdash; deferred twelve months, approvals P-29.</li>
+    <li><strong>Amend-in-place after send</strong> &mdash; recommended out; <a href="#rulings">R6</a> owns it, and rigidity 5 is the argument for the other side.</li>
+    <li><strong>Covenant or royalty language of any kind</strong> &mdash; V6.</li>
+    <li><strong>A general contract builder</strong> for documents that are not agreements &mdash; recommended out; no ruling asks for it, and R7 bans the phrase.</li>
+    <li><strong>Verifying licenses</strong> &mdash; recommended out; <a href="#rulings">R10</a> owns it. Patina stores the attestation and nothing more.</li>
+    <li><strong>Legal advice</strong> &mdash; every template carries the standing disclaimer.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 14 -->
+<section id="respond" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Fourteen</p><h2>How to respond</h2></div>
+
+  <ul>
+    <li><strong>Comment on the Artifact</strong> on the line it concerns.</li>
+    <li><strong>Rule <a href="#rulings">R1&ndash;R16</a></strong> &mdash; Kody owns ten; Leah R3, R7 and R13; counsel R10 and R11; R16 is Kody's with counsel on the wording.</li>
+    <li><strong>Walk the Okonkwo fixture</strong> in the portal against <a href="#model">M1</a> &mdash; thirty minutes gets further than reading.</li>
+  </ul>
+
+  <div class="qgroup">
+    <h3 class="mono-head">Eleven questions for the Middle West team</h3>
+    <ol>
+      <li>Which of the seven facets have you wanted to delete?</li>
+      <li>How many templates would your studio keep, and what are they called?</li>
+      <li>Which fee model do you actually quote?</li>
+      <li>Does a retainer get credited, or is it non-refundable?</li>
+      <li>Should exclusions be removable?</li>
+      <li>What should the client see of a sub?</li>
+      <li>Who in the studio may edit the Library?</li>
+      <li>Would you sign an attestation about licensing inside Patina?</li>
+      <li>Do you want a PDF, or is the frozen copy enough?</li>
+      <li>What would make you notice Patina in this room &mdash; and should we remove it?</li>
+      <li>Does Middle West hold trades under its own name, or plan to?</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============================================================ appendix -->
+<section id="appendix" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Appendix</p><h2>Citations, sources, panel, vision test</h2></div>
+
+  <h3>A &middot; Codebase citations</h3>
+  <ul class="citelist">
+    <li><b>Rigidity 1</b> apps/designer-portal/src/components/document/rooms/drafting/service-agreement-drafting-room.tsx:356-605</li>
+    <li><b>Rigidity 2</b> supabase/migrations/00412_design_services_commercial_authority.sql:68-84</li>
+    <li><b>Rigidity 3</b> apps/designer-portal/src/lib/document/commercial-documents.ts:180-250 (ceiling blocker :211)</li>
+    <li><b>Rigidity 4</b> 00412:75-78; 00412:33-46; 00423:94-101; un-CHECKed pattern 00417:87</li>
+    <li><b>Rigidity 5</b> supabase/migrations/00423_trade_scope_instrument.sql:440-461</li>
+    <li><b>Rigidity 6</b> drafting/draft-proposal-opener.tsx:6-7; DECISIONS.md:2682</li>
+    <li><b>Rigidity 7</b> supabase/migrations/00428_invoice_payment_method_surcharge.sql:42-51; board_templates 00408:18-49</li>
+    <li><b>Rigidity 8</b> service-agreement-drafting-room.tsx:459 vs :377, :399</li>
+    <li><b>Rigidity 9</b> apps/client-portal/src/components/commercial-document-shell.tsx:179-262; service-agreement-preview.tsx:91-244; consent-copy.ts:26-60; __tests__/consent-copy.test.ts:27</li>
+    <li><b>Rigidity 10</b> supabase/functions/spec-pdf/index.ts:15-22</li>
+    <li><b>Rigidity 11</b> packages/types/src/commercial.ts:41-55 vs commercial-documents.ts:1-8, 49-70</li>
+    <li><b>Rigidity 12</b> supabase/migrations/00423_trade_scope_instrument.sql:1214-1275</li>
+    <li><b>Constraint 1</b> fingerprint is table-scoped 00423:1224-1246; send refuses on mismatch 00423:1592-1596</li>
+    <li><b>Constraint 2</b> only typed money creates authority 00566:788-797; re-CHECKed 00412:145-152</li>
+    <li><b>Constraint 3</b> immutability at send, not signature &mdash; guard_commercial_authored_child 00423:452-455, dispatch :447-451</li>
+    <li><b>Constraint 4</b> lifecycle columns move only under transaction-local GUCs 00477:134-139, :207-227</li>
+    <li><b>Constraint 5</b> RLS helpers is_studio_comember 00556:51 &middot; is_active_studio_member 00417:40 &middot; is_org_admin_or_owner 00484:604 &middot; is_active_org_member 00556:86</li>
+    <li><b>Constraint 6</b> studio-scoped, not designer-scoped &mdash; phase_templates 00135:49, :70-74 and proposal_templates 00063:19, :31-32 are per-user; board_templates 00408:24, :37-49, :129-143 is not</li>
+    <li><b>Constraint 7</b> signature table admits two parties &mdash; 00412:101, :108; trade_scope 00423:144</li>
+    <li><b>Trade scope is client-facing</b> sign route dispatch route.ts:178-187; execute_trade_scope_with_trusted_ip refusal 00423:1881; client consent sentence consent-copy.ts:31; trade_scope_terms.client_price_cents 00423:185; instrument definition 00423:144</li>
+    <li><b>Draw invoicing</b> issue_trade_draw_invoice, supabase/migrations/00423_trade_scope_instrument.sql; token-link pattern trade_rfq_tokens, 00424</li>
+    <li><b>document_kind is closed</b> proposals CHECK 00423:94-101; project_commercial_documents CHECK 00412:115-117; sign route fail-closed dispatch route.ts:273; proposal-send ternaries handler.ts:240-259; notify policy SERVICES_KINDS policy.ts:69</li>
+    <li><b>Ceiling and time authorization</b> billing_ceiling_cents NOT NULL 00412:73; authority CHECK 00412:145, :815-820; send guard 00423:1608-1614; time authorization 00414:911-913; retainer invoice at countersign 00566:765-784; addendum supersedes prior authority 00566:761-763</li>
+    <li><b>Addendum copies the origin terms row, zeroing the retainer</b> 00422:1870-1878; the ten Discovery seeding keys 00422:1754-1766; create_furnishings_authorization_from_schedule 00422:370</li>
+    <li><b>Signature metadata</b> commercial_document_signatures.metadata 00412:107</li>
+    <li><b>Billing card, as deployed</b> account-studio-page.tsx:811-823 (card-fee label :821; check remit-to named in the help copy :813); card surcharge default 00428</li>
+    <li><b>Constraint 8</b> consent copy pinned by a disk-reading drift test &mdash; consent-copy.ts:26-60, __tests__/consent-copy.test.ts:27, sign/route.ts:124, 178, 235, 269</li>
+    <li><b>The Contract Room</b> title :268, counter :269 (7 &minus; blockers.length, :192-195), DEFAULT_DELIVERABLES :30-34, DEFAULT_EXCLUSIONS :35-38, DEPOSIT_CHIPS :67 rendered :485 with other :507, activation select :563 (:574-575), cadence select :586 (:597-599), + Add a role :459</li>
+    <li><b>DB refusal</b> &ldquo;design services agreement requires terms and at least one role rate&rdquo; &mdash; EXISTS check 00477:306, message :309</li>
+  </ul>
+
+  <h3>B &middot; Sources by lane</h3>
+  <p class="caption no-prose">Hostnames, deduplicated, with the specific document named in brackets where one is meant; <code class="mono">27/197</code> and <code class="mono">28/205</code> are ASID's own product-page path segments. The ten sources the body leans on hardest are linked in full below the list.</p>
+  <ul class="srclist">
+    <li><span class="acc">01 &middot; contracting</span> — asid.org (Residential 27/197, Commercial 28/205) &middot; mn.asid.org/costs &middot; designmanager.com &middot; terms.law &middot; roomwork.ai &middot; vividlybuilt.com &middot; fynk.com &middot; crewcost.com &middot; lawinsider.com &middot; interiordesigncommunity.com &middot; showplacehq.com &middot; famearchitects.com &middot; nubuordesigns.com &middot; procurist.io &middot; dakotadesigncompany.com &middot; blairburtoninteriors.com &middot; homeguide.com &middot; designerfeecalculator.com &middot; getmonetizely.com &middot; manypixels.co &middot; thelegalpaige.com &middot; circaphiles.com &middot; capellakincheloe.com &middot; foyr.com &middot; idlawshop.com &middot; kaplaw.com &middot; programa.design &middot; northstarlaw.com &middot; hellobonsai.com &middot; legaltemplates.net</li>
+    <li><span class="acc">02 &middot; design-build</span> — learn.aiacontracts.com (A-series, design-build family, subcontractor guide, lien-waiver types) &middot; store.dbia.org (525) &middot; consensusdocs.org &middot; bricker.com &middot; designtekconsulting.com &middot; procore.com &middot; projul.com &middot; getbuilt.com &middot; documentcrunch.com &middot; rabbet.com &middot; unitedrentals.com &middot; dsps.wi.gov &middot; adaptdigitalsolutions.com &middot; thecontractormatrix.com &middot; illinoisattorneygeneral.gov &middot; contractorrequirements.com &middot; dli.mn.gov &middot; revisor.mn.gov (326B.805, 325G.07) &middot; simplywise.com &middot; contractorslicenseguru.com &middot; fox40.com &middot; cslb.ca.gov &middot; law.justia.com (BPC 7159) &middot; liconstructionlaw.com &middot; datcp.wi.gov &middot; regulations.justia.com (ATCP 110.05) &middot; ag.state.mn.us &middot; nyc.gov/dca &middot; mass.gov (142A, 403 on re-fetch) &middot; levelset.com &middot; designbuildlaw.com &middot; constructioncostaccounting.com &middot; aiacontracts.com &middot; buildingadvisor.com &middot; angi.com &middot; constructioncoverage.com &middot; markupandprofit.com &middot; hollingtonlawfirm.com &middot; boomandbucket.com &middot; zigaflow.com &middot; eb3construction.com &middot; docutrax.com &middot; lukesfurniturecompany.com &middot; woodweb.com</li>
+    <li><span class="acc">03 &middot; software + e-sign</span> — pro.houzz.com &middot; studiodesigner.com &middot; blog.designfiles.co &middot; mydomastudio.com + help.mydomastudio.com &middot; programa.design &middot; help.honeybook.com &middot; help.dubsado.com &middot; emakatiraee.com &middot; hellobonsai.com &middot; pandadoc.com + support.pandadoc.com &middot; docusign.com + support.docusign.com &middot; buildertrend.com &middot; jobtread.com &middot; ironcladapp.com + support.ironcladapp.com &middot; juro.com &middot; signwell.com &middot; agrello.io &middot; esignly.com &middot; thanksroger.com &middot; papersign.com &middot; easylegaldocs.com</li>
+  </ul>
+  <p class="caption no-prose">Linked in full, the ten the body rests on:
+    <a href="https://www.asid.org/digital_downloads/products/view/27/197">ASID Residential contract package</a> &middot;
+    <a href="https://www.asid.org/digital_downloads/products/view/28/205">ASID Commercial contract package</a> &middot;
+    <a href="https://dsps.wi.gov/Pages/Professions/DwellingContractorQualifier/Default.aspx">WI DSPS Dwelling Contractor Qualifier</a> &middot;
+    <a href="https://regulations.justia.com/states/wisconsin/atcp/atcp-90-139/chapter-atcp-110/section-atcp-110-05">WI ATCP 110.05</a> &middot;
+    <a href="https://www.cslb.ca.gov/Consumers/Hire_A_Contractor/Home_Improvement_Contracts/Warnings_And_Exceptions.aspx">CA CSLB home-improvement contracts</a> &middot;
+    <a href="https://law.justia.com/codes/california/code-bpc/division-3/chapter-9/article-10/section-7159/">CA BPC &sect;7159</a> &middot;
+    <a href="https://www.revisor.mn.gov/statutes/cite/325g.07">Minn. Stat. 325G.07</a> &middot;
+    <a href="https://help.mydomastudio.com/en/articles/7180113-how-to-ensure-everything-is-visible-to-your-clients">Mydoma feature toggles</a> &middot;
+    <a href="https://buildertrend.com/project-management/construction-change-order-software/">Buildertrend change orders</a> &middot;
+    <a href="https://learn.aiacontracts.com/guides/subcontractor-contracts-guide/">AIA subcontractor contracts guide</a>.
+  </p>
+
+  <h3>C &middot; SIMULATED panel</h3>
+  <p class="caption no-prose">Five invented personas built to sharpen the questions. Not evidence, and never cited as such.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Persona</th><th class="w-what" scope="col">What they want from &ldquo;flexible&rdquo;</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Marta &middot; Madison hire-maker <span class="sim">[simulated]</span></th><td>A new hire builds the first draft from a template she trusts, and she still holds the number.</td></tr>
+        <tr><th scope="row">Dana &middot; solo e-design packager <span class="sim">[simulated]</span></th><td>Three packages, the same wording every time; only price and room list change.</td></tr>
+        <tr><th scope="row">Marcus &middot; Minneapolis design-build principal <span class="sim">[simulated]</span></th><td>A GMP number he can put in front of a client and mean, with subs disclosed as far as law and client need.</td></tr>
+        <tr><th scope="row">Elise &middot; furnishings-only studio <span class="sim">[simulated]</span></th><td>An agreement about furniture, freight and a deposit &mdash; not construction exclusions she has never used.</td></tr>
+        <tr><th scope="row">Renee &middot; bookkeeper / ops <span class="sim">[simulated]</span></th><td>One shelf of clauses across every studio she serves, version-pinned, with a paper trail on every change.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th scope="col">#</th><th class="w-name" scope="col">Disagreement</th><th scope="col">Ruled at</th></tr></thead>
+      <tbody>
+        <tr><th class="num" scope="row">1</th><td>Can Exclusions be removed, or only reordered?</td><td class="num">R4</td></tr>
+        <tr><th class="num" scope="row">2</th><td>Does sub and bid visibility stay studio-only, or does some of it reach the client?</td><td class="num">R13</td></tr>
+        <tr><th class="num" scope="row">3</th><td>Can a studio delete or rename the seven canonical facets, or only add alongside them?</td><td class="num">R4, R7</td></tr>
+        <tr><th class="num" scope="row">4</th><td>Should role-based permissions gate who edits rates within a studio?</td><td class="num">R14</td></tr>
+        <tr><th class="num" scope="row">5</th><td>Does turnkey require a licensing attestation gate, and who administers it?</td><td class="num">R10</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>D &middot; Vision test</h3>
+  <div class="ftest">
+    <p><b>Surface</b> &mdash; The Document. Nothing here reaches the marketplace.</p>
+    <p><b>Moment</b> &mdash; the studio's first hands drafting an agreement from a trusted template.</p>
+    <p><b>Stream</b> &mdash; the subscription floor. Procurement parts are where V1's answer will land; construction cost-plus is the studio's margin, not Patina's.</p>
+    <p><b>Promise</b> &mdash; the studio won't notice Patina. This room gets faster, not louder.</p>
+  </div>
+  <p class="caption no-prose">Where it strains: Wave 3 serves a studio shape not yet on record &mdash; see <a href="#waves">§11</a> and question 11.</p>
+</section>
+
+</main>
+</div>

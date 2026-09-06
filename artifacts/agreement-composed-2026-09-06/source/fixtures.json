@@ -1,0 +1,92 @@
+{
+  "okonkwo": {
+    "studio": "Middle West Studio",
+    "house": "the Okonkwo house, Madison",
+    "engagementType": "design services",
+    "rateCard": [
+      { "role": "Principal", "rateCentsPerHour": 22500, "planningHours": 40 },
+      { "role": "Designer", "rateCentsPerHour": 16500, "planningHours": 60 },
+      { "role": "Design associate", "rateCentsPerHour": 11000, "planningHours": 30 }
+    ],
+    "retainerCents": 500000,
+    "designAuthorizationCeilingCents": 2400000,
+    "furnishingsDepositPct": 50,
+    "billingCadence": "monthly",
+    "monthOneBilledCents": 615000,
+    "furnishingsWaveCents": 3140000,
+    "expected": {
+      "feeByRoleCents": {
+        "Principal": 900000,
+        "Designer": 990000,
+        "Design associate": 330000
+      },
+      "feeEstimateTotalCents": 2220000,
+      "headroomUnderCeilingCents": 180000,
+      "firstInvoiceDueCents": 115000,
+      "furnishingsDepositCents": 1570000
+    }
+  },
+  "halvorsen": {
+    "house": "the Halvorsen kitchen and mudroom, Middleton",
+    "engagementType": "turnkey design-build",
+    "costBasisLines": [
+      { "id": "cabinetryAndMillwork", "label": "Cabinetry & millwork", "category": "sub", "basisCents": 3800000 },
+      { "id": "electrical", "label": "Electrical", "category": "sub", "basisCents": 950000 },
+      { "id": "plumbing", "label": "Plumbing", "category": "sub", "basisCents": 720000 },
+      { "id": "generalConditions", "label": "General conditions / site", "category": "generalConditions", "basisCents": 630000 },
+      { "id": "tile", "label": "Tile allowance", "category": "allowance", "basisCents": 400000 },
+      { "id": "plumbingFixtures", "label": "Plumbing fixtures allowance", "category": "allowance", "basisCents": 350000 },
+      { "id": "lighting", "label": "Lighting allowance", "category": "allowance", "basisCents": 280000 }
+    ],
+    "designFeeCents": 1100000,
+    "feePct": 18,
+    "retainagePct": 5,
+    "draws": [
+      { "id": "deposit", "label": "Deposit at signing", "pct": 10, "retainageApplies": false },
+      { "id": "roughIn", "label": "Rough-in", "pct": 30, "retainageApplies": true },
+      { "id": "cabinetsSet", "label": "Cabinets set", "pct": 40, "retainageApplies": true },
+      { "id": "substantialCompletion", "label": "Substantial completion", "pct": 20, "retainageApplies": true }
+    ],
+    "expected": {
+      "costBasisCents": 7130000,
+      "feeCents": 1283400,
+      "gmpCents": 8413400,
+      "scheduleOfValuesCents": {
+        "cabinetryAndMillwork": 4484000,
+        "electrical": 1121000,
+        "plumbing": 849600,
+        "generalConditions": 743400,
+        "tile": 472000,
+        "plumbingFixtures": 413000,
+        "lighting": 330400
+      },
+      "scheduleOfValuesTotalCents": 8413400,
+      "drawsGrossCents": {
+        "deposit": 841340,
+        "roughIn": 2524020,
+        "cabinetsSet": 3365360,
+        "substantialCompletion": 1682680
+      },
+      "drawsGrossTotalCents": 8413400,
+      "retainageHeldCents": {
+        "roughIn": 126201,
+        "cabinetsSet": 168268,
+        "substantialCompletion": 84134
+      },
+      "retainageCumulativeCents": {
+        "roughIn": 126201,
+        "cabinetsSet": 294469,
+        "substantialCompletion": 378603
+      },
+      "retainageTotalCents": 378603,
+      "drawsNetCents": {
+        "deposit": 841340,
+        "roughIn": 2397819,
+        "cabinetsSet": 3197092,
+        "substantialCompletion": 1598546
+      },
+      "finalRetainageReleaseCents": 378603,
+      "totalPaidCents": 8413400
+    }
+  }
+}

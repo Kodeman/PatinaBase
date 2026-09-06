@@ -1,0 +1,472 @@
+{
+  "generatedAt": "2026-09-06T14:27:18.553Z",
+  "proposalPath": "/Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/proposal.html",
+  "renders": [
+    {
+      "viewport": 390,
+      "theme": "light",
+      "screenshot": "review/shots/full-390-light.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "skipped": true,
+          "message": "skipped — not a dark-ish render",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    },
+    {
+      "viewport": 760,
+      "theme": "light",
+      "screenshot": "review/shots/full-760-light.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "skipped": true,
+          "message": "skipped — not a dark-ish render",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    },
+    {
+      "viewport": 1280,
+      "theme": "light",
+      "screenshot": "review/shots/full-1280-light.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "skipped": true,
+          "message": "skipped — not a dark-ish render",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    },
+    {
+      "viewport": 390,
+      "theme": "dark",
+      "screenshot": "review/shots/full-390-dark.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "message": "body bg rgb(31, 28, 25); body text rgb(201, 193, 182) (ratio 9.52); sample p text rgb(153, 143, 128) (ratio 5.33); worst 5.33",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    },
+    {
+      "viewport": 760,
+      "theme": "dark",
+      "screenshot": "review/shots/full-760-dark.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "message": "body bg rgb(31, 28, 25); body text rgb(201, 193, 182) (ratio 9.52); sample p text rgb(153, 143, 128) (ratio 5.33); worst 5.33",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    },
+    {
+      "viewport": 1280,
+      "theme": "dark",
+      "screenshot": "review/shots/full-1280-dark.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "message": "body bg rgb(31, 28, 25); body text rgb(201, 193, 182) (ratio 9.52); sample p text rgb(153, 143, 128) (ratio 5.33); worst 5.33",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    },
+    {
+      "viewport": 390,
+      "theme": "system-dark",
+      "screenshot": "review/shots/full-390-system-dark.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "message": "body bg rgb(31, 28, 25); body text rgb(201, 193, 182) (ratio 9.52); sample p text rgb(153, 143, 128) (ratio 5.33); worst 5.33",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    },
+    {
+      "viewport": 760,
+      "theme": "system-dark",
+      "screenshot": "review/shots/full-760-system-dark.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "message": "body bg rgb(31, 28, 25); body text rgb(201, 193, 182) (ratio 9.52); sample p text rgb(153, 143, 128) (ratio 5.33); worst 5.33",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    },
+    {
+      "viewport": 1280,
+      "theme": "system-dark",
+      "screenshot": "review/shots/full-1280-system-dark.png",
+      "checks": [
+        {
+          "name": "no-horizontal-overflow",
+          "pass": true,
+          "message": "ok",
+          "failures": []
+        },
+        {
+          "name": "sections-nonzero-height",
+          "pass": true,
+          "message": "16 section[id] found, 0 with zero height",
+          "failures": []
+        },
+        {
+          "name": "nav-index-targets-resolve",
+          "pass": true,
+          "message": "16 .index links checked, 0 unresolved",
+          "failures": []
+        },
+        {
+          "name": "figures-sized-and-not-clipped",
+          "pass": true,
+          "message": "9 figure.mock checked, 0 failing",
+          "failures": []
+        },
+        {
+          "name": "min-font-size-11px",
+          "pass": true,
+          "message": "min visible font-size 12px; 0 elements below 11px",
+          "failures": []
+        },
+        {
+          "name": "dark-contrast-4.5",
+          "pass": true,
+          "message": "body bg rgb(31, 28, 25); body text rgb(201, 193, 182) (ratio 9.52); sample p text rgb(153, 143, 128) (ratio 5.33); worst 5.33",
+          "failures": []
+        },
+        {
+          "name": "no-hidden-content-in-figures",
+          "pass": true,
+          "message": "0 display:none elements inside figure.mock without sr-only",
+          "failures": []
+        }
+      ],
+      "passCount": 7,
+      "failCount": 0
+    }
+  ],
+  "totals": {
+    "pass": 63,
+    "fail": 0
+  }
+}
