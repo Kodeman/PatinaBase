@@ -24,11 +24,12 @@ function mark(state: StampState, props: Record<string, unknown> = {}) {
   return screen.getByTestId('stamp');
 }
 
-describe('the eleven states', () => {
-  it('covers exactly the eleven ruled states', () => {
+describe('the twelve states', () => {
+  it('covers exactly the twelve ruled states', () => {
     expect(ALL_STATES).toEqual([
       'awaiting',
       'approved',
+      'chosen',
       'returned',
       'held',
       'signed',
@@ -43,6 +44,7 @@ describe('the eleven states', () => {
 
   it.each([
     ['approved', 'APPROVED', 'var(--color-mocha)', 'var(--color-mocha)'],
+    ['chosen', 'CHOSEN', 'var(--color-mocha)', 'var(--color-mocha)'],
     ['returned', 'RETURNED', 'var(--color-clay-ink)', 'var(--color-charcoal)'],
     ['held', 'HELD', 'var(--color-golden-hour-ink)', 'var(--color-charcoal)'],
     ['signed', 'SIGNED', 'var(--color-mocha)', 'var(--color-mocha)'],
@@ -190,5 +192,22 @@ describe('which state an approval stands at', () => {
     expect(stampStateForApproval({ disposition: 'active', outcome: 'changes_requested' })).not.toBe(
       'declined',
     );
+  });
+});
+
+/* `W3R1-n2`. A settled choice between named alternatives is CHOSEN. It takes
+   APPROVED's dials exactly — one act, one weight, one pigment — so the two
+   read as siblings and not as a hierarchy of consent. The iOS half is
+   `PatinaStamp.State.chosen`, asserted the same way in `PatinaStampTests`. */
+describe('CHOSEN', () => {
+  it('is APPROVED in every dial but the word', () => {
+    const withoutTheWord = (dial: (typeof STAMP_DIALS)['chosen']) => ({
+      ...dial,
+      word: null,
+      label: '',
+    });
+    expect(withoutTheWord(STAMP_DIALS.chosen)).toEqual(withoutTheWord(STAMP_DIALS.approved));
+    expect(STAMP_DIALS.chosen.word).toBe('CHOSEN');
+    expect(STAMP_DIALS.chosen.label).toBe('Chosen');
   });
 });

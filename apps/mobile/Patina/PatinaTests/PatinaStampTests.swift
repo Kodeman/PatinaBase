@@ -2,7 +2,7 @@
 //  PatinaStampTests.swift
 //  PatinaTests
 //
-//  `P-17` / `R13`. The eleven-state table, dial by dial, plus the one aging
+//  `P-17` / `R13`. The twelve-state table, dial by dial, plus the one aging
 //  step — pinned as values rather than as pixels, because the table IS the
 //  component and a wrong pigment is a wrong statement about a $50,000
 //  agreement.
@@ -24,6 +24,7 @@ struct PatinaStampTests {
         )
         #expect(words[.awaiting] == "AWAITING YOU")
         #expect(words[.approved] == "APPROVED")
+        #expect(words[.chosen] == "CHOSEN")
         #expect(words[.returned] == "RETURNED")
         #expect(words[.held] == "HELD")
         #expect(words[.signed] == "SIGNED")
@@ -33,7 +34,7 @@ struct PatinaStampTests {
         #expect(words[.superseded] == "SUPERSEDED")
         #expect(words[.expired] == "EXPIRED")
         #expect(words[.declined] == "DECLINED")
-        #expect(PatinaStamp.State.allCases.count == 11)
+        #expect(PatinaStamp.State.allCases.count == 12)
     }
 
     /// The paper original is the same act, in the same word, with where it
@@ -55,6 +56,7 @@ struct PatinaStampTests {
     @Test("every state takes its ruled border pigment")
     func everyStateTakesItsBorderPigment() {
         #expect(PatinaStamp.State.approved.borderPigment == .mocha)
+        #expect(PatinaStamp.State.chosen.borderPigment == .mocha)
         #expect(PatinaStamp.State.signed.borderPigment == .mocha)
         #expect(PatinaStamp.State.signedOnPaper.borderPigment == .mocha)
         #expect(PatinaStamp.State.held.borderPigment == .goldenHour)
@@ -236,5 +238,34 @@ struct PatinaStampTests {
             PatinaStamp(state: .expired, accessibilityLabel: "Expired")
                 .accessibilityLabel == "Expired"
         )
+    }
+
+    // MARK: - `W3R1-n2` · the settled option choice
+
+    /// A choice between named alternatives is CHOSEN, not APPROVED — and it
+    /// takes APPROVED's dials exactly, so the two read as one act at one
+    /// weight rather than as a hierarchy of consent.
+    @Test("CHOSEN is APPROVED's twin in every dial but the word")
+    func chosenCarriesApprovedsDials() {
+        let chosen = PatinaStamp.State.chosen
+        let approved = PatinaStamp.State.approved
+        #expect(chosen.word == "CHOSEN")
+        #expect(chosen.borderPigment == approved.borderPigment)
+        #expect(chosen.wordPigment == approved.wordPigment)
+        #expect(chosen.weight == approved.weight)
+        #expect(chosen.rotationDegrees == approved.rotationDegrees)
+        #expect(chosen.ages == approved.ages)
+        #expect(chosen.isStruckThrough == false)
+        #expect(chosen.innerLine == nil)
+        #expect(chosen.borderPigment.lightInkHex == "5C4A3C", "mocha, and no other pigment")
+    }
+
+    /// And the screen that settles an option choice presses it: a sign-off,
+    /// which carries no options by design, keeps APPROVED.
+    @Test("the legacy rail stamps by what the act was")
+    @MainActor
+    func theLegacyRailStampsByTheAct() {
+        #expect(DecisionDetailView.resolvedStamp(hasNamedOptions: true) == .chosen)
+        #expect(DecisionDetailView.resolvedStamp(hasNamedOptions: false) == .approved)
     }
 }

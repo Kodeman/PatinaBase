@@ -243,7 +243,7 @@ struct DecisionDetailView: View {
     private var resolvedBanner: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             PatinaStamp(
-                state: Self.resolvedStamp,
+                state: Self.resolvedStamp(hasNamedOptions: !viewModel.options.isEmpty),
                 recordedAt: viewModel.decision?.responded_at
                     .flatMap(ISO8601DateParsing.date(from:))
             )
@@ -254,13 +254,16 @@ struct DecisionDetailView: View {
         .padding(.top, 8)
     }
 
-    /// Every client act on the legacy rail says yes to something: choosing a
-    /// named option, or giving a sign-off through `approve_client_signoff`.
-    /// There is no client-reachable path that records any other outcome on a
-    /// non-Stage-2 decision, so APPROVED is the one honest word here. The
-    /// Stage-2 ceremony, which has three, stamps its own in
-    /// `ProjectApprovalBlock`.
-    static let resolvedStamp: PatinaStamp.State = .approved
+    /// Every client act on the legacy rail says yes to something — but not to
+    /// the same thing. A sign-off through `approve_client_signoff` is an
+    /// approval and stamps APPROVED; a settled choice between named
+    /// alternatives is a CHOSEN (`W3R1-n2`), because she picked the Natural
+    /// rug rather than approving it, and the Vocabulary reserves "decision"
+    /// for exactly that act. The Stage-2 ceremony, which has three outcomes,
+    /// stamps its own in `ProjectApprovalBlock`.
+    static func resolvedStamp(hasNamedOptions: Bool) -> PatinaStamp.State {
+        hasNamedOptions ? .chosen : .approved
+    }
 
     /// `P-30`: one plate of the spread. It used to carry its own "Choose this"
     /// submit; now the whole plate is the tap and the act is one, named, and

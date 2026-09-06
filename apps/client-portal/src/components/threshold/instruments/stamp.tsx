@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 
 /* ── THE STAMP ───────────────────────────────────────────────────────────────
-   One inspection stamp, eleven states, four dials: border weight (single or
+   One inspection stamp, twelve states, four dials: border weight (single or
    doubled), border pigment, word ink, and rotation. No fill, no shadow, no
    checkmark, no badge — a stamp is ink pressed onto paper, and paper has no
    depth.
@@ -26,6 +26,11 @@ import type { CSSProperties, ReactNode } from 'react';
 export type StampState =
   | 'awaiting'
   | 'approved'
+  /* `W3R1-n2`: a settled choice between named alternatives. She chose the
+     Natural rug; she did not approve it, and the Vocabulary keeps "decision"
+     for exactly that act. Same dials as APPROVED — one act, one weight, one
+     pigment — so the two read as siblings rather than as a hierarchy. */
+  | 'chosen'
   | 'returned'
   | 'held'
   | 'signed'
@@ -82,6 +87,17 @@ export const STAMP_DIALS: Record<StampState, StampDial> = {
     ages: true,
     struck: false,
     label: 'Approved',
+  },
+  chosen: {
+    word: 'CHOSEN',
+    underWord: null,
+    border: MOCHA,
+    ink: MOCHA,
+    weight: 'doubled',
+    rotation: -1.1,
+    ages: true,
+    struck: false,
+    label: 'Chosen',
   },
   returned: {
     word: 'RETURNED',
