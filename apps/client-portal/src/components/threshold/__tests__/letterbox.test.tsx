@@ -1,45 +1,25 @@
-import { act, render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen } from '@testing-library/react';
 import type { Invoice } from '@patina/supabase';
 
 import type { InvoiceModel } from '@/lib/threshold/derive';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
 
 // ── Boundaries ──────────────────────────────────────────────────────────────
-// Opening the letterbox now unfolds the settlement, which owns the pay path's
-// three hooks. Mock the module they come from; the ceremony itself is covered
-// in settlement.test.tsx.
+// The letterbox's only act is the invoice's own address (00574 · K1); the
+// settle-in-place ceremony this used to unfold is retired (W3b). The pay path
+// itself is `/pay/[token]`'s own boundary now.
 
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
-  InvoiceCheckoutError: class InvoiceCheckoutError extends Error {},
-  useInvoicePaymentOptions: jest.fn(),
-  useStartCheckout: jest.fn(),
-  useNotifyCheckIntent: jest.fn(),
-  useStudioIdentity: jest.fn(),
   useInvoiceLink: jest.fn(),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({
   __esModule: true,
-  clientEvents: {
-    paymentCompleted: jest.fn(),
-    paymentCancelled: jest.fn(),
-    paymentMethodSelected: jest.fn(),
-    checkIntentSubmitted: jest.fn(),
-    paymentStarted: jest.fn(),
-  },
   makingEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
-import {
-  useInvoiceLink,
-  useInvoicePaymentOptions,
-  useNotifyCheckIntent,
-  useStartCheckout,
-  useStudioIdentity,
-} from '@patina/supabase';
-import { clientEvents } from '@/lib/analytics/events';
+import { useInvoiceLink } from '@patina/supabase';
 
 import { Letterbox } from '../letterbox';
 
@@ -48,12 +28,6 @@ const LINK_TOKEN = 'a'.repeat(64);
 
 /** 5 August 2026 — the deck's "today". */
 const TODAY = new Date(2026, 7, 5);
-
-/** Two studios, one designer — Kody's own shape. */
-const STUDIO_NAMES: Record<string, string> = {
-  'studio-1': 'Alder & Fox',
-  'studio-b': 'Bramwell Fox',
-};
 
 function invoice(overrides: Partial<InvoiceModel> = {}): InvoiceModel {
   return {
@@ -122,24 +96,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     resetCheckoutReturn();
     standAt('');
     jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
-    (useInvoicePaymentOptions as jest.Mock).mockReturnValue({
-      isPending: false,
-      data: { card_surcharge_bps: 300, check_remit_to: null },
-    });
-    (useStartCheckout as jest.Mock).mockReturnValue({
-      mutateAsync: jest.fn(),
-      isPending: false,
-    });
-    (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: jest.fn() });
     (useInvoiceLink as jest.Mock).mockReturnValue({ data: { token: LINK_TOKEN, status: 'active' } });
-    // The brand resolver, keyed the way 00571 keys it: the studio the row
-    // names itself wins, and each studio answers with its own name.
-    (useStudioIdentity as jest.Mock).mockImplementation(
-      ({ studioId }: { studioId?: string | null }) => ({
-        isPending: false,
-        data: { name: STUDIO_NAMES[studioId ?? ''] ?? null },
-      }),
-    );
   });
 
   afterEach(() => {
@@ -236,74 +193,6 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 31');
   });
 
-  /* ── Whose name is on the check ──────────────────────────────────────────
-     A studio letter stands in the ADOPTED house's letterbox, and the adopted
-     house may belong to a different studio than the one that drew the letter.
-     The payee has to come off the letter. ──────────────────────────────── */
-
-  it("makes the check out to the letter's own studio, not the house's", async () => {
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
-        invoices={[
-          invoiceRow({
-            id: 'inv-31',
-            status: 'sent',
-            project_id: null,
-            studio_id: 'studio-b',
-            title: 'Design consultation',
-          }),
-        ]}
-        // The adopted house's studio — what the house page hands down.
-        designerName="Alder & Fox"
-        today={TODAY}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
-    await userEvent.click(screen.getByRole('radio', { name: /check/i }));
-
-    expect(
-      screen.getByRole('button', { name: 'Let Bramwell Fox know a check is coming' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Alder & Fox/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("resolves a folded letter's payee from that letter, not from the slot", async () => {
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
-        invoices={[
-          invoiceRow({
-            id: 'inv-31',
-            status: 'sent',
-            project_id: null,
-            studio_id: 'studio-b',
-          }),
-          invoiceRow({
-            id: 'inv-5',
-            invoice_number: 'Invoice No. 5',
-            status: 'sent',
-            studio_id: 'studio-1',
-            amount_paid_cents: 0,
-            paid_at: null,
-          }),
-        ]}
-        today={TODAY}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Settle this balance' }));
-    await userEvent.click(screen.getByRole('radio', { name: /check/i }));
-
-    expect(
-      screen.getByRole('button', { name: 'Let Alder & Fox know a check is coming' }),
-    ).toBeInTheDocument();
-  });
-
   it('says nothing of the studio for a letter this house holds', () => {
     render(
       <Letterbox
@@ -352,7 +241,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     ).toBeInTheDocument();
   });
 
-  it('states the letter in words and figures before it is opened', () => {
+  it('states the letter in words and figures', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     const body = screen.getByTestId('letterbox-body');
@@ -362,15 +251,10 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(body).toHaveTextContent('due August 15');
   });
 
-  it('spells the year out once the letter falls in another one', async () => {
+  it('spells the year out once the letter falls in another one', () => {
     render(<Letterbox invoice={invoice({ dueDate: '2027-01-15' })} today={TODAY} />);
 
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent('due January 15, 2027');
-
-    await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
-    expect(within(screen.getByTestId('spine-toll')).getByTestId('spine-toll-due')).toHaveTextContent(
-      'due January 15, 2027',
-    );
   });
 
   it('names an unnumbered letter, and omits a due date it does not have', () => {
@@ -381,36 +265,11 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(body).not.toHaveTextContent('due');
   });
 
-  it('unfolds to the settlement when the letterbox is opened, and folds back', async () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
-
-    expect(screen.getByTestId('settlement')).toBeInTheDocument();
-    const toll = screen.getByTestId('spine-toll');
-    expect(toll).toHaveAttribute('data-invoice-id', 'b0000000-0000-0000-0000-0000000000i4');
-    expect(screen.getByTestId('threshold-payment-methods')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /close the letterbox/i }),
-    ).toHaveAttribute('aria-expanded', 'true');
-
-    await userEvent.click(screen.getByRole('button', { name: /close the letterbox/i }));
-
-    expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /open the letterbox/i }),
-    ).toHaveAttribute('aria-expanded', 'false');
-  });
-
   it('stands empty, and says so, when nothing has come', () => {
     render(<Letterbox invoice={null} />);
 
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Nothing in the letterbox.');
-    expect(
-      screen.queryByRole('button', { name: /open the letterbox/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open the invoice' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('img', { name: 'An empty letterbox' }),
     ).toBeInTheDocument();
@@ -434,155 +293,17 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(screen.queryByTestId('earlier-invoices')).not.toBeInTheDocument();
   });
 
-  it('reads a settled return once the invoice’s own row says it is paid', () => {
-    standAt('?invoice=inv-4&checkout=success&session_id=cs_1');
-
-    render(
-      <Letterbox
-        invoice={null}
-        invoices={[invoiceRow({ id: 'inv-4', status: 'paid' })]}
-        today={new Date(2026, 8, 4)}
-      />,
-    );
-
-    // The retired invoice detail page's own confirmed sentence, and the letter
-    // it is about — the receipt used to stand unlabelled over a different one.
-    expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
-      'Invoice No. 3 · Payment confirmed — thank you. Your invoice has been updated.',
-    );
-    expect(clientEvents.paymentCompleted).toHaveBeenCalledTimes(1);
-    expect(clientEvents.paymentCompleted).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
-  });
-
-  it('will not say a letter is paid while it is still open, and counts nothing', () => {
-    standAt('?invoice=inv-4&checkout=success&session_id=cs_1');
-
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-4' })}
-        invoices={[
-          invoiceRow({
-            id: 'inv-4',
-            status: 'sent',
-            amount_paid_cents: 912_500,
-            total_cents: 1_825_000,
-            paid_at: null,
-          }),
-        ]}
-        today={new Date(2026, 8, 4)}
-      />,
-    );
-
-    const receipt = screen.getByTestId('letterbox-receipt');
-    expect(receipt).toHaveTextContent('Confirming payment… This usually takes a few seconds.');
-    expect(receipt).not.toHaveTextContent('Payment confirmed');
-    expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
-  });
-
-  it('says plainly that nothing is confirmed once the wait runs out', () => {
-    jest.useFakeTimers();
-    try {
-      standAt('?invoice=inv-4&checkout=success');
-
-      render(
-        <Letterbox
-          invoice={invoice({ id: 'inv-4' })}
-          invoices={[
-            invoiceRow({
-              id: 'inv-4',
-              status: 'sent',
-              amount_paid_cents: 0,
-              total_cents: 1_825_000,
-              paid_at: null,
-            }),
-          ]}
-          today={new Date(2026, 8, 4)}
-        />,
-      );
-
-      act(() => {
-        jest.advanceTimersByTime(31_000);
-      });
-
-      expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent(
-        'Checkout returned, but Patina has not confirmed a payment yet. Do not submit another payment until the status is known.',
-      );
-      expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  it('says nothing about a letter this house is not holding', () => {
-    standAt('?invoice=inv-elsewhere&checkout=success');
-
-    render(<Letterbox invoice={invoice()} invoices={[invoiceRow()]} today={TODAY} />);
-
-    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
-    expect(clientEvents.paymentCompleted).not.toHaveBeenCalled();
-  });
-
-  it('says nothing changed when she came back from a cancelled till', () => {
-    standAt('?invoice=inv-4&checkout=cancelled');
-
-    render(
-      <Letterbox
-        invoice={invoice({ id: 'inv-4' })}
-        invoices={[invoiceRow({ id: 'inv-4', status: 'sent' })]}
-        today={TODAY}
-      />,
-    );
-
-    expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent('Nothing changed.');
-    expect(clientEvents.paymentCancelled).toHaveBeenCalledWith({ invoiceId: 'inv-4' });
-  });
-
-  it('keeps the letter in the slot printable too', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.getByRole('link', { name: /print/i })).toHaveAttribute(
-      'href',
-      '/invoices/b0000000-0000-0000-0000-0000000000i4/print',
-    );
-  });
-
-  it('leaves an order’s return to the road', () => {
-    standAt('?order=ord-1&checkout=success');
-
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
-  });
-
-  it('says nothing about a till it was never sent to', () => {
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
-  });
-
   /* ── The letter's own address (00574 · K1) ───────────────────────────────
-     Additive: the settle-in-place and the print sheet both stay until W3b.
-     ─────────────────────────────────────────────────────────────────────── */
+     W3b: this is the letter's only act. Settle-in-place and the print sheet
+     are retired; the standalone page carries both now. ────────────────────── */
 
-  it('offers the invoice its own address, above the settle-in-place', () => {
+  it("offers the invoice its own address, as the letter's only act", () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     const open = screen.getByRole('link', { name: 'Open the invoice' });
     expect(open).toHaveAttribute('href', `https://client.test/pay/${LINK_TOKEN}`);
-  });
-
-  it('keeps the letterbox, the print sheet and the settle-in-place beside it', async () => {
-    const user = userEvent.setup();
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.getByRole('link', { name: 'Open the invoice' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
-
-    const toggle = screen.getByRole('button', { name: 'Open the letterbox' });
-    await act(async () => {
-      await user.click(toggle);
-    });
-    expect(screen.getByRole('button', { name: 'Close the letterbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /open the letterbox/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Print' })).not.toBeInTheDocument();
   });
 
   it('says nothing about an address the invoice does not have', () => {
@@ -591,8 +312,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     expect(screen.queryByRole('link', { name: 'Open the invoice' })).not.toBeInTheDocument();
-    // The existing acts are untouched by a missing link.
-    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open the letterbox' })).toBeInTheDocument();
+    // The letter still states its own facts even with no address to offer.
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
   });
 });

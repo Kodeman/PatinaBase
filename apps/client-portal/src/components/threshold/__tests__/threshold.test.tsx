@@ -102,12 +102,6 @@ jest.mock('@patina/supabase', () => ({
   useDeclineScopeChange: jest.fn(),
   useCreateClientScopeChangeRequest: jest.fn(),
   useCancelClientScopeChangeRequest: jest.fn(),
-  // A letter the address names is unfolded on arrival, and unfolding mounts
-  // `Settlement`. Its own behaviour is `settlement.test.tsx`'s; here these only
-  // have to exist so the ceremony can stand.
-  useInvoicePaymentOptions: jest.fn(),
-  useStartCheckout: jest.fn(),
-  useNotifyCheckIntent: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-commercial-client', () => ({
@@ -207,9 +201,6 @@ import {
   useApproveScopeChange,
   useDeclineScopeChange,
   useCreateClientScopeChangeRequest,
-  useInvoicePaymentOptions,
-  useStartCheckout,
-  useNotifyCheckIntent,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -244,9 +235,6 @@ const ordersMock = useDirectOrders as jest.Mock;
 const partiesMock = useProjectParties as jest.Mock;
 const teamMock = useProjectTeamMembers as jest.Mock;
 const identityMock = useStudioIdentity as jest.Mock;
-const paymentOptionsMock = useInvoicePaymentOptions as jest.Mock;
-const startCheckoutMock = useStartCheckout as jest.Mock;
-const notifyCheckIntentMock = useNotifyCheckIntent as jest.Mock;
 const markReadMock = useMarkProjectRead as jest.Mock;
 const previousMarkMock = usePreviousReadingMark as jest.Mock;
 const selectionsMock = useClientSelections as jest.Mock;
@@ -1920,43 +1908,6 @@ describe("Threshold — the studio's own letters", () => {
     expect(screen.getByText(/Invoice No\. 4/)).toBeInTheDocument();
   });
 
-  // The adopted house belongs to one studio; the letter standing in its
-  // letterbox may have been drawn by another. The plate is the HOUSE's and the
-  // payee is the LETTER's, and neither may borrow the other's studio.
-  it("makes the check out to the letter's studio while the plate keeps the house's", async () => {
-    paymentOptionsMock.mockReturnValue({
-      isPending: false,
-      data: { card_surcharge_bps: 300, check_remit_to: null },
-    });
-    startCheckoutMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
-    notifyCheckIntentMock.mockReturnValue({ mutateAsync: jest.fn() });
-    identityMock.mockImplementation(({ studioId }: { studioId: string | null }) =>
-      settled({
-        name: studioId === 'studio-ash' ? 'The Ash Studio' : 'Quist Interiors',
-        source: 'studio',
-      }),
-    );
-    clientInvoicesMock.mockReturnValue(
-      settled([{ ...STUDIO_INVOICE, studio_id: 'studio-ash' }]),
-    );
-
-    renderThreshold();
-
-    expect(screen.getByTestId('doorplate-line')).toHaveTextContent('Quist Interiors');
-
-    fireEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
-    fireEvent.click(screen.getByRole('radio', { name: /check/i }));
-
-    expect(
-      await screen.findByRole('button', {
-        name: 'Let The Ash Studio know a check is coming',
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Let Quist Interiors know/ }),
-    ).not.toBeInTheDocument();
-  });
-
   it('leaves the studio letters out of a house that has not adopted them', () => {
     clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
 
@@ -2030,9 +1981,6 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
     standAt('');
     jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
     identityMock.mockReturnValue(settled({ name: 'Middle West Studio', source: 'studio' }));
-    paymentOptionsMock.mockReturnValue({ isPending: false, data: { card_surcharge_bps: 300 } });
-    startCheckoutMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
-    notifyCheckIntentMock.mockReturnValue({ mutateAsync: jest.fn() });
   });
 
   afterEach(() => {
@@ -2070,7 +2018,7 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
     });
   });
 
-  it('reads the return from the till, which the empty state never could', () => {
+  it('still stands the door when the address carries a return from the till (the letterbox no longer reads it — W3b, the road keeps its own)', () => {
     standAt('?checkout=success&invoice=inv-31');
     clientInvoicesMock.mockReturnValue(
       settled([{ ...STUDIO_INVOICE, status: 'paid', amount_paid_cents: 45_000 }]),
@@ -2078,7 +2026,11 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
 
     renderDoor();
 
-    expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent('Payment confirmed');
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    expect(screen.getByTestId('letterbox')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+    expect(screen.getByText(/Invoice No\. 31/)).toBeInTheDocument();
   });
 
   it('meets a household with no letter with the empty state, not an empty letterbox', () => {

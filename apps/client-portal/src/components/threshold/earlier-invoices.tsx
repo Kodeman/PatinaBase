@@ -3,15 +3,14 @@
 import { useState } from 'react';
 
 import type { Invoice } from '@patina/supabase';
+import { useInvoiceLink } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
+import { invoiceLinkUrl } from '@patina/utils';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
-import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
-
-import { useLetterPayee } from './letter-payee';
-import { Settlement } from './settlement';
+import { parseSourceDate } from '@/lib/threshold/derive';
 
 /* ── EARLIER INVOICES ────────────────────────────────────────────────────────
    The letterbox holds one letter. Everything that came before it is kept, and
@@ -19,14 +18,13 @@ import { Settlement } from './settlement';
 
    `visibleInvoices` decides what counts — the same reader /budget uses, so the
    house and the budget page can never disagree about which invoices exist.
-   Each line can be printed, and printing opens the invoice's own printable
-   sheet in a new tab: a print is a document, not chrome, so it keeps its
-   route.
 
-   A line that is still owed is not only a record. The letterbox holds the
-   soonest-due letter; a studio that sent two can be paid for both, and the
-   second one settles here — the same ceremony, unfolded on its own line, so
-   retiring `/invoices/[id]` strands no balance.
+   Each line carries its own address (00574 · K1): "Open the invoice" reaches
+   the same standalone page the letter in the slot's own act points at,
+   whether the line is still owed or stands only as a receipt. Settle-in-place
+   and the printable sheet were retired together here in W3b, once that page
+   could carry both for every invoice on the project, not only the one in the
+   slot.
 
    A letter drawn against no house at all is folded away here too, because the
    adopted house holds it. It carries the same clause the envelope carries in
@@ -47,26 +45,6 @@ function longDate(value: string | null | undefined, today?: Date): string | null
   return today && today.getFullYear() !== date.getFullYear()
     ? LONG_MONTH_DAY_YEAR.format(date)
     : LONG_MONTH_DAY.format(date);
-}
-
-/** Still owed: the house may be asked for money on it. */
-function isOpen(invoice: Invoice): boolean {
-  return (
-    (invoice.status === 'sent' || invoice.status === 'partially_paid') &&
-    invoiceBalanceCents(invoice) > 0
-  );
-}
-
-/** The row as the toll reads it — the same arithmetic every money surface runs. */
-function toModel(invoice: Invoice): InvoiceModel {
-  return {
-    id: invoice.id,
-    number: invoice.invoice_number,
-    totalCents: invoice.total_cents || 0,
-    paidCents: invoice.amount_paid_cents || 0,
-    balanceCents: invoiceBalanceCents(invoice),
-    dueDate: invoice.due_date,
-  };
 }
 
 /** What became of it, in one dated clause. */
@@ -98,33 +76,28 @@ function byArrival(a: Invoice, b: Invoice): number {
   return right - left;
 }
 
-/* One folded letter's settle panel. It is its own component because the payee
-   has to come off THIS letter's studio rather than off the letter in the slot,
-   and only one folded letter is ever unfolded at a time — so the resolution is
-   a mounted component's hook, never a hook in a loop. */
-function FoldedSettlement({
-  invoice,
-  hold,
-  fallbackName,
-  onRefetch,
-  today,
+/* A folded letter's own address. Its own hook per row, mounted whether the
+   line is open or already settled — a plain link carries no state to gate
+   behind a toggle, unlike the settle panel it replaces. */
+function FoldedInvoiceLink({
+  invoiceId,
+  linkOrigin,
 }: {
-  invoice: Invoice;
-  hold: boolean;
-  fallbackName?: string | null;
-  onRefetch?: () => void | Promise<unknown>;
-  today?: Date;
+  invoiceId: string;
+  linkOrigin: string;
 }) {
-  const payee = useLetterPayee(invoice, fallbackName);
+  const { data: invoiceLink } = useInvoiceLink(invoiceId);
+  if (!invoiceLink) return null;
   return (
-    <Settlement
-      invoice={toModel(invoice)}
-      currency={invoice.currency || 'USD'}
-      hold={hold}
-      designerName={payee}
-      onRefetch={onRefetch}
-      today={today}
-    />
+    <ScoredAction
+      actionKey="invoice_open_link"
+      regionKey="letterbox"
+      surfaceKey="the_threshold"
+      variant="tertiary"
+      href={invoiceLinkUrl(linkOrigin, invoiceLink.token)}
+    >
+      Open the invoice
+    </ScoredAction>
   );
 }
 
@@ -133,29 +106,19 @@ export interface EarlierInvoicesProps {
   invoices: Invoice[];
   /** The one standing in the letterbox — it is not also kept behind it. */
   exceptId?: string | null;
-  /** Last-resort payee name. Each folded letter resolves its own studio first. */
-  designerName?: string | null;
-  /**
-   * A letter whose own return from the till is still unconfirmed. Its settle
-   * act is withheld, the same rule the letterbox keeps for the letter in the
-   * slot — a second attempt on an unconfirmed payment is refused anyway.
-   */
-  heldInvoiceId?: string | null;
-  /** Re-read the invoices after an attempt that ended in a fact, not a session. */
-  onRefetch?: () => void | Promise<unknown>;
+  /** The client-portal origin, resolved after mount by the letterbox — the
+   * same address each line's own act builds its link from. */
+  linkOrigin?: string;
   today?: Date;
 }
 
 export function EarlierInvoices({
   invoices,
   exceptId,
-  designerName,
-  heldInvoiceId = null,
-  onRefetch,
+  linkOrigin = '',
   today,
 }: EarlierInvoicesProps) {
   const [open, setOpen] = useState(false);
-  const [settling, setSettling] = useState<string | null>(null);
 
   const earlier = visibleInvoices(invoices)
     .filter((invoice) => invoice.id !== exceptId)
@@ -199,56 +162,8 @@ export function EarlierInvoices({
                         invoice.currency || 'USD',
                       )} · ${receiptTrail(invoice, today)}${origin(invoice)}`}
                     </span>
-                    <span className="flex flex-wrap items-baseline gap-x-4">
-                      {isOpen(invoice) && (
-                        <ScoredAction
-                          actionKey="invoice_settle"
-                          regionKey="letterbox"
-                          surfaceKey="the_threshold"
-                          variant="secondary"
-                          aria-expanded={settling === invoice.id}
-                          aria-controls={`earlier-invoice-settle-${invoice.id}`}
-                          onClick={() =>
-                            setSettling((was) => (was === invoice.id ? null : invoice.id))
-                          }
-                        >
-                          {settling === invoice.id ? 'Close this letter' : 'Settle this balance'}
-                        </ScoredAction>
-                      )}
-                      <ScoredAction
-                        actionKey="invoice_print"
-                        regionKey="letterbox"
-                        surfaceKey="the_threshold"
-                        variant="tertiary"
-                        href={`/invoices/${invoice.id}/print`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Print
-                      </ScoredAction>
-                    </span>
+                    <FoldedInvoiceLink invoiceId={invoice.id} linkOrigin={linkOrigin} />
                   </div>
-
-                  {isOpen(invoice) && (
-                    <div
-                      id={`earlier-invoice-settle-${invoice.id}`}
-                      className={`grid overflow-hidden motion-safe:transition-[grid-template-rows] motion-safe:duration-[420ms] ${
-                        settling === invoice.id ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                      }`}
-                    >
-                      <div className="min-h-0">
-                        {settling === invoice.id && (
-                          <FoldedSettlement
-                            invoice={invoice}
-                            hold={heldInvoiceId === invoice.id}
-                            fallbackName={designerName}
-                            onRefetch={onRefetch}
-                            today={today}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </li>
               ))}
             </ul>
