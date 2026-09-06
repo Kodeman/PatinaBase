@@ -65,6 +65,7 @@ import {
   invoiceForClause,
   invoiceSubjectName,
 } from '../_shared/invoice-subject.ts';
+import { letterPortalUrl } from '../_shared/invoice-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -343,6 +344,14 @@ Deno.serve(async (_req: Request) => {
     const identity = await resolveStudioIdentity(admin, invoiceBrandingRef(invoice));
     const cobrand = studioCobrand(identity);
 
+    // K1: the reminder carries the invoice's own address — `/pay/<token>`
+    // opens for anyone holding it, signed in or not. A null (draft, void, or a
+    // failed mint) falls back to today's signed-in form rather than a broken
+    // address. The link is re-asked per letter and never cached, so a
+    // Regenerate is honored by the next reminder. metadata.deep_link below
+    // stays `/invoices/<id>`: it routes the iOS inbox by id (I2).
+    const portalUrl = await letterPortalUrl(admin, CLIENT_PORTAL_URL, invoice.id);
+
     const rendered = STAGE_BUILDERS[stage]({
       invoiceNumber,
       projectName,
@@ -350,7 +359,7 @@ Deno.serve(async (_req: Request) => {
       clientName: recipientName,
       balanceCents,
       dueDate: invoice.due_date,
-      portalUrl: `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`,
+      portalUrl,
       currency: invoice.currency,
       studioName: cobrand.studioName,
       studioLogoUrl: cobrand.studioLogoUrl,

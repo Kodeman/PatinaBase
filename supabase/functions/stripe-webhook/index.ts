@@ -98,6 +98,7 @@ import {
   clientProjectDeepLink,
   clientProjectLink,
 } from '../_shared/client-portal-links.ts';
+import { ensureInvoiceLinkUrl } from '../_shared/invoice-links.ts';
 // Direct-order settle side effects (00540 / W5): the earnings credit + project
 // notice, and the intake enqueue that gives the client a "where is it".
 import {
@@ -110,7 +111,10 @@ import {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
+const CLIENT_PORTAL_URL = (Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud').replace(
+  /\/$/,
+  ''
+);
 // Designer-facing links (refund notices go to the designer's portal invoice).
 const DESIGNER_PORTAL_URL = Deno.env.get('DESIGNER_PORTAL_URL') ?? 'https://app.patina.cloud';
 
@@ -146,6 +150,12 @@ interface PaymentRow {
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
   stripe_payment_method_type: string | null;
+  /**
+   * The identity-verified attempt's link id (00574 M5) — populated only by
+   * resolveClaimedPaymentRow, from the attempt it just resolved and validated,
+   * never from raw session/PI metadata. null on every other resolution path.
+   */
+  resolved_invoice_link_id?: string | null;
 }
 
 interface InvoiceJoined {
@@ -191,6 +201,8 @@ async function resolveClaimedPaymentRow(
     attemptId: string;
     invoiceId: string | null;
     payerId: string | null;
+    /** The link identity term (00574) — exactly one of payerId / invoiceLinkId binds. */
+    invoiceLinkId: string | null;
     sessionId: string | null;
     paymentIntentId: string | null;
     customerId: string | null;
@@ -198,17 +210,23 @@ async function resolveClaimedPaymentRow(
     currency: string | null;
   }
 ): Promise<PaymentRow> {
+  // Captured from loadAttempt below so the caller can source the link id from
+  // the identity-verified attempt (00574 M5) rather than raw session/PI
+  // metadata — set only once resolveExactClaimedPayment has loaded the row,
+  // and returned regardless of outcome (a throw below discards it anyway).
+  let resolvedInvoiceLinkId: string | null = null;
   const payment = (await resolveExactClaimedPayment(
     {
       async loadAttempt(attemptId) {
         const { data, error } = await admin
           .from('invoice_checkout_attempts')
           .select(
-            'id, invoice_id, payer_id, stripe_customer_id, amount_cents, surcharge_cents, payment_method, currency, state, stripe_checkout_session_id, stripe_payment_intent_id'
+            'id, invoice_id, payer_id, invoice_link_id, stripe_customer_id, amount_cents, surcharge_cents, payment_method, currency, state, stripe_checkout_session_id, stripe_payment_intent_id'
           )
           .eq('id', attemptId)
           .maybeSingle();
         if (error) throw new Error(`failed to load Checkout attempt: ${error.message}`);
+        resolvedInvoiceLinkId = (data as ClaimedCheckoutAttempt | null)?.invoice_link_id ?? null;
         return data as ClaimedCheckoutAttempt | null;
       },
       async loadPayment(attemptId) {
@@ -231,6 +249,7 @@ async function resolveClaimedPaymentRow(
         p_payer_id: input.payerId,
         p_stripe_customer_id: input.customerId,
         p_stripe_checkout_session_id: input.sessionId,
+        p_invoice_link_id: input.invoiceLinkId,
       });
       if (error) throw new Error(`active finalization failed: ${error.message}`);
     },
@@ -240,12 +259,13 @@ async function resolveClaimedPaymentRow(
         p_payer_id: input.payerId,
         p_stripe_customer_id: input.customerId,
         p_stripe_checkout_session_id: input.sessionId,
+        p_invoice_link_id: input.invoiceLinkId,
       });
       if (error) throw new Error(`terminal evidence recovery failed: ${error.message}`);
     },
   });
 
-  return payment;
+  return { ...payment, resolved_invoice_link_id: resolvedInvoiceLinkId };
 }
 
 /** Resolve the invoice_payments row: session id → PI id → latest pending stripe row on the invoice. */
@@ -313,8 +333,13 @@ async function loadInvoiceJoined(
 
 /**
  * Resolve the client recipient the way invoice-send does: invoice.client
- * profile → project.client_id profile → designer_clients.client_email for
- * not-yet-signed-up clients.
+ * profile → project.client_id profile → the address the payer gave at
+ * Checkout (invoice_links.payer_email, 00574 / M5) → designer_clients
+ * .client_email keyed on the household profile.
+ *
+ * The payer-less household — the population the invoice link exists for — has
+ * no profile on either side, so payer_email is the rung that carries its
+ * receipt or failure letter to a real inbox.
  */
 async function resolveRecipient(
   admin: SupabaseClient,
@@ -334,7 +359,26 @@ async function resolveRecipient(
     name = (profile as any)?.full_name ?? name;
   }
 
+  if (!email) {
+    // The address Checkout collected, persisted on the invoice's link at
+    // checkout.session.completed. The newest link that has one.
+    const { data: link } = await admin
+      .from('invoice_links')
+      .select('payer_email')
+      .eq('invoice_id', invoice.id)
+      .not('payer_email', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    email = (link as any)?.payer_email ?? null;
+  }
+
   if (!email && clientUserId) {
+    // The roster, keyed on the household profile. A payer-less invoice has no
+    // profile to key on and designer_clients has no project_id, so a
+    // designer-keyed lookup could address another household's receipt (review
+    // F6): for that case the Checkout-collected payer_email above is the only
+    // truthful address, and with none the letter is not sent.
     const { data: dc } = await admin
       .from('designer_clients')
       .select('client_email, client_name')
@@ -411,11 +455,20 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     const deskName = invoiceDeskName(invoice);
     const designerName = designerDisplayName(invoice);
     const balanceCents = invoice.total_cents - invoice.amount_paid_cents;
-    // /invoices/<id> stays: the Patina iOS app claims `/invoices/*` in its
-    // applinks entitlement, so a client with the app installed opens the native
-    // invoice. On the web the portal's middleware 308s it onto
-    // `/?invoice=<id>#letterbox`, which is where this receipt is read.
-    const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
+    // The receipt links to the invoice's standing page, /pay/<token> (00574,
+    // K1): it opens for anyone holding the letter, signed in or not, with or
+    // without a Patina account. This REVERSES the earlier ruling recorded here
+    // — that `/invoices/<id>` stays so the Patina iOS app's `/invoices/*`
+    // applinks claim opens the native invoice. A signed-in iOS client's
+    // receipt link now opens Safari, by decision (T3 I1, recorded as R137).
+    // The in-app inbox row below keeps its `/invoices/<id>` deep_link because
+    // it routes the iOS inbox by id (I2): the emailed link and the inbox link
+    // for the same event land on different surfaces on purpose — do not
+    // "fix" it. `/invoices/<id>` remains the fallback only when no link can be
+    // ensured (draft, void, or an RPC failure).
+    const portalUrl =
+      (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
+      `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
     // Two amounts, deliberately: the client is told what their card/bank was
     // actually charged (balance + rail fee), the designer is told what landed
     // on the invoice (net). A legacy payment has no fee and the two coincide.
@@ -514,7 +567,11 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
     const projectName = invoiceSubjectName(invoice, null);
     const deskName = invoiceDeskName(invoice);
     const designerName = designerDisplayName(invoice);
-    const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
+    // /pay/<token> (00574), with today's `/invoices/<id>` as the fallback —
+    // see the receipt letter above for the ruling this records.
+    const portalUrl =
+      (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
+      `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
     const amountLabel = formatInvoiceCurrency(row.amount_cents, invoice.currency);
 
     const recipient = await resolveRecipient(admin, invoice);
@@ -620,6 +677,7 @@ async function handleSessionCompleted(admin: SupabaseClient, event: Stripe.Event
         attemptId: checkoutAttemptId,
         invoiceId,
         payerId: session.metadata?.payer_id ?? null,
+        invoiceLinkId: session.metadata?.invoice_link_id ?? null,
         sessionId,
         paymentIntentId,
         customerId: stripeObjectId(session.customer),
@@ -652,6 +710,23 @@ async function handleSessionCompleted(admin: SupabaseClient, event: Stripe.Event
   if (!row) {
     console.warn('stripe-webhook: no payment row resolvable for session', sessionId);
     return;
+  }
+
+  // M5 (00574): the address Checkout collected is the only one a payer-less
+  // household has. Persist it once the payment row's identity is confirmed —
+  // the link id comes from the resolved, identity-verified attempt, never raw
+  // session metadata read before that check ran. Best effort — a settlement
+  // never waits on it, and only the link id is ever logged.
+  const invoiceLinkId = row.resolved_invoice_link_id ?? null;
+  const collectedEmail = session.customer_details?.email ?? null;
+  if (invoiceLinkId && collectedEmail) {
+    const { error: emailErr } = await admin.rpc('set_invoice_link_payer_email', {
+      p_link_id: invoiceLinkId,
+      p_email: collectedEmail,
+    });
+    if (emailErr) {
+      console.error('stripe-webhook: payer_email capture failed', invoiceLinkId, emailErr.message);
+    }
   }
 
   if (session.payment_status === 'paid') {
@@ -696,6 +771,7 @@ async function handleAsyncPaymentSucceeded(
         attemptId: checkoutAttemptId,
         invoiceId,
         payerId: session.metadata?.payer_id ?? null,
+        invoiceLinkId: session.metadata?.invoice_link_id ?? null,
         sessionId,
         paymentIntentId,
         customerId: stripeObjectId(session.customer),
@@ -733,6 +809,7 @@ async function handleAsyncPaymentFailed(admin: SupabaseClient, event: Stripe.Eve
         attemptId: checkoutAttemptId,
         invoiceId,
         payerId: session.metadata?.payer_id ?? null,
+        invoiceLinkId: session.metadata?.invoice_link_id ?? null,
         sessionId,
         paymentIntentId,
         customerId: stripeObjectId(session.customer),
@@ -798,6 +875,7 @@ async function handlePaymentIntentSettled(
         attemptId: checkoutAttemptId,
         invoiceId: pi.metadata?.invoice_id ?? null,
         payerId: pi.metadata?.payer_id ?? null,
+        invoiceLinkId: pi.metadata?.invoice_link_id ?? null,
         sessionId: null,
         paymentIntentId: pi.id,
         customerId: stripeObjectId(pi.customer),

@@ -404,7 +404,30 @@ BEGIN
       (
         'public.submit_trade_rfq_response(text,integer,text)',
         'service_role'
-      )
+      ),
+      -- The Invoice, Standing Alone (00574): the guest rail's service-only
+      -- RPCs and the two folio RPCs.
+      ('public.resolve_invoice_link(text,boolean)', 'authenticated'),
+      ('public.regenerate_invoice_link(uuid)', 'authenticated'),
+      ('public.get_invoice_link(uuid)', 'authenticated'),
+      ('public.ensure_invoice_link(uuid)', 'service_role'),
+      ('public.resolve_invoice_link_for_checkout(text)', 'service_role'),
+      ('public.resolve_invoice_return_nonce(text)', 'service_role'),
+      ('public.set_invoice_link_stripe_customer(uuid,text)', 'service_role'),
+      ('public.set_invoice_link_payer_email(uuid,text)', 'service_role'),
+      (
+        'public.claim_invoice_link_checkout_attempt(uuid,uuid,text,text)',
+        'service_role'
+      ),
+      (
+        'public.finalize_invoice_checkout_attempt(uuid,uuid,text,text,uuid)',
+        'service_role'
+      ),
+      (
+        'public.recover_invoice_checkout_session_evidence(uuid,uuid,text,text,uuid)',
+        'service_role'
+      ),
+      ('public.expire_stale_invoice_checkout_attempts(interval)', 'service_role')
     ) AS required(signature, role_name)
     LEFT JOIN pg_roles AS role ON role.rolname = required.role_name
     LEFT JOIN pg_proc AS routine
@@ -792,6 +815,59 @@ BEGIN
   ), 'pg_net relations or sequence grant privileges outside the reviewed surface';
 END
 $net_contract$;
+
+-- The Invoice, Standing Alone (00574, S15): Strata predates the grant-default
+-- flip and auto-grants anon EXECUTE at creation, so every function the guest
+-- rail added is asserted anon-denied by name. resolve_invoice_link is
+-- authenticated + service_role only (the portal's service client), never anon;
+-- the service-only set is denied to authenticated as well.
+DO $invoice_links_00574$
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY[
+      'public.mint_invoice_link_on_issue()',
+      'public.ensure_invoice_link(uuid)',
+      'public.resolve_invoice_link(text,boolean)',
+      'public.resolve_invoice_link_for_checkout(text)',
+      'public.resolve_invoice_return_nonce(text)',
+      'public.set_invoice_link_stripe_customer(uuid,text)',
+      'public.set_invoice_link_payer_email(uuid,text)',
+      'public.claim_invoice_link_checkout_attempt(uuid,uuid,text,text)',
+      'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean,text)',
+      'public.finalize_invoice_checkout_attempt(uuid,uuid,text,text,uuid)',
+      'public.recover_invoice_checkout_session_evidence(uuid,uuid,text,text,uuid)',
+      'public.regenerate_invoice_link(uuid)',
+      'public.get_invoice_link(uuid)',
+      'public.expire_stale_invoice_checkout_attempts(interval)',
+      'public._void_invoice_authorized_legacy_00397(uuid,text)'
+    ]::text[]) AS item(signature)
+    WHERE to_regprocedure(item.signature) IS NULL
+       OR has_function_privilege('anon', item.signature, 'EXECUTE')
+  ), 'anon must hold EXECUTE on none of the 00574 invoice-link functions';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY[
+      'public.ensure_invoice_link(uuid)',
+      'public.resolve_invoice_link_for_checkout(text)',
+      'public.resolve_invoice_return_nonce(text)',
+      'public.set_invoice_link_stripe_customer(uuid,text)',
+      'public.set_invoice_link_payer_email(uuid,text)',
+      'public.claim_invoice_link_checkout_attempt(uuid,uuid,text,text)',
+      'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean,text)',
+      'public.finalize_invoice_checkout_attempt(uuid,uuid,text,text,uuid)',
+      'public.recover_invoice_checkout_session_evidence(uuid,uuid,text,text,uuid)',
+      'public.expire_stale_invoice_checkout_attempts(interval)'
+    ]::text[]) AS item(signature)
+    WHERE has_function_privilege('authenticated', item.signature, 'EXECUTE')
+  ), 'a service-only 00574 invoice-link RPC widened to authenticated';
+
+  ASSERT NOT has_table_privilege('anon', 'public.invoice_links', 'SELECT')
+     AND NOT has_table_privilege('authenticated', 'public.invoice_links', 'SELECT'),
+    'invoice_links must not be readable by a browser role';
+END
+$invoice_links_00574$;
 
 DO $extension_helpers$
 BEGIN

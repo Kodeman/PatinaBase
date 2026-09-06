@@ -61,8 +61,13 @@ let consumedValue: CheckoutReturn | null = null;
 /**
  * The return, read and cleaned once. Callers after the first get the same
  * answer without a second history entry.
+ *
+ * `hash` is the fragment the cleaned address keeps. The house has two sections
+ * a receipt can belong to, so it defaults to choosing between them exactly as
+ * it always has. `/pay/<token>` is one sheet with no sections and no anchor to
+ * name, and passes `''`.
  */
-export function consumeCheckoutReturn(): CheckoutReturn | null {
+export function consumeCheckoutReturn(hash?: string): CheckoutReturn | null {
   if (consumed) return consumedValue;
   consumed = true;
   if (typeof window === 'undefined') return null;
@@ -71,7 +76,10 @@ export function consumeCheckoutReturn(): CheckoutReturn | null {
     window.history.replaceState(
       {},
       '',
-      cleanedCheckoutUrl(window.location.href, consumedValue.orderId ? '#road' : '#letterbox'),
+      cleanedCheckoutUrl(
+        window.location.href,
+        hash ?? (consumedValue.orderId ? '#road' : '#letterbox'),
+      ),
     );
   }
   return consumedValue;
@@ -136,13 +144,16 @@ export function resetCheckoutReturn(): void {
 }
 
 /** The return, after hydration — never during SSR, where there is no address. */
-export function useCheckoutReturn(): CheckoutReturn | null {
+export function useCheckoutReturn(hash?: string): CheckoutReturn | null {
   const [received, setReceived] = useState<CheckoutReturn | null>(null);
   useEffect(() => {
     // Reading the browser's return address is a synchronization with an
     // external system, not derived state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReceived(consumeCheckoutReturn());
+    setReceived(consumeCheckoutReturn(hash));
+    // The hash names the cleaned address once, on the first read; a later
+    // change to it has nothing left to clean.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return received;
 }

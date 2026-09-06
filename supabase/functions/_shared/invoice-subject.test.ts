@@ -144,6 +144,7 @@ const SENDERS = [
   "invoice-reminders",
   "stripe-webhook",
   "invoice-check-intent",
+  "invoice-link-checkout",
 ] as const;
 
 /** The four whose letters name the invoice, so a stand-in phrase is forbidden. */
@@ -161,23 +162,49 @@ const FOOTER_FLAG_SENDERS = [
   "stripe-webhook",
 ] as const;
 
-/** The four that put a studio's letterhead on a client-facing letter. */
+/** The five that put a studio's letterhead on a client-facing letter or line item. */
 const BRANDING_SENDERS = [
   "create-checkout-session",
   "invoice-send",
   "invoice-reminders",
   "stripe-webhook",
+  "invoice-link-checkout",
 ] as const;
 
+/**
+ * Where a sender's letter logic lives. A sender that delegates its body to a
+ * shared core (00574: the check letter is composed once in
+ * _shared/invoice-check-intent-core.ts, for the JWT adapter and the guest
+ * rail alike) is read together with that core, so the pins below still reach
+ * the code that composes the letter.
+ */
+const SENDER_SOURCES: Record<string, readonly string[]> = {
+  "invoice-check-intent": [
+    "invoice-check-intent/index.ts",
+    "_shared/invoice-check-intent-core.ts",
+  ],
+  "invoice-link-checkout": [
+    "invoice-link-checkout/index.ts",
+    "_shared/invoice-check-intent-core.ts",
+  ],
+};
+
 async function senderSource(name: string): Promise<string> {
-  return await Deno.readTextFile(new URL(`../${name}/index.ts`, import.meta.url));
+  const files = SENDER_SOURCES[name] ?? [`${name}/index.ts`];
+  const parts = await Promise.all(
+    files.map((file) => Deno.readTextFile(new URL(`../${file}`, import.meta.url))),
+  );
+  return parts.join("\n");
 }
 
 Deno.test("every invoice sender names the letter through invoiceSubjectName", async () => {
   for (const name of SENDERS) {
     const src = await senderSource(name);
+    // A function imports the derivation from _shared; a shared core imports
+    // its sibling relatively. Either is the same module.
     assert(
-      src.includes(`from '../_shared/invoice-subject.ts'`),
+      src.includes(`from '../_shared/invoice-subject.ts'`) ||
+        src.includes(`from './invoice-subject.ts'`),
       `${name}/index.ts no longer imports the shared derivation`,
     );
     assert(

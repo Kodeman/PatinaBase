@@ -3,7 +3,10 @@
 export interface ClaimedCheckoutAttempt {
   id: string;
   invoice_id: string;
-  payer_id: string;
+  /** The signed-in payer, or null on the link rail (00574). */
+  payer_id: string | null;
+  /** The invoice link this attempt belongs to, or null on the payer rail. Exactly one of the two is set. */
+  invoice_link_id: string | null;
   stripe_customer_id: string;
   /** NET claimed balance. Stripe charged this PLUS surcharge_cents. */
   amount_cents: number;
@@ -36,6 +39,7 @@ export interface ClaimedCheckoutEvidence {
   attemptId: string;
   invoiceId: string | null;
   payerId: string | null;
+  invoiceLinkId: string | null;
   sessionId: string | null;
   paymentIntentId: string | null;
   customerId: string | null;
@@ -98,7 +102,12 @@ export async function resolveExactClaimedPayment(
 
   const mismatch =
     input.invoiceId !== attempt.invoice_id ||
-    input.payerId !== attempt.payer_id ||
+    // Exactly one identity term binds (00574): the payer's on the payer rail,
+    // the link's on the link rail. A row carrying neither, or both, is corrupt
+    // and never settles.
+    (attempt.payer_id === null) === (attempt.invoice_link_id === null) ||
+    (attempt.payer_id !== null && input.payerId !== attempt.payer_id) ||
+    (attempt.invoice_link_id !== null && input.invoiceLinkId !== attempt.invoice_link_id) ||
     input.customerId !== attempt.stripe_customer_id ||
     input.amountCents !== expectedGrossCents ||
     input.currency?.toLowerCase() !== attempt.currency.toLowerCase() ||

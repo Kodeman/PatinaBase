@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Invoice } from '@patina/supabase';
@@ -17,6 +18,39 @@ jest.mock('@patina/supabase', () => ({
   useStartCheckout: jest.fn(),
   useNotifyCheckIntent: jest.fn(),
   useStudioIdentity: jest.fn(),
+  useInvoiceLink: jest.fn(),
+}));
+
+// `prefetch` is a Next `Link` prop, not a DOM attribute, so it leaves no trace
+// on the rendered anchor. It is surfaced as `data-prefetch` here so the
+// guarantee below can be asserted at all — the pay-link e2e CANNOT assert it,
+// because `next dev` disables prefetching outright and the suite would pass
+// just as green with the prop deleted.
+//
+// J30(b): scoped to the one link that cares. Omitting `data-prefetch`
+// entirely when `prefetch` is undefined keeps every OTHER `next/link` usage
+// in the tree free of a stray `data-prefetch="undefined"` attribute nobody
+// asserts on.
+jest.mock('next/link', () => ({
+  __esModule: true,
+  default: ({
+    children,
+    href,
+    prefetch,
+    ...rest
+  }: {
+    children: ReactNode;
+    href: string;
+    prefetch?: boolean;
+  } & Record<string, unknown>) => (
+    <a
+      href={href}
+      {...(prefetch !== undefined ? { 'data-prefetch': String(prefetch) } : {})}
+      {...rest}
+    >
+      {children}
+    </a>
+  ),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({
@@ -32,6 +66,7 @@ jest.mock('@/lib/analytics/events', () => ({
 }));
 
 import {
+  useInvoiceLink,
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useStartCheckout,
@@ -40,6 +75,9 @@ import {
 import { clientEvents } from '@/lib/analytics/events';
 
 import { Letterbox } from '../letterbox';
+
+/** The 64-hex shape ensure_invoice_link (00574) emits. */
+const LINK_TOKEN = 'a'.repeat(64);
 
 /** 5 August 2026 — the deck's "today". */
 const TODAY = new Date(2026, 7, 5);
@@ -106,6 +144,7 @@ function standAt(search: string) {
       search,
       href: `https://client.test/projects/p1${search}`,
       pathname: '/projects/p1',
+      origin: 'https://client.test',
     },
   });
 }
@@ -125,6 +164,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
       isPending: false,
     });
     (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: jest.fn() });
+    (useInvoiceLink as jest.Mock).mockReturnValue({ data: { token: LINK_TOKEN, status: 'active' } });
     // The brand resolver, keyed the way 00571 keys it: the studio the row
     // names itself wins, and each studio answers with its own name.
     (useStudioIdentity as jest.Mock).mockImplementation(
@@ -551,5 +591,54 @@ describe('Letterbox — one letter, half out of the slot', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
+  });
+
+  /* ── The letter's own address (00574 · K1) ───────────────────────────────
+     Additive: the settle-in-place and the print sheet both stay until W3b.
+     ─────────────────────────────────────────────────────────────────────── */
+
+  it('offers the invoice its own address, above the settle-in-place', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    const open = screen.getByRole('link', { name: 'Open the invoice' });
+    expect(open).toHaveAttribute('href', `/pay/${LINK_TOKEN}`);
+  });
+
+  /* F6: Next prefetches a `Link` as it scrolls into view, and the pay page
+     records a view and spends its rate-limit budget on every render. Scrolling
+     past the letterbox must therefore cost the link nothing, which `prefetch`
+     being explicitly false is the whole of. */
+  it('never warms the pay page by scrolling past it', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.getByRole('link', { name: 'Open the invoice' })).toHaveAttribute(
+      'data-prefetch',
+      'false',
+    );
+  });
+
+  it('keeps the letterbox, the print sheet and the settle-in-place beside it', async () => {
+    const user = userEvent.setup();
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.getByRole('link', { name: 'Open the invoice' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: 'Open the letterbox' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    expect(screen.getByRole('button', { name: 'Close the letterbox' })).toBeInTheDocument();
+  });
+
+  it('says nothing about an address the invoice does not have', () => {
+    (useInvoiceLink as jest.Mock).mockReturnValue({ data: null });
+
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.queryByRole('link', { name: 'Open the invoice' })).not.toBeInTheDocument();
+    // The existing acts are untouched by a missing link.
+    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open the letterbox' })).toBeInTheDocument();
   });
 });

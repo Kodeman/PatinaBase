@@ -74,6 +74,9 @@ jest.mock('@patina/supabase', () => ({
   useProjectParties: jest.fn(),
   useProjectTeamMembers: jest.fn(),
   useStudioIdentity: jest.fn(),
+  // The letter's own address (00574) — the letterbox reads it; this suite is
+  // not about the link, so it answers with none.
+  useInvoiceLink: () => ({ data: null }),
   useMarkProjectRead: jest.fn(),
   useMyProjectApprovalReviews: jest.fn(),
   usePreviousReadingMark: jest.fn(),

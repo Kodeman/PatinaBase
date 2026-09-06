@@ -2307,4 +2307,70 @@ BEGIN
 END
 $agent_rpc_contract$;
 
+-- The Invoice, Standing Alone (00574): the guest checkout rail's RPC surface.
+-- Service-only functions are callable by service_role alone; the two folio
+-- RPCs and the portal-side resolver are authenticated + service_role; anon
+-- holds EXECUTE on nothing here; the link table is unreadable by browser
+-- roles; the actor never reaches the ledger tables directly.
+DO $invoice_links_00574_contract$
+DECLARE
+  v_sig text;
+BEGIN
+  FOREACH v_sig IN ARRAY ARRAY[
+    'public.ensure_invoice_link(uuid)',
+    'public.resolve_invoice_link(text,boolean)',
+    'public.resolve_invoice_link_for_checkout(text)',
+    'public.resolve_invoice_return_nonce(text)',
+    'public.set_invoice_link_stripe_customer(uuid,text)',
+    'public.set_invoice_link_payer_email(uuid,text)',
+    'public.claim_invoice_link_checkout_attempt(uuid,uuid,text,text)',
+    'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean,text)',
+    'public.finalize_invoice_checkout_attempt(uuid,uuid,text,text,uuid)',
+    'public.recover_invoice_checkout_session_evidence(uuid,uuid,text,text,uuid)',
+    'public.expire_stale_invoice_checkout_attempts(interval)'
+  ] LOOP
+    ASSERT to_regprocedure(v_sig) IS NOT NULL, format('%s must exist', v_sig);
+    ASSERT has_function_privilege('service_role', v_sig, 'EXECUTE'),
+      format('service_role must execute %s', v_sig);
+    ASSERT NOT has_function_privilege('anon', v_sig, 'EXECUTE'),
+      format('anon must not execute %s', v_sig);
+    ASSERT NOT has_function_privilege('authenticated', v_sig, 'EXECUTE'),
+      format('authenticated must not execute service-only %s', v_sig);
+    ASSERT NOT has_function_privilege('agent_writer', v_sig, 'EXECUTE'),
+      format('agent_writer must not execute %s', v_sig);
+  END LOOP;
+
+  -- J33: resolve_invoice_link left this list for the service-only one above.
+  -- The portal reaches it through its service client, and the per-IP limiter
+  -- that rations this token oracle lives in the portal — an authenticated
+  -- PostgREST caller holding EXECUTE would walk straight past it.
+  FOREACH v_sig IN ARRAY ARRAY[
+    'public.regenerate_invoice_link(uuid)',
+    'public.get_invoice_link(uuid)'
+  ] LOOP
+    ASSERT has_function_privilege('authenticated', v_sig, 'EXECUTE')
+       AND has_function_privilege('service_role', v_sig, 'EXECUTE'),
+      format('authenticated + service_role must execute %s', v_sig);
+    ASSERT NOT has_function_privilege('anon', v_sig, 'EXECUTE'),
+      format('anon must not execute %s', v_sig);
+  END LOOP;
+
+  ASSERT NOT has_function_privilege('anon', 'public.mint_invoice_link_on_issue()', 'EXECUTE')
+     AND NOT has_function_privilege('authenticated', 'public.mint_invoice_link_on_issue()', 'EXECUTE')
+     AND NOT has_function_privilege('service_role', 'public.mint_invoice_link_on_issue()', 'EXECUTE'),
+    'the mint trigger function stays private';
+
+  ASSERT NOT has_table_privilege('anon', 'public.invoice_links', 'SELECT')
+     AND NOT has_table_privilege('authenticated', 'public.invoice_links', 'SELECT')
+     AND NOT has_table_privilege('authenticated', 'public.invoice_links', 'INSERT')
+     AND NOT has_table_privilege('authenticated', 'public.invoice_links', 'UPDATE')
+     AND has_table_privilege('service_role', 'public.invoice_links', 'SELECT'),
+    'invoice_links is a service-only table';
+  ASSERT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.invoice_links'::regclass)
+     AND NOT EXISTS (SELECT 1 FROM pg_policies
+                     WHERE schemaname = 'public' AND tablename = 'invoice_links'),
+    'invoice_links has RLS on with zero policies';
+END
+$invoice_links_00574_contract$;
+
 ROLLBACK;

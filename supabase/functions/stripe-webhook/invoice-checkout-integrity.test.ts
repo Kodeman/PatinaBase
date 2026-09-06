@@ -19,6 +19,7 @@ const attempt: ClaimedCheckoutAttempt = {
   id: 'attempt-1',
   invoice_id: 'invoice-1',
   payer_id: 'client-1',
+  invoice_link_id: null,
   stripe_customer_id: 'cus_client_1',
   amount_cents: 10_000,
   surcharge_cents: 0,
@@ -47,6 +48,7 @@ const evidence: ClaimedCheckoutEvidence = {
   attemptId: 'attempt-1',
   invoiceId: 'invoice-1',
   payerId: 'client-1',
+  invoiceLinkId: null,
   sessionId: 'cs_attempt_1',
   paymentIntentId: 'pi_attempt_1',
   customerId: 'cus_client_1',
@@ -128,6 +130,71 @@ Deno.test(
     }
   }
 );
+
+// ── The link rail (00574): the link is the identity term ────────────────────
+const linkAttempt: ClaimedCheckoutAttempt = {
+  ...attempt,
+  payer_id: null,
+  invoice_link_id: 'link-1',
+  stripe_customer_id: 'cus_link_1',
+};
+const linkPayment: ClaimedInvoicePayment = { ...payment, recorded_by: null };
+const linkEvidence: ClaimedCheckoutEvidence = {
+  ...evidence,
+  payerId: null,
+  invoiceLinkId: 'link-1',
+  customerId: 'cus_link_1',
+};
+
+Deno.test('claimed webhook: a link attempt settles on its link, its customer and its payer-less row', async () => {
+  assertEquals(await resolveExactClaimedPayment(reader(linkAttempt, linkPayment), linkEvidence), linkPayment);
+  // A stray payer_id on link evidence is not an identity term for a link attempt.
+  assertEquals(
+    await resolveExactClaimedPayment(reader(linkAttempt, linkPayment), { ...linkEvidence, payerId: 'client-stray' }),
+    linkPayment
+  );
+});
+
+Deno.test('claimed webhook: a tampered or missing invoice_link_id never settles a link attempt', async () => {
+  for (const changed of [
+    { invoiceLinkId: 'link-foreign' },
+    { invoiceLinkId: null },
+    { customerId: 'cus_foreign' },
+  ] satisfies Array<Partial<ClaimedCheckoutEvidence>>) {
+    await assertRejects(
+      () => resolveExactClaimedPayment(reader(linkAttempt, linkPayment), { ...linkEvidence, ...changed }),
+      ClaimedCheckoutIntegrityError,
+      'identity mismatch'
+    );
+  }
+  // A link payment recorded by a person is not the link's payment.
+  await assertRejects(
+    () => resolveExactClaimedPayment(reader(linkAttempt, { ...linkPayment, recorded_by: 'client-1' }), linkEvidence),
+    ClaimedCheckoutIntegrityError,
+    'identity mismatch'
+  );
+});
+
+Deno.test('claimed webhook: an attempt carrying neither or both identities is corrupt and never settles', async () => {
+  await assertRejects(
+    () =>
+      resolveExactClaimedPayment(
+        reader({ ...attempt, payer_id: null, invoice_link_id: null }, linkPayment),
+        { ...evidence, payerId: null }
+      ),
+    ClaimedCheckoutIntegrityError,
+    'identity mismatch'
+  );
+  await assertRejects(
+    () =>
+      resolveExactClaimedPayment(reader({ ...attempt, invoice_link_id: 'link-1' }, payment), {
+        ...evidence,
+        invoiceLinkId: 'link-1',
+      }),
+    ClaimedCheckoutIntegrityError,
+    'identity mismatch'
+  );
+});
 
 Deno.test('claimed webhook: payment-row identity tampering is rejected', async () => {
   for (const changed of [

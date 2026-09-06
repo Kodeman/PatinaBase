@@ -299,3 +299,99 @@ export const moodBoardEvents = {
     });
   },
 };
+
+// ---------------------------------------------------------------------------
+// payLinkEvents — `/pay/<token>`, the standing invoice (§9).
+//
+// The page is opened by someone who has no account and never will, and its URL
+// IS a bearer credential. So the property law here is tighter than anywhere
+// else in this file: the whitelist is EXACTLY
+//
+//   status · is_studio_invoice · has_balance · method · amount_cents ·
+//   surcharge_cents · currency
+//
+// and nothing else may be added to it. No id of any kind (the payload carries
+// none), no token, no return nonce, no name, no email, no address. The
+// `clientEvents.invoice*` names are deliberately NOT reused: they carry
+// `invoice_id` and belong to the signed-in dashboards.
+// ---------------------------------------------------------------------------
+
+export type PayLinkMethod = 'us_bank_account' | 'card' | 'check';
+
+export const payLinkEvents = {
+  view: (p: {
+    status: string;
+    isStudioInvoice: boolean;
+    hasBalance: boolean;
+    currency: string;
+  }) =>
+    track('pay_link_view', {
+      status: p.status,
+      is_studio_invoice: p.isStudioInvoice,
+      has_balance: p.hasBalance,
+      currency: p.currency,
+    }),
+
+  methodSelected: (p: {
+    method: PayLinkMethod;
+    amountCents: number;
+    surchargeCents: number;
+    currency: string;
+  }) =>
+    track('pay_link_method_selected', {
+      method: p.method,
+      amount_cents: p.amountCents,
+      surcharge_cents: p.surchargeCents,
+      currency: p.currency,
+    }),
+
+  // Fires immediately before the Stripe Checkout redirect, so it uses
+  // sendBeacon transport to survive the navigation away — the same reason
+  // `client_payment_started` does.
+  paymentStarted: (p: {
+    method: PayLinkMethod;
+    amountCents: number;
+    surchargeCents: number;
+    currency: string;
+  }) =>
+    track(
+      'pay_link_payment_started',
+      {
+        method: p.method,
+        amount_cents: p.amountCents,
+        surcharge_cents: p.surchargeCents,
+        currency: p.currency,
+      },
+      { transport: 'sendBeacon' },
+    ),
+
+  paymentCompleted: (p: { status: string; amountCents: number; currency: string }) =>
+    track('pay_link_payment_completed', {
+      status: p.status,
+      amount_cents: p.amountCents,
+      currency: p.currency,
+    }),
+
+  paymentCancelled: (p: { currency: string }) =>
+    track('pay_link_payment_cancelled', { currency: p.currency }),
+
+  checkIntent: (p: { amountCents: number; currency: string }) =>
+    track('pay_link_check_intent', {
+      amount_cents: p.amountCents,
+      currency: p.currency,
+    }),
+
+  deadLink: () => track('pay_link_dead'),
+
+  settling: () => track('pay_link_settling'),
+
+  // J15 — K5's sheet was the one terminal state with no mouth, so a withdrawn
+  // invoice was invisible in PostHog while dead and settling were not. No
+  // property: the whitelist above has nothing that applies to it.
+  withdrawn: () => track('pay_link_withdrawn'),
+
+  // S4 — the limiter binding is absent in a production Worker. The server
+  // route logs this as a structured error line (there is no server-side
+  // PostHog client in this portal); this is the browser-side twin.
+  rateLimitBindingMissing: () => track('pay_link_ratelimit_missing'),
+};
