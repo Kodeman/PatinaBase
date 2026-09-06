@@ -327,3 +327,45 @@ appended. The stack now carries the **W2 integration tree** (all migrations thro
 `00571`, all 29 seeds) — which is exactly what the walk needs, so `stack-released`
 records that this steward is finished with it **without** implying it may be
 re-reset. Peer `00569`/`00570` are not on this stack.
+
+## 7 · Carry
+
+The four findings the release judge would have blocked on, closed in this worktree
+(`studio-invoices/integration`) on top of `e0daf3863`. Nothing else was touched.
+
+| id | sev | what was wrong | what it is now |
+|---|---|---|---|
+| **R3-1** | major (client) | `threshold.tsx:278` resolved the letterbox payee from `useStudioIdentity({ projectId })` — the ADOPTED HOUSE's studio — so a studio letter drawn by studio B, standing in a house belonging to studio A, put A's name on the check panel. | The payee is resolved from the LETTER, never from the house around it. New `apps/client-portal/src/components/threshold/letter-payee.ts` (`useLetterPayee`) calls the resolver with the row's own `studio_id` / `project_id` / `designer_id` — the same 00571 precedence `letterbox-door.tsx:95` already used — and `letterbox.tsx` takes its `studio` from it. `threshold.tsx` is unchanged: the doorplate, the note and the mat still name the HOUSE's studio, which is right. |
+| **R3-12** | minor (client) | `EarlierInvoices` handed every folded letter one `designerName` — the slot letter's studio. | Each folded letter's settle panel is its own component (`FoldedSettlement`) that resolves its own payee through `useLetterPayee`. Only one folded letter is ever unfolded at a time, so this is a mounted component's hook, never a hook in a loop. The caller's name survives only as the last-resort fallback. |
+| **F-F8** | minor (designer) | `activeDesignStudios` filtered the ORGANIZATION only, so a **guest** membership was offered as a billing studio — and 00571 (`membership.status = 'active' AND membership.role <> 'guest'`) then raised `insufficient_privilege` verbatim into the R83 band. | The membership is filtered too: `role !== 'guest'` and a status that is active. The W-1 name sort the walk-fix added is untouched and still covered. |
+| **F-R2-3** | minor (designer) | The *regarding* input had no bound; 00571 refuses a title over 200 characters. | `maxLength={200}` on the field. |
+| **W-5 / W2-4** | nit (walk, copy) | After voiding a STUDIO invoice the folio note said `invoice voided · linked milestones and time released`, contradicting the confirm copy two seconds earlier. | The note is keyed on `documentProjectId`, exactly as the confirm copy already was: a studio void now reads `invoice voided · the number retired, the letter withdrawn`. The house void keeps its old sentence. |
+
+**Tests** (all new, in the suites that already cover the neighbouring code):
+`letterbox.test.tsx` +2 (the slot letter's own studio on the check panel; a folded
+letter's payee resolved from that letter) · `earlier-invoices.test.tsx` +1 ·
+`threshold.test.tsx` +1 (the house-level R3-1 scenario end to end: plate keeps
+`Quist Interiors`, the check names `The Ash Studio`) · `invoice-composer.test.ts` +3
+(guest dropped, non-active membership dropped, active non-guest kept) ·
+`invoice-composer-studio.test.tsx` +3 (guest studio never offered, the name sort
+survives the drop, `maxLength` 200) · `invoice-folio.test.tsx` +2 (both void notes).
+
+**Gates**
+
+```
+pnpm --filter @patina/client-portal type-check    → clean (tsc --noEmit, no output)
+pnpm --filter @patina/client-portal test          → 116 suites / 1582 tests passed
+pnpm --filter @patina/designer-portal type-check  → clean (tsc --noEmit, no output)
+pnpm --filter @patina/designer-portal test -- accounts composer
+                                                  → 7 of 8 suites passed (see below)
+pnpm --filter @patina/designer-portal test        → 512 of 513 suites,
+                                                    6147 of 6148 tests passed
+```
+
+**W2-A4 (advisory, NOT this lane's)** — `client-note-composer.test.tsx:479` asserts
+the literal `"Taken down Sep 4. It moves to Previously."` while
+`client-note-composer.tsx:326` renders `fmtDay(new Date())`. The literal was
+committed on 2026-09-04 (`ffb9cff6f`), so the suite passes only on the day it was
+written; it fails today in every timezone (`TZ=Etc/GMT+12 date` is still Sep 5). It
+is the single red suite in the full designer run, it shares no file with this
+program, and it will fail every day until the date is stubbed.
