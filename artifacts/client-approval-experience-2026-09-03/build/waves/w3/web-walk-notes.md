@@ -126,3 +126,66 @@ web-walk-dev.log                     the dev server
 Local stack not reset. Local mutations only: the fixture's teardown/setup, two plan issues, the
 superseded pair through the RPCs, one signature row, and the four acts the browser recorded
 (one Approve, one cadence change, two snoozes). Dev server killed at the end.
+
+---
+
+# Round 2 — 2026-09-06 UTC
+
+Lane: web walk, second pass, on `da8f6811b` (one commit above the walk-fix `e3b4d6a71`).
+Report: `walk-web-r2.md`. Shots: `web-walk-shots-r2/` (29). Dev log: `web-walk-dev-r2.log`.
+
+## What changed since round 1
+
+The stack was **not** reset and round 1's fixtures were all still standing, so nothing was
+re-seeded: the superseded pair (`57d7fad9` approved → `aee67ead` pending), the eight G-rows,
+and the `commercial_document_signatures` row carrying `signed_ip = 203.0.113.44`. Ledger still
+`00573, 00572, 00571, 00569, 00568`.
+
+## The three round-1 majors, all closed
+
+- `W3W-R1-01` — the revision act now measures **7.86:1** at both render sites, no `clay` in
+  either className, and **axe reports zero violations of any type on the doorstep**.
+- `W3W-R1-02` — the said-line is drawn on a cold load for a standing `never` and a standing
+  `sunday`, and is correctly **absent** when the stored hold's hour has passed (walked by
+  setting my own row two hours into the past and restoring it).
+- `W3W-R1-03` — five discussion landmarks, five distinct labels, including both colliding pairs.
+
+## What is still open
+
+`W3W-R1-04` · `-05` · `-06` · `-07` · `-08` · `-09` and nits n1–n4, all re-verified unchanged —
+the fix round deliberately touched only the three majors.
+
+## One new major
+
+`W3W-R2-01` — `consentMethodForOutcome` derives the keepsake's consent sentence from the
+outcome, so an approval with `client_consent_method = NULL` and `client_signature = NULL`
+(G3, and every approval answered before 00569) prints "Signed electronically by typed name."
+over an empty name. The projection carries the name and no method by design; the page infers
+the method rather than omitting it.
+
+Plus two new nits: two Records of Decision on one artifact edition print the same `MARK`
+(the checksum is the edition's), and the four Remind-me acts carry no `aria-pressed` under a
+standing hold.
+
+## Files added this round
+
+```
+web-walk/lib-r2.mjs                    lib.mjs with SHOTS repointed at web-walk-shots-r2
+web-walk/r2-01-record.mjs              both sheets, print emulation, IP sweep, landmarks, variants
+web-walk/r2-02-stranger.mjs            the second homeowner, timed; bogus ids; signed out
+web-walk/r2-03-doorstep-axe.mjs        axe, the revision-act ink, landmark labels, vocabulary, keep-a-copy
+web-walk/r2-04-successor-fold.mjs      P-27 in order + the fold's four probes
+web-walk/r2-05-pace.mjs                re-entry read-back, the details sheet, cadence write, snooze write
+web-walk/r2-06-snooze-past-due.mjs     dated hold survives reload; don't-remind-me; past due
+web-walk/r2-07-pastdue-text.mjs        the past-due card, whole
+web-walk/r2-08-pastdue-visibility.mjs  is the past-due phrase sr-only? (no — it is fixture question text)
+web-walk/r2-09-lifted-hold.mjs         a hold whose hour has passed draws nothing
+web-walk/r2-10-door.mjs                the door hunt, again empty
+web-walk/r2-11-ink.mjs                 contrast of the acts the fix did not touch
+```
+
+## Housekeeping
+
+Local stack not reset. Local mutations only, all on rows this program minted: one cadence change
+to `weekly_sunday`, two snoozes on the walk's own successor, and one direct UPDATE/restore of
+that snooze row to prove the lifted-hold refusal. Dev server killed at the end.

@@ -1,0 +1,11 @@
+import { open, signIn, openHouse, t, IDS } from './lib-r2.mjs';
+const { browser, page } = await open({ width: 1280, height: 1400 });
+await signIn(page);
+await openHouse(page);
+await page.waitForTimeout(4000);
+const ask = page.locator(`#approval-${IDS.successor}`);
+await ask.scrollIntoViewIfNeeded();
+console.log('stored row: kind=tomorrow_morning, snoozed_until = 2 hours ago');
+console.log('  said count:', await ask.locator('[data-testid="approval-snooze-said"]').count());
+console.log('  block:', t(await ask.locator('[data-testid="approval-snooze"]').innerText()));
+await browser.close();
