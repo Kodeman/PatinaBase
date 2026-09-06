@@ -560,6 +560,26 @@ export type {
   ProposalEmailDispatchStatus,
 } from "./use-proposals";
 export { commercialKeys } from "./use-commercial-documents";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Agreement parts — an agreement as an ordered list of parts, and the
+// projection of its money parts into the terms row (migration 00575)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  agreementPartsKeys,
+  mapAgreementPart,
+  useAgreementParts,
+  useSaveAgreementParts,
+  useMaterializeStandardParts,
+} from "./use-agreement-parts";
+export type {
+  AgreementPartRow,
+  AgreementPartInput,
+  SaveAgreementPartsInput,
+  SaveAgreementPartsResult,
+  MaterializeStandardPartsResult,
+} from "./use-agreement-parts";
+
 export type {
   Proposal,
   ProposalItem,
@@ -1589,6 +1609,22 @@ export {
   useUpdateStudioBillingSettings,
 } from "./use-studio-billing";
 export type { StudioBillingSettings } from "./use-studio-billing";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Studio agreement defaults — the studio's standing rate card, deposit,
+// cadence, retainer credit rule and exclusions, read by
+// materialize_standard_parts when it seeds a new agreement (migration 00575)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  studioAgreementDefaultsKeys,
+  defaultStudioAgreementDefaults,
+  useStudioAgreementDefaults,
+  useUpdateStudioAgreementDefaults,
+} from "./use-studio-agreement-defaults";
+export type {
+  StudioAgreementDefaultsRow,
+  UpdateStudioAgreementDefaultsInput,
+} from "./use-studio-agreement-defaults";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Direct orders — client "buy now" on Patina-managed products, the third
