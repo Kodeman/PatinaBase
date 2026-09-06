@@ -34,7 +34,7 @@ import {
   isProjectApprovalAwaitingStudioIssue,
 } from '@/lib/client-attention';
 import { parseSourceDate } from '@/lib/threshold/derive';
-import { refusalSentence } from '@/lib/threshold/refusal';
+import { isPastDueRefusal, refusalSentence } from '@/lib/threshold/refusal';
 
 /* ── THE DOORSTEP ASK ────────────────────────────────────────────────────────
    A phase approval stands on the doorstep because it carries no room, and it
@@ -279,7 +279,15 @@ export function successionLine(
 }
 
 /**
- * The single act along the thread, forward first.
+ * The single act along the thread, and it only ever points FORWARD.
+ *
+ * `W3W-R1-06` / P-27. The predecessor of a live edition offers "Review
+ * revised edition", which is where the conversation is. The LEAF — the
+ * newest edition, the one actually asking her something — used to offer
+ * "Review previous edition", a backward act on the only card in the thread
+ * that wants an answer, and the continuation line above it already names the
+ * edition she answered ("Edition 904 replaces the edition you approved on
+ * September 5."). So the leaf offers nothing: one thread, one direction.
  *
  * Only a sibling that is itself anchored on this page is offered — an
  * `#approval-<id>` link to a row the doorstep is not drawing lands nowhere.
@@ -292,11 +300,23 @@ export function revisionAct(
   if (successor && anchoredDecisionIds.includes(successor)) {
     return { id: successor, label: 'Review revised edition' };
   }
-  const predecessor = approval.predecessorDecisionId;
-  if (predecessor && anchoredDecisionIds.includes(predecessor)) {
-    return { id: predecessor, label: 'Review previous edition' };
-  }
   return null;
+}
+
+/**
+ * The date line under the ask.
+ *
+ * `W3W-R1-n2`. It read a plain "Due August 31" whether the date was ahead of
+ * her or a week behind, so the one card whose reminders never stop was the one
+ * card that did not say so. The tell is WORDS, in body ink — never the word
+ * "overdue", never red — and it is the same refusal the money rail keeps with
+ * "Past due · {date}" (ruled at Wave 1 close). Here the sentence is hers: the
+ * date first, because that is what she is looking for, and what has become of
+ * it second.
+ */
+export function dueLine(due: Date, isOverdue: boolean): string {
+  const day = `Due ${LONG_MONTH_DAY.format(due)}`;
+  return isOverdue ? `${day} · past its date` : day;
 }
 
 /** The fallback, when the two projections differ in nothing she can read. */
@@ -751,7 +771,7 @@ export function ApprovalReceipt({
           {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
         </Stamp>
       </p>
-      {forward?.label === 'Review revised edition' && (
+      {forward && (
         <p className="mt-3">
           <a
             data-testid="approval-receipt-forward"
@@ -849,9 +869,32 @@ const SNOOZE_ACTS: Array<{
   {
     choice: 'never',
     label: "Don't remind me",
-    confirmation: "I won't remind you again until it's past its date.",
+    // `W3W-R1-09`. One act, one row (`kind='never'`, `snoozed_until =
+    // 'infinity'`), and it said two different things on two surfaces — and on
+    // an approval with no due date the web's sentence pointed at a date that
+    // does not exist. This is iOS's sentence, word for word
+    // (`DecisionSnooze.holdsUntil`): it names the act that ends the hold,
+    // which is the menu the sentence is drawn beside, rather than a condition
+    // Patina cannot detect.
+    confirmation:
+      "I'll hold the reminders. Choose again here whenever you want them back.",
   },
 ];
+
+/**
+ * The acts this approval actually offers.
+ *
+ * `W3W-R1-09`, mirroring `DecisionSnooze.offered(hasDueDate:)`: "When it's
+ * due" on an approval with no due date is an invented timing, and 00572
+ * stores that choice as a standing quiet rather than the hold the words
+ * promise. So it is not offered.
+ */
+export function snoozeActsOffered(hasDueDate: boolean) {
+  return SNOOZE_ACTS.filter((act) => hasDueDate || act.choice !== 'when_due');
+}
+
+/** R16, said in the act's place: the notice on a passed date cannot be held. */
+export const SNOOZE_PAST_DUE = 'This one is past its date, so its notice stands.';
 
 /** The house sentence for a snooze that did not land. */
 const SNOOZE_REFUSED = 'The reminders could not be set just now. Try again.';
@@ -864,7 +907,10 @@ function snoozeConfirmation(choice: DecisionSnoozeChoice): string | null {
 function RemindMe({
   approval,
 }: {
-  approval: Pick<ProjectApprovalReview, 'decisionId' | 'projectId' | 'isOverdue'>;
+  approval: Pick<
+    ProjectApprovalReview,
+    'decisionId' | 'projectId' | 'isOverdue' | 'dueAt'
+  >;
 }) {
   const setSnooze = useSetDecisionSnooze();
   // `W3R1-02`. The write was the only half the web had, so a reload of an
@@ -890,7 +936,7 @@ function RemindMe({
         data-testid="approval-snooze-past-due"
         className="mt-4 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
       >
-        This one is past its date, so its notice stands.
+        {SNOOZE_PAST_DUE}
       </p>
     );
   }
@@ -907,7 +953,14 @@ function RemindMe({
       });
       setSaid(act.confirmation);
     } catch (cause) {
-      setError(refusalSentence(cause, SNOOZE_REFUSED));
+      // `W3R1-n1`: 00572 refuses a hold on an approval past its date. A
+      // screen that raced the date hears it, and says the rule it would have
+      // drawn had it known — not "could not be set just now".
+      setError(
+        isPastDueRefusal(cause)
+          ? SNOOZE_PAST_DUE
+          : refusalSentence(cause, SNOOZE_REFUSED),
+      );
     } finally {
       inFlight.current = false;
     }
@@ -917,7 +970,7 @@ function RemindMe({
     <div className="mt-4 max-w-[52ch]" data-testid="approval-snooze">
       <p className={EYEBROW_CLASS}>Remind me</p>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-5">
-        {SNOOZE_ACTS.map((act) => (
+        {snoozeActsOffered(parseSourceDate(approval.dueAt) !== null).map((act) => (
           <ScoredAction
             key={act.choice}
             actionKey={`snooze_approval_${act.choice}`}
@@ -1448,8 +1501,11 @@ export function ApprovalAsk({
       </blockquote>
 
       {due && (
-        <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]">
-          {`Due ${LONG_MONTH_DAY.format(due)}`}
+        <p
+          data-testid="approval-due-line"
+          className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]"
+        >
+          {dueLine(due, approval.isOverdue)}
         </p>
       )}
       {/* `W1-01`. The sentence is present tense, so it stands only while the

@@ -63,6 +63,7 @@ import {
   ApprovalAsk,
   ApprovalReceipt,
   ApprovalRecords,
+  dueLine,
   useDoorstepApprovals,
 } from '../approval-ask';
 
@@ -228,7 +229,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     const plate = within(ask).getByTestId('approval-plate');
     expect(plate).toHaveTextContent('Library elevations');
     expect(plate).toHaveTextContent(/Edition 3 · Issued August \d+/);
-    expect(ask).toHaveTextContent('Due August 20');
+    expect(screen.getByTestId('approval-due-line')).toHaveTextContent('Due August 20');
     expect(screen.getByTestId('approval-rationale')).toHaveTextContent(
       'This releases the joinery package for pricing.',
     );
@@ -716,13 +717,31 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     rerender(
       <ApprovalAsk
         approval={{ ...APPROVAL, predecessorDecisionId: 'dec-0', successorDecisionId: 'dec-2' }}
-        anchoredDecisionIds={['dec-1', 'dec-0']}
+        anchoredDecisionIds={['dec-1', 'dec-2']}
       />,
     );
-    const link = screen.getByRole('link', { name: 'Review previous edition' });
-    expect(link).toHaveAttribute('href', '#approval-dec-0');
+    const link = screen.getByRole('link', { name: 'Review revised edition' });
+    expect(link).toHaveAttribute('href', '#approval-dec-2');
+  });
+
+  /**
+   * `W3W-R1-06`. The LEAF of a thread — the newest edition, the one actually
+   * asking her something — used to draw "Review previous edition" as its one
+   * act: a backward step on the only card in the thread that wants an answer,
+   * under a continuation line that already names the edition she answered.
+   * The leaf now offers no act at all.
+   */
+  it('gives the leaf of a thread no backward act', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, predecessorDecisionId: 'dec-0', successorDecisionId: null }}
+        anchoredDecisionIds={['dec-0', 'dec-1']}
+      />,
+    );
+
+    expect(screen.queryByTestId('approval-revisions')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: 'Review revised edition' }),
+      screen.queryByRole('link', { name: 'Review previous edition' }),
     ).not.toBeInTheDocument();
   });
 
@@ -819,18 +838,63 @@ describe('ApprovalAsk — remind me', () => {
   });
 
   /**
-   * "Don't remind me" is not "never tell me". A snooze moves the reminders;
-   * the notice that an approval has passed its date is the last thing Patina
-   * says before it hands the item back to the studio, and no snooze buries it.
+   * `W3W-R1-09`. One act, one row (`kind='never'`, `snoozed_until =
+   * 'infinity'`), and it said two different things on two surfaces — and on
+   * an approval with no due date the web's sentence pointed at a date that
+   * does not exist. This is iOS's sentence, word for word: it names the act
+   * that ends the hold, which is the menu it is drawn beside.
    */
-  it('says plainly that even "don’t remind me" runs out at the date', async () => {
+  it('says what "don’t remind me" actually does, in iOS’s words', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
     fireEvent.click(screen.getByRole('button', { name: "Don't remind me" }));
 
     expect(await screen.findByTestId('approval-snooze-said')).toHaveTextContent(
-      "I won't remind you again until it's past its date.",
+      "I'll hold the reminders. Choose again here whenever you want them back.",
     );
+  });
+
+  /**
+   * `W3W-R1-09`, the other half — `DecisionSnooze.offered(hasDueDate:)` on
+   * this surface. "When it's due" on an approval with no due date is an
+   * invented timing, and 00572 stores that choice as a standing quiet rather
+   * than the hold the words promise. So it is not offered.
+   */
+  it('never offers "When it’s due" on an approval with no date', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, dueAt: null as unknown as string }} />);
+
+    const acts = within(screen.getByTestId('approval-snooze')).getAllByRole('button');
+    expect(acts.map((act) => act.textContent)).toEqual([
+      'Tomorrow morning',
+      'Sunday',
+      "Don't remind me",
+    ]);
+  });
+
+  it('offers all four where the approval carries a date', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    const acts = within(screen.getByTestId('approval-snooze')).getAllByRole('button');
+    expect(acts.map((act) => act.textContent)).toContain("When it's due");
+  });
+
+  /**
+   * `W3R1-n1`. 00572 now refuses a hold on an approval past its date. A
+   * screen that raced the date hears it, and draws the rule rather than
+   * "could not be set just now".
+   */
+  it('answers the server’s past-due refusal with the rule, not a failure', async () => {
+    snoozeMutateAsync.mockRejectedValue({
+      code: '23514',
+      message: 'decision_past_due',
+    });
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sunday' }));
+
+    const refusal = await screen.findByRole('alert');
+    expect(refusal).toHaveTextContent('This one is past its date, so its notice stands.');
+    expect(refusal.textContent).not.toMatch(/overdue/i);
   });
 
   /**
@@ -876,7 +940,7 @@ describe('ApprovalAsk — remind me', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('approval-snooze-said')).toHaveTextContent(
-        "I won't remind you again until it's past its date.",
+        "I'll hold the reminders. Choose again here whenever you want them back.",
       ),
     );
   });
@@ -2399,5 +2463,26 @@ describe('the outcome is signed and held (P-18)', () => {
     await hold(confirm);
     await waitFor(() => expect(confirmMutate).toHaveBeenCalledTimes(1));
     expect(confirmMutate.mock.calls[0][0]).not.toHaveProperty('clientSignature');
+  });
+});
+
+/* `W3W-R1-n2`. The date line read a plain "Due August 31" whether the date was
+   ahead of her or a week behind it, so the one card whose reminders never stop
+   was the one card that did not say so. Words, in body ink — the same refusal
+   the money rail keeps with "Past due · {date}". */
+describe('the date line', () => {
+  it('says what has become of a date that has passed', () => {
+    expect(dueLine(new Date(2026, 7, 31), true)).toBe('Due August 31 · past its date');
+    expect(dueLine(new Date(2026, 7, 31), false)).toBe('Due August 31');
+  });
+
+  it('never says the retired word, and never wears a colour', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, isOverdue: true }} />);
+
+    const line = screen.getByTestId('approval-due-line');
+    expect(line).toHaveTextContent('Due August 20 · past its date');
+    expect(line.textContent).not.toMatch(/overdue/i);
+    expect(line.className).toContain('text-[var(--text-body)]');
+    expect(line.className).not.toMatch(/red|terracotta/);
   });
 });
