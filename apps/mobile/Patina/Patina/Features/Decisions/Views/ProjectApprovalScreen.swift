@@ -27,6 +27,7 @@ struct ProjectApprovalScreen: View {
             heading
             failure
             ProjectApprovalBlock(viewModel: viewModel)
+            pace
             if viewModel.discussThreadId != nil {
                 discuss
             }
@@ -94,6 +95,65 @@ struct ProjectApprovalScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
             .accessibilityIdentifier("decisionDetail.approval.failure")
+        }
+    }
+
+    /// `P-28`. "Remind me" — four words, and the sentence that says what a
+    /// snooze does and does not do.
+    ///
+    /// Past its date there is no act, only the reason: `R16` makes the overdue
+    /// notice unsnoozeable, and a control that appears to work and quietly
+    /// does not is worse than no control. An approval already answered gets
+    /// neither — there is nothing left to be reminded about.
+    @ViewBuilder
+    private var pace: some View {
+        if viewModel.canSnoozeApproval() {
+            VStack(alignment: .leading, spacing: 8) {
+                if let chosen = viewModel.chosenSnooze {
+                    Text(chosen.confirmation)
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("approval.snooze.confirmation")
+                } else {
+                    Menu {
+                        ForEach(viewModel.snoozeOptions) { option in
+                            Button(option.label) {
+                                Task { await viewModel.snoozeApproval(option) }
+                            }
+                        }
+                    } label: {
+                        Text(DecisionPaceCopy.remindMe)
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(viewModel.isSnoozing)
+                    .accessibilityIdentifier("approval.snooze")
+                }
+                Text(DecisionPaceCopy.onlyTheRemindersWait)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if viewModel.snoozeFailed {
+                    Text(DecisionPaceCopy.snoozeFailed)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("approval.snooze.failed")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+        } else if viewModel.approvalIsPastDue(), viewModel.approvalReview?.canRespond == true {
+            Text(DecisionPaceCopy.pastItsDate)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .accessibilityIdentifier("approval.snooze.pastDue")
         }
     }
 

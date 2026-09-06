@@ -374,6 +374,28 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
 
 extension DecisionsAPIClient {
 
+    /// `P-28`. Ask Patina to wait, on ONE approval.
+    ///
+    /// `set_decision_snooze(p_decision_id, p_kind)` computes the moment in
+    /// the reader's own timezone and writes `decision_snoozes`; the arithmetic
+    /// is deliberately not done here, because a phone's idea of "tomorrow
+    /// morning" and the cron's have to be the same one.
+    ///
+    /// `R16` is enforced where it has to be — in `decision-reminders` — and
+    /// this call cannot weaken it: the overdue notice and a superseding
+    /// edition bypass the snooze entirely. The screen's own job is to not
+    /// PROMISE otherwise, which is why it does not offer the act on a past-due
+    /// approval at all.
+    public func setDecisionSnooze(
+        decisionId: String,
+        kind: DecisionSnooze
+    ) async throws {
+        _ = try await callRPC(
+            "set_decision_snooze",
+            body: ["p_decision_id": decisionId, "p_kind": kind.rawValue]
+        )
+    }
+
     /// This Stage-2 approval, or nil.
     ///
     /// Nil covers three things the RPC deliberately does not distinguish: no

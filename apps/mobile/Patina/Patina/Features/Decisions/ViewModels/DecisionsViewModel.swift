@@ -25,14 +25,11 @@ final class DecisionDetailViewModel {
 
     /// Option the client tapped "Choose" on — the one the act is carrying.
     var pendingOptionId: String?
-    /// `P-30`. The option she is LEANING toward: tapped, marked with a clay
-    /// dot, and committing to nothing.
-    ///
-    /// It is deliberately not `pendingOptionId`: that one is the act in
-    /// flight, and a homeowner comparing two fabrics has to be able to put her
-    /// finger on one without the phone treating the touch as an answer. The
-    /// only thing that answers is the held act.
-    private(set) var leaningOptionId: String?
+    /// `P-30`. The option she is leaning toward — see
+    /// `DecisionDetailViewModel+Spread.swift`, which is the only thing that
+    /// moves it. Deliberately not `pendingOptionId`, which is the act in
+    /// flight: a touch is not an answer.
+    var leaningOptionId: String?
     /// Option the client has committed to (locally, after a successful
     /// `selectOption`). Mirrors the server `selected` flag for instant UI.
     var selectedOptionId: String?
@@ -74,6 +71,24 @@ final class DecisionDetailViewModel {
     var changeNote: String = ""
     var noteFailure: String?
     var typedSignature: String = ""
+
+    // MARK: - P-28 · the pace
+
+    /// The snooze recorded in this session, so the screen can say when Patina
+    /// will ask next. The row itself is the server's; this is the sentence.
+    var chosenSnooze: DecisionSnooze?
+    var isSnoozing: Bool = false
+    var snoozeFailed: Bool = false
+
+    /// `set_decision_snooze`, behind a seam — the same reason as every other
+    /// act on this class: the singleton actor's network call is not reachable
+    /// from a test. Arguments: the decision id and the kind.
+    @ObservationIgnored
+    var setDecisionSnooze: (String, DecisionSnooze) async throws -> Void = { decisionId, kind in
+        try await DecisionsAPIClient.shared.setDecisionSnooze(
+            decisionId: decisionId, kind: kind
+        )
+    }
 
     /// Whichever ceremony this decision belongs to.
     ///
@@ -309,70 +324,6 @@ final class DecisionDetailViewModel {
 
     func cancelSelection() {
         pendingOptionId = nil
-    }
-
-    /// `P-30`. Lean toward an option. This writes nothing, sends nothing and
-    /// resolves nothing — it moves a dot and fires a selection haptic.
-    ///
-    /// A contentless option is not leanable for the same reason it was never
-    /// choosable (`R06`): the act above it would name nothing.
-    func chooseLeaning(optionId: String) {
-        guard !isResolved, !isSubmitting else { return }
-        guard options.first(where: { $0.id == optionId })?.hasRenderableContent == true else {
-            return
-        }
-        leaningOptionId = optionId
-    }
-
-    /// The option the named act is standing over, if any.
-    var leaningOption: RemoteDecisionOption? {
-        guard let leaningOptionId else { return nil }
-        return options.first { $0.id == leaningOptionId }
-    }
-
-    /// `P-30`. The act itself: the held press on "I choose {name}".
-    ///
-    /// The consent is `click_through` and carries no signature. That is what
-    /// the consent step this replaces sent on its default path — its "Add my
-    /// signature" toggle rested OFF — and it is the token the mid-Wave-2
-    /// ruling reserves for an act with no name on it. A choice between two
-    /// named alternatives is not the signature moment; R1's typed name belongs
-    /// to Approve on the ceremony rail, which has its own screen.
-    func commitLeaning(decisionId: String) async {
-        guard let optionId = leaningOptionId, !isSubmitting, !isResolved else { return }
-        pendingOptionId = optionId
-        await confirmSelection(decisionId: decisionId, consent: .clickThrough)
-    }
-
-    /// Commit the pending option with the client's consent. On success the
-    /// decision is `responded` and the chosen option's `selected` flag is set
-    /// server-side (via `apply_decision`); we mirror that locally.
-    func confirmSelection(
-        decisionId: String,
-        consent: DecisionsAPIClient.ConsentMethod,
-        signature: String? = nil
-    ) async {
-        guard let optionId = pendingOptionId, !isSubmitting else { return }
-        isSubmitting = true
-        error = nil
-        submitFailure = nil
-        do {
-            try await DecisionsAPIClient.shared.selectOption(
-                decisionId: decisionId,
-                optionId: optionId,
-                consent: consent,
-                signature: signature
-            )
-            self.selectedOptionId = optionId
-            self.pendingOptionId = nil
-            self.leaningOptionId = nil
-        } catch {
-            MoneyFailureCopy.log("decision", error)
-            self.submitFailure = MoneyFailureCopy.decision
-            self.lastAttemptedOptionId = optionId
-            self.pendingOptionId = nil
-        }
-        isSubmitting = false
     }
 
     /// SP-15's first act on the decision path: put the failed submit's option

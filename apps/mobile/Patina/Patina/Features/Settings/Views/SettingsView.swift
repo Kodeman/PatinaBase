@@ -159,6 +159,7 @@ struct SettingsView: View {
                 // Preferences group
                 settingsGroup(title: "Preferences") {
                     notificationsRow
+                    reminderCadenceRow
                     settingsToggleRow(
                         icon: "hand.tap",
                         iconColor: PatinaColors.agedOak,
@@ -478,6 +479,59 @@ struct SettingsView: View {
                 )
             )
             .accessibilityIdentifier("SettingsView.NotificationsToggle")
+        }
+    }
+
+    /// `P-28`. How often Patina checks in, in three plain words rather than
+    /// the column's two tokens. The floor beneath it is the one promise the
+    /// push leg actually keeps, said as a fact rather than sold as a feature.
+    ///
+    /// It draws under the notifications row and not inside it: the switch is
+    /// whether anything arrives at all, and this is the pace of what does.
+    private var reminderCadenceRow: some View {
+        VStack(alignment: .leading, spacing: PatinaSpacing.xxs) {
+            HStack(spacing: PatinaSpacing.xsm) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: PatinaRadius.md)
+                        .fill(PatinaColors.clay.opacity(0.15))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "clock")
+                        .font(.system(size: 14))
+                        .foregroundStyle(PatinaColors.clay)
+                }
+
+                Text(DecisionPaceCopy.cadenceLabel)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.primary)
+
+                Spacer()
+
+                Picker(DecisionPaceCopy.cadenceLabel, selection: Binding(
+                    get: { settings.reminderCadence },
+                    set: { settings.setReminderCadence($0) }
+                )) {
+                    ForEach(ReminderCadence.allCases) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(PatinaColors.Text.secondary)
+                .accessibilityLabel(DecisionPaceCopy.cadenceLabel)
+                .accessibilityIdentifier("SettingsView.ReminderCadence")
+            }
+            .frame(minHeight: 44)
+
+            Text(DecisionPaceCopy.quietHours)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("SettingsView.ReminderQuietHours")
+        }
+        .padding(.horizontal, PatinaSpacing.md)
+        .padding(.vertical, PatinaSpacing.sm)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
+                .padding(.leading, 60)
         }
     }
 
