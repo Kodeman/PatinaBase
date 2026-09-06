@@ -39,6 +39,23 @@ extension DecisionDetailViewModel {
             && !approvalIsPastDue(now: now)
     }
 
+    /// Whether the reason is drawn in the act's place: every leg of
+    /// `canSnoozeApproval` except the date, which is the one that is failing.
+    ///
+    /// `r2 M2`. `canSnoozeApproval` going false is not on its own a past-due
+    /// approval — it also goes false the moment she answers, because
+    /// `record(_:)` sets `answeredOutcome` and never refetches the review, so
+    /// `canRespond` stays true underneath. Read as "not snoozeable and past
+    /// its date", the line "the reminders stay until it’s answered" draws
+    /// directly beneath the mark recording that she answered it.
+    func approvalPaceIsHeldByDate(now: Date = Date()) -> Bool {
+        guard let review = approvalReview else { return false }
+        return review.canRespond
+            && review.viewerAnswers
+            && !hasAnsweredApproval
+            && approvalIsPastDue(now: now)
+    }
+
     /// The four words, minus the one that needs a date this approval has not
     /// got. "When it's due" on an undated approval is an invented timing.
     var snoozeOptions: [DecisionSnooze] {
