@@ -43,14 +43,24 @@ export interface DesignServiceTerms {
   scope: string;
   deliverables: string[];
   exclusions: string[];
-  billingCeilingCents: number;
+  /** NULL = uncapped. Legal only when the agreement carries no rate_card
+   *  part (00575 `_agreement_requires_rate_card`); the seven-facet room
+   *  never writes null. */
+  billingCeilingCents: number | null;
   retainerAmountCents: number;
   retainerActivationPolicy: RetainerActivationPolicy;
   billingCadence: BillingCadence;
   currency: string;
   terms: string;
   currentRateVersion: number;
-  updatedAt: string;
+  updatedAt: string | null;
+  /** R8: the deposit percent the studio commits to on EACH furnishings
+   *  authorization released under this agreement (0–100). A term of the
+   *  design services agreement, not of any one authorization — chips in the
+   *  drafting room offer 0/25/50/100/other. Nullable by design — the studio
+   *  may leave it unset, and create_furnishings_authorization_from_schedule
+   *  (00422) falls back to a 50% house default at release time. */
+  furnishingsDepositPercent: number | null;
 }
 
 export interface DesignServiceRate {
@@ -59,7 +69,7 @@ export interface DesignServiceRate {
   version: number;
   roleName: string;
   hourlyRateCents: number;
-  effectiveAt: string;
+  effectiveAt: string | null;
 }
 
 export interface CommercialSignatureReceipt {
@@ -100,12 +110,15 @@ export interface ProjectBillingAuthoritySummary {
   agreementId: string;
   state: 'active' | 'retainer_pending' | 'exhausted' | 'superseded';
   currency: string;
-  ceilingCents: number;
+  /** NULL = uncapped (F-2) — legal only when the agreement carries no
+   *  rate_card part. Render as "No ceiling", never as `$0`. */
+  ceilingCents: number | null;
   authorizedCents: number;
   accruedCents: number;
   invoicedCents: number;
   pendingAuthorizationCents: number;
-  remainingCents: number;
+  /** NULL = uncapped (F-2), mirrors `ceilingCents`. */
+  remainingCents: number | null;
   retainerAmountCents: number;
   retainerPaidCents: number;
   retainerActivationPolicy: RetainerActivationPolicy;
