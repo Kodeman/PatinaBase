@@ -19,6 +19,18 @@ final class StudioHubViewModel {
     private(set) var hasLoaded = false
     private(set) var failedSources: [String] = []
 
+    /// `W3R2-M1`: whether the Stage-2 projection has ever answered.
+    ///
+    /// The approvals leg is deliberately not a `failures` entry — it is the
+    /// second half of one decision feed — so a hub whose projection read
+    /// failed drew no notice, no staleness line and no error card, and simply
+    /// said "Nothing needs a decision." under a header reading "Eight things
+    /// need your eye". Emptiness is only assertable once the merge has landed.
+    private(set) var hasLoadedProjection = false
+
+    /// Whether the hub may still be told nothing is there.
+    var isAwaitingProjection: Bool { !hasLoaded || !hasLoadedProjection }
+
     /// When every source last answered. `nil` until one refresh has come back
     /// clean.
     private(set) var lastSuccessAt: Date?
@@ -113,7 +125,14 @@ final class StudioHubViewModel {
         await load()
     }
 
-    func load() async {
+    /// `W3R2-M1`: one retry, and only for the projection.
+    ///
+    /// A merge that did not answer leaves every section unprovable, and the
+    /// screen holds its placeholders open until it does. Waiting for the
+    /// homeowner to leave and come back is what the walk measured; asking
+    /// once more is what makes the merge land while she is still looking at
+    /// it. Bounded at one — a leg that fails twice is a failure, not a race.
+    func load(retryingProjection: Bool = true) async {
         guard !isLoading else { return }
         guard AuthService.shared.isAuthenticated else {
             resetForGuest()
@@ -157,6 +176,10 @@ final class StudioHubViewModel {
             notifications: loaded.6
         )
         apply(result)
+
+        if retryingProjection, !hasLoadedProjection {
+            await load(retryingProjection: false)
+        }
     }
 
     /// Internal so `LoadStateHonestyTests` can drive a partial failure
@@ -169,6 +192,7 @@ final class StudioHubViewModel {
         // instead of emptying it.
         held.projects = result.projects ?? held.projects
         held.approvals = result.approvals ?? held.approvals
+        if result.approvals != nil { hasLoadedProjection = true }
         // `W2R2-M1`: `listPending` is a PostgREST read on `client_decisions`,
         // and 00467 hides every Stage-2 row from the homeowner behind it — so
         // the hub counted only her legacy rows while Today (through
@@ -231,6 +255,7 @@ final class StudioHubViewModel {
         failedSources = []
         isLoading = false
         hasLoaded = false
+        hasLoadedProjection = false
         held = HeldSources()
         lastSuccessAt = nil
     }
@@ -239,6 +264,9 @@ final class StudioHubViewModel {
         snapshot = .empty
         failedSources = []
         hasLoaded = true
+        // A guest has no projection to wait for: her hub is the sign-in card,
+        // and leaving this false would hold a placeholder open behind it.
+        hasLoadedProjection = true
         isLoading = false
         held = HeldSources()
         lastSuccessAt = nil

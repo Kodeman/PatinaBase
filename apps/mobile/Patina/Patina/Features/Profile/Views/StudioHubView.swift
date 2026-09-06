@@ -20,7 +20,11 @@ struct StudioHubView: View {
 
             if !authService.isAuthenticated {
                 guestState
-            } else if viewModel.isLoading && !viewModel.hasLoaded {
+            } else if !viewModel.hasLoaded {
+                // `W3R2-M1`: `isLoading` is false for the frames between mount
+                // and the `.task` firing, so the hub fell straight through to
+                // its sections and drew every one of them as empty — an
+                // assertion about a load that had not been asked for yet.
                 loadingState
             } else {
                 // L07-05: the staleness line is drawn ABOVE the branch, so it
@@ -240,40 +244,38 @@ struct StudioHubView: View {
 
             // P-24: the hub counts in words. A figure at the end of a row is
             // the count chip the refusals name, whatever it is drawn in.
-            Text(PatinaCount.inWords(sectionBadgeCount(section)))
-                .font(PatinaTypography.monoLabel)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .accessibilityLabel(sectionBadgeLabel(section))
+            //
+            // `W3R2-M1`: and no word at all until the merge has answered — the
+            // count that was read out was "zero things awaiting you" over a
+            // projection that had not come back.
+            if !viewModel.isAwaitingProjection {
+                Text(PatinaCount.inWords(sectionBadgeCount(section)))
+                    .font(PatinaTypography.monoLabel)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .accessibilityLabel(sectionBadgeLabel(section))
+            }
         }
         .padding(14)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// SP-16 named three numbers on one screen, and "Awaiting you 3" under a
-    /// header reading "4 things need your eye" was the third. Every other
-    /// section badge counts its cards; this one counts the things, because it
-    /// is the one the header also speaks for.
-    private func sectionBadgeCount(_ section: StudioQueueSection) -> Int {
-        section.kind == .awaitingYou
-            ? viewModel.snapshot.attentionSummary.awaitingCount
-            : section.rows.count
-    }
-
-    private func sectionBadgeLabel(_ section: StudioQueueSection) -> String {
-        section.kind.badgeLabel(count: sectionBadgeCount(section))
-    }
-
     @ViewBuilder
     private func sectionContent(_ section: StudioQueueSection) -> some View {
         if section.rows.isEmpty {
-            Text(section.kind.emptyMessage)
+            // `W3R2-M1`: an unloaded snapshot is not an empty one. Until the
+            // projection merge has answered, the section holds a quiet
+            // placeholder rather than telling her nothing needs her.
+            let line = viewModel.isAwaitingProjection
+                ? StudioQueueSectionKind.gatheringMessage
+                : section.kind.emptyMessage
+            Text(line)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
                 .padding(.horizontal, 14)
-                .accessibilityLabel("\(section.kind.title). \(section.kind.emptyMessage)")
+                .accessibilityLabel("\(section.kind.title). \(line)")
         } else {
             ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
                 sectionRow(row, kind: section.kind)
@@ -401,6 +403,20 @@ private struct StudioHubStalenessLine: View {
 /// body is at SwiftLint's `type_body_length` warning, and because neither of
 /// these draws anything — they decide when the hub refetches.
 private extension StudioHubView {
+
+    /// SP-16 named three numbers on one screen, and "Awaiting you 3" under a
+    /// header reading "4 things need your eye" was the third. Every other
+    /// section badge counts its cards; this one counts the things, because it
+    /// is the one the header also speaks for.
+    func sectionBadgeCount(_ section: StudioQueueSection) -> Int {
+        section.kind == .awaitingYou
+            ? viewModel.snapshot.attentionSummary.awaitingCount
+            : section.rows.count
+    }
+
+    func sectionBadgeLabel(_ section: StudioQueueSection) -> String {
+        section.kind.badgeLabel(count: sectionBadgeCount(section))
+    }
 
     /// Whether the Studio is the surface she is looking at. The flag-off root
     /// has no tabs — the hub is pushed there, and mounting is arriving — so it
