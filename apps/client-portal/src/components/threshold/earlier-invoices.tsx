@@ -10,6 +10,7 @@ import { moneyInWords } from '@/components/threshold/instruments/standing-senten
 import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
 import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
 
+import { useLetterPayee } from './letter-payee';
 import { Settlement } from './settlement';
 
 /* ── EARLIER INVOICES ────────────────────────────────────────────────────────
@@ -25,7 +26,12 @@ import { Settlement } from './settlement';
    A line that is still owed is not only a record. The letterbox holds the
    soonest-due letter; a studio that sent two can be paid for both, and the
    second one settles here — the same ceremony, unfolded on its own line, so
-   retiring `/invoices/[id]` strands no balance. ──────────────────────────── */
+   retiring `/invoices/[id]` strands no balance.
+
+   A letter drawn against no house at all is folded away here too, because the
+   adopted house holds it. It carries the same clause the envelope carries in
+   the slot: a money line she can act on may never leave her to assume the
+   work is hers. ─────────────────────────────────────────────────────────── */
 
 const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
 const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
@@ -81,10 +87,45 @@ function receiptTrail(invoice: Invoice, today?: Date): string {
   return sent ? `sent ${sent}` : 'awaiting payment';
 }
 
+/** Where it came from, when it came from no house — the envelope's own clause. */
+function origin(invoice: Invoice): string {
+  return invoice.project_id === null ? ' · from the studio · not for a house' : '';
+}
+
 function byArrival(a: Invoice, b: Invoice): number {
   const left = parseSourceDate(a.sent_at ?? a.created_at)?.getTime() ?? 0;
   const right = parseSourceDate(b.sent_at ?? b.created_at)?.getTime() ?? 0;
   return right - left;
+}
+
+/* One folded letter's settle panel. It is its own component because the payee
+   has to come off THIS letter's studio rather than off the letter in the slot,
+   and only one folded letter is ever unfolded at a time — so the resolution is
+   a mounted component's hook, never a hook in a loop. */
+function FoldedSettlement({
+  invoice,
+  hold,
+  fallbackName,
+  onRefetch,
+  today,
+}: {
+  invoice: Invoice;
+  hold: boolean;
+  fallbackName?: string | null;
+  onRefetch?: () => void | Promise<unknown>;
+  today?: Date;
+}) {
+  const payee = useLetterPayee(invoice, fallbackName);
+  return (
+    <Settlement
+      invoice={toModel(invoice)}
+      currency={invoice.currency || 'USD'}
+      hold={hold}
+      designerName={payee}
+      onRefetch={onRefetch}
+      today={today}
+    />
+  );
 }
 
 export interface EarlierInvoicesProps {
@@ -92,7 +133,7 @@ export interface EarlierInvoicesProps {
   invoices: Invoice[];
   /** The one standing in the letterbox — it is not also kept behind it. */
   exceptId?: string | null;
-  /** Who a check would be coming to, when a line here is settled. */
+  /** Last-resort payee name. Each folded letter resolves its own studio first. */
   designerName?: string | null;
   /**
    * A letter whose own return from the till is still unconfirmed. Its settle
@@ -156,7 +197,7 @@ export function EarlierInvoices({
                       {`${invoice.invoice_number ?? 'Invoice'} · ${moneyInWords(
                         invoice.total_cents || 0,
                         invoice.currency || 'USD',
-                      )} · ${receiptTrail(invoice, today)}`}
+                      )} · ${receiptTrail(invoice, today)}${origin(invoice)}`}
                     </span>
                     <span className="flex flex-wrap items-baseline gap-x-4">
                       {isOpen(invoice) && (
@@ -197,16 +238,10 @@ export function EarlierInvoices({
                     >
                       <div className="min-h-0">
                         {settling === invoice.id && (
-                          <Settlement
-                            invoice={toModel(invoice)}
-                            currency={invoice.currency || 'USD'}
+                          <FoldedSettlement
+                            invoice={invoice}
                             hold={heldInvoiceId === invoice.id}
-                            designerName={
-                              invoice.designer?.full_name?.trim() ||
-                              invoice.designer?.business_name?.trim() ||
-                              designerName?.trim() ||
-                              'your designer'
-                            }
+                            fallbackName={designerName}
                             onRefetch={onRefetch}
                             today={today}
                           />

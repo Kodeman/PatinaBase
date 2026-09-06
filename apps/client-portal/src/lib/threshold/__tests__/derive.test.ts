@@ -984,6 +984,31 @@ describe('deriveThreshold — what is owed across every open invoice', () => {
     expect(model.letterbox?.balanceCents).toBe(912_500);
   });
 
+  // A letter drawn against no house is merged into the adopted house's list by
+  // `threshold.tsx`, so the ledger sums it. It must be countable separately or
+  // the owed row cannot disclose it.
+  it('counts how many of the open letters were drawn against no house', () => {
+    const studio = invoice({
+      id: 'inv-31',
+      project_id: null,
+      due_date: '2026-08-10',
+      total_cents: 45_000,
+      amount_paid_cents: 0,
+    });
+    const model = deriveThreshold(input({ invoices: [first, studio] }));
+
+    expect(model.ledger.owedInvoiceCount).toBe(2);
+    expect(model.ledger.owedStudioCount).toBe(1);
+    expect(model.ledger.owedCents).toBe(957_500);
+  });
+
+  it('counts no studio letters in a house that holds only its own', () => {
+    const model = deriveThreshold(
+      input({ invoices: [{ ...first, project_id: 'proj-vale' } as typeof first] }),
+    );
+    expect(model.ledger.owedStudioCount).toBe(0);
+  });
+
   it('counts nothing when nothing is open', () => {
     const model = deriveThreshold(input());
     expect(model.ledger.owedCents).toBeNull();

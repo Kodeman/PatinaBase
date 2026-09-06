@@ -3,6 +3,7 @@ import 'server-only';
 import { createServerClient } from '@patina/supabase/server';
 
 import { env } from '../env';
+import { adoptedHouseId } from '../threshold/adopted-house';
 import { pickActiveProjectId, type HouseActivity } from '../threshold/active-project';
 
 /* ── The house `/` opens on ─────────────────────────────────────────────────
@@ -78,7 +79,14 @@ export async function resolveActiveHouse(projectIds: string[]): Promise<string |
    before the active-house clocks are consulted.
 
    It never guesses: an id that resolves to nothing, or to a project outside
-   the client's own list, returns null and the active house stands. ───────── */
+   the client's own list, returns null and the active house stands.
+
+   A STUDIO INVOICE names no house at all (ruling S1), so there is nothing for
+   the house rule to match and the letter would land in the last-moved house,
+   whose letterbox is not holding it. It resolves instead to the adopted house
+   — the lowest project id the client can open, the same rule the house itself
+   applies to money with no house — which is where the letter actually
+   stands. ────────────────────────────────────────────────────────────────── */
 
 export async function resolveHouseForInstrument(
   projectIds: string[],
@@ -89,9 +97,14 @@ export async function resolveHouseForInstrument(
   },
 ): Promise<string | null> {
   const { invoiceId, proposalId, decisionId } = instrument;
-  if (projectIds.length < 2) return null;
   if (!invoiceId && !proposalId && !decisionId) return null;
   if (env.useProjectFixtures) return null;
+  if (projectIds.length === 0) return null;
+  // One house cannot disagree with itself, so nothing needs reading for it —
+  // EXCEPT an invoice, which may be a studio invoice belonging to no house.
+  // That case is answered by the adopted-house rule below, not by the
+  // active-house clocks, so the read has to happen either way.
+  if (projectIds.length < 2 && !invoiceId) return null;
 
   const owns = (projectId: unknown): string | null =>
     typeof projectId === 'string' && projectIds.includes(projectId)
@@ -102,16 +115,24 @@ export async function resolveHouseForInstrument(
     const supabase = (await createServerClient()) as any;
 
     if (invoiceId) {
-      // Scoped to the client's own projects as well as by id: RLS should not
-      // be the only thing standing between this read and another client's row.
+      // A studio invoice has no project to be scoped by, so the read cannot
+      // carry `.in('project_id', …)` any more. `owns` still refuses a house
+      // outside the client's own list, and the studio branch below checks the
+      // household the letter names — RLS is not the only thing standing
+      // between this read and another client's row either way.
       const { data, error } = await supabase
         .from('invoices')
-        .select('project_id')
+        .select('project_id, client_id')
         .eq('id', invoiceId)
-        .in('project_id', projectIds)
         .maybeSingle();
-      if (!error && data) return owns(data.project_id);
-      return null;
+      if (error || !data) return null;
+      if (data.project_id) return owns(data.project_id);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || data.client_id !== user.id) return null;
+      return adoptedHouseId(projectIds);
     }
 
     if (proposalId) {

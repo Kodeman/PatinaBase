@@ -96,6 +96,8 @@ function InvoiceRows({
         // yet (it's not been sent), so it shows nothing on the tail.
         const owedNow =
           inv.status === 'sent' || inv.status === 'partially_paid';
+        // R136 — a studio invoice has no house, so no doorway to walk through.
+        const studioInvoice = inv.project_id === null;
         const tail =
           inv.status === 'paid'
             ? inv.paid_at
@@ -127,26 +129,33 @@ function InvoiceRows({
                 </span>
               </p>
               <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                {[
-                  inv.project?.name ?? 'Project',
+                {inv.project?.name ?? inv.title ?? 'Studio'}
+                {studioInvoice && (
+                  <span className="ml-1.5 align-middle">
+                    <Stamp label="studio" color="var(--color-clay-ink)" />
+                  </span>
+                )}
+                {` · ${[
                   fmtUsd(inv.total_cents),
                   inv.due_date ? `due ${fmtDay(inv.due_date)}` : null,
                 ]
                   .filter(Boolean)
-                  .join(' · ')}
+                  .join(' · ')}`}
               </p>
             </button>
             <span className="whitespace-nowrap font-mono text-[11px] text-[var(--color-mocha)]">
               {tail}
             </span>
             <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
-            <button
-              type="button"
-              onClick={() => onOpenDocument(inv.project_id)}
-              className="whitespace-nowrap text-[11px] text-[var(--color-clay-ink)] hover:underline"
-            >
-              document ↗
-            </button>
+            {!studioInvoice && (
+              <button
+                type="button"
+                onClick={() => onOpenDocument(inv.project_id)}
+                className="whitespace-nowrap text-[11px] text-[var(--color-clay-ink)] hover:underline"
+              >
+                document ↗
+              </button>
+            )}
           </li>
         );
       })}

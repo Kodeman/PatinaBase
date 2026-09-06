@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
 
 import {
+  useClientInvoices,
   useDirectOrders,
   useMarkProjectRead,
   useMyPendingReviewRequests,
@@ -42,6 +43,7 @@ import {
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
 import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
+import { standsUnfiled } from '@/lib/threshold/adopted-house';
 import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import {
   deriveThreshold,
@@ -278,6 +280,48 @@ export function Threshold({
   const partiesQuery = useProjectParties(projectId);
   const ordersQuery = useDirectOrders();
   useProjectNotesRealtime(projectId);
+
+  // ── the studio's own letters ───────────────────────────────────────────────
+  // An invoice drawn against no house at all (ruling S1) belongs to the
+  // relationship rather than to a project. It stands in exactly ONE of the
+  // client's houses — the adopted house, by the same lowest-id rule that
+  // places a houseless order — so the same letter is never read twice and
+  // never settled twice. Every house below reads ONE merged list, so the
+  // ledger, the letterbox, the note's enclosures and the notices this house
+  // files cannot disagree about which invoices it holds.
+  const otherHouseKey = otherHouses
+    .map((house) => house.id)
+    .sort()
+    .join(',');
+  const adopted = useMemo(
+    () => standsUnfiled(projectId, otherHouseKey.split(',').filter(Boolean)),
+    [projectId, otherHouseKey],
+  );
+  const clientInvoicesQuery = useClientInvoices();
+  const studioInvoices = useMemo(
+    () =>
+      adopted
+        ? (clientInvoicesQuery.data ?? []).filter(
+            (row) => row.project_id === null && row.status !== 'draft',
+          )
+        : [],
+    [adopted, clientInvoicesQuery.data],
+  );
+  const invoices = useMemo(
+    () => [...(invoicesQuery.data ?? []), ...studioInvoices],
+    [invoicesQuery.data, studioInvoices],
+  );
+  const clientInvoicesRefetch = clientInvoicesQuery.refetch;
+  const projectInvoicesRefetch = invoicesQuery.refetch;
+  // Stable by construction: the confirmation poll holds this in an effect's
+  // dependency list, and a fresh identity each render would restart it.
+  const refetchInvoices = useCallback(async () => {
+    await Promise.all(
+      adopted
+        ? [projectInvoicesRefetch(), clientInvoicesRefetch()]
+        : [projectInvoicesRefetch()],
+    );
+  }, [adopted, clientInvoicesRefetch, projectInvoicesRefetch]);
   // Every id this house holds, for the notices that name no project of their
   // own. Keyed by value rather than by array identity, so the mapping below is
   // not rebuilt on every render.
@@ -285,7 +329,7 @@ export function Threshold({
     ...(proposalsQuery.data ?? [])
       .filter((proposal) => commercialSummaryFromProposal(proposal).projectId === projectId)
       .map((proposal) => proposal.id),
-    ...(invoicesQuery.data ?? []).map((invoice) => invoice.id),
+    ...invoices.map((invoice) => invoice.id),
     ...projectApprovals.map((approval) => approval.decisionId),
   ]
     .sort()
@@ -524,7 +568,7 @@ export function Threshold({
     rooms,
     selections: selectionsQuery.data,
     proposals: { signatureGates, instrumentReceipts },
-    invoices: invoicesQuery.data ?? [],
+    invoices,
     approvals,
     notes: (notesQuery.data ?? []).map(toThresholdNote),
     previousReadAt,
@@ -573,6 +617,7 @@ export function Threshold({
     proposalsQuery.isPending ||
     holds(hasProject, selectionsQuery.isPending) ||
     holds(hasProject, invoicesQuery.isPending) ||
+    holds(adopted, clientInvoicesQuery.isPending) ||
     holds(hasProject, notesQuery.isPending) ||
     holds(hasProject, roomsQuery.isPending) ||
     holds(hasProject, planQuery.isPending) ||
@@ -734,7 +779,7 @@ export function Threshold({
   const enclosures: NoteEnclosure[] = (model.note?.enclosures ?? []).flatMap(
     (enclosure): NoteEnclosure[] => {
       if (enclosure.kind === "invoice") {
-        const invoice = (invoicesQuery.data ?? []).find(
+        const invoice = invoices.find(
           (row) => row.id === enclosure.id,
         );
         return invoice
@@ -840,16 +885,15 @@ export function Threshold({
   // all belongs to the relationship rather than to a project, and must stand
   // in exactly ONE of the client's houses — the same one on every visit, or
   // she answers the same ask twice and reads the same lamp twice.
-  const standsUnfiledAsks =
-    [projectId, ...otherHouses.map((house) => house.id)].sort()[0] === projectId;
+  const standsUnfiledAsks = adopted;
 
   const ledger = <HouseLedger ledger={model.ledger} today={today} />;
   const letterbox = (
     <Letterbox
       invoice={model.letterbox}
-      invoices={invoicesQuery.data ?? []}
+      invoices={invoices}
       designerName={studioName}
-      onRefetch={invoicesQuery.refetch}
+      onRefetch={refetchInvoices}
       today={today}
     />
   );

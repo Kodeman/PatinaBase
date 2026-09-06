@@ -102,6 +102,10 @@ const ids = {
   payExpire: '', // PO_F deposit, PO cancelled, WITH pointer+PI → expire-po-session {expired:1}
   invoice: '',
   invPay: '',
+  // ── studio invoice (00571): an invoice with no project ──
+  studio: '',
+  studioInvoice: '', // project_id NULL → settles and earns off the title
+  studioInvPay: '',
   // ── direct_order fixtures (00276) ──
   product: '', // a buyable Patina-managed product for direct_orders FK
   doPaid: '', // pending_payment → paid via checkout.session.completed (tests f, g, g2)
@@ -112,6 +116,7 @@ const ids = {
 };
 const EVT = {
   inv: `evt_inv_${RUN}`,
+  studioInv: `evt_studio_inv_${RUN}`, // 00571: project-less invoice settles
   poPaid: `evt_po_paid_${RUN}`,
   poPaidPi: `evt_po_paid_pi_${RUN}`, // DISTINCT event, same PI as poPaid — exercises the settle guard
   poFail: `evt_po_fail_${RUN}`,
@@ -128,6 +133,7 @@ const EVT = {
 };
 const SESS = {
   inv: `cs_inv_${RUN}`,
+  studioInv: `cs_studio_inv_${RUN}`,
   poPaid: `cs_po_paid_${RUN}`,
   poFail: `cs_po_fail_${RUN}`,
   poExpire: `cs_po_expire_${RUN}`, // open session on a cancelled PO (expire-po-session)
@@ -225,6 +231,40 @@ async function seed() {
     stripe_checkout_session_id: SESS.inv, recorded_by: ids.designerA,
   });
 
+  // ── studio invoice (00571) ──
+  // project_id NULL, anchored on the studio and the household instead. The
+  // studio-stamp trigger needs designerA to be an active non-guest member of
+  // an active design studio; the webhook settles it on the service role.
+  ids.studio = await insert('organizations', {
+    type: 'design_studio',
+    name: `${MARKER} Studio`,
+    slug: `stripe-rail-studio-${RUN}`,
+  });
+  await insert('organization_members', {
+    user_id: ids.designerA,
+    organization_id: ids.studio,
+    role: 'owner',
+    status: 'active',
+  });
+  ids.studioInvoice = await insert('invoices', {
+    project_id: null,
+    designer_id: ids.designerA,
+    client_id: ids.designerA,
+    studio_id: ids.studio,
+    title: `${MARKER} consultation`,
+    invoice_number: `INV-${MARKER}-S`,
+    status: 'sent',
+    currency: 'USD',
+    subtotal_cents: 4000,
+    tax_cents: 0,
+    total_cents: 4000,
+    amount_paid_cents: 0,
+  });
+  ids.studioInvPay = await insert('invoice_payments', {
+    invoice_id: ids.studioInvoice, amount_cents: 4000, method: 'stripe', status: 'pending',
+    stripe_checkout_session_id: SESS.studioInv, recorded_by: ids.designerA,
+  });
+
   // ── direct_order fixtures ──
   // A buyable Patina-managed product (catalog layer satisfies the
   // catalog-requires-management CHECK with patina_managed=true; no owner_user_id
@@ -277,6 +317,15 @@ async function cleanup() {
     await admin.from('designer_earnings').delete().eq('invoice_id', ids.invoice);
     await admin.from('invoice_payments').delete().eq('invoice_id', ids.invoice);
     await admin.from('invoices').delete().eq('id', ids.invoice);
+  }
+  if (ids.studioInvoice) {
+    await admin.from('designer_earnings').delete().eq('invoice_id', ids.studioInvoice);
+    await admin.from('invoice_payments').delete().eq('invoice_id', ids.studioInvoice);
+    await admin.from('invoices').delete().eq('id', ids.studioInvoice);
+  }
+  if (ids.studio) {
+    await admin.from('organization_members').delete().eq('organization_id', ids.studio);
+    await admin.from('organizations').delete().eq('id', ids.studio);
   }
   if (payIds.length) await admin.from('po_payments').delete().in('id', payIds);
   if (poIds.length) await admin.from('purchase_orders').delete().in('id', poIds);
@@ -441,6 +490,35 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
         .from('invoice_payments').select('status, stripe_payment_intent_id').eq('id', ids.invPay).single();
       assertEquals(data!.status, 'succeeded');
       assertEquals(data!.stripe_payment_intent_id, `pi_inv_${RUN}`);
+    });
+
+    // (a2) STUDIO INVOICE (00571): the same rail with no project. The
+    // payment-effects trigger LEFT JOINs projects, so the design-fee credit
+    // still lands, keyed on the title instead of a house.
+    await t.step('project-less studio invoice settles and earns', async () => {
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(EVT.studioInv, 'checkout.session.completed', {
+          id: SESS.studioInv, object: 'checkout.session', payment_status: 'paid',
+          amount_total: 4000, payment_intent: `pi_studio_inv_${RUN}`,
+          metadata: { invoice_id: ids.studioInvoice },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      assertEquals(await invoicePaymentStatus(ids.studioInvPay), 'succeeded');
+      assertEquals((await invoiceRow(ids.studioInvoice)).status, 'paid');
+      const { data } = await admin
+        .from('designer_earnings')
+        .select('project_id, net_amount, description')
+        .eq('invoice_payment_id', ids.studioInvPay)
+        .single();
+      assertEquals(data!.project_id, null);
+      assertEquals(data!.net_amount, 4000);
+      assert(
+        (data!.description as string).includes(`${MARKER} consultation`),
+        'studio earnings name themselves from the invoice title',
+      );
     });
 
     // (b) PO_PAYMENT paid via checkout.session.completed.

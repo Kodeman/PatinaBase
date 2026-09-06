@@ -19,18 +19,26 @@ jest.mock('@patina/supabase', () => ({
   useInvoicePaymentOptions: jest.fn(),
   useStartCheckout: jest.fn(),
   useNotifyCheckIntent: jest.fn(),
+  useStudioIdentity: jest.fn(),
 }));
 
 import {
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useStartCheckout,
+  useStudioIdentity,
 } from '@patina/supabase';
 
 import { EarlierInvoices } from '../earlier-invoices';
 
 /** 5 August 2026 — the deck's "today". */
 const TODAY = new Date(2026, 7, 5);
+
+/** Two studios, one designer — Kody's own shape. */
+const STUDIO_NAMES: Record<string, string> = {
+  'studio-1': 'Alder & Fox',
+  'studio-b': 'Bramwell Fox',
+};
 
 function invoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
@@ -81,6 +89,14 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
       mutateAsync: jest.fn(),
       isPending: false,
     });
+    // The brand resolver, keyed the way 00571 keys it: the studio the row
+    // names itself wins, and each studio answers with its own name.
+    (useStudioIdentity as jest.Mock).mockImplementation(
+      ({ studioId }: { studioId?: string | null }) => ({
+        isPending: false,
+        data: { name: STUDIO_NAMES[studioId ?? ''] ?? null },
+      }),
+    );
   });
 
   it('says nothing when the letterbox holds the only invoice', () => {
@@ -185,6 +201,37 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
     expect(screen.getByTestId('threshold-payment-methods')).toBeInTheDocument();
   });
 
+  it("makes each folded letter's check out to that letter's own studio", () => {
+    render(
+      <EarlierInvoices
+        invoices={[
+          invoice({
+            id: 'inv-31',
+            invoice_number: 'Invoice No. 31',
+            project_id: null,
+            studio_id: 'studio-b',
+            title: 'Design consultation',
+            status: 'sent',
+            amount_paid_cents: 0,
+            paid_at: null,
+          }),
+        ]}
+        // The slot letter's studio, handed down as the last resort.
+        designerName="Alder & Fox"
+        today={TODAY}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Settle this balance' }));
+    fireEvent.click(screen.getByRole('radio', { name: /check/i }));
+
+    expect(
+      screen.getByRole('button', { name: 'Let Bramwell Fox know a check is coming' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Alder & Fox/ })).not.toBeInTheDocument();
+  });
+
   it('withholds the act on the line whose own return is not confirmed', () => {
     // The letter taken to the till may be one of THESE, not the one in the
     // slot; the same refusal has to reach the line that carries its act.
@@ -208,6 +255,55 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Settle this balance' }));
 
     expect(screen.getByRole('button', { name: 'Settle the balance' })).toBeDisabled();
+  });
+
+  // A studio invoice reaches the adopted house's letterbox alongside that
+  // house's own letters, so an open one has to keep its settle act here for
+  // the same reason a second house invoice does — and, carrying a settle act,
+  // it may not read as one of this house's own letters.
+  it('keeps a studio letter behind the slot, with its balance still settleable', () => {
+    render(
+      <EarlierInvoices
+        invoices={[
+          invoice({
+            id: 'inv-31',
+            invoice_number: 'Invoice No. 31',
+            project_id: null,
+            title: 'Design consultation',
+            status: 'sent',
+            total_cents: 45_000,
+            amount_paid_cents: 0,
+            due_date: '2026-08-20',
+            paid_at: null,
+          }),
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+
+    expect(
+      screen.getByText(
+        'Invoice No. 31 · $450 · due August 20 · from the studio · not for a house',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Settle this balance' })).toBeInTheDocument();
+  });
+
+  it('says nothing about the studio on a line this house was billed for', () => {
+    render(
+      <EarlierInvoices
+        invoices={[invoice({ id: 'inv-3', invoice_number: 'Invoice No. 3' })]}
+        today={TODAY}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+
+    const line = screen.getByText(/^Invoice No\. 3 ·/);
+    expect(line).toHaveTextContent('Invoice No. 3 · $9,125 · paid June 12');
+    expect(line).not.toHaveTextContent('from the studio');
   });
 
   it('offers a settled line its record and nothing to pay', () => {

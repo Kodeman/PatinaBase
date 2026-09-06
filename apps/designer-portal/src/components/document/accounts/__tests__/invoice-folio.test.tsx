@@ -16,6 +16,7 @@ const invoice: Invoice = {
   designer_id: 'designer-1',
   client_id: 'client-1',
   invoice_number: null,
+  title: null,
   status: 'draft',
   issue_date: null,
   due_date: null,
@@ -218,6 +219,113 @@ describe('InvoiceFolio delivery recovery', () => {
       }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/has no linked portal account/i)).not.toBeInTheDocument();
+  });
+
+  it('offers no document doorway on a studio invoice, and issues it with no project', async () => {
+    mockInvoice = {
+      ...invoice,
+      project_id: null,
+      project: undefined,
+      title: 'Design consultation, September',
+    };
+    mockIssue.mockResolvedValue({
+      ...mockInvoice,
+      status: 'sent',
+      invoice_number: 'INV-0031',
+    });
+    mockSend.mockResolvedValue({ emailSent: true, recipient: 'client@example.com' });
+
+    const onOpenDocument = jest.fn();
+    render(<InvoiceFolio invoiceId="invoice-1" onOpenDocument={onOpenDocument} />);
+
+    // The head reads household · regarding · status where a house invoice
+    // reads household · house · status (R136).
+    expect(
+      screen.getByText(/Client Example · Design consultation, September · draft/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /document/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    await waitFor(() =>
+      expect(mockIssue).toHaveBeenCalledWith({
+        invoiceId: 'invoice-1',
+        projectId: undefined,
+      }),
+    );
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceId: 'invoice-1', projectId: undefined }),
+    );
+    expect(onOpenDocument).not.toHaveBeenCalled();
+  });
+
+  it('tells a studio invoice the truth about what voiding releases', () => {
+    mockInvoice = {
+      ...invoice,
+      project_id: null,
+      project: undefined,
+      title: 'Design consultation, September',
+    };
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+
+    expect(
+      screen.getByText(
+        'Voiding keeps the number and marks the invoice void. Nothing else is released; a studio invoice holds no milestones or time. This cannot be undone.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/payment milestones and time entries/)).not.toBeInTheDocument();
+  });
+
+  it('retires the number and withdraws the letter — the studio folio note after a void', async () => {
+    mockInvoice = {
+      ...invoice,
+      project_id: null,
+      project: undefined,
+      title: 'Design consultation, September',
+    };
+    mockVoid.mockResolvedValue(undefined);
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+    fireEvent.change(screen.getByLabelText('Void reason'), {
+      target: { value: 'duplicate' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Void invoice' }));
+
+    expect(
+      await screen.findByText('invoice voided · the letter withdrawn, nothing else released'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/milestones and time released/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the milestone-and-time note on a house invoice after a void', async () => {
+    mockVoid.mockResolvedValue(undefined);
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+    fireEvent.change(screen.getByLabelText('Void reason'), {
+      target: { value: 'duplicate' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Void invoice' }));
+
+    expect(
+      await screen.findByText('invoice voided · linked milestones and time released'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the milestone-and-time void copy on a house invoice', () => {
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+
+    expect(
+      screen.getByText(
+        'Voiding releases any linked payment milestones and time entries so they can be billed again. This cannot be undone.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('announces clipboard failure instead of silently resetting the button', async () => {

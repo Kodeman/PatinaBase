@@ -36,6 +36,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { buildCheckIntentEmail } from '../_shared/invoice-emails.ts';
+import { invoiceDeskName, invoiceSubjectName } from '../_shared/invoice-subject.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -62,7 +63,10 @@ interface InvoiceRow {
   id: string;
   designer_id: string;
   client_id: string | null;
-  project_id: string;
+  // NULL on a studio invoice — an invoice drawn for a household with no house.
+  project_id: string | null;
+  studio_id: string | null;
+  title: string | null;
   invoice_number: string | null;
   status: string;
   currency: string;
@@ -119,7 +123,7 @@ Deno.serve(async (req: Request) => {
     .from('invoices')
     .select(
       `
-      id, designer_id, client_id, project_id, invoice_number, status,
+      id, designer_id, client_id, project_id, studio_id, title, invoice_number, status,
       currency, total_cents, amount_paid_cents,
       project:projects!invoices_project_id_fkey(id, name, client_id),
       client:profiles!invoices_client_id_fkey(id, full_name, email),
@@ -164,7 +168,10 @@ Deno.serve(async (req: Request) => {
   }
 
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-  const projectName = invoice.project?.name ?? 'your project';
+  const projectName = invoiceSubjectName(invoice, null);
+  // The designer's own line must lead with something; her letter's "for …"
+  // clause simply closes early when the invoice names nothing.
+  const deskName = invoiceDeskName(invoice);
   const clientName = invoice.client?.full_name?.trim() || 'Your client';
   const designerName =
     invoice.designer?.full_name?.trim() || invoice.designer?.business_name?.trim() || null;
@@ -220,7 +227,7 @@ Deno.serve(async (req: Request) => {
       project_id: invoice.project_id,
       amount_cents: balanceCents,
       subject,
-      message: `${projectName}: ${clientName} is mailing a check for ${balanceLabel} toward ${invoiceNumber}. Record it when it arrives.`,
+      message: `${deskName}: ${clientName} is mailing a check for ${balanceLabel} toward ${invoiceNumber}. Record it when it arrives.`,
       deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
     },
   });
