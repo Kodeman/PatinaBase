@@ -15,9 +15,8 @@
  *    installed opens the native screen. The portal's middleware 308s them onto
  *    the right anchor for everyone else. Keep sending those.
  *  - token surfaces (`/field/<t>`, `/rfq/<t>`, `/share/<t>`, `/plans/<t>`,
- *    `/evidence/<t>`, `/pay/<t>` (the invoice link, `_shared/invoice-links.ts`),
- *    `/auth/invite/<t>`, `/piece/<id>`, `/api/unsubscribe`) — untouched by the
- *    retirement.
+ *    `/evidence/<t>`, `/auth/invite/<t>`, `/piece/<id>`, `/api/unsubscribe`) —
+ *    untouched by the retirement.
  */
 
 /** The Threshold section ids an old route can land on. */

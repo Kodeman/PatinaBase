@@ -33688,6 +33688,7 @@ export type Database = {
         Returns: {
           balance_cents: number
           card_surcharge_bps: number
+          client_display_name: string
           currency: string
           invoice_id: string
           link_id: string

@@ -106,6 +106,8 @@ interface CheckoutTargetRow {
   balance_cents: number;
   currency: string;
   card_surcharge_bps: number;
+  /** The household profile's name, else the designer's single email-only roster name (F14). */
+  client_display_name: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -206,7 +208,9 @@ Deno.serve(async (req: Request) => {
         admin,
         stripe,
         target.link_id,
-        invoice.client?.full_name ?? null
+        // On the payer-less branch invoice.client is null by definition; the
+        // resolver derives the roster name the same way the page does (F14).
+        target.client_display_name ?? invoice.client?.full_name ?? null
       );
   if (!customer.ok) {
     return json(checkoutCustomerFailureBody(customer), customer.status);

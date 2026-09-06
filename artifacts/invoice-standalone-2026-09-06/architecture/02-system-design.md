@@ -226,11 +226,13 @@ A SQL RPC, not `invoke_edge_function` — there is no HTTP work to do (`00300:20
     "memo": "string|null", "project_name": "string|null",
     "is_studio_invoice": "boolean"           // invoices.project_id IS NULL
   },
-  "line_items": [{ "description", "quantity", "unit_amount_cents", "amount_cents", "kind" }],
+  "line_items": [{ "description", "quantity", "unit_amount_cents", "amount_cents", "kind",
+                   "attribution" }],             // FF&E maker/vendor name or null — never an id (W2 ask)
   "payments":   [{ "amount_cents", "surcharge_cents", "method", "status",
                    "rail": "card|us_bank_account|null", "received_at" }],
   "studio": { "name": "string|null", "logo_url": "string|null",
-              "website": "string|null", "source": "string|null" },
+              "website": "string|null", "source": "string|null",
+              "location": "string|null" },        // "City, State" from organizations.address (W2 ask)
   "designer_display_name": "string|null",
   "client_display_name": "string|null",
   "payment_options": {
@@ -239,7 +241,7 @@ A SQL RPC, not `invoke_edge_function` — there is no HTTP work to do (`00300:20
   },
   "pay": {
     "rails": ["us_bank_account","card","check"],   // all three today
-    "processing": "boolean"                        // any payments[].status === 'pending' (G8)
+    "processing": "boolean"                        // a pending payment with a stamped PaymentIntent — ACH in flight (G8 as amended by W1 review F3; a merely-claimed or abandoned card attempt is neither listed nor processing)
   }
 }
 ```
@@ -283,10 +285,14 @@ POST /functions/v1/invoice-link-checkout   { "token": "<64 hex>", "method": "car
 | `Origin` present and ≠ `CLIENT_PORTAL_URL` | `{"error":"forbidden_origin"}` | 403 |
 | token malformed / unknown / revoked / closed / draft / void / balance ≤ 0 | `{"error":"invoice_not_found"}` | 404 |
 | unknown `method` | `{"error":"bad_payment_method"}` | 400 |
-| claim RPC raises `invoice_checkout_*` | mapped code + `detail` | 409 |
+| claim RPC raises `invoice_checkout_*` | mapped code + `detail` (`invoice_not_payable`, `checkout_payer_mismatch`, `payment_reconciliation_required`; `payment_processing` for a completed session with a pending debit **or**, per W1 review F1, a different actor meeting a `processing` attempt) | 409 |
+| body unparsable / unknown method | `invalid_body` / `bad_payment_method` | 400 · 405 for a non-POST |
+| a post-resolve failure | `lookup_failed`, `stripe_not_configured`, `notification_failed`, `customer_persistence_failed`, `payer_profile_not_found`, `invoice_link_not_found` | 500 |
 | Stripe throws | `{"error":"stripe_error","detail":…}` | 502 |
 
-**CORS is not wildcard (S3).** The browser reaches this only through the same-origin Worker route, which sends no `Origin`; anything else must equal `CLIENT_PORTAL_URL`. iOS opens the *page*, not the function. `Access-Control-Allow-Origin` echoes `CLIENT_PORTAL_URL`, never `*`. A constant response floor (S12) equalises the valid/invalid timing difference — a valid token does an RPC round trip plus possibly a Stripe customer create, an invalid one returns after a regex test; §10 S2's "no timing branch" claim is scoped to the *page* and the floor covers the function.
+None of the 400/500 rows is a token-validity oracle: every one is reached only after the token resolved (as built, W1 review F11).
+
+**CORS is not wildcard (S3).** The browser reaches this only through the same-origin Worker route, which sends no `Origin`; anything else must equal `CLIENT_PORTAL_URL`. iOS opens the *page*, not the function. `Access-Control-Allow-Origin` echoes `CLIENT_PORTAL_URL`, never `*`. There is **no constant response floor** (W1 deviation 9, accepted): a malformed token returns after a regex test, an unknown one after one RPC, a valid one after an RPC plus a Stripe call. That timing tells an attacker nothing usable against 256 bits of entropy — entropy is the control, the portal's limiter is friction.
 
 `config.toml`, matching the shape of the other nine `verify_jwt=false` entries (`stripe-webhook`:331, `resend-webhook`:335, `sms-inbound`:341, `sms-status`:346, `comms-mute`:350, `test-account-login`:360, `fulfillment-po`:514, `fulfillment-evidence`:539, `site-request-guest`:557 — the skill's "only four" is stale):
 ```toml
@@ -452,7 +458,7 @@ New `payLinkEvents` namespace in `events.ts`: `view`, `methodSelected`, `payment
 | # | Concern | Mechanism | Where |
 |---|---|---|---|
 | S1 | Enumeration | 256-bit token, unique index, `^[0-9a-f]{64}$` gate before any round trip. **The deck names entropy as the control and the limiter as friction, not as the boundary** | `00574`; `invoice-link.ts` |
-| S2 | Existence oracle | malformed / unknown / revoked / closed-without-live-payment / draft / void → one NULL → one `<DeadLink/>`; the function collapses them to 404. The *page* has no timing branch; the *function* gets a constant floor (S12) | `resolve_invoice_link`; `invoice-link-checkout` |
+| S2 | Existence oracle | malformed / unknown / revoked / closed-without-live-payment / draft / void → one NULL → one `<DeadLink/>`; the function collapses them to 404. No timing floor anywhere — 256-bit entropy is the control (W1 review F11) | `resolve_invoice_link`; `invoice-link-checkout` |
 | S3 | Brute force | `ratelimits` binding, 30/min per `cf-connecting-ip`, on **all three** routes — page, `state`, `checkout` — plus `pay/return`. `state` was the cheaper, uncounted oracle | `wrangler.jsonc`; the four route modules |
 | S4 | Limiter silently absent | Fail open in dev; in production log an error **and** emit a PostHog event. Smoke step proves 31 rapid requests → dead link | `invoice-link.ts`; §12 step 6 |
 | S5 | Service-worker cache | `NetworkOnly` before the catch-all for all six bearer prefixes. Cache Storage does **not** honour `no-store`, so the middleware header would not have covered it. Per R1 the catch-all is inert on the deployed Worker; the entry protects non-OpenNext builds and any re-enabling | `next.config.js:19-36` |

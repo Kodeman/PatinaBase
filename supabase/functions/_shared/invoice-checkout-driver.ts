@@ -208,11 +208,19 @@ export function invoiceCheckoutErrorResponse(
   error: unknown,
   json: JsonResponder,
   logTag: string,
-  lastAttempt: InvoiceCheckoutAttempt | null
+  lastAttempt: InvoiceCheckoutAttempt | null,
+  processingDetail = 'A payment for this invoice is already processing.'
 ): Response {
   const detail = error instanceof Error ? error.message : 'Invoice Checkout failed.';
   const dbMessage = (error as any)?.message ?? '';
   const fields = lastAttempt ? invoiceAttemptFields(lastAttempt) : {};
+
+  // Review F1: a different actor met money in flight (a processing attempt).
+  // The same state the driver reports for a completed session with a pending
+  // debit, so the page renders the one "processing" sheet either way.
+  if (dbMessage.includes('invoice_checkout_in_progress')) {
+    return json({ error: 'payment_processing', detail: processingDetail, ...fields }, 409);
+  }
 
   if (
     dbMessage.includes('invoice_checkout_payer_not_allowed') ||
@@ -407,6 +415,6 @@ export async function startInvoiceCheckout(input: StartInvoiceCheckoutInput): Pr
       reused: result.reused,
     });
   } catch (error) {
-    return invoiceCheckoutErrorResponse(error, json, logTag, lastAttempt);
+    return invoiceCheckoutErrorResponse(error, json, logTag, lastAttempt, target.processingDetail);
   }
 }

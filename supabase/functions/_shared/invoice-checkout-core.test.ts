@@ -10,6 +10,7 @@ import {
   reconcileInvoiceCheckoutSession,
   runInvoiceCheckout,
 } from './invoice-checkout-core.ts';
+import { invoiceSessionMetadata } from './invoice-checkout-driver.ts';
 
 function attempt(overrides: Partial<InvoiceCheckoutAttempt> = {}): InvoiceCheckoutAttempt {
   return {
@@ -47,23 +48,8 @@ function sessionFor(
     amountTotal: claimed.amountCents + claimed.surchargeCents,
     currency: claimed.currency,
     customerId: claimed.stripeCustomerId,
-    metadata: {
-      payable_type: 'invoice',
-      invoice_id: claimed.invoiceId,
-      checkout_attempt_id: claimed.attemptId,
-      // Exactly one identity key: payer_id on the payer rail, invoice_link_id
-      // on the link rail — never a string "null".
-      ...(claimed.payerId !== null ? { payer_id: claimed.payerId } : {}),
-      ...(claimed.invoiceLinkId !== null ? { invoice_link_id: claimed.invoiceLinkId } : {}),
-      // A legacy attempt stamps no rail keys at all — the session stays byte
-      // identical to the pre-surcharge one.
-      ...(claimed.paymentMethod
-        ? {
-            payment_method: claimed.paymentMethod,
-            surcharge_cents: String(claimed.surchargeCents),
-          }
-        : {}),
-    },
+    // The function that actually stamps Stripe (review F8), not a hand copy.
+    metadata: invoiceSessionMetadata(claimed),
     ...overrides,
   };
 }
