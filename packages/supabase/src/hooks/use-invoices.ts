@@ -1150,6 +1150,10 @@ export function useChaseInvoice(options?: { errorSurface?: 'inline' }) {
  * 00428). Leaving it undefined OMITS `payment_method` from the body entirely
  * — not a null — which is exactly what iOS (InvoicesAPIClient.swift) has
  * always sent, and claims the legacy both-methods session (invariant #3).
+ *
+ * @deprecated The pay path is `/pay/<token>` (00574 · K1) — settle-in-place is
+ * retired in W3b, and iOS moves to `useInvoiceLink`'s address in W4. Kept
+ * because the legacy JWT path stays valid until the iOS build ships.
  */
 export function useStartCheckout() {
   return useMutation({
@@ -1217,6 +1221,11 @@ const DEFAULT_INVOICE_PAYMENT_OPTIONS: InvoicePaymentOptions = {
  * failure — RPC error, no settings row, a malformed/empty response — falls
  * back to the platform defaults (300 bps, no remit-to) rather than throwing:
  * a config read must never block the pay path.
+ *
+ * @deprecated The pay page reads its surcharge config from the resolved link
+ * payload (00574 · K1) — settle-in-place is retired in W3b, and iOS moves to
+ * `/pay/<token>` in W4. Kept because the legacy JWT path stays valid until the
+ * iOS build ships.
  */
 export function useInvoicePaymentOptions(invoiceId: string | null | undefined) {
   return useQuery({
@@ -1245,6 +1254,111 @@ export function useInvoicePaymentOptions(invoiceId: string | null | undefined) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// INVOICE LINKS (migration 00574 — The Invoice, Standing Alone)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** An invoice's current link. `status` is 'active', or 'closed' once voided. */
+export interface InvoiceLink {
+  token: string;
+  status: 'active' | 'closed';
+}
+
+function parseInvoiceLink(data: unknown): InvoiceLink | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const row = data as Record<string, unknown>;
+  if (typeof row.token !== 'string') return null;
+  if (row.status !== 'active' && row.status !== 'closed') return null;
+  return { token: row.token, status: row.status };
+}
+
+/**
+ * The invoice's live link, via get_invoice_link (00574, SECURITY DEFINER —
+ * can_manage_invoice or the household payer only; every denial, including a
+ * draft read by the household, raises `invoice_not_found`). Returns null when
+ * the invoice has no link yet — a draft has none until it is issued, and the
+ * folio shows no Copy/Regenerate act for one. A revoked token is never
+ * returned, so a Regenerate's old address cannot be re-copied.
+ */
+export function useInvoiceLink(invoiceId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['invoice-link', invoiceId],
+    queryFn: async (): Promise<InvoiceLink | null> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('get_invoice_link', {
+        p_invoice_id: invoiceId as string,
+      });
+      if (error) throw error;
+      return parseInvoiceLink(data);
+    },
+    enabled: !!invoiceId,
+  });
+}
+
+/**
+ * Why a regenerate was refused. `checkout_in_progress` is M11: the RPC will
+ * not pull the address out from under someone mid-payment.
+ */
+export type RegenerateInvoiceLinkReason = 'checkout_in_progress' | 'not_payable' | 'not_found';
+
+/** A refusal the folio can render as prose rather than a raw Postgres message. */
+export class RegenerateInvoiceLinkError extends Error {
+  readonly reason: RegenerateInvoiceLinkReason;
+  constructor(reason: RegenerateInvoiceLinkReason, message: string) {
+    super(message);
+    this.name = 'RegenerateInvoiceLinkError';
+    this.reason = reason;
+  }
+}
+
+/**
+ * Revokes the invoice's active link and mints a fresh token
+ * (regenerate_invoice_link, 00574). The old address is dead the moment this
+ * lands — anyone holding it sees a dead page — so the folio confirms first.
+ *
+ * Refuses while a checkout attempt is claimed/session_created/processing
+ * (M11), for a draft or void invoice, and for a caller without authority.
+ */
+export function useRegenerateInvoiceLink(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({ invoiceId }: { invoiceId: string }): Promise<InvoiceLink> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('regenerate_invoice_link', {
+        p_invoice_id: invoiceId,
+      });
+      if (error) {
+        const raw = error.message ?? '';
+        if (raw.includes('invoice_checkout_in_progress')) {
+          throw new RegenerateInvoiceLinkError(
+            'checkout_in_progress',
+            'A payment is in progress on this invoice. Try again later.',
+          );
+        }
+        if (raw.includes('invoice_link_not_payable')) {
+          throw new RegenerateInvoiceLinkError(
+            'not_payable',
+            'This invoice has no link to replace.',
+          );
+        }
+        if (raw.includes('invoice_not_found')) {
+          throw new RegenerateInvoiceLinkError('not_found', 'This invoice could not be opened.');
+        }
+        throw error;
+      }
+      if (typeof data !== 'string') {
+        throw new Error('Failed to regenerate the invoice link');
+      }
+      return { token: data, status: 'active' };
+    },
+    onSuccess: (link, { invoiceId }) => {
+      queryClient.setQueryData(['invoice-link', invoiceId], link);
+      void queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
+    },
+  });
+}
+
 export interface NotifyCheckIntentResult {
   ok: boolean;
   /** True when a prior notification within the idempotency window absorbed
@@ -1264,6 +1378,10 @@ export interface NotifyCheckIntentResult {
  * Error unwrap mirrors useSendInvoice (R83): a FunctionsHttpError's JSON body
  * carries the stable `detail`/`error` code, preferred over the generic
  * transport message.
+ *
+ * @deprecated Check intent lives on the pay page (00574 · K1) — settle-in-place
+ * is retired in W3b, and iOS moves to `/pay/<token>` in W4. Kept because the
+ * legacy JWT path stays valid until the iOS build ships.
  */
 export function useNotifyCheckIntent() {
   return useMutation({

@@ -1542,6 +1542,9 @@ export {
   InvoiceCheckoutError,
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
+  useInvoiceLink,
+  useRegenerateInvoiceLink,
+  RegenerateInvoiceLinkError,
   useVoidInvoice,
   useArAging,
   useFfeInvoiceCoverage,
@@ -1573,6 +1576,8 @@ export type {
   OnlinePaymentMethod,
   InvoicePaymentOptions,
   NotifyCheckIntentResult,
+  InvoiceLink,
+  RegenerateInvoiceLinkReason,
 } from "./use-invoices";
 
 // ═══════════════════════════════════════════════════════════════════════════
