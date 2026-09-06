@@ -7912,7 +7912,7 @@ export type Database = {
           memo: string | null
           paid_at: string | null
           payment_terms_days: number
-          project_id: string
+          project_id: string | null
           reminder_count: number
           sent_at: string | null
           status: string
@@ -7921,6 +7921,7 @@ export type Database = {
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
+          title: string | null
           total_cents: number
           updated_at: string
           void_reason: string | null
@@ -7943,7 +7944,7 @@ export type Database = {
           memo?: string | null
           paid_at?: string | null
           payment_terms_days?: number
-          project_id: string
+          project_id?: string | null
           reminder_count?: number
           sent_at?: string | null
           status?: string
@@ -7952,6 +7953,7 @@ export type Database = {
           subtotal_cents?: number
           tax_cents?: number
           tax_rate?: number
+          title?: string | null
           total_cents?: number
           updated_at?: string
           void_reason?: string | null
@@ -7974,7 +7976,7 @@ export type Database = {
           memo?: string | null
           paid_at?: string | null
           payment_terms_days?: number
-          project_id?: string
+          project_id?: string | null
           reminder_count?: number
           sent_at?: string | null
           status?: string
@@ -7983,6 +7985,7 @@ export type Database = {
           subtotal_cents?: number
           tax_cents?: number
           tax_rate?: number
+          title?: string | null
           total_cents?: number
           updated_at?: string
           void_reason?: string | null
@@ -28821,7 +28824,7 @@ export type Database = {
           memo: string | null
           paid_at: string | null
           payment_terms_days: number
-          project_id: string
+          project_id: string | null
           reminder_count: number
           sent_at: string | null
           status: string
@@ -28830,6 +28833,7 @@ export type Database = {
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
+          title: string | null
           total_cents: number
           updated_at: string
           void_reason: string | null
@@ -28861,7 +28865,7 @@ export type Database = {
           memo: string | null
           paid_at: string | null
           payment_terms_days: number
-          project_id: string
+          project_id: string | null
           reminder_count: number
           sent_at: string | null
           status: string
@@ -28870,6 +28874,7 @@ export type Database = {
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
+          title: string | null
           total_cents: number
           updated_at: string
           void_reason: string | null
@@ -29529,7 +29534,7 @@ export type Database = {
           memo: string | null
           paid_at: string | null
           payment_terms_days: number
-          project_id: string
+          project_id: string | null
           reminder_count: number
           sent_at: string | null
           status: string
@@ -29538,6 +29543,7 @@ export type Database = {
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
+          title: string | null
           total_cents: number
           updated_at: string
           void_reason: string | null
@@ -30813,7 +30819,7 @@ export type Database = {
           memo: string | null
           paid_at: string | null
           payment_terms_days: number
-          project_id: string
+          project_id: string | null
           reminder_count: number
           sent_at: string | null
           status: string
@@ -30822,6 +30828,7 @@ export type Database = {
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
+          title: string | null
           total_cents: number
           updated_at: string
           void_reason: string | null
@@ -30833,6 +30840,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      create_draft_studio_invoice: {
+        Args: {
+          p_client_id: string
+          p_lines?: Json
+          p_memo?: string
+          p_payment_terms_days?: number
+          p_studio_id: string
+          p_tax_rate?: number
+          p_title: string
+        }
+        Returns: string
       }
       create_field_link: {
         Args: { p_party_id: string }
@@ -32344,7 +32363,7 @@ export type Database = {
           memo: string | null
           paid_at: string | null
           payment_terms_days: number
-          project_id: string
+          project_id: string | null
           reminder_count: number
           sent_at: string | null
           status: string
@@ -32353,6 +32372,7 @@ export type Database = {
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
+          title: string | null
           total_cents: number
           updated_at: string
           void_reason: string | null
@@ -33589,7 +33609,11 @@ export type Database = {
       resolve_plan_transmittal: { Args: { p_token: string }; Returns: Json }
       resolve_spec_book_share: { Args: { p_token: string }; Returns: Json }
       resolve_studio_identity: {
-        Args: { p_designer_id?: string; p_project_id?: string }
+        Args: {
+          p_designer_id?: string
+          p_project_id?: string
+          p_studio_id?: string
+        }
         Returns: {
           logo_url: string
           name: string
@@ -34974,7 +34998,7 @@ export type Database = {
           memo: string | null
           paid_at: string | null
           payment_terms_days: number
-          project_id: string
+          project_id: string | null
           reminder_count: number
           sent_at: string | null
           status: string
@@ -34983,6 +35007,7 @@ export type Database = {
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
+          title: string | null
           total_cents: number
           updated_at: string
           void_reason: string | null

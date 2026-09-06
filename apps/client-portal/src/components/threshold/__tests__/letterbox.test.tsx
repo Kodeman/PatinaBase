@@ -16,6 +16,7 @@ jest.mock('@patina/supabase', () => ({
   useInvoicePaymentOptions: jest.fn(),
   useStartCheckout: jest.fn(),
   useNotifyCheckIntent: jest.fn(),
+  useStudioIdentity: jest.fn(),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({
@@ -34,6 +35,7 @@ import {
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useStartCheckout,
+  useStudioIdentity,
 } from '@patina/supabase';
 import { clientEvents } from '@/lib/analytics/events';
 
@@ -41,6 +43,12 @@ import { Letterbox } from '../letterbox';
 
 /** 5 August 2026 — the deck's "today". */
 const TODAY = new Date(2026, 7, 5);
+
+/** Two studios, one designer — Kody's own shape. */
+const STUDIO_NAMES: Record<string, string> = {
+  'studio-1': 'Alder & Fox',
+  'studio-b': 'Bramwell Fox',
+};
 
 function invoice(overrides: Partial<InvoiceModel> = {}): InvoiceModel {
   return {
@@ -117,6 +125,14 @@ describe('Letterbox — one letter, half out of the slot', () => {
       isPending: false,
     });
     (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: jest.fn() });
+    // The brand resolver, keyed the way 00571 keys it: the studio the row
+    // names itself wins, and each studio answers with its own name.
+    (useStudioIdentity as jest.Mock).mockImplementation(
+      ({ studioId }: { studioId?: string | null }) => ({
+        isPending: false,
+        data: { name: STUDIO_NAMES[studioId ?? ''] ?? null },
+      }),
+    );
   });
 
   afterEach(() => {
@@ -172,6 +188,141 @@ describe('Letterbox — one letter, half out of the slot', () => {
     );
 
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
+  });
+
+  /* ── A letter for no house ───────────────────────────────────────────────
+     A studio invoice stands in the letterbox of the adopted house, which is
+     not the house the work is in — the envelope has to say so on its own
+     line, and name itself by the regarding line that stands where a house
+     name would. ────────────────────────────────────────────────────────── */
+
+  it('says a studio letter is not for a house, and names it by its regarding line', () => {
+    render(
+      <Letterbox
+        invoice={invoice({
+          id: 'inv-31',
+          number: 'Invoice No. 31',
+          totalCents: 45_000,
+          paidCents: 0,
+          balanceCents: 45_000,
+          dueDate: '2026-09-20',
+        })}
+        invoices={[
+          invoiceRow({
+            id: 'inv-31',
+            invoice_number: 'Invoice No. 31',
+            status: 'sent',
+            project_id: null,
+            title: 'Design consultation · 12 September 2026',
+          }),
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('letterbox-from-studio')).toHaveTextContent(
+      'From the studio · not for a house',
+    );
+    expect(screen.getByTestId('letterbox-regarding')).toHaveTextContent(
+      'Design consultation · 12 September 2026',
+    );
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 31');
+  });
+
+  /* ── Whose name is on the check ──────────────────────────────────────────
+     A studio letter stands in the ADOPTED house's letterbox, and the adopted
+     house may belong to a different studio than the one that drew the letter.
+     The payee has to come off the letter. ──────────────────────────────── */
+
+  it("makes the check out to the letter's own studio, not the house's", async () => {
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
+        invoices={[
+          invoiceRow({
+            id: 'inv-31',
+            status: 'sent',
+            project_id: null,
+            studio_id: 'studio-b',
+            title: 'Design consultation',
+          }),
+        ]}
+        // The adopted house's studio — what the house page hands down.
+        designerName="Alder & Fox"
+        today={TODAY}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
+    await userEvent.click(screen.getByRole('radio', { name: /check/i }));
+
+    expect(
+      screen.getByRole('button', { name: 'Let Bramwell Fox know a check is coming' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Alder & Fox/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("resolves a folded letter's payee from that letter, not from the slot", async () => {
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
+        invoices={[
+          invoiceRow({
+            id: 'inv-31',
+            status: 'sent',
+            project_id: null,
+            studio_id: 'studio-b',
+          }),
+          invoiceRow({
+            id: 'inv-5',
+            invoice_number: 'Invoice No. 5',
+            status: 'sent',
+            studio_id: 'studio-1',
+            amount_paid_cents: 0,
+            paid_at: null,
+          }),
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Settle this balance' }));
+    await userEvent.click(screen.getByRole('radio', { name: /check/i }));
+
+    expect(
+      screen.getByRole('button', { name: 'Let Alder & Fox know a check is coming' }),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing of the studio for a letter this house holds', () => {
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-3', number: 'Invoice No. 3' })}
+        invoices={[invoiceRow({ id: 'inv-3', status: 'sent' })]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.queryByTestId('letterbox-from-studio')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('letterbox-regarding')).not.toBeInTheDocument();
+  });
+
+  it('states the studio line for a letter with no regarding line to print', () => {
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-31', number: 'Invoice No. 31' })}
+        invoices={[
+          invoiceRow({ id: 'inv-31', status: 'sent', project_id: null, title: null }),
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('letterbox-from-studio')).toBeInTheDocument();
+    expect(screen.queryByTestId('letterbox-regarding')).not.toBeInTheDocument();
   });
 
   it('carries the anchor, the unit, and never opts into dimming', () => {

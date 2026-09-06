@@ -4,7 +4,8 @@
 // so Deno, portal TS, and Swift all resolve studio brand identity through the
 // SAME precedence and can't drift:
 //
-//   project.studio_id → org  ·  else designer's primary studio → org
+//   studio_id → org  ·  else project.studio_id → org
+//   ·  else designer's primary studio → org
 //   ·  else profiles.business_name  ·  else profiles.full_name
 //
 // The RPC returns EXACTLY ONE row of brand-only columns (never email/phone/
@@ -28,22 +29,45 @@ export interface StudioIdentity {
 
 /**
  * Resolve studio brand identity via the resolve_studio_identity RPC.
- * Pass exactly one of projectId / designerId (projectId takes precedence in the
- * RPC). Returns null on error, missing input, or an empty result — never throws.
+ *
+ * Pass whichever of studioId / projectId / designerId the row carries; the RPC
+ * reads them in that precedence, so an invoice with no house still brands with
+ * its own studio's letterhead rather than the designer's primary one. Returns
+ * null on error, missing input, or an empty result — never throws.
  */
 export async function resolveStudioIdentity(
   admin: SupabaseClient,
-  opts: { projectId?: string | null; designerId?: string | null },
+  opts: {
+    projectId?: string | null;
+    designerId?: string | null;
+    studioId?: string | null;
+  },
 ): Promise<StudioIdentity | null> {
   const projectId = opts.projectId ?? null;
   const designerId = opts.designerId ?? null;
-  if (!projectId && !designerId) return null;
+  const studioId = opts.studioId ?? null;
+  if (!projectId && !designerId && !studioId) return null;
 
   try {
-    const { data, error } = await admin.rpc("resolve_studio_identity", {
+    const args: Record<string, string | null> = {
       p_project_id: projectId,
       p_designer_id: designerId,
-    });
+      p_studio_id: studioId,
+    };
+    // p_studio_id is ALWAYS named, so the call binds exactly one signature by
+    // argument name. A two-argument call would match BOTH the pre-00570
+    // function and the three-argument one if a deploy ever left them side by
+    // side, and Postgres answers that with 42725 — an error this wrapper
+    // swallows as "no brand", i.e. silent letterhead loss.
+    let { data, error } = await admin.rpc("resolve_studio_identity", args);
+    if (
+      error && (error as { code?: string }).code === "PGRST202" && !studioId
+    ) {
+      // Deployed ahead of 00570 the RPC still takes two arguments; a caller
+      // with no studio to name gets the same row from either signature.
+      delete args.p_studio_id;
+      ({ data, error } = await admin.rpc("resolve_studio_identity", args));
+    }
     if (error) {
       console.error("resolveStudioIdentity: rpc error", error.message);
       return null;

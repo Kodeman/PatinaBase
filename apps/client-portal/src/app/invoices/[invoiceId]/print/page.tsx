@@ -27,7 +27,15 @@ export default function ClientInvoicePrintPage({
   const { data: invoice, isLoading, isError, refetch } = useInvoice(invoiceId);
   // Studio brand identity (Designer Studios). projectId path; disabled until the
   // invoice resolves. name/logoUrl are nullable — fall back to the designer join.
-  const { data: identity } = useStudioIdentity({ projectId: invoice?.project_id });
+  // A studio invoice has no project to resolve through, so it brands off the
+  // studio it was drawn FOR (00571's p_studio_id, which takes precedence over
+  // the designer's primary studio — a two-studio designer would otherwise
+  // print the wrong letterhead), with the designer as the fallback leg.
+  const { data: identity } = useStudioIdentity(
+    invoice?.project_id
+      ? { projectId: invoice.project_id }
+      : { studioId: invoice?.studio_id, designerId: invoice?.designer_id },
+  );
   // check_remit_to for the "How to pay" block (migration 00428). Falls back to
   // platform defaults on any failure — a config read never blocks printing.
   const paymentOptions = useInvoicePaymentOptions(invoiceId);
@@ -191,9 +199,11 @@ export default function ClientInvoicePrintPage({
             </div>
           </div>
           <div>
-            <PrintLabel>Project</PrintLabel>
+            {/* A studio invoice names no house. Its regarding line stands
+                where the project name would, under its own label. */}
+            <PrintLabel>{invoice.project_id ? 'Project' : 'Regarding'}</PrintLabel>
             <div style={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
-              {invoice.project?.name ?? '—'}
+              {invoice.project?.name ?? invoice.title ?? '—'}
             </div>
           </div>
           <div>

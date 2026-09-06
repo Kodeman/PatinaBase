@@ -1695,9 +1695,33 @@ VALUES
     ARRAY['service_role']::text[]
   ),
   (
+    -- 00571 added the project-less studio-invoice branch to both arms
+    -- (00511's hash was
+    -- 3ce8183f5490b21a6a087a6a21e8e36c2c1b4c51d1577da614799a473f99099b).
+    -- Everything this file pins about the function is unchanged: still
+    -- SECURITY INVOKER, still no direct grants, every project-path line
+    -- byte-identical, and the canonical root -> user_roles -> memberships ->
+    -- organization lock order below is untouched - the new branch takes no
+    -- lock and returns before the project lookups. The branch holds direct
+    -- authenticated DML to the same clean-draft predicate the project path
+    -- applies, so no caller can write state or money around the billing RPCs,
+    -- and BOTH arms require the household to sit on the designer_clients
+    -- roster of an active non-guest member of the invoice's studio (an
+    -- unlocked read), so a houseless invoice can no more be addressed to a
+    -- stranger than a project one can. On the INSERT arm that roster read and
+    -- the designer-domain check sit ABOVE the machine early return, exactly
+    -- where the project path holds service_role to its live tuple and to
+    -- has_designer_domain_role; only a true postgres/no-SET-ROLE session keeps
+    -- the bounded legacy-fixture bypass the project path grants at the same
+    -- point. The designer-domain check stays off the UPDATE arm, exactly as
+    -- the project path judges its lead only on insert: the four identity
+    -- columns are immutable on UPDATE, and for the same reason the UPDATE
+    -- arm's live-authority reads sit BELOW its service_role/postgres early
+    -- return, as the project path's do, so a settle or a void still replays
+    -- once the stamped designer has left.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '3ce8183f5490b21a6a087a6a21e8e36c2c1b4c51d1577da614799a473f99099b',
+    '3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c',
     ARRAY[]::text[]
   ),
   (
@@ -2357,7 +2381,7 @@ BEGIN
                'amount_paid_cents','memo','internal_notes','sent_at','paid_at',
                'voided_at','void_reason','stripe_checkout_session_id',
                'reminder_count','last_reminder_at','ar_flagged_at',
-               'ar_last_chased_at','created_at','updated_at'
+               'ar_last_chased_at','created_at','updated_at','title'
              ], attname))
            FROM pg_attribute
            WHERE attrelid = 'public.invoices'::regclass
@@ -2370,11 +2394,11 @@ BEGIN
                  'internal_notes','sent_at','paid_at','voided_at','void_reason',
                  'stripe_checkout_session_id','reminder_count',
                  'last_reminder_at','ar_flagged_at','ar_last_chased_at',
-                 'created_at','updated_at'
+                 'created_at','updated_at','title'
                ]
              )),
           NULL::text, 0::oid,
-          'createtriggerset_invoice_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,project_id,status,invoice_number,issue_date,due_date,payment_terms_days,currency,subtotal_cents,tax_rate,tax_cents,total_cents,amount_paid_cents,memo,internal_notes,sent_at,paid_at,voided_at,void_reason,stripe_checkout_session_id,reminder_count,last_reminder_at,ar_flagged_at,ar_last_chased_at,created_at,updated_atoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+          'createtriggerset_invoice_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,project_id,status,invoice_number,issue_date,due_date,payment_terms_days,currency,subtotal_cents,tax_rate,tax_cents,total_cents,amount_paid_cents,memo,internal_notes,sent_at,paid_at,voided_at,void_reason,stripe_checkout_session_id,reminder_count,last_reminder_at,ar_flagged_at,ar_last_chased_at,created_at,updated_at,titleoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
         ),
         (
           'public.commercial_document_signatures'::text,

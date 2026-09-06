@@ -36,6 +36,15 @@ export interface ClientPickerProps {
   /** Optional caller-normalized rows. The hook still supplies the default. */
   clientOptions?: DesignerClient[];
   /**
+   * Extra classes for the popover panel, which portals to <body> at `z-50` —
+   * the overlay band DocSheet lives in, where DOM order settles the stack.
+   * A host that sits ABOVE that band has to say so: PaperFolioSheet is
+   * `z-[60]`, so the invoice composer passes `z-[70]`, the same number
+   * date/folio-popover.tsx picked for a panel opened from a field inside one.
+   * Left unset the picker keeps its `z-50` and no existing host moves.
+   */
+  popoverClassName?: string;
+  /**
    * When true, a household with no email on file (client_id null, not even
    * invitable) renders its explanatory hint framed around needing a client
    * login — for flows where the resulting document must reach a client who
@@ -58,6 +67,7 @@ export function ClientPicker({
   open: openProp,
   onOpenChange,
   clientOptions,
+  popoverClassName,
   requireClientLogin = false,
 }: ClientPickerProps) {
   const [openState, setOpenState] = React.useState(false);
@@ -262,7 +272,10 @@ export function ClientPicker({
           <PopoverPrimitive.Content
             align="start"
             sideOffset={4}
-            className="z-50 w-[var(--radix-popover-trigger-width)] min-w-[260px] rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] outline-none"
+            className={cn(
+              'z-50 w-[var(--radix-popover-trigger-width)] min-w-[260px] rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] outline-none',
+              popoverClassName
+            )}
           >
             <CommandPrimitive shouldFilter={false} className="flex flex-col overflow-hidden">
               <div className="flex items-center border-b border-[var(--border-subtle)] px-3">

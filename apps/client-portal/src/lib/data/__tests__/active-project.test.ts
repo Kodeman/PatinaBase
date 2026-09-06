@@ -278,3 +278,113 @@ describe('resolveHouseForInstrument — the approval names its house', () => {
     expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
 });
+
+/* ── The house a letter belongs to ──────────────────────────────────────────
+   A studio invoice (ruling S1) names no house at all, so `.in('project_id')`
+   would never match it and `/?invoice=<id>` would fall to the last-moved
+   house, whose letterbox is not holding it. It resolves to the adopted house
+   instead — the lowest project id the client can open, the same rule the
+   house itself applies to money with no house of its own. ───────────────── */
+
+function invoiceClient(options: {
+  invoice?: { data: unknown; error?: unknown };
+  user?: { id: string } | null;
+}) {
+  const maybeSingle = jest.fn(async () => options.invoice ?? { data: null, error: null });
+  const eq = jest.fn(() => ({ maybeSingle }));
+  const select = jest.fn(() => ({ eq }));
+  const from = jest.fn(() => ({ select }));
+  const getUser = jest.fn(async () => ({
+    data: { user: options.user === undefined ? { id: 'client-1' } : options.user },
+  }));
+  return { from, select, eq, maybeSingle, auth: { getUser } };
+}
+
+describe('resolveHouseForInstrument — the letter names its house', () => {
+  it('stands a studio invoice in the adopted house, not the last-moved one', async () => {
+    // `fetchClientProjects` orders by freshness, so p2 is the active house.
+    // The letter belongs to neither, and the adopted house is the lowest id.
+    const client = invoiceClient({
+      invoice: { data: { project_id: null, client_id: 'client-1' }, error: null },
+    });
+    mockCreateServerClient.mockResolvedValue(client);
+
+    await expect(
+      resolveHouseForInstrument(['p2', 'p1'], { invoiceId: 'inv-31' }),
+    ).resolves.toBe('p1');
+    expect(client.select).toHaveBeenCalledWith('project_id, client_id');
+  });
+
+  it('answers for a client with ONE house, which the house-count rule would skip', async () => {
+    const client = invoiceClient({
+      invoice: { data: { project_id: null, client_id: 'client-1' }, error: null },
+    });
+    mockCreateServerClient.mockResolvedValue(client);
+
+    await expect(
+      resolveHouseForInstrument(['p1'], { invoiceId: 'inv-31' }),
+    ).resolves.toBe('p1');
+  });
+
+  it('refuses a studio invoice drawn for another household', async () => {
+    const client = invoiceClient({
+      invoice: { data: { project_id: null, client_id: 'someone-else' }, error: null },
+    });
+    mockCreateServerClient.mockResolvedValue(client);
+
+    await expect(
+      resolveHouseForInstrument(['p2', 'p1'], { invoiceId: 'inv-31' }),
+    ).resolves.toBeNull();
+  });
+
+  it('refuses a studio invoice when the session cannot be read', async () => {
+    const client = invoiceClient({
+      invoice: { data: { project_id: null, client_id: 'client-1' }, error: null },
+      user: null,
+    });
+    mockCreateServerClient.mockResolvedValue(client);
+
+    await expect(
+      resolveHouseForInstrument(['p2', 'p1'], { invoiceId: 'inv-31' }),
+    ).resolves.toBeNull();
+  });
+
+  it('still names the house a project invoice belongs to', async () => {
+    mockCreateServerClient.mockResolvedValue(
+      invoiceClient({
+        invoice: { data: { project_id: 'p2', client_id: 'client-1' }, error: null },
+      }),
+    );
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { invoiceId: 'inv-9' }),
+    ).resolves.toBe('p2');
+  });
+
+  it('never names a house outside the client\'s own list', async () => {
+    mockCreateServerClient.mockResolvedValue(
+      invoiceClient({
+        invoice: { data: { project_id: 'p9', client_id: 'client-1' }, error: null },
+      }),
+    );
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { invoiceId: 'inv-9' }),
+    ).resolves.toBeNull();
+  });
+
+  it('leaves the active house standing when the letter resolves to nothing', async () => {
+    mockCreateServerClient.mockResolvedValue(invoiceClient({}));
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { invoiceId: 'inv-9' }),
+    ).resolves.toBeNull();
+  });
+
+  it('reads nothing at all for a client with no house', async () => {
+    await expect(
+      resolveHouseForInstrument([], { invoiceId: 'inv-31' }),
+    ).resolves.toBeNull();
+    expect(mockCreateServerClient).not.toHaveBeenCalled();
+  });
+});

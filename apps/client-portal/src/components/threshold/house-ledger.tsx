@@ -48,16 +48,25 @@ function figure(cents: number | null | undefined): cents is number {
 /**
  * One open invoice is "the open invoice"; several are counted in words.
  *
- * P-24 residue: the several case printed the figure while the comment above it
- * promised words, so a homeowner read "Owed across 2 open invoices" in a house
- * whose every neighbouring sentence spells its counts. `countInWords` is the
- * surface's one speller — words to twelve, figures past it, where the word
- * stops helping.
+ * A letter drawn against no house stands in this house's letterbox by
+ * adoption, not because the work is here. The envelope says so on its own
+ * line, and the figure it is summed into may not quietly imply otherwise — a
+ * homeowner reading "owed" against her house has to be able to tell which of
+ * that money is her house's. P-24's rule holds across every arm: `countInWords`
+ * is the surface's one speller, words to twelve, figures past it.
  */
-function owedWords(count: number): string {
-  return count > 1
-    ? `Owed across ${countInWords(count)} open invoices`
-    : 'Owed on the open invoice';
+function owedWords(count: number, studioCount: number): string {
+  if (studioCount <= 0) {
+    return count > 1
+      ? `Owed across ${countInWords(count)} open invoices`
+      : 'Owed on the open invoice';
+  }
+  if (studioCount >= count) {
+    return count > 1
+      ? `Owed across ${countInWords(count)} open invoices from the studio, not for this house`
+      : 'Owed on the open invoice from the studio, not for this house';
+  }
+  return `Owed across ${countInWords(count)} open invoices, ${countInWords(studioCount)} from the studio`;
 }
 
 /**
@@ -84,7 +93,7 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
   const rows: LedgerRow[] = [
     {
       key: 'owed' as const,
-      words: owedWords(ledger.owedInvoiceCount),
+      words: owedWords(ledger.owedInvoiceCount, ledger.owedStudioCount),
       cents: ledger.owedCents,
       due: owedDueLine(
         parseSourceDate(ledger.owedDueDate),

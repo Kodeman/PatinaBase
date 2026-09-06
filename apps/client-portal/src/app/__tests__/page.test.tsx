@@ -46,6 +46,10 @@ jest.mock('@/components/projects/ProjectsEmptyState', () => ({
   ProjectsEmptyState: () => <div data-testid="empty-state" />,
 }));
 
+jest.mock('@/components/threshold/letterbox-door', () => ({
+  LetterboxDoor: () => <div data-testid="letterbox-door" />,
+}));
+
 const mockProjects = fetchClientProjects as jest.Mock;
 const mockProjectView = fetchClientProjectView as jest.Mock;
 const mockActiveHouse = resolveActiveHouse as jest.Mock;
@@ -113,13 +117,17 @@ describe('the front door', () => {
     );
   });
 
-  it('shows the empty state, not a house, when the client has none', async () => {
+  // A household with no house may still have been sent a studio invoice, and
+  // the letterbox is the only thing that reads a `?checkout=` return. The
+  // door itself falls back to the empty state when no letter is waiting —
+  // that branch is covered in threshold.test.tsx.
+  it('opens the letterbox door, not a house, when the client has none', async () => {
     mockProjects.mockResolvedValue([]);
     mockActiveHouse.mockResolvedValue(null);
 
     render(await HomePage());
 
-    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.getByTestId('letterbox-door')).toBeInTheDocument();
     expect(screen.queryByTestId('surface')).not.toBeInTheDocument();
     expect(mockProjectView).not.toHaveBeenCalled();
   });
@@ -207,7 +215,33 @@ describe('the front door', () => {
 
     render(await HomePage());
 
+    // She HAS a house the list named, so this is not the letterbox door: the
+    // door stands only where there is no house at all.
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('letterbox-door')).not.toBeInTheDocument();
     expect(screen.queryByTestId('surface')).not.toBeInTheDocument();
+  });
+
+  // `/invoices/<studio-invoice>` folds here too. It names no house, so the
+  // resolver answers with the adopted one and the letterbox that is actually
+  // holding it opens.
+  it('opens the adopted house when the address names a studio invoice', async () => {
+    mockProjects.mockResolvedValue([
+      listItem('p2', 'The Linden house'),
+      listItem('p1', 'The Vale Residence'),
+    ]);
+    mockActiveHouse.mockResolvedValue('p2');
+    mockInstrumentHouse.mockResolvedValue('p1');
+    mockProjectView.mockImplementation(async (id: string) => view(id));
+
+    render(await HomePage({ searchParams: Promise.resolve({ invoice: 'inv-31' }) }));
+
+    expect(mockInstrumentHouse).toHaveBeenCalledWith(['p2', 'p1'], {
+      invoiceId: 'inv-31',
+      proposalId: undefined,
+      decisionId: undefined,
+    });
+    expect(mockActiveHouse).not.toHaveBeenCalled();
+    expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p1');
   });
 });

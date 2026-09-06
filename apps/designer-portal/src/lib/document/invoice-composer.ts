@@ -176,3 +176,70 @@ export function buildComposerLines(selection: ComposerSelection): DraftLineInput
 
   return [...milestoneLines, ...ffeLines, ...timeLines, ...adhocLines];
 }
+
+// ── The studio invoice — an invoice with no house (R136, ruling S1) ──────────
+
+/** The value the composer's "for" select carries for the houseless choice.
+ *  Never a project id, so it can never collide with one. */
+export const STUDIO_TARGET = '__studio__';
+
+/** The org rows the composer needs to answer ruling S8. */
+export interface ComposerStudio {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  membership?: { role?: string | null; status?: string | null } | null;
+}
+
+/**
+ * The design studios the designer can draw a studio invoice for. The studio
+ * line appears only when this returns more than one (S8); one studio is used
+ * silently.
+ *
+ * The membership is filtered here as well as the organization: 00571 authorizes
+ * the draw against an ACTIVE, NON-GUEST membership of the named studio, so a
+ * guest membership offered in this list is an option whose only answer is
+ * `insufficient_privilege` raised verbatim into the composer's error band.
+ *
+ * Sorted by name (id breaks a tie): the membership query carries no ORDER BY,
+ * so the first row is Postgres physical order and would otherwise decide which
+ * studio a two-studio designer silently bills from — wrong letterhead, wrong
+ * number sequence, and a number burnt on issue.
+ */
+export function activeDesignStudios<T extends ComposerStudio>(orgs: T[]): T[] {
+  return orgs
+    .filter(
+      (o) =>
+        o.type === 'design_studio' &&
+        o.status === 'active' &&
+        o.membership?.role !== 'guest' &&
+        (o.membership?.status ?? 'active') === 'active',
+    )
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
+export interface StudioInvoiceDraft {
+  /** The household being billed — a profiles.id off the roster (S4). */
+  clientId: string | null;
+  /** The regarding line (S12). */
+  title: string;
+  /** The studio drawing it — resolved silently when there is only one (S8). */
+  studioId: string | null;
+  /** Assembled ad-hoc lines; blank/zero rows are already dropped (S6). */
+  lines: DraftLineInput[];
+}
+
+/**
+ * The pure twin of the composer's Draft act in studio mode: a household, a
+ * regarding line, a studio to bill from, and at least one line that carries
+ * money. (Busy/pending state stays in the component, as it does for houses.)
+ */
+export function canDraftStudioInvoice(draft: StudioInvoiceDraft): boolean {
+  return (
+    Boolean(draft.clientId) &&
+    draft.title.trim().length > 0 &&
+    Boolean(draft.studioId) &&
+    draft.lines.length > 0
+  );
+}

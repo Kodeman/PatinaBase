@@ -178,6 +178,8 @@ export function InvoiceFolio({
   // the invoice-send and checkout resolution path before deciding that the
   // household needs another invite.
   const portalClientId = invoice.client_id ?? invoice.project?.client_id ?? null;
+  // A studio invoice has no house, so there is no document to walk into.
+  const documentProjectId = invoice.project_id;
   const portalClientProfile = invoice.client ?? invoice.project?.client ?? null;
   const hasClientPortalAccount = Boolean(
     portalClientId && portalClientProfile?.id === portalClientId,
@@ -205,7 +207,7 @@ export function InvoiceFolio({
     try {
       issued = await issue.mutateAsync({
         invoiceId,
-        projectId: invoice.project_id,
+        projectId: invoice.project_id ?? undefined,
       });
     } catch (e) {
       setNote(`Could not issue — ${e instanceof Error ? e.message : 'try again'}`);
@@ -214,7 +216,7 @@ export function InvoiceFolio({
     try {
       const result = await send.mutateAsync({
         invoiceId,
-        projectId: invoice.project_id,
+        projectId: invoice.project_id ?? undefined,
         message: message.trim() || undefined,
       });
       setNote(
@@ -242,7 +244,7 @@ export function InvoiceFolio({
     try {
       const result = await send.mutateAsync({
         invoiceId,
-        projectId: invoice.project_id,
+        projectId: invoice.project_id ?? undefined,
         message: message.trim() || undefined,
       });
       setNote(
@@ -282,7 +284,7 @@ export function InvoiceFolio({
     try {
       await recordPayment.mutateAsync({
         invoiceId,
-        projectId: invoice.project_id,
+        projectId: invoice.project_id ?? undefined,
         amountCents,
         method,
         reference: reference.trim() || undefined,
@@ -305,10 +307,14 @@ export function InvoiceFolio({
     try {
       await voidInvoice.mutateAsync({
         invoiceId,
-        projectId: invoice.project_id,
+        projectId: invoice.project_id ?? undefined,
         reason: voidReason.trim(),
       });
-      setNote('invoice voided · linked milestones and time released');
+      setNote(
+        documentProjectId
+          ? 'invoice voided · linked milestones and time released'
+          : 'invoice voided · the letter withdrawn, nothing else released',
+      );
       setAct(null);
       setVoidReason('');
       void qc.invalidateQueries({ queryKey: ['document-state'] });
@@ -340,7 +346,9 @@ export function InvoiceFolio({
           <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {[
               invoice.client?.full_name ?? invoice.client?.email,
-              invoice.project?.name,
+              // R136 — a studio invoice reads its regarding line where a
+              // project invoice reads its house.
+              invoice.project?.name ?? invoice.title,
               overdue ? null : INVOICE_STATUS_LABELS[invoice.status].toLowerCase(),
             ]
               .filter(Boolean)
@@ -350,13 +358,13 @@ export function InvoiceFolio({
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
-          {invoice.project && onOpenDocument && (
+          {documentProjectId && invoice.project && onOpenDocument && (
             <DocumentAction
               actionKey="open-invoice-document"
               surfaceKey="accounts"
               regionKey="invoice-letterhead"
               variant="tertiary"
-              onClick={() => onOpenDocument(invoice.project_id)}
+              onClick={() => onOpenDocument(documentProjectId)}
               className="folio-no-print"
             >
               document ↗
@@ -806,8 +814,9 @@ export function InvoiceFolio({
         {act === 'void' && (
           <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
             <p className="text-[11px] text-[var(--color-charcoal)]">
-              Voiding releases any linked payment milestones and time entries so they can be billed
-              again. This cannot be undone.
+              {documentProjectId
+                ? 'Voiding releases any linked payment milestones and time entries so they can be billed again. This cannot be undone.'
+                : 'Voiding keeps the number and marks the invoice void. Nothing else is released; a studio invoice holds no milestones or time. This cannot be undone.'}
             </p>
             <textarea
               autoFocus
