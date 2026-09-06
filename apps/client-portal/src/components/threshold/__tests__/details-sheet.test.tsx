@@ -392,12 +392,41 @@ describe("DetailsSheet — what you hear from us", () => {
     );
   });
 
-  it("sets a digest frequency", async () => {
+  /**
+   * `W3W-R1-07`. Two frequency controls stood in one panel with nothing
+   * between them and nothing saying which governed approval mail — "Digest
+   * frequency: Weekly" directly above "Reminder cadence: Once a week, on
+   * Sunday" — and the legacy group was not only present but SET. The reminder
+   * cadence (P-28, 00572) is the one the mail rail reads, so it is the only
+   * one the homeowner is asked. The column stays; the question goes.
+   */
+  it("asks about frequency once, and it is the cadence the mail rail reads", () => {
     render(<DetailsSheet open onClose={jest.fn()} />);
-    await userEvent.click(screen.getByRole("radio", { name: "Daily" }));
-    expect(updatePrefsMutate).toHaveBeenCalledWith({
-      digest_frequency: "daily",
-    });
+
+    expect(screen.queryByText("Digest frequency")).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[name="details-digest-frequency"]')).toHaveLength(0);
+    expect(
+      document.querySelectorAll('[name="details-reminder-cadence"]').length,
+    ).toBeGreaterThan(0);
+    // The three cadences, and no fourth frequency question anywhere near them.
+    for (const label of ["Tell me right away", "Once a day", "Once a week, on Sunday"]) {
+      expect(screen.getByRole("radio", { name: label })).toBeInTheDocument();
+    }
+    for (const gone of ["Never", "Daily", "Weekly", "Every two weeks", "Monthly"]) {
+      expect(screen.queryByRole("radio", { name: gone })).not.toBeInTheDocument();
+    }
+  });
+
+  /**
+   * `W3W-R1-n3`. "Re-engagement" is a marketer's word for a person who
+   * stopped answering, printed in her own settings beside "Weekly
+   * inspiration".
+   */
+  it("names the marketing note in her language, not the funnel's", () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    expect(screen.getByText("Occasional notes from your studio")).toBeInTheDocument();
+    expect(screen.queryByText("Re-engagement")).not.toBeInTheDocument();
   });
 
   it("sets a reminder cadence, and names invoice reminders as always-immediate", async () => {

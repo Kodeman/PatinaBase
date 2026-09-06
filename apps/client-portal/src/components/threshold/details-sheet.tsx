@@ -111,21 +111,21 @@ const PREF_GROUPS: Array<{
       { key: "type_product_launch", label: "Product launches" },
       { key: "type_seasonal_campaign", label: "Seasonal campaigns" },
       { key: "type_founding_circle", label: "Founding Circle updates" },
-      { key: "type_reengagement", label: "Re-engagement" },
+      // `W3W-R1-n3`: "Re-engagement" is a marketer's word for a person who
+      // stopped answering. What the homeowner is switching is a note from her
+      // studio, and the row now says so.
+      { key: "type_reengagement", label: "Occasional notes from your studio" },
     ],
   },
 ];
 
-const DIGEST_OPTIONS: Array<{
-  value: NotificationPreferences["digest_frequency"];
-  label: string;
-}> = [
-  { value: "never", label: "Never" },
-  { value: "daily", label: "Daily" },
-  { value: "weekly", label: "Weekly" },
-  { value: "biweekly", label: "Every two weeks" },
-  { value: "monthly", label: "Monthly" },
-];
+/* `W3W-R1-07`. The legacy "Digest frequency" group is retired from THIS
+   sheet. Two frequency controls stood in one panel with nothing between them
+   and nothing saying which governed approval mail — "Digest frequency:
+   Weekly" above "Reminder cadence: Once a week, on Sunday" — and the reminder
+   cadence (P-28, 00572) is the one the mail rail actually reads. The column
+   stays, and so does any studio-side use of it; what is gone is asking the
+   homeowner to reconcile two answers to one question. */
 
 /**
  * P-28 (00572). Three cadences, in her words rather than in the column's — the
@@ -587,34 +587,6 @@ function NotificationsSection() {
                 </label>
               </div>
             )}
-          </div>
-
-          <div className="mt-5">
-            <p className="text-[15px] font-medium text-[var(--text-primary)]">
-              Digest frequency
-            </p>
-            <p className="text-[13px] text-[var(--text-muted)]">
-              Bundle routine updates into a single email.
-            </p>
-            <fieldset className="mt-2 flex flex-col gap-1.5">
-              <legend className="sr-only">Digest frequency</legend>
-              {DIGEST_OPTIONS.map((opt) => (
-                <label
-                  key={opt.value}
-                  className="flex items-center gap-2.5 text-[15px] text-[var(--text-body)]"
-                >
-                  <input
-                    type="radio"
-                    name="details-digest-frequency"
-                    value={opt.value}
-                    checked={prefs.digest_frequency === opt.value}
-                    onChange={() => update({ digest_frequency: opt.value })}
-                    className="h-4 w-4 border border-current"
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </fieldset>
           </div>
 
           <div className="mt-5">
