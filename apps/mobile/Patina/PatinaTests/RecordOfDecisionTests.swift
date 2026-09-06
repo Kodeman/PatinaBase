@@ -13,6 +13,7 @@
 import Foundation
 import PatinaDesignKit
 import Testing
+import UIKit
 @testable import Patina
 
 @MainActor
@@ -241,6 +242,51 @@ struct RecordOfDecisionTests {
         // A tilted mark on a laser printer reads as a misfeed.
         #expect(PatinaStamp(state: .approved, isUpright: true).drawnRotationDegrees == 0)
         #expect(PatinaStamp(state: .approved).drawnRotationDegrees == PatinaStamp.rotationDegrees)
+    }
+
+    /// `W3R1-B1`. The suite walked `printedLines` and never the renderer, so
+    /// "Keep a copy" could be absent from every settled record in the shipped
+    /// build with the whole suite green. This calls the renderer.
+    @Test("the sheet renders to a real image")
+    func theKeepsakeRenders() throws {
+        let review = try ProjectApprovalFixture.review(
+            lifecycleStatus: "responded",
+            outcome: "approved",
+            respondedAt: "2026-09-05T14:00:00+00:00"
+        )
+        let record = RecordOfDecision.approval(
+            review: review,
+            outcome: .approved,
+            studio: "Hartwell Studio",
+            signedName: "Margaret Whitfield",
+            consentMethod: RecordOfDecisionCopy.electronicSignature
+        )
+
+        let image = try #require(
+            RecordKeepsake.image(record),
+            "the keepsake did not render, so there is nothing to hand the share sheet"
+        )
+        #expect(image.size.width > 0)
+        #expect(image.size.height > 0)
+        // Drawn at print scale rather than at the phone's.
+        #expect(image.scale == RecordSheet.renderScale)
+    }
+
+    /// `W3R1-B1`. The render must hang off a view that exists whether or not
+    /// the image does. It used to hang off a `Group` that was an `EmptyView`
+    /// until the image arrived — and an `EmptyView` runs no `.task`, so the
+    /// image was never made and the act was never drawn.
+    @Test("the render is anchored to a view that always exists")
+    func theRenderIsNotGatedOnItsOwnResult() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Shared/Views/RecordSheet.swift")
+        )
+        let anchor = try #require(code.range(of: "private var renderAnchor"))
+        let task = try #require(code.range(of: ".task {"))
+        #expect(anchor.lowerBound < task.lowerBound,
+                "the render is attached to something other than the anchor")
+        #expect(code.contains("Color.clear"),
+                "the anchor is not drawn, so the render still depends on the act")
     }
 
     @Test("the act is offered at the seal and on both settled screens")

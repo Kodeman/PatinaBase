@@ -153,13 +153,22 @@ enum RecordKeepsake {
 /// so the share sheet opens on the first press with the paper already in it.
 /// Until it exists there is no act — an act that cannot succeed is not
 /// offered, which is the same rule the deferral pair follows.
+///
+/// `W3R1-B1`: the render has to hang off a view that EXISTS. The `.task` was
+/// attached to a `Group` whose only content was the finished ShareLink, so
+/// until the image arrived the Group was an `EmptyView` — and an `EmptyView`
+/// carries no modifiers, so the task that would have made the image never ran
+/// and the act never appeared on any settled record. `renderAnchor` is drawn
+/// unconditionally and is what the task is attached to; the act above it stays
+/// conditional, which is the rule, not the defect.
 struct KeepACopyAct: View {
     let record: RecordOfDecision
 
     @State private var sheetImage: Image?
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 0) {
+            renderAnchor
             if let sheetImage {
                 ShareLink(
                     item: sheetImage,
@@ -174,9 +183,17 @@ struct KeepACopyAct: View {
                 .accessibilityIdentifier("record.keepACopy")
             }
         }
-        .task {
-            guard sheetImage == nil else { return }
-            sheetImage = RecordKeepsake.image(record).map(Image.init(uiImage:))
-        }
+    }
+
+    /// Zero-height, silent, and always there: the one view the render can be
+    /// attached to that does not depend on the render having happened.
+    private var renderAnchor: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .task {
+                guard sheetImage == nil else { return }
+                sheetImage = RecordKeepsake.image(record).map(Image.init(uiImage:))
+            }
     }
 }

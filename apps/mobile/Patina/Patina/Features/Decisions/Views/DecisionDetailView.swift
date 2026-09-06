@@ -302,46 +302,8 @@ struct DecisionDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    if hasDetails {
-                        Text(option.resolvedTitle ?? "Option")
-                            .font(PatinaTypography.h5)
-                            .foregroundStyle(PatinaColors.Text.primary)
-                        if let description = option.resolvedDescription {
-                            Text(description)
-                                .font(PatinaTypography.caption)
-                                .foregroundStyle(PatinaColors.Text.muted)
-                        }
-                    } else {
-                        // SP-17: client-voiced. The old line sent a homeowner
-                        // to a portal she cannot open.
-                        Text(DecisionOptionCopy.unavailableLine)
-                            .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.Text.muted)
-                    }
-                }
-                Spacer()
-                if isRecommended {
-                    Text("Recommended")
-                        // C-06: the badge is one word in a capsule beside a
-                        // title that takes the rest of the row. At
-                        // accessibility-extra-large the capsule was squeezed
-                        // below the word's own width and it wrapped inside
-                        // itself — "Recommende / d". One line, tightened, and
-                        // never split.
-                        .font(PatinaTypography.monoTiny)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .allowsTightening(true)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(PatinaColors.clay.opacity(0.1))
-                        .clipShape(Capsule())
-                }
-            }
+            plateNaming(option, hasDetails: hasDetails,
+                        isRecommended: isRecommended, compact: compact)
 
             HStack {
                 if let cents = option.resolvedPriceCents {
@@ -365,6 +327,73 @@ struct DecisionDetailView: View {
         // contentless plate is not leanable — the act above it would name
         // nothing — and the view model refuses it for the same reason.
         .contentShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// What the plate is called, and the mark that says it is recommended.
+    ///
+    /// `W3R1-M1`: on a compact plate the capsule takes its intrinsic width
+    /// first (C-06 gave it `fixedSize`), so a 171pt plate handed the title
+    /// what was left and "Shaker Oak" drew as "Shak…" — the plate could not
+    /// say its own name on the exact two-option case this spread was built
+    /// for. Side by side, the word goes under the title instead of beside it;
+    /// at full width there is room for both on one line, which is where the
+    /// mark reads best.
+    private func plateNaming(
+        _ option: RemoteDecisionOption,
+        hasDetails: Bool,
+        isRecommended: Bool,
+        compact: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if hasDetails {
+                        Text(option.resolvedTitle ?? "Option")
+                            .font(PatinaTypography.h5)
+                            .foregroundStyle(PatinaColors.Text.primary)
+                        if let description = option.resolvedDescription {
+                            Text(description)
+                                .font(PatinaTypography.caption)
+                                .foregroundStyle(PatinaColors.Text.muted)
+                        }
+                    } else {
+                        // SP-17: client-voiced. The old line sent a homeowner
+                        // to a portal she cannot open.
+                        Text(DecisionOptionCopy.unavailableLine)
+                            .font(PatinaTypography.bodySmall)
+                            .foregroundStyle(PatinaColors.Text.muted)
+                    }
+                }
+                Spacer(minLength: 8)
+                if isRecommended, !compact {
+                    recommendedCapsule
+                }
+            }
+            if isRecommended, compact {
+                recommendedCapsule
+            }
+        }
+    }
+
+    /// The one word, in a capsule. Drawn beside the title at full width and
+    /// beneath it on a compact plate — the same mark, never a truncated title.
+    private var recommendedCapsule: some View {
+        Text("Recommended")
+            // C-06: the badge is one word in a capsule beside a title that
+            // takes the rest of the row. At accessibility-extra-large the
+            // capsule was squeezed below the word's own width and it wrapped
+            // inside itself — "Recommende / d". One line, tightened, and never
+            // split.
+            .font(PatinaTypography.monoTiny)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .allowsTightening(true)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(PatinaColors.Text.interactive)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(PatinaColors.clay.opacity(0.1))
+            .clipShape(Capsule())
     }
 
     /// The rule around a plate. Mocha is the answer already given; clay is the
@@ -511,6 +540,14 @@ extension DecisionDetailView {
     /// dot rule beneath it. `.scrollTargetBehavior(.viewAligned)` rather than
     /// a `TabView` page style, which demands a fixed height a plate does not
     /// have.
+    ///
+    /// `W3R1-M2`: the page inset is the SCROLL VIEW's, not the row's.
+    /// `containerRelativeFrame` measures the scroll view and knows nothing
+    /// about padding applied inside it, so a `.padding(.horizontal, 24)` on
+    /// the `LazyHStack` made every plate a full screen wide starting 24pt in —
+    /// 24pt of each one, including the leaning dot that is the whole point of
+    /// the tap, hung off the right edge. `safeAreaPadding` insets the
+    /// container itself, which is the measurement the frame reads.
     private var pagedPlates: some View {
         VStack(alignment: .leading, spacing: 10) {
             ScrollView(.horizontal) {
@@ -522,8 +559,8 @@ extension DecisionDetailView {
                     }
                 }
                 .scrollTargetLayout()
-                .padding(.horizontal, 24)
             }
+            .safeAreaPadding(.horizontal, 24)
             .scrollTargetBehavior(.viewAligned)
             .scrollIndicators(.hidden)
             .scrollPosition(id: $pagedOptionId)

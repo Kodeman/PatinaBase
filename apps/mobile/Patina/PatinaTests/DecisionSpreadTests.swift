@@ -268,6 +268,49 @@ struct DecisionSpreadTests {
         #expect(DecisionSpread.transition(reduceMotion: false) == .zoom)
     }
 
+    // MARK: - `W3R1-M1` / `W3R1-M2` · the plate fits the page
+
+    /// `W3R1-M1`. On the two-plate spread the recommended plate drew "Shak…":
+    /// C-06 gave the capsule `fixedSize`, so beside a title in the same HStack
+    /// it took its intrinsic width first and left the title 171pt minus its
+    /// own. A plate that cannot say its own name is the one thing the spread
+    /// exists to do. Side by side the word goes under the title.
+    @Test("the compact plate gives its title the row, and puts the mark beneath")
+    func theCompactPlateDrawsItsWholeTitle() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionDetailView.swift")
+        )
+        #expect(code.contains("if isRecommended, !compact {"),
+                "the capsule still shares the title's row on a compact plate")
+        #expect(code.contains("if isRecommended, compact {"),
+                "the compact plate draws no recommended mark at all")
+        // One capsule, drawn from one place — never two that can drift apart.
+        #expect(code.components(separatedBy: "Text(\"Recommended\")").count - 1 == 1)
+    }
+
+    /// `W3R1-M2`. `containerRelativeFrame` measures the SCROLL VIEW, so an
+    /// inset applied inside it made every plate a full screen wide starting
+    /// 24pt in — the leaning dot, which is the whole point of the tap, hung
+    /// off the right edge on every page of a three-option spread.
+    @Test("the paged spread insets the scroll view, not the row inside it")
+    func thePagedPlatesFitTheScreen() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionDetailView.swift")
+        )
+        let paged = try #require(code.range(of: "private var pagedPlates"))
+        let dots = try #require(code.range(of: "private var pageDots"))
+        let spread = String(code[paged.lowerBound..<dots.lowerBound])
+
+        #expect(spread.contains(".safeAreaPadding(.horizontal, 24)"),
+                "the paged spread does not inset its container")
+        #expect(!spread.contains(".padding(.horizontal, 24)"),
+                "the inset is still applied inside the scroll view it is measured against")
+        #expect(spread.contains("containerRelativeFrame(.horizontal, count: 1, spacing: 12)"))
+        // Three or more is the case this geometry is for.
+        #expect(DecisionSpread.layout(optionCount: 3, isAccessibilitySize: false) == .paged)
+        #expect(DecisionSpread.layout(optionCount: 3, isAccessibilitySize: true) == .stacked)
+    }
+
     @Test("the zoom has both halves: a source on the Record row and the destination")
     func theZoomHasBothHalves() throws {
         let row = SourceScan.code(
