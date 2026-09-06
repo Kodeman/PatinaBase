@@ -73,3 +73,48 @@ Deno.test('invoice links: ensureInvoiceLinkUrl is null on every failure shape (t
     null
   );
 });
+
+// ── The producers' substitution (invoice-send:259, invoice-reminders:353) ──
+//
+// Both letters build their portalUrl as
+//   `(await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
+//     `${CLIENT_PORTAL_URL}/invoices/${invoice.id}``
+// Neither function has a test harness of its own (each is one monolithic
+// Deno.serve handler), so the expression's two outcomes are pinned here —
+// the shape a producer edit must not break.
+
+const CLIENT_PORTAL_URL = 'https://client.patina.cloud';
+
+async function producerPortalUrl(
+  admin: Parameters<typeof ensureInvoiceLinkUrl>[0],
+  invoiceId: string
+): Promise<string> {
+  return (
+    (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoiceId)) ??
+    `${CLIENT_PORTAL_URL}/invoices/${invoiceId}`
+  );
+}
+
+Deno.test('invoice links: the letters address /pay/<token> when the link mints', async () => {
+  const { client, calls } = rpcClient({ data: TOKEN, error: null });
+  assertEquals(
+    await producerPortalUrl(client, 'inv-1'),
+    `https://client.patina.cloud/pay/${TOKEN}`
+  );
+  // Asked per letter, never cached — a Regenerate is honored by the next send.
+  assertEquals(calls, [{ name: 'ensure_invoice_link', args: { p_invoice_id: 'inv-1' } }]);
+});
+
+Deno.test('invoice links: the letters fall back to /invoices/<id>, never a broken address', async () => {
+  // A draft/void (null token), an RPC failure, and a throw all fall back (M7).
+  for (const result of [
+    { data: null, error: null },
+    { data: null, error: { message: 'boom' } } as const,
+    new Error('network'),
+  ]) {
+    assertEquals(
+      await producerPortalUrl(rpcClient(result).client, 'inv-1'),
+      'https://client.patina.cloud/invoices/inv-1'
+    );
+  }
+});

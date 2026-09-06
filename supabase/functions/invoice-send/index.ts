@@ -51,6 +51,7 @@ import {
   invoiceForClause,
   invoiceSubjectName,
 } from '../_shared/invoice-subject.ts';
+import { ensureInvoiceLinkUrl } from '../_shared/invoice-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -256,7 +257,14 @@ Deno.serve(async (req: Request) => {
   const forClause = invoiceForClause(invoice);
   const studioInvoice = !invoice.project_id;
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
-  const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
+  // K1: the letter carries the invoice's own address — `/pay/<token>` opens
+  // for anyone holding it, signed in or not. A null (draft, void, or a failed
+  // mint) falls back to today's signed-in form rather than a broken address.
+  // metadata.deep_link below stays `/invoices/<id>`: it routes the iOS inbox
+  // by id (I2), so the emailed link and the in-app row land differently.
+  const portalUrl =
+    (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
+    `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
 
   // type 'reminder' renders the overdue-notice template (manual nudge from the
   // A/R page) without touching the automated cadence counters; default 'sent'
