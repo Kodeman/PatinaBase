@@ -45,6 +45,20 @@
     { "binding": "SVC_ORDERS", "service": "patina-orders-worker" },
     { "binding": "SVC_MEDIA", "service": "patina-media-svc-worker" }
   ],
+  // S3 — the brute-force control on /pay/<token>, its state and checkout
+  // routes, and /pay/return/<nonce>. 30 requests a minute per
+  // cf-connecting-ip; over-limit renders the dead sheet, never a "too many
+  // attempts" oracle. Entropy (256 bits) is the boundary; this is friction.
+  //
+  // namespace_id is account-scoped and must never be reused by another Patina
+  // Worker — no other Worker declares a `ratelimits` binding today.
+  "ratelimits": [
+    {
+      "name": "PAY_LINK_RATELIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ],
   "env": {
     "staging": {
       "workers_dev": true,
@@ -77,6 +91,20 @@
         { "binding": "SVC_PROJECTS", "service": "patina-projects-worker-staging" },
         { "binding": "SVC_ORDERS", "service": "patina-orders-worker-staging" },
         { "binding": "SVC_MEDIA", "service": "patina-media-svc-worker-staging" }
+      ],
+      // Environments do not inherit top-level bindings — an env block that
+      // carries `services` carries every binding or none. Without this,
+      // staging would silently run with no limiter at all (S4).
+      //
+      // Its OWN namespace id (S-9): the counter is per-namespace-per-IP, so
+      // sharing 1001 with prod would let a staging probe spend a real
+      // visitor's budget on the production sheet.
+      "ratelimits": [
+        {
+          "name": "PAY_LINK_RATELIMIT",
+          "namespace_id": "1002",
+          "simple": { "limit": 30, "period": 60 }
+        }
       ]
     }
   }

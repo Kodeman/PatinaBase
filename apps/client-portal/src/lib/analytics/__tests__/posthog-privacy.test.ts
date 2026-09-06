@@ -16,6 +16,7 @@ const shareToken = 'a'.repeat(64);
 const rfqToken = 'b'.repeat(64);
 const evidenceToken = 'c'.repeat(64);
 const plansToken = 'd'.repeat(64);
+const payToken = 'e'.repeat(64);
 const initMock = (posthog as unknown as { init: jest.Mock }).init;
 
 describe('PostHog Field bearer privacy boundary', () => {
@@ -158,5 +159,48 @@ describe('PostHog Field bearer privacy boundary', () => {
     expect(serialized).not.toContain(plansToken);
     expect(serialized.match(/\/plans\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(4);
     expect(event.properties?.already_redacted).toBe('/plans/[redacted]');
+  });
+
+  // S8/S9. The pay-link token is the one bearer on this list that reaches a
+  // TILL, and it is permanent — it stays live for the invoice's life. A raw
+  // pageview URL here would leave a standing payment capability sitting in an
+  // analytics store, readable by anyone with dashboard access.
+  it('redacts pay-link bearers from pageview, referrer, autocapture, and nested values', () => {
+    const event = sanitizePostHogEvent({
+      event: '$autocapture',
+      properties: {
+        $current_url: `https://client.patina.cloud/pay/${payToken}?from=email`,
+        $referrer: `/pay/${payToken}`,
+        $elements: [{
+          tag_name: 'a',
+          attributes: {
+            href: `/pay/${payToken}`,
+            'data-source': JSON.stringify({ returnTo: `/pay/${payToken}` }),
+          },
+        }],
+        already_redacted: '/pay/[redacted]',
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(payToken);
+    expect(serialized.match(/\/pay\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(event.properties?.already_redacted).toBe('/pay/[redacted]');
+  });
+
+  it('redacts the pay-link token out of the routes hung beneath it', () => {
+    const event = sanitizePostHogEvent({
+      event: '$pageview',
+      properties: {
+        $current_url: `https://client.patina.cloud/pay/${payToken}/state`,
+        $referrer: `https://client.patina.cloud/pay/${payToken}/checkout`,
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(payToken);
+    expect(event.properties?.$current_url).toBe(
+      'https://client.patina.cloud/pay/[redacted]/state',
+    );
   });
 });

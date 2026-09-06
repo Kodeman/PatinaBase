@@ -14,6 +14,7 @@ const PUBLIC_PREFIXES = [
   '/field',
   '/rfq',
   '/plans',
+  '/pay',
   '/evidence',
   '/quiz',
   '/preferences/unsubscribe',

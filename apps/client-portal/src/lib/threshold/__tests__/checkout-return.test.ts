@@ -127,3 +127,47 @@ describe('revealReturnAnchor', () => {
     expect(() => revealReturnAnchor({} as HTMLElement)).not.toThrow();
   });
 });
+
+describe('consumeCheckoutReturn — the hash the caller names', () => {
+  const replaceState = jest.fn();
+  const originalHistory = window.history.replaceState;
+
+  beforeEach(() => {
+    resetCheckoutReturn();
+    replaceState.mockClear();
+    window.history.replaceState = replaceState;
+  });
+
+  afterEach(() => {
+    window.history.replaceState = originalHistory;
+  });
+
+  function standOnTheSheet(search: string) {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        search,
+        href: `https://client.test/pay/${'a'.repeat(64)}${search}`,
+        pathname: `/pay/${'a'.repeat(64)}`,
+      },
+    });
+  }
+
+  it('leaves no anchor on a sheet that has no sections', () => {
+    standOnTheSheet('?checkout=success&session_id=cs_1');
+
+    expect(consumeCheckoutReturn('')?.outcome).toBe('settled');
+    expect(replaceState).toHaveBeenCalledWith({}, '', `/pay/${'a'.repeat(64)}`);
+  });
+
+  it('keeps the house’s own default when no hash is named', () => {
+    standOnTheSheet('?checkout=success&invoice=inv-4');
+
+    expect(consumeCheckoutReturn()?.invoiceId).toBe('inv-4');
+    expect(replaceState).toHaveBeenCalledWith(
+      {},
+      '',
+      `/pay/${'a'.repeat(64)}#letterbox`,
+    );
+  });
+});
