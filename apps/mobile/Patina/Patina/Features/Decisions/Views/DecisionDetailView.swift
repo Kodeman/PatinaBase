@@ -25,6 +25,9 @@ struct DecisionDetailView: View {
     /// `P-30`: which plate the paged spread is resting on, so the page dot
     /// knows which one to fill. Nil on the two other layouts.
     @State private var pagedOptionId: String?
+    /// `r1 M2`: the optional signature under the spread. Empty is the ordinary
+    /// path, and what an unsigned hold records is `click_through`.
+    @State private var spreadSignature = ""
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// `P-30`: the arrival. Reduce Motion takes the still one.
@@ -554,20 +557,77 @@ extension DecisionDetailView {
     @ViewBuilder
     private var namedAct: some View {
         if let leaning = viewModel.leaningOption {
-            HoldToActButton(
-                title: DecisionSpread.actLabel(optionTitle: leaning.resolvedTitle),
-                isEnabled: !viewModel.isSubmitting,
-                isBusy: viewModel.isSubmitting
-            ) {
-                Task { await viewModel.commitLeaning(decisionId: decisionId) }
+            VStack(alignment: .leading, spacing: 12) {
+                signatureLine
+                // `r1 M2`: what holding it does. The consent sheet carried
+                // this sentence and took it with it when P-30 replaced it.
+                Text(DecisionSpread.actConsequence)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("decisionSpread.consequence")
+                HoldToActButton(
+                    title: DecisionSpread.actLabel(optionTitle: leaning.resolvedTitle),
+                    isEnabled: !viewModel.isSubmitting && spreadConsent != .tooShort,
+                    isBusy: viewModel.isSubmitting
+                ) {
+                    Task {
+                        await viewModel.commitLeaning(
+                            decisionId: decisionId,
+                            typedName: spreadSignature
+                        )
+                    }
+                }
+                .accessibilityIdentifier("decisionSpread.act")
             }
-            .accessibilityIdentifier("decisionSpread.act")
         } else {
             Text(DecisionSpread.leaningPrompt)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("decisionSpread.prompt")
+        }
+    }
+
+    /// What the held act will send, given what is in the name field.
+    private var spreadConsent: DecisionSpread.Consent {
+        DecisionSpread.consent(forTypedName: spreadSignature)
+    }
+
+    /// `r1 M2`. The optional typed name, restored under the spread after
+    /// `P-30` retired the consent sheet the option path used to reach
+    /// `client_consent_method = 'electronic_signature'` through.
+    ///
+    /// It is one line and it is never a gate: the act is live over an empty
+    /// field, and the only state that holds it back is a field with something
+    /// in it too short to be a name — which the line beneath says plainly
+    /// rather than leaving a dead control.
+    private var signatureLine: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(DecisionSpread.signatureTitle)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.primary)
+            Text(DecisionSpread.signatureNote)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            PatinaTextField(
+                DecisionSpread.signatureFieldLabel,
+                text: $spreadSignature,
+                label: DecisionSpread.signatureFieldLabel,
+                icon: "signature",
+                textContentType: .name,
+                autocapitalization: .words
+            )
+            .disabled(viewModel.isSubmitting)
+            .accessibilityIdentifier("decisionSpread.signatureField")
+            if spreadConsent == .tooShort {
+                Text(DecisionSpread.signatureTooShort)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("decisionSpread.signatureTooShort")
+            }
         }
     }
 

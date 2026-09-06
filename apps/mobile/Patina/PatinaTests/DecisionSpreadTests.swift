@@ -122,6 +122,88 @@ struct DecisionSpreadTests {
                 "the act does not name the option it carries")
     }
 
+    // MARK: - `r1 M2` · the optional signature the sheet used to carry
+
+    /// The retired `DecisionConsentSheet` could put `electronic_signature` on
+    /// an option choice (its "Add my signature" toggle). `P-30` removed the
+    /// sheet; it may not remove the capability, because 00117's
+    /// `client_consent_method` is a per-decision column and the mid-Wave-2
+    /// "signature only on Approve" ruling is scoped to the Stage-2 ceremony
+    /// rail, not to a legacy choice between named alternatives.
+    @Test("an empty name is an unsigned choice, and a typed one is signed")
+    func theTypedNameDecidesTheConsent() {
+        #expect(DecisionSpread.consent(forTypedName: nil) == .clickThrough)
+        #expect(DecisionSpread.consent(forTypedName: "") == .clickThrough)
+        #expect(DecisionSpread.consent(forTypedName: "   \n ") == .clickThrough)
+        #expect(DecisionSpread.consent(forTypedName: " Anne Vinter ")
+                == .signed("Anne Vinter"))
+    }
+
+    /// The floor is `_apply_client_decision`'s: a one-character signature is a
+    /// check violation server-side. Below it the act is HELD rather than
+    /// quietly downgraded, so a half-typed name never lands as an unsigned
+    /// submit the homeowner did not choose.
+    @Test("a half-typed name holds the act rather than sending unsigned")
+    func aHalfTypedNameHoldsTheAct() throws {
+        #expect(DecisionSpread.consent(forTypedName: "A") == .tooShort)
+        #expect(DecisionSpread.consent(forTypedName: " A ") == .tooShort)
+
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionDetailView.swift")
+        )
+        #expect(code.contains("spreadConsent != .tooShort"),
+                "the act is live over a name too short to send")
+    }
+
+    @Test("the held act carries the typed name into the commit")
+    func theActCarriesTheName() throws {
+        let view = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionDetailView.swift")
+        )
+        #expect(view.contains("typedName: spreadSignature"))
+        #expect(view.contains("DecisionSpread.signatureTitle"))
+
+        let model = SourceScan.code(
+            in: try SourcePin.read(
+                "Patina/Features/Decisions/ViewModels/DecisionDetailViewModel+Spread.swift"
+            )
+        )
+        #expect(model.contains("consent: .electronicSignature"),
+                "the option path can no longer be e-signed")
+        #expect(model.contains("consent: .clickThrough"),
+                "an unsigned hold no longer records click_through")
+    }
+
+    /// The signature is an offer, never a gate: nothing in the copy asks for
+    /// it, apologises for it, or names a lapse.
+    @Test("the signature line is offered, not demanded")
+    func theSignatureIsOptional() {
+        #expect(DecisionSpread.signatureNote.lowercased().hasPrefix("optional"))
+        for word in ["required", "must", "sorry", "overdue", "gate", "task"] {
+            #expect(!DecisionSpread.signatureNote.lowercased().contains(word),
+                    "the signature note says \(word)")
+            #expect(!DecisionSpread.signatureTitle.lowercased().contains(word),
+                    "the signature title says \(word)")
+            #expect(!DecisionSpread.signatureTooShort.lowercased().contains(word),
+                    "the too-short line says \(word)")
+        }
+    }
+
+    /// `r1 M2`, second order: the consent sheet carried the only sentence on
+    /// this path naming what the act DOES. `leaningPrompt` names only what is
+    /// not happening, so the consequence moves beside the act.
+    @Test("the act says what holding it sets off")
+    func theActNamesItsConsequence() throws {
+        #expect(DecisionSpread.actConsequence.contains("your designer"))
+        #expect(DecisionSpread.actConsequence.contains("waiting on it"))
+
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionDetailView.swift")
+        )
+        #expect(code.contains("DecisionSpread.actConsequence"),
+                "the act is drawn without the sentence naming what it does")
+    }
+
     /// `P-30`: the deferral acts sit BELOW the act at equal weight, "not
     /// smaller" — so they are drawn through one control at the body face, and
     /// not at a caption size that would read as a footnote beside the act.

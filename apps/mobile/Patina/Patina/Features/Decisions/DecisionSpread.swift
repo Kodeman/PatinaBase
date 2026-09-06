@@ -68,6 +68,65 @@ enum DecisionSpread {
     /// which is the whole of what the leaning state is for.
     static let leaningPrompt = "Tap one to sit with it. Nothing is sent until you hold the act."
 
+    /// `r1 M2`. What the act DOES, said beside it.
+    ///
+    /// The consent step this path replaced carried the only sentence naming
+    /// the consequence; `leaningPrompt` names only what is not happening, so a
+    /// homeowner arriving at a lit plate had nothing telling her what holding
+    /// it sets off. This is the sheet's own sentence, in the choice's words.
+    /// "Any work waiting on it" is hedged because the app cannot see whether
+    /// there is any — `R9`: name the real consequence or stay silent.
+    static let actConsequence =
+        "Choosing sends your decision to your designer and unblocks any work waiting on it."
+
+    // MARK: - The signature, which is optional here
+
+    /// `r1 M2`. The typed name under the spread.
+    ///
+    /// The option path used to reach `client_consent_method` through a consent
+    /// sheet whose "Add my signature" toggle could put `electronic_signature`
+    /// on a choice (00117 carries the column per decision, and it is not the
+    /// ceremony rail's column). `P-30` replaced the sheet with one held act;
+    /// removing the sheet must not remove the capability, so the name moves
+    /// under the spread as one optional line.
+    ///
+    /// Optional is the whole point: the mid-Wave-2 ruling requires a typed
+    /// name on Stage-2 *Approve*, and says nothing about a choice between two
+    /// finishes. Empty is the ordinary path and is recorded as `click_through`.
+    static let signatureTitle = "Sign it, if you’d like"
+
+    static let signatureNote =
+        "Optional. Type your full legal name and your choice is recorded as signed; "
+        + "leave it empty and it is recorded as confirmed in Patina."
+
+    static let signatureFieldLabel = "Full legal name"
+
+    /// Drawn only while the field holds something too short to be a name, so a
+    /// stray keystroke is never silently dropped into an unsigned submit. A
+    /// statement of what the field takes — no apology and no instruction about
+    /// what she should have done.
+    static let signatureTooShort = "Your full legal name, or leave it empty."
+
+    /// What one held act sends, given whatever is in the name field.
+    ///
+    /// The two-character floor is `_apply_client_decision`'s own: a consent
+    /// method and a signature are written together or not at all, and a
+    /// one-character "signature" is a check violation server-side. Below the
+    /// floor this reports `.tooShort` rather than quietly downgrading to
+    /// click-through — the view holds the act until the field is a name or
+    /// empty again.
+    enum Consent: Equatable {
+        case clickThrough
+        case signed(String)
+        case tooShort
+    }
+
+    static func consent(forTypedName typed: String?) -> Consent {
+        let name = (typed ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return .clickThrough }
+        return name.count >= 2 ? .signed(name) : .tooShort
+    }
+
     /// Beside a leaning plate, for VoiceOver: the mark itself is a dot, and a
     /// dot reads as nothing.
     static let leaningLabel = "Leaning toward this"

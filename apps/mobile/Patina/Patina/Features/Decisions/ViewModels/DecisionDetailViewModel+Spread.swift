@@ -34,16 +34,34 @@ extension DecisionDetailViewModel {
 
     /// `P-30`. The act itself: the held press on "I choose {name}".
     ///
-    /// The consent is `click_through` and carries no signature. That is what
-    /// the consent step this replaces sent on its default path — its "Add my
-    /// signature" toggle rested OFF — and it is the token the mid-Wave-2
-    /// ruling reserves for an act with no name on it. A choice between two
-    /// named alternatives is not the signature moment; R1's typed name belongs
-    /// to Approve on the ceremony rail, which has its own screen.
-    func commitLeaning(decisionId: String) async {
+    /// The consent an unsigned hold records is `click_through` — the token the
+    /// mid-Wave-2 ruling reserves for an act with no name on it, and what the
+    /// consent step this replaced sent on its own default path (its "Add my
+    /// signature" toggle rested OFF).
+    ///
+    /// `r1 M2`: that sheet could also put `electronic_signature` on a choice,
+    /// and removing the sheet must not remove the capability. `typedName` is
+    /// the optional line under the spread; when it holds a name, the same held
+    /// act sends it, exactly as `DecisionConsentSheet` did. Below the two-
+    /// character floor nothing is sent at all — the view does not offer the
+    /// act there, and this refuses it too, so a half-typed name cannot be
+    /// silently downgraded to an unsigned submit.
+    func commitLeaning(decisionId: String, typedName: String? = nil) async {
         guard let optionId = leaningOptionId, !isSubmitting, !isResolved else { return }
-        pendingOptionId = optionId
-        await confirmSelection(decisionId: decisionId, consent: .clickThrough)
+        switch DecisionSpread.consent(forTypedName: typedName) {
+        case .tooShort:
+            return
+        case .clickThrough:
+            pendingOptionId = optionId
+            await confirmSelection(decisionId: decisionId, consent: .clickThrough)
+        case .signed(let name):
+            pendingOptionId = optionId
+            await confirmSelection(
+                decisionId: decisionId,
+                consent: .electronicSignature,
+                signature: name
+            )
+        }
     }
 
     /// Commit the pending option with the client's consent. On success the
