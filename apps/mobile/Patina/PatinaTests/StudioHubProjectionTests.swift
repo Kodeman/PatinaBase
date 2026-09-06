@@ -133,4 +133,29 @@ struct StudioHubProjectionTests {
         #expect(source.contains("if retryingProjection, !hasLoadedProjection {"))
         #expect(source.contains("await load(retryingProjection: false)"))
     }
+
+    // MARK: - 4 · the door she is actually invited through
+
+    /// `W3R3-M1`. Today's "See all that needs you" and the Companion's "Your
+    /// studio" PUSH this hub onto the Today stack, where the selected tab is
+    /// Today — so a guard that read the selection alone returned before
+    /// `load()` was ever asked for, and the placeholder section 1 pins never
+    /// resolved. Measured still gathering two minutes after a cold launch.
+    ///
+    /// The selection now speaks only for the instance it is about. A tab root
+    /// stays mounted after she leaves the tab, which is the refetch the guard
+    /// was raised to stop; a pushed hub is torn down when she leaves, so its
+    /// appearance is her arrival and there is nothing to guard against.
+    @Test
+    func aPushedHubLoadsWithoutWaitingForTheStudioTab() throws {
+        let source = try SourcePin.read("Patina/Features/Profile/Views/StudioHubView.swift")
+        let code = SourceScan.code(in: source)
+        #expect(code.contains("@Environment(\\.isTabRoot) private var isTabRoot"),
+                "the hub cannot tell a tab root from a pushed copy of itself")
+        #expect(code.contains("guard coordinator.isHouseFirstRoot, isTabRoot else { return true }"))
+        #expect(!code.contains("!coordinator.isHouseFirstRoot || coordinator.tabs.selected == .studio"),
+                "a hub pushed over Today is still read as a hub she is not looking at")
+        #expect(code.contains("guard isOnStudio else { return }"),
+                "an unselected tab root still refetches eight sources")
+    }
 }

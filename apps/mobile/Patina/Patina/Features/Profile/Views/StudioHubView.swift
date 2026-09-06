@@ -11,6 +11,7 @@ import SwiftUI
 struct StudioHubView: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.isTabRoot) private var isTabRoot
     @State private var authService = AuthService.shared
     @State private var viewModel = StudioHubViewModel.shared
 
@@ -421,8 +422,19 @@ private extension StudioHubView {
     /// Whether the Studio is the surface she is looking at. The flag-off root
     /// has no tabs — the hub is pushed there, and mounting is arriving — so it
     /// is always true.
+    ///
+    /// `W3R3-M1`: so is a PUSHED hub under the house-first bar. Today's "See
+    /// all that needs you" and the Companion's "Your studio" push this screen
+    /// onto the Today stack, where `tabs.selected == .today`; reading the tab
+    /// alone the guard called that "not looking at the Studio" and returned,
+    /// so the load was never asked for and the placeholder never resolved.
+    /// The tab-root instance is the only one the selection speaks for — a tab
+    /// stays mounted after she leaves it, which is the refetch this stops.
+    /// A pushed instance is torn down when she leaves, so its appearance IS
+    /// her arrival.
     var isOnStudio: Bool {
-        !coordinator.isHouseFirstRoot || coordinator.tabs.selected == .studio
+        guard coordinator.isHouseFirstRoot, isTabRoot else { return true }
+        return coordinator.tabs.selected == .studio
     }
 
     /// Four states, not one per tab: switching between two tabs that are not
