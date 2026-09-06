@@ -7638,8 +7638,10 @@ export type Database = {
           finalized_at: string | null
           id: string
           invoice_id: string
-          payer_id: string
+          invoice_link_id: string | null
+          payer_id: string | null
           payment_method: string | null
+          return_nonce: string | null
           state: string
           stripe_checkout_session_id: string | null
           stripe_customer_id: string
@@ -7656,8 +7658,10 @@ export type Database = {
           finalized_at?: string | null
           id?: string
           invoice_id: string
-          payer_id: string
+          invoice_link_id?: string | null
+          payer_id?: string | null
           payment_method?: string | null
+          return_nonce?: string | null
           state?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id: string
@@ -7674,8 +7678,10 @@ export type Database = {
           finalized_at?: string | null
           id?: string
           invoice_id?: string
-          payer_id?: string
+          invoice_link_id?: string | null
+          payer_id?: string | null
           payment_method?: string | null
+          return_nonce?: string | null
           state?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string
@@ -7690,6 +7696,13 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_checkout_attempts_invoice_link_id_fkey"
+            columns: ["invoice_link_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_links"
             referencedColumns: ["id"]
           },
           {
@@ -7801,6 +7814,70 @@ export type Database = {
             columns: ["milestone_id"]
             isOneToOne: false
             referencedRelation: "project_payment_milestones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          invoice_id: string
+          last_viewed_at: string | null
+          payer_email: string | null
+          revoked_at: string | null
+          status: string
+          stripe_customer_id: string | null
+          token: string
+          view_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_id: string
+          last_viewed_at?: string | null
+          payer_email?: string | null
+          revoked_at?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          token: string
+          view_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_id?: string
+          last_viewed_at?: string | null
+          payer_email?: string | null
+          revoked_at?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          token?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_links_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -30474,6 +30551,15 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_invoice_link_checkout_attempt: {
+        Args: {
+          p_invoice_id: string
+          p_invoice_link_id: string
+          p_payment_method?: string
+          p_stripe_customer_id: string
+        }
+        Returns: Json
+      }
       claim_proposal_send_dispatch: {
         Args: {
           p_dispatch_id: string
@@ -31356,6 +31442,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      ensure_invoice_link: { Args: { p_invoice_id: string }; Returns: string }
       ensure_project_spec_book: {
         Args: { p_project_id: string }
         Returns: {
@@ -31525,6 +31612,10 @@ export type Database = {
       }
       expire_proposals: { Args: never; Returns: number }
       expire_room_scan_associations: { Args: never; Returns: number }
+      expire_stale_invoice_checkout_attempts: {
+        Args: { p_stale?: string }
+        Returns: Json
+      }
       expire_stale_upload_intents: { Args: { p_ttl?: string }; Returns: number }
       export_designer_taste: { Args: { p_designer_id: string }; Returns: Json }
       extend_and_reopen_client_decision: {
@@ -31604,6 +31695,7 @@ export type Database = {
       finalize_invoice_checkout_attempt: {
         Args: {
           p_attempt_id: string
+          p_invoice_link_id?: string
           p_payer_id: string
           p_stripe_checkout_session_id: string
           p_stripe_customer_id: string
@@ -32039,6 +32131,7 @@ export type Database = {
           invoice_status: string
         }[]
       }
+      get_invoice_link: { Args: { p_invoice_id: string }; Returns: Json }
       get_invoice_payment_options: {
         Args: { p_invoice_id: string }
         Returns: Json
@@ -33183,6 +33276,7 @@ export type Database = {
       recover_invoice_checkout_session_evidence: {
         Args: {
           p_attempt_id: string
+          p_invoice_link_id?: string
           p_payer_id: string
           p_stripe_checkout_session_id: string
           p_stripe_customer_id: string
@@ -33197,6 +33291,10 @@ export type Database = {
       }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
+      regenerate_invoice_link: {
+        Args: { p_invoice_id: string }
+        Returns: string
+      }
       register_media_entry: {
         Args: {
           p_access_class: string
@@ -33581,6 +33679,26 @@ export type Database = {
         }[]
       }
       resolve_field_link: { Args: { p_token: string }; Returns: Json }
+      resolve_invoice_link: {
+        Args: { p_record_view?: boolean; p_token: string }
+        Returns: Json
+      }
+      resolve_invoice_link_for_checkout: {
+        Args: { p_token: string }
+        Returns: {
+          balance_cents: number
+          card_surcharge_bps: number
+          currency: string
+          invoice_id: string
+          link_id: string
+          link_stripe_customer_id: string
+          payer_id: string
+        }[]
+      }
+      resolve_invoice_return_nonce: {
+        Args: { p_nonce: string }
+        Returns: string
+      }
       resolve_item_feedback: {
         Args: { p_feedback_id: string }
         Returns: {
@@ -34102,6 +34220,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_invoice_link_payer_email: {
+        Args: { p_email: string; p_link_id: string }
+        Returns: undefined
+      }
+      set_invoice_link_stripe_customer: {
+        Args: { p_link_id: string; p_stripe_customer_id: string }
+        Returns: string
       }
       set_my_member_title: {
         Args: { p_job_title: string; p_organization_id: string }
