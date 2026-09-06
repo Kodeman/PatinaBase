@@ -8,6 +8,7 @@ import {
   invalidateProjectWorkflow,
   settleScheduleWrite,
 } from "@patina/supabase";
+import type { AgreementPart } from "@patina/types";
 import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
 import {
   asCommercialDocumentKind,
@@ -140,6 +141,11 @@ export interface CommercialDocumentBundle {
   terms: ServiceAgreementTerms | null;
   rates: ServiceRate[];
   signatures: CommercialSignature[];
+  /** "The Agreement, Composed" W1. `[]` for every document authored before
+   *  00575 and for every document the flag never reached — which is what
+   *  keeps the flag-off room and the legacy preview on exactly the path they
+   *  were on. Never absent, so no caller branches on undefined. */
+  parts: AgreementPart[];
 }
 
 const finiteCents = (value: unknown) => {
@@ -285,6 +291,63 @@ function mapSignature(row: any): CommercialSignature {
   };
 }
 
+/**
+ * `proposal_agreement_parts` → the camelCase part the composer and both
+ * renderers read. Defensive throughout: `payload` is jsonb and `kind` /
+ * `variant` are un-CHECKed vocabulary columns (contract §1), so a row written
+ * by a later wave must map without throwing.
+ */
+function mapAgreementPart(row: any): AgreementPart {
+  const payload = row.payload;
+  return {
+    id: String(row.id),
+    proposalId: String(row.proposal_id),
+    position: Number(row.position ?? 0),
+    kind: String(row.kind ?? "clause") as AgreementPart["kind"],
+    variant:
+      typeof row.variant === "string" && row.variant.length > 0
+        ? (row.variant as AgreementPart["variant"])
+        : null,
+    partKey: String(row.part_key ?? ""),
+    title: String(row.title ?? ""),
+    payload:
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : {},
+    required: row.required === true,
+    clientVisible: row.client_visible !== false,
+    sourceTemplateKey:
+      typeof row.source_template_key === "string"
+        ? row.source_template_key
+        : null,
+    sourcePartId:
+      typeof row.source_part_id === "string" ? row.source_part_id : null,
+    updatedAt: typeof row.updated_at === "string" ? row.updated_at : null,
+  };
+}
+
+/**
+ * The parts read, isolated so it can FAIL SOFT.
+ *
+ * 00575 lands on Strata separately from this Worker, and the flag is
+ * fail-closed on top of that. A portal that reaches a database without
+ * `proposal_agreement_parts` must render exactly what it rendered before — so
+ * a missing relation resolves to "this document has no parts", not to a
+ * broken Contract Room. Every other read in the bundle still throws.
+ */
+async function fetchAgreementParts(
+  supabase: any,
+  proposalId: string,
+): Promise<AgreementPart[]> {
+  const { data, error } = await supabase
+    .from("proposal_agreement_parts")
+    .select("*")
+    .eq("proposal_id", proposalId)
+    .order("position", { ascending: true });
+  if (error) return [];
+  return (data ?? []).map(mapAgreementPart);
+}
+
 export async function fetchCommercialDocumentBundle(
   proposalId: string,
 ): Promise<CommercialDocumentBundle> {
@@ -319,6 +382,7 @@ export async function fetchCommercialDocumentBundle(
         .eq("proposal_id", proposalId)
         .order("signed_at", { ascending: true }),
     ]);
+  const parts = await fetchAgreementParts(supabase, proposalId);
 
   if (proposalResult.error) throw proposalResult.error;
   if (termsResult.error) throw termsResult.error;
@@ -346,6 +410,7 @@ export async function fetchCommercialDocumentBundle(
     terms: mapTerms(termsResult.data, proposalId, currentRateVersion),
     rates: rates.filter((rate) => rate.version === currentRateVersion),
     signatures,
+    parts,
   };
 }
 
@@ -421,6 +486,84 @@ export function useSaveServiceAgreement(proposalId: string) {
       });
       void queryClient.invalidateQueries({ queryKey: commercialKeys.all });
     },
+  });
+}
+
+/** The key the `@patina/supabase` parts hook uses. Invalidated alongside the
+ *  bundle so the two never disagree about what this agreement is made of. */
+export const agreementPartsKey = (proposalId: string) =>
+  ["agreement-parts", proposalId] as const;
+
+/** What `upsert_agreement_parts` takes: the whole ordered array, every time.
+ *  The RPC replaces wholesale — a removed part is ABSENT, not blank — so
+ *  there is no per-row write and no half-saved composition. */
+function toPartPayload(parts: AgreementPart[]) {
+  return parts.map((part) => ({
+    kind: part.kind,
+    variant: part.variant,
+    partKey: part.partKey,
+    title: part.title.trim(),
+    payload: part.payload ?? {},
+    required: part.required,
+    clientVisible: part.clientVisible,
+  }));
+}
+
+function settleAgreementParts(
+  queryClient: QueryClient,
+  proposalId: string,
+  bundle: CommercialDocumentBundle,
+) {
+  queryClient.setQueryData(commercialDocumentKeys.bundle(proposalId), bundle);
+  void queryClient.invalidateQueries({
+    queryKey: agreementPartsKey(proposalId),
+  });
+  void queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] });
+  void queryClient.invalidateQueries({ queryKey: commercialKeys.all });
+}
+
+/**
+ * Writes the composition. One call, the whole ordered array, and the terms
+ * row is the server's projection of the money parts (R5) — this hook never
+ * writes `proposal_service_terms` itself.
+ */
+export function useSaveAgreementParts(proposalId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["save-agreement-parts", proposalId],
+    mutationFn: async (parts: AgreementPart[]) => {
+      const supabase = getSupabase();
+      const { error } = await supabase.rpc("upsert_agreement_parts", {
+        p_proposal_id: proposalId,
+        p_parts: toPartPayload(parts),
+      });
+      if (error) throw error;
+      return await fetchCommercialDocumentBundle(proposalId);
+    },
+    onSuccess: (bundle) =>
+      settleAgreementParts(queryClient, proposalId, bundle),
+  });
+}
+
+/**
+ * Seeds the nine standard parts from the terms row this agreement already
+ * has. Idempotent server-side — a second call returns the existing set and
+ * writes nothing, so two tabs opening the same room cannot double-seed.
+ */
+export function useMaterializeStandardParts(proposalId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["materialize-standard-parts", proposalId],
+    mutationFn: async () => {
+      const supabase = getSupabase();
+      const { error } = await supabase.rpc("materialize_standard_parts", {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+      return await fetchCommercialDocumentBundle(proposalId);
+    },
+    onSuccess: (bundle) =>
+      settleAgreementParts(queryClient, proposalId, bundle),
   });
 }
 
