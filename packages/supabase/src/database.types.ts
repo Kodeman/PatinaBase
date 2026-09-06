@@ -13517,7 +13517,7 @@ export type Database = {
       project_billing_authorities: {
         Row: {
           billing_cadence: string
-          billing_ceiling_cents: number
+          billing_ceiling_cents: number | null
           commercial_document_id: string
           created_at: string
           effective_at: string
@@ -13532,7 +13532,7 @@ export type Database = {
         }
         Insert: {
           billing_cadence: string
-          billing_ceiling_cents: number
+          billing_ceiling_cents?: number | null
           commercial_document_id: string
           created_at?: string
           effective_at?: string
@@ -13547,7 +13547,7 @@ export type Database = {
         }
         Update: {
           billing_cadence?: string
-          billing_ceiling_cents?: number
+          billing_ceiling_cents?: number | null
           commercial_document_id?: string
           created_at?: string
           effective_at?: string
@@ -17516,6 +17516,65 @@ export type Database = {
           },
         ]
       }
+      proposal_agreement_parts: {
+        Row: {
+          client_visible: boolean
+          created_at: string
+          id: string
+          kind: string
+          part_key: string
+          payload: Json
+          position: number
+          proposal_id: string
+          required: boolean
+          source_part_id: string | null
+          source_template_key: string | null
+          title: string
+          updated_at: string
+          variant: string | null
+        }
+        Insert: {
+          client_visible?: boolean
+          created_at?: string
+          id?: string
+          kind: string
+          part_key: string
+          payload?: Json
+          position: number
+          proposal_id: string
+          required?: boolean
+          source_part_id?: string | null
+          source_template_key?: string | null
+          title: string
+          updated_at?: string
+          variant?: string | null
+        }
+        Update: {
+          client_visible?: boolean
+          created_at?: string
+          id?: string
+          kind?: string
+          part_key?: string
+          payload?: Json
+          position?: number
+          proposal_id?: string
+          required?: boolean
+          source_part_id?: string | null
+          source_template_key?: string | null
+          title?: string
+          updated_at?: string
+          variant?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_agreement_parts_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_board_items: {
         Row: {
           board_id: string
@@ -18913,7 +18972,7 @@ export type Database = {
       proposal_service_terms: {
         Row: {
           billing_cadence: string
-          billing_ceiling_cents: number
+          billing_ceiling_cents: number | null
           created_at: string
           currency: string
           current_rate_version: number
@@ -18929,7 +18988,7 @@ export type Database = {
         }
         Insert: {
           billing_cadence?: string
-          billing_ceiling_cents: number
+          billing_ceiling_cents?: number | null
           created_at?: string
           currency?: string
           current_rate_version?: number
@@ -18945,7 +19004,7 @@ export type Database = {
         }
         Update: {
           billing_cadence?: string
-          billing_ceiling_cents?: number
+          billing_ceiling_cents?: number | null
           created_at?: string
           currency?: string
           current_rate_version?: number
@@ -23557,6 +23616,78 @@ export type Database = {
           type?: string
         }
         Relationships: []
+      }
+      studio_agreement_defaults: {
+        Row: {
+          cadence: string
+          created_at: string
+          default_exclusions: Json
+          deposit_percent: number | null
+          rate_card: Json
+          retainer_credit_rule: string
+          studio_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          cadence?: string
+          created_at?: string
+          default_exclusions?: Json
+          deposit_percent?: number | null
+          rate_card?: Json
+          retainer_credit_rule?: string
+          studio_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          cadence?: string
+          created_at?: string
+          default_exclusions?: Json
+          deposit_percent?: number | null
+          rate_card?: Json
+          retainer_credit_rule?: string
+          studio_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_agreement_defaults_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_agreement_defaults_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_agreement_defaults_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_agreement_defaults_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_agreement_defaults_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       studio_billing_settings: {
         Row: {
@@ -28208,6 +28339,10 @@ export type Database = {
         Returns: number[]
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _agreement_requires_rate_card: {
+        Args: { p_proposal_id: string }
+        Returns: boolean
+      }
       _apply_board_room_state_00444_impl: {
         Args: {
           p_board_id: string
@@ -29160,6 +29295,10 @@ export type Database = {
       _product_configuration_json: {
         Args: { p_configuration_id: string }
         Returns: Json
+      }
+      _project_agreement_terms: {
+        Args: { p_proposal_id: string; p_rates: Json; p_terms: Json }
+        Returns: undefined
       }
       _project_approval_hash: { Args: { p_value: Json }; Returns: string }
       _project_approval_release_sentence: {
@@ -32788,6 +32927,10 @@ export type Database = {
         Args: { p_phases: Json; p_project_id: string }
         Returns: number
       }
+      materialize_standard_parts: {
+        Args: { p_proposal_id: string }
+        Returns: Json
+      }
       may_resolve_coordination_item: {
         Args: {
           actor: string
@@ -35070,6 +35213,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      upsert_agreement_parts: {
+        Args: { p_parts: Json; p_proposal_id: string }
+        Returns: Json
       }
       upsert_design_services_draft: {
         Args: { p_proposal_id: string; p_rates: Json; p_terms: Json }
