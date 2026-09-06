@@ -252,3 +252,111 @@ in this one.
    next lane that tests an App Router page taking a promise.
 7. **Prettier drift is inherited, not introduced.** Every file this lane touched warns; the
    base versions warned identically in Waves 1 and 2. The hook calls it advisory.
+
+---
+
+## Fix round 1 — 2026-09-05 (branch `approvals/w3-web`)
+
+Eight findings from the round-1 adversarial review, all addressed. Three commits:
+
+| Commit | Findings |
+|---|---|
+| `9f8a06ab6` fix(client): the snooze speaks the RPC's own language | W3W-01, W3W-02, W3W-03, W3W-08 |
+| `6e71d1910` fix(client): the three cadences are the column's own, and the quiet one is the default | W3W-04, W3W-05, W3W-07 |
+| `89d1668c3` feat(approvals): her name on the Record of Decision | W3W-06 |
+
+### What was decided, where two spellings existed
+
+Every contested spelling was settled **on the backend lane's side** (`approvals/w3-backend`,
+`supabase/migrations/00572_she_sets_the_pace.sql`). The migration lands before the portal in
+the deploy order, so the portal is the side that has to speak the database's language, and
+00572 is already signed with SQL tests behind it.
+
+- **W3W-01 — the snooze signature.** `set_decision_snooze(p_decision_id uuid, p_kind text)`.
+  The hook now posts exactly `{ p_decision_id, p_kind }` — a test asserts the argument-name
+  set, because PostgREST resolves overloads by name and a third key resolves nothing.
+  `p_timezone` is gone: 00572 resolves her zone itself via `notification_time_zone(v_actor)`,
+  and two clocks would eventually disagree.
+- **W3W-02 — the fourth kind.** `never`, not `none` (00572:342's `IN` list). Changed in
+  `DecisionSnoozeChoice` and in `SNOOZE_ACTS`. The confirmation sentence is unchanged and
+  still true: "I won't remind you again until it's past its date" — `never` writes
+  `snoozed_until = 'infinity'` and the overdue notice breaks every snooze.
+- **W3W-03 — the success reported as failure.** `useSetDecisionSnooze` no longer routes
+  through `parseActionResult`; it takes the `projectId` off its own input (which the
+  invalidation rail already required) and reads only `decisionId` from the return. A snooze
+  that lands now says so.
+- **W3W-04 / W3W-05 — the cadence vocabulary and the default.** Settled on
+  `right_away | daily | weekly_sunday`, with `daily` as the fallback everywhere (the column's
+  own `DEFAULT` after 00572). Six files: the shared union, the zod enum, `@patina/types`'
+  `ReminderCadence`, `getReminderCadence`/`isReminderDigestUser`, the
+  `useNotificationPreferences` seed, and `REMINDER_OPTIONS`. The four outside
+  `details-sheet.tsx` were made **byte-identical to the backend lane's own commit
+  `62767ee14`**, so those hunks merge as a no-op. `packages/shared/src/types/notifications.ts`
+  is the one file that will conflict: this lane's doc comment says "approval reminders" (the
+  P-04 vocabulary sweep) where the backend's still says "decision reminders". Take this
+  lane's prose and the backend's type line — they are the same type line.
+- **W3W-07 — the quiet-hours sentence.** The absolute was false twice over. Replaced with a
+  sentence that names its exceptions, sourced from the code rather than from the deck:
+  `decisionMailHold` holds before 8am local and all of Sunday and lets the passed-date notice
+  through; `notification-digest` sends the weekly summary *on* Sunday in her zone;
+  `push_deliver_after` is the 8am-8pm half. **Advisory 3 from the build round is thereby
+  answered in code, not by ruling** — the weekly digest is treated as the one Sunday
+  exception, because that is what the backend lane actually built. If Kody would rather the
+  weekly summary land Monday morning, it is a change to `notification-digest`, and this
+  sentence follows it.
+- **W3W-08 — the address that names an open ask.** The seek/scroll effect became a small
+  shared hook, `useAddressedApproval()`. `ApprovalRecords` still opens the fold and scrolls;
+  `ApprovalAsk` now scrolls to itself when the address names it. A supersession notice names
+  the successor, and the successor is an open ask — the fold was never what was hiding it.
+
+### W3W-06 — a migration this lane had said it did not own
+
+The finding is right that the typed name needed the projection widened, and no other Wave 3
+lane redefines `get_project_decision_reviews`. **Minted `00573_approval_record_typed_name.sql`**
+(00572 is the backend lane's; the peer `studio-invoices` program holds 00571).
+
+- The body is `00569`'s definition **verbatim** plus one key,
+  `'clientSignature', decision.client_signature`. Verified by diffing the two blocks: the only
+  difference is the added key and its comment.
+- `client_consent_method` is deliberately NOT projected — the sheet derives its consent
+  sentence from the outcome (ruled 2026-09-05) — and the IP address never leaves the row.
+- `ProjectApprovalReview.clientSignature?: string | null`, parsed with `nullableString`, so an
+  older projection yields `null` rather than throwing.
+- **Redefinition hazard, for the integration steward:** anything that redefines
+  `get_project_decision_reviews` at a number above 00573 must carry `clientSignature` forward
+  or the printed record silently loses her name again. The header of 00573 carries the ledger.
+
+### Gates (re-run at `89d1668c3`)
+
+```
+pnpm --filter @patina/client-portal type-check   → tsc --noEmit, clean
+pnpm --filter @patina/supabase type-check        → tsc --noEmit, clean
+pnpm --filter @patina/client-portal test         → 122 suites, 1766 tests, all passing
+pnpm --filter @patina/client-portal test --coverage
+    → All files 72.94 stmts / 67.98 branch / 72.78 funcs / 75.02 lines
+      (floor 70 / 60 / 70 / 70 — held)
+```
+
+Also run, because the cadence narrowing reaches them:
+
+```
+pnpm --filter @patina/supabase test        → 84 files, 1009 passing
+pnpm --filter @patina/notifications test   → 6 files, 89 passing
+pnpm --filter @patina/shared type-check    → clean
+pnpm --filter @patina/types type-check     → clean
+```
+
+`grep` confirms no other consumer of `ReminderCadence` / `getReminderCadence` /
+`isReminderDigestUser` exists outside those four packages, so nothing else moves with them.
+
+### Still owed after this round
+
+1. **A SQL contract test for 00573's `clientSignature` key.** Not written: the shared local
+   stack is held by the peer program this wave and no lane may reset it. It belongs beside
+   `supabase/tests/.../00569_why_viewer_role_receipt_contract_test.sql`, and the integration
+   steward is the first person who can run it. The key is covered at the parser and page
+   levels in the meantime.
+2. **The Sunday question** (build-round advisory 3) is now answered by the code rather than
+   by a ruling — see W3W-07 above. Kody may still overturn it.
+3. **Prettier drift is still inherited**, on the same files as before; the base versions warn
+   identically. Confirmed by running `prettier --check` against `HEAD~1`'s copies.
