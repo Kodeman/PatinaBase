@@ -189,3 +189,72 @@ web-walk/r2-11-ink.mjs                 contrast of the acts the fix did not touc
 Local stack not reset. Local mutations only, all on rows this program minted: one cadence change
 to `weekly_sunday`, two snoozes on the walk's own successor, and one direct UPDATE/restore of
 that snooze row to prove the lifted-hold refusal. Dev server killed at the end.
+
+---
+
+# Round 3 — 2026-09-06 UTC, targeted
+
+Lane: web walk, final pass, on `7dc3686cc`. Report: `walk-web-r3.md`. Shots:
+`web-walk-shots-r3/` (40). Dev log: `web-walk-dev-r3.log`.
+
+## The stack was reset, so everything was re-seeded
+
+The fix round replayed the stack (`stack-reset-notice.md`, 2026-09-06). `client_decisions` read
+6 and `commercial_document_signatures` read 0 before seeding. Order: the gate fixture →
+`seed-w3.sql` → `seed-r3.sql` → `seed-r3-door-terms.sql`, then the projection read back as the
+homeowner to harvest the fresh ids (they rotate every run — nothing may be hard-coded).
+
+## Two traps that cost rounds, not minutes
+
+1. **`door-gate` is not a testid.** Three walks reported the door unreachable on a count of
+   `[data-testid="door-gate"]`. `door-gate.tsx` renders `door-way`, `door-leaf`, `door-summary`,
+   `door-sign-name`, `door-acts`, `door-receipt`, `door-keep-a-copy` — never `door-gate`. The
+   door draws whenever a `sent`, non-legacy commercial proposal exists on the project.
+2. **A hand-built `service_addendum` needs `proposal_service_terms` + at least one
+   `proposal_service_rates` row** before `sign_design_services_agreement_with_trusted_ip` will
+   take a name (00477:306). Without them the POST is `500 sign_failed` — which is exactly the
+   Wave-2 door failure, and it was a fixture gap both times.
+
+Also carried forward and confirmed again: the act is gated on the consent CHECKBOX as well as
+the name; the door swings away on success, so anything read off the leaf must be read before
+the hold, and re-walking the receipt needs the proposal rewound
+(`seed-r3-door-reset.sql`, replica mode, this walk's own row only).
+
+## An undated approval cannot be seeded
+
+`project_approval_artifacts.due_at` is NOT NULL and `create_project_approval_decision` raises
+`approval dueAt is required`. Nulling `dueAt` in the projection response instead produces zero
+approval cards, not an undated one, because `parseProjectApprovalReview` throws on it — that is
+`W3W-R3-01`.
+
+## A peer walker was on the same stack
+
+`Rug color` answered at 06:30:17 and this walk's successor approved at 06:38:46 as
+`Margaret Whitfield` — neither by this walker. Every §1–§6 reading predates 06:38.
+
+## Files added this round
+
+```
+web-walk/lib-r3.mjs                 lib with fresh ids, SHOTS at web-walk-shots-r3, axe helper
+web-walk/seed-r3.sql                a fifth pending approval + the first signable door
+web-walk/seed-r3-door-terms.sql     that door's service terms and two role rates
+web-walk/seed-r3-door-reset.sql     rewinds the walk's own door so the swing can be re-read
+web-walk/r3-01-record.mjs           the four record shapes, landmarks, IP sweep, print
+web-walk/r3-02-stranger.mjs         the 403, timed; bogus ids; signed out
+web-walk/r3-03-doorstep.mjs         the thread, the past-due date line, axe, vocabulary
+web-walk/r3-04-forward-act.mjs      both act sites on every card
+web-walk/r3-05-fold.mjs             the fold's three probes
+web-walk/r3-06-forward-lands.mjs    does the third record's forward act land?
+web-walk/r3-07-pace.mjs             the details sheet, the cadence write, the snooze acts
+web-walk/r3-08-snooze-undated.mjs   the hold on a cold load; the undated interception
+web-walk/r3-09-answer.mjs           the browser's Return and its Approve
+web-walk/r3-10-record-returned.mjs  the records those two answers minted
+web-walk/r3-11-door.mjs             the door: swing, receipt, keep a copy, record
+web-walk/r3-12-final-390.mjs        the phone measure + the keep-a-copy anchors
+web-walk/r3-13-final-sweep.mjs      axe and vocabulary after every act
+```
+
+## Housekeeping
+
+Stack not reset by this walk. Mutations local only, through the shipped surfaces except the
+seeds. Dev server killed at the end (`lsof -ti:3002` empty).
