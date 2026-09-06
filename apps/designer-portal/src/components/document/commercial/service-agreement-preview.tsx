@@ -1,5 +1,7 @@
 "use client";
 
+import type { AgreementPart } from "@patina/types";
+import { AgreementPartsBody } from "./agreement-parts-body";
 import {
   buildServiceAgreementPreview,
   commercialStatusView,
@@ -38,6 +40,7 @@ export function ServiceAgreementPreview({
   signatures,
   clientName,
   compact = false,
+  parts,
 }: {
   document: CommercialDocument;
   terms: ServiceAgreementTerms;
@@ -45,7 +48,13 @@ export function ServiceAgreementPreview({
   signatures: CommercialSignature[];
   clientName?: string;
   compact?: boolean;
+  /** Present only under `agreement-parts`. When the agreement HAS parts they
+   *  replace the seven fixed sections between the header and the signature
+   *  block; the Core is unchanged. Absent or empty ⇒ the flag-off body,
+   *  byte-identical to what this file rendered before Wave 1. */
+  parts?: AgreementPart[];
 }) {
+  const composed = (parts?.length ?? 0) > 0;
   const preview = buildServiceAgreementPreview({
     document,
     terms,
@@ -66,7 +75,8 @@ export function ServiceAgreementPreview({
   // agreement activates immediately" would state a term nobody wrote — and
   // read identically to a deliberate no-retainer choice.
   const retainerIsSet =
-    Number.isFinite(preview.retainerAmountCents) && preview.retainerAmountCents > 0;
+    Number.isFinite(preview.retainerAmountCents) &&
+    preview.retainerAmountCents > 0;
 
   return (
     <article
@@ -90,125 +100,133 @@ export function ServiceAgreementPreview({
         </p>
       </header>
 
-      <section>
-        <AgreementHeading>Services</AgreementHeading>
-        <p className="whitespace-pre-wrap text-[12.5px] leading-[1.75] text-[var(--text-body)]">
-          {preview.scope || "Services have not been written yet."}
-        </p>
-      </section>
+      {composed ? (
+        // R8 — the designer's order, filtered to the client-visible parts.
+        // The Core above and below this branch is untouched.
+        <AgreementPartsBody parts={parts ?? []} currency={preview.currency} />
+      ) : (
+        <>
+          <section>
+            <AgreementHeading>Services</AgreementHeading>
+            <p className="whitespace-pre-wrap text-[12.5px] leading-[1.75] text-[var(--text-body)]">
+              {preview.scope || "Services have not been written yet."}
+            </p>
+          </section>
 
-      {preview.deliverables.length > 0 && (
-        <section>
-          <AgreementHeading>What you will receive</AgreementHeading>
-          <ul className="space-y-1.5 text-[12.5px] leading-relaxed text-[var(--text-body)]">
-            {preview.deliverables.map((item) => (
-              <li
-                key={item}
-                className="border-l-2 border-[var(--color-sage)] pl-3"
-              >
-                {item}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {preview.deliverables.length > 0 && (
+            <section>
+              <AgreementHeading>What you will receive</AgreementHeading>
+              <ul className="space-y-1.5 text-[12.5px] leading-relaxed text-[var(--text-body)]">
+                {preview.deliverables.map((item) => (
+                  <li
+                    key={item}
+                    className="border-l-2 border-[var(--color-sage)] pl-3"
+                  >
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-      {preview.exclusions.length > 0 && (
-        <section className="border-l-2 border-[var(--color-aged-oak)] pl-4">
-          <AgreementHeading>Not included</AgreementHeading>
-          <ul className="space-y-1 text-[12px] text-[var(--color-mocha)]">
-            {preview.exclusions.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {preview.exclusions.length > 0 && (
+            <section className="border-l-2 border-[var(--color-aged-oak)] pl-4">
+              <AgreementHeading>Not included</AgreementHeading>
+              <ul className="space-y-1 text-[12px] text-[var(--color-mocha)]">
+                {preview.exclusions.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-      <section>
-        <AgreementHeading>How design time is billed</AgreementHeading>
-        <div className="divide-y divide-[var(--doc-ink-border)] border-y border-[var(--doc-ink-border)]">
-          {preview.rates.map((rate) => (
-            <div
-              key={rate.roleName}
-              className="flex items-baseline justify-between gap-4 py-2"
-            >
-              <span className="text-[12px] text-[var(--text-body)]">
-                {rate.roleName}
+          <section>
+            <AgreementHeading>How design time is billed</AgreementHeading>
+            <div className="divide-y divide-[var(--doc-ink-border)] border-y border-[var(--doc-ink-border)]">
+              {preview.rates.map((rate) => (
+                <div
+                  key={rate.roleName}
+                  className="flex items-baseline justify-between gap-4 py-2"
+                >
+                  <span className="text-[12px] text-[var(--text-body)]">
+                    {rate.roleName}
+                  </span>
+                  <strong className="font-mono text-[11px] font-medium text-[var(--color-charcoal)]">
+                    {money(rate.hourlyRateCents, preview.currency)} / hr
+                  </strong>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-baseline justify-between gap-4 rounded-[4px] bg-[rgba(229,221,208,0.45)] px-3 py-2.5">
+              <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Design authorization ceiling
               </span>
-              <strong className="font-mono text-[11px] font-medium text-[var(--color-charcoal)]">
-                {money(rate.hourlyRateCents, preview.currency)} / hr
+              <strong
+                className={
+                  ceilingIsSet
+                    ? "font-heading text-[1.05rem] text-[var(--color-charcoal)]"
+                    : "font-heading text-[1.05rem] italic text-[var(--text-muted)]"
+                }
+              >
+                {preview.billingCeilingCents !== null && ceilingIsSet
+                  ? money(preview.billingCeilingCents, preview.currency)
+                  : "Not yet set"}
               </strong>
             </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-baseline justify-between gap-4 rounded-[4px] bg-[rgba(229,221,208,0.45)] px-3 py-2.5">
-          <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            Design authorization ceiling
-          </span>
-          <strong
-            className={
-              ceilingIsSet
-                ? "font-heading text-[1.05rem] text-[var(--color-charcoal)]"
-                : "font-heading text-[1.05rem] italic text-[var(--text-muted)]"
-            }
-          >
-            {preview.billingCeilingCents !== null && ceilingIsSet
-              ? money(preview.billingCeilingCents, preview.currency)
-              : "Not yet set"}
-          </strong>
-        </div>
-      </section>
+          </section>
 
-      <section className="grid gap-3 border-y border-[var(--doc-ink-border)] py-4 sm:grid-cols-2">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            Retainer
-          </p>
-          <p
-            className={
-              retainerIsSet
-                ? "mt-1 text-[12.5px] text-[var(--color-charcoal)]"
-                : "mt-1 text-[12.5px] italic text-[var(--text-muted)]"
-            }
-          >
-            {retainerIsSet ? (
-              <>
-                {money(preview.retainerAmountCents, preview.currency)}
-                {preview.retainerActivationPolicy === "retainer_paid"
-                  ? " · work begins when paid"
-                  : " · agreement activates immediately"}
-              </>
-            ) : (
-              "Not yet set"
-            )}
-          </p>
-        </div>
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            Billing cadence
-          </p>
-          <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
-            {cadenceLabel[preview.billingCadence]}
-          </p>
-        </div>
-        <div className="sm:col-span-2">
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            Furnishings deposit
-          </p>
-          <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
-            {preview.furnishingsDepositPercent === null
-              ? "No furnishings deposit set — authorizations will default to 50%."
-              : `Furnishings deposit · ${preview.furnishingsDepositPercent}% on each authorization`}
-          </p>
-        </div>
-      </section>
+          <section className="grid gap-3 border-y border-[var(--doc-ink-border)] py-4 sm:grid-cols-2">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Retainer
+              </p>
+              <p
+                className={
+                  retainerIsSet
+                    ? "mt-1 text-[12.5px] text-[var(--color-charcoal)]"
+                    : "mt-1 text-[12.5px] italic text-[var(--text-muted)]"
+                }
+              >
+                {retainerIsSet ? (
+                  <>
+                    {money(preview.retainerAmountCents, preview.currency)}
+                    {preview.retainerActivationPolicy === "retainer_paid"
+                      ? " · work begins when paid"
+                      : " · agreement activates immediately"}
+                  </>
+                ) : (
+                  "Not yet set"
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Billing cadence
+              </p>
+              <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
+                {cadenceLabel[preview.billingCadence]}
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Furnishings deposit
+              </p>
+              <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
+                {preview.furnishingsDepositPercent === null
+                  ? "No furnishings deposit set — authorizations will default to 50%."
+                  : `Furnishings deposit · ${preview.furnishingsDepositPercent}% on each authorization`}
+              </p>
+            </div>
+          </section>
 
-      <section>
-        <AgreementHeading>Agreement terms</AgreementHeading>
-        <p className="whitespace-pre-wrap text-[11.5px] leading-[1.75] text-[var(--color-mocha)]">
-          {preview.terms || "Terms have not been written yet."}
-        </p>
-      </section>
+          <section>
+            <AgreementHeading>Agreement terms</AgreementHeading>
+            <p className="whitespace-pre-wrap text-[11.5px] leading-[1.75] text-[var(--color-mocha)]">
+              {preview.terms || "Terms have not been written yet."}
+            </p>
+          </section>
+        </>
+      )}
 
       <section
         aria-label="Agreement signatures"
