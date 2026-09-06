@@ -195,8 +195,14 @@ export function MoneyRegion({
   // The head and the seam speak the ladder's own words: rung 1 is `Budget`
   // and rung 3 is `Authorized`. `authority`/`committed` named neither rung
   // after SP-03, and `authority` is the word direction-a §5 sends away.
+  // F-2: an uncapped agreement (no rate card) has no remaining figure. Say so
+  // rather than printing `$0 remaining`, which reads as exhausted.
   const headStatus = authority
-    ? `${money(authority.remainingCents)} remaining · ${money(committedCents)} authorized`
+    ? `${
+        authority.remainingCents === null
+          ? 'no ceiling'
+          : `${money(authority.remainingCents)} remaining`
+      } · ${money(committedCents)} authorized`
     : 'no budget yet';
   // The table's seam states the same two figures as one sentence: what has been
   // authorized, against the budget it is being spent out of.

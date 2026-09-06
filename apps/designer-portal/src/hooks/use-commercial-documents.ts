@@ -378,7 +378,11 @@ export function useSaveServiceAgreement(proposalId: string) {
           exclusions: terms.exclusions
             .map((item) => item.trim())
             .filter(Boolean),
-          billingCeilingCents: Math.round(terms.billingCeilingCents),
+          // The seven-facet room never writes null (its input coerces to 0),
+          // so this stays the integer 00575's projection expects from the
+          // flag-off path. The `?? 0` is the type widening's belt, not a
+          // behavior change.
+          billingCeilingCents: Math.round(terms.billingCeilingCents ?? 0),
           retainerAmountCents: Math.round(terms.retainerAmountCents),
           retainerActivationPolicy: terms.retainerActivationPolicy,
           billingCadence: terms.billingCadence,
@@ -648,14 +652,19 @@ export function adaptProjectBillingAuthority(
         ? row.state
         : "superseded",
     currency: String(row.currency ?? "USD"),
-    ceilingCents: finiteCents(row.ceilingCents ?? row.ceiling_cents),
+    // F-2: NULL survives as NULL — "uncapped" and "$0 of headroom" are
+    // different facts, and get_project_authority_summary now returns null for
+    // both of these on a no-rate-card agreement.
+    ceilingCents: nullableFiniteCents(row.ceilingCents ?? row.ceiling_cents),
     authorizedCents: finiteCents(row.authorizedCents ?? row.authorized_cents),
     accruedCents: finiteCents(row.accruedCents ?? row.accrued_cents),
     invoicedCents: finiteCents(row.invoicedCents ?? row.invoiced_cents),
     pendingAuthorizationCents: finiteCents(
       row.pendingAuthorizationCents ?? row.pending_authorization_cents,
     ),
-    remainingCents: finiteCents(row.remainingCents ?? row.remaining_cents),
+    remainingCents: nullableFiniteCents(
+      row.remainingCents ?? row.remaining_cents,
+    ),
     retainerAmountCents: finiteCents(
       row.retainerAmountCents ?? row.retainer_amount_cents,
     ),

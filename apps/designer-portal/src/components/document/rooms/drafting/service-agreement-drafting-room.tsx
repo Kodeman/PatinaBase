@@ -471,7 +471,7 @@ function ServiceAgreementEditor({
                   <Input
                     className="mt-2"
                     inputMode="decimal"
-                    value={dollars(terms.billingCeilingCents)}
+                    value={dollars(terms.billingCeilingCents ?? 0)}
                     onChange={(event) =>
                       changeTerms({
                         billingCeilingCents: cents(event.target.value),

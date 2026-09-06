@@ -36,9 +36,14 @@ export function ProjectAuthorityBand({
 }: {
   authority: ProjectBillingAuthority;
 }) {
-  const ceiling = Math.max(0, authority.ceilingCents);
+  // F-2: a null ceiling is uncapped, not zero. An uncapped authority has no
+  // meaningful fill — the bar stays empty rather than pretending to be full.
+  const ceiling =
+    authority.ceilingCents === null
+      ? null
+      : Math.max(0, authority.ceilingCents);
   const percent =
-    ceiling > 0
+    ceiling !== null && ceiling > 0
       ? Math.min(100, Math.round((authority.accruedCents / ceiling) * 100))
       : 0;
   const retainerPending = authority.state === "retainer_pending";
@@ -80,7 +85,11 @@ export function ProjectAuthorityBand({
         />
         <AuthorityFigure
           label="remaining"
-          value={money(authority.remainingCents, authority.currency)}
+          value={
+            authority.remainingCents === null
+              ? "No ceiling"
+              : money(authority.remainingCents, authority.currency)
+          }
         />
       </div>
 

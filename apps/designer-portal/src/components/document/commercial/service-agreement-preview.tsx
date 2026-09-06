@@ -58,7 +58,9 @@ export function ServiceAgreementPreview({
   // an untouched/zero ceiling counts as not-yet-written there, so the
   // client copy must not advertise it as a real $0 figure here either.
   const ceilingIsSet =
-    Number.isFinite(preview.billingCeilingCents) && preview.billingCeilingCents > 0;
+    preview.billingCeilingCents !== null &&
+    Number.isFinite(preview.billingCeilingCents) &&
+    preview.billingCeilingCents > 0;
   // Same gate for the retainer: an untouched agreement defaults it to 0
   // (emptyTerms, service-agreement-drafting-room.tsx), so printing "$0 ·
   // agreement activates immediately" would state a term nobody wrote — and
@@ -150,7 +152,7 @@ export function ServiceAgreementPreview({
                 : "font-heading text-[1.05rem] italic text-[var(--text-muted)]"
             }
           >
-            {ceilingIsSet
+            {preview.billingCeilingCents !== null && ceilingIsSet
               ? money(preview.billingCeilingCents, preview.currency)
               : "Not yet set"}
           </strong>
