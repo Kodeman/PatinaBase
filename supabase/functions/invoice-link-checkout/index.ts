@@ -26,12 +26,15 @@
 // equal CLIENT_PORTAL_URL, and Access-Control-Allow-Origin echoes that, never
 // `*`. iOS opens the page, not the function.
 //
-// Who pays (v2 §4.5): the household payer when the invoice has one —
-// coalesce(invoices.client_id, projects.client_id), that profile's Stripe
-// customer, claim_invoice_checkout_attempt (a stranger with the link opens a
-// Checkout attributed to the household; the ledger is unchanged, S17). When
-// there is no payer, the LINK is the payer: a per-link Stripe customer created
-// with no email so Checkout collects one, claim_invoice_link_checkout_attempt.
+// Who pays (F5 ruling): the LINK, always. Whether or not the invoice has a
+// household profile, the guest rail opens Checkout on the per-link Stripe
+// customer — created with no email, so Checkout collects one — and claims
+// through claim_invoice_link_checkout_attempt (payer_id NULL). The household's
+// own email is never prefilled or locked into a Checkout opened by whoever
+// holds the link; the signed-in rail (create-checkout-session) is the only one
+// that pays as the household profile. One identity per rail keeps the F1/M3
+// cross-actor rules simple, and receipts still reach the household because
+// resolveRecipient reads the profile email first, then payer_email.
 //
 // S13: the token is never logged. Log lines carry link / invoice ids only.
 //
@@ -48,7 +51,6 @@ import { invoiceCheckoutReturnAddress } from '../_shared/invoice-checkout-core.t
 import {
   checkoutCustomerFailureBody,
   ensureLinkStripeCustomer,
-  ensureStripeCustomer,
 } from '../_shared/invoice-checkout-stripe.ts';
 import { startInvoiceCheckout } from '../_shared/invoice-checkout-driver.ts';
 import {
@@ -101,6 +103,7 @@ type PaymentMethod = 'card' | 'us_bank_account' | 'check';
 interface CheckoutTargetRow {
   invoice_id: string;
   link_id: string;
+  /** Informational only (the household, when one exists) — never used to pick a customer (F5). */
   payer_id: string | null;
   link_stripe_customer_id: string | null;
   balance_cents: number;
@@ -201,17 +204,14 @@ Deno.serve(async (req: Request) => {
     invoiceSubjectName(invoice, 'Studio invoice')
   }${studioSuffix}`;
 
-  // The household pays as itself when it exists; otherwise the link is the payer.
-  const customer = target.payer_id
-    ? await ensureStripeCustomer(admin, stripe, target.payer_id)
-    : await ensureLinkStripeCustomer(
-        admin,
-        stripe,
-        target.link_id,
-        // On the payer-less branch invoice.client is null by definition; the
-        // resolver derives the roster name the same way the page does (F14).
-        target.client_display_name ?? invoice.client?.full_name ?? null
-      );
+  // The link is the payer, always (F5): a per-link Stripe customer with no
+  // email, named from the resolver's client_display_name (F14) — a name only.
+  const customer = await ensureLinkStripeCustomer(
+    admin,
+    stripe,
+    target.link_id,
+    target.client_display_name ?? null
+  );
   if (!customer.ok) {
     return json(checkoutCustomerFailureBody(customer), customer.status);
   }
@@ -221,25 +221,17 @@ Deno.serve(async (req: Request) => {
     stripe,
     json,
     logTag: 'invoice-link-checkout',
-    actor: target.payer_id
-      ? {
-          kind: 'payer',
-          payerId: target.payer_id,
-          stripeCustomerId: customer.customerId,
-          // The designer test override is a JWT-path affordance only.
-          allowDesignerTest: false,
-        }
-      : {
-          kind: 'link',
-          invoiceLinkId: target.link_id,
-          stripeCustomerId: customer.customerId,
-        },
+    actor: {
+      kind: 'link',
+      invoiceLinkId: target.link_id,
+      stripeCustomerId: customer.customerId,
+    },
     target: {
       invoiceId: invoice.id,
       lineItemName,
       // Every attempt claimed through 00574 carries a return nonce, so Stripe
-      // returns the payer through /pay/return/<nonce>. The letterbox address is
-      // the fallback only for a reused household attempt claimed before 00574.
+      // returns the payer through /pay/return/<nonce>. The letterbox address
+      // below can only be reached by a legacy attempt and is the M7 valve.
       successUrl: invoiceCheckoutReturnAddress(
         CLIENT_PORTAL_URL,
         invoice.project_id,

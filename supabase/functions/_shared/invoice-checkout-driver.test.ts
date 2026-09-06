@@ -33,6 +33,8 @@ function attempt(overrides: Partial<InvoiceCheckoutAttempt> = {}): InvoiceChecko
 }
 
 // ── invoiceSessionMetadata — the exact key set per rail (M6) ─────────────────
+// One identity per rail (F5 ruling): the signed-in rail claims as the payer,
+// the guest rail always as the link. The driver never chooses — its caller does.
 
 Deno.test('driver metadata: a legacy payer attempt stamps today\'s keys and nothing else', () => {
   assertEquals(invoiceSessionMetadata(attempt()), {

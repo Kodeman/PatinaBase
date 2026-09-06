@@ -134,6 +134,8 @@ Deno.test('link customer: failures are named and never leak past the helper', as
   });
 });
 
+// ensureStripeCustomer serves the SIGNED-IN rail only (create-checkout-session);
+// the guest rail always pays as the link (F5 ruling) and never reaches it.
 Deno.test('payer customer: keyed on the explicit payer id; an existing id short-circuits Stripe', async () => {
   const { admin } = fakeAdmin({
     'profiles:select': [

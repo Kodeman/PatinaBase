@@ -45,8 +45,12 @@
 -- supersedes a household's live session (actor_changed) where 00428 raised
 -- payer_mismatch — JWT path, Stripe test key only, accepted; F14 the
 -- checkout resolver returns client_display_name so the link customer is
--- named. Payload additions for W2: studio.location (organizations.address
--- city/state) and line_items[].attribution (FF&E maker name, never an id).
+-- named; F5 (ruled) the guest rail ALWAYS pays as the link — the resolver's
+-- payer_id is informational (the household, for the F1/M3 actor comparison)
+-- and never picks a Stripe customer; only the signed-in rail pays as the
+-- household profile. Payload additions for W2: studio.location
+-- (organizations.address city/state) and line_items[].attribution (FF&E
+-- maker name, never an id).
 --
 -- Rollback (each alone): DROP TRIGGER invoice_link_mint_on_issue ON
 -- public.invoices freezes minting without breaking a link;
@@ -1345,7 +1349,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.resolve_invoice_link_for_checkout(text) IS
-  'Service-only: the ids invoice-link-checkout needs to open a Checkout for a link — invoice, link, the household payer (coalesce(invoices.client_id, projects.client_id), NULL for the link-payer branch), the link''s own Stripe customer, the balance, and the always-coalesced card bps. Empty unless active + payable.';
+  'Service-only: the ids invoice-link-checkout needs to open a Checkout for a link — invoice, link, the household payer if one exists (coalesce(invoices.client_id, projects.client_id); informational only — the guest rail always pays as the link, F5), the link''s own Stripe customer, the balance, the always-coalesced card bps, and the payer''s display name. Empty unless active + payable.';
 
 -- The nonce on Stripe's return URL resolves to the link that was in force
 -- when its attempt was claimed (review F2: a nonce in Stripe's retained logs

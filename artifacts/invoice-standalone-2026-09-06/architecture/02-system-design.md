@@ -338,9 +338,9 @@ The amount assertion (`amountCents + surchargeCents`) and the customer assertion
 
 ### 4.5 Payer resolution
 
-`payer := coalesce(invoices.client_id, projects.client_id)` — the same expression `claim_invoice_checkout_attempt` enforces at `00428:227-231`, with the payer's `profiles.stripe_customer_id` matched at `:233-237`.
+**F5 ruling (W1 review): the guest rail always pays as the link.** `invoice-link-checkout` takes the link-customer branch below for *every* invoice, whether or not a household profile exists — the household's email is never prefilled or locked into a Checkout opened by whoever holds the link, one identity per rail keeps the F1/M3 cross-actor rules simple, and receipts still reach the household because `resolveRecipient` reads the profile email first, then `payer_email`. `resolve_invoice_link_for_checkout` still returns `payer_id` (informational) but never uses it to pick a customer. Only the signed-in `create-checkout-session` pays as `payer := coalesce(invoices.client_id, projects.client_id)` — the expression `claim_invoice_checkout_attempt` enforces at `00428:227-231`, with the payer's `profiles.stripe_customer_id` matched at `:233-237`.
 
-When `payer` is NULL, the **link-payer** branch: `stripe.customers.create({ name: <client_display_name> ?? undefined, metadata: { invoice_link_id } }, { idempotencyKey: 'patina-invoice-link-customer:<link_id>' })` — **no `email`**, so Checkout collects one — persisted via `set_invoice_link_stripe_customer`, then `claim_invoice_link_checkout_attempt`. The ledger is indifferent: `invoice_payments.recorded_by` is nullable (`00178:137`) and `apply_invoice_payment_effects` touches neither `payer_id` nor `recorded_by`.
+The **link-payer** branch: `stripe.customers.create({ name: <client_display_name> ?? undefined, metadata: { invoice_link_id } }, { idempotencyKey: 'patina-invoice-link-customer:<link_id>' })` — **no `email`**, so Checkout collects one — persisted via `set_invoice_link_stripe_customer`, then `claim_invoice_link_checkout_attempt`. The ledger is indifferent: `invoice_payments.recorded_by` is nullable (`00178:137`) and `apply_invoice_payment_effects` touches neither `payer_id` nor `recorded_by`.
 
 ### 4.6 Return URLs — the nonce (S10)
 
