@@ -123,6 +123,13 @@ export async function middleware(req: NextRequest) {
   // resolve_plan_transmittal() — a sub or fabricator handed a drawing set has
   // no Patina account and never will.
   const isPlansPage = req.nextUrl.pathname.startsWith('/plans/');
+  // /pay/[token] is the same login-less pattern for whoever holds an invoice
+  // link (00574): the token is resolved server-side via resolve_invoice_link()
+  // — the homeowner paying a bill has no account and, in the payer-less case
+  // the feature exists for, has no profile row to have one with. The prefix
+  // deliberately covers /pay/return/<nonce> (the Stripe return hop) and
+  // /pay/dead (the static sheet it lands on when the nonce names nothing).
+  const isPayPage = req.nextUrl.pathname.startsWith('/pay/');
   // /piece/[id] is the public face of a shared piece (SP-03). A homeowner texts
   // the link to her husband, who has no Patina account and may never have one;
   // redirecting him to /auth/signin is the same dead end the share already was.
@@ -141,7 +148,12 @@ export async function middleware(req: NextRequest) {
   // keyed on the token URL, so a cached copy would keep serving a revoked
   // link's sheet list. force-dynamic + meta tags govern Next and crawlers that
   // read the document — these headers govern everything in between.
-  if (isPlansPage) {
+  //
+  // S8: this covers ALL six bearer prefixes, not just /plans. The other four
+  // have carried neither header since they shipped — /share, /rfq, /evidence
+  // and /field are the same kind of address as /plans, and /pay is the one
+  // that reaches a till. Widening it costs nothing and closes four gaps.
+  if (isPlansPage || isPayPage || isSharePage || isFieldPage || isRfqPage || isEvidencePage) {
     res.headers.set('Cache-Control', 'private, no-store, max-age=0');
     res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
@@ -158,6 +170,7 @@ export async function middleware(req: NextRequest) {
     isRfqPage ||
     isEvidencePage ||
     isPlansPage ||
+    isPayPage ||
     isPiecePage ||
     isUnsubscribeOutcomePage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');

@@ -75,12 +75,16 @@ export function isAnalyticsPossible(): boolean {
 // rather than folding into the generic hex one below.
 const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
 
-// /share, /rfq, /evidence, and /plans all mint the same 64-char lowercase-hex
-// bearer (sha256/gen_random_bytes idiom — document_shares, trade_rfq_tokens,
-// fulfillment_mint_evidence_token, plan_transmittal_tokens) — one generic
-// pattern covers all four while preserving which prefix gets redacted back
-// into the URL.
-const HEX_BEARER_IN_URL = /\/(share|rfq|evidence|plans)\/[0-9a-f]{64}(?![0-9a-f])/gi;
+// /share, /rfq, /evidence, /plans and /pay all mint the same 64-char
+// lowercase-hex bearer (sha256/gen_random_bytes idiom — document_shares,
+// trade_rfq_tokens, fulfillment_mint_evidence_token, plan_transmittal_tokens,
+// invoice_links) — one generic pattern covers all five while preserving which
+// prefix gets redacted back into the URL.
+//
+// /pay is the one that reaches a till: its token is a PERMANENT credential
+// that stays live for the invoice's life, so a raw pageview URL in PostHog
+// would be a standing payment capability sitting in an analytics store.
+const HEX_BEARER_IN_URL = /\/(share|rfq|evidence|plans|pay)\/[0-9a-f]{64}(?![0-9a-f])/gi;
 
 function redactBearerPaths(value: string): string {
   return value
