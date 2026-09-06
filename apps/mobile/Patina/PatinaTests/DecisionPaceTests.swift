@@ -68,7 +68,35 @@ struct DecisionPaceTests {
         #expect(code.contains("DecisionPaceCopy.quietHours"))
         #expect(DecisionPaceCopy.quietHours.contains("8am"))
         #expect(DecisionPaceCopy.quietHours.contains("8pm"))
-        #expect(DecisionPaceCopy.quietHours.contains("Sunday"))
+    }
+
+    /// `r1 M1`. The caption sits directly under a picker whose third option is
+    /// "Once a week, on Sunday", and the backend mails that cadence ON Sunday
+    /// morning (`notification-digest`'s `isDigestDue`). A caption claiming no
+    /// Sunday mail contradicts the control above it; one claiming an 8pm
+    /// ceiling on MAIL claims a gate that does not exist (only the push leg
+    /// has one). The floor — nothing before 8am local — is the promise every
+    /// leg keeps, and it is the one the sentence is allowed to make.
+    @Test("the floor under the cadence promises only what every leg keeps")
+    func theFloorDoesNotOutrunTheLegs() {
+        let floor = DecisionPaceCopy.quietHours
+
+        #expect(!floor.contains("Sunday"),
+                "the caption contradicts the Sunday cadence in the picker above it")
+        #expect(ReminderCadence.weeklySunday.label.contains("Sunday"),
+                "the option the caption must not contradict has moved")
+
+        // The 8pm ceiling belongs to the phone, not the post.
+        #expect(floor.contains("buzzes between 8am and 8pm"),
+                "the ceiling is stated without naming the leg that keeps it")
+        #expect(floor.contains("never mails about an approval before 8am"))
+
+        // Deferred, never dropped: R16's push leg holds the buzz to the next
+        // morning, and the sentence may not imply the notice is lost.
+        #expect(floor.contains("waits"))
+        for word in ["overdue", "sorry", "gate", "task", "dashboard"] {
+            #expect(!floor.lowercased().contains(word), "the floor says \(word)")
+        }
     }
 
     /// The column is read and written under its own name; the select has to

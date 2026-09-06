@@ -124,11 +124,26 @@ enum DecisionPaceCopy {
 
     static let cadenceLabel = "Reminders"
 
-    /// The floor, stated where she sets the pace. It is the one promise the
-    /// push leg actually keeps (`R16`), so it is said plainly and not as a
-    /// feature.
+    /// The floor, stated where she sets the pace — and stated only as far as
+    /// every leg actually keeps it (`r1 M1`).
+    ///
+    /// Two facts, and no third: **no automated approval mail before 8am
+    /// local** (`notification-digest`'s `LOCAL_MORNING_HOUR`, and
+    /// `decision-notify`'s `before_local_morning` hold), and **the phone buzzes
+    /// only between 8am and 8pm local** — 00572's `push_deliver_after` defers a
+    /// push minted outside that window to the next 8am (`R16`). The buzz is
+    /// DEFERRED, never dropped, which is why the sentence says it waits.
+    ///
+    /// What it deliberately no longer claims: an 8pm ceiling on mail (there is
+    /// none — the ceiling is the push leg's), and "never on Sunday". The third
+    /// cadence in the picker directly above this line is "Once a week, on
+    /// Sunday", and `isDigestDue` mails it ON Sunday morning; a caption that
+    /// contradicts the option above it is a false promise, whichever half the
+    /// homeowner believes.
     static let quietHours =
-        "Patina never sends an approval reminder before 8am or after 8pm, or on Sunday."
+        "Patina never mails about an approval before 8am, and your phone only "
+        + "buzzes between 8am and 8pm — your own clock. Anything later waits "
+        + "for the morning."
 
     // MARK: - The snooze
 
