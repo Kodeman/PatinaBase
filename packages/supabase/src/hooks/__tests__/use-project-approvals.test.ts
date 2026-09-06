@@ -17,9 +17,24 @@ channel.subscribe = () => {
 };
 channelCreate.mockReturnValue(channel);
 
+/** The one plain table read in this module: `decision_snoozes` (00572). */
+const tableSelect = vi.fn();
+const tableResult: { data: unknown; error: unknown } = { data: [], error: null };
+const from = vi.fn((table: string) => ({
+  select: (columns: string) => ({
+    eq: (column: string, value: unknown) => ({
+      limit: (count: number) => {
+        tableSelect({ table, columns, column, value, count });
+        return Promise.resolve(tableResult);
+      },
+    }),
+  }),
+}));
+
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({
     rpc,
+    from,
     channel: channelCreate,
     removeChannel,
   }),
@@ -44,6 +59,9 @@ import {
   useMyProjectApprovalReviews,
   usePublishProjectApproval,
   useRespondProjectApproval,
+  useDecisionSnooze,
+  standingDecisionSnooze,
+  useSetDecisionSnooze,
   useSetProjectDecisionAuthority,
   useSupersedeProjectApproval,
   useWithdrawProjectApproval,
@@ -322,6 +340,39 @@ describe('project approval sanitized reads', () => {
     expect(
       parseProjectApprovalReview({ ...REVIEW, viewerRole: 'owner' }),
     ).toEqual(expect.objectContaining({ viewerRole: null }));
+  });
+
+  // P-26 (00573). The typed name is what puts her signature on the printed
+  // Record of Decision; Return and Hold carry none, and neither does any
+  // projection older than 00573.
+  it('carries the typed name when the projection has one, and null when it has not', () => {
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, clientSignature: 'Leah Quist' }),
+    ).toEqual(expect.objectContaining({ clientSignature: 'Leah Quist' }));
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, clientSignature: null }),
+    ).toEqual(expect.objectContaining({ clientSignature: null }));
+    expect(parseProjectApprovalReview({ ...REVIEW })).toEqual(
+      expect.objectContaining({ clientSignature: null }),
+    );
+  });
+
+  // P-26 / `W3W-R2-01` (00573). HOW she consented is a fact the ROW carries.
+  // Derived from the outcome instead, the printed Record of Decision claimed
+  // "Signed electronically by typed name." on every approval answered before
+  // 00569 — which is every approval standing in production.
+  it('carries the stored consent method, and null where the row has none', () => {
+    for (const method of ['electronic_signature', 'click_through', 'paper']) {
+      expect(
+        parseProjectApprovalReview({ ...REVIEW, clientConsentMethod: method }),
+      ).toEqual(expect.objectContaining({ clientConsentMethod: method }));
+    }
+    expect(
+      parseProjectApprovalReview({ ...REVIEW, clientConsentMethod: null }),
+    ).toEqual(expect.objectContaining({ clientConsentMethod: null }));
+    expect(parseProjectApprovalReview({ ...REVIEW })).toEqual(
+      expect.objectContaining({ clientConsentMethod: null }),
+    );
   });
 });
 
@@ -623,6 +674,112 @@ describe('project approval authority and lifecycle RPCs', () => {
     expect(rpc.mock.calls[0][1].p_payload).toEqual({ outcome: 'needs_discussion' });
   });
 
+  /* ── P-28 · she sets the pace, per approval ───────────────────────────── */
+
+  /**
+   * The RPC 00572 declares is `set_decision_snooze(p_decision_id uuid, p_kind
+   * text)`. PostgREST resolves overloads by argument NAME, so a hook that
+   * posts `p_choice` — or a third `p_timezone` — resolves nothing and every
+   * press comes back PGRST202. The zone is resolved server-side
+   * (`notification_time_zone`), which is why the browser sends none.
+   */
+  it('calls the RPC by the signature 00572 declares — p_decision_id and p_kind, nothing else', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        decisionId: 'decision-1',
+        kind: 'sunday',
+        snoozedUntil: '2026-09-13T13:00:00.000Z',
+        timeZone: 'America/Chicago',
+      },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+
+    await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'sunday',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('set_decision_snooze', {
+      p_decision_id: 'decision-1',
+      p_kind: 'sunday',
+    });
+    expect(Object.keys(rpc.mock.calls[0][1])).toEqual(['p_decision_id', 'p_kind']);
+  });
+
+  /**
+   * The four kinds the RPC's own IN list accepts. `never` is the fourth —
+   * "don't remind me" — and any other spelling raises
+   * `unsupported snooze kind` at the database.
+   */
+  it('spells every kind the way the RPC accepts it', async () => {
+    for (const kind of ['tomorrow_morning', 'sunday', 'when_due', 'never'] as const) {
+      rpc.mockResolvedValue({ data: { decisionId: 'decision-1', kind }, error: null });
+      const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+      await snooze.mutationFn({
+        projectId: 'project-1',
+        decisionId: 'decision-1',
+        choice: kind,
+      });
+      expect(rpc.mock.calls.at(-1)?.[1].p_kind).toBe(kind);
+    }
+  });
+
+  /**
+   * The snooze RPC answers about the SNOOZE and returns no projectId. Demanding
+   * one would throw on a call that had already stood the reminders down, and
+   * the surface would tell her the reminders could not be set when they had.
+   */
+  it('accepts a return that carries no projectId, and takes the caller\'s own', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        decisionId: 'decision-1',
+        kind: 'never',
+        snoozedUntil: null,
+        timeZone: 'America/Chicago',
+      },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+
+    const result = (await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'never',
+    })) as { projectId: string; decisionId: string };
+
+    expect(result.projectId).toBe('project-1');
+    expect(result.decisionId).toBe('decision-1');
+  });
+
+  it('rides the approval invalidation rail, so the ask redraws with its snooze', async () => {
+    rpc.mockResolvedValue({
+      data: { decisionId: 'decision-1', kind: 'when_due' },
+      error: null,
+    });
+    const snooze = useSetDecisionSnooze() as unknown as MutationConfig<any>;
+    const result = await snooze.mutationFn({
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'when_due',
+    });
+
+    invalidateQueries.mockClear();
+    await snooze.onSuccess?.(result, {
+      projectId: 'project-1',
+      decisionId: 'decision-1',
+      choice: 'when_due',
+    });
+
+    const keys = (
+      invalidateQueries.mock.calls as unknown as Array<[{ queryKey: unknown }]>
+    ).map(([call]) => JSON.stringify(call.queryKey));
+    expect(keys).toContain(JSON.stringify(['project-approvals', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['my-project-approval-reviews']));
+    expect(keys).toContain(JSON.stringify(['project-approval', 'decision-1']));
+  });
+
   it('uses the exact withdrawal and supersession signatures', async () => {
     rpc.mockResolvedValue({
       data: { projectId: 'project-1', decisionId: 'decision-1' },
@@ -738,6 +895,7 @@ describe('project approval cache and compatibility', () => {
         ['project-approval-authority', 'project-1'],
         ['project-approval-artifact-candidates', 'project-1'],
         ['project-approval', 'decision-1'],
+        ['decision-snooze', 'decision-1'],
         ['my-project-approval-reviews'],
         ['project-contextual-handoffs', 'project-1'],
         ['client-decision', 'decision-1'],
@@ -750,5 +908,103 @@ describe('project approval cache and compatibility', () => {
         ['project-ffe-items', 'project-1'],
       ]),
     );
+  });
+});
+
+/* ── P-28 / `W3R1-02` · the read half of the snooze ────────────────────────── */
+
+describe('the snooze already standing', () => {
+  beforeEach(() => {
+    tableSelect.mockClear();
+    from.mockClear();
+    tableResult.data = [];
+    tableResult.error = null;
+  });
+
+  /**
+   * RLS (`decision_snoozes_owner_select`, 00572) hands back the caller's own
+   * row and nobody else's, so this is a plain table read and NOT filtered by
+   * user id here — a client-side user filter would be a second, weaker copy of
+   * the policy.
+   */
+  it('reads her own row of decision_snoozes, by decision', async () => {
+    tableResult.data = [{ kind: 'sunday', snoozed_until: '2999-01-01T13:00:00Z' }];
+    const query = useDecisionSnooze('decision-1') as unknown as {
+      queryKey: readonly unknown[];
+      queryFn: () => Promise<unknown>;
+      enabled: boolean;
+    };
+
+    expect(query.queryKey).toEqual(['decision-snooze', 'decision-1']);
+    expect(query.enabled).toBe(true);
+
+    const standing = await query.queryFn();
+
+    expect(tableSelect).toHaveBeenCalledWith({
+      table: 'decision_snoozes',
+      columns: 'kind,snoozed_until',
+      column: 'decision_id',
+      value: 'decision-1',
+      count: 1,
+    });
+    expect(standing).toEqual({
+      choice: 'sunday',
+      snoozedUntil: '2999-01-01T13:00:00Z',
+    });
+  });
+
+  it('asks nothing when there is no approval to ask about', () => {
+    const query = useDecisionSnooze(undefined) as unknown as { enabled: boolean };
+    expect(query.enabled).toBe(false);
+  });
+
+  it('says nothing where she has never snoozed this one', async () => {
+    const query = useDecisionSnooze('decision-1') as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    expect(await query.queryFn()).toBeNull();
+  });
+
+  /**
+   * A hold that has already lifted is not a hold, and drawing "the reminders
+   * are held until Sunday" on the Monday after is the same lie in the other
+   * direction. Same rule as iOS's `DecisionSnooze.standing`.
+   */
+  it('refuses a hold that has already lifted', () => {
+    const now = new Date('2026-09-07T12:00:00Z');
+    expect(
+      standingDecisionSnooze(
+        { kind: 'sunday', snoozed_until: '2026-09-06T13:00:00Z' },
+        now,
+      ),
+    ).toBeNull();
+    expect(
+      standingDecisionSnooze(
+        { kind: 'sunday', snoozed_until: '2026-09-08T13:00:00Z' },
+        now,
+      ),
+    ).toEqual({ choice: 'sunday', snoozedUntil: '2026-09-08T13:00:00Z' });
+  });
+
+  /** `never`, and a dateless `when_due`, are stored as the word (00572). */
+  it('holds forever on infinity', () => {
+    const now = new Date('2999-01-01T00:00:00Z');
+    expect(standingDecisionSnooze({ kind: 'never', snoozed_until: 'infinity' }, now)).toEqual({
+      choice: 'never',
+      snoozedUntil: 'infinity',
+    });
+  });
+
+  it('draws nothing for a row it cannot read honestly', () => {
+    const now = new Date('2026-09-05T12:00:00Z');
+    expect(standingDecisionSnooze(null, now)).toBeNull();
+    expect(standingDecisionSnooze(undefined, now)).toBeNull();
+    expect(standingDecisionSnooze({ kind: 'sunday', snoozed_until: null }, now)).toBeNull();
+    expect(standingDecisionSnooze({ kind: null, snoozed_until: 'infinity' }, now)).toBeNull();
+    // A kind this build does not know is not guessed at.
+    expect(standingDecisionSnooze({ kind: 'someday', snoozed_until: 'infinity' }, now)).toBeNull();
+    expect(
+      standingDecisionSnooze({ kind: 'sunday', snoozed_until: 'not-a-date' }, now),
+    ).toBeNull();
   });
 });

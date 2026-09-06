@@ -81,7 +81,7 @@ function makePrefs(
     type_seasonal_campaign: true,
     type_reengagement: true,
     digest_frequency: "weekly",
-    reminder_cadence: "immediate",
+    reminder_cadence: "right_away",
     quiet_hours_enabled: false,
     quiet_hours_start: "22:00",
     quiet_hours_end: "08:00",
@@ -392,12 +392,41 @@ describe("DetailsSheet — what you hear from us", () => {
     );
   });
 
-  it("sets a digest frequency", async () => {
+  /**
+   * `W3W-R1-07`. Two frequency controls stood in one panel with nothing
+   * between them and nothing saying which governed approval mail — "Digest
+   * frequency: Weekly" directly above "Reminder cadence: Once a week, on
+   * Sunday" — and the legacy group was not only present but SET. The reminder
+   * cadence (P-28, 00572) is the one the mail rail reads, so it is the only
+   * one the homeowner is asked. The column stays; the question goes.
+   */
+  it("asks about frequency once, and it is the cadence the mail rail reads", () => {
     render(<DetailsSheet open onClose={jest.fn()} />);
-    await userEvent.click(screen.getByRole("radio", { name: "Daily" }));
-    expect(updatePrefsMutate).toHaveBeenCalledWith({
-      digest_frequency: "daily",
-    });
+
+    expect(screen.queryByText("Digest frequency")).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[name="details-digest-frequency"]')).toHaveLength(0);
+    expect(
+      document.querySelectorAll('[name="details-reminder-cadence"]').length,
+    ).toBeGreaterThan(0);
+    // The three cadences, and no fourth frequency question anywhere near them.
+    for (const label of ["Tell me right away", "Once a day", "Once a week, on Sunday"]) {
+      expect(screen.getByRole("radio", { name: label })).toBeInTheDocument();
+    }
+    for (const gone of ["Never", "Daily", "Weekly", "Every two weeks", "Monthly"]) {
+      expect(screen.queryByRole("radio", { name: gone })).not.toBeInTheDocument();
+    }
+  });
+
+  /**
+   * `W3W-R1-n3`. "Re-engagement" is a marketer's word for a person who
+   * stopped answering, printed in her own settings beside "Weekly
+   * inspiration".
+   */
+  it("names the marketing note in her language, not the funnel's", () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    expect(screen.getByText("Occasional notes from your studio")).toBeInTheDocument();
+    expect(screen.queryByText("Re-engagement")).not.toBeInTheDocument();
   });
 
   it("sets a reminder cadence, and names invoice reminders as always-immediate", async () => {
@@ -408,10 +437,133 @@ describe("DetailsSheet — what you hear from us", () => {
       ),
     ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("radio", { name: "Daily summary" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Once a day" }));
     expect(updatePrefsMutate).toHaveBeenCalledWith({
-      reminder_cadence: "daily_digest",
+      reminder_cadence: "daily",
     });
+
+    // P-28: the third cadence she can choose, in her own words.
+    await userEvent.click(
+      screen.getByRole("radio", { name: "Once a week, on Sunday" }),
+    );
+    expect(updatePrefsMutate).toHaveBeenCalledWith({
+      reminder_cadence: "weekly_sunday",
+    });
+  });
+
+  /**
+   * P-28. Three cadences, in plain words. The column's own tokens —
+   * `right_away`, `daily`, `weekly_sunday` — never reach the page.
+   */
+  it("offers three cadences and says them in her words, never in tokens", async () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    const cadence = screen.getByRole("group", { name: "Reminder cadence" });
+    const options = within(cadence).getAllByRole("radio");
+    expect(options).toHaveLength(3);
+    expect(options.map((option) => option.getAttribute("aria-label") ?? "")).not.toContain(
+      "weekly_sunday",
+    );
+
+    for (const label of [
+      "Tell me right away",
+      "Once a day",
+      "Once a week, on Sunday",
+    ]) {
+      expect(within(cadence).getByRole("radio", { name: label })).toBeInTheDocument();
+    }
+    expect(cadence.textContent).not.toMatch(
+      /right_away|weekly_sunday|immediate|daily_digest/,
+    );
+  });
+
+  /**
+   * The tokens the widened column's CHECK accepts (00572). A picker writing
+   * anything else violates the constraint, and the Sunday cadence could never
+   * be saved at all.
+   */
+  it("writes the widened column's own value for each cadence", async () => {
+    // Starting on the middle cadence, so pressing either of the other two is a
+    // real change: a radio already checked fires nothing.
+    mockUseNotificationPreferences.mockReturnValue({
+      data: makePrefs({ reminder_cadence: "daily" }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    await userEvent.click(screen.getByRole("radio", { name: "Tell me right away" }));
+    expect(updatePrefsMutate).toHaveBeenCalledWith({
+      reminder_cadence: "right_away",
+    });
+
+    await userEvent.click(
+      screen.getByRole("radio", { name: "Once a week, on Sunday" }),
+    );
+    expect(updatePrefsMutate).toHaveBeenCalledWith({
+      reminder_cadence: "weekly_sunday",
+    });
+  });
+
+  it("checks the option the stored row actually names", () => {
+    mockUseNotificationPreferences.mockReturnValue({
+      data: makePrefs({ reminder_cadence: "weekly_sunday" }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    expect(
+      screen.getByRole("radio", { name: "Once a week, on Sunday" }),
+    ).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Tell me right away" })).not.toBeChecked();
+  });
+
+  /**
+   * No dark default: a client with no row of her own is shown the quietest
+   * cadence that still gets a real answer on time, which is the column's own
+   * DEFAULT after 00572 — never the loudest one.
+   */
+  it("falls back to the quiet cadence, not the loud one, when the row names none", () => {
+    mockUseNotificationPreferences.mockReturnValue({
+      data: makePrefs({ reminder_cadence: undefined as never }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    expect(screen.getByRole("radio", { name: "Once a day" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Tell me right away" })).not.toBeChecked();
+  });
+
+  /**
+   * R16's floor holds whether or not she sets quiet hours of her own, so it is
+   * stated as a fact about Patina rather than as a setting she has to find.
+   */
+  it("states the floor under quiet hours, and names its exceptions", () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    const floor = screen.getByTestId("details-quiet-floor");
+    expect(floor).toHaveTextContent("nothing before 8am in your time zone");
+    expect(floor).toHaveTextContent("nothing on Sunday");
+    // The two things the sentence must not promise away: the weekly summary
+    // IS sent on Sunday, and the passed-date notice breaks every hold.
+    expect(floor).toHaveTextContent("except the weekly summary");
+    expect(floor).toHaveTextContent("passed its date is the one thing that never waits");
+    // An absolute "never" would be false on both counts.
+    expect(floor.textContent ?? "").not.toMatch(/never sends/);
+  });
+
+  /** P-24: the ask is an approval, and the copy says so. */
+  it("calls them approval requests", () => {
+    render(<DetailsSheet open onClose={jest.fn()} />);
+
+    expect(screen.getByTestId("details-notifications")).toHaveTextContent(
+      "approval requests",
+    );
+    expect(screen.getByTestId("details-notifications")).not.toHaveTextContent(
+      "decision requests",
+    );
   });
 });
 

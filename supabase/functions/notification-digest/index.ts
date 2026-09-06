@@ -1,9 +1,10 @@
 // Supabase Edge Function: notification-digest
 //
-// Cron-triggered daily at 15:00 UTC (migration 00260). For every CLIENT who set
-// reminder_cadence = 'daily_digest', rolls the last 24h of UNREAD non-urgent
-// reminders into a SINGLE email instead of the individual nudge emails those
-// senders suppressed:
+// Cron-triggered hourly at 20 past (migration 00572, replacing 00278's daily
+// 15:00 UTC run so the per-reader 8am-local gate has an hour to release into).
+// For every CLIENT on a BATCHING cadence — 'daily', or 'weekly_sunday' on a Sunday in her own zone
+// (00572) — rolls the window's UNREAD non-urgent reminders into a SINGLE email
+// instead of the individual nudge emails those senders suppressed:
 //
 //   • proposal-nudge  → notification_log rows (channel in_app, type
 //     'proposal_nudge') the sender writes when it skips the direct email.
@@ -29,9 +30,19 @@ import {
   buildReminderDigestEmail,
   decisionDigestLink,
   decisionDigestTitle,
-  isReminderDigestDue,
+  digestCategoryForDecision,
+  type DigestPeriod,
+  digestWindowStart,
+  type DirectDecisionMailRow,
+  directlyMailedDecisionIds,
+  directMailWindowStart,
+  dropDecisionsPastOverdue,
+  dropDirectlyMailedDecisions,
+  dropSnoozedDecisions,
+  isDigestDue,
   type ReminderDigestItem,
 } from "./logic.ts";
+import { isSnoozeActive } from "../_shared/decision-notify.ts";
 import {
   type EmbeddedApprovalArtifact,
   resolveApprovalArtifactCitation,
@@ -43,22 +54,114 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CLIENT_PORTAL_URL = Deno.env.get("CLIENT_PORTAL_URL") ??
   "https://client.patina.cloud";
 
-// Look-back window for reminders to include. Slightly over 24h so daily runs
-// with jitter never drop a row; the min-interval guard prevents double-send.
-const WINDOW_MS = 24 * 60 * 60 * 1000;
-
 const PAGE = 200;
 
 interface DigestPrefRow {
   user_id: string;
   last_reminder_digest_sent_at: string | null;
   timezone: string | null;
+  reminder_cadence: string | null;
+}
+
+/**
+ * R16. The approvals this reader has already had the overdue notice for. After
+ * that notice Patina is quiet about them, in a summary as much as in a letter.
+ */
+async function decisionsPastOverdue(
+  supabase: SupabaseClient,
+  userId: string,
+  decisionIds: string[],
+): Promise<string[]> {
+  if (decisionIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("decision_notifications")
+    .select("decision_id")
+    .eq("user_id", userId)
+    .eq("kind", "decision_overdue")
+    .in("decision_id", decisionIds);
+  if (error) {
+    console.warn("[notification-digest] overdue lookup failed", error);
+    return [];
+  }
+  return ((data ?? []) as Array<{ decision_id: string }>)
+    .map((row) => row.decision_id);
+}
+
+/**
+ * P-28 (r1 B1). The approvals this reader has told Patina to hold, and the
+ * hour each hold ends. A snoozed approval sends nothing until then — in a
+ * summary as much as in a letter — except the two notices R16 exempts, neither
+ * of which is ever batched here.
+ *
+ * Fails open, exactly as the direct-mail gate does: a snooze that cannot be
+ * read must not become a silence nobody asked for.
+ */
+async function snoozedDecisions(
+  supabase: SupabaseClient,
+  userId: string,
+  decisionIds: string[],
+  now: Date,
+): Promise<string[]> {
+  if (decisionIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("decision_snoozes")
+    .select("decision_id, snoozed_until")
+    .eq("user_id", userId)
+    .in("decision_id", decisionIds);
+  if (error) {
+    console.warn("[notification-digest] snooze lookup failed", error);
+    return [];
+  }
+  return ((data ?? []) as Array<
+    { decision_id: string; snoozed_until: string | null }
+  >)
+    .filter((row) => isSnoozeActive(row.snoozed_until, now))
+    .map((row) => row.decision_id);
+}
+
+/**
+ * The approvals that already had a letter of their own inside the last
+ * twenty-four hours — `sinceIso` here is `directMailWindowStart`'s floor, not
+ * the digest's window start (M-R3-01).
+ *
+ * (r2 M-R2-02.) The first notice and a superseding edition break the digest
+ * and mail direct, so without this the default cadence says the same thing
+ * twice inside a day: the announcement in the afternoon, the summary the next
+ * morning. ux/03 §282 allows one.
+ *
+ * Fails open — a log that cannot be read must not become a silence. The
+ * duplicate is the lesser harm than a summary that never mentions the ask.
+ */
+async function decisionsMailedDirect(
+  supabase: SupabaseClient,
+  userId: string,
+  decisionIds: string[],
+  sinceIso: string,
+): Promise<string[]> {
+  if (decisionIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("notification_log")
+    .select("status, metadata")
+    .eq("user_id", userId)
+    .eq("channel", "email")
+    .eq("type", "decision_required")
+    .gt("created_at", sinceIso)
+    .limit(200);
+  if (error) {
+    console.warn("[notification-digest] direct-mail lookup failed", error);
+    return [];
+  }
+  const wanted = new Set(decisionIds);
+  return directlyMailedDecisionIds(
+    (data ?? []) as DirectDecisionMailRow[],
+  ).filter((id) => wanted.has(id));
 }
 
 async function collectItems(
   supabase: SupabaseClient,
   userId: string,
   sinceIso: string,
+  now: Date,
 ): Promise<ReminderDigestItem[]> {
   const items: ReminderDigestItem[] = [];
 
@@ -86,6 +189,9 @@ async function collectItems(
   }
 
   // ── Decision reminders (decision_notifications rows) ────────────────────
+  // decision_required only. The overdue notice always breaks the digest and
+  // mails direct (R16, _shared/decision-notify.ts), so batching it here would
+  // say the same thing twice — and it is the one letter that must not wait.
   const { data: decisions } = await supabase
     .from("decision_notifications")
     .select(`
@@ -101,7 +207,7 @@ async function collectItems(
       )
     `)
     .eq("user_id", userId)
-    .in("kind", ["decision_required", "decision_overdue"])
+    .eq("kind", "decision_required")
     .is("read_at", null)
     .gt("created_at", sinceIso)
     .order("created_at", { ascending: false })
@@ -141,9 +247,9 @@ async function collectItems(
       );
       continue;
     }
-    const title = dec?.title || "A decision needs your input";
+    const title = dec?.title || "Something needs your answer";
     items.push({
-      category: "decision",
+      category: digestCategoryForDecision(dec?.approval_contract),
       title: decisionDigestTitle(row.kind, title),
       // The same address the decision letter's own door carries: the iOS app
       // claims /decisions/*, and the portal middleware 308s everyone else onto
@@ -154,7 +260,27 @@ async function collectItems(
     });
   }
 
-  return items;
+  const decisionIds = items.flatMap((item) =>
+    item.decisionId ? [item.decisionId] : []
+  );
+  return dropDirectlyMailedDecisions(
+    dropSnoozedDecisions(
+      dropDecisionsPastOverdue(
+        items,
+        await decisionsPastOverdue(supabase, userId, decisionIds),
+      ),
+      await snoozedDecisions(supabase, userId, decisionIds, now),
+    ),
+    // The 24-hour floor is this check's own (M-R3-01): §282 counts days,
+    // not the summary's period, and reading it over a seven-day window
+    // dropped every approval announced that week out of Sunday's summary.
+    await decisionsMailedDirect(
+      supabase,
+      userId,
+      decisionIds,
+      directMailWindowStart(sinceIso, now).toISOString(),
+    ),
+  );
 }
 
 async function dispatchReminderDigests(
@@ -170,14 +296,17 @@ async function dispatchReminderDigests(
 > {
   const stats = { scanned: 0, sent: 0, empty: 0, skipped: 0, errors: 0 };
   const now = new Date();
-  const sinceIso = new Date(now.getTime() - WINDOW_MS).toISOString();
 
   let offset = 0;
   while (true) {
+    // Both batching cadences page through here (00572). 'right_away' never
+    // does: her reminders mail as they fire and there is nothing to summarise.
     const { data: prefs, error } = await supabase
       .from("notification_preferences")
-      .select("user_id, last_reminder_digest_sent_at, timezone")
-      .eq("reminder_cadence", "daily_digest")
+      .select(
+        "user_id, last_reminder_digest_sent_at, timezone, reminder_cadence",
+      )
+      .in("reminder_cadence", ["daily", "weekly_sunday"])
       .eq("channels_email", true)
       .range(offset, offset + PAGE - 1);
 
@@ -186,12 +315,28 @@ async function dispatchReminderDigests(
 
     for (const pref of prefs as DigestPrefRow[]) {
       try {
-        if (!isReminderDigestDue(pref.last_reminder_digest_sent_at, now)) {
+        const period: DigestPeriod = pref.reminder_cadence === "weekly_sunday"
+          ? "weekly_sunday"
+          : "daily";
+        const zone = pref.timezone?.trim() || "America/New_York";
+        // "Once a week, on Sunday" is Sunday in her zone; six of the seven
+        // daily runs are a no-op for her.
+        if (
+          !isDigestDue(period, pref.last_reminder_digest_sent_at, now, zone)
+        ) {
           stats.skipped++;
           continue;
         }
 
-        const items = await collectItems(supabase, pref.user_id, sinceIso);
+        // One period back, or as far as the last summary actually sent when
+        // a run was skipped — a daily reader is never mailed on Sunday, and
+        // Saturday's reminders must not fall through that gap (r1 M3).
+        const sinceIso = digestWindowStart(
+          period,
+          pref.last_reminder_digest_sent_at,
+          now,
+        ).toISOString();
+        const items = await collectItems(supabase, pref.user_id, sinceIso, now);
         if (items.length === 0) {
           // Nothing accumulated — leave the watermark so a reminder arriving
           // later today is still picked up on the next run.
@@ -213,6 +358,7 @@ async function dispatchReminderDigests(
           items,
           CLIENT_PORTAL_URL,
           pref.timezone,
+          period,
         );
         const result = await sendCompliantEmail(supabase, {
           to: profile.email as string,

@@ -52,18 +52,21 @@ function figure(cents: number | null | undefined): cents is number {
  * adoption, not because the work is here. The envelope says so on its own
  * line, and the figure it is summed into may not quietly imply otherwise — a
  * homeowner reading "owed" against her house has to be able to tell which of
- * that money is her house's.
+ * that money is her house's. P-24's rule holds across every arm: `countInWords`
+ * is the surface's one speller, words to twelve, figures past it.
  */
 function owedWords(count: number, studioCount: number): string {
   if (studioCount <= 0) {
-    return count > 1 ? `Owed across ${count} open invoices` : 'Owed on the open invoice';
+    return count > 1
+      ? `Owed across ${countInWords(count)} open invoices`
+      : 'Owed on the open invoice';
   }
   if (studioCount >= count) {
     return count > 1
-      ? `Owed across ${count} open invoices from the studio, not for this house`
+      ? `Owed across ${countInWords(count)} open invoices from the studio, not for this house`
       : 'Owed on the open invoice from the studio, not for this house';
   }
-  return `Owed across ${count} open invoices, ${countInWords(studioCount)} from the studio`;
+  return `Owed across ${countInWords(count)} open invoices, ${countInWords(studioCount)} from the studio`;
 }
 
 /**

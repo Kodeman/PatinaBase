@@ -1,0 +1,101 @@
+
+> @patina/client-portal@0.1.0 dev /Users/kody/Code/patina-merged/.codex/worktrees/agent-cae-w3-integration/apps/client-portal
+> next dev --webpack -p 3002
+
+▲ Next.js 16.2.10 (webpack)
+- Local:         http://localhost:3002
+- Network:       http://192.168.1.63:3002
+✓ Ready in 433ms
+> [PWA] PWA support is disabled
+> [PWA] PWA support is disabled
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · serverActions
+
+○ Compiling /auth/signin ...
+Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+warn - The class `duration-[320ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;320ms&rsqb;` to silence this warning.
+
+warn - The class `duration-[420ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;420ms&rsqb;` to silence this warning.
+
+warn - The class `duration-[520ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;520ms&rsqb;` to silence this warning.
+
+warn - The class `ease-[cubic-bezier(.24,.78,.28,1)]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(.24,.78,.28,1)&rsqb;` to silence this warning.
+
+warn - The class `ease-[cubic-bezier(0.25,1,0.5,1)]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(0.25,1,0.5,1)&rsqb;` to silence this warning.
+
+warn - The class `max-[600px]:duration-[240ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `max-&lsqb;600px&rsqb;:duration-[240ms]` to silence this warning.
+
+warn - The class `motion-safe:duration-[420ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `motion-safe:duration-&lsqb;420ms&rsqb;` to silence this warning.
+ GET /auth/signin 200 in 37ms (next.js: 1747µs, proxy.ts: 9ms, application-code: 25ms)
+ GET /auth/signin 200 in 25ms (next.js: 1123µs, proxy.ts: 3ms, application-code: 20ms)
+ GET /auth/signin?callbackUrl=%2F 200 in 30ms (next.js: 1379µs, proxy.ts: 4ms, application-code: 25ms)
+ GET /auth/signin 200 in 29ms (next.js: 1345µs, proxy.ts: 4ms, application-code: 24ms)
+○ Compiling / ...
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 4.6s (next.js: 3.3s, proxy.ts: 55ms, application-code: 1213ms)
+ GET /decisions/57d7fad9-1e9f-40ed-8ccb-257d443a5b7e/record 200 in 2.8s (next.js: 1975ms, proxy.ts: 45ms, application-code: 756ms)
+ GET /proposals/b0000000-0000-0000-0000-0000000cd003/record 200 in 2.4s (next.js: 1807ms, proxy.ts: 57ms, application-code: 579ms)
+ GET /decisions/eb18b8ad-c610-49f2-9a88-5d7afd81c277/record 200 in 97ms (next.js: 29ms, proxy.ts: 45ms, application-code: 23ms)
+ GET /decisions/104e94dc-d23f-4200-9984-24cf40fa758d/record 200 in 62ms (next.js: 5ms, proxy.ts: 35ms, application-code: 21ms)
+ GET /auth/signin 200 in 165ms (next.js: 115ms, proxy.ts: 7ms, application-code: 43ms)
+ GET / 200 in 465ms (next.js: 155ms, proxy.ts: 58ms, application-code: 252ms)
+ GET /decisions/57d7fad9-1e9f-40ed-8ccb-257d443a5b7e/record 200 in 67ms (next.js: 7ms, proxy.ts: 38ms, application-code: 23ms)
+ GET /proposals/b0000000-0000-0000-0000-0000000cd003/record 200 in 65ms (next.js: 5ms, proxy.ts: 40ms, application-code: 21ms)
+ GET /auth/signin 200 in 29ms (next.js: 1272µs, proxy.ts: 4ms, application-code: 24ms)
+ GET / 200 in 193ms (next.js: 1422µs, proxy.ts: 46ms, application-code: 146ms)
+ GET /decisions/00000000-0000-0000-0000-0000000000ff/record 200 in 66ms (next.js: 5ms, proxy.ts: 39ms, application-code: 22ms)
+ GET /proposals/00000000-0000-0000-0000-0000000000ff/record 200 in 71ms (next.js: 4ms, proxy.ts: 47ms, application-code: 20ms)
+ GET /auth/signin?callbackUrl=%2Fdecisions%2F57d7fad9-1e9f-40ed-8ccb-257d443a5b7e%2Frecord 200 in 25ms (next.js: 1041µs, proxy.ts: 2ms, application-code: 21ms)
+ GET /auth/signin 200 in 26ms (next.js: 1114µs, proxy.ts: 3ms, application-code: 22ms)
+ GET / 200 in 234ms (next.js: 1669µs, proxy.ts: 54ms, application-code: 178ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 3.9s (next.js: 2.9s, proxy.ts: 37ms, application-code: 1008ms)
+ GET /decisions/57d7fad9-1e9f-40ed-8ccb-257d443a5b7e/record 200 in 180ms (next.js: 113ms, proxy.ts: 40ms, application-code: 27ms)
+ GET /auth/signin 200 in 156ms (next.js: 119ms, proxy.ts: 4ms, application-code: 33ms)
+ GET / 200 in 371ms (next.js: 141ms, proxy.ts: 55ms, application-code: 174ms)
+ GET / 200 in 182ms (next.js: 1150µs, proxy.ts: 38ms, application-code: 144ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 168ms (next.js: 6ms, proxy.ts: 36ms, application-code: 127ms)
+ GET / 200 in 179ms (next.js: 1148µs, proxy.ts: 36ms, application-code: 142ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 165ms (next.js: 5ms, proxy.ts: 33ms, application-code: 127ms)
+ GET / 200 in 198ms (next.js: 1348µs, proxy.ts: 33ms, application-code: 164ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 470ms (next.js: 13ms, proxy.ts: 58ms, application-code: 399ms)
+ GET / 200 in 191ms (next.js: 1351µs, proxy.ts: 41ms, application-code: 149ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 237ms (next.js: 7ms, proxy.ts: 58ms, application-code: 172ms)
+ GET / 200 in 199ms (next.js: 1649µs, proxy.ts: 46ms, application-code: 151ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 200ms (next.js: 5ms, proxy.ts: 35ms, application-code: 160ms)
+ GET /auth/signin 200 in 34ms (next.js: 1380µs, proxy.ts: 3ms, application-code: 29ms)
+ GET / 200 in 243ms (next.js: 1296µs, proxy.ts: 53ms, application-code: 189ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 172ms (next.js: 5ms, proxy.ts: 35ms, application-code: 133ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 205ms (next.js: 5ms, proxy.ts: 55ms, application-code: 145ms)
+ GET /auth/signin 200 in 26ms (next.js: 1028µs, proxy.ts: 3ms, application-code: 22ms)
+ GET / 200 in 211ms (next.js: 1263µs, proxy.ts: 53ms, application-code: 157ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 180ms (next.js: 5ms, proxy.ts: 40ms, application-code: 136ms)
+ GET /auth/signin 200 in 26ms (next.js: 1039µs, proxy.ts: 3ms, application-code: 22ms)
+ GET / 200 in 220ms (next.js: 1511µs, proxy.ts: 56ms, application-code: 162ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 171ms (next.js: 5ms, proxy.ts: 40ms, application-code: 126ms)
+ GET /auth/signin 200 in 26ms (next.js: 1156µs, proxy.ts: 3ms, application-code: 21ms)
+ GET / 200 in 198ms (next.js: 1252µs, proxy.ts: 37ms, application-code: 160ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 184ms (next.js: 5ms, proxy.ts: 38ms, application-code: 141ms)
+ GET /auth/signin 200 in 26ms (next.js: 1110µs, proxy.ts: 3ms, application-code: 22ms)
+ GET / 200 in 187ms (next.js: 1295µs, proxy.ts: 45ms, application-code: 141ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 159ms (next.js: 5ms, proxy.ts: 34ms, application-code: 120ms)
+ GET /auth/signin 200 in 28ms (next.js: 1011µs, proxy.ts: 3ms, application-code: 23ms)
+ GET / 200 in 216ms (next.js: 1339µs, proxy.ts: 45ms, application-code: 169ms)
+ GET /?proposal=b0000000-0000-0000-0000-0000000cd003 200 in 176ms (next.js: 1362µs, proxy.ts: 37ms, application-code: 138ms)
+ GET / 200 in 198ms (next.js: 1712µs, proxy.ts: 47ms, application-code: 150ms)
+ GET / 200 in 196ms (next.js: 1743µs, proxy.ts: 49ms, application-code: 146ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 185ms (next.js: 4ms, proxy.ts: 42ms, application-code: 138ms)
+ GET /auth/signin 200 in 51ms (next.js: 1146µs, proxy.ts: 3ms, application-code: 47ms)
+ GET / 200 in 238ms (next.js: 1482µs, proxy.ts: 57ms, application-code: 180ms)
+ GET /projects/b0000000-0000-0000-0000-0000000000d1 200 in 167ms (next.js: 5ms, proxy.ts: 38ms, application-code: 125ms)
+[?25h

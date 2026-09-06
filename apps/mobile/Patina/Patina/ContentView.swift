@@ -17,6 +17,10 @@ struct ContentView: View {
     @State private var showingEmailCode = false
     @State private var showingPasswordSignIn = false
 
+    /// `P-30`: the namespace the Record row's zoom source and the decision
+    /// screen it pushes both live in, on the flag-off root.
+    @Namespace private var decisionZoom
+
     var body: some View {
         ZStack {
             // Root view is selected purely from the derived phase. No
@@ -185,6 +189,9 @@ struct ContentView: View {
                     // for the whole stack (guarded to never fire at root).
                     .interactivePopGestureEnabled()
             }
+            // `P-30`: the zoom's namespace, published to the stack that owns
+            // both the Record row and the decision screen it pushes.
+            .environment(\.decisionZoomNamespace, decisionZoom)
             // The root Companion floats inside a 120-point invisible Hearth.
             // Scan and quiz provide their own in-flow Companion surfaces, so
             // those routes reclaim the space instead of rendering two docks.

@@ -48,9 +48,12 @@ const STAGE_PHASE = [
  * `--bg-primary` they are illegible: procurement gold `#E8C547` reads about
  * 1.6:1 before the stamp's own 0.72 opacity. The deck does not do this either
  * — it ships a separate darkened stamp palette (`--dc-gold:#96702A`,
- * `--dc-blue:#63798E`, `--dc-sage:#5A6F52`) for exactly this mark, and
- * `SpineGate` already darkens its kind line the same way with `color-mix`.
- * 45% phase against charcoal lands on the deck's swatches.
+ * `--dc-blue:#63798E`, `--dc-sage:#5A6F52`) for exactly this mark.
+ * 45% phase against charcoal lands on the deck's swatches. (`SpineGate` used
+ * to darken its kind line the same way at 52%; `W3-03` retired that mix —
+ * 52% against charcoal composites to #8E7A37, 3.40:1 on `--bg-warm`, which
+ * is below AA at an 11px register. This mark is a different size on a
+ * different ground and is left as it is.)
  */
 const STAGE_INK = STAGE_PHASE.map(
   (phase) => `color-mix(in srgb, ${phase} 45%, var(--color-charcoal))`,

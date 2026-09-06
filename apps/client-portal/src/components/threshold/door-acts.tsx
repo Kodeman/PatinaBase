@@ -242,12 +242,17 @@ export function DoorActs({
         className="mt-6 border-t border-[var(--border-subtle)] pt-3 max-[600px]:sticky max-[600px]:bottom-[61px] max-[600px]:z-20 max-[600px]:-mx-5 max-[600px]:mt-4 max-[600px]:border-[var(--border-default)] max-[600px]:bg-[var(--bg-surface)] max-[600px]:px-5 max-[600px]:pb-2"
       >
         <div ref={rowRef} tabIndex={-1} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {/* Reading outranks declining. All four sat at `tertiary`, which
+              made "Read it in full" — the act that ends with her knowing more
+              — weigh exactly what "Decline" weighs. The other three are
+              answers to the paper and stay peers at the lighter weight; the
+              reading takes the secondary. */}
           {acts.map((act) => (
             <ScoredAction
               key={act.key}
               actionKey={`door_${act.key}`}
               regionKey="door"
-              variant="tertiary"
+              variant={act.key === 'read' ? 'secondary' : 'tertiary'}
               aria-expanded={open === act.key}
               aria-controls={open === act.key ? panelIdFor(act.key) : undefined}
               onClick={(event) => toggle(act.key, event)}

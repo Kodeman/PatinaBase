@@ -31,6 +31,13 @@ public final class SettingsService {
     /// Haptic feedback for in-app interactions.
     public var hapticsEnabled: Bool = true
 
+    /// `P-28`. How often Patina checks in about an approval.
+    ///
+    /// Defaults to the quietest cadence that still gets an answer on time —
+    /// there is no dark default here — and is replaced by whatever the row
+    /// actually says the moment `load()` reads one.
+    public var reminderCadence: ReminderCadence = .quietestHonest
+
     /// Whether the initial fetch has completed.
     public private(set) var isLoaded: Bool = false
 
@@ -45,6 +52,7 @@ public final class SettingsService {
     func resetForSessionChange() {
         notificationsEnabled = true
         hapticsEnabled = true
+        reminderCadence = .quietestHonest
         isLoaded = false
     }
 
@@ -61,6 +69,10 @@ public final class SettingsService {
         public var channels_push: Bool?
         public var channels_email: Bool?
         public var channels_in_app: Bool?
+        /// `P-28`. Two values before the widening (00278), three after. Both
+        /// vocabularies decode — `ReminderCadence.from(wireValue:)` reads
+        /// either — and a value neither knows leaves the default standing.
+        public var reminder_cadence: String?
     }
 
     // MARK: - Fetch
@@ -93,13 +105,16 @@ public final class SettingsService {
         do {
             let row: NotificationPrefsRow = try await supabase.database
                 .from("notification_preferences")
-                .select("user_id, channels_push, channels_email, channels_in_app")
+                .select("user_id, channels_push, channels_email, channels_in_app, reminder_cadence")
                 .eq("user_id", value: userId)
                 .single()
                 .execute()
                 .value
             if let push = row.channels_push {
                 self.notificationsEnabled = push
+            }
+            if let cadence = ReminderCadence.from(wireValue: row.reminder_cadence) {
+                self.reminderCadence = cadence
             }
         } catch {
             #if DEBUG
@@ -126,6 +141,27 @@ public final class SettingsService {
             guard let userId = await currentUserId() else { return }
             await upsertUserSetting(userId: userId, pushEnabled: enabled)
             await upsertNotificationPref(userId: userId, pushEnabled: enabled)
+        }
+    }
+
+    /// `P-28`. Persist the cadence she chose.
+    ///
+    /// Written optimistically, and written twice where it has to be: a
+    /// database that has not yet taken the widening still holds the 00278
+    /// CHECK, and a write of `right_away` against it fails. The fallback is
+    /// the same choice in the old vocabulary, so the two sides of the
+    /// backend lane's deploy both save. `weekly_sunday` has no old spelling —
+    /// it is the option the widening adds — so there the failure stands and
+    /// the screen keeps what the row last said.
+    public func setReminderCadence(_ cadence: ReminderCadence) {
+        let previous = reminderCadence
+        reminderCadence = cadence
+        Task { [cadence, previous] in
+            guard let userId = await currentUserId() else { return }
+            if await upsertReminderCadence(userId: userId, value: cadence.rawValue) { return }
+            if let legacy = cadence.legacyWireValue,
+               await upsertReminderCadence(userId: userId, value: legacy) { return }
+            self.reminderCadence = previous
         }
     }
 
@@ -170,6 +206,27 @@ public final class SettingsService {
             #if DEBUG
             PatinaLog.ui.error("[SettingsService] notification_preferences upsert failed: \(error.localizedDescription)")
             #endif
+        }
+    }
+
+    /// - Returns: whether the write landed.
+    private func upsertReminderCadence(userId: String, value: String) async -> Bool {
+        struct UpsertPayload: Encodable {
+            let user_id: String
+            let reminder_cadence: String
+        }
+        do {
+            try await supabase.database
+                .from("notification_preferences")
+                .upsert(UpsertPayload(user_id: userId, reminder_cadence: value),
+                        onConflict: "user_id")
+                .execute()
+            return true
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[SettingsService] reminder_cadence upsert failed for \(value): \(error.localizedDescription)")
+            #endif
+            return false
         }
     }
 

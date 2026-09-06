@@ -400,6 +400,25 @@ export function DoorGate({
         </p>
       )}
 
+      {/* P-26. "You'll have a copy" is a promise the receipt makes one line
+          above; this is where it is kept. A new tab, because the door has just
+          swung on a page she may still be reading. */}
+      {receipt && (
+        <div className="mt-2" data-testid="door-keep-a-copy">
+          <ScoredAction
+            actionKey="keep_proposal_record"
+            regionKey="door"
+            surfaceKey="the_threshold"
+            variant="tertiary"
+            href={`/proposals/${encodeURIComponent(proposal.id)}/record`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Keep a copy
+          </ScoredAction>
+        </div>
+      )}
+
       {deliveryPending && (
         <div data-testid="door-delivery-pending" className="mt-2">
           <p role="status" className="max-w-[56ch] text-[15px] leading-relaxed text-[var(--text-body)]">

@@ -95,6 +95,21 @@ export interface ProjectApprovalReview {
   authorityRevision: number | null;
   predecessorDecisionId: string | null;
   successorDecisionId: string | null;
+  /**
+   * P-26 — the name she typed when she signed, so the printed Record of
+   * Decision can say who answered and not only how. Carried by the projection
+   * from 00573; null on Return and Hold (press-and-hold only, no name), on
+   * every approval answered before 00569, and on any older projection.
+   */
+  clientSignature?: string | null;
+  /**
+   * P-26 / `W3W-R2-01` — HOW she consented, as the row recorded it:
+   * `electronic_signature`, `click_through`, `paper`, or null on every
+   * approval answered before 00569. The Record of Decision reads this and
+   * never the outcome: "approved therefore signed" printed a provenance
+   * claim the row could not substantiate.
+   */
+  clientConsentMethod?: string | null;
   createdAt: string;
   sentAt: string | null;
   respondedAt: string | null;
@@ -150,6 +165,7 @@ export const projectApprovalKeys = {
     ['project-approval-artifact-candidates', projectId] as const,
   decision: (decisionId: string) => ['project-approval', decisionId] as const,
   mine: () => ['my-project-approval-reviews'] as const,
+  snooze: (decisionId: string) => ['decision-snooze', decisionId] as const,
 };
 
 const APPROVAL_FOREGROUND_REFRESH_MS = 30_000;
@@ -194,6 +210,7 @@ export async function invalidateProjectApprovalQueries(
 
   if (scope.decisionId) {
     keys.push(projectApprovalKeys.decision(scope.decisionId));
+    keys.push(projectApprovalKeys.snooze(scope.decisionId));
     keys.push(['client-decision', scope.decisionId]);
   }
   if (scope.designerClientId) {
@@ -207,6 +224,7 @@ export async function invalidateProjectApprovalQueries(
 }
 
 type ProjectApprovalRpcName =
+  | 'set_decision_snooze'
   | 'set_project_decision_authority'
   | 'create_project_approval_decision'
   | 'confirm_project_decision_review'
@@ -364,6 +382,11 @@ export function parseProjectApprovalReview(
         : null,
     predecessorDecisionId: nullableString(row, 'predecessorDecisionId'),
     successorDecisionId: nullableString(row, 'successorDecisionId'),
+    // Arrived with 00573; an older projection simply has no name to give,
+    // and no method — which the keepsake says as "Recorded", never as a
+    // signature.
+    clientSignature: nullableString(row, 'clientSignature'),
+    clientConsentMethod: nullableString(row, 'clientConsentMethod'),
     createdAt: stringValue(row, 'createdAt', label),
     sentAt: nullableString(row, 'sentAt'),
     respondedAt: nullableString(row, 'respondedAt'),
@@ -724,6 +747,142 @@ export function useRespondProjectApproval() {
         }),
       ),
   );
+}
+
+/* ── P-28 · she sets the pace, per approval ─────────────────────────────────
+   A snooze moves the REMINDERS and nothing else. The approval stays open, her
+   answer stays hers to give, and two classes of mail ignore this setting
+   entirely: the overdue notice (it is the last thing Patina says before it
+   goes quiet, and burying it would leave her with nothing at all) and a
+   superseding edition (a new edition is news, not a reminder).
+
+   The four choices are SYMBOLIC, not timestamps. "Tomorrow morning" and
+   "Sunday" are questions about her wall calendar, and "when it's due" is a
+   date only the row knows; resolving them server-side keeps one answer for
+   the mail, the push and the in-app row, where a client-computed instant would
+   drift the moment she crossed a timezone.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The four kinds `set_decision_snooze` accepts (00572). `never` is "don't
+ * remind me — I'll come back": it stands the reminders down until the overdue
+ * notice, which no snooze suppresses.
+ */
+export type DecisionSnoozeChoice =
+  | 'tomorrow_morning'
+  | 'sunday'
+  | 'when_due'
+  | 'never';
+
+export interface DecisionSnoozeInput extends ProjectApprovalInvalidationScope {
+  decisionId: string;
+  choice: DecisionSnoozeChoice;
+}
+
+/** One row of `decision_snoozes`, as its own owner reads it back (00572). */
+export interface DecisionSnoozeStanding {
+  choice: DecisionSnoozeChoice;
+  /** `'infinity'` for `never` and for a dateless `when_due`. */
+  snoozedUntil: string;
+}
+
+const DECISION_SNOOZE_CHOICES: readonly DecisionSnoozeChoice[] = [
+  'tomorrow_morning',
+  'sunday',
+  'when_due',
+  'never',
+];
+
+/**
+ * The snooze a stored row still stands for, or null.
+ *
+ * Read HONESTLY, the same rule iOS's `DecisionSnooze.standing` applies: a hold
+ * that has already lifted is not a hold, and saying "the reminders are held
+ * until Sunday" on the Monday after would be the same lie in the other
+ * direction. `snoozed_until = 'infinity'` (`never`, and a dateless `when_due`)
+ * never lifts, and Postgres serialises it as the word.
+ */
+export function standingDecisionSnooze(
+  row: { kind?: unknown; snoozed_until?: unknown } | null | undefined,
+  now: Date = new Date(),
+): DecisionSnoozeStanding | null {
+  if (!row) return null;
+  const kind = typeof row.kind === 'string' ? row.kind.trim() : '';
+  if (!DECISION_SNOOZE_CHOICES.includes(kind as DecisionSnoozeChoice)) {
+    return null;
+  }
+  const until =
+    typeof row.snoozed_until === 'string' ? row.snoozed_until.trim() : '';
+  if (!until) return null;
+  const choice = kind as DecisionSnoozeChoice;
+  if (until === 'infinity') return { choice, snoozedUntil: until };
+  const lifts = new Date(until);
+  if (Number.isNaN(lifts.getTime())) return null;
+  return lifts > now ? { choice, snoozedUntil: until } : null;
+}
+
+/**
+ * `P-28` — the snooze already standing on this approval.
+ *
+ * The write was the only half the web had, so the choice lived exactly as long
+ * as the tab did and a reload drew the four acts as though she had never
+ * asked. RLS hands back her own row and nobody else's
+ * (`decision_snoozes_owner_select`, 00572), which is why this is a plain table
+ * read rather than another RPC: there is nothing to filter that the policy has
+ * not already filtered. A list rather than `.maybeSingle()` for the same reason
+ * iOS takes one — `UNIQUE (user_id, decision_id)` makes at most one row
+ * possible, a snooze being replaced rather than stacked.
+ */
+export function useDecisionSnooze(decisionId: string | undefined) {
+  return useQuery({
+    queryKey: projectApprovalKeys.snooze(decisionId ?? ''),
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase
+        .from('decision_snoozes')
+        .select('kind,snoozed_until')
+        .eq('decision_id', decisionId as string)
+        .limit(1);
+      if (error) throw error;
+      return standingDecisionSnooze(
+        (data as Array<{ kind: string; snoozed_until: string }> | null)?.[0],
+      );
+    },
+    enabled: !!decisionId,
+    ...approvalForegroundRefresh,
+  });
+}
+
+/**
+ * Stand this approval's reminders down (P-28).
+ *
+ * Rides the same invalidation rail every authoritative Stage-2 mutation uses,
+ * so the ask redraws with the snooze it was just given rather than with the
+ * one it had a moment ago.
+ */
+export function useSetDecisionSnooze() {
+  const queryClient = useQueryClient();
+  return approvalMutation(queryClient, async (input: DecisionSnoozeInput) => {
+    // The RPC resolves her zone itself (notification_time_zone), so the
+    // browser sends no timezone: two clocks would eventually disagree and the
+    // server's is the one the mail, the push and the in-app row are minted on.
+    const row = asRecord(
+      await runRpc('set_decision_snooze', {
+        p_decision_id: input.decisionId,
+        p_kind: input.choice,
+      }),
+      'Decision snooze',
+    );
+    // This RPC answers about the SNOOZE, not about the approval: it returns
+    // decisionId / kind / snoozedUntil / timeZone and no projectId. Demanding
+    // one here would report a snooze that landed as a snooze that failed, so
+    // the invalidation rail takes the projectId the caller already carries.
+    return {
+      ...row,
+      projectId: input.projectId,
+      decisionId: stringValue(row, 'decisionId', 'Decision snooze'),
+    } as ProjectApprovalActionResult;
+  });
 }
 
 export function useWithdrawProjectApproval() {

@@ -80,6 +80,8 @@ jest.mock('@patina/supabase', () => ({
   // The doorstep ask answers in place now; these are its boundary.
   useConfirmProjectApprovalReview: jest.fn(),
   useRespondProjectApproval: jest.fn(),
+  useSetDecisionSnooze: jest.fn(),
+  useDecisionSnooze: jest.fn(),
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
@@ -186,6 +188,8 @@ import {
   useMyProjectApprovalReviews,
   usePreviousReadingMark,
   useRespondProjectApproval,
+  useSetDecisionSnooze,
+  useDecisionSnooze,
   useProjectInvoices,
   useProjectNotes,
   useProjectParties,
@@ -571,6 +575,11 @@ beforeEach(() => {
     mutateAsync: jest.fn(),
     isPending: false,
   });
+  (useSetDecisionSnooze as jest.Mock).mockReturnValue({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  });
+  (useDecisionSnooze as jest.Mock).mockReturnValue({ data: null });
   (useDecisionComments as jest.Mock).mockReturnValue({
     data: [],
     isLoading: false,
@@ -1963,7 +1972,7 @@ describe("Threshold — the studio's own letters", () => {
     renderThreshold();
 
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      'Owed across 2 open invoices, one from the studio',
+      'Owed across two open invoices, one from the studio',
     );
   });
 

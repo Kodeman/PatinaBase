@@ -1,0 +1,169 @@
+running 159 SQL test file(s) against postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+PASS                             supabase/tests/aesthete/aesthete_space_test.sql                           0s
+PASS                             supabase/tests/aesthete/drift_audit_test.sql                              0s
+PASS                             supabase/tests/aesthete/house_portfolio_test.sql                          0s
+PASS                             supabase/tests/aesthete/jobs_queue_test.sql                               0s
+PASS                             supabase/tests/aesthete/match_rpc_test.sql                                0s
+PASS                             supabase/tests/aesthete/nightly_test.sql                                  0s
+PASS                             supabase/tests/aesthete/product_dna_test.sql                              0s
+PASS                             supabase/tests/aesthete/quiz_rpc_test.sql                                 0s
+PASS                             supabase/tests/aesthete/shim_contract_test.sql                            0s
+PASS                             supabase/tests/aesthete/taste_foundation_test.sql                         0s
+PASS                             supabase/tests/aesthete/taste_rpcs_test.sql                               0s
+PASS                             supabase/tests/aesthete/why_phrases_breadth_test.sql                      0s
+PASS                             supabase/tests/agent_os/agent_tasks_test.sql                              0s
+PASS                             supabase/tests/agent_os/catalog_normalizer_test.sql                       0s
+PASS                             supabase/tests/agent_os/groom_test.sql                                    1s
+PASS                             supabase/tests/agent_os/pipeline_boards_test.sql                          0s
+EXPECTED-FAIL (exit 3)           supabase/tests/agent_os/roles_test.sql                                    0s
+PASS                             supabase/tests/agent_os/transaction_tracker_test.sql                      0s
+PASS                             supabase/tests/agent_os/vitals_test.sql                                   0s
+PASS                             supabase/tests/auth/account_purge_test.sql                                0s
+PASS                             supabase/tests/auth/qr_auth_handoff_test.sql                              0s
+PASS                             supabase/tests/billing/invoice_checkout_integrity_test.sql                0s
+PASS                             supabase/tests/billing/studio_invoice_test.sql                            0s
+PASS                             supabase/tests/capture_enrichment/claim_duplicate_stale_test.sql          0s
+PASS                             supabase/tests/capture_enrichment/claim_terminal_target_test.sql          0s
+PASS                             supabase/tests/capture_enrichment/enqueue_for_producer_ownership_test.sql    0s
+PASS                             supabase/tests/capture_enrichment/never_overwrite_result_test.sql         0s
+PASS                             supabase/tests/capture_enrichment/outbox_atomicity_and_enqueue_idempotency_test.sql    0s
+PASS                             supabase/tests/capture_enrichment/producer_double_submit_field_capture_test.sql    0s
+PASS                             supabase/tests/capture_enrichment/producer_double_submit_proposal_capture_test.sql    1s
+PASS                             supabase/tests/capture_enrichment/target_type_visibility_test.sql         0s
+PASS                             supabase/tests/catalog/first_flight_catalog_test.sql                      0s
+EXPECTED-FAIL (exit 3)           supabase/tests/commercial/authorized_schedule_test.sql                    0s
+EXPECTED-FAIL (exit 3)           supabase/tests/commercial/design_services_authority_test.sql              0s
+EXPECTED-FAIL (exit 3)           supabase/tests/commercial/design_services_gap_hardening_test.sql          0s
+PASS                             supabase/tests/commercial/design_services_paper_issue_test.sql            0s
+PASS                             supabase/tests/commercial/direct_order_attribution_test.sql               0s
+EXPECTED-FAIL (exit 3)           supabase/tests/commercial/executed_on_paper_test.sql                      0s
+PASS                             supabase/tests/commercial/fulfillment_intake_ledger_balance_test.sql      0s
+PASS                             supabase/tests/commercial/multi_studio_signature_test.sql                 1s
+EXPECTED-FAIL (exit 3)           supabase/tests/commercial/trade_rfq_test.sql                              0s
+EXPECTED-FAIL (exit 3)           supabase/tests/commercial/trade_scope_test.sql                            0s
+PASS                             supabase/tests/document/advance_project_phase_atomicity_test.sql          1s
+PASS                             supabase/tests/document/begin_discovery_atomicity_test.sql                0s
+PASS                             supabase/tests/document/client_decision_option_numeric_integrity_test.sql    0s
+PASS                             supabase/tests/document/client_scope_change_request_test.sql              0s
+EXPECTED-FAIL (exit 3)           supabase/tests/document/close_project_readiness_test.sql                  0s
+PASS                             supabase/tests/document/decision_journey_atomicity_test.sql               1s
+PASS                             supabase/tests/document/delete_project_phase_atomicity_test.sql           0s
+EXPECTED-FAIL (exit 3)           supabase/tests/document/journey_authority_integrity_test.sql              0s
+PASS                             supabase/tests/document/margin_items_note_field_capture_test.sql          0s
+PASS                             supabase/tests/document/project_document_notifications_test.sql           0s
+PASS                             supabase/tests/document/project_journey_authority_test.sql                0s
+PASS                             supabase/tests/document/project_phases_realtime_test.sql                  0s
+PASS                             supabase/tests/document/proposal_phase_authority_atomicity_test.sql       0s
+PASS                             supabase/tests/document/set_document_client_consistency_test.sql          0s
+PASS                             supabase/tests/edge_api/catalog_roles_remote_conformance_negative_test.sql    1s
+EXPECTED-FAIL (exit 3)           supabase/tests/edge_api/catalog_roles_remote_conformance_test.sql         0s
+EXPECTED-FAIL (exit 3)           supabase/tests/edge_api/catalog_roles_test.sql                            0s
+EXPECTED-FAIL (exit 3)           supabase/tests/edge_api/platform_acl_compatibility_test.sql               0s
+PASS                             supabase/tests/edge_api/public_acl_exception_registry.sql                 0s
+PASS                             supabase/tests/edge_api/public_acl_residual_census.sql                    0s
+PASS                             supabase/tests/edge_api/public_rpc_authorization_contract_test.sql        0s
+PASS                             supabase/tests/edge_api/public_sd_hardening_contract_test.sql             2s
+PASS                             supabase/tests/ffe/assignment_scope_rpc_derivation_test.sql               0s
+PASS                             supabase/tests/ffe/domain_and_placement_test.sql                          0s
+PASS                             supabase/tests/ffe/release_lineage_compat_test.sql                        0s
+PASS                             supabase/tests/ffe/release_security_test.sql                              0s
+PASS                             supabase/tests/ffe/review_privacy_test.sql                                0s
+PASS                             supabase/tests/ffe/service_boundaries_test.sql                            1s
+PASS                             supabase/tests/field/apply_field_effect_test.sql                          0s
+PASS                             supabase/tests/field/field_capture_note_routing_test.sql                  0s
+PASS                             supabase/tests/field/field_capture_visit_test.sql                         0s
+PASS                             supabase/tests/field/field_links_test.sql                                 0s
+PASS                             supabase/tests/field/project_task_field_capture_ref_test.sql              0s
+PASS                             supabase/tests/field/time_entry_field_visit_source_test.sql               0s
+EXPECTED-FAIL (exit 3)           supabase/tests/library/product_configuration_test.sql                     0s
+PASS                             supabase/tests/media_registry/media_registry_lifecycle_test.sql           0s
+PASS                             supabase/tests/media_registry/media_registry_rls_test.sql                 0s
+PASS                             supabase/tests/media_registry/media_upload_intents_test.sql               0s
+PASS                             supabase/tests/mood_boards/atomic_room_state_test.sql                     0s
+PASS                             supabase/tests/mood_boards/board_item_directions_test.sql                 0s
+PASS                             supabase/tests/mood_boards/lineage_and_client_bundle_test.sql             0s
+PASS                             supabase/tests/mood_boards/maintenance_quota_test.sql                     1s
+PASS                             supabase/tests/mood_boards/project_board_share_test.sql                   0s
+PASS                             supabase/tests/mood_boards/share_security_test.sql                        0s
+PASS                             supabase/tests/mood_boards/template_lifecycle_test.sql                    0s
+PASS                             supabase/tests/notifications/client_attention_test.sql                    0s
+PASS                             supabase/tests/notifications/decision_first_notice_test.sql               0s
+PASS                             supabase/tests/notifications/onboarding_drip_retiming_test.sql            0s
+PASS                             supabase/tests/notifications/she_sets_the_pace_test.sql                   0s
+EXPECTED-FAIL (exit 3)           supabase/tests/notifications/unconfirmed_analytics_test.sql               0s
+PASS                             supabase/tests/plan_room/security_and_lifecycle_test.sql                  1s
+PASS                             supabase/tests/plan_room/storage_policy_test.sql                          0s
+PASS                             supabase/tests/procurement/create_po_rpc_test.sql                         0s
+PASS                             supabase/tests/procurement/crons_test.sql                                 0s
+PASS                             supabase/tests/procurement/dual_pricing_test.sql                          0s
+PASS                             supabase/tests/procurement/ffe_coverage_test.sql                          0s
+PASS                             supabase/tests/procurement/po_send_columns_test.sql                       0s
+EXPECTED-FAIL (exit 3)           supabase/tests/procurement/state_chain_test.sql                           0s
+EXPECTED-FAIL (exit 3)           supabase/tests/proposals/proposal_builder_atomicity_test.sql              0s
+PASS                             supabase/tests/proposals/proposal_copy_immutability_test.sql              1s
+PASS                             supabase/tests/proposals/proposal_lifecycle_authority_test.sql            0s
+EXPECTED-FAIL (exit 3)           supabase/tests/proposals/proposal_policy_locking_integrity_test.sql       0s
+PASS                             supabase/tests/proposals/proposal_send_dispatch_guard_test.sql            0s
+EXPECTED-FAIL (exit 3)           supabase/tests/proposals/proposal_signature_authority_test.sql            0s
+PASS                             supabase/tests/proposals/send_proposal_schedule_guard_test.sql            0s
+PASS                             supabase/tests/retained_services/authorization_contract_test.sql          1s
+PASS                             supabase/tests/retained_services/prod_shape_regression_test.sql           0s
+PASS                             supabase/tests/rls/00555_ios_round_one_security.test.sql                  0s
+PASS                             supabase/tests/rls/00557_increment_scan_upload_attempt.test.sql           0s
+PASS                             supabase/tests/rls/00559_first_document_opened_test.sql                   0s
+PASS                             supabase/tests/rls/00562_notification_log_owner_opened.test.sql           0s
+PASS                             supabase/tests/rls/00563_proposal_signing_multi_studio.test.sql           0s
+PASS                             supabase/tests/rls/00564_client_signoff_approval.test.sql                 0s
+PASS                             supabase/tests/rls/admin_studio_management_test.sql                       0s
+PASS                             supabase/tests/rls/anon_table_grant_narrowing_test.sql                    0s
+EXPECTED-FAIL (exit 3)           supabase/tests/rls/design_requests_test.sql                               0s
+PASS                             supabase/tests/rls/designer_clients_client_read_test.sql                  0s
+PASS                             supabase/tests/rls/field_parties_test.sql                                 0s
+PASS                             supabase/tests/rls/fulfillment_client_read_test.sql                       1s
+PASS                             supabase/tests/rls/people_directory_scope_test.sql                        0s
+PASS                             supabase/tests/rls/products_three_layer_test.sql                          0s
+PASS                             supabase/tests/rls/project_notes_test.sql                                 0s
+PASS                             supabase/tests/rls/project_roster_test.sql                                0s
+PASS                             supabase/tests/rls/saved_items_snapshot_test.sql                          0s
+PASS                             supabase/tests/rls/sms_tables_test.sql                                    0s
+PASS                             supabase/tests/rls/studio_contacts_backfill_test.sql                      0s
+PASS                             supabase/tests/rls/studio_contacts_test.sql                               0s
+EXPECTED-FAIL (exit 3)           supabase/tests/rls/studio_titles_test.sql                                 0s
+PASS                             supabase/tests/rooms/geometry_rls_test.sql                                0s
+PASS                             supabase/tests/rooms/house_on_today_test.sql                              0s
+PASS                             supabase/tests/rooms/profile_presence_test.sql                            1s
+PASS                             supabase/tests/rooms/room_scan_documents_test.sql                         0s
+PASS                             supabase/tests/rooms/saved_item_note_test.sql                             0s
+PASS                             supabase/tests/scan_pipeline/scan_roles_conformance_test.sql              0s
+PASS                             supabase/tests/schedule/ceremony_hardening_test.sql                       0s
+PASS                             supabase/tests/schedule/install_window_test.sql                           0s
+PASS                             supabase/tests/security/extension_execute_authenticated_test.sql          0s
+PASS                             supabase/tests/site_requests/00471_authority_and_action_detail_test.sql    0s
+PASS                             supabase/tests/site_requests/00472_binder_exact_studio_privacy_test.sql    0s
+PASS                             supabase/tests/site_requests/security_and_lifecycle_test.sql              0s
+EXPECTED-FAIL (exit 3)           supabase/tests/spec_books/security_and_lifecycle_test.sql                 0s
+PASS                             supabase/tests/storage/moodboard_caller_binding_test.sql                  1s
+PASS                             supabase/tests/storage/product_images_owner_folder_insert_test.sql        0s
+PASS                             supabase/tests/storage/project_documents_caller_binding_test.sql          0s
+PASS                             supabase/tests/svc_media/shape_reconciliation_fixture_proof.sql           0s
+PASS                             supabase/tests/workflow/00469_project_contextual_handoffs_contract_test.sql    0s
+PASS                             supabase/tests/workflow/00470_site_request_awaiting_consent_handoff_contract_test.sql    0s
+PASS                             supabase/tests/workflow/approval_authority/00463_authority_evidence_contract_test.sql    0s
+PASS                             supabase/tests/workflow/approval_authority/00464_lifecycle_compatibility_contract_test.sql    0s
+PASS                             supabase/tests/workflow/approval_authority/00465_notification_traceability_contract_test.sql    1s
+PASS                             supabase/tests/workflow/approval_authority/00467_client_access_contract_test.sql    0s
+PASS                             supabase/tests/workflow/approval_authority/00468_stage2_option_privacy_contract_test.sql    0s
+PASS                             supabase/tests/workflow/approval_authority/00569_why_viewer_role_receipt_contract_test.sql    0s
+PASS                             supabase/tests/workflow/board_privacy_contract_test.sql                   0s
+PASS                             supabase/tests/workflow/canonical_workflow_spine_test.sql                 0s
+PASS                             supabase/tests/workflow/commercial_privacy_contract_test.sql              1s
+PASS                             supabase/tests/workflow/configuration_privacy_contract_test.sql           0s
+
+================ summary ================
+total:             159
+green:              138
+expected-fail:      21  (documented in supabase/tests/KNOWN_FAILURES.md)
+unexpected-fail:    0
+effective-green:    159 / 159  (green + expected-fail)
+===========================================

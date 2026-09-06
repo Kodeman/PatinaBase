@@ -36,8 +36,34 @@ private final class MutableClock: @unchecked Sendable {
 /// flips from unresolved to resolved mid-flight.
 private final class TourStateBox: @unchecked Sendable {
     var state: FirstLaunchTourState?
+    /// How many more reads answer "not resolved yet" before the box resolves
+    /// itself. Zero — the default — is a box that simply holds what it was
+    /// given.
+    private var readsUntilResolved = 0
+    private(set) var reads = 0
+
     init(_ state: FirstLaunchTourState?) { self.state = state }
-    func get() -> FirstLaunchTourState? { state }
+
+    /// A box that resolves on its Nth read.
+    ///
+    /// `introGate_freshUser_pollsUntilTourResolves` used to resolve this from
+    /// the test's own `Task.sleep(50ms)` while the gate polled on a wall
+    /// clock, which under a loaded full-suite run is a race the gate wins:
+    /// the poll loop starved the sleeping test past its own timeout and the
+    /// suite went red for reasons that had nothing to do with the gate. The
+    /// polling is what the test is about, so it is COUNTED instead of timed.
+    convenience init(resolvingAfter reads: Int) {
+        self.init(FirstLaunchTourState())
+        self.readsUntilResolved = reads
+    }
+
+    func get() -> FirstLaunchTourState? {
+        reads += 1
+        if readsUntilResolved > 0, reads > readsUntilResolved {
+            state = FirstLaunchTourState(completed: true, launched: true)
+        }
+        return state
+    }
 }
 
 @MainActor
@@ -370,18 +396,17 @@ struct CompanionCoachingModelTests {
         let (defaults, suite) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
         let recorder = CoachingEventRecorder()
-        let box = TourStateBox(FirstLaunchTourState())   // fresh, unresolved
+        // Fresh and unresolved, and resolving on the fourth read rather than
+        // on a wall clock the loaded suite can starve.
+        let box = TourStateBox(resolvingAfter: 3)
         let model = makeModel(defaults: defaults, tourState: { box.get() }, recorder: recorder)
         model.introGatePollInterval = .milliseconds(10)
-        model.introGateTimeout = .seconds(5)
+        model.introGateTimeout = .seconds(30)
 
-        let task = Task { await model.introGate() }
-        // Let it poll a few times while still unresolved, then resolve.
-        try? await Task.sleep(for: .milliseconds(50))
-        box.state = FirstLaunchTourState(completed: true, launched: true)
+        let result = await model.introGate()
 
-        let result = await task.value
         #expect(result == true)
+        #expect(box.reads > 3, "the gate resolved without polling")
     }
 
     @Test

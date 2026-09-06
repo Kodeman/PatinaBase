@@ -2,7 +2,7 @@
 //  PatinaStamp.swift
 //  PatinaDesignKit
 //
-//  `P-17` / `R13`. One stamp, eleven states, four dials — the iOS port of the
+//  `P-17` / `R13`. One stamp, twelve states, four dials — the iOS port of the
 //  portals' `GateStamp` grammar, so a homeowner meets the same mark in her
 //  inbox, on the web and on her phone.
 //
@@ -32,13 +32,18 @@ import SwiftUI
 /// rather than reading the state twice.
 public struct PatinaStamp: View {
 
-    // MARK: - The eleven states
+    // MARK: - The twelve states
 
     public enum State: String, CaseIterable, Sendable {
         /// Not stamped yet, and drawn so: an upright outline, deliberately
         /// unlike every mark beside it.
         case awaiting
         case approved
+        /// `W3R1-n2`. A settled choice between named alternatives. She did not
+        /// approve a rug — she chose one, and stamping APPROVED over her own
+        /// pick told her she had done something she had not. Same dials as
+        /// APPROVED, which is the point: one act, one weight, one pigment.
+        case chosen
         /// `changes_requested` on every surface. Never "Declined" — that word
         /// belongs to a commercial document a client refused, and using it for
         /// both made one row read two ways on two screens.
@@ -63,6 +68,7 @@ public struct PatinaStamp: View {
             switch self {
             case .awaiting: return "AWAITING YOU"
             case .approved: return "APPROVED"
+            case .chosen: return "CHOSEN"
             case .returned: return "RETURNED"
             case .held: return "HELD"
             case .signed, .signedOnPaper: return "SIGNED"
@@ -82,7 +88,7 @@ public struct PatinaStamp: View {
 
         public var borderPigment: Pigment {
             switch self {
-            case .approved, .signed, .signedOnPaper: return .mocha
+            case .approved, .chosen, .signed, .signedOnPaper: return .mocha
             case .awaiting, .held: return .goldenHour
             case .returned: return .clay
             case .declined: return .terracotta
@@ -95,7 +101,7 @@ public struct PatinaStamp: View {
         /// whole mark is muted.
         public var wordPigment: Pigment {
             switch self {
-            case .approved, .signed, .signedOnPaper: return .mocha
+            case .approved, .chosen, .signed, .signedOnPaper: return .mocha
             case .awaiting, .held, .returned, .declined: return .word
             case .reviewed, .withdrawn, .superseded, .expired: return .muted
             }
@@ -104,7 +110,7 @@ public struct PatinaStamp: View {
         /// Doubled reads terminal; a single rule reads still-open.
         public var weight: Weight {
             switch self {
-            case .approved, .signed, .signedOnPaper, .held: return .doubled
+            case .approved, .chosen, .signed, .signedOnPaper, .held: return .doubled
             case .awaiting, .returned, .declined, .reviewed,
                  .withdrawn, .superseded, .expired: return .single
             }
@@ -117,7 +123,7 @@ public struct PatinaStamp: View {
             switch self {
             case .awaiting, .signedOnPaper, .withdrawn, .superseded, .expired:
                 return 0
-            case .approved, .returned, .held, .signed, .reviewed, .declined:
+            case .approved, .chosen, .returned, .held, .signed, .reviewed, .declined:
                 return PatinaStamp.rotationDegrees
             }
         }
@@ -132,7 +138,7 @@ public struct PatinaStamp: View {
         public var ages: Bool {
             switch self {
             case .awaiting, .returned, .held: return false
-            case .approved, .signed, .signedOnPaper, .reviewed,
+            case .approved, .chosen, .signed, .signedOnPaper, .reviewed,
                  .withdrawn, .superseded, .expired, .declined: return true
             }
         }
@@ -241,16 +247,25 @@ public struct PatinaStamp: View {
     /// draws the stamp with NO sentence beside it passes the word it stands
     /// for, and the mark speaks.
     public let accessibilityLabel: String?
+    /// `P-26`: drawn square to the page, whatever the state's own tilt.
+    ///
+    /// The tilt is the hand that pressed the mark, and on a screen it reads
+    /// as one. On a printed keepsake it reads as a misfeed — a page that went
+    /// through the printer crooked — so the Record of Decision, and nothing
+    /// else, asks for the mark upright.
+    public let isUpright: Bool
 
     public init(
         state: State,
         sublabel: String? = nil,
         isAged: Bool = false,
+        isUpright: Bool = false,
         accessibilityLabel: String? = nil
     ) {
         self.state = state
         self.sublabel = sublabel
         self.isAged = isAged
+        self.isUpright = isUpright
         self.accessibilityLabel = accessibilityLabel
     }
 
@@ -260,14 +275,21 @@ public struct PatinaStamp: View {
         sublabel: String? = nil,
         recordedAt: Date?,
         now: Date = Date(),
+        isUpright: Bool = false,
         accessibilityLabel: String? = nil
     ) {
         self.init(
             state: state,
             sublabel: sublabel,
             isAged: Self.isAged(state: state, recordedAt: recordedAt, now: now),
+            isUpright: isUpright,
             accessibilityLabel: accessibilityLabel
         )
+    }
+
+    /// The rotation this mark is actually drawn at.
+    public var drawnRotationDegrees: Double {
+        isUpright ? 0 : state.rotationDegrees
     }
 
     // MARK: - Body
@@ -318,7 +340,7 @@ public struct PatinaStamp: View {
                         .padding(2.5)
                 }
             }
-            .rotationEffect(.degrees(state.rotationDegrees))
+            .rotationEffect(.degrees(drawnRotationDegrees))
     }
 
     private var words: some View {

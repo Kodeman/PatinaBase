@@ -77,6 +77,35 @@ extension DecisionDetailViewModel {
         approvalReview?.decisionId ?? decision?.id
     }
 
+    /// `P-26`. The keepsake for a settled Stage-2 approval, or nil while one
+    /// is still open.
+    ///
+    /// The name and the consent are what THIS session witnessed. On the visit
+    /// she answers, that is both; on a later visit the projection carries the
+    /// outcome and the day and neither of the other two, and the record
+    /// prints what it has rather than reconstructing the act from the
+    /// outcome. Approve is the only signed act (ruled 2026-09-05), so a
+    /// Return or a Hold names the click-through it actually sent.
+    func approvalRecord(studio: String?, now: Date = Date()) -> RecordOfDecision? {
+        guard let review = approvalReview,
+              let outcome = answeredOutcome ?? review.recordedOutcome else { return nil }
+        let witnessed = answeredOutcome != nil
+        let typed = typedSignature.trimmingCharacters(in: .whitespacesAndNewlines)
+        let signed = outcome == .approved && !typed.isEmpty
+        return .approval(
+            review: review,
+            outcome: outcome,
+            studio: studio,
+            signedName: witnessed && signed ? typed : nil,
+            consentMethod: witnessed
+                ? (signed
+                    ? RecordOfDecisionCopy.electronicSignature
+                    : RecordOfDecisionCopy.clickThrough)
+                : nil,
+            recordedAt: witnessed ? now : nil
+        )
+    }
+
     /// Pick an outcome. Records nothing — `submitApprovalResponse` is the act.
     func chooseOutcome(_ outcome: ProjectApprovalOutcome) {
         guard !isSubmitting, approvalReview?.canRespond == true else { return }

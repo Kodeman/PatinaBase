@@ -22,8 +22,20 @@ import SwiftUI
 struct DecisionDetailView: View {
     let decisionId: String
     @State private var viewModel = DecisionDetailViewModel()
+    /// `P-30`: which plate the paged spread is resting on, so the page dot
+    /// knows which one to fill. Nil on the two other layouts.
+    @State private var pagedOptionId: String?
+    /// `r1 M2`: the optional signature under the spread. Empty is the ordinary
+    /// path, and what an unsigned hold records is `click_through`.
+    @State private var spreadSignature = ""
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// `P-30`: the arrival. Reduce Motion takes the still one.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The namespace the Record row's own `matchedTransitionSource` is in.
+    /// Nil where the screen was reached from somewhere that publishes none —
+    /// a push notification, a deep link — and the push is then the plain one.
+    @Environment(\.decisionZoomNamespace) private var zoomNamespace
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -79,24 +91,19 @@ struct DecisionDetailView: View {
             )
             .presentationDetents(DecisionSheetDetents.detents(for: dynamicTypeSize))
         }
+        // `P-30`: the zoom is applied to the DESTINATION; the Record row
+        // carries the matching `matchedTransitionSource`. Under Reduce Motion
+        // neither the zoom nor the push's slide is drawn — the screen is
+        // simply there (`W2R2-n1`'s rule, applied to a push).
+        .modifier(
+            DecisionArrival(
+                decisionId: decisionId,
+                namespace: zoomNamespace,
+                transition: DecisionSpread.transition(reduceMotion: reduceMotion)
+            )
+        )
         .sheet(isPresented: consentSheetBinding) {
-            if let option = pendingOption {
-                DecisionConsentSheet(
-                    optionTitle: option.resolvedTitle ?? "this option",
-                    isSubmitting: viewModel.isSubmitting,
-                    onConfirm: { consent, signature in
-                        Task {
-                            await viewModel.confirmSelection(
-                                decisionId: decisionId,
-                                consent: consent,
-                                signature: signature
-                            )
-                        }
-                    },
-                    onCancel: { viewModel.cancelSelection() }
-                )
-                .presentationDetents(DecisionSheetDetents.detents(for: dynamicTypeSize))
-            } else if viewModel.isApprovingSignoff {
+            if viewModel.isApprovingSignoff {
                 // W1-B-03: the same sheet, the same contractual moment, named
                 // for the act. A sign-off has no option to put in the title, so
                 // the subject is the decision itself.
@@ -120,24 +127,16 @@ struct DecisionDetailView: View {
         }
     }
 
-    /// The option the client tapped "Choose this" on, resolved from the VM.
-    private var pendingOption: RemoteDecisionOption? {
-        guard let id = viewModel.pendingOptionId else { return nil }
-        return viewModel.options.first(where: { $0.id == id })
-    }
-
-    /// `.sheet(isPresented:)` binding driven by whichever act is pending — an
-    /// option the client tapped, or the sign-off (`W1-B-03`), which has no
-    /// option to remember. Dismissing the sheet (swipe or Cancel) clears both.
+    /// `.sheet(isPresented:)` binding for the one act that still uses the
+    /// consent step: the sign-off (`W1-B-03`), which carries no option and no
+    /// spread. `P-30` took the option path off this sheet — the named held act
+    /// under the plates IS the consent, and a hold that opens a second Approve
+    /// button is the stack of submit buttons P-30 replaced, wearing a gesture.
+    /// Dismissing the sheet (swipe or Cancel) clears it.
     private var consentSheetBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.pendingOptionId != nil || viewModel.isApprovingSignoff },
-            set: {
-                if !$0 {
-                    viewModel.cancelSelection()
-                    viewModel.cancelSignoff()
-                }
-            }
+            get: { viewModel.isApprovingSignoff },
+            set: { if !$0 { viewModel.cancelSignoff() } }
         )
     }
 
@@ -244,7 +243,7 @@ struct DecisionDetailView: View {
     private var resolvedBanner: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             PatinaStamp(
-                state: Self.resolvedStamp,
+                state: Self.resolvedStamp(hasNamedOptions: !viewModel.options.isEmpty),
                 recordedAt: viewModel.decision?.responded_at
                     .flatMap(ISO8601DateParsing.date(from:))
             )
@@ -255,15 +254,41 @@ struct DecisionDetailView: View {
         .padding(.top, 8)
     }
 
-    /// Every client act on the legacy rail says yes to something: choosing a
-    /// named option, or giving a sign-off through `approve_client_signoff`.
-    /// There is no client-reachable path that records any other outcome on a
-    /// non-Stage-2 decision, so APPROVED is the one honest word here. The
-    /// Stage-2 ceremony, which has three, stamps its own in
-    /// `ProjectApprovalBlock`.
-    static let resolvedStamp: PatinaStamp.State = .approved
+    /// Every client act on the legacy rail says yes to something — but not to
+    /// the same thing. A sign-off through `approve_client_signoff` is an
+    /// approval and stamps APPROVED; a settled choice between named
+    /// alternatives is a CHOSEN (`W3R1-n2`), because she picked the Natural
+    /// rug rather than approving it, and the Vocabulary reserves "decision"
+    /// for exactly that act. The Stage-2 ceremony, which has three outcomes,
+    /// stamps its own in `ProjectApprovalBlock`.
+    static func resolvedStamp(hasNamedOptions: Bool) -> PatinaStamp.State {
+        hasNamedOptions ? .chosen : .approved
+    }
 
-    private func optionCard(_ option: RemoteDecisionOption) -> some View {
+    /// `P-30`: one plate of the spread. It used to carry its own "Choose this"
+    /// submit; now the whole plate is the tap and the act is one, named, and
+    /// below the spread.
+    ///
+    /// `compact` is the side-by-side and paged geometry: half the width, so
+    /// the image takes a third less height and the plate still shows its
+    /// title, price and note above the fold.
+    private func optionCard(_ option: RemoteDecisionOption, compact: Bool = false) -> some View {
+        Button {
+            viewModel.chooseLeaning(optionId: option.id)
+        } label: {
+            plate(option, compact: compact)
+        }
+        .buttonStyle(.plain)
+        // A resolved decision's plates are a record, not a control.
+        .allowsHitTesting(!viewModel.isResolved)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(
+            viewModel.leaningOptionId == option.id ? .isSelected : []
+        )
+        .accessibilityIdentifier("decisionOption.plate.\(option.id)")
+    }
+
+    private func plate(_ option: RemoteDecisionOption, compact: Bool) -> some View {
         let isRecommended = option.is_recommended ?? false
         let isSelected = viewModel.isSelected(option)
         // R06 render contract: title/description/image resolve through the
@@ -275,11 +300,54 @@ struct DecisionDetailView: View {
             if let imageURL = option.resolvedImageURL {
                 PatinaAsyncImage(url: imageURL)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 180)
+                    .frame(height: compact ? 120 : 180)
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
+            plateNaming(option, hasDetails: hasDetails,
+                        isRecommended: isRecommended, compact: compact)
+
+            HStack {
+                if let cents = option.resolvedPriceCents {
+                    Text(Self.formattedPrice(cents: cents))
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                }
+                Spacer()
+                optionAction(option, isSelected: isSelected, hasDetails: hasDetails)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(PatinaColors.Background.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(plateRule(isSelected: isSelected, isLeaning: viewModel.leaningOptionId == option.id), lineWidth: 1.5)
+        )
+        // `P-30`: the whole plate is the tap, and the tap is a leaning. A
+        // contentless plate is not leanable — the act above it would name
+        // nothing — and the view model refuses it for the same reason.
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// What the plate is called, and the mark that says it is recommended.
+    ///
+    /// `W3R1-M1`: on a compact plate the capsule takes its intrinsic width
+    /// first (C-06 gave it `fixedSize`), so a 171pt plate handed the title
+    /// what was left and "Shaker Oak" drew as "Shak…" — the plate could not
+    /// say its own name on the exact two-option case this spread was built
+    /// for. Side by side, the word goes under the title instead of beside it;
+    /// at full width there is room for both on one line, which is where the
+    /// mark reads best.
+    private func plateNaming(
+        _ option: RemoteDecisionOption,
+        hasDetails: Bool,
+        isRecommended: Bool,
+        compact: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     if hasDetails {
@@ -299,46 +367,44 @@ struct DecisionDetailView: View {
                             .foregroundStyle(PatinaColors.Text.muted)
                     }
                 }
-                Spacer()
-                if isRecommended {
-                    Text("Recommended")
-                        // C-06: the badge is one word in a capsule beside a
-                        // title that takes the rest of the row. At
-                        // accessibility-extra-large the capsule was squeezed
-                        // below the word's own width and it wrapped inside
-                        // itself — "Recommende / d". One line, tightened, and
-                        // never split.
-                        .font(PatinaTypography.monoTiny)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .allowsTightening(true)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(PatinaColors.clay.opacity(0.1))
-                        .clipShape(Capsule())
+                Spacer(minLength: 8)
+                if isRecommended, !compact {
+                    recommendedCapsule
                 }
             }
-
-            HStack {
-                if let cents = option.resolvedPriceCents {
-                    Text(Self.formattedPrice(cents: cents))
-                        .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.Text.secondary)
-                }
-                Spacer()
-                optionAction(option, isSelected: isSelected, hasDetails: hasDetails)
+            if isRecommended, compact {
+                recommendedCapsule
             }
         }
-        .padding(16)
-        .background(PatinaColors.Background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(isSelected ? PatinaColors.Stamp.mocha : .clear, lineWidth: 1.5)
-        )
-        .padding(.horizontal, 24)
+    }
+
+    /// The one word, in a capsule. Drawn beside the title at full width and
+    /// beneath it on a compact plate — the same mark, never a truncated title.
+    private var recommendedCapsule: some View {
+        Text("Recommended")
+            // C-06: the badge is one word in a capsule beside a title that
+            // takes the rest of the row. At accessibility-extra-large the
+            // capsule was squeezed below the word's own width and it wrapped
+            // inside itself — "Recommende / d". One line, tightened, and never
+            // split.
+            .font(PatinaTypography.monoTiny)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .allowsTightening(true)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(PatinaColors.Text.interactive)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(PatinaColors.clay.opacity(0.1))
+            .clipShape(Capsule())
+    }
+
+    /// The rule around a plate. Mocha is the answer already given; clay is the
+    /// leaning, which is the same pigment as the dot inside it and the page
+    /// dot below. Nothing else draws a rule — an untouched plate is a plate.
+    private func plateRule(isSelected: Bool, isLeaning: Bool) -> Color {
+        if isSelected { return PatinaColors.Stamp.mocha }
+        return isLeaning ? PatinaColors.clay : .clear
     }
 
     @ViewBuilder
@@ -353,18 +419,15 @@ struct DecisionDetailView: View {
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Stamp.mocha)
                 .accessibilityIdentifier("decisionOption.selected")
-        } else if !viewModel.isResolved {
-            // Approval is contractual — a contentless card can't be chosen
-            // here (R06); PatinaButton's isEnabled dims + disables.
-            PatinaButton(
-                "Choose this",
-                style: .primary,
-                isLoading: viewModel.isSubmitting && viewModel.pendingOptionId == option.id,
-                isEnabled: !viewModel.isSubmitting && hasDetails
-            ) {
-                viewModel.beginSelection(optionId: option.id)
-            }
-            .accessibilityIdentifier("decisionOption.choose")
+        } else if !viewModel.isResolved, viewModel.leaningOptionId == option.id, hasDetails {
+            // `P-30`: the leaning mark. A filled clay dot and nothing else —
+            // no word, no check, no fill behind the plate. The sentence it
+            // stands for is spoken to VoiceOver by the plate's own selected
+            // trait, so the dot itself is silent.
+            Circle()
+                .fill(PatinaColors.clay)
+                .frame(width: 10, height: 10)
+                .accessibilityHidden(true)
         }
     }
 
@@ -420,10 +483,192 @@ extension DecisionDetailView {
                     .padding(.horizontal, 24)
                     .accessibilityIdentifier("decisionDetail.noOptions")
             } else {
-                ForEach(viewModel.options) { option in
-                    optionCard(option)
-                }
+                spread
             }
+    }
+
+    // MARK: - `P-30` · the spread
+
+    /// The plates, then one named act.
+    ///
+    /// The act is below the whole spread rather than inside each plate: two
+    /// full-width submit buttons stacked vertically is a screen asking the
+    /// same question twice, and neither of them said what it was agreeing to.
+    private var spread: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            switch DecisionSpread.layout(
+                optionCount: viewModel.options.count,
+                isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+            ) {
+            case .sideBySide: sideBySidePlates
+            case .paged: pagedPlates
+            case .stacked: stackedPlates
+            }
+            if !viewModel.isResolved {
+                namedAct.padding(.horizontal, 24)
+            }
+        }
+        // The haptic the leaning earns: one selection tick, on the change of
+        // which plate is lit, and nothing on the act itself (`HoldToActButton`
+        // fires its own).
+        .sensoryFeedback(.selection, trigger: viewModel.leaningOptionId)
+    }
+
+    /// Two plates, equal, shoulder to shoulder. `maxHeight: .infinity` on each
+    /// plate is what makes them equal: the row takes the taller one's height
+    /// and both fill it, so a one-line option does not sit in a short card
+    /// beside a three-line one and read as the lesser offer.
+    private var sideBySidePlates: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ForEach(viewModel.options) { option in
+                optionCard(option, compact: true)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 24)
+    }
+
+    /// One plate at a time down the page — the accessibility sizes, and a lone
+    /// option.
+    private var stackedPlates: some View {
+        VStack(spacing: 12) {
+            ForEach(viewModel.options) { option in
+                optionCard(option)
+            }
+        }
+        .padding(.horizontal, 24)
+    }
+
+    /// Three or more: a horizontally paged spread, one plate per page, with a
+    /// dot rule beneath it. `.scrollTargetBehavior(.viewAligned)` rather than
+    /// a `TabView` page style, which demands a fixed height a plate does not
+    /// have.
+    ///
+    /// `W3R1-M2`: the page inset is the SCROLL VIEW's, not the row's.
+    /// `containerRelativeFrame` measures the scroll view and knows nothing
+    /// about padding applied inside it, so a `.padding(.horizontal, 24)` on
+    /// the `LazyHStack` made every plate a full screen wide starting 24pt in —
+    /// 24pt of each one, including the leaning dot that is the whole point of
+    /// the tap, hung off the right edge. `safeAreaPadding` insets the
+    /// container itself, which is the measurement the frame reads.
+    private var pagedPlates: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 12) {
+                    ForEach(viewModel.options) { option in
+                        optionCard(option, compact: true)
+                            .containerRelativeFrame(.horizontal, count: 1, spacing: 12)
+                            .id(option.id)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .safeAreaPadding(.horizontal, 24)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: $pagedOptionId)
+            .accessibilityHint(DecisionSpread.pagedSpreadLabel)
+            pageDots
+        }
+    }
+
+    /// `P-24` / the refusals: a dot rule, never "2 of 4". The dots are drawn
+    /// for the eye and hidden from VoiceOver, which reaches the plates
+    /// themselves and hears each one named.
+    private var pageDots: some View {
+        HStack(spacing: 6) {
+            ForEach(viewModel.options) { option in
+                Circle()
+                    .fill(
+                        option.id == (pagedOptionId ?? viewModel.options.first?.id)
+                            ? PatinaColors.clay
+                            : PatinaColors.Text.muted.opacity(0.3)
+                    )
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
+    }
+
+    /// `P-30`: one act, named for what it agrees to, and held rather than
+    /// tapped. Until a plate is leaning there is no act — there is the line
+    /// that says the tap is safe.
+    @ViewBuilder
+    private var namedAct: some View {
+        if let leaning = viewModel.leaningOption {
+            VStack(alignment: .leading, spacing: 12) {
+                signatureLine
+                // `r1 M2`: what holding it does. The consent sheet carried
+                // this sentence and took it with it when P-30 replaced it.
+                Text(DecisionSpread.actConsequence)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("decisionSpread.consequence")
+                HoldToActButton(
+                    title: DecisionSpread.actLabel(optionTitle: leaning.resolvedTitle),
+                    isEnabled: !viewModel.isSubmitting && spreadConsent != .tooShort,
+                    isBusy: viewModel.isSubmitting
+                ) {
+                    Task {
+                        await viewModel.commitLeaning(
+                            decisionId: decisionId,
+                            typedName: spreadSignature
+                        )
+                    }
+                }
+                .accessibilityIdentifier("decisionSpread.act")
+            }
+        } else {
+            Text(DecisionSpread.leaningPrompt)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("decisionSpread.prompt")
+        }
+    }
+
+    /// What the held act will send, given what is in the name field.
+    private var spreadConsent: DecisionSpread.Consent {
+        DecisionSpread.consent(forTypedName: spreadSignature)
+    }
+
+    /// `r1 M2`. The optional typed name, restored under the spread after
+    /// `P-30` retired the consent sheet the option path used to reach
+    /// `client_consent_method = 'electronic_signature'` through.
+    ///
+    /// It is one line and it is never a gate: the act is live over an empty
+    /// field, and the only state that holds it back is a field with something
+    /// in it too short to be a name — which the line beneath says plainly
+    /// rather than leaving a dead control.
+    private var signatureLine: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(DecisionSpread.signatureTitle)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.primary)
+            Text(DecisionSpread.signatureNote)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            PatinaTextField(
+                DecisionSpread.signatureFieldLabel,
+                text: $spreadSignature,
+                label: DecisionSpread.signatureFieldLabel,
+                icon: "signature",
+                textContentType: .name,
+                autocapitalization: .words
+            )
+            .disabled(viewModel.isSubmitting)
+            .accessibilityIdentifier("decisionSpread.signatureField")
+            if spreadConsent == .tooShort {
+                Text(DecisionSpread.signatureTooShort)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("decisionSpread.signatureTooShort")
+            }
+        }
     }
 
     /// SP-17: the two answers a real client gives, alongside the choices.

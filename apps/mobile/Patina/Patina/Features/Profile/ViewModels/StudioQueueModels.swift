@@ -49,9 +49,16 @@ enum StudioQueueSectionKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// `W3R2-M1`: what a section says while the merge has not answered yet.
+    /// It asserts nothing — the assertion is what the finding was about.
+    static let gatheringMessage = "Still gathering."
+
     var emptyMessage: String {
         switch self {
-        case .awaitingYou: return "Nothing needs a decision."
+        // "Decision" is a choice between named alternatives (Vocabulary), and
+        // this section holds approvals as well; what is empty is her side of
+        // the conversation, not a category of row.
+        case .awaitingYou: return "Nothing needs your answer."
         case .inProgress: return "No active projects yet."
         case .conversation: return "No project conversations yet."
         case .moneyAndDocuments: return "No shared records yet."

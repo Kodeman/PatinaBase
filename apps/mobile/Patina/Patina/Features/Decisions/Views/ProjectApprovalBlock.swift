@@ -198,6 +198,10 @@ struct ProjectApprovalBlock: View {
                 stamp: ProjectApprovalCopy.stamp(for: answered),
                 id: "recorded"
             )
+            // `P-26`: the copy she keeps, beside the mark that settled it.
+            if let record = viewModel.approvalRecord(studio: studioName) {
+                KeepACopyAct(record: record)
+            }
             if let noteFailure = viewModel.noteFailure {
                 Text(noteFailure)
                     .font(PatinaTypography.bodySmall)
@@ -417,10 +421,10 @@ struct ProjectApprovalBlock: View {
     /// resolves it (`ProposalsViewModel.signingStudio`) — from the
     /// project the app already holds, never invented.
     private var studioName: String? {
-        guard let projectId = viewModel.approvalReview?.projectId
-            ?? viewModel.decision?.project_id else { return nil }
-        let project = BadgeCountService.shared.projects.first { $0.id == projectId }
-        return project?.designerStudioName ?? project?.designer?.displayName
+        RecordOfDecision.masthead(
+            projectId: viewModel.approvalReview?.projectId ?? viewModel.decision?.project_id,
+            projects: BadgeCountService.shared.projects
+        )
     }
 
     private var chosenAct: ProjectApprovalAct? {

@@ -121,6 +121,28 @@ final class ProposalDetailViewModel {
             .designerStudioName
     }
 
+    /// `P-26`. The copy of a signed proposal. Nil while it is unsigned — a
+    /// record of a decision nobody has taken yet is not a record.
+    ///
+    /// `signedName` is what THIS session typed; `signed_by_name` is what the
+    /// row carries on a later visit. Neither is invented, and where both are
+    /// absent the sheet prints no name.
+    func record(now: Date = Date()) -> RecordOfDecision? {
+        guard isSigned, let proposal else { return nil }
+        return .proposal(
+            proposal,
+            // `W3R2-n1`: the letterhead both keepsakes print, resolved in one
+            // place. `signingStudio` stays the seal sentence's — that one
+            // names a house or nothing.
+            studio: RecordOfDecision.masthead(
+                projectId: proposal.project_id,
+                projects: BadgeCountService.shared.projects
+            ),
+            signedName: signedName,
+            signedAt: didSign ? now : nil
+        )
+    }
+
     /// Signed either server-side or just now.
     var isSigned: Bool {
         didSign || proposal?.isSigned == true

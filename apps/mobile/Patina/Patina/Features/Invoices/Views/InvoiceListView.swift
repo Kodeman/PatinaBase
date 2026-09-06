@@ -76,7 +76,11 @@ struct InvoiceListView: View {
     private func section(_ title: String, _ invoices: [RemoteInvoice], accent: Color) -> some View {
         if !invoices.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("\(title) (\(invoices.count))")
+                // `W2R1-n3` / `P-24` residue: the eyebrow counts in words,
+                // like every other count a homeowner reads. Past twelve
+                // `PatinaCount` hands back figures, which is the web's own
+                // cutoff.
+                Text("\(title) (\(PatinaCount.inWords(invoices.count)))")
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.4)
                     .textCase(.uppercase)

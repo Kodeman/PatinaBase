@@ -10,13 +10,17 @@ import {
   spacer,
 } from "../_shared/branded-email.ts";
 import type { ApprovalArtifactCitation } from "../_shared/decision-notify.ts";
+import { localWeekdayAndHour } from "../_shared/decision-notify.ts";
 import { clientDecisionLink } from "../_shared/client-portal-links.ts";
 
 const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
 const SANS =
   "'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 
-export type ReminderDigestCategory = "proposal" | "decision";
+export type ReminderDigestCategory = "proposal" | "approval" | "choice";
+
+/** Which cadence this digest is being built for (00572). */
+export type DigestPeriod = "daily" | "weekly_sunday";
 
 export interface ReminderDigestItem {
   category: ReminderDigestCategory;
@@ -24,6 +28,149 @@ export interface ReminderDigestItem {
   link: string | null;
   decisionId?: string;
   artifact?: ApprovalArtifactCitation | null;
+}
+
+/**
+ * The vocabulary ruling, in the digest's own headings (Wave-1 carry, backend
+ * r3-M1). "Approval" is the only name for the ask; "decision" is allowed only
+ * for a choice between named alternatives. One heading could not be both, so
+ * the digest splits on `approval_contract` — a Stage-2 artifact-bound ask is an
+ * approval, a legacy option row is a choice.
+ */
+export function digestCategoryForDecision(
+  approvalContract: string | null | undefined,
+): ReminderDigestCategory {
+  return approvalContract === "project_artifact_v1" ? "approval" : "choice";
+}
+
+/**
+ * R16's quiet, on the digest side. After the overdue notice Patina says nothing
+ * further about that approval — including inside a summary, which is still an
+ * automated letter about it. The weekly digest makes this load-bearing: its
+ * seven-day window can reach back past a notice that already went out.
+ */
+export function dropDecisionsPastOverdue(
+  items: ReminderDigestItem[],
+  overdueDecisionIds: readonly string[],
+): ReminderDigestItem[] {
+  if (overdueDecisionIds.length === 0) return items;
+  const quiet = new Set(overdueDecisionIds);
+  return items.filter((item) =>
+    !(item.decisionId && quiet.has(item.decisionId))
+  );
+}
+
+/**
+ * P-28's snooze, on the digest side (r1 B1). A snoozed approval sends nothing
+ * until its hour — and a summary is still an automated letter about it. The
+ * direct-mail gate reads the same table; the digest had been reading none of
+ * it, so the default cadence delivered nightly what the snooze had silenced.
+ *
+ * R16's exception for a superseding edition needs no clause here: a successor
+ * is its own `client_decisions` row with its own id, so a snooze set on the
+ * edition she answered cannot reach the new one, and the announcement of a
+ * new edition mails direct rather than batching (decisionMailHold).
+ */
+export function dropSnoozedDecisions(
+  items: ReminderDigestItem[],
+  snoozedDecisionIds: readonly string[],
+): ReminderDigestItem[] {
+  if (snoozedDecisionIds.length === 0) return items;
+  const quiet = new Set(snoozedDecisionIds);
+  return items.filter((item) =>
+    !(item.decisionId && quiet.has(item.decisionId))
+  );
+}
+
+/**
+ * A notification_log row whose status means a letter actually left Patina.
+ * 'failed' and 'suppressed' mean it did not, so they must not silence the
+ * summary — she has heard nothing yet.
+ */
+const EMAIL_ACTUALLY_LEFT: ReadonlySet<string> = new Set([
+  "queued",
+  "sending",
+  "sent",
+  "delivered",
+  "opened",
+  "clicked",
+  "unconfirmed",
+  "bounced",
+  "complained",
+]);
+
+export interface DirectDecisionMailRow {
+  status?: string | null;
+  metadata?: { decisionId?: unknown } | null;
+}
+
+/**
+ * Which of these approvals already had a letter of their own inside this
+ * window (r2 M-R2-02).
+ *
+ * The first notice and a superseding edition break the digest and mail direct
+ * (decisionMailHold), so on the default cadence the very approval announced at
+ * four in the afternoon would be listed again in the next morning's summary —
+ * two letters about one ask inside a day, which ux/03 §282 forbids. Reading
+ * the mail log is the only place that fact is recorded, because the bell row
+ * the summary is built from carries no notion of which register spoke.
+ */
+export function directlyMailedDecisionIds(
+  rows: readonly DirectDecisionMailRow[],
+): string[] {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (!EMAIL_ACTUALLY_LEFT.has(String(row?.status ?? ""))) continue;
+    const id = row?.metadata?.decisionId;
+    if (typeof id === "string" && id.length > 0) ids.add(id);
+  }
+  return [...ids];
+}
+
+/** ux/03 §282's unit is a DAY, whatever period the summary covers. */
+const DIRECT_MAIL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How far back the "already had a letter of its own" check looks: the LATER of
+ * the summary's own window start and twenty-four hours ago (M-R3-01).
+ *
+ * The rule is ux/03 §282 — no second automated notice for one approval inside
+ * 24 hours — and reading it over the digest's period instead silenced whole
+ * cadences. Every approval mails its first notice direct, so on
+ * `weekly_sunday` every approval announced during the week had a
+ * `decision_required` row inside the seven-day window and was dropped from the
+ * Sunday summary; its reminder never mailed either (it was held as
+ * `cadence_digest` and stamped `reminder_sent_at`), so a "once a week, on
+ * Sunday" reader heard the announcement and then nothing until the date
+ * passed. On `daily` the same stretch swallowed a Saturday announcement out of
+ * Monday's summary.
+ */
+export function directMailWindowStart(
+  windowStart: Date | string,
+  now: Date,
+): Date {
+  const floor = now.getTime() - DIRECT_MAIL_WINDOW_MS;
+  const since = windowStart instanceof Date
+    ? windowStart.getTime()
+    : new Date(windowStart).getTime();
+  if (Number.isNaN(since)) return new Date(floor);
+  return new Date(Math.max(since, floor));
+}
+
+/**
+ * ux/03 §282: no second automated notice for one approval inside 24 hours.
+ * An approval whose own letter went out inside this window is not repeated in
+ * the summary that follows it.
+ */
+export function dropDirectlyMailedDecisions(
+  items: ReminderDigestItem[],
+  mailedDecisionIds: readonly string[],
+): ReminderDigestItem[] {
+  if (mailedDecisionIds.length === 0) return items;
+  const spokenFor = new Set(mailedDecisionIds);
+  return items.filter((item) =>
+    !(item.decisionId && spokenFor.has(item.decisionId))
+  );
 }
 
 export interface RenderedDigest {
@@ -51,6 +198,86 @@ export function isReminderDigestDue(
   return now.getTime() - last >= DIGEST_MIN_INTERVAL_MS;
 }
 
+// Six days, not seven: the weekly run has to be able to fire on the same
+// weekday it fired last week without the guard rounding it out.
+const WEEKLY_MIN_INTERVAL_MS = 6 * 24 * 60 * 60 * 1000;
+
+/** How far back each cadence looks. The weekly window is its own week. */
+export const DIGEST_WINDOW_MS: Record<DigestPeriod, number> = {
+  daily: 24 * 60 * 60 * 1000,
+  weekly_sunday: 7 * 24 * 60 * 60 * 1000,
+};
+
+/**
+ * "Once a week, on Sunday" means Sunday in HER zone, not in the cron's. The
+ * digest cron runs daily; this is the gate that makes six of those runs a
+ * no-op for a weekly reader.
+ */
+export function isSundayLocal(now: Date, timeZone: string): boolean {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+  }).format(now);
+  return weekday === "Sun";
+}
+
+/** The hour before which no automated approval mail goes out (ux/03 §6.2). */
+const LOCAL_MORNING_HOUR = 8;
+
+/**
+ * Whether this reader's digest is due now, for the cadence she chose.
+ *
+ * The summary keeps the same hours as the letter (r1 M3). The direct-mail gate
+ * refuses Sunday and refuses anything before 8am local; the digest is the
+ * vehicle for the DEFAULT cadence, so it owes the same promise — otherwise the
+ * quietest choice on the list is the one that mails at seven in the morning,
+ * on a Sunday. `weekly_sunday` is the one cadence that mails ON Sunday, and it
+ * waits for her morning like everything else. The cron runs hourly (00572) so
+ * that this gate has an hour to release into.
+ */
+export function isDigestDue(
+  period: DigestPeriod,
+  lastSentAt: string | null | undefined,
+  now: Date,
+  timeZone: string,
+): boolean {
+  const { weekday, hour } = localWeekdayAndHour(now, timeZone);
+  if (hour < LOCAL_MORNING_HOUR) return false;
+  if (period === "daily") {
+    if (weekday === 0) return false;
+    return isReminderDigestDue(lastSentAt, now);
+  }
+  if (weekday !== 0) return false;
+  if (!lastSentAt) return true;
+  const last = new Date(lastSentAt).getTime();
+  if (Number.isNaN(last)) return true;
+  return now.getTime() - last >= WEEKLY_MIN_INTERVAL_MS;
+}
+
+// A summary may reach back a long way when a run was skipped, but never
+// indefinitely: an item unread for a fortnight is not news.
+const DIGEST_MAX_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Where this summary's window starts. Ordinarily one period back — but a daily
+ * reader is not mailed on Sunday, so Monday's summary has to reach back past
+ * the run that never happened or Saturday's reminders fall through the floor
+ * (r1 M3). The window therefore stretches to the last digest actually sent,
+ * capped at a fortnight.
+ */
+export function digestWindowStart(
+  period: DigestPeriod,
+  lastSentAt: string | null | undefined,
+  now: Date,
+): Date {
+  const floor = now.getTime() - DIGEST_MAX_WINDOW_MS;
+  const ordinary = now.getTime() - DIGEST_WINDOW_MS[period];
+  if (!lastSentAt) return new Date(Math.max(floor, ordinary));
+  const last = new Date(lastSentAt).getTime();
+  if (Number.isNaN(last)) return new Date(Math.max(floor, ordinary));
+  return new Date(Math.max(floor, Math.min(ordinary, last)));
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -62,11 +289,16 @@ function escapeHtml(s: string): string {
 
 const CATEGORY_LABELS: Record<ReminderDigestCategory, string> = {
   proposal: "Proposals awaiting your review",
-  decision: "Decisions that need you",
+  approval: "Approvals that need you",
+  choice: "Choices that need you",
 };
 
 // Stable render order.
-const CATEGORY_ORDER: ReminderDigestCategory[] = ["proposal", "decision"];
+const CATEGORY_ORDER: ReminderDigestCategory[] = [
+  "proposal",
+  "approval",
+  "choice",
+];
 
 // The zone the rest of the notification rail falls back to when a recipient
 // stored none (decision-notify's DEFAULT_TIME_ZONE).
@@ -158,12 +390,16 @@ export function buildReminderDigestEmail(
   /** The recipient's notification_preferences.timezone; the issue dates are
    * printed in it, and the rail's own fallback stands in when it is unset. */
   timeZone?: string | null,
+  /** Which cadence this summary is for; daily unless she asked for Sunday. */
+  period: DigestPeriod = "daily",
 ): RenderedDigest {
   const zone = timeZone?.trim() || DEFAULT_TIME_ZONE;
   const count = items.length;
+  // Words where words will do (Wave-1 carry, backend r3-M1). A number in a
+  // subject line is a count of obligations, and she is not working a queue.
   const subject = count === 1
-    ? "A reminder from Patina"
-    : `${count} reminders from Patina`;
+    ? "One reminder from Patina"
+    : "A few reminders from Patina";
 
   const sections = CATEGORY_ORDER.map((category) => {
     const group = items.filter((i) => i.category === category);
@@ -188,18 +424,25 @@ export function buildReminderDigestEmail(
       </div>`;
   }).join("");
 
-  const body = heading("Your daily summary") +
-    paragraph("A few things are waiting for you.") +
+  const title = period === "weekly_sunday"
+    ? "Your Sunday summary"
+    : "Your daily summary";
+  const footer = period === "weekly_sunday"
+    ? "You're getting one summary a week, on Sunday, instead of individual reminders. Change this anytime in your notification settings."
+    : "You're getting one daily summary instead of individual reminders. Change this anytime in your notification settings.";
+
+  const body = heading(title) +
+    paragraph(
+      count === 1 ? "One thing is waiting for you." : "A few things are waiting for you.",
+    ) +
     (sections || paragraph("Nothing new right now.")) +
     spacer(6) +
     ctaButton(baseUrl, "Open Patina") +
     spacer(10) +
-    muted(
-      "You're getting one daily summary instead of individual reminders. Change this anytime in your notification settings.",
-    );
+    muted(footer);
 
   const html = renderBrandedShell({
-    title: "Your daily summary",
+    title,
     eyebrow: "Reminders",
     audience: "client",
     body,

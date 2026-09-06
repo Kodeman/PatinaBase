@@ -11,6 +11,7 @@ import SwiftUI
 struct StudioHubView: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.isTabRoot) private var isTabRoot
     @State private var authService = AuthService.shared
     @State private var viewModel = StudioHubViewModel.shared
 
@@ -20,7 +21,11 @@ struct StudioHubView: View {
 
             if !authService.isAuthenticated {
                 guestState
-            } else if viewModel.isLoading && !viewModel.hasLoaded {
+            } else if !viewModel.hasLoaded {
+                // `W3R2-M1`: `isLoading` is false for the frames between mount
+                // and the `.task` firing, so the hub fell straight through to
+                // its sections and drew every one of them as empty — an
+                // assertion about a load that had not been asked for yet.
                 loadingState
             } else {
                 // L07-05: the staleness line is drawn ABOVE the branch, so it
@@ -46,7 +51,14 @@ struct StudioHubView: View {
                 }
             }
         }
-        .task(id: authService.isAuthenticated) {
+        // `W2R3-n1`: the hub's number was a load-time snapshot. Keyed on the
+        // auth flag alone this re-ran only across a sign-in, so three
+        // consecutive Today→Studio re-entries inside one session all read
+        // "Ten" while the homeowner's real set had fallen to eight. The key
+        // now moves when she ARRIVES here, and the guard is why it does not
+        // also refetch eight sources on the way out.
+        .task(id: studioEntryKey) {
+            guard isOnStudio else { return }
             await viewModel.load()
         }
         .accessibilityElement(children: .contain)
@@ -233,40 +245,38 @@ struct StudioHubView: View {
 
             // P-24: the hub counts in words. A figure at the end of a row is
             // the count chip the refusals name, whatever it is drawn in.
-            Text(PatinaCount.inWords(sectionBadgeCount(section)))
-                .font(PatinaTypography.monoLabel)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .accessibilityLabel(sectionBadgeLabel(section))
+            //
+            // `W3R2-M1`: and no word at all until the merge has answered — the
+            // count that was read out was "zero things awaiting you" over a
+            // projection that had not come back.
+            if !viewModel.isAwaitingProjection {
+                Text(PatinaCount.inWords(sectionBadgeCount(section)))
+                    .font(PatinaTypography.monoLabel)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .accessibilityLabel(sectionBadgeLabel(section))
+            }
         }
         .padding(14)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// SP-16 named three numbers on one screen, and "Awaiting you 3" under a
-    /// header reading "4 things need your eye" was the third. Every other
-    /// section badge counts its cards; this one counts the things, because it
-    /// is the one the header also speaks for.
-    private func sectionBadgeCount(_ section: StudioQueueSection) -> Int {
-        section.kind == .awaitingYou
-            ? viewModel.snapshot.attentionSummary.awaitingCount
-            : section.rows.count
-    }
-
-    private func sectionBadgeLabel(_ section: StudioQueueSection) -> String {
-        section.kind.badgeLabel(count: sectionBadgeCount(section))
-    }
-
     @ViewBuilder
     private func sectionContent(_ section: StudioQueueSection) -> some View {
         if section.rows.isEmpty {
-            Text(section.kind.emptyMessage)
+            // `W3R2-M1`: an unloaded snapshot is not an empty one. Until the
+            // projection merge has answered, the section holds a quiet
+            // placeholder rather than telling her nothing needs her.
+            let line = viewModel.isAwaitingProjection
+                ? StudioQueueSectionKind.gatheringMessage
+                : section.kind.emptyMessage
+            Text(line)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
                 .padding(.horizontal, 14)
-                .accessibilityLabel("\(section.kind.title). \(section.kind.emptyMessage)")
+                .accessibilityLabel("\(section.kind.title). \(line)")
         } else {
             ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
                 sectionRow(row, kind: section.kind)
@@ -387,5 +397,49 @@ private struct StudioHubStalenessLine: View {
             .foregroundStyle(PatinaColors.Text.secondary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("StudioHub.StalenessLine")
+    }
+}
+
+/// `W2R3-n1`'s arrival key. It lives in an extension because the hub's own
+/// body is at SwiftLint's `type_body_length` warning, and because neither of
+/// these draws anything — they decide when the hub refetches.
+private extension StudioHubView {
+
+    /// SP-16 named three numbers on one screen, and "Awaiting you 3" under a
+    /// header reading "4 things need your eye" was the third. Every other
+    /// section badge counts its cards; this one counts the things, because it
+    /// is the one the header also speaks for.
+    func sectionBadgeCount(_ section: StudioQueueSection) -> Int {
+        section.kind == .awaitingYou
+            ? viewModel.snapshot.attentionSummary.awaitingCount
+            : section.rows.count
+    }
+
+    func sectionBadgeLabel(_ section: StudioQueueSection) -> String {
+        section.kind.badgeLabel(count: sectionBadgeCount(section))
+    }
+
+    /// Whether the Studio is the surface she is looking at. The flag-off root
+    /// has no tabs — the hub is pushed there, and mounting is arriving — so it
+    /// is always true.
+    ///
+    /// `W3R3-M1`: so is a PUSHED hub under the house-first bar. Today's "See
+    /// all that needs you" and the Companion's "Your studio" push this screen
+    /// onto the Today stack, where `tabs.selected == .today`; reading the tab
+    /// alone the guard called that "not looking at the Studio" and returned,
+    /// so the load was never asked for and the placeholder never resolved.
+    /// The tab-root instance is the only one the selection speaks for — a tab
+    /// stays mounted after she leaves it, which is the refetch this stops.
+    /// A pushed instance is torn down when she leaves, so its appearance IS
+    /// her arrival.
+    var isOnStudio: Bool {
+        guard coordinator.isHouseFirstRoot, isTabRoot else { return true }
+        return coordinator.tabs.selected == .studio
+    }
+
+    /// Four states, not one per tab: switching between two tabs that are not
+    /// the Studio does not move it, so nothing re-runs until she comes back.
+    var studioEntryKey: String {
+        "\(authService.isAuthenticated)#\(isOnStudio)"
     }
 }

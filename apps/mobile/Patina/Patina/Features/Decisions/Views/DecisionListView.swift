@@ -85,13 +85,13 @@ struct DecisionListView: View {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 6) {
                     decisionTitle(d)
-                    if let type = d.decision_type { decisionTypeBadge(type) }
+                    if let kind = d.kindChipLabel { decisionTypeBadge(kind) }
                 }
             } else {
                 HStack {
                     decisionTitle(d)
                     Spacer()
-                    if let type = d.decision_type { decisionTypeBadge(type) }
+                    if let kind = d.kindChipLabel { decisionTypeBadge(kind) }
                 }
             }
             // R20: project context so the client knows which engagement
@@ -130,7 +130,9 @@ struct DecisionListView: View {
     }
 
     private func decisionTitle(_ decision: RemoteClientDecision) -> some View {
-        Text(decision.title ?? "Decision")
+        // `W2R1-n4`: "Decision" is the narrower word, and it was the fallback
+        // over approvals too. An untitled Stage-2 row is an approval.
+        Text(decision.title ?? decision.untitledRowTitle)
             .font(PatinaTypography.h5)
             .foregroundStyle(PatinaColors.Text.primary)
             .minimumScaleFactor(0.7)
@@ -138,8 +140,8 @@ struct DecisionListView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func decisionTypeBadge(_ type: String) -> some View {
-        Text(type.capitalized)
+    private func decisionTypeBadge(_ label: String) -> some View {
+        Text(label)
             .font(PatinaTypography.monoTiny)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
@@ -155,8 +157,8 @@ struct DecisionListView: View {
     /// Aggregated VoiceOver label for a decision card: title + type + description,
     /// so focus lands once instead of stopping on each Text.
     private func decisionAccessibilityLabel(_ d: RemoteClientDecision) -> String {
-        var parts: [String] = [d.title ?? "Decision"]
-        if let type = d.decision_type { parts.append(type.capitalized) }
+        var parts: [String] = [d.title ?? d.untitledRowTitle]
+        if let kind = d.kindChipLabel { parts.append(kind) }
         if let projectName = d.project?.name, !projectName.isEmpty { parts.append(projectName) }
         if let description = d.description, !description.isEmpty { parts.append(description) }
         if let standing = DateDisplay.approval(

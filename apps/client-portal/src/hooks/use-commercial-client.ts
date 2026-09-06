@@ -14,6 +14,7 @@ import {
   type WorkingBudgetVersion,
 } from '@/lib/commercial-documents';
 import { adaptClientProjectReviewBundle, applyClientReviewMediaUrls, type ClientProjectReviewBundle, type ClientReviewVerdict } from '@/lib/project-review';
+import { retryUnlessRefused } from '@/lib/threshold/refusal';
 
 /** Canonical query keys for the client selections/plan projections — kept as
  * plain arrays (not object literals) so callers can pass them straight to
@@ -41,6 +42,12 @@ export function clientCommercialDocumentQueryOptions(proposalId: string) {
   return {
     queryKey: commercialKeys.clientBundle(proposalId),
     enabled: !!proposalId,
+    // `W3W-R1-04`. React Query's default is three tries, and the bundle RPC
+    // refuses a reader it is not addressed to with a 403 — so the paper
+    // record sat blank for about five seconds before saying anything, and
+    // then said "Refresh to try again" about a door that will never open.
+    // A refusal is answered once.
+    retry: retryUnlessRefused,
     queryFn: async (): Promise<CommercialDocumentBundle | null> => {
       const { data, error } = await getSupabase().rpc('get_client_commercial_document_bundle', {
         p_proposal_id: proposalId,

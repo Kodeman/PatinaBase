@@ -13039,3 +13039,195 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.resolve_studio_identity(uuid, uuid, uuid) TO anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notification_time_zone(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.notification_time_zone(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.normalize_reminder_cadence() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.decision_snoozes FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.decision_snoozes TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.decision_snoozes TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.next_local_morning(text, timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.next_local_morning(text, timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_decision_snooze(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_decision_snooze(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.push_deliver_after(uuid, timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.push_deliver_after(uuid, timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_due_client_pushes(integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_due_client_pushes(integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_decision_studio_handoff(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_decision_studio_handoff(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.decision_first_notice_attempts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.decision_first_notice_attempts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._decision_first_notice_disposition_is_terminal(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._decision_first_notice_disposition_is_terminal(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_decision_first_notice_attempt(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_decision_first_notice_attempt(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.decision_first_notice_sweep_state FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.decision_first_notice_sweep_state TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._decision_first_notice_sweep_cutoff() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._decision_first_notice_sweep_cutoff() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sweep_decision_first_notices(integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sweep_decision_first_notices(integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._why_author_display_name(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_project_approval_decision_checked( uuid, jsonb, text, uuid, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.backfill_why_author_display_names() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00572_she_sets_the_pace.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.backfill_why_author_display_names() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

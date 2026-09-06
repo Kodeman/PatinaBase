@@ -104,6 +104,20 @@ describe('DoorActs', () => {
     expect(act('Decline')).toBeInTheDocument();
   });
 
+  /**
+   * The four sat at one weight, which made READING the paper weigh exactly
+   * what DECLINING it weighs. Reading outranks declining: the three answers
+   * stay peers at the lighter weight and the reading takes the secondary.
+   */
+  it('gives the reading more weight than the three answers', () => {
+    renderActs();
+
+    expect(act('Read it in full')).toHaveAttribute('data-action-variant', 'secondary');
+    for (const label of ['Ask a question', 'Request a change', 'Decline']) {
+      expect(act(label)).toHaveAttribute('data-action-variant', 'tertiary');
+    }
+  });
+
   it('offers no reading of a legacy row, which has no instrument to print', () => {
     renderActs({ kind: 'legacy' });
 

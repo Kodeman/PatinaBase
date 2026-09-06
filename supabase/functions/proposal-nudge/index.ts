@@ -21,6 +21,7 @@ import {
   givenName,
   signOff,
 } from '../_shared/branded-email.ts';
+import { nudgeRoutesToDigest } from './logic.ts';
 import {
   resolveStudioIdentity,
   studioCobrand,
@@ -120,10 +121,12 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'no_recipient' }, 422);
   }
 
-  // Cadence gate — clients on the daily digest don't get a direct nudge email.
-  // Instead we write an in-app row (type 'proposal_nudge') that the
-  // notification-digest cron batches into one daily summary. `immediate`
-  // (the default) falls through to the email path below, unchanged.
+  // Cadence gate — a client on a batching cadence doesn't get a direct nudge
+  // email. Instead we write an in-app row (type 'proposal_nudge') that the
+  // notification-digest cron rolls into her summary. "Tell me right away"
+  // falls through to the email path below, unchanged. The test is the
+  // cadence's shape, never one of its spellings: 00572 retired 'daily_digest'
+  // and this branch is the summary's only source of proposal lines (r1 B2).
   if (proposal.client_id) {
     const { data: pref } = await supabase
       .from('notification_preferences')
@@ -131,7 +134,7 @@ Deno.serve(async (req: Request) => {
       .eq('user_id', proposal.client_id)
       .maybeSingle();
 
-    if (pref?.reminder_cadence === 'daily_digest') {
+    if (nudgeRoutesToDigest(pref as { reminder_cadence?: string | null } | null)) {
       const deepLink = `/proposals/${proposal.id}`;
       try {
         const { data: existing } = await supabase

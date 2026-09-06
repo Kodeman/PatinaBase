@@ -103,7 +103,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
 
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3 })} />);
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      'Owed across 3 open invoices',
+      'Owed across three open invoices',
     );
   });
 
@@ -123,13 +123,13 @@ describe('HouseLedger — the house in figures, with its words', () => {
       <HouseLedger ledger={ledger({ owedInvoiceCount: 2, owedStudioCount: 2 })} />,
     );
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      'Owed across 2 open invoices from the studio, not for this house',
+      'Owed across two open invoices from the studio, not for this house',
     );
     second.unmount();
 
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedStudioCount: 1 })} />);
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      'Owed across 3 open invoices, one from the studio',
+      'Owed across three open invoices, one from the studio',
     );
   });
 
@@ -137,7 +137,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 2, owedStudioCount: 0 })} />);
 
     const row = screen.getByTestId('house-ledger-owed');
-    expect(row).toHaveTextContent('Owed across 2 open invoices');
+    expect(row).toHaveTextContent('Owed across two open invoices');
     expect(row).not.toHaveTextContent('studio');
   });
 

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { CommercialDocumentKind } from '@patina/types';
 
@@ -383,6 +383,16 @@ describe('DoorGate', () => {
     // her name — and never that anyone countersigns.
     expect(receipt).toHaveTextContent('Quist Interiors has your signature. You’ll have a copy.');
     expect(receipt).not.toHaveTextContent('countersign');
+
+    // P-26. "You'll have a copy" is a promise one line above; this is where
+    // it is kept. A new tab, because the door has just swung on a page she
+    // may still be reading.
+    const keep = within(screen.getByTestId('door-keep-a-copy')).getByRole('link', {
+      name: 'Keep a copy',
+    });
+    expect(keep).toHaveAttribute('href', '/proposals/prop-7/record');
+    expect(keep).toHaveAttribute('target', '_blank');
+    expect(keep).toHaveAttribute('rel', 'noopener noreferrer');
 
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/proposals/prop-7/sign',

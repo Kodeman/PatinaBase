@@ -90,6 +90,12 @@ function stripTrailingSlash(pathname: string): string {
  *  - `/preferences/unsubscribe` — a public outcome page, kept (and made public
  *    in the middleware, which used to bounce signed-out recipients to sign-in).
  *  - `/invoices/<id>/print` — the printable invoice has no in-page equivalent.
+ *  - `/decisions/<id>/record` and `/proposals/<id>/record` — the Record of
+ *    Decision (P-26), on the same carve-out and for the same reason: a sheet
+ *    that exists to be printed has no section of the page it could fold onto,
+ *    and folding it would send "Keep a copy" back to the ask it was pressed
+ *    on. They are print sheets, not a new zone; every other address under
+ *    `/decisions` and `/proposals` still folds.
  */
 export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null {
   const path = stripTrailingSlash(pathname);
@@ -110,6 +116,8 @@ export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null 
     // does: `/` on its own opens the house that moved last, which for a
     // multi-house client is a doorstep the approval is not standing on.
     case 'decisions':
+      // Exactly `/decisions/<id>`. `/decisions/<id>/record` is three segments
+      // and falls out here unmapped, which is what keeps the print sheet.
       if (segments.length !== 2) return null;
       return {
         path: '/',
@@ -121,6 +129,8 @@ export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null 
     // door. `?proposal=` names WHICH house's door: `/` on its own opens the
     // house that moved last, which for a multi-house client is the wrong one.
     case 'proposals': {
+      // `/proposals/<id>/record` is deliberately absent from this pair, so it
+      // falls through unmapped and keeps its own page (P-26).
       const named =
         segments.length === 2 ||
         (segments.length === 3 && third === 'sign');
@@ -133,7 +143,7 @@ export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null 
     }
 
     // `/invoices/<id>` — the letterbox reads `?invoice=` to name which one.
-    // `/invoices/<id>/print` keeps its own page.
+    // `/invoices/<id>/print` keeps its own page, as the two record sheets do.
     case 'invoices':
       if (segments.length !== 2) return null;
       return {
