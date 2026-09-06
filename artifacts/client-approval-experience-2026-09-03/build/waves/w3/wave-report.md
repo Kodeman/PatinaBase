@@ -289,3 +289,59 @@ The two known issues are the pre-existing `BrandVoiceLint` "curated_mix" and
 4. **Prettier drift is inherited**, as in Waves 1 and 2: `prettier --check` fails on the base
    versions of all three `notification-digest` files at `42d9057e4`. Nothing was reformatted, and
    `deno fmt --check` is clean for every line these commits added.
+
+---
+
+## 8 · Walk fixes — round 1
+
+The two round-1 walks (`walk-ios-r1.md`, `walk-web-r1.md`) returned one blocker and five majors.
+All six are closed on this branch. Lane log: `walk-fix-notes.md`. Nothing else in either walk was
+touched; every standing minor and nit there is still standing.
+
+| Item | File | What changed |
+|---|---|---|
+| **`W3R1-B1`** (blocker) | `RecordSheet.swift` | "Keep a copy" was absent from every settled record in the build. `KeepACopyAct`'s `.task` hung off a `Group` that was an `EmptyView` until the image it was supposed to make arrived — and an `EmptyView` carries no modifiers, so the render never ran and the act never drew. The render moved onto `renderAnchor`, a zero-height accessibility-hidden `Color.clear` that always exists; the act above it stays conditional, which was the rule, not the defect. |
+| **`W3R1-M1`** | `DecisionDetailView.swift` | The two-plate spread drew "Shak…" at the default text size: C-06's `fixedSize` capsule took its intrinsic width first inside a shared `HStack` and left the title the remainder of 171pt. The capsule is now one view (`recommendedCapsule`) placed by `plateNaming(…)` — beside the title at full width, beneath it when `compact`. The accessibility (`.stacked`) path is unchanged. The extraction also keeps `plate(_:compact:)` under SwiftLint's `function_body_length`, which `lint-delta` fails on. |
+| **`W3R1-M2`** | `DecisionDetailView.swift` | Every plate of a three-or-more paged spread ran 24pt off the right edge — the `Recommended` capsule sliced, the clay leaning dot outside the viewport. `.padding(.horizontal, 24)` sat on the `LazyHStack` inside the `ScrollView` while `containerRelativeFrame` measures the scroll view itself. The inset moved to `.safeAreaPadding(.horizontal, 24)` on the scroll view. |
+| **`W3W-R1-01`** | `approval-ask.tsx` | P-27's revision act inherited `--color-clay` on #FAF7F2 — 2.17:1, axe's only serious contrast failure left on the doorstep. Both render sites take `text-[var(--text-body)]` (#5C4A3C, 6.94:1). Clay keeps the rules and the caps. |
+| **`W3W-R1-02`** | `approval-ask.tsx`, `use-project-approvals.ts`, `hooks/index.ts` | The web had only the write half of the snooze, so a cold load of an approval already snoozed drew the four acts with no said-line. New `useDecisionSnooze(decisionId)` (plain `decision_snoozes` read under `decision_snoozes_owner_select`, no client-side copy of the policy) plus `standingDecisionSnooze(row, now)`, which applies iOS's own honesty rule — `infinity` stands, a lifted hold is refused, an unknown kind or unparseable hour draws nothing. Keyed `projectApprovalKeys.snooze(…)` on the existing invalidation rail. `RemindMe` draws the confirmation on mount; this session's answer wins over the row. |
+| **`W3W-R1-03`** | `approval-ask.tsx` | `landmark-unique` still fired: two approvals on ONE artifact edition is the ordinary case (the fixture's own G1/G2 and G6/G7 pairs), and title-plus-edition left both landmarks identical. The decision id now closes every name — `Discussion about {title} · Edition {N} · approval {decisionId}`. The visible heading is untouched. |
+
+Tests for every behaviour changed: `RecordOfDecisionTests` gains the first call the suite has ever
+made to `RecordKeepsake.image` (non-nil `UIImage`, non-zero size, print scale) plus the anchor pin;
+`DecisionSpreadTests` gains two layout pins; `use-project-approvals.test.ts` gains a six-case suite
+over the read half (its shared `createBrowserClient` mock gains a `from` builder); `approval-ask.test.tsx`
+gains the landmark-collision case, the two contrast assertions and three snooze re-entry cases.
+
+### Gates on the walk-fix tip
+
+| Gate | Result |
+|---|---|
+| `IOS_GATE_UDID=B6AD6271-… ios-gate.sh all` | **PASS**, exit 0 — `** BUILD SUCCEEDED **`, **2712 tests in 290 suites passed, 2 known issues** (2708/290 at the carry-fix tip; +4 tests), `✓ lint-delta: no new warnings in touched files` |
+| walk-app rebuild → `.build/DerivedDataWalk/…/Debug-iphonesimulator/Patina.app` | **PASS** — `** BUILD SUCCEEDED **`, exit 0; `codesign -dv`: `Identifier=cloud.patina.app`, `Signature=adhoc`, `Sealed Resources version=2 rules=10 files=61` |
+| `pnpm --filter @patina/client-portal type-check` | **PASS** — `tsc --noEmit`, no output |
+| `pnpm --filter @patina/client-portal test` | **PASS** — **122 suites, 1817 tests**, 0 failed (1806 before; +11) |
+| `pnpm --dir packages/supabase test` | **PASS** — **85 files, 1024 tests**, 12 skipped, 0 failed (1018 before; +6) |
+| deno tests / SQL tests / `supabase db reset` | **NOT RUN, and not owed** — no edge function, no migration and no SQL changed this round |
+
+The first `ios-gate all` run failed compilation, not the fix: the new renderer test read
+`UIImage.size` and `.scale` without `import UIKit` in `RecordOfDecisionTests.swift`
+(`Property 'size' is not available due to missing import of defining module 'UIKit'`). One import;
+the second run is the row above.
+
+### Advisories
+
+1. **Cross-surface snooze copy still diverges.** iOS says *"I'll hold the reminders until Sunday"*
+   (`r2 M1` — a snooze only unblocks a letter, the cadence gate still runs underneath); web still
+   says *"I'll ask you Sunday."* The read half now draws that web sentence on re-entry as well as
+   after the press, so the over-promise is repeated more often than it was. Not in scope for this
+   round — no finding named it — but it is the same defect iOS was ruled on.
+2. **The web has no equivalent of iOS's `snoozeOptions` filter.** "When it's due" is offered on the
+   doorstep whether or not the approval carries a date; iOS drops it (`DecisionSnooze.offered(hasDueDate:)`)
+   because an undated "when it's due" is an invented timing. Untouched, and unraised by either walk.
+3. **`W3R1-B1`'s class is not closed by its test.** The added pin is a source pin: it asserts the
+   anchor exists ahead of the file's only `.task`. Any future `.task` on a conditional `Group` in
+   another file has the same silent failure mode and no gate would catch it.
+4. **Deploy set is unchanged.** No migration, no edge function. `@patina/supabase` changed, so the
+   client-portal Worker must be rebuilt through `infra/deploy-portal.sh` (which rebuilds workspace
+   dists) rather than deployed from a stale dist.
