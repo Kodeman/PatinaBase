@@ -50,6 +50,7 @@ function valePayload() {
         unit_amount_cents: 117_000,
         amount_cents: 234_000,
         kind: "product",
+        attribution: "Bertoia Studio",
       },
     ],
     payments: [
@@ -67,11 +68,16 @@ function valePayload() {
       logo_url: null,
       website: "quistinteriors.com",
       source: "project",
+      location: "Providence, RI",
     },
     designer_display_name: "Nora Quist",
     client_display_name: "Harper Vale",
     payment_options: { card_surcharge_bps: 300, check_remit_to: null },
-    pay: { rails: ["us_bank_account", "card", "check"], processing: false },
+    pay: {
+      rails: ["us_bank_account", "card", "check"],
+      processing: false,
+      payable: true,
+    },
   };
 }
 
@@ -172,6 +178,14 @@ describe("parseResolvedInvoiceLink", () => {
   it("refuses a payload carrying both spellings with different values", () => {
     const confused = { ...valePayload(), kind: "settling" };
     expect(parseResolvedInvoiceLink(confused)).toBeNull();
+  });
+
+  // J30(a): `kind` is the SOLE discriminator. A payload carrying `sheet` but
+  // no `kind` at all must not fall back to reading `sheet` in its place.
+  it("refuses a payload carrying only `sheet`, with no `kind` at all", () => {
+    const onlySheet = valePayload() as Record<string, unknown>;
+    delete onlySheet.kind;
+    expect(parseResolvedInvoiceLink(onlySheet)).toBeNull();
   });
 
   it("kills a payload carrying a forbidden key at depth", () => {

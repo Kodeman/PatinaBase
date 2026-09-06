@@ -61,6 +61,10 @@ export async function GET(
       // poll only (which G8 permits) would leave two definitions of one word,
       // and they would disagree the day the resolver counts `requires_refund`.
       processing: resolved.pay.processing,
+      // J2: same reasoning as `processing` — the till's open/closed state is
+      // decided server-side, once, so the poll cannot disagree with the SSR
+      // payload about whether a requires_refund row is standing.
+      payable: resolved.pay.payable,
     },
     { headers: PRIVATE_HEADERS },
   );

@@ -1,6 +1,22 @@
 import "server-only";
 
+/* The pure shape half of this module lives in `./invoice-link-shape`, which
+   imports nothing server-only, so a client component can reuse the SAME
+   parsers this file uses on the server. Everything it exports is re-exported
+   here, so no caller has to know about the split. */
+
 import { createServiceClient } from "@patina/supabase/server";
+
+import {
+  isInteger,
+  isRecord,
+  nullableString,
+  optionalString,
+  parsePayment,
+} from "./invoice-link-shape";
+import type { InvoiceLinkPayment } from "./invoice-link-shape";
+
+export * from "./invoice-link-shape";
 
 /* ── THE LINK, RESOLVED ──────────────────────────────────────────────────────
    `/pay/<token>` is a public, account-less address whose 64-hex token IS the
@@ -16,7 +32,6 @@ import { createServiceClient } from "@patina/supabase/server";
 export const INVOICE_LINK_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 
 export type InvoiceLinkStatus = "sent" | "partially_paid" | "paid";
-export type InvoiceLinkRail = "card" | "us_bank_account" | null;
 export type PayRail = "us_bank_account" | "card" | "check";
 
 export interface InvoiceLinkLineItem {
@@ -25,15 +40,8 @@ export interface InvoiceLinkLineItem {
   unit_amount_cents: number | null;
   amount_cents: number;
   kind: string | null;
-}
-
-export interface InvoiceLinkPayment {
-  amount_cents: number;
-  surcharge_cents: number;
-  method: string | null;
-  status: string | null;
-  rail: InvoiceLinkRail;
-  received_at: string | null;
+  /** The maker a furnishings line came through (00574 scrubs ids and emails). */
+  attribution: string | null;
 }
 
 export interface InvoiceLinkStudio {
@@ -41,6 +49,8 @@ export interface InvoiceLinkStudio {
   logo_url: string | null;
   website: string | null;
   source: string | null;
+  /** City, State of the studio's address — the letterhead's second line. */
+  location: string | null;
 }
 
 export interface InvoiceLinkInvoice {
@@ -77,6 +87,13 @@ export interface InvoiceLinkPayload {
   pay: {
     rails: PayRail[];
     processing: boolean;
+    /**
+     * False while a `requires_refund` payment stands: money arrived that does
+     * not match the invoice, and only the studio can settle it with Stripe.
+     * The balance reads as owing again meanwhile, so the till must not reopen
+     * on top of it (J2).
+     */
+    payable: boolean;
   };
 }
 
@@ -143,10 +160,6 @@ const IDENTIFIER_KEY = /^id$|_id$|Id$/;
  */
 const FORBIDDEN_KEY_FAMILY = /^stripe_|^payer_|_email$/;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function carriesForbiddenKey(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(carriesForbiddenKey);
   if (!isRecord(value)) return false;
@@ -159,38 +172,34 @@ export function carriesForbiddenKey(value: unknown): boolean {
   );
 }
 
-function isInteger(value: unknown): value is number {
-  return (
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    Number.isInteger(value)
-  );
-}
-
-function nullableString(value: unknown): value is string | null {
-  return value === null || typeof value === "string";
-}
-
 function parseStudio(value: unknown): InvoiceLinkStudio | null {
   if (!isRecord(value)) return null;
-  const { name, logo_url, website, source } = value;
+  const { name, logo_url, website, source, location } = value;
   if (
     !nullableString(name) ||
     !nullableString(logo_url) ||
     !nullableString(website) ||
-    !nullableString(source)
+    !nullableString(source) ||
+    !optionalString(location)
   ) {
     return null;
   }
-  return { name, logo_url, website, source };
+  return { name, logo_url, website, source, location: location ?? null };
 }
 
 function parseLineItem(value: unknown): InvoiceLinkLineItem | null {
   if (!isRecord(value)) return null;
-  const { description, quantity, unit_amount_cents, amount_cents, kind } =
-    value;
+  const {
+    description,
+    quantity,
+    unit_amount_cents,
+    amount_cents,
+    kind,
+    attribution,
+  } = value;
   if (!isInteger(amount_cents)) return null;
   if (!nullableString(description) || !nullableString(kind)) return null;
+  if (!optionalString(attribution)) return null;
   if (quantity !== null && typeof quantity !== "number") return null;
   if (unit_amount_cents !== null && !isInteger(unit_amount_cents)) return null;
   return {
@@ -199,25 +208,8 @@ function parseLineItem(value: unknown): InvoiceLinkLineItem | null {
     unit_amount_cents: (unit_amount_cents as number | null) ?? null,
     amount_cents,
     kind,
+    attribution: attribution ?? null,
   };
-}
-
-function parsePayment(value: unknown): InvoiceLinkPayment | null {
-  if (!isRecord(value)) return null;
-  const { amount_cents, surcharge_cents, method, status, rail, received_at } =
-    value;
-  if (!isInteger(amount_cents)) return null;
-  if (!isInteger(surcharge_cents)) return null;
-  if (
-    !nullableString(method) ||
-    !nullableString(status) ||
-    !nullableString(received_at)
-  ) {
-    return null;
-  }
-  if (rail !== null && rail !== "card" && rail !== "us_bank_account")
-    return null;
-  return { amount_cents, surcharge_cents, method, status, rail, received_at };
 }
 
 function parseInvoice(value: unknown): InvoiceLinkInvoice | null {
@@ -350,9 +342,9 @@ export function parseResolvedInvoiceLink(
       // attribute the withdrawal to, so the designer's is preferred and the
       // studio's is the fallback.
       if (
-        !nullableString(rawContact.designer_display_name) ||
-        !nullableString(rawContact.studio_name) ||
-        !nullableString(rawContact.website)
+        !optionalString(rawContact.designer_display_name) ||
+        !optionalString(rawContact.studio_name) ||
+        !optionalString(rawContact.website)
       )
         return null;
       contact = {
@@ -403,6 +395,10 @@ export function parseResolvedInvoiceLink(
   if (!isRecord(pay)) return null;
   if (!Array.isArray(pay.rails) || typeof pay.processing !== "boolean")
     return null;
+  // Required, unlike `location`/`attribution`: this one gates the till. A
+  // payload missing it is not the resolver speaking, and the safe failure is
+  // the dead sheet — never an open till defaulted to true.
+  if (typeof pay.payable !== "boolean") return null;
   const rails: PayRail[] = [];
   for (const rail of pay.rails) {
     if (rail !== "us_bank_account" && rail !== "card" && rail !== "check")
@@ -425,7 +421,7 @@ export function parseResolvedInvoiceLink(
       card_surcharge_bps: payment_options.card_surcharge_bps,
       check_remit_to: payment_options.check_remit_to,
     },
-    pay: { rails, processing: pay.processing },
+    pay: { rails, processing: pay.processing, payable: pay.payable },
   };
 }
 

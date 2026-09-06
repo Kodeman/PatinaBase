@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { formatCurrency, onlineSurchargeCents } from "@patina/shared";
 
@@ -15,11 +16,40 @@ import {
   PaymentMethodChooser,
   type InvoicePaymentUIMethod,
 } from "./payment-method-chooser";
-import type {
-  InvoiceLinkPayload,
-  InvoiceLinkPayment,
-  InvoiceLinkStatus,
-} from "./invoice-link";
+// From the shape module, not `./invoice-link`: that one is `server-only`, and
+// this is a client component. Same parser, both halves of the wall.
+import { parsePayment } from "./invoice-link-shape";
+import type { InvoiceLinkPayment } from "./invoice-link-shape";
+import type { InvoiceLinkPayload, InvoiceLinkStatus } from "./invoice-link";
+
+/* ── J4: what the till says when it refuses ──────────────────────────────────
+   `invoice-link-checkout` answers with a machine code, and every one of them
+   used to collapse into "Try again in a moment." — including the ACH-in-flight
+   409, where trying again is precisely the wrong instruction and the reason F1
+   exists. Each code the edge function can return gets the sentence a person
+   can act on; anything unrecognised still falls through to `refusalSentence`.
+   `invoice_not_found` is absent on purpose: it is a dead link, and the caller
+   sends the payer to the dead sheet rather than printing a sentence. ─────── */
+function checkoutRefusalSentence(
+  code: string | undefined,
+  studioName: string,
+): string | null {
+  switch (code) {
+    case "payment_processing":
+      return "A bank transfer on this invoice is still settling. Nothing more is owed until it does.";
+    case "payment_reconciliation_required":
+      return `A payment on this invoice is being sorted out by ${studioName}. Nothing to do here for now.`;
+    case "invoice_not_payable":
+    case "invoice_link_not_payable":
+      return `This invoice can't be paid from this link any more. Ask ${studioName} for a fresh one.`;
+    case "invoice_link_no_payer":
+      return `This link can only be settled by check. Choose Check and ${studioName} will be told it's on its way.`;
+    case "stripe_error":
+      return "The payment page could not open. Try again in a moment.";
+    default:
+      return null;
+  }
+}
 
 /* ── THE STATEMENT ───────────────────────────────────────────────────────────
    One sheet: the record on the left, the money in a column beside it, and a
@@ -119,6 +149,31 @@ const PAYMENT_METHOD_WORDS: Record<string, string> = {
   wire: "Wire transfer",
 };
 
+/**
+ * The one line under a payment's name. J2: a `requires_refund` or `refunded`
+ * row used to fall through to "Received", which is the opposite of true — the
+ * first is money that arrived and did not match, the second is money already
+ * handed back. Both stay visible; neither is dressed as a receipt.
+ */
+function paymentStanding(
+  payment: InvoiceLinkPayment,
+  studioName: string,
+): string {
+  const on = payment.received_at
+    ? ` ${formatLongDate(payment.received_at)}`
+    : "";
+  switch (payment.status) {
+    case "pending":
+      return "Payment processing";
+    case "requires_refund":
+      return `Being sorted out by ${studioName}`;
+    case "refunded":
+      return `Refunded${on}`;
+    default:
+      return payment.received_at ? `Received${on}` : "Received";
+  }
+}
+
 function paymentLabel(payment: InvoiceLinkPayment): string {
   if (payment.rail === "us_bank_account") return "Bank transfer";
   if (payment.rail === "card") return "Card";
@@ -132,6 +187,8 @@ interface PayLinkLiveState {
   amount_paid_cents: number;
   balance_cents: number;
   payments: InvoiceLinkPayment[];
+  processing: boolean;
+  payable: boolean;
 }
 
 function readLiveState(value: unknown): PayLinkLiveState | null {
@@ -146,11 +203,25 @@ function readLiveState(value: unknown): PayLinkLiveState | null {
   )
     return null;
   if (!Array.isArray(payments)) return null;
+  // J8/J2: both words are the server's, never re-derived here — two
+  // definitions of one word disagree the day the resolver's WHERE changes.
+  if (typeof record.processing !== "boolean") return null;
+  if (typeof record.payable !== "boolean") return null;
+  // J28: the last unvalidated structural cast on this path. Same origin and
+  // same parser as the SSR payload, so it gets the same walk.
+  const parsedPayments: InvoiceLinkPayment[] = [];
+  for (const entry of payments) {
+    const parsed = parsePayment(entry);
+    if (!parsed) return null;
+    parsedPayments.push(parsed);
+  }
   return {
     status,
     amount_paid_cents,
     balance_cents,
-    payments: payments as InvoiceLinkPayment[],
+    payments: parsedPayments,
+    processing: record.processing,
+    payable: record.payable,
   };
 }
 
@@ -162,6 +233,7 @@ export interface InvoiceSheetProps {
 export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
   const { invoice, studio, payment_options: paymentOptions } = payload;
 
+  const router = useRouter();
   const [method, setMethod] =
     useState<InvoicePaymentUIMethod>("us_bank_account");
   const [live, setLive] = useState<PayLinkLiveState | null>(null);
@@ -175,9 +247,10 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
   const amountPaidCents = live?.amount_paid_cents ?? invoice.amount_paid_cents;
   const balanceCents = live?.balance_cents ?? invoice.balance_cents;
   const payments = live?.payments ?? payload.payments;
-  const processing = live
-    ? live.payments.some((entry) => entry.status === "pending")
-    : payload.pay.processing;
+  // J8: the server decides both. `readLiveState` refuses a poll that omits
+  // them, so there is no third definition hiding in a fallback.
+  const processing = live ? live.processing : payload.pay.processing;
+  const payable = live ? live.payable : payload.pay.payable;
 
   const currency = invoice.currency;
   // M-5: a $0.00 invoice that was never paid would otherwise read "Paid in
@@ -194,11 +267,24 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
         cache: "no-store",
       });
       if (!response.ok) return;
-      setLive(readLiveState(await response.json()));
+      const body = (await response.json()) as unknown;
+      // J14: the invoice was voided or the link closed while this sheet sat
+      // open. `readLiveState` returns null for those, which would leave the
+      // pre-void figures and the till on screen until someone reloaded. Ask
+      // the server for the page again — it renders the withdrawn sheet.
+      const kind =
+        typeof body === "object" && body !== null
+          ? (body as { kind?: unknown }).kind
+          : undefined;
+      if (typeof kind === "string" && kind !== "invoice") {
+        router.refresh();
+        return;
+      }
+      setLive(readLiveState(body));
     } catch {
       // A failed poll is not news; the next tick tries again.
     }
-  }, [token]);
+  }, [token, router]);
 
   // `''` — this page is one sheet with no sections, so the cleaned address
   // keeps no anchor. The house's two-section default belongs to the house.
@@ -226,7 +312,9 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
   // While Checkout's answer is still coming, the page must not offer a second
   // one — "don't send another one until this settles" is the whole point of
   // the sentence it is showing.
-  const showChooser = !paid && !processing && confirmState === null;
+  // J2 adds `payable`: while a requires_refund row stands, the balance reads
+  // as owing again but a second payment would only become a second refund.
+  const showChooser = !paid && !processing && payable && confirmState === null;
 
   const designerName = payload.designer_display_name?.trim() ?? "";
   const designerFirst = designerName.split(/\s+/)[0] || "your designer";
@@ -394,13 +482,21 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
       if (!body?.url) throw new Error("checkout_failed");
       window.location.assign(body.url);
     } catch (error) {
+      const code = error instanceof Error ? error.message : undefined;
+      // A link that names nothing is a dead link, not a sentence on a live
+      // sheet: the payer meets the same calm page a guessed token gets.
+      if (code === "invoice_not_found") {
+        router.replace("/pay/dead");
+        return;
+      }
       setRefusal(
-        refusalSentence(
-          error,
-          method === "check"
-            ? "Unable to let the studio know just now. Try again in a moment."
-            : "Unable to open the payment page just now. Try again in a moment.",
-        ),
+        checkoutRefusalSentence(code, studioName) ??
+          refusalSentence(
+            error,
+            method === "check"
+              ? "Unable to let the studio know just now. Try again in a moment."
+              : "Unable to open the payment page just now. Try again in a moment.",
+          ),
       );
     } finally {
       setSubmitting(false);
@@ -437,9 +533,11 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
             <div className="font-heading text-[25px] font-medium leading-[1.15] text-[var(--text-primary)]">
               {studioName}
             </div>
-            {designerName && (
+            {(studio.location || designerName) && (
               <div className="font-mono text-[12px] leading-[1.5] text-[var(--text-muted)]">
-                prepared by {designerName}
+                {studio.location}
+                {studio.location && designerName && " · "}
+                {designerName && `prepared by ${designerName}`}
               </div>
             )}
           </div>
@@ -466,6 +564,11 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
             {invoice.is_studio_invoice && (
               <p className="font-mono text-[12px] text-[var(--color-quiet-ink)]">
                 from the studio
+              </p>
+            )}
+            {payload.client_display_name && (
+              <p className="font-mono text-[12px] text-[var(--color-quiet-ink)]">
+                for {payload.client_display_name}
               </p>
             )}
           </div>
@@ -524,7 +627,23 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                   due {formatLongDate(invoice.due_date)}
                 </p>
               )}
+              {invoice.issue_date && (
+                <p className="font-mono text-[12px] text-[var(--color-quiet-ink)]">
+                  issued {formatLongDate(invoice.issue_date)}
+                </p>
+              )}
             </div>
+
+            {!payable && !paid && !processing && (
+              <p
+                data-pay-print="hide"
+                data-testid="pay-reconciling-notice"
+                className="border border-[var(--border-subtle)] bg-[var(--bg-warm)] px-3.5 py-3 text-[14px] leading-[1.5] text-[var(--text-body)]"
+              >
+                A payment on this invoice is being sorted out by {studioName}.
+                Nothing to do here for now — they&rsquo;ll be in touch.
+              </p>
+            )}
 
             {processing && (
               <p
@@ -550,6 +669,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                   payeeName={studioName}
                   invoiceLabel={invoiceLabel}
                   checkRemitTo={paymentOptions.check_remit_to}
+                  studioWebsite={studio.website}
                 />
               </div>
             )}
@@ -694,6 +814,11 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                   >
                     <span className="break-words text-[15.5px] text-[var(--text-primary)]">
                       {line.description ?? "—"}
+                      {line.attribution && (
+                        <span className="mt-0.5 block font-mono text-[11.5px] text-[var(--color-quiet-ink)]">
+                          {line.attribution}
+                        </span>
+                      )}
                     </span>
                     <span className="text-right font-mono text-[12px] text-[var(--color-quiet-ink)]">
                       {line.quantity ?? ""}
@@ -743,11 +868,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                           )} charged)`}
                       </p>
                       <p className="mt-0.5 font-mono text-[11.5px] text-[var(--color-quiet-ink)]">
-                        {payment.status === "pending"
-                          ? "Payment processing"
-                          : payment.received_at
-                            ? `Received ${formatLongDate(payment.received_at)}`
-                            : "Received"}
+                        {paymentStanding(payment, studioName)}
                       </p>
                     </div>
                     <span className="font-mono text-[14px] tabular-nums text-[var(--text-primary)]">

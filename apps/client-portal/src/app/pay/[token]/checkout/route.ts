@@ -15,6 +15,14 @@ export const dynamic = "force-dynamic";
  * check on the server side of the wall. Errors are returned VERBATIM with the
  * function's own status — the function is the authority on why a checkout was
  * refused, and re-wording it here would drift from the SQL that raised it.
+ *
+ * J29 — the method check below is a SHAPE check, not an entitlement check: it
+ * rejects a word that is not one of the three rails, and deliberately does not
+ * intersect against this invoice's `pay.rails`. Doing so would mean resolving
+ * the link here on every POST — a second DB round trip, and a cheaper oracle
+ * than the sheet, which is exactly what the limiter above exists to prevent.
+ * `invoice-link-checkout` holds the authority and refuses a closed rail with
+ * its own error, which this route relays verbatim.
  */
 
 const PRIVATE_HEADERS = {

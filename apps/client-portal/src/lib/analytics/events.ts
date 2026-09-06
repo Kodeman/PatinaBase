@@ -385,6 +385,11 @@ export const payLinkEvents = {
 
   settling: () => track('pay_link_settling'),
 
+  // J15 — K5's sheet was the one terminal state with no mouth, so a withdrawn
+  // invoice was invisible in PostHog while dead and settling were not. No
+  // property: the whitelist above has nothing that applies to it.
+  withdrawn: () => track('pay_link_withdrawn'),
+
   // S4 — the limiter binding is absent in a production Worker. The server
   // route logs this as a structured error line (there is no server-side
   // PostHog client in this portal); this is the browser-side twin.

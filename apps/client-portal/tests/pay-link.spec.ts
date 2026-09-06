@@ -9,8 +9,10 @@ import { randomUUID } from "node:crypto";
 //
 // Every fixture is minted through the honest path, because every shortcut is
 // refused by a constraint that exists for a reason:
-//   - the invoice is INSERTed at 'draft' and then ISSUED, because the link is
-//     minted by the trigger on that status write and by nothing else;
+//   - the invoice is INSERTed at 'draft' and then moved to 'sent' with a plain
+//     UPDATE, because the link is minted by the trigger on that status write
+//     and by nothing else — and `issue_invoice`, the RPC a designer would
+//     call, is revoked from service_role (00412, 00511);
 //   - a test that voids gets its OWN payment-free mint: the legacy
 //     `void_invoice` body raises `has collected payments and cannot be voided`
 //     when `amount_paid_cents <> 0`, and the payable fixture deliberately
@@ -42,6 +44,38 @@ const SERVICE_JWT = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 // Seeded dev accounts (supabase/seed/dev-accounts.sql).
 const DESIGNER_ID = "a0000000-0000-0000-0000-000000000004";
 const CLIENT_ID = "a0000000-0000-0000-0000-000000000005";
+
+// The Supabase CLI's fixed local demo ANON key — the one `supabase status`
+// prints on every machine, and the one playwright.config.ts already pins for
+// the same reason. It authorizes nothing outside a local stack. (The
+// service_role key is NOT written here: the repo's pre-commit scan rejects any
+// file carrying one, demo key included.)
+const LOCAL_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
+
+/**
+ * The seeded designer, signed in.
+ *
+ * Two acts on this page belong to a designer and to nobody else: Regenerate
+ * and Void. Driving them as service_role proves less than it looks —
+ * `void_invoice`'s authority guard evaluates NULL for an actorless caller and
+ * the RAISE simply never fires, so the fixture would pass through a hole no
+ * real flow takes. These run as the authenticated designer instead.
+ */
+let designerClientCache: SupabaseClient | null = null;
+async function designer(): Promise<SupabaseClient> {
+  if (designerClientCache) return designerClientCache;
+  const client = createClient(LOCAL_URL, LOCAL_ANON_KEY, {
+    auth: { persistSession: false },
+  });
+  const { error } = await client.auth.signInWithPassword({
+    email: "designer@patina.dev",
+    password: "password123",
+  });
+  expect(error, "the seeded designer must be able to sign in").toBeNull();
+  designerClientCache = client;
+  return client;
+}
 
 // Constructed LAZILY: supabase-js throws `supabaseKey is required.` from its
 // constructor, so building this at module scope would crash the import and an
@@ -206,6 +240,22 @@ async function mintInvoice(options: MintOptions = {}): Promise<MintedInvoice> {
     if (paymentErr) throw paymentErr;
   }
 
+  // J21: the trigger's own work, asserted BEFORE the idempotent helper below
+  // could mask its absence. `ensure_invoice_link` would mint the row itself if
+  // `invoice_link_mint_on_issue` had never fired, and the suite would still be
+  // green — so the row is read first, and only then is the token asked for.
+  const { data: minted, error: mintedErr } = await db
+    .from("invoice_links")
+    .select("id, status")
+    .eq("invoice_id", invoiceId)
+    .eq("status", "active")
+    .single();
+  expect(
+    mintedErr,
+    "the status write alone must mint the link (invoice_link_mint_on_issue)",
+  ).toBeNull();
+  expect(minted).not.toBeNull();
+
   const { data: token, error: linkErr } = await db.rpc("ensure_invoice_link", {
     p_invoice_id: invoiceId,
   });
@@ -229,19 +279,13 @@ async function mintInvoice(options: MintOptions = {}): Promise<MintedInvoice> {
   };
 }
 
-/* The solo household `threshold.spec.ts` drives: one house, one sent invoice
-   (supabase/seed/the-client-page.sql). Reused rather than re-seeded so this
-   file still parks nothing. */
-const SOLO_PROJECT_ID = "b0000000-0000-0000-0000-00000000c0d1";
-const SOLO_INVOICE_ID = "b0000000-0000-0000-0000-00000000cc01";
-
 /**
  * The password leg of the sign-in form, pressed the way `threshold.spec.ts`
  * presses it: the disclosure is server-rendered before React attaches, so an
  * early click is swallowed silently and the button must be retried until the
  * password field it controls actually opens.
  */
-async function signInAsSoloClient(page: Page): Promise<void> {
+async function signInAsClient(page: Page, email: string): Promise<void> {
   await page.goto("/auth/signin", { waitUntil: "domcontentloaded" });
 
   const disclosure = page
@@ -256,7 +300,7 @@ async function signInAsSoloClient(page: Page): Promise<void> {
     await password.waitFor({ state: "visible", timeout: 5_000 });
   }).toPass({ timeout: 120_000 });
 
-  await page.getByLabel(/email/i).first().fill("client-solo@patina.dev");
+  await page.getByLabel(/email/i).first().fill(email);
   await password.fill("password123");
   await page.getByRole("button", { name: /^sign in$/i }).click();
   await page.waitForURL((url) => !url.pathname.includes("/auth/signin"), {
@@ -346,23 +390,31 @@ test.describe("the standing invoice (00574)", () => {
     const stateResponse = await page.request.get(`/pay/${minted.token}/state`);
     expect(stateResponse.status()).toBe(200);
     const state = await stateResponse.json();
+    // The exact key set, so a widening is a deliberate act: this body reaches
+    // an unauthenticated browser every three seconds.
     expect(Object.keys(state).sort()).toEqual([
       "amount_paid_cents",
       "balance_cents",
       "kind",
+      "payable",
       "payments",
       "processing",
       "status",
     ]);
+    expect(state.payable).toBe(true);
     expect(state.balance_cents).toBe(912_500);
 
-    // ── Revoke (a Regenerate) → the link is dead ──
-    const { error: revokeErr } = await admin()
-      .from("invoice_links")
-      .update({ status: "revoked", revoked_at: new Date().toISOString() })
-      .eq("invoice_id", minted.invoiceId)
-      .eq("status", "active");
+    // ── Regenerate → the old link is dead ──
+    // J21: through the RPC the folio calls, as the designer who owns the
+    // invoice — not a raw UPDATE on invoice_links. The revoke is a side effect
+    // of minting the replacement, and only this path proves the two happen
+    // together.
+    const { data: freshToken, error: revokeErr } = await (
+      await designer()
+    ).rpc("regenerate_invoice_link", { p_invoice_id: minted.invoiceId });
     expect(revokeErr).toBeNull();
+    expect(freshToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(freshToken).not.toBe(minted.token);
 
     await page.goto(`/pay/${minted.token}`);
     await expect(page.getByTestId("pay-dead-link")).toBeVisible({
@@ -393,7 +445,14 @@ test.describe("the standing invoice (00574)", () => {
     // payment; this one needs its absence, so they cannot share a mint.
     const minted = await mintInvoice({ paid: false });
 
-    const { error: voidErr } = await admin().rpc("void_invoice", {
+    // J12: as the DESIGNER. `void_invoice`'s guard is
+    // `IF NOT FOUND OR NOT _can_manage_invoice_owner(...)`, which evaluates
+    // NULL — never true — for an actorless service_role caller, so a
+    // service-role void slips past the authority check through a
+    // three-valued-logic hole that no real flow uses.
+    const { error: voidErr } = await (
+      await designer()
+    ).rpc("void_invoice", {
       p_invoice_id: minted.invoiceId,
       p_reason: "e2e",
     });
@@ -507,20 +566,16 @@ test.describe("the standing invoice (00574)", () => {
      paths instead — a beacon, a loader or a warm-up fetch that reached
      `/pay/` would fail here and nowhere else.
 
-     The seeded invoice is `sent` but carries no link — 00574's backfill runs
-     with the migrations, before the seeds load. `ensure_invoice_link` is
-     idempotent and purely additive, so minting one here makes the action
-     render without moving any figure `threshold.spec.ts` reads off this same
-     fixture. ─────────────────────────────────────────────────────────────── */
+     The fixture is this file's own throwaway invoice, so nothing here can move
+     a figure another spec reads. ──────────────────────────────────────────── */
   test("the letterbox names the invoice without ever requesting it", async ({
     page,
   }) => {
-    const { data: token, error: linkErr } = await admin().rpc(
-      "ensure_invoice_link",
-      { p_invoice_id: SOLO_INVOICE_ID },
-    );
-    expect(linkErr).toBeNull();
-    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    // J21: its OWN invoice and its OWN house. This test used to mint a link on
+    // the seed invoice `threshold.spec.ts` drives, which coupled the two files
+    // through shared rows for no gain — `mintInvoice` already builds a house
+    // this client owns, with a link already on it.
+    const minted = await mintInvoice();
 
     const payRequests: string[] = [];
     page.on("request", (request) => {
@@ -530,8 +585,8 @@ test.describe("the standing invoice (00574)", () => {
       }
     });
 
-    await signInAsSoloClient(page);
-    await page.goto(`/projects/${SOLO_PROJECT_ID}`, {
+    await signInAsClient(page, "client@patina.dev");
+    await page.goto(`/projects/${minted.projectId}`, {
       waitUntil: "domcontentloaded",
     });
     // The house is the absence of the hold, not the presence of the doorplate
@@ -546,10 +601,7 @@ test.describe("the standing invoice (00574)", () => {
     // Not a vacuous assertion: the action is on the page, at this token.
     const openInvoice = page.getByRole("link", { name: /open the invoice/i });
     await expect(openInvoice).toBeVisible();
-    await expect(openInvoice).toHaveAttribute(
-      "href",
-      `/pay/${token as string}`,
-    );
+    await expect(openInvoice).toHaveAttribute("href", `/pay/${minted.token}`);
 
     expect(
       payRequests,

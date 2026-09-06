@@ -160,10 +160,20 @@ export function Letterbox({
     onRefetch,
   );
 
-  // client_payment_completed counts money that MOVED, so it waits for the row
-  // — an abandoned ACH debit must never be counted as revenue. A cancellation
-  // is reported on the return itself, with no amount: only exact attempt
-  // evidence is authoritative, and this surface has none.
+  /* client_payment_completed counts money that MOVED, so it waits for the row
+     — an abandoned ACH debit must never be counted as revenue. A cancellation
+     is reported on the return itself, with no amount: only exact attempt
+     evidence is authoritative, and this surface has none.
+
+     J5 — THIS BLOCK IS CURRENTLY UNREACHABLE, deliberately. S10 put the return
+     nonce on BOTH rails, so a household paying from this letterbox now returns
+     to /pay/return/<nonce> and lands on the guest sheet, which is the ruled pay
+     surface (K1). `CARRIED_PARAMS` on that route carries no `invoice`, so
+     `useCheckoutReturn()` yields `invoiceId: null`, `settlement` stays null and
+     neither event fires. `payLinkEvents.paymentCompleted` on the guest sheet is
+     the successor. Left standing rather than deleted because W3b retires the
+     letterbox till outright and will take this with it; deleting it now would
+     be a second change to the same lines for no behaviour difference. */
   const reported = useRef(false);
   useEffect(() => {
     if (!settlement || reported.current || !settlement.invoiceId) return;

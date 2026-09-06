@@ -63,6 +63,13 @@ export interface PaymentMethodChooserProps {
   invoiceLabel: string;
   /** Studio's check_remit_to; falls back to CHECK_REMIT_FALLBACK when unset. */
   checkRemitTo: string | null;
+  /**
+   * J32: the studio's own address on the web. With no `studio_billing_settings`
+   * row the remit-to line can only say "contact your designer", which on a
+   * link the guest opened from an email is a dead end — this gives them
+   * somewhere to go. Never printed as a mailing address.
+   */
+  studioWebsite?: string | null;
 }
 
 export function PaymentMethodChooser({
@@ -76,6 +83,7 @@ export function PaymentMethodChooser({
   payeeName,
   invoiceLabel,
   checkRemitTo,
+  studioWebsite = null,
 }: PaymentMethodChooserProps) {
   const achFee = achSurchargeCents(balanceCents);
   const cardFee = cardSurchargeCents(balanceCents, cardSurchargeBps);
@@ -103,7 +111,13 @@ export function PaymentMethodChooser({
 
   const options = allOptions.filter((option) => rails.includes(option.value));
 
-  const remitTo = checkRemitTo?.trim() || CHECK_REMIT_FALLBACK;
+  const configuredRemitTo = checkRemitTo?.trim();
+  const remitTo = configuredRemitTo || CHECK_REMIT_FALLBACK;
+  // Only on the fallback: a studio that HAS set a remit-to address needs no
+  // second address beside it.
+  const remitFallbackWebsite = configuredRemitTo
+    ? null
+    : studioWebsite?.trim() || null;
 
   return (
     <section
@@ -205,6 +219,9 @@ export function PaymentMethodChooser({
           </h3>
           <p className="whitespace-pre-line text-[16px] leading-[1.5] text-[var(--text-primary)]">
             {remitTo}
+            {remitFallbackWebsite && (
+              <span className="mt-1 block">{remitFallbackWebsite}</span>
+            )}
           </p>
           <p className="text-[14px] text-[var(--text-body)]">
             Write {invoiceLabel} on the memo line.

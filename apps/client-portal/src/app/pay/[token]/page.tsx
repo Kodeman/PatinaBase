@@ -75,7 +75,7 @@ export default async function PayLinkPage({
     return (
       <>
         <WithdrawnSheet payload={resolved} />
-        <PayLinkBeacon limiterMissing={limiterMissing} />
+        <PayLinkBeacon sheet="withdrawn" limiterMissing={limiterMissing} />
       </>
     );
   }

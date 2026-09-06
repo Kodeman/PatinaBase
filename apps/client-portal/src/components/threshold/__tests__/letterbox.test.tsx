@@ -26,6 +26,11 @@ jest.mock('@patina/supabase', () => ({
 // guarantee below can be asserted at all — the pay-link e2e CANNOT assert it,
 // because `next dev` disables prefetching outright and the suite would pass
 // just as green with the prop deleted.
+//
+// J30(b): scoped to the one link that cares. Omitting `data-prefetch`
+// entirely when `prefetch` is undefined keeps every OTHER `next/link` usage
+// in the tree free of a stray `data-prefetch="undefined"` attribute nobody
+// asserts on.
 jest.mock('next/link', () => ({
   __esModule: true,
   default: ({
@@ -38,7 +43,11 @@ jest.mock('next/link', () => ({
     href: string;
     prefetch?: boolean;
   } & Record<string, unknown>) => (
-    <a href={href} data-prefetch={String(prefetch)} {...rest}>
+    <a
+      href={href}
+      {...(prefetch !== undefined ? { 'data-prefetch': String(prefetch) } : {})}
+      {...rest}
+    >
       {children}
     </a>
   ),

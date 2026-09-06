@@ -62,7 +62,11 @@ const payable = {
     memo: "never travels twice",
   },
   payments: [{ amount_cents: 760_500, status: "succeeded" }],
-  pay: { rails: ["us_bank_account", "card", "check"], processing: false },
+  pay: {
+    rails: ["us_bank_account", "card", "check"],
+    processing: false,
+    payable: true,
+  },
   studio: { name: "Quist Interiors" },
 };
 
@@ -87,6 +91,7 @@ describe("GET /pay/[token]/state", () => {
       "amount_paid_cents",
       "balance_cents",
       "kind",
+      "payable",
       "payments",
       "processing",
       "status",
@@ -96,6 +101,10 @@ describe("GET /pay/[token]/state", () => {
     // I-7: `processing` is server-authoritative on the poll as well as on the
     // SSR payload, so the sheet reads one definition of the word, not two.
     expect(response.body.processing).toBe(false);
+    // J2: same reasoning as `processing` — the till's open/closed state is
+    // decided server-side, once, so the poll cannot disagree with the SSR
+    // payload about whether a requires_refund row is standing.
+    expect(response.body.payable).toBe(true);
     expect(JSON.stringify(response.body)).not.toContain("never travels twice");
     expect(JSON.stringify(response.body)).not.toContain("Quist Interiors");
   });

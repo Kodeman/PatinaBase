@@ -45,6 +45,21 @@ jest.mock("@/lib/analytics/events", () => ({
   },
 }));
 
+// J4: `handleAct` reads `useRouter()` directly — the sheet routes a dead link
+// to `/pay/dead` rather than printing a sentence on a live one. A single
+// shared mock instance so a test can assert what it was called with.
+const mockRouter = {
+  replace: jest.fn(),
+  refresh: jest.fn(),
+  push: jest.fn(),
+  back: jest.fn(),
+  forward: jest.fn(),
+  prefetch: jest.fn(),
+};
+jest.mock("next/navigation", () => ({
+  useRouter: () => mockRouter,
+}));
+
 const TOKEN = "a".repeat(64);
 
 function vale(
@@ -81,6 +96,7 @@ function vale(
         unit_amount_cents: 117_000,
         amount_cents: 234_000,
         kind: "product",
+        attribution: null,
       },
     ],
     payments: [
@@ -98,11 +114,16 @@ function vale(
       logo_url: null,
       website: "quistinteriors.com",
       source: "project",
+      location: null,
     },
     designer_display_name: "Nora Quist",
     client_display_name: "Harper Vale",
     payment_options: { card_surcharge_bps: 300, check_remit_to: null },
-    pay: { rails: ["us_bank_account", "card", "check"], processing: false },
+    pay: {
+      rails: ["us_bank_account", "card", "check"],
+      processing: false,
+      payable: true,
+    },
   };
 }
 
@@ -131,6 +152,7 @@ function studioInvoice(): InvoiceLinkPayload {
         unit_amount_cents: 67_500,
         amount_cents: 67_500,
         kind: "service",
+        attribution: null,
       },
     ],
     payments: [],
@@ -139,6 +161,7 @@ function studioInvoice(): InvoiceLinkPayload {
       logo_url: null,
       website: "middlewest.studio",
       source: "studio",
+      location: null,
     },
     designer_display_name: "Leah Kochaver",
   };
@@ -160,6 +183,9 @@ beforeEach(() => {
   resetCheckoutReturn();
   standAt("");
   window.history.replaceState = jest.fn();
+  mockRouter.replace.mockClear();
+  mockRouter.refresh.mockClear();
+  mockRouter.push.mockClear();
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
     json: async () => ({ url: "https://checkout.stripe.com/c/pay/cs_test_1" }),
@@ -300,6 +326,28 @@ describe("the states", () => {
     expect(screen.getByText(/^Past due · \d+ days$/)).toBeInTheDocument();
   });
 
+  // J6: the letterhead's second line is "City, State", said before who
+  // prepared it.
+  it("J6 — the letterhead states the studio's location before who prepared it", () => {
+    const payload = vale();
+    payload.studio.location = "Providence, RI";
+    render(<InvoiceSheet token={TOKEN} payload={payload} />);
+    expect(
+      screen.getByText("Providence, RI · prepared by Nora Quist"),
+    ).toBeInTheDocument();
+  });
+
+  // J7: the maker a furnishings line came through renders under the
+  // description, not beside it.
+  it("J7 — a line item's attribution renders under its description", () => {
+    const payload = vale();
+    payload.line_items = [
+      { ...payload.line_items[0], attribution: "Bertoia Studio" },
+    ];
+    render(<InvoiceSheet token={TOKEN} payload={payload} />);
+    expect(screen.getByText("Bertoia Studio")).toBeInTheDocument();
+  });
+
   it("processing — the chooser and the act are gone, the sentence stands", () => {
     const payload = vale();
     payload.pay.processing = true;
@@ -327,6 +375,103 @@ describe("the states", () => {
     expect(screen.queryByTestId("pay-chooser")).not.toBeInTheDocument();
     expect(screen.queryByTestId("pay-act")).not.toBeInTheDocument();
     expect(screen.getByText("Payment processing")).toBeInTheDocument();
+  });
+
+  // J2: a `requires_refund` row is money that arrived and did not match. The
+  // balance reads as owing again, but the till must stay closed — a second
+  // payment would only become a second refund.
+  it("J2 — a requires_refund row is sorted out, not received, and the till stays closed", () => {
+    const payload = vale();
+    payload.pay.payable = false;
+    payload.payments = [
+      {
+        amount_cents: 912_500,
+        surcharge_cents: 0,
+        method: "stripe",
+        status: "requires_refund",
+        rail: "us_bank_account",
+        received_at: "2026-08-05T12:00:00+00:00",
+      },
+    ];
+    render(<InvoiceSheet token={TOKEN} payload={payload} />);
+
+    const paymentRow = document.querySelector(
+      "[data-pay-payment]",
+    ) as HTMLElement;
+    expect(
+      within(paymentRow).getByText("Being sorted out by Quist Interiors"),
+    ).toBeInTheDocument();
+    expect(within(paymentRow).queryByText(/^Received/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("pay-reconciling-notice")).toBeInTheDocument();
+    expect(screen.queryByTestId("pay-chooser")).not.toBeInTheDocument();
+  });
+
+  // J2: a `refunded` row is money already handed back. It must never read as
+  // a receipt.
+  it("J2 — a refunded row reads Refunded, and never Received", () => {
+    const payload = vale();
+    payload.payments = [
+      {
+        amount_cents: 912_500,
+        surcharge_cents: 0,
+        method: "stripe",
+        status: "refunded",
+        rail: "us_bank_account",
+        received_at: "2026-08-05T12:00:00+00:00",
+      },
+    ];
+    render(<InvoiceSheet token={TOKEN} payload={payload} />);
+
+    const paymentRow = document.querySelector(
+      "[data-pay-payment]",
+    ) as HTMLElement;
+    expect(
+      within(paymentRow).getByText("Refunded 5 August 2026"),
+    ).toBeInTheDocument();
+    expect(within(paymentRow).queryByText(/^Received/)).not.toBeInTheDocument();
+  });
+
+  // J8: `processing` is the SERVER's word, never re-derived from `payments[]`.
+  // A poll saying `processing: true` with only a `succeeded` row (no `pending`
+  // row) must still put the sheet in the processing state.
+  it("J8 — the poll's own `processing` flag governs even with no pending payment row", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        kind: "invoice",
+        status: "partially_paid",
+        amount_paid_cents: 760_500,
+        balance_cents: 912_500,
+        payments: [
+          {
+            amount_cents: 760_500,
+            surcharge_cents: 0,
+            method: "stripe",
+            status: "succeeded",
+            rail: "us_bank_account",
+            received_at: "2026-08-05T12:00:00+00:00",
+          },
+        ],
+        processing: true,
+        payable: true,
+      }),
+    }) as unknown as typeof fetch;
+
+    jest.useFakeTimers();
+    try {
+      standAt("?checkout=success&session_id=cs_1");
+      render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+
+      await act(async () => {
+        jest.advanceTimersByTime(CONFIRM_POLL_INTERVAL_MS + 1);
+      });
+      await act(async () => {});
+
+      expect(screen.getByTestId("pay-processing-notice")).toBeInTheDocument();
+      expect(screen.queryByTestId("pay-chooser")).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("paid — a receipt, with the charged figure on the payment row", () => {
@@ -439,6 +584,7 @@ describe("the states", () => {
         balance_cents: 0,
         payments: [],
         processing: false,
+        payable: true,
       }),
     }) as unknown as typeof fetch;
 
@@ -517,7 +663,7 @@ describe("the act", () => {
   it("says a refusal in the house’s words and leaves the act takeable", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,
-      json: async () => ({ error: "invoice_link_not_payable" }),
+      json: async () => ({ error: "an_unmapped_code" }),
     }) as unknown as typeof fetch;
 
     render(<InvoiceSheet token={TOKEN} payload={vale()} />);
@@ -530,6 +676,110 @@ describe("the act", () => {
       "Unable to open the payment page just now.",
     );
     expect(screen.getByTestId("pay-act")).not.toBeDisabled();
+  });
+
+  // J4: `checkoutRefusalSentence` maps every code the edge function can
+  // return to a sentence a person can act on. One case per code, asserting
+  // the EXACT string reaches the screen.
+  it("J4: payment_processing — a bank transfer is still settling", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "payment_processing" }),
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "A bank transfer on this invoice is still settling. Nothing more is owed until it does.",
+    );
+    expect(screen.getByTestId("pay-act")).not.toBeDisabled();
+  });
+
+  it("J4: payment_reconciliation_required — names the studio sorting it out", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "payment_reconciliation_required" }),
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "A payment on this invoice is being sorted out by Quist Interiors. Nothing to do here for now.",
+    );
+  });
+
+  it("J4: invoice_not_payable — asks for a fresh link from the studio", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "invoice_not_payable" }),
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "This invoice can't be paid from this link any more. Ask Quist Interiors for a fresh one.",
+    );
+  });
+
+  it("J4: invoice_link_no_payer — points at Check as the only way out", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "invoice_link_no_payer" }),
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "This link can only be settled by check. Choose Check and Quist Interiors will be told it's on its way.",
+    );
+  });
+
+  it("J4: stripe_error — the generic Stripe-side refusal", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "stripe_error" }),
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "The payment page could not open. Try again in a moment.",
+    );
+  });
+
+  it("J4: invoice_not_found routes to the dead sheet instead of printing a sentence", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "invoice_not_found" }),
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    expect(mockRouter.replace).toHaveBeenCalledWith("/pay/dead");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
@@ -562,6 +812,7 @@ describe("the sheets with no act", () => {
             logo_url: null,
             website: "quistinteriors.com",
             source: "project",
+            location: null,
           },
           designer_display_name: "Nora Quist",
         }}
@@ -598,6 +849,7 @@ describe("the sheets with no act", () => {
             logo_url: null,
             website: "quistinteriors.com",
             source: "project",
+            location: null,
           },
           designer_display_name: "Nora Quist",
           contact: null,
@@ -621,7 +873,13 @@ describe("the sheets with no act", () => {
         payload={{
           kind: "withdrawn",
           invoice: { number: null, title: null },
-          studio: { name: null, logo_url: null, website: null, source: null },
+          studio: {
+            name: null,
+            logo_url: null,
+            website: null,
+            source: null,
+            location: null,
+          },
           designer_display_name: null,
           contact: { name: "Nora Quist", website: "quistinteriors.com" },
         }}
