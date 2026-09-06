@@ -4,6 +4,7 @@ import {
   INVOICE_LINK_TOKEN_PATTERN,
   invoiceLinkPath,
   invoiceLinkUrl,
+  letterPortalUrl,
 } from './invoice-links.ts';
 
 const TOKEN = 'f'.repeat(64);
@@ -71,5 +72,44 @@ Deno.test('invoice links: ensureInvoiceLinkUrl is null on every failure shape (t
   assertEquals(
     await ensureInvoiceLinkUrl(rpcClient(new Error('network')).client, 'https://client.test', 'inv-1'),
     null
+  );
+});
+
+// ── The address the letters actually use ──────────────────────────────────
+//
+// `letterPortalUrl` IS what invoice-send:265 and invoice-reminders:353 call —
+// the fallback lives beside the helper it guards, so these exercise the real
+// producer path rather than a restatement of it.
+
+const CLIENT_PORTAL_URL = 'https://client.patina.cloud';
+
+Deno.test('invoice links: the letters address /pay/<token> when the link mints', async () => {
+  const { client, calls } = rpcClient({ data: TOKEN, error: null });
+  assertEquals(
+    await letterPortalUrl(client, CLIENT_PORTAL_URL, 'inv-1'),
+    `https://client.patina.cloud/pay/${TOKEN}`
+  );
+  // Asked per letter, never cached — a Regenerate is honored by the next send.
+  assertEquals(calls, [{ name: 'ensure_invoice_link', args: { p_invoice_id: 'inv-1' } }]);
+});
+
+Deno.test('invoice links: the letters fall back to /invoices/<id>, never a broken address', async () => {
+  // A draft/void (null token), an RPC failure, and a throw all fall back (M7).
+  for (const result of [
+    { data: null, error: null },
+    { data: null, error: { message: 'boom' } } as const,
+    new Error('network'),
+  ]) {
+    assertEquals(
+      await letterPortalUrl(rpcClient(result).client, CLIENT_PORTAL_URL, 'inv-1'),
+      'https://client.patina.cloud/invoices/inv-1'
+    );
+  }
+});
+
+Deno.test('invoice links: the fallback normalizes a trailing slash on the base', async () => {
+  assertEquals(
+    await letterPortalUrl(rpcClient({ data: null, error: null }).client, 'https://client.test/', 'inv-1'),
+    'https://client.test/invoices/inv-1'
   );
 });

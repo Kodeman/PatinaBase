@@ -17,6 +17,7 @@ jest.mock('@patina/supabase', () => ({
   useStartCheckout: jest.fn(),
   useNotifyCheckIntent: jest.fn(),
   useStudioIdentity: jest.fn(),
+  useInvoiceLink: jest.fn(),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({
@@ -32,6 +33,7 @@ jest.mock('@/lib/analytics/events', () => ({
 }));
 
 import {
+  useInvoiceLink,
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useStartCheckout,
@@ -40,6 +42,9 @@ import {
 import { clientEvents } from '@/lib/analytics/events';
 
 import { Letterbox } from '../letterbox';
+
+/** The 64-hex shape ensure_invoice_link (00574) emits. */
+const LINK_TOKEN = 'a'.repeat(64);
 
 /** 5 August 2026 — the deck's "today". */
 const TODAY = new Date(2026, 7, 5);
@@ -106,6 +111,7 @@ function standAt(search: string) {
       search,
       href: `https://client.test/projects/p1${search}`,
       pathname: '/projects/p1',
+      origin: 'https://client.test',
     },
   });
 }
@@ -125,6 +131,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
       isPending: false,
     });
     (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: jest.fn() });
+    (useInvoiceLink as jest.Mock).mockReturnValue({ data: { token: LINK_TOKEN, status: 'active' } });
     // The brand resolver, keyed the way 00571 keys it: the studio the row
     // names itself wins, and each studio answers with its own name.
     (useStudioIdentity as jest.Mock).mockImplementation(
@@ -551,5 +558,41 @@ describe('Letterbox — one letter, half out of the slot', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
+  });
+
+  /* ── The letter's own address (00574 · K1) ───────────────────────────────
+     Additive: the settle-in-place and the print sheet both stay until W3b.
+     ─────────────────────────────────────────────────────────────────────── */
+
+  it('offers the invoice its own address, above the settle-in-place', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    const open = screen.getByRole('link', { name: 'Open the invoice' });
+    expect(open).toHaveAttribute('href', `/pay/${LINK_TOKEN}`);
+  });
+
+  it('keeps the letterbox, the print sheet and the settle-in-place beside it', async () => {
+    const user = userEvent.setup();
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.getByRole('link', { name: 'Open the invoice' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: 'Open the letterbox' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    expect(screen.getByRole('button', { name: 'Close the letterbox' })).toBeInTheDocument();
+  });
+
+  it('says nothing about an address the invoice does not have', () => {
+    (useInvoiceLink as jest.Mock).mockReturnValue({ data: null });
+
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.queryByRole('link', { name: 'Open the invoice' })).not.toBeInTheDocument();
+    // The existing acts are untouched by a missing link.
+    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open the letterbox' })).toBeInTheDocument();
   });
 });

@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import type { Invoice } from '@patina/supabase';
+import { useInvoiceLink, type Invoice } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
+import { invoiceLinkPath } from '@patina/utils';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
@@ -130,6 +131,13 @@ export function Letterbox({
   const namedRow = namedId ? (invoices.find((row) => row.id === namedId) ?? null) : null;
   const invoice = namedRow ? toInvoiceModel(namedRow) : soonestDue;
   const due = invoice ? formatDue(invoice.dueDate, today) : null;
+
+  // The letter's own address (00574 · K1) — the whole invoice on one page, and
+  // the till on it. Additive here: the settle-in-place below stays until W3b.
+  // `/pay/[token]` is a route of this very portal, so the root-relative path is
+  // the whole address: correct on the server and the client alike, with no
+  // origin to read and nothing to reconcile at hydration.
+  const { data: invoiceLink } = useInvoiceLink(invoice?.id ?? null);
 
   // The return from the till. A return that names an order belongs to the road,
   // not to the letterbox — and a return naming a letter this house is not
@@ -262,6 +270,21 @@ export function Letterbox({
           </p>
 
           <div className="mt-3.5 flex flex-wrap items-baseline gap-x-4">
+            {invoiceLink && (
+              <ScoredAction
+                actionKey="invoice_open_link"
+                regionKey="letterbox"
+                surfaceKey="the_threshold"
+                variant="primary"
+                href={invoiceLinkPath(invoiceLink.token)}
+                // Never warmed by scrolling past: a prefetch that ever renders
+                // would record a view and spend the pay page's rate-limit
+                // budget on a letter nobody opened.
+                prefetch={false}
+              >
+                Open the invoice
+              </ScoredAction>
+            )}
             <ScoredAction
               actionKey="letterbox_open"
               regionKey="letterbox"

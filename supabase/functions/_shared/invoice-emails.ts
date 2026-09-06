@@ -161,7 +161,14 @@ function wrap(
       inner +
       spacer() +
       ctaButton(portalUrl, cta) +
-      muted("If the button doesn't work, copy this link:<br>" + portalUrl),
+      // The address must break inside the card on a phone. A /pay/<64-hex>
+      // link is ~93 unbroken characters, and many mail clients will not break
+      // a run like that on their own — this is the one address a homeowner
+      // whose CTA button does not work has left.
+      muted(
+        "If the button doesn't work, copy this link:<br>" +
+          `<span style="word-break:break-all; overflow-wrap:anywhere;">${portalUrl}</span>`,
+      ),
   });
 }
 

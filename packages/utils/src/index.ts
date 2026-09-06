@@ -14,6 +14,7 @@ export * from './schedule-fidelity';
 export * from './schedule-entry';
 export * from './schedule-compose';
 export * from './document-share';
+export * from './invoice-link';
 export * from './item-feedback';
 // Schedule & Boards Wave 3 · Track A — Designer-Taught Intelligence
 export * from './taught-alternatives';

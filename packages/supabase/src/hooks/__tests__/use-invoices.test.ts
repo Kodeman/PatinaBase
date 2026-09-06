@@ -40,7 +40,9 @@ import {
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useRecordPayment,
+  useSendInvoice,
   useVoidInvoice,
+  useInvoiceLink,
   type CreateDraftInvoiceInput,
   type CreateDraftStudioInvoiceInput,
   type DraftLineInput,
@@ -953,5 +955,98 @@ describe('useNotifyCheckIntent', () => {
     await expect(config.mutationFn({ invoiceId: 'invoice-1' })).rejects.toThrow(
       'No such invoice.'
     );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Invoice links (00574) — the link key, and the quiet read
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("invoice-link invalidation (F1)", () => {
+  type OnSuccess = (
+    result: unknown,
+    vars: { invoiceId: string; projectId?: string },
+  ) => void;
+
+  const cases: Array<[string, () => unknown]> = [
+    ["useIssueInvoice", useIssueInvoice],
+    ["useSendInvoice", useSendInvoice],
+    ["useRecordPayment", useRecordPayment],
+    ["useVoidInvoice", useVoidInvoice],
+  ];
+
+  for (const [name, hook] of cases) {
+    it(`${name} onSuccess invalidates ["invoice-link", invoiceId]`, () => {
+      const config = hook() as unknown as { onSuccess: OnSuccess };
+      config.onSuccess({ project_id: "proj-1" }, { invoiceId: "inv-1", projectId: "proj-1" });
+      expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+    });
+  }
+
+  it("does not invalidate a link key when no invoiceId is in hand", () => {
+    const config = useUpsertLineItems() as unknown as {
+      onSuccess: (rows: unknown, vars: { projectId?: string }) => void;
+    };
+    config.onSuccess([], { projectId: "proj-1" });
+    expect(invalidatedKeys().some((k) => k[0] === "invoice-link")).toBe(false);
+  });
+});
+
+describe("useInvoiceLink", () => {
+  type QueryConfig = {
+    queryKey: unknown[];
+    enabled: boolean;
+    retry: boolean;
+    meta?: { errorSurface?: string };
+    queryFn: () => Promise<unknown>;
+  };
+  const TOKEN = "a".repeat(64);
+
+  it("keys on the invoice, is gated on one, and never retries a refusal", () => {
+    const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
+    expect(config.queryKey).toEqual(["invoice-link", "inv-1"]);
+    expect(config.enabled).toBe(true);
+    expect(config.retry).toBe(false);
+    expect(config.meta?.errorSurface).toBe("silent");
+    expect((useInvoiceLink(null) as unknown as QueryConfig).enabled).toBe(false);
+  });
+
+  it("reads get_invoice_link and returns the link", async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { token: TOKEN, status: "active" }, error: null });
+    const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
+    await expect(config.queryFn()).resolves.toEqual({ token: TOKEN, status: "active" });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith("get_invoice_link", { p_invoice_id: "inv-1" });
+  });
+
+  it("resolves null on a refusal rather than throwing into the global toast (F2)", async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: { message: "invoice_not_found" } });
+    const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
+    await expect(config.queryFn()).resolves.toBeNull();
+  });
+
+  it("resolves null when the client itself throws", async () => {
+    supabaseClient.rpc.mockRejectedValue(new Error("network"));
+    const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
+    await expect(config.queryFn()).resolves.toBeNull();
+  });
+
+  it("refuses a malformed token rather than handing one on (F4)", async () => {
+    for (const token of ["not-a-token", TOKEN.toUpperCase(), TOKEN.slice(1), 42, null]) {
+      supabaseClient.rpc.mockResolvedValue({ data: { token, status: "active" }, error: null });
+      const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
+      await expect(config.queryFn()).resolves.toBeNull();
+    }
+  });
+
+  it("refuses an unknown status, and accepts the closed link K5 keeps alive", async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { token: TOKEN, status: "revoked" }, error: null });
+    await expect(
+      (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
+    ).resolves.toBeNull();
+
+    supabaseClient.rpc.mockResolvedValue({ data: { token: TOKEN, status: "closed" }, error: null });
+    await expect(
+      (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
+    ).resolves.toEqual({ token: TOKEN, status: "closed" });
   });
 });
