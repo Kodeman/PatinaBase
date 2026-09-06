@@ -212,7 +212,7 @@ struct DecisionPaceTests {
     @Test("the snooze is written through the RPC the backend lane defines")
     func theSnoozeCallsTheRPC() throws {
         let code = SourceScan.code(
-            in: try SourcePin.read("Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift")
+            in: try SourcePin.read("Patina/Core/Network/DecisionsAPIClient+Pace.swift")
         )
         #expect(code.contains("\"set_decision_snooze\""))
         #expect(code.contains("\"p_decision_id\": decisionId, \"p_kind\": kind.rawValue"))

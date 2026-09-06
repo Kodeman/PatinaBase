@@ -60,19 +60,6 @@ struct StudioHubView: View {
         .accessibilityIdentifier("StudioHub")
     }
 
-    /// Whether the Studio is the surface she is looking at. The flag-off root
-    /// has no tabs — the hub is pushed there, and mounting is arriving — so it
-    /// is always true.
-    private var isOnStudio: Bool {
-        !coordinator.isHouseFirstRoot || coordinator.tabs.selected == .studio
-    }
-
-    /// Four states, not one per tab: switching between two tabs that are not
-    /// the Studio does not move it, so nothing re-runs until she comes back.
-    private var studioEntryKey: String {
-        "\(authService.isAuthenticated)#\(isOnStudio)"
-    }
-
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "STUDIO", size: PatinaTypography.monoMedium)
@@ -407,5 +394,24 @@ private struct StudioHubStalenessLine: View {
             .foregroundStyle(PatinaColors.Text.secondary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("StudioHub.StalenessLine")
+    }
+}
+
+/// `W2R3-n1`'s arrival key. It lives in an extension because the hub's own
+/// body is at SwiftLint's `type_body_length` warning, and because neither of
+/// these draws anything — they decide when the hub refetches.
+private extension StudioHubView {
+
+    /// Whether the Studio is the surface she is looking at. The flag-off root
+    /// has no tabs — the hub is pushed there, and mounting is arriving — so it
+    /// is always true.
+    var isOnStudio: Bool {
+        !coordinator.isHouseFirstRoot || coordinator.tabs.selected == .studio
+    }
+
+    /// Four states, not one per tab: switching between two tabs that are not
+    /// the Studio does not move it, so nothing re-runs until she comes back.
+    var studioEntryKey: String {
+        "\(authService.isAuthenticated)#\(isOnStudio)"
     }
 }
