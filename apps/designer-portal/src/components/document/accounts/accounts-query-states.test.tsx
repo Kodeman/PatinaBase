@@ -22,6 +22,9 @@ jest.mock('@patina/supabase', () => ({
   useRecordPayment: () => ({ isPending: false, mutateAsync: jest.fn() }),
   useSendInvoice: () => ({ isPending: false, mutateAsync: jest.fn() }),
   useVoidInvoice: () => ({ isPending: false, mutateAsync: jest.fn() }),
+  useInvoiceLink: () => ({ data: null }),
+  useRegenerateInvoiceLink: () => ({ isPending: false, mutateAsync: jest.fn() }),
+  RegenerateInvoiceLinkError: class RegenerateInvoiceLinkError extends Error {},
 }));
 
 jest.mock('@tanstack/react-query', () => ({

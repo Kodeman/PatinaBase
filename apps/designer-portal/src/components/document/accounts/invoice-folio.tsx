@@ -18,13 +18,17 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   useInvoice,
+  useInvoiceLink,
   useIssueInvoice,
   useRecordPayment,
+  useRegenerateInvoiceLink,
   useSendInvoice,
   useVoidInvoice,
+  RegenerateInvoiceLinkError,
   type Invoice,
   type InvoicePaymentMethod,
 } from '@patina/supabase';
+import { invoiceLinkUrl } from '@patina/utils';
 import {
   INVOICE_PAYMENT_METHOD_LABELS,
   INVOICE_STATUS_LABELS,
@@ -77,7 +81,7 @@ const LABEL = 'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--tex
 const INPUT =
   'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
-type ActPanel = 'send' | 'resend' | 'payment' | 'void' | null;
+type ActPanel = 'send' | 'resend' | 'payment' | 'void' | 'regenerate-link' | null;
 
 export function InvoiceFolio({
   invoiceId,
@@ -94,6 +98,9 @@ export function InvoiceFolio({
   const recordPayment = useRecordPayment({ errorSurface: 'inline' });
   const voidInvoice = useVoidInvoice({ errorSurface: 'inline' });
   const reconcileCheckout = useReconcileInvoiceCheckout();
+  // The invoice's own address (00574). Null for a draft — nothing to copy yet.
+  const { data: invoiceLink } = useInvoiceLink(invoiceId);
+  const regenerateLink = useRegenerateInvoiceLink({ errorSurface: 'inline' });
   const reconciledSessionIds = useRef(new Set<string>());
 
   const [act, setAct] = useState<ActPanel>(null);
@@ -189,7 +196,11 @@ export function InvoiceFolio({
     send.isPending ||
     recordPayment.isPending ||
     voidInvoice.isPending ||
+    regenerateLink.isPending ||
     reconcileCheckout.isPending;
+  // The link exists from the moment the invoice is issued, so its acts stand
+  // wherever Print does — not only after a send has failed.
+  const canShareLink = canPrint;
 
   const openPanel = (panel: ActPanel) => {
     setNote(null);
@@ -259,19 +270,44 @@ export function InvoiceFolio({
     }
   };
 
-  // This fallback renders only after a client-side send attempt, so the
-  // current origin can preserve localhost → :3002 routing when no env
-  // override is configured. Production still uses the explicit portal var.
-  const clientInvoiceUrl = `${resolveClientPortalOrigin(
-    typeof window === 'undefined' ? undefined : window.location.origin,
-  )}/invoices/${invoiceId}`;
+  // The invoice's own address — `/pay/<token>` opens for whoever holds it,
+  // signed in or not (00574 · K1). The current origin preserves localhost →
+  // :3002 routing when no env override is configured; production still uses
+  // the explicit portal var. Null until the invoice is issued and minted.
+  const clientInvoiceUrl = invoiceLink
+    ? invoiceLinkUrl(
+        resolveClientPortalOrigin(
+          typeof window === 'undefined' ? undefined : window.location.origin,
+        ),
+        invoiceLink.token,
+      )
+    : null;
 
   const copyClientInvoiceUrl = async () => {
+    if (!clientInvoiceUrl) return;
     try {
       await navigator.clipboard.writeText(clientInvoiceUrl);
       setClientLinkStatus('copied');
     } catch {
       setClientLinkStatus('failed');
+    }
+  };
+
+  // Regenerate is one confirmed act: the old address dies the moment it lands.
+  const doRegenerateLink = async () => {
+    setNote(null);
+    setClientLinkStatus('idle');
+    try {
+      await regenerateLink.mutateAsync({ invoiceId });
+      setNote('link replaced · the old one is dead');
+      setAct(null);
+    } catch (e) {
+      setNote(
+        e instanceof RegenerateInvoiceLinkError
+          ? `Could not replace — ${e.message}`
+          : `Could not replace — ${e instanceof Error ? e.message : 'try again'}`,
+      );
+      setAct(null);
     }
   };
 
@@ -603,6 +639,30 @@ export function InvoiceFolio({
               Void
             </DocumentAction>
           )}
+          {canShareLink && (
+            <DocumentAction
+              actionKey="copy-invoice-link"
+              variant="tertiary"
+              disabled={busy || !clientInvoiceUrl}
+              onClick={() => void copyClientInvoiceUrl()}
+            >
+              {clientLinkStatus === 'copied'
+                ? 'Link copied'
+                : clientLinkStatus === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy link'}
+            </DocumentAction>
+          )}
+          {canShareLink && (
+            <DocumentAction
+              actionKey="regenerate-invoice-link"
+              variant="tertiary"
+              disabled={busy || !clientInvoiceUrl}
+              onClick={() => openPanel('regenerate-link')}
+            >
+              Regenerate link
+            </DocumentAction>
+          )}
           {canPrint && (
             <DocumentAction
               actionKey="print-invoice"
@@ -637,11 +697,11 @@ export function InvoiceFolio({
             role="status"
             aria-live="polite"
           >
-            {hasClientPortalAccount ? (
+            {clientInvoiceUrl ? (
               <>
                 <p className="text-[11px] text-[var(--color-charcoal)]">
-                  Email did not reach the client. Their linked portal account can still open this
-                  issued invoice:
+                  Email did not reach the client. Send them this link — it opens the invoice and
+                  takes payment, with or without an account.
                 </p>
                 <a
                   href={clientInvoiceUrl}
@@ -663,12 +723,20 @@ export function InvoiceFolio({
                       ? 'Copy failed — select the link above'
                       : 'Copy client link'}
                 </DocumentAction>
+                {/* M5: with no profile on either side there is no address on
+                    file, so the receipt is addressed to whatever they type at
+                    checkout — which the webhook now captures. */}
+                {!hasClientPortalAccount && !portalClientId && (
+                  <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
+                    This household has no account with you, so the receipt goes to the address they
+                    give at checkout.
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-[11px] text-[var(--color-charcoal)]">
-                Email did not reach the client, and this household has no linked portal account.
-                Invite or link the client from the Clients book before sharing a portal URL, then
-                resend the invoice.
+                Email did not reach the client, and this invoice has no link yet. Resend the
+                invoice to try again.
               </p>
             )}
           </div>
@@ -844,6 +912,37 @@ export function InvoiceFolio({
               </DocumentAction>
               <DocumentAction
                 actionKey="cancel-void-invoice"
+                variant="tertiary"
+                onClick={() => setAct(null)}
+              >
+                never mind
+              </DocumentAction>
+            </DocumentActionGroup>
+          </div>
+        )}
+
+        {act === 'regenerate-link' && (
+          <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
+            <p className="text-[11px] text-[var(--color-charcoal)]">
+              The old link stops working. Anyone who has it will see a dead page.
+            </p>
+            <DocumentActionGroup
+              surfaceKey="accounts"
+              regionKey="regenerate-invoice-link-confirmation"
+              className="mt-1.5"
+            >
+              <DocumentAction
+                actionKey="confirm-regenerate-invoice-link"
+                variant="danger"
+                disabled={busy}
+                loading={busy}
+                loadingLabel="Replacing…"
+                onClick={() => void doRegenerateLink()}
+              >
+                Replace the link
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-regenerate-invoice-link"
                 variant="tertiary"
                 onClick={() => setAct(null)}
               >
