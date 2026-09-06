@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import type { Invoice } from '@patina/supabase';
+import { useInvoiceLink, type Invoice } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
+import { invoiceLinkUrl } from '@patina/utils';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
@@ -130,6 +131,15 @@ export function Letterbox({
   const namedRow = namedId ? (invoices.find((row) => row.id === namedId) ?? null) : null;
   const invoice = namedRow ? toInvoiceModel(namedRow) : soonestDue;
   const due = invoice ? formatDue(invoice.dueDate, today) : null;
+
+  // The letter's own address (00574 · K1) — the whole invoice on one page, and
+  // the till on it. Additive here: the settle-in-place below stays until W3b.
+  const { data: invoiceLink } = useInvoiceLink(invoice?.id ?? null);
+  // Read after mount so the first client render matches the server's, which
+  // has no window. Same origin either way, so the relative form is correct
+  // until it resolves.
+  const [origin, setOrigin] = useState('');
+  useEffect(() => setOrigin(window.location.origin), []);
 
   // The return from the till. A return that names an order belongs to the road,
   // not to the letterbox — and a return naming a letter this house is not
@@ -262,6 +272,17 @@ export function Letterbox({
           </p>
 
           <div className="mt-3.5 flex flex-wrap items-baseline gap-x-4">
+            {invoiceLink && (
+              <ScoredAction
+                actionKey="invoice_open_link"
+                regionKey="letterbox"
+                surfaceKey="the_threshold"
+                variant="primary"
+                href={invoiceLinkUrl(origin, invoiceLink.token)}
+              >
+                Open the invoice
+              </ScoredAction>
+            )}
             <ScoredAction
               actionKey="letterbox_open"
               regionKey="letterbox"
