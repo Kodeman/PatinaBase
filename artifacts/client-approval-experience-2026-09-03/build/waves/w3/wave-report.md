@@ -425,3 +425,75 @@ note living in `DecisionPace.swift`.
    versions of the client-portal files this round touched. Nothing was reformatted.
 5. **The local stack was reset from this branch's tree** at the end of this round. A peer program
    needing its own unmerged schema re-resets from its own worktree.
+
+---
+
+## 10 · Round 3 — the one major left standing, closed
+
+Round 3 (`walk-ios-r3.md`, `walk-web-r3.md`) closed every carried finding on the web and five
+nits on iOS. **One major stood**, and it is the only item in this round.
+
+Tip at the start of the round: `1e067a110` (docs). Fix commit: **`d1bc55c57`**.
+
+### `W3R3-M1` — the hub gathered forever at the door Today opens
+
+| Item | Files | What changed |
+|---|---|---|
+| **`W3R3-M1`** (major) | `StudioHubView.swift`, `StudioHubProjectionTests.swift` | Section 9's `W3R2-M1` fixed the **sentence** and left the **cause**: the hub reached from Today's "See all that needs you" never asked for a load at all, so the new `!hasLoaded` branch held "Gathering your Studio…" open with no end. Measured on a cold launch: still gathering at thirty-five seconds (`walk-shots-r3/02`–`05`), still gathering two minutes after a Back and a second entry (`06`–`08`); one tap on the Studio tab filled the same screen at once (`09`), because the view model is a singleton and the tab's load warmed it. The load's only trigger guarded on `coordinator.tabs.selected == .studio`, and both doors — Today's row and the Companion's "Your studio" — `navigate(to: .profile)`, which **pushes** onto the Today stack (`DailyRoomView.swift:292, 324`; `CompanionActionRows.swift:44`), so the selected tab is Today and the guard returned. |
+
+The guard is kept, and narrowed to the one instance the tab selection actually speaks for:
+
+```swift
+var isOnStudio: Bool {
+    guard coordinator.isHouseFirstRoot, isTabRoot else { return true }
+    return coordinator.tabs.selected == .studio
+}
+```
+
+`isTabRoot` is the seam `TabRoot.swift` already publishes and the chrome already reads to tell a
+tab's root from a pushed copy of itself — no new mechanism. The reasoning the guard rests on:
+
+- A **tab root stays mounted** after she leaves the tab (`HouseFirstRoot` hides it at opacity zero
+  rather than tearing it down), so an unnarrowed key would refetch eight sources on the way out.
+  That is `W2R3-n1`'s guard, and it still holds — for the tab root, and only there.
+- A **pushed hub is torn down** when she leaves and rebuilt when she returns, so its appearance
+  *is* her arrival. There is nothing to guard against, and the `.task` that fires on that
+  appearance is exactly the load the walk waited two minutes for.
+- The **flag-off root** is unchanged: it has no tabs, the hub is always pushed, `isOnStudio` is
+  still unconditionally true there.
+
+No timeout was added to the placeholder. `apply()` runs unconditionally after the eight legs
+settle and sets `hasLoaded`/clears `isLoading`, so once `load()` is entered "gathering" cannot be
+terminal; the terminal state the walk measured was a load never entered.
+
+### Tests added
+
+`StudioHubProjectionTests` gains a fourth section, `aPushedHubLoadsWithoutWaitingForTheStudioTab`
+(the suite's ninth case): it pins the `isTabRoot` seam into the view, pins the narrowed guard, and
+holds the tab-root half of `W2R3-n1` in place — the pre-fix expression
+`!coordinator.isHouseFirstRoot || coordinator.tabs.selected == .studio` must not return. A source
+pin, as `W3R1-B1`'s was, and carrying the same limit: it proves this file's trigger, not the class.
+
+### Gates on this tip (`d1bc55c57`)
+
+| Gate | Result |
+|---|---|
+| `IOS_GATE_UDID=B6AD6271-… ios-gate.sh all` | **PASS**, exit 0 — `** BUILD SUCCEEDED **`, `** TEST SUCCEEDED **`, **2726 tests in 291 suites passed, 2 known issues** (2725 at the round-2 tip; the new case is the one), `✓ lint-delta: no new warnings in touched files`. Log: `ios-gate-final-r3.log` (main checkout, uncommitted at 55k lines) |
+| walk-app rebuild → `.build/DerivedDataWalk/…/Debug-iphonesimulator/Patina.app` | **PASS** — `** BUILD SUCCEEDED **`, exit 0. `Patina.debug.dylib` stamped **02:07**, after the fix commit; `codesign -dv`: `Identifier=cloud.patina.app`, `Signature=adhoc`, `Sealed Resources version=2 rules=10 files=61`. The fix is provable in the bundle: `nm -a Patina.debug.dylib \| grep StudioHubView \| grep isTabRoot` → the property's getter, setter and initialiser, none of which existed before this round. Log: `walk-build-final-r3.log` |
+| `pnpm --filter @patina/client-portal type-check` | **PASS** — `tsc --noEmit`, no output |
+| `pnpm --filter @patina/client-portal test` | **PASS** — **123 suites, 1841 tests**, 0 failed — unchanged from the round-2 tip, as expected |
+| `supabase db reset` + `scripts/run-sql-tests.sh` | **NOT RUN, and not owed** — no migration changed this round. `00572` and `00573` stand exactly as section 9 left them, and no line was added to `stack-reset-notice.md` |
+| designer/admin portals, edge functions, `@patina/supabase` | **NOT RUN, and not owed** — untouched |
+
+### What this round does not close
+
+- **`W3R3-n1`** (the header hint is not held to the same honesty as the sections) was raised as a
+  nit and explicitly **not** a live-path defect — the walk names its own SQL flip as the cause of
+  the disagreement it saw. The hint reads `BadgeCountService.shared.studioHint` and is not
+  reconciled with what the sections came to say; that is a persisted-floor question, not this
+  trigger's. Left open, and worth a look before the next surface that prints a count word.
+- **`W3R3-n2`** (numerals on the profile stats and the Companion) is P-24 residue on screens
+  outside the approval rail; the Wave 2 walks already ruled the numerals-vs-words sweep a wave
+  item rather than a blocker.
+- The **deploy set is unchanged** by this round: iOS only, no migration, no edge function, no
+  workspace package. Section 9's deploy notes stand as written.
