@@ -127,6 +127,36 @@ export function directlyMailedDecisionIds(
   return [...ids];
 }
 
+/** ux/03 §282's unit is a DAY, whatever period the summary covers. */
+const DIRECT_MAIL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How far back the "already had a letter of its own" check looks: the LATER of
+ * the summary's own window start and twenty-four hours ago (M-R3-01).
+ *
+ * The rule is ux/03 §282 — no second automated notice for one approval inside
+ * 24 hours — and reading it over the digest's period instead silenced whole
+ * cadences. Every approval mails its first notice direct, so on
+ * `weekly_sunday` every approval announced during the week had a
+ * `decision_required` row inside the seven-day window and was dropped from the
+ * Sunday summary; its reminder never mailed either (it was held as
+ * `cadence_digest` and stamped `reminder_sent_at`), so a "once a week, on
+ * Sunday" reader heard the announcement and then nothing until the date
+ * passed. On `daily` the same stretch swallowed a Saturday announcement out of
+ * Monday's summary.
+ */
+export function directMailWindowStart(
+  windowStart: Date | string,
+  now: Date,
+): Date {
+  const floor = now.getTime() - DIRECT_MAIL_WINDOW_MS;
+  const since = windowStart instanceof Date
+    ? windowStart.getTime()
+    : new Date(windowStart).getTime();
+  if (Number.isNaN(since)) return new Date(floor);
+  return new Date(Math.max(since, floor));
+}
+
 /**
  * ux/03 §282: no second automated notice for one approval inside 24 hours.
  * An approval whose own letter went out inside this window is not repeated in

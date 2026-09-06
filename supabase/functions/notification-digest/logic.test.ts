@@ -14,6 +14,7 @@ import {
   digestCategoryForDecision,
   digestWindowStart,
   directlyMailedDecisionIds,
+  directMailWindowStart,
   dropDecisionsPastOverdue,
   dropDirectlyMailedDecisions,
   dropSnoozedDecisions,
@@ -391,4 +392,108 @@ Deno.test("only a letter that actually left silences the summary", () => {
   ];
   const ids = directlyMailedDecisionIds(rows);
   assertEquals(ids.sort(), ["d-delivered", "d-sending", "d-sent"]);
+});
+
+// ── M-R3-01. §282 counts days, not periods ────────────────────────────────
+
+Deno.test("the already-mailed filter looks back a day, whatever the period", () => {
+  const sunday = new Date("2026-10-11T13:00:00Z");
+
+  // The weekly window is a week; the filter over it is still a day.
+  const weekly = digestWindowStart(
+    "weekly_sunday",
+    "2026-10-04T13:00:00Z",
+    sunday,
+  );
+  assertEquals(weekly.toISOString(), "2026-10-04T13:00:00.000Z");
+  assertEquals(
+    directMailWindowStart(weekly, sunday).toISOString(),
+    "2026-10-10T13:00:00.000Z",
+  );
+
+  // A daily window and the floor are the same instant, which is why the
+  // daily tests never caught this.
+  const monday = new Date("2026-10-12T13:00:00Z");
+  assertEquals(
+    directMailWindowStart(digestWindowStart("daily", null, monday), monday)
+      .toISOString(),
+    "2026-10-11T13:00:00.000Z",
+  );
+
+  // A daily window stretched over the skipped Sunday run still floors at a day.
+  assertEquals(
+    directMailWindowStart(
+      digestWindowStart("daily", "2026-10-10T13:00:00Z", monday),
+      monday,
+    ).toISOString(),
+    "2026-10-11T13:00:00.000Z",
+  );
+
+  // A window narrower than a day is left alone — the floor is a floor, and a
+  // letter mailed inside it must still silence the summary.
+  assertEquals(
+    directMailWindowStart("2026-10-12T09:00:00Z", monday).toISOString(),
+    "2026-10-12T09:00:00.000Z",
+  );
+  // An unreadable watermark falls back to the day, never to the epoch.
+  assertEquals(
+    directMailWindowStart("not-a-date", monday).toISOString(),
+    "2026-10-11T13:00:00.000Z",
+  );
+});
+
+Deno.test("an approval announced mid-week is in the Sunday summary (M-R3-01)", () => {
+  const sunday = new Date("2026-10-11T13:00:00Z"); // 9am New York
+  const lastSummary = "2026-10-04T13:00:00Z";
+
+  const items: ReminderDigestItem[] = [
+    {
+      category: "approval",
+      title: "Approve the issued set",
+      link: null,
+      decisionId: "d-wednesday",
+    },
+    {
+      category: "approval",
+      title: "Approve the stair detail",
+      link: null,
+      decisionId: "d-this-morning",
+    },
+  ];
+
+  // Every approval mails its first notice direct, so both have a
+  // `decision_required` email row inside the seven-day window.
+  const mailLog = [
+    {
+      created_at: "2026-10-07T20:00:00Z", // Wednesday's announcement
+      status: "delivered",
+      metadata: { decisionId: "d-wednesday" },
+    },
+    {
+      created_at: "2026-10-11T11:00:00Z", // two hours before this summary
+      status: "delivered",
+      metadata: { decisionId: "d-this-morning" },
+    },
+  ];
+
+  const floor = directMailWindowStart(
+    digestWindowStart("weekly_sunday", lastSummary, sunday),
+    sunday,
+  );
+  // What the query in index.ts returns: `.gt("created_at", floor)`.
+  const rowsInWindow = mailLog.filter(
+    (row) => new Date(row.created_at) > floor,
+  );
+  const kept = dropDirectlyMailedDecisions(
+    items,
+    directlyMailedDecisionIds(rowsInWindow),
+  );
+
+  // The week's announcement is old news; the summary is the only thing that
+  // will mention that approval again before its date.
+  assertEquals(kept.length, 1);
+  assertEquals(kept[0].decisionId, "d-wednesday");
+
+  // And the one announced two hours ago is still not said twice in a day.
+  assert(!kept.some((item) => item.decisionId === "d-this-morning"));
 });

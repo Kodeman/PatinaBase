@@ -35,6 +35,7 @@ import {
   digestWindowStart,
   type DirectDecisionMailRow,
   directlyMailedDecisionIds,
+  directMailWindowStart,
   dropDecisionsPastOverdue,
   dropDirectlyMailedDecisions,
   dropSnoozedDecisions,
@@ -119,8 +120,11 @@ async function snoozedDecisions(
 }
 
 /**
- * The approvals that already had a letter of their own inside this window
- * (r2 M-R2-02). The first notice and a superseding edition break the digest
+ * The approvals that already had a letter of their own inside the last
+ * twenty-four hours — `sinceIso` here is `directMailWindowStart`'s floor, not
+ * the digest's window start (M-R3-01).
+ *
+ * (r2 M-R2-02.) The first notice and a superseding edition break the digest
  * and mail direct, so without this the default cadence says the same thing
  * twice inside a day: the announcement in the afternoon, the summary the next
  * morning. ux/03 §282 allows one.
@@ -267,7 +271,15 @@ async function collectItems(
       ),
       await snoozedDecisions(supabase, userId, decisionIds, now),
     ),
-    await decisionsMailedDirect(supabase, userId, decisionIds, sinceIso),
+    // The 24-hour floor is this check's own (M-R3-01): §282 counts days,
+    // not the summary's period, and reading it over a seven-day window
+    // dropped every approval announced that week out of Sunday's summary.
+    await decisionsMailedDirect(
+      supabase,
+      userId,
+      decisionIds,
+      directMailWindowStart(sinceIso, now).toISOString(),
+    ),
   );
 }
 
