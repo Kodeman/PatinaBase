@@ -131,7 +131,13 @@ final class ProposalDetailViewModel {
         guard isSigned, let proposal else { return nil }
         return .proposal(
             proposal,
-            studio: signingStudio,
+            // `W3R2-n1`: the letterhead both keepsakes print, resolved in one
+            // place. `signingStudio` stays the seal sentence's — that one
+            // names a house or nothing.
+            studio: RecordOfDecision.masthead(
+                projectId: proposal.project_id,
+                projects: BadgeCountService.shared.projects
+            ),
             signedName: signedName,
             signedAt: didSign ? now : nil
         )

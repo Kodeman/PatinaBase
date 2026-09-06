@@ -300,4 +300,58 @@ struct RecordOfDecisionTests {
         }
         #expect(RecordOfDecisionCopy.keepACopy == "Keep a copy")
     }
+
+    // MARK: - `W3R2-n1` · one letterhead, both rails
+
+    private func projects(_ json: String) throws -> [RemoteProject] {
+        try JSONDecoder().decode([RemoteProject].self, from: Data(json.utf8))
+    }
+
+    /// Two pieces of the same paper carried different letterheads on the same
+    /// phone in the same session: the approval keepsake named the studio, the
+    /// proposal keepsake drew a bare rule. One resolution now serves both.
+    @Test("the masthead is the studio's name, and the designer's where there is none")
+    func theMastheadIsResolvedOnce() throws {
+        let named = try projects("""
+        [{ "id": "b1", "name": "Aspen Loft Refresh", "status": "active",
+           "designer_id": "d-1",
+           "designer": { "id": "d-1", "display_name": "Leah Hartwell",
+                         "business_name": "Hartwell Studio" } }]
+        """)
+        #expect(RecordOfDecision.masthead(projectId: "b1", projects: named) == "Hartwell Studio")
+
+        let unnamed = try projects("""
+        [{ "id": "b1", "name": "Aspen Loft Refresh", "status": "active",
+           "designer_id": "d-1",
+           "designer": { "id": "d-1", "display_name": "Leah Hartwell" } }]
+        """)
+        #expect(RecordOfDecision.masthead(projectId: "b1", projects: unnamed) == "Leah Hartwell")
+    }
+
+    /// And a paper the app cannot place still refuses to invent a house.
+    @Test("an unplaceable paper draws no letterhead rather than a guess")
+    func anUnplaceablePaperDrawsNoLetterhead() throws {
+        let rows = try projects("""
+        [{ "id": "b1", "name": "Aspen Loft Refresh", "status": "active" }]
+        """)
+        #expect(RecordOfDecision.masthead(projectId: nil, projects: rows) == nil)
+        #expect(RecordOfDecision.masthead(projectId: "", projects: rows) == nil)
+        #expect(RecordOfDecision.masthead(projectId: "b2", projects: rows) == nil)
+        #expect(RecordOfDecision.masthead(projectId: "b1", projects: rows) == nil)
+    }
+
+    /// Both rails call it, and the seal sentence still does not — "{Studio}
+    /// has your signature" names a house or nothing (`W2R1-m2`).
+    @Test("both keepsake rails read the same letterhead")
+    func bothRailsReadTheSameLetterhead() throws {
+        let proposals = try SourcePin.read(
+            "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift"
+        )
+        let approvals = try SourcePin.read(
+            "Patina/Features/Decisions/Views/ProjectApprovalBlock.swift"
+        )
+        #expect(proposals.contains("RecordOfDecision.masthead("))
+        #expect(approvals.contains("RecordOfDecision.masthead("))
+        #expect(proposals.contains("var signingStudio: String?"), "the seal keeps its own rule")
+    }
 }

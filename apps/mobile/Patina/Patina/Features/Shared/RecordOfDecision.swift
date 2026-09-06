@@ -77,6 +77,27 @@ struct RecordOfDecision: Equatable, Sendable {
 
 extension RecordOfDecision {
 
+    /// The letterhead, resolved ONCE for both rails.
+    ///
+    /// `W3R2-n1`: the approval keepsake printed "Leah Hartwell" while the
+    /// proposal keepsake printed a bare rule, on the same phone in the same
+    /// session — two pieces of the same paper with different letterheads,
+    /// because each rail resolved the studio its own way. This is the
+    /// approval rail's resolution, and now the only one: the studio's own
+    /// name where the project carries it, and the designer's where the studio
+    /// has no name on file, so the paper is never anonymous.
+    ///
+    /// The SEAL sentence keeps the stricter rule (`W2R1-m2`,
+    /// `ProposalsViewModel.signingStudio`): "{Studio} has your signature"
+    /// names a house, never a person. A letterhead is not that sentence.
+    static func masthead(projectId: String?, projects: [RemoteProject]) -> String? {
+        guard let projectId, !projectId.isEmpty else { return nil }
+        let project = projects.first { $0.id == projectId }
+        let name = project?.designerStudioName ?? project?.designer?.displayName
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     /// A settled Stage-2 approval.
     ///
     /// `consentMethod` and `signedName` are what the app HOLDS, which on the
