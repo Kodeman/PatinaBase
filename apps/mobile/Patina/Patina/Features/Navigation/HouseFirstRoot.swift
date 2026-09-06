@@ -30,6 +30,11 @@ public struct HouseFirstRoot: View {
     /// for one surface, not four.
     @State private var mounted: Set<PatinaTab> = [.today]
 
+    /// `P-30`: the namespace the Record row's zoom source and the decision
+    /// screen it pushes both live in. One per root — every stack publishes the
+    /// same one, and only one stack is ever pushing at a time.
+    @Namespace private var decisionZoom
+
     public init() {}
 
     /// The first-launch tour is hosted HERE, above the four stacks, and not
@@ -102,6 +107,9 @@ public struct HouseFirstRoot: View {
                 // disables UIKit's edge-swipe-back. Re-enable it per stack.
                 .interactivePopGestureEnabled()
         }
+        // `P-30`: the zoom's namespace belongs to the stack that owns both
+        // ends of it — the Record row and the decision screen it pushes.
+        .environment(\.decisionZoomNamespace, decisionZoom)
     }
 
     private func path(for tab: PatinaTab) -> Binding<NavigationPath> {

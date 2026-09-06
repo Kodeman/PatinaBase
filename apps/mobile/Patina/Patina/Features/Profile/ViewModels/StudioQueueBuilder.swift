@@ -394,7 +394,7 @@ private extension StudioQueueBuilder {
         }
         let detail = projects.count == 1
             ? (mostRecent?.name ?? "Your project")
-            : "\(mostRecent?.name ?? "Your projects") and \(projects.count - 1) more"
+            : "\(mostRecent?.name ?? "Your projects") and \(PatinaCount.inWords(projects.count - 1)) more"
 
         return StudioQueueRow(
             id: "progress.projects",
@@ -436,8 +436,8 @@ private extension StudioQueueBuilder {
             ? "No messages yet"
             : (unreadCount == 0
                ? "All caught up"
-               : countLabel(unreadCount, singular: "1 unread thread",
-                            plural: "\(unreadCount) unread threads"))
+               : countLabel(unreadCount, singular: "One unread thread",
+                            plural: "\(PatinaCount.inWordsCapitalized(unreadCount)) unread threads"))
 
         return StudioQueueRow(
             id: "conversation.threads",
@@ -467,8 +467,8 @@ private extension StudioQueueBuilder {
             ? "All updates read"
             : countLabel(
                 unreadCount,
-                singular: "1 unread update",
-                plural: "\(unreadCount) unread updates"
+                singular: "One unread update",
+                plural: "\(PatinaCount.inWordsCapitalized(unreadCount)) unread updates"
             )
 
         return StudioQueueRow(
@@ -509,22 +509,22 @@ extension StudioQueueBuilder {
         if !moving.isEmpty {
             detail = countLabel(
                 moving.count,
-                singular: "1 piece on its way",
-                plural: "\(moving.count) pieces on their way"
+                singular: "One piece on its way",
+                plural: "\(PatinaCount.inWordsCapitalized(moving.count)) pieces on their way"
             )
         } else if delivered > 0 {
             detail = countLabel(
                 delivered,
-                singular: "1 piece delivered",
-                plural: "\(delivered) pieces delivered"
+                singular: "One piece delivered",
+                plural: "\(PatinaCount.inWordsCapitalized(delivered)) pieces delivered"
             )
         } else {
             // Everything she has is refunded or cancelled. The door still
             // draws — the orders are in the list — and says nothing more.
             detail = countLabel(
                 orders.count,
-                singular: "1 past order",
-                plural: "\(orders.count) past orders"
+                singular: "One past order",
+                plural: "\(PatinaCount.inWordsCapitalized(orders.count)) past orders"
             )
         }
 
@@ -569,11 +569,11 @@ private extension StudioQueueBuilder {
             title: "Proposals",
             detail: countLabel(
                 proposals.count,
-                singular: "1 shared proposal",
-                plural: "\(proposals.count) shared proposals"
+                singular: "One shared proposal",
+                plural: "\(PatinaCount.inWordsCapitalized(proposals.count)) shared proposals"
             ),
             meta: accepted > 0
-                ? countLabel(accepted, singular: "1 accepted", plural: "\(accepted) accepted")
+                ? countLabel(accepted, singular: "One accepted", plural: "\(PatinaCount.inWordsCapitalized(accepted)) accepted")
                 : nil,
             systemImage: "doc.badge.ellipsis",
             route: .proposalList,
@@ -593,11 +593,11 @@ private extension StudioQueueBuilder {
             title: "Invoices",
             detail: countLabel(
                 invoices.count,
-                singular: "1 shared invoice",
-                plural: "\(invoices.count) shared invoices"
+                singular: "One shared invoice",
+                plural: "\(PatinaCount.inWordsCapitalized(invoices.count)) shared invoices"
             ),
             meta: paid > 0
-                ? countLabel(paid, singular: "1 paid", plural: "\(paid) paid")
+                ? countLabel(paid, singular: "One paid", plural: "\(PatinaCount.inWordsCapitalized(paid)) paid")
                 : nil,
             systemImage: "creditcard",
             route: .invoiceList,
@@ -617,14 +617,14 @@ private extension StudioQueueBuilder {
             title: "Documents",
             detail: countLabel(
                 documents.count,
-                singular: "1 shared file",
-                plural: "\(documents.count) shared files"
+                singular: "One shared file",
+                plural: "\(PatinaCount.inWordsCapitalized(documents.count)) shared files"
             ),
             meta: projectCount > 0
                 ? countLabel(
                     projectCount,
-                    singular: "1 project",
-                    plural: "\(projectCount) projects"
+                    singular: "One project",
+                    plural: "\(PatinaCount.inWordsCapitalized(projectCount)) projects"
                 )
                 : nil,
             systemImage: "doc.text",
@@ -668,8 +668,8 @@ private extension StudioQueueBuilder {
             title: countLabel(projects.count, singular: "Project", plural: "Projects"),
             detail: countLabel(
                 projects.count,
-                singular: "1 completed or archived project",
-                plural: "\(projects.count) completed or archived projects"
+                singular: "One completed or archived project",
+                plural: "\(PatinaCount.inWordsCapitalized(projects.count)) completed or archived projects"
             ),
             meta: nil,
             systemImage: "folder",
@@ -692,8 +692,8 @@ private extension StudioQueueBuilder {
             title: "Past proposals",
             detail: countLabel(
                 archived.count,
-                singular: "1 declined or expired proposal",
-                plural: "\(archived.count) declined or expired proposals"
+                singular: "One declined or expired proposal",
+                plural: "\(PatinaCount.inWordsCapitalized(archived.count)) declined or expired proposals"
             ),
             meta: nil,
             systemImage: "doc.badge.ellipsis",
@@ -714,8 +714,8 @@ private extension StudioQueueBuilder {
             title: "Voided invoices",
             detail: countLabel(
                 voided.count,
-                singular: "1 voided invoice",
-                plural: "\(voided.count) voided invoices"
+                singular: "One voided invoice",
+                plural: "\(PatinaCount.inWordsCapitalized(voided.count)) voided invoices"
             ),
             meta: nil,
             systemImage: "creditcard",
@@ -764,6 +764,11 @@ private extension StudioQueueBuilder {
         return ISO8601DateParsing.dateOrDay(from: raw)
     }
 
+    /// `P-24` residue (`W2R1-n3`), swept in Wave 3: every Studio row counts in
+    /// WORDS, the way the hub's own section badges and "Nine approvals are
+    /// waiting on you" already did. `PatinaCount` hands back figures past
+    /// twelve — the web's own cutoff (`standing-sentence.ts`) — so the two
+    /// surfaces cannot say the same count two ways.
     static func countLabel(
         _ count: Int,
         singular: String,

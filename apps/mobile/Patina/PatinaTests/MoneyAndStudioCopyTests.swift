@@ -176,7 +176,12 @@ struct MoneyAndStudioCopyTests {
             encoding: .utf8
         )
         #expect(proposals.contains("DateDisplay.expiry(proposal.valid_until)"))
-        #expect(proposals.contains("expiry.isPastDue ? PatinaColors.Text.error"))
+        // `IOSC-R3-01`, closed in Wave 3: the proposal rail was the last
+        // surface painting a passed date red, two rows from the badge P-17
+        // retired. Body ink here too — "a passed date is a fact, not an
+        // alarm", on every surface.
+        #expect(proposals.contains("expiry.isPastDue ? PatinaColors.Text.primary"))
+        #expect(!proposals.contains("expiry.isPastDue ? PatinaColors.Text.error"))
     }
 
     @Test("every money detail carries the date its list already printed")

@@ -241,16 +241,25 @@ public struct PatinaStamp: View {
     /// draws the stamp with NO sentence beside it passes the word it stands
     /// for, and the mark speaks.
     public let accessibilityLabel: String?
+    /// `P-26`: drawn square to the page, whatever the state's own tilt.
+    ///
+    /// The tilt is the hand that pressed the mark, and on a screen it reads
+    /// as one. On a printed keepsake it reads as a misfeed — a page that went
+    /// through the printer crooked — so the Record of Decision, and nothing
+    /// else, asks for the mark upright.
+    public let isUpright: Bool
 
     public init(
         state: State,
         sublabel: String? = nil,
         isAged: Bool = false,
+        isUpright: Bool = false,
         accessibilityLabel: String? = nil
     ) {
         self.state = state
         self.sublabel = sublabel
         self.isAged = isAged
+        self.isUpright = isUpright
         self.accessibilityLabel = accessibilityLabel
     }
 
@@ -260,14 +269,21 @@ public struct PatinaStamp: View {
         sublabel: String? = nil,
         recordedAt: Date?,
         now: Date = Date(),
+        isUpright: Bool = false,
         accessibilityLabel: String? = nil
     ) {
         self.init(
             state: state,
             sublabel: sublabel,
             isAged: Self.isAged(state: state, recordedAt: recordedAt, now: now),
+            isUpright: isUpright,
             accessibilityLabel: accessibilityLabel
         )
+    }
+
+    /// The rotation this mark is actually drawn at.
+    public var drawnRotationDegrees: Double {
+        isUpright ? 0 : state.rotationDegrees
     }
 
     // MARK: - Body
@@ -318,7 +334,7 @@ public struct PatinaStamp: View {
                         .padding(2.5)
                 }
             }
-            .rotationEffect(.degrees(state.rotationDegrees))
+            .rotationEffect(.degrees(drawnRotationDegrees))
     }
 
     private var words: some View {

@@ -126,7 +126,7 @@ struct OrderRoutingTests {
             order("a", .confirmed), order("b", .shipped)
         ])
         #expect(row?.title == "Ordered")
-        #expect(row?.detail == "2 pieces on their way")
+        #expect(row?.detail == "Two pieces on their way")
         #expect(row?.meta == "Shipped")
         #expect(row?.route == .orderList)
 
@@ -135,20 +135,20 @@ struct OrderRoutingTests {
         let withDelivered = StudioQueueBuilder.orderRecordRow([
             order("a", .confirmed), order("b", .delivered), order("c", .refunded)
         ])
-        #expect(withDelivered?.detail == "1 piece on its way")
+        #expect(withDelivered?.detail == "One piece on its way")
         #expect(withDelivered?.meta == "Confirmed")
 
         let allArrived = StudioQueueBuilder.orderRecordRow([
             order("a", .delivered), order("b", .delivered)
         ])
-        #expect(allArrived?.detail == "2 pieces delivered")
+        #expect(allArrived?.detail == "Two pieces delivered")
         #expect(allArrived?.meta == "Delivered")
 
         // A refunded order is in the list, is not "on its way", and is not
         // what the meta reports.
         let refundedOnly = StudioQueueBuilder.orderRecordRow([order("c", .refunded)])
         #expect(refundedOnly?.meta == nil)
-        #expect(refundedOnly?.detail == "1 past order")
+        #expect(refundedOnly?.detail == "One past order")
     }
 
     @Test("the Ordered row rides the Studio’s Money & documents group")

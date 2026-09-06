@@ -167,19 +167,24 @@ struct DecisionConsentValidationTests {
           "project_id": "pr-1", "created_at": "2026-08-01T00:00:00Z" }
         """)
         // The state `confirmSelection`'s catch branch leaves behind: the
-        // failure drawn, the consent sheet closed, the option remembered.
+        // failure drawn, the act idle, the option remembered.
+        viewModel.options = try decode([RemoteDecisionOption].self, """
+        [{ "id": "o-1", "decision_id": "d-1", "title": "Natural" }]
+        """)
         viewModel.submitFailure = MoneyFailureCopy.decision
         viewModel.lastAttemptedOptionId = "o-1"
         #expect(viewModel.pendingOptionId == nil)
 
         viewModel.retrySelection()
-        #expect(viewModel.pendingOptionId == "o-1")
+        // `P-30`: the retry restores the LEANING, so the named act is live
+        // again over the option the failed submit was carrying.
+        #expect(viewModel.leaningOptionId == "o-1")
+        #expect(viewModel.pendingOptionId == nil)
         #expect(viewModel.submitFailure == nil)
         #expect(MoneyFailureCopy.decision.retryLabel == "Let’s try that again")
 
-        // A retry after the decision resolved would re-open a consent step on
-        // a settled decision.
-        viewModel.cancelSelection()
+        // A retry after the decision resolved would put an act back on a
+        // settled decision.
         viewModel.selectedOptionId = "o-1"
         viewModel.retrySelection()
         #expect(viewModel.pendingOptionId == nil)

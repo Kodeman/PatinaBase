@@ -46,7 +46,14 @@ struct StudioHubView: View {
                 }
             }
         }
-        .task(id: authService.isAuthenticated) {
+        // `W2R3-n1`: the hub's number was a load-time snapshot. Keyed on the
+        // auth flag alone this re-ran only across a sign-in, so three
+        // consecutive Today→Studio re-entries inside one session all read
+        // "Ten" while the homeowner's real set had fallen to eight. The key
+        // now moves when she ARRIVES here, and the guard is why it does not
+        // also refetch eight sources on the way out.
+        .task(id: studioEntryKey) {
+            guard isOnStudio else { return }
             await viewModel.load()
         }
         .accessibilityElement(children: .contain)
@@ -387,5 +394,24 @@ private struct StudioHubStalenessLine: View {
             .foregroundStyle(PatinaColors.Text.secondary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("StudioHub.StalenessLine")
+    }
+}
+
+/// `W2R3-n1`'s arrival key. It lives in an extension because the hub's own
+/// body is at SwiftLint's `type_body_length` warning, and because neither of
+/// these draws anything — they decide when the hub refetches.
+private extension StudioHubView {
+
+    /// Whether the Studio is the surface she is looking at. The flag-off root
+    /// has no tabs — the hub is pushed there, and mounting is arriving — so it
+    /// is always true.
+    var isOnStudio: Bool {
+        !coordinator.isHouseFirstRoot || coordinator.tabs.selected == .studio
+    }
+
+    /// Four states, not one per tab: switching between two tabs that are not
+    /// the Studio does not move it, so nothing re-runs until she comes back.
+    var studioEntryKey: String {
+        "\(authService.isAuthenticated)#\(isOnStudio)"
     }
 }
