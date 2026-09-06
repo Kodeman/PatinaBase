@@ -21,6 +21,7 @@ export function ServiceAgreementSendSheet({
   rates,
   recipientEmail,
   recipientName,
+  readinessOverride,
 }: {
   open: boolean;
   onClose: () => void;
@@ -35,16 +36,28 @@ export function ServiceAgreementSendSheet({
   rates: ServiceRate[];
   recipientEmail: string | null;
   recipientName?: string;
+  /** The composed agreement's verdict, when the room is running under
+   *  `agreement-parts`. The seven-facet function below asks for a role rate
+   *  and a ceiling unconditionally — true of the fixed facets, false of a
+   *  flat-fee composition, which would otherwise be refused a send it is
+   *  entitled to (R4). Omitted on the flag-off path, where nothing moves. */
+  readinessOverride?: {
+    ready: boolean;
+    blockers: string[];
+    notes: string[];
+  };
 }) {
   const send = useSendServiceAgreement(document.id);
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<string | null>(null);
-  const readiness = assessServiceAgreementReadiness({
-    document,
-    terms,
-    rates,
-    recipientEmail,
-  });
+  const readiness =
+    readinessOverride ??
+    assessServiceAgreementReadiness({
+      document,
+      terms,
+      rates,
+      recipientEmail,
+    });
 
   const submit = async () => {
     setResult(null);
