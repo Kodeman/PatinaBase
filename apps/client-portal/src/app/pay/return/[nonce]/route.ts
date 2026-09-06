@@ -55,15 +55,11 @@ const CARRIED_PARAMS = [
 async function resolveReturnNonce(nonce: string): Promise<string | null> {
   try {
     const admin = createServiceClient();
-    const { data, error } = await admin.rpc(
-      // W1-TYPES: cast removed at integration — W1 regenerates
-      // database.types.ts with resolve_invoice_return_nonce; until then the
-      // generated Database carries no such function name.
-      "resolve_invoice_return_nonce" as never,
-      { p_nonce: nonce } as never,
+    const { data: token, error } = await admin.rpc(
+      "resolve_invoice_return_nonce",
+      { p_nonce: nonce },
     );
     if (error) return null;
-    const token = data as unknown;
     return typeof token === "string" && NONCE_PATTERN.test(token)
       ? token
       : null;

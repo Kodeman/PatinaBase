@@ -288,19 +288,14 @@ function parseInvoice(value: unknown): InvoiceLinkInvoice | null {
 }
 
 /**
- * The discriminator is read from `sheet` or `kind`.
+ * The discriminator is `kind`. I-4 asked for one word and 00574 pinned it: every
+ * sheet emits `kind`, and `invoice_links_test.sql` asserts it ("kind is the
+ * discriminator W2 reads"). `sheet` is emitted alongside as an alias carrying
+ * the same value, and is not read here.
  *
- * I-4 asked for one word, and the specification does not have one: v2 §3.1
- * spells the payable and settling sheets `"sheet"`, K5 spells the withdrawn one
- * `{ kind: 'withdrawn' }`, and K4–K11 win over v2 where they conflict. Picking
- * either word here bets the ENTIRE surface on which one 00574 emits — guess
- * wrong and every invoice in the wild renders as a dead link.
- *
- * So the tolerance stays until W1's SQL pins one, and the hardening I-4
- * actually wants goes in instead: a payload carrying BOTH spellings with
- * different values is incoherent and dies whole. Tightening this to a single
- * word is a W3 exit criterion, once `resolve_invoice_link`'s SQL test asserts
- * which word it is.
+ * The alias is still inspected for one purpose: a payload carrying both
+ * spellings with DIFFERENT values is incoherent and dies whole rather than
+ * picking a winner.
  */
 function readDiscriminator(candidate: Record<string, unknown>): string | null {
   const sheet = candidate.sheet;
@@ -308,7 +303,6 @@ function readDiscriminator(candidate: Record<string, unknown>): string | null {
   if (typeof sheet === "string" && typeof kind === "string" && sheet !== kind) {
     return null;
   }
-  if (typeof sheet === "string") return sheet;
   if (typeof kind === "string") return kind;
   return null;
 }
@@ -437,18 +431,12 @@ export async function resolveInvoiceLink(
 
   try {
     const admin = options?.client ?? createServiceClient();
-    const { data, error } = await admin.rpc(
-      // W1-TYPES: cast removed at integration — W1 regenerates database.types.ts
-      // with resolve_invoice_link; until then the generated Database has no
-      // such function name and the overload cannot be satisfied.
-      "resolve_invoice_link" as never,
-      {
-        p_token: token,
-        p_record_view: options?.recordView ?? true,
-      } as never,
-    );
+    const { data, error } = await admin.rpc("resolve_invoice_link", {
+      p_token: token,
+      p_record_view: options?.recordView ?? true,
+    });
     if (error) return null;
-    return parseResolvedInvoiceLink(data as unknown);
+    return parseResolvedInvoiceLink(data);
   } catch {
     return null;
   }

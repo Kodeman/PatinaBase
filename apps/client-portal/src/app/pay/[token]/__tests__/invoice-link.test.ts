@@ -23,6 +23,7 @@ const TOKEN = "a".repeat(64);
 
 function valePayload() {
   return {
+    kind: "invoice",
     sheet: "invoice",
     invoice: {
       number: "4",
@@ -165,9 +166,9 @@ describe("parseResolvedInvoiceLink", () => {
     expect(parseResolvedInvoiceLink([])).toBeNull();
   });
 
-  // I-4: the specification spells the discriminator two ways (v2 §3.1 `sheet`,
-  // K5 `kind`), so both are read — but a payload claiming to be two different
-  // sheets at once is incoherent and dies whole.
+  // I-4: 00574 pinned `kind` as the discriminator and emits `sheet` alongside
+  // as an alias. Only `kind` is read — but a payload claiming to be two
+  // different sheets at once is incoherent and dies whole.
   it("refuses a payload carrying both spellings with different values", () => {
     const confused = { ...valePayload(), kind: "settling" };
     expect(parseResolvedInvoiceLink(confused)).toBeNull();
@@ -194,6 +195,7 @@ describe("parseResolvedInvoiceLink", () => {
 
   it("parses the settling sheet", () => {
     const parsed = parseResolvedInvoiceLink({
+      kind: "settling",
       sheet: "settling",
       invoice: { number: "4" },
       studio: {
@@ -227,7 +229,7 @@ describe("parseResolvedInvoiceLink", () => {
     expect(parseResolvedInvoiceLink(null)).toBeNull();
     expect(parseResolvedInvoiceLink("nope")).toBeNull();
     expect(
-      parseResolvedInvoiceLink({ sheet: "something-else", studio: {} }),
+      parseResolvedInvoiceLink({ kind: "something-else", studio: {} }),
     ).toBeNull();
   });
 });
