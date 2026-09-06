@@ -377,6 +377,73 @@ test.describe('The Threshold — the client page', () => {
     expect(new URL(page.url()).pathname).toBe(`/projects/${PROJECT_ID}`);
   });
 
+  /**
+   * "The Agreement, Composed" (Wave 1). An agreement is read in full where the
+   * house keeps it — the fold on its Previously line — and when the bundle
+   * carries parts, the composed leaves are what the client reads, in
+   * `position` order.
+   *
+   * BOTH paths are asserted, because until 00575 is applied AND a studio has
+   * composed something, every agreement in the world takes the parts-less one,
+   * and this fixture's takes it today: the seed lays down the proposal and its
+   * commercial document but no `proposal_service_terms` row, so the shell
+   * prints its header, its execution mark and its footer with no body at all.
+   * That is the shape this assertion pins now; the parts branch is the shape
+   * it pins the moment a composed agreement reaches this stack.
+   */
+  test('reads the agreement in full — its parts in position order when it carries them', async ({
+    page,
+  }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    const reading = page.getByTestId('instrument-reading');
+    await pressUntilOpen(
+      page
+        .getByTestId('previously-line')
+        .filter({ hasText: /design services/i })
+        .first()
+        .getByRole('button'),
+      reading,
+    );
+
+    const shell = reading.getByTestId('commercial-document-shell');
+
+    // The whole reading is asserted inside one retry, not statement by
+    // statement: the house re-enters its settle gate on a background refetch,
+    // which unmounts everything below the doorplate mid-assertion. Every
+    // locator below is therefore re-resolved on each attempt.
+    await expect(async () => {
+      await expect(shell).toBeVisible({ timeout: 5_000 });
+      // The instrument that opened is the agreement, not a neighbouring paper.
+      expect(await shell.getByText('Design services agreement').count()).toBe(1);
+
+      const parts = shell.getByTestId('agreement-part');
+      const positions = await parts.evaluateAll((nodes) =>
+        nodes.map((node) => Number(node.getAttribute('data-position'))),
+      );
+
+      if (positions.length > 0) {
+        // The one assertion this wave is here for: the client reads the parts
+        // in the order the studio composed them, never the order they arrived.
+        expect(positions).toEqual([...positions].sort((a, b) => a - b));
+        const titles = await parts.evaluateAll((nodes) =>
+          nodes.map((node) => node.querySelector('h2, p')?.textContent?.trim() ?? ''),
+        );
+        expect(titles.every((title) => title.length > 0)).toBe(true);
+        expect(await shell.getByTestId('agreement-parts-body').count()).toBe(1);
+        // The separate-purchase boundary is said once, by the parts body.
+        expect(
+          await shell.getByText(/require a separate named furnishings authorization/i).count(),
+        ).toBe(1);
+      } else {
+        // The parts-less path: nothing composed reaches the client, and the
+        // body is whatever today's terms row makes it (here, none at all).
+        expect(await shell.getByTestId('agreement-parts-body').count()).toBe(0);
+      }
+    }).toPass({ timeout: 90_000 });
+  });
+
   /* ── Wave 2: the retired routes ─────────────────────────────────────────── */
 
   test('answers the retired routes with a 308 to the page anchor', async ({ page }) => {
