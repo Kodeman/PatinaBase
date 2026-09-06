@@ -16,7 +16,10 @@ const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
 const SANS =
   "'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 
-export type ReminderDigestCategory = "proposal" | "decision";
+export type ReminderDigestCategory = "proposal" | "approval" | "choice";
+
+/** Which cadence this digest is being built for (00572). */
+export type DigestPeriod = "daily" | "weekly_sunday";
 
 export interface ReminderDigestItem {
   category: ReminderDigestCategory;
@@ -24,6 +27,36 @@ export interface ReminderDigestItem {
   link: string | null;
   decisionId?: string;
   artifact?: ApprovalArtifactCitation | null;
+}
+
+/**
+ * The vocabulary ruling, in the digest's own headings (Wave-1 carry, backend
+ * r3-M1). "Approval" is the only name for the ask; "decision" is allowed only
+ * for a choice between named alternatives. One heading could not be both, so
+ * the digest splits on `approval_contract` — a Stage-2 artifact-bound ask is an
+ * approval, a legacy option row is a choice.
+ */
+export function digestCategoryForDecision(
+  approvalContract: string | null | undefined,
+): ReminderDigestCategory {
+  return approvalContract === "project_artifact_v1" ? "approval" : "choice";
+}
+
+/**
+ * R16's quiet, on the digest side. After the overdue notice Patina says nothing
+ * further about that approval — including inside a summary, which is still an
+ * automated letter about it. The weekly digest makes this load-bearing: its
+ * seven-day window can reach back past a notice that already went out.
+ */
+export function dropDecisionsPastOverdue(
+  items: ReminderDigestItem[],
+  overdueDecisionIds: readonly string[],
+): ReminderDigestItem[] {
+  if (overdueDecisionIds.length === 0) return items;
+  const quiet = new Set(overdueDecisionIds);
+  return items.filter((item) =>
+    !(item.decisionId && quiet.has(item.decisionId))
+  );
 }
 
 export interface RenderedDigest {
@@ -51,6 +84,44 @@ export function isReminderDigestDue(
   return now.getTime() - last >= DIGEST_MIN_INTERVAL_MS;
 }
 
+// Six days, not seven: the weekly run has to be able to fire on the same
+// weekday it fired last week without the guard rounding it out.
+const WEEKLY_MIN_INTERVAL_MS = 6 * 24 * 60 * 60 * 1000;
+
+/** How far back each cadence looks. The weekly window is its own week. */
+export const DIGEST_WINDOW_MS: Record<DigestPeriod, number> = {
+  daily: 24 * 60 * 60 * 1000,
+  weekly_sunday: 7 * 24 * 60 * 60 * 1000,
+};
+
+/**
+ * "Once a week, on Sunday" means Sunday in HER zone, not in the cron's. The
+ * digest cron runs daily; this is the gate that makes six of those runs a
+ * no-op for a weekly reader.
+ */
+export function isSundayLocal(now: Date, timeZone: string): boolean {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+  }).format(now);
+  return weekday === "Sun";
+}
+
+/** Whether this reader's digest is due now, for the cadence she chose. */
+export function isDigestDue(
+  period: DigestPeriod,
+  lastSentAt: string | null | undefined,
+  now: Date,
+  timeZone: string,
+): boolean {
+  if (period === "daily") return isReminderDigestDue(lastSentAt, now);
+  if (!isSundayLocal(now, timeZone)) return false;
+  if (!lastSentAt) return true;
+  const last = new Date(lastSentAt).getTime();
+  if (Number.isNaN(last)) return true;
+  return now.getTime() - last >= WEEKLY_MIN_INTERVAL_MS;
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -62,11 +133,16 @@ function escapeHtml(s: string): string {
 
 const CATEGORY_LABELS: Record<ReminderDigestCategory, string> = {
   proposal: "Proposals awaiting your review",
-  decision: "Decisions that need you",
+  approval: "Approvals that need you",
+  choice: "Choices that need you",
 };
 
 // Stable render order.
-const CATEGORY_ORDER: ReminderDigestCategory[] = ["proposal", "decision"];
+const CATEGORY_ORDER: ReminderDigestCategory[] = [
+  "proposal",
+  "approval",
+  "choice",
+];
 
 // The zone the rest of the notification rail falls back to when a recipient
 // stored none (decision-notify's DEFAULT_TIME_ZONE).
@@ -158,12 +234,16 @@ export function buildReminderDigestEmail(
   /** The recipient's notification_preferences.timezone; the issue dates are
    * printed in it, and the rail's own fallback stands in when it is unset. */
   timeZone?: string | null,
+  /** Which cadence this summary is for; daily unless she asked for Sunday. */
+  period: DigestPeriod = "daily",
 ): RenderedDigest {
   const zone = timeZone?.trim() || DEFAULT_TIME_ZONE;
   const count = items.length;
+  // Words where words will do (Wave-1 carry, backend r3-M1). A number in a
+  // subject line is a count of obligations, and she is not working a queue.
   const subject = count === 1
-    ? "A reminder from Patina"
-    : `${count} reminders from Patina`;
+    ? "One reminder from Patina"
+    : "A few reminders from Patina";
 
   const sections = CATEGORY_ORDER.map((category) => {
     const group = items.filter((i) => i.category === category);
@@ -188,18 +268,25 @@ export function buildReminderDigestEmail(
       </div>`;
   }).join("");
 
-  const body = heading("Your daily summary") +
-    paragraph("A few things are waiting for you.") +
+  const title = period === "weekly_sunday"
+    ? "Your Sunday summary"
+    : "Your daily summary";
+  const footer = period === "weekly_sunday"
+    ? "You're getting one summary a week, on Sunday, instead of individual reminders. Change this anytime in your notification settings."
+    : "You're getting one daily summary instead of individual reminders. Change this anytime in your notification settings.";
+
+  const body = heading(title) +
+    paragraph(
+      count === 1 ? "One thing is waiting for you." : "A few things are waiting for you.",
+    ) +
     (sections || paragraph("Nothing new right now.")) +
     spacer(6) +
     ctaButton(baseUrl, "Open Patina") +
     spacer(10) +
-    muted(
-      "You're getting one daily summary instead of individual reminders. Change this anytime in your notification settings.",
-    );
+    muted(footer);
 
   const html = renderBrandedShell({
-    title: "Your daily summary",
+    title,
     eyebrow: "Reminders",
     audience: "client",
     body,

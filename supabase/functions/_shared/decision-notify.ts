@@ -74,14 +74,127 @@ const KIND_TO_LOG_TYPE: Record<DecisionNotificationKind, string> = {
   decision_resolved: "decision_resolved",
 };
 
-// Kinds subject to the client's reminder_cadence preference. Both are
-// client-addressed reminders (produced by decision-reminders / expire-decisions)
-// and so are batchable into the daily digest. decision_resolved is addressed to
-// the DESIGNER and is never deferred.
-const CADENCE_ELIGIBLE_KINDS = new Set<DecisionNotificationKind>([
-  "decision_required",
-  "decision_overdue",
-]);
+// P-28 (00572). The three cadences, in the column's own spellings. The two
+// retired ones are normalised here as well as by the database trigger, because
+// a preferences row written by yesterday's portal reaches this code before the
+// trigger has had anything to say about it.
+export type ReminderCadence = "right_away" | "daily" | "weekly_sunday";
+
+export function normalizeReminderCadence(
+  value: string | null | undefined,
+): ReminderCadence {
+  switch ((value ?? "").trim()) {
+    case "daily":
+    case "daily_digest":
+      return "daily";
+    case "weekly_sunday":
+      return "weekly_sunday";
+    case "right_away":
+    case "immediate":
+      return "right_away";
+    default:
+      // The column default is 'daily' (00572): the quietest cadence that still
+      // gets a real answer on time, because the first notice and the overdue
+      // notice both break the digest.
+      return "daily";
+  }
+}
+
+/** Why a letter is not going out on this pass, or null when it is. */
+export type DecisionMailHold =
+  | "cadence_digest"
+  | "snoozed"
+  | "sunday_quiet"
+  | "before_local_morning"
+  | "quiet_after_overdue";
+
+export interface DecisionMailGate {
+  kind: DecisionNotificationKind;
+  /** Which register a decision_required letter speaks in. */
+  notice: "first" | "reminder";
+  /** True when this first notice announces an edition replacing an earlier one. */
+  isSupersedingEdition: boolean;
+  cadence: ReminderCadence;
+  /** IANA zone the Sunday rule and the morning gate are read in. */
+  timeZone: string;
+  now: Date;
+  /** decision_snoozes.snoozed_until for this reader and this approval. */
+  snoozedUntil: string | null;
+  /** True once a decision_overdue notice exists for this approval. */
+  overdueAlreadySent: boolean;
+}
+
+/** The recipient's weekday (0 = Sunday) and hour, in her own zone. */
+export function localWeekdayAndHour(
+  now: Date,
+  timeZone: string,
+): { weekday: number; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const weekdayName = parts.find((p) => p.type === "weekday")?.value ?? "Sun";
+  const hourText = parts.find((p) => p.type === "hour")?.value ?? "0";
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    .indexOf(weekdayName);
+  // "24" is a legal formatted hour for midnight in some ICU builds.
+  const hour = Number(hourText) % 24;
+  return { weekday: weekday < 0 ? 0 : weekday, hour: Number.isNaN(hour) ? 0 : hour };
+}
+
+/**
+ * R16, in one place. The order matters and each step is a separate promise:
+ *
+ *   • decision_resolved is the DESIGNER's letter — none of this applies.
+ *   • decision_overdue ALWAYS sends. It breaks the cadence, the snooze, the
+ *     Sunday rule and the morning gate, because a passed date is the one thing
+ *     a homeowner asked us never to sit on.
+ *   • After the overdue notice, Patina is quiet: no further automated approval
+ *     mail for that approval, whatever the register. The studio takes it from
+ *     there (record_decision_studio_handoff, 00572).
+ *   • A snooze silences the letter until its hour — except a superseding
+ *     edition, which is news about a different piece of paper.
+ *   • A first notice and a superseding edition break the digest: "a new
+ *     decision and a passed date are news, not summary" (ux/03 §6.2). Only the
+ *     in-between reminder folds into a digest.
+ *   • No automated approval mail on Sunday, and none before 8am local. The
+ *     hourly cron (00572) releases the held letter at the first pass at or
+ *     after 8am in her zone — which is what "send Monday 8am local" means.
+ *     The 8pm side of the floor is the PUSH leg's alone (notify_client_
+ *     attention / release_due_client_pushes): a letter that lands in an inbox
+ *     at nine at night has not woken anybody.
+ */
+export function decisionMailHold(gate: DecisionMailGate): DecisionMailHold | null {
+  if (gate.kind === "decision_resolved") return null;
+  if (gate.kind === "decision_overdue") return null;
+
+  if (gate.overdueAlreadySent) return "quiet_after_overdue";
+
+  if (!gate.isSupersedingEdition && gate.snoozedUntil) {
+    const until = new Date(gate.snoozedUntil).getTime();
+    // 'infinity' parses as NaN through PostgREST; a snooze with no end is a
+    // standing quiet, not a parse failure to shrug off.
+    if (Number.isNaN(until)) {
+      if (gate.snoozedUntil.trim().toLowerCase().startsWith("infinity")) {
+        return "snoozed";
+      }
+    } else if (until > gate.now.getTime()) {
+      return "snoozed";
+    }
+  }
+
+  const breaksTheDigest = gate.notice === "first" || gate.isSupersedingEdition;
+  if (!breaksTheDigest && gate.cadence !== "right_away") {
+    return "cadence_digest";
+  }
+
+  const { weekday, hour } = localWeekdayAndHour(gate.now, gate.timeZone);
+  if (weekday === 0) return "sunday_quiet";
+  if (hour < 8) return "before_local_morning";
+  return null;
+}
 
 interface PrefRow {
   channels_email: boolean | null;
@@ -214,6 +327,39 @@ export interface DecisionContext {
    * is a lie unless its producer runs at the moment of sending.
    */
   notice?: "first" | "reminder";
+  /**
+   * P-27. Present only when this ask replaces an earlier edition she has
+   * already seen — `client_decisions.predecessor_decision_id` (00463) resolved
+   * by the producer. A successor is a NEW decision, never a reopen, and the
+   * letter says so: the edition she answered stays in the record.
+   */
+  supersedes?: SupersededEdition | null;
+}
+
+/**
+ * P-27. What the successor letter may truthfully say about the edition it
+ * replaces. Every field is optional because every field is evidence: an
+ * unanswered predecessor names no answer, and a predecessor with no artifact
+ * yields no delta. Nothing here is computed from the successor alone.
+ */
+export interface SupersededEdition {
+  /** The predecessor's edition number. */
+  version: number;
+  /** Its artifact title, when it carried one. */
+  title?: string | null;
+  /** The day she answered it (client_decisions.responded_at). */
+  answeredOn?: string | null;
+  /** What she answered, in the stamp's own word. */
+  answeredOutcome?: DecisionReceiptOutcome | null;
+  /**
+   * Differences between the successor's frozen artifact and the predecessor's
+   * (project_approval_artifacts, joined by predecessor_decision_id). Absent
+   * when either side carries no artifact — a delta with nothing to subtract
+   * from is not a fact.
+   */
+  costCentsDelta?: number | null;
+  scheduleDaysDelta?: number | null;
+  leadTimeDaysDelta?: number | null;
 }
 
 export interface DeliverDecisionNotificationResult {
@@ -541,6 +687,96 @@ function renderEditionLine(
   return muted(line);
 }
 
+/**
+ * P-27. Money as she reads it: whole dollars unless the cents are real. A
+ * delta is signed, because "$1,240" and "−$1,240" are different news.
+ */
+export function formatCostDelta(cents: number): string {
+  const abs = Math.abs(cents);
+  const amount = (abs / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: abs % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: abs % 100 === 0 ? 0 : 2,
+  });
+  if (cents === 0) return amount;
+  return `${cents > 0 ? "+" : "\u2212"}${amount}`;
+}
+
+/** "4 days" / "1 day", for a schedule or a lead time. */
+function dayCount(days: number): string {
+  const abs = Math.abs(days);
+  return `${abs} ${abs === 1 ? "day" : "days"}`;
+}
+
+/**
+ * P-27 / R11. The three deltas stated INDEPENDENTLY, side by side — never
+ * summed, and never dressed in a colour. Each line is omitted when its number
+ * is not computable; a delta of zero is stated as "unchanged", because "holds"
+ * is a fact she asked for.
+ *
+ * No baseline is rendered: `project_approval_artifacts` carries the deltas and
+ * no baseline column (W2-n3), and R11 asks for a baseline only "where one
+ * exists". A delta alone is a fragment; a delta named as a delta is not.
+ */
+export function supersededDeltaLines(
+  edition: SupersededEdition,
+): string[] {
+  const lines: string[] = [];
+  const previous = `edition ${edition.version}`;
+  if (typeof edition.costCentsDelta === "number") {
+    lines.push(
+      edition.costCentsDelta === 0
+        ? `Cost: unchanged from ${previous}.`
+        : `Cost: ${formatCostDelta(edition.costCentsDelta)} against ${previous}.`,
+    );
+  }
+  if (typeof edition.scheduleDaysDelta === "number") {
+    lines.push(
+      edition.scheduleDaysDelta === 0
+        ? `Schedule: unchanged from ${previous}.`
+        : `Schedule: ${dayCount(edition.scheduleDaysDelta)} ${
+          edition.scheduleDaysDelta > 0 ? "later" : "earlier"
+        } than ${previous}.`,
+    );
+  }
+  if (typeof edition.leadTimeDaysDelta === "number") {
+    lines.push(
+      edition.leadTimeDaysDelta === 0
+        ? `Lead time: unchanged from ${previous}.`
+        : `Lead time: ${dayCount(edition.leadTimeDaysDelta)} ${
+          edition.leadTimeDaysDelta > 0 ? "longer" : "shorter"
+        } than ${previous}.`,
+    );
+  }
+  return lines;
+}
+
+/**
+ * P-27. The continuation sentence. It names her own answer where the record
+ * carries one, and the edition number where it does not — and it never says
+ * the earlier answer was undone, because it was not: a successor is a new
+ * decision and the edition she answered stays in the record.
+ */
+export function supersededOpeningLine(
+  newVersion: number,
+  edition: SupersededEdition,
+  timeZone: string,
+): string {
+  const answeredOn = calendarDay(edition.answeredOn, timeZone);
+  const verb = edition.answeredOutcome === "approved"
+    ? "approved"
+    : edition.answeredOutcome === "returned"
+    ? "returned"
+    : edition.answeredOutcome === "held"
+    ? "held"
+    : null;
+  if (answeredOn && verb) {
+    return `Edition ${newVersion} replaces the edition you ${verb} on ${answeredOn}.`;
+  }
+  return `Edition ${newVersion} replaces edition ${edition.version}.`;
+}
+
 export function decisionNotificationMetadata(
   kind: DecisionNotificationKind,
   decision: DecisionContext,
@@ -550,6 +786,11 @@ export function decisionNotificationMetadata(
     kind,
   };
   if (kind === "decision_required") metadata.notice = decisionNotice(decision);
+  // P-27: which edition this one replaces, for the record and for support.
+  // NOT part of decisionLogKey — the dedupe key stays {decisionId, notice}.
+  if (decision.supersedes) {
+    metadata.supersedesVersion = decision.supersedes.version;
+  }
   if (decision.artifact) {
     metadata.artifactKind = decision.artifact.kind;
     metadata.artifactVersion = decision.artifact.version;
@@ -683,6 +924,56 @@ export function renderDecisionEmail(
           ),
           designerNote,
           editionLine,
+          door,
+          studioSignature,
+        ].join(""),
+      }),
+    };
+  }
+
+  // P-27. The successor read as one thread. A superseding edition is still a
+  // first notice — it announces — but it opens on what she already answered
+  // and names what moved since, instead of arriving as an unrelated second
+  // letter with two bare links.
+  if (decision.notice === "first" && decision.supersedes) {
+    const previous = decision.supersedes;
+    const thisVersion = decision.artifact?.version ?? previous.version + 1;
+    const subject = `Edition ${thisVersion} of ${quoted(title)}`;
+    const deltas = supersededDeltaLines(previous);
+    return {
+      subject,
+      html: renderBrandedShell({
+        title: subject,
+        preview: `Edition ${thisVersion} replaces edition ${previous.version}.`,
+        eyebrow,
+        audience: "client",
+        studioName: cobrand.studioName,
+        studioLogoUrl: cobrand.studioLogoUrl,
+        body: [
+          paragraph(`Hi ${escapeHtml(name)},`),
+          paragraph(
+            escapeHtml(
+              supersededOpeningLine(thisVersion, previous, timeZone),
+            ),
+          ),
+          deltas.length
+            ? paragraph(
+              `What changed: ${
+                deltas.map((line) => escapeHtml(line)).join(" ")
+              }`,
+            )
+            : "",
+          designerNote,
+          editionLine,
+          dueWeekday && dueDay
+            ? paragraph(`Due ${escapeHtml(dueWeekday)}, ${escapeHtml(dueDay)}.`)
+            : "",
+          // Nothing she did is undone. The earlier edition and the answer she
+          // gave it are both still in the record — this letter says so out
+          // loud rather than leaving her to wonder.
+          paragraph(
+            `Edition ${previous.version} stays in the record.`,
+          ),
           door,
           studioSignature,
         ].join(""),
@@ -1012,6 +1303,56 @@ export async function deliverDecisionReceipt(
 }
 
 /**
+ * P-28. The standing snooze this reader set on this approval, or null. Read
+ * rather than passed in, so every producer honours it without having to know
+ * it exists. A lookup failure returns null: a snooze that cannot be read must
+ * not become a silence nobody asked for.
+ */
+async function decisionSnoozedUntil(
+  supabase: SupabaseClient,
+  userId: string | null,
+  decisionId: string,
+): Promise<string | null> {
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from("decision_snoozes")
+    .select("snoozed_until")
+    .eq("user_id", userId)
+    .eq("decision_id", decisionId)
+    .maybeSingle();
+  if (error) {
+    console.warn("decision-notify: snooze lookup failed", error);
+    return null;
+  }
+  return (data as { snoozed_until?: string } | null)?.snoozed_until ?? null;
+}
+
+/**
+ * R16. True once the overdue notice exists for this approval. After it, Patina
+ * is quiet and the studio chases by hand — so no further automated approval
+ * mail goes out, whatever produced it. Read from the spine table
+ * (decision_notifications, 00173), which the overdue RPC writes idempotently,
+ * rather than from the mail log: the promise is about the notice, not about
+ * whether one particular letter happened to send.
+ */
+async function decisionOverdueAlreadySent(
+  supabase: SupabaseClient,
+  decisionId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("decision_notifications")
+    .select("id")
+    .eq("decision_id", decisionId)
+    .eq("kind", "decision_overdue")
+    .limit(1);
+  if (error) {
+    console.warn("decision-notify: overdue lookup failed", error);
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
+/**
  * Deliver a decision notification through the notification center:
  *   • fire the in-app spine RPC (idempotent), then
  *   • respect preferences (in-app channel / type toggle / quiet hours), then
@@ -1068,24 +1409,38 @@ export async function deliverDecisionNotification(
       };
     }
 
-    // Cadence gate — a client on the daily digest defers non-urgent reminder
-    // EMAILS to the notification-digest cron. The in-app row already fired
-    // (step 1), so nothing is lost; the digest batches it. Only client reminder
-    // kinds are eligible (decision_resolved → designer stays immediate).
-    if (
-      CADENCE_ELIGIBLE_KINDS.has(kind) &&
-      pref.reminder_cadence === "daily_digest"
-    ) {
+    // R16's one gate (00572): the cadence, the snooze she set, the Sunday
+    // rule, the morning floor, and the quiet after the overdue notice — all
+    // decided by decisionMailHold, which is a pure function and is tested as
+    // one. The in-app row already fired (step 1), so a hold loses nothing:
+    // the digest batches it, or the hourly cron returns for it.
+    const hold = decisionMailHold({
+      kind,
+      notice: decisionNotice(decision),
+      isSupersedingEdition: Boolean(decision.supersedes),
+      cadence: normalizeReminderCadence(pref.reminder_cadence),
+      timeZone,
+      now: new Date(),
+      snoozedUntil: await decisionSnoozedUntil(
+        supabase,
+        recipient.userId,
+        decision.id,
+      ),
+      overdueAlreadySent: kind === "decision_required"
+        ? await decisionOverdueAlreadySent(supabase, decision.id)
+        : false,
+    });
+    if (hold) {
       return {
         inAppOk: inApp.ok,
         emailSent: false,
         emailSkipped: true,
-        reason: "cadence_digest",
+        reason: hold,
       };
     }
 
-    // Overdue is time-critical and bypasses quiet hours; required/resolved
-    // defer (skip this run — the daily cron will re-attempt).
+    // Her own quiet hours, unchanged from Wave 1: overdue is time-critical and
+    // bypasses them; required/resolved defer and the cron re-attempts.
     if (kind !== "decision_overdue" && isQuietHours(pref)) {
       return {
         inAppOk: inApp.ok,

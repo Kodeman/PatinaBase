@@ -11,7 +11,11 @@ import {
   buildReminderDigestEmail,
   decisionDigestLink,
   decisionDigestTitle,
+  digestCategoryForDecision,
+  dropDecisionsPastOverdue,
+  isDigestDue,
   isReminderDigestDue,
+  isSundayLocal,
   type ReminderDigestItem,
 } from "./logic.ts";
 import { clientDecisionLink } from "../_shared/client-portal-links.ts";
@@ -37,7 +41,7 @@ Deno.test("isReminderDigestDue: true for an unparseable watermark", () => {
   assertEquals(isReminderDigestDue("not-a-date", NOW), true);
 });
 
-Deno.test("buildReminderDigestEmail: singular vs plural subject", () => {
+Deno.test("buildReminderDigestEmail: the subject counts in words, never numerals", () => {
   const one = buildReminderDigestEmail(
     [{
       category: "proposal",
@@ -46,17 +50,17 @@ Deno.test("buildReminderDigestEmail: singular vs plural subject", () => {
     }],
     "https://client.patina.cloud",
   );
-  assertStringIncludes(one.subject, "reminder");
-  assert(!one.subject.includes("2 "));
+  assertEquals(one.subject, "One reminder from Patina");
 
   const many = buildReminderDigestEmail(
     [
       { category: "proposal", title: "A", link: null },
-      { category: "decision", title: "B", link: null },
+      { category: "approval", title: "B", link: null },
     ],
     "https://client.patina.cloud",
   );
-  assertStringIncludes(many.subject, "2");
+  assertEquals(many.subject, "A few reminders from Patina");
+  assert(!/[0-9]/.test(many.subject), "no numerals in a subject line");
 });
 
 Deno.test("buildReminderDigestEmail: lists every item and groups by category", () => {
@@ -67,9 +71,14 @@ Deno.test("buildReminderDigestEmail: lists every item and groups by category", (
       link: "https://x/p/1",
     },
     {
-      category: "decision",
-      title: "Pick a sofa fabric",
+      category: "approval",
+      title: "Approve the issued set",
       link: "https://x/d/9",
+    },
+    {
+      category: "choice",
+      title: "Pick a sofa fabric",
+      link: "https://x/d/8",
     },
   ];
   const { html } = buildReminderDigestEmail(
@@ -77,11 +86,17 @@ Deno.test("buildReminderDigestEmail: lists every item and groups by category", (
     "https://client.patina.cloud",
   );
   assertStringIncludes(html, "Living Room Refresh");
+  assertStringIncludes(html, "Approve the issued set");
   assertStringIncludes(html, "Pick a sofa fabric");
   assertStringIncludes(html, "https://x/p/1");
-  // category headings present
+  // The ask and the choice get their own headings (Wave-1 carry, r3-M1).
   assertStringIncludes(html.toLowerCase(), "proposal");
-  assertStringIncludes(html.toLowerCase(), "decision");
+  assertStringIncludes(html, "Approvals that need you");
+  assertStringIncludes(html, "Choices that need you");
+  assert(
+    !html.includes("Decisions that need you"),
+    "an approval is never called a decision",
+  );
 });
 
 Deno.test("buildReminderDigestEmail: escapes HTML in titles", () => {
@@ -104,7 +119,7 @@ Deno.test("the digest never says 'overdue' to a homeowner (P-04)", () => {
   );
   const { html } = buildReminderDigestEmail(
     [{
-      category: "decision",
+      category: "approval",
       title: decisionDigestTitle("decision_overdue", "The kitchen plan set"),
       link: null,
     }],
@@ -127,7 +142,7 @@ Deno.test("the digest is addressed to the homeowner's own door (P-03b)", () => {
 Deno.test("Stage-2 digest item cites the edition, not the checksum (R6)", () => {
   const checksum = "c".repeat(64);
   const items: ReminderDigestItem[] = [{
-    category: "decision",
+    category: "approval",
     title: "Approve the issue",
     link: "https://client.patina.cloud/projects/project-1#doorstep",
     decisionId: "decision-1",
@@ -176,4 +191,82 @@ Deno.test("the digest addresses an approval exactly as the letter does (F12)", (
   // A missing or forged id lands on the doorstep, never an interpolated path.
   assertEquals(decisionDigestLink(base, null), `${base}/#doorstep`);
   assertEquals(decisionDigestLink(base, "../evil"), `${base}/#doorstep`);
+});
+
+// ── P-28. "Once a week, on Sunday" — hers, not the cron's ──────────────────
+
+Deno.test("the weekly digest waits for Sunday in HER zone", () => {
+  // 2026-10-12T02:00Z: Monday in UTC, Sunday evening in Los Angeles.
+  const at = new Date("2026-10-12T02:00:00Z");
+  assertEquals(isSundayLocal(at, "America/Los_Angeles"), true);
+  assertEquals(isSundayLocal(at, "UTC"), false);
+  assertEquals(isDigestDue("weekly_sunday", null, at, "America/Los_Angeles"), true);
+  assertEquals(isDigestDue("weekly_sunday", null, at, "UTC"), false);
+});
+
+Deno.test("the weekly digest fires once a week, the daily one once a day", () => {
+  const sunday = new Date("2026-10-11T15:00:00Z");
+  // Sent two days ago — a week has not passed.
+  assertEquals(
+    isDigestDue("weekly_sunday", "2026-10-09T15:00:00Z", sunday, "UTC"),
+    false,
+  );
+  // Sent last Sunday — six days is enough to fire on the same weekday again.
+  assertEquals(
+    isDigestDue("weekly_sunday", "2026-10-04T15:00:00Z", sunday, "UTC"),
+    true,
+  );
+  // The daily cadence keeps its own 20h guard, untouched.
+  assertEquals(
+    isDigestDue("daily", "2026-10-11T10:00:00Z", sunday, "UTC"),
+    false,
+  );
+  assertEquals(
+    isDigestDue("daily", "2026-10-10T10:00:00Z", sunday, "UTC"),
+    true,
+  );
+});
+
+Deno.test("the ask and the choice are sorted by their contract, never by guess", () => {
+  assertEquals(digestCategoryForDecision("project_artifact_v1"), "approval");
+  assertEquals(digestCategoryForDecision("legacy_option_v1"), "choice");
+  assertEquals(digestCategoryForDecision(null), "choice");
+  assertEquals(digestCategoryForDecision(undefined), "choice");
+});
+
+Deno.test("an approval past its overdue notice leaves the summary too (R16)", () => {
+  const items: ReminderDigestItem[] = [
+    { category: "proposal", title: "A", link: null },
+    { category: "approval", title: "B", link: null, decisionId: "d-1" },
+    { category: "choice", title: "C", link: null, decisionId: "d-2" },
+  ];
+  assertEquals(dropDecisionsPastOverdue(items, []).length, 3);
+  const quiet = dropDecisionsPastOverdue(items, ["d-1"]);
+  assertEquals(quiet.length, 2);
+  assert(!quiet.some((item) => item.decisionId === "d-1"));
+  // A proposal nudge carries no decision id and is never swept up with them.
+  assert(quiet.some((item) => item.category === "proposal"));
+});
+
+Deno.test("the Sunday summary says which summary it is", () => {
+  const items: ReminderDigestItem[] = [
+    { category: "approval", title: "Approve the issued set", link: null },
+  ];
+  const weekly = buildReminderDigestEmail(
+    items,
+    "https://client.patina.cloud",
+    "America/New_York",
+    "weekly_sunday",
+  );
+  assertStringIncludes(weekly.html, "Your Sunday summary");
+  assertStringIncludes(weekly.html, "one summary a week, on Sunday");
+  assertEquals(weekly.subject, "One reminder from Patina");
+
+  const daily = buildReminderDigestEmail(
+    items,
+    "https://client.patina.cloud",
+    "America/New_York",
+  );
+  assertStringIncludes(daily.html, "Your daily summary");
+  assert(!daily.html.includes("Your Sunday summary"));
 });

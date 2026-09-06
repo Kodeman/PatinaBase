@@ -1,9 +1,9 @@
 // Supabase Edge Function: notification-digest
 //
-// Cron-triggered daily at 15:00 UTC (migration 00260). For every CLIENT who set
-// reminder_cadence = 'daily_digest', rolls the last 24h of UNREAD non-urgent
-// reminders into a SINGLE email instead of the individual nudge emails those
-// senders suppressed:
+// Cron-triggered daily at 15:00 UTC (migration 00278). For every CLIENT on a
+// BATCHING cadence — 'daily', or 'weekly_sunday' on a Sunday in her own zone
+// (00572) — rolls the window's UNREAD non-urgent reminders into a SINGLE email
+// instead of the individual nudge emails those senders suppressed:
 //
 //   • proposal-nudge  → notification_log rows (channel in_app, type
 //     'proposal_nudge') the sender writes when it skips the direct email.
@@ -29,7 +29,11 @@ import {
   buildReminderDigestEmail,
   decisionDigestLink,
   decisionDigestTitle,
-  isReminderDigestDue,
+  DIGEST_WINDOW_MS,
+  type DigestPeriod,
+  digestCategoryForDecision,
+  dropDecisionsPastOverdue,
+  isDigestDue,
   type ReminderDigestItem,
 } from "./logic.ts";
 import {
@@ -43,9 +47,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CLIENT_PORTAL_URL = Deno.env.get("CLIENT_PORTAL_URL") ??
   "https://client.patina.cloud";
 
-// Look-back window for reminders to include. Slightly over 24h so daily runs
-// with jitter never drop a row; the min-interval guard prevents double-send.
-const WINDOW_MS = 24 * 60 * 60 * 1000;
+// Look-back window per cadence (00572): a day for 'daily', a week for
+// 'weekly_sunday'. The min-interval guard prevents double-send either way.
+const WINDOW_MS = DIGEST_WINDOW_MS;
 
 const PAGE = 200;
 
@@ -53,6 +57,31 @@ interface DigestPrefRow {
   user_id: string;
   last_reminder_digest_sent_at: string | null;
   timezone: string | null;
+  reminder_cadence: string | null;
+}
+
+/**
+ * R16. The approvals this reader has already had the overdue notice for. After
+ * that notice Patina is quiet about them, in a summary as much as in a letter.
+ */
+async function decisionsPastOverdue(
+  supabase: SupabaseClient,
+  userId: string,
+  decisionIds: string[],
+): Promise<string[]> {
+  if (decisionIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("decision_notifications")
+    .select("decision_id")
+    .eq("user_id", userId)
+    .eq("kind", "decision_overdue")
+    .in("decision_id", decisionIds);
+  if (error) {
+    console.warn("[notification-digest] overdue lookup failed", error);
+    return [];
+  }
+  return ((data ?? []) as Array<{ decision_id: string }>)
+    .map((row) => row.decision_id);
 }
 
 async function collectItems(
@@ -86,6 +115,9 @@ async function collectItems(
   }
 
   // ── Decision reminders (decision_notifications rows) ────────────────────
+  // decision_required only. The overdue notice always breaks the digest and
+  // mails direct (R16, _shared/decision-notify.ts), so batching it here would
+  // say the same thing twice — and it is the one letter that must not wait.
   const { data: decisions } = await supabase
     .from("decision_notifications")
     .select(`
@@ -101,7 +133,7 @@ async function collectItems(
       )
     `)
     .eq("user_id", userId)
-    .in("kind", ["decision_required", "decision_overdue"])
+    .eq("kind", "decision_required")
     .is("read_at", null)
     .gt("created_at", sinceIso)
     .order("created_at", { ascending: false })
@@ -141,9 +173,9 @@ async function collectItems(
       );
       continue;
     }
-    const title = dec?.title || "A decision needs your input";
+    const title = dec?.title || "Something needs your answer";
     items.push({
-      category: "decision",
+      category: digestCategoryForDecision(dec?.approval_contract),
       title: decisionDigestTitle(row.kind, title),
       // The same address the decision letter's own door carries: the iOS app
       // claims /decisions/*, and the portal middleware 308s everyone else onto
@@ -154,7 +186,14 @@ async function collectItems(
     });
   }
 
-  return items;
+  return dropDecisionsPastOverdue(
+    items,
+    await decisionsPastOverdue(
+      supabase,
+      userId,
+      items.flatMap((item) => item.decisionId ? [item.decisionId] : []),
+    ),
+  );
 }
 
 async function dispatchReminderDigests(
@@ -170,14 +209,17 @@ async function dispatchReminderDigests(
 > {
   const stats = { scanned: 0, sent: 0, empty: 0, skipped: 0, errors: 0 };
   const now = new Date();
-  const sinceIso = new Date(now.getTime() - WINDOW_MS).toISOString();
 
   let offset = 0;
   while (true) {
+    // Both batching cadences page through here (00572). 'right_away' never
+    // does: her reminders mail as they fire and there is nothing to summarise.
     const { data: prefs, error } = await supabase
       .from("notification_preferences")
-      .select("user_id, last_reminder_digest_sent_at, timezone")
-      .eq("reminder_cadence", "daily_digest")
+      .select(
+        "user_id, last_reminder_digest_sent_at, timezone, reminder_cadence",
+      )
+      .in("reminder_cadence", ["daily", "weekly_sunday"])
       .eq("channels_email", true)
       .range(offset, offset + PAGE - 1);
 
@@ -186,11 +228,21 @@ async function dispatchReminderDigests(
 
     for (const pref of prefs as DigestPrefRow[]) {
       try {
-        if (!isReminderDigestDue(pref.last_reminder_digest_sent_at, now)) {
+        const period: DigestPeriod = pref.reminder_cadence === "weekly_sunday"
+          ? "weekly_sunday"
+          : "daily";
+        const zone = pref.timezone?.trim() || "America/New_York";
+        // "Once a week, on Sunday" is Sunday in her zone; six of the seven
+        // daily runs are a no-op for her.
+        if (
+          !isDigestDue(period, pref.last_reminder_digest_sent_at, now, zone)
+        ) {
           stats.skipped++;
           continue;
         }
 
+        const sinceIso = new Date(now.getTime() - WINDOW_MS[period])
+          .toISOString();
         const items = await collectItems(supabase, pref.user_id, sinceIso);
         if (items.length === 0) {
           // Nothing accumulated — leave the watermark so a reminder arriving
@@ -213,6 +265,7 @@ async function dispatchReminderDigests(
           items,
           CLIENT_PORTAL_URL,
           pref.timezone,
+          period,
         );
         const result = await sendCompliantEmail(supabase, {
           to: profile.email as string,
