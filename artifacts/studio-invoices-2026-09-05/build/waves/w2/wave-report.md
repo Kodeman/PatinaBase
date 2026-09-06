@@ -369,3 +369,160 @@ committed on 2026-09-04 (`ffb9cff6f`), so the suite passes only on the day it wa
 written; it fails today in every timezone (`TZ=Etc/GMT+12 date` is still Sep 5). It
 is the single red suite in the full designer run, it shares no file with this
 program, and it will fail every day until the date is stubbed.
+
+---
+
+# Merge main — the approvals W2 catch-up (2026-09-06)
+
+The release judge blocked the ship on B1: `origin/main` had moved **141 commits**
+past the program base `36b4b539e` while the waves ran, and production already
+carried what those commits shipped (Strata `00569`, six edge functions, both
+portal Workers). This step merged main into `studio-invoices/integration` and
+re-gated the whole tree.
+
+**Merge**
+
+```
+git -C <wt> merge --no-ff --no-autostash origin/main -m "chore(studio-invoices): merge main — approvals W2 landed"
+  CONFLICT (content): apps/client-portal/src/components/threshold/__tests__/threshold.test.tsx
+  CONFLICT (content): supabase/seed/00-legacy-grants.sql
+  Auto-merging: threshold.tsx · BudgetViewModel.swift · BudgetAggregationTests.swift
+                database.types.ts · hooks/index.ts
+```
+
+Exactly the two conflicts the judge predicted, resolved as instructed:
+
+| file | resolution |
+|---|---|
+| `threshold.test.tsx` | **Both** imports kept — `HOLD_MS` from `../instruments/scored-action` (main) and `LetterboxDoor` from `../letterbox-door` (ours), alphabetized. One import line each side; no other hunk. |
+| `supabase/seed/00-legacy-grants.sql` | `--ours`, then **regenerated** with `python3 scripts/generate-legacy-grants.py` (`baseline + 2164 replayed statements`). Never hand-merged. Against main's copy the regen adds only the two `00571` `create_draft_studio_invoice` blocks and drops the superseded 2-arg `resolve_studio_identity` grants from `00320`; against ours it adds main's eleven `00569` blocks and drops five `00463`/`00464` blocks that `00569` supersedes. |
+
+The five semantic auto-merges were read, not trusted:
+
+- **`threshold.tsx`** — disjoint. Main added the sealed-door retention
+  (`sealedDoors`/`sealDoor`, `openDoorMarks`, `onSigned`); ours changed only the
+  invoice-list plumbing (`useClientInvoices`, `standsUnfiled`, the merged
+  `invoices` list, `refetchInvoices`). `standsUnfiledAsks` still reads our
+  `adopted`. No shared hunk.
+- **`BudgetViewModel.swift`** — disjoint. Main touched `PaymentTermsDisplay.label`
+  (slug-vs-prose humanization); ours touched `BudgetMath.projectScopedRollup` and
+  its call site. Both present after the merge.
+- **`BudgetAggregationTests.swift`** — both sides' new cases present.
+- **`packages/supabase/src/hooks/index.ts`** — main's two approvals type exports
+  added beside ours.
+- **`database.types.ts`** — proven correct independently: regenerating from the
+  reset stack produced **zero diff** (`git diff --exit-code` → 0).
+
+Commits: `8168ef4f4` (merge) and `37b15a35f` (judge minors F1 + F5).
+
+**Migration numbering** — unchanged. `ls supabase/migrations | tail`:
+`00566, 00567, 00568, 00569, 00571`. Main brought `00569`; there is no `00570`
+anywhere; ours is the only `00571`; approvals W3 holds `00572`/`00573` on their
+own branches. **No renumber.** Mint W4+ from `00574`.
+
+**Judge minors closed here**
+
+- **F1** — `supabase/functions/create-checkout-session/index.ts:~298`. The comment
+  block telling a future reader *"Do not SEND a studio invoice until W3 lands"* is
+  replaced: W3 folded into the W2 client lane, so the houseless door and the merged
+  client-invoice read ship in the same release as the function. It now states the
+  delivered order: migration → these functions → designer portal → client portal.
+- **F5** — `apps/designer-portal/.../invoice-folio.tsx:316`. The studio void result
+  note read *"invoice voided · the number retired, the letter withdrawn"* while the
+  confirm copy (`:819`) and deck M7 both say the number is **kept**. Now
+  **"invoice voided · the letter withdrawn, nothing else released"**, which agrees
+  with the confirm sentence. `invoice-folio.test.tsx:300` re-pinned to the new
+  string.
+
+**Full gates on the merged tree**
+
+```
+supabase --workdir <wt> db reset              → Finished; ledger tail 00571, 00569, 00568, 00567, 00566, 00565
+scripts/run-sql-tests.sh                      → total 158 · green 136 · expected-fail 21
+                                                effective-green 157/158 · 1 unexpected (pre-existing, below)
+@patina/supabase generate + git diff --exit-code packages/supabase/src/database.types.ts
+                                              → exit 0 (NO drift; nothing to commit)
+@patina/supabase type-check                   → clean
+@patina/supabase test                         → 85 suites / 1013 passed, 12 skipped
+@patina/designer-portal type-check            → clean
+@patina/designer-portal test (FULL)           → 515/515 suites, 6174/6174 tests
+@patina/client-portal type-check              → clean
+@patina/client-portal test (FULL)             → 119/119 suites, 1719/1719 tests
+@patina/admin-portal build                    → BUILD_ID twRejPh9HZylteLs-hA8b
+deno test _shared/                            → ok | 262 passed | 0 failed
+deno test create-checkout-session/            → ok | 17 passed | 0 failed
+deno test stripe-webhook/                     → ok | 18 passed | 0 failed
+deno check × 20 (the whole deploy set)        → 20 OK, 0 FAIL
+ios-gate.sh all (sim si-merge, iPhone 16 Pro / iOS 26.5, cold DerivedData)
+                                              → IOS_GATE_EXIT=0
+                                                build  ** BUILD SUCCEEDED **
+                                                unit   ** TEST SUCCEEDED **
+                                                       2644 tests in 285 suites passed
+                                                       (2 known issues, both pre-existing
+                                                        `withKnownIssue` markers)
+                                                lint   ✓ lint-delta: no new warnings in
+                                                       touched files (base = main 7d7a8ef2b)
+                                                Suite BudgetAggregationTests ✔
+                                                Suite InvoicesMoneyRailTests ✔
+```
+
+The simulator `si-merge` (`B824D435-1EA4-4806-9FE1-9245962C4CFE`) was created for this
+gate and deleted after it. `Secrets.swift` was already present in the worktree, so no
+copy from the main checkout was needed. A first attempt was discarded: two gate runs
+briefly overlapped on one `DerivedData` (the contention the script's own header warns
+about), so both were killed, `DerivedData` was wiped, and the numbers above come from a
+single cold run.
+
+`invoice-check-intent`, `invoice-reminders` and `invoice-send` are the other three
+directly-edited functions and carry no `*.test.ts`; their `deno check` is above.
+
+**The pre-existing red the judge named is GONE.** `client-note-composer.test.tsx:479`
+(W2-A4) was the one calendar-driven failure in the full designer run; main's clock
+freeze came in with this merge and the suite now passes. The full designer run is
+green end to end.
+
+**Reds that remain, both pre-existing and neither ours**
+
+1. `supabase/tests/commercial/direct_order_attribution_test.sql` —
+   *"two roster designers on one day must file the order uncredited, got …d2"*.
+   The same calendar shape as W2-A4, in SQL. The fixture seeds two roster rows at
+   `NOW() - INTERVAL '2 hours'` and `NOW() - INTERVAL '1 hour'`
+   (`direct_order_attribution_test.sql:117-122`) and `create_direct_order` breaks
+   the tie with `date_trunc('day', v_runner_up) = date_trunc('day', v_winner_at)`
+   (`00540_direct_orders_attribution.sql`). Between **00:00 and 02:00 UTC** those
+   two rows land on different days, the tie never forms, and the more recent
+   designer wins. Proof at run time: `date -u` → `Sun Sep 6 01:45:21 UTC 2026`;
+   `select date_trunc('day', now() - interval '2 hours') = date_trunc('day', now() - interval '1 hour')`
+   → `f`. The test file is untouched since `ee784a83c`, long before this program;
+   `00571` contains no `direct_order`, `designer_of_record` or `uncredited` text.
+   It is on `origin/main` exactly as it is here, and it passes outside that
+   two-hour window.
+2. `supabase/functions/_tests/stripe-rail.test.ts` — still dies at seed with
+   `insert projects failed: studio_id_not_designer_studio` (W2-A1 / judge F7).
+   Unchanged by the merge; `designerA` needs a designer-domain role in `seed()`.
+   The houseless settle stays proven by the SQL suite only.
+
+**Recomputed deploy set — over `origin/main...HEAD`, not the program base**
+
+- **Migrations above main's tip:** `00571_studio_invoices.sql` (one).
+- **Edge functions:** **20**, unchanged from W1/W2. Recomputed by an independent
+  fixpoint walk over relative imports: `_shared/invoice-emails.ts`,
+  `_shared/invoice-subject.ts` and `_shared/studio-identity.ts` are the changed
+  shared modules; five functions are edited directly
+  (`create-checkout-session`, `invoice-check-intent`, `invoice-reminders`,
+  `invoice-send`, `stripe-webhook`) and fifteen ride the `_shared` rule.
+  Note `_shared/decision-notify.ts` and `_shared/project-approval-notification.ts`
+  enter the closure as *importers* of `studio-identity.ts` — main already deployed
+  their current content, so redeploying them is a no-op on code and a necessity on
+  the shared bundle.
+- **Portals:** **designer + client**. `apps/admin-portal` and
+  `apps/manufacturer-portal` are byte-identical to `origin/main`
+  (`git diff --name-only origin/main HEAD -- apps/` → only `client-portal`,
+  `designer-portal`, `mobile`), so admin does not deploy; its build was run as a
+  type gate only.
+- Ship order is unchanged: **migration → 20 functions → designer portal →
+  client portal → flag.**
+
+**Still owed** — the judge's re-walk of the two auto-merged surfaces (the client
+threshold with a studio letter beside an approvals door; iOS Budget with a studio
+invoice in the list) and a re-judge. Everything in (g) of the judgment stands.
