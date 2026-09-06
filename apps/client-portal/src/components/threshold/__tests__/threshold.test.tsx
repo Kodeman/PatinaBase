@@ -81,6 +81,7 @@ jest.mock('@patina/supabase', () => ({
   useConfirmProjectApprovalReview: jest.fn(),
   useRespondProjectApproval: jest.fn(),
   useSetDecisionSnooze: jest.fn(),
+  useDecisionSnooze: jest.fn(),
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
@@ -188,6 +189,7 @@ import {
   usePreviousReadingMark,
   useRespondProjectApproval,
   useSetDecisionSnooze,
+  useDecisionSnooze,
   useProjectInvoices,
   useProjectNotes,
   useProjectParties,
@@ -577,6 +579,7 @@ beforeEach(() => {
     mutateAsync: jest.fn(),
     isPending: false,
   });
+  (useDecisionSnooze as jest.Mock).mockReturnValue({ data: null });
   (useDecisionComments as jest.Mock).mockReturnValue({
     data: [],
     isLoading: false,

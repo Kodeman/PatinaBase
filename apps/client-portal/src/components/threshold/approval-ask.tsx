@@ -7,6 +7,7 @@ import {
   useCreateDecisionComment,
   useDecisionComments,
   useDecisionRealtime,
+  useDecisionSnooze,
   useRespondProjectApproval,
   useSetDecisionSnooze,
   type DecisionComment,
@@ -553,11 +554,21 @@ function Discussion({
   // The heading reads "The discussion" on every one of them, so it cannot be
   // the accessible name. `aria-label` wins over `aria-labelledby`, which is
   // why the heading keeps its id for the eye and gives up naming the landmark.
+  //
+  // `W3R1-03`: title and edition are NOT enough. Two approvals hanging off one
+  // artifact edition is the ordinary case — the fixture's own G1/G2 pair does
+  // it — and both landmarks then read identically, which is the axe failure
+  // `landmark-unique` names. The decision id is the only thing on the page
+  // that is unique per thread, so it closes every name rather than only the
+  // untitled one.
   const named = artifactTitle?.trim();
-  const landmarkName = named
+  const subject = named
     ? typeof artifactVersion === 'number'
-      ? `Discussion about ${named} · Edition ${artifactVersion}`
-      : `Discussion about ${named}`
+      ? `${named} · Edition ${artifactVersion}`
+      : named
+    : null;
+  const landmarkName = subject
+    ? `Discussion about ${subject} · approval ${decisionId}`
     : `Discussion about approval ${decisionId}`;
   const written = (comments.data ?? []) as DecisionComment[];
 
@@ -745,7 +756,7 @@ export function ApprovalReceipt({
           <a
             data-testid="approval-receipt-forward"
             href={`#approval-${forward.id}`}
-            className="inline-flex min-h-11 items-center text-[15px] leading-normal underline"
+            className="inline-flex min-h-11 items-center text-[15px] leading-normal text-[var(--text-body)] underline"
           >
             {forward.label}
           </a>
@@ -845,15 +856,33 @@ const SNOOZE_ACTS: Array<{
 /** The house sentence for a snooze that did not land. */
 const SNOOZE_REFUSED = 'The reminders could not be set just now. Try again.';
 
+/** What a standing snooze says back, by the choice that made it. */
+function snoozeConfirmation(choice: DecisionSnoozeChoice): string | null {
+  return SNOOZE_ACTS.find((act) => act.choice === choice)?.confirmation ?? null;
+}
+
 function RemindMe({
   approval,
 }: {
   approval: Pick<ProjectApprovalReview, 'decisionId' | 'projectId' | 'isOverdue'>;
 }) {
   const setSnooze = useSetDecisionSnooze();
+  // `W3R1-02`. The write was the only half the web had, so a reload of an
+  // approval she had already quieted drew the four acts as though she had
+  // never asked — byte-identical to one never snoozed, on the surface whose
+  // whole promise is that Patina remembers the pace she set. iOS reads the
+  // row back on the way in (`loadSnooze`); this is the same read, and
+  // `standingDecisionSnooze` applies the same honesty rule underneath it —
+  // a hold that has already lifted is not drawn.
+  const standing = useDecisionSnooze(approval.decisionId);
   const [said, setSaid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  // This session's answer wins over the row: it is the newer of the two, and
+  // the refetch it triggers has not necessarily landed yet.
+  const stood =
+    said ??
+    (standing.data ? snoozeConfirmation(standing.data.choice) : null);
 
   if (approval.isOverdue) {
     return (
@@ -906,13 +935,13 @@ function RemindMe({
       <p className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]">
         Still yours to answer; only the reminders wait.
       </p>
-      {said && (
+      {stood && (
         <p
           role="status"
           data-testid="approval-snooze-said"
           className="mt-1.5 text-[15px] leading-[1.62] text-[var(--text-body)]"
         >
-          {said}
+          {stood}
         </p>
       )}
       {error && (
@@ -1736,7 +1765,7 @@ export function ApprovalAsk({
         >
           <a
             href={`#approval-${forward.id}`}
-            className="inline-flex min-h-11 items-center text-[15px] leading-normal underline"
+            className="inline-flex min-h-11 items-center text-[15px] leading-normal text-[var(--text-body)] underline"
           >
             {forward.label}
           </a>

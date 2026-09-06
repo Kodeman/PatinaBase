@@ -17,9 +17,24 @@ channel.subscribe = () => {
 };
 channelCreate.mockReturnValue(channel);
 
+/** The one plain table read in this module: `decision_snoozes` (00572). */
+const tableSelect = vi.fn();
+const tableResult: { data: unknown; error: unknown } = { data: [], error: null };
+const from = vi.fn((table: string) => ({
+  select: (columns: string) => ({
+    eq: (column: string, value: unknown) => ({
+      limit: (count: number) => {
+        tableSelect({ table, columns, column, value, count });
+        return Promise.resolve(tableResult);
+      },
+    }),
+  }),
+}));
+
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({
     rpc,
+    from,
     channel: channelCreate,
     removeChannel,
   }),
@@ -44,6 +59,8 @@ import {
   useMyProjectApprovalReviews,
   usePublishProjectApproval,
   useRespondProjectApproval,
+  useDecisionSnooze,
+  standingDecisionSnooze,
   useSetDecisionSnooze,
   useSetProjectDecisionAuthority,
   useSupersedeProjectApproval,
@@ -860,6 +877,7 @@ describe('project approval cache and compatibility', () => {
         ['project-approval-authority', 'project-1'],
         ['project-approval-artifact-candidates', 'project-1'],
         ['project-approval', 'decision-1'],
+        ['decision-snooze', 'decision-1'],
         ['my-project-approval-reviews'],
         ['project-contextual-handoffs', 'project-1'],
         ['client-decision', 'decision-1'],
@@ -872,5 +890,103 @@ describe('project approval cache and compatibility', () => {
         ['project-ffe-items', 'project-1'],
       ]),
     );
+  });
+});
+
+/* ── P-28 / `W3R1-02` · the read half of the snooze ────────────────────────── */
+
+describe('the snooze already standing', () => {
+  beforeEach(() => {
+    tableSelect.mockClear();
+    from.mockClear();
+    tableResult.data = [];
+    tableResult.error = null;
+  });
+
+  /**
+   * RLS (`decision_snoozes_owner_select`, 00572) hands back the caller's own
+   * row and nobody else's, so this is a plain table read and NOT filtered by
+   * user id here — a client-side user filter would be a second, weaker copy of
+   * the policy.
+   */
+  it('reads her own row of decision_snoozes, by decision', async () => {
+    tableResult.data = [{ kind: 'sunday', snoozed_until: '2999-01-01T13:00:00Z' }];
+    const query = useDecisionSnooze('decision-1') as unknown as {
+      queryKey: readonly unknown[];
+      queryFn: () => Promise<unknown>;
+      enabled: boolean;
+    };
+
+    expect(query.queryKey).toEqual(['decision-snooze', 'decision-1']);
+    expect(query.enabled).toBe(true);
+
+    const standing = await query.queryFn();
+
+    expect(tableSelect).toHaveBeenCalledWith({
+      table: 'decision_snoozes',
+      columns: 'kind,snoozed_until',
+      column: 'decision_id',
+      value: 'decision-1',
+      count: 1,
+    });
+    expect(standing).toEqual({
+      choice: 'sunday',
+      snoozedUntil: '2999-01-01T13:00:00Z',
+    });
+  });
+
+  it('asks nothing when there is no approval to ask about', () => {
+    const query = useDecisionSnooze(undefined) as unknown as { enabled: boolean };
+    expect(query.enabled).toBe(false);
+  });
+
+  it('says nothing where she has never snoozed this one', async () => {
+    const query = useDecisionSnooze('decision-1') as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    expect(await query.queryFn()).toBeNull();
+  });
+
+  /**
+   * A hold that has already lifted is not a hold, and drawing "the reminders
+   * are held until Sunday" on the Monday after is the same lie in the other
+   * direction. Same rule as iOS's `DecisionSnooze.standing`.
+   */
+  it('refuses a hold that has already lifted', () => {
+    const now = new Date('2026-09-07T12:00:00Z');
+    expect(
+      standingDecisionSnooze(
+        { kind: 'sunday', snoozed_until: '2026-09-06T13:00:00Z' },
+        now,
+      ),
+    ).toBeNull();
+    expect(
+      standingDecisionSnooze(
+        { kind: 'sunday', snoozed_until: '2026-09-08T13:00:00Z' },
+        now,
+      ),
+    ).toEqual({ choice: 'sunday', snoozedUntil: '2026-09-08T13:00:00Z' });
+  });
+
+  /** `never`, and a dateless `when_due`, are stored as the word (00572). */
+  it('holds forever on infinity', () => {
+    const now = new Date('2999-01-01T00:00:00Z');
+    expect(standingDecisionSnooze({ kind: 'never', snoozed_until: 'infinity' }, now)).toEqual({
+      choice: 'never',
+      snoozedUntil: 'infinity',
+    });
+  });
+
+  it('draws nothing for a row it cannot read honestly', () => {
+    const now = new Date('2026-09-05T12:00:00Z');
+    expect(standingDecisionSnooze(null, now)).toBeNull();
+    expect(standingDecisionSnooze(undefined, now)).toBeNull();
+    expect(standingDecisionSnooze({ kind: 'sunday', snoozed_until: null }, now)).toBeNull();
+    expect(standingDecisionSnooze({ kind: null, snoozed_until: 'infinity' }, now)).toBeNull();
+    // A kind this build does not know is not guessed at.
+    expect(standingDecisionSnooze({ kind: 'someday', snoozed_until: 'infinity' }, now)).toBeNull();
+    expect(
+      standingDecisionSnooze({ kind: 'sunday', snoozed_until: 'not-a-date' }, now),
+    ).toBeNull();
   });
 });

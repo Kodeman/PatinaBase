@@ -157,6 +157,7 @@ export const projectApprovalKeys = {
     ['project-approval-artifact-candidates', projectId] as const,
   decision: (decisionId: string) => ['project-approval', decisionId] as const,
   mine: () => ['my-project-approval-reviews'] as const,
+  snooze: (decisionId: string) => ['decision-snooze', decisionId] as const,
 };
 
 const APPROVAL_FOREGROUND_REFRESH_MS = 30_000;
@@ -201,6 +202,7 @@ export async function invalidateProjectApprovalQueries(
 
   if (scope.decisionId) {
     keys.push(projectApprovalKeys.decision(scope.decisionId));
+    keys.push(projectApprovalKeys.snooze(scope.decisionId));
     keys.push(['client-decision', scope.decisionId]);
   }
   if (scope.designerClientId) {
@@ -764,6 +766,80 @@ export type DecisionSnoozeChoice =
 export interface DecisionSnoozeInput extends ProjectApprovalInvalidationScope {
   decisionId: string;
   choice: DecisionSnoozeChoice;
+}
+
+/** One row of `decision_snoozes`, as its own owner reads it back (00572). */
+export interface DecisionSnoozeStanding {
+  choice: DecisionSnoozeChoice;
+  /** `'infinity'` for `never` and for a dateless `when_due`. */
+  snoozedUntil: string;
+}
+
+const DECISION_SNOOZE_CHOICES: readonly DecisionSnoozeChoice[] = [
+  'tomorrow_morning',
+  'sunday',
+  'when_due',
+  'never',
+];
+
+/**
+ * The snooze a stored row still stands for, or null.
+ *
+ * Read HONESTLY, the same rule iOS's `DecisionSnooze.standing` applies: a hold
+ * that has already lifted is not a hold, and saying "the reminders are held
+ * until Sunday" on the Monday after would be the same lie in the other
+ * direction. `snoozed_until = 'infinity'` (`never`, and a dateless `when_due`)
+ * never lifts, and Postgres serialises it as the word.
+ */
+export function standingDecisionSnooze(
+  row: { kind?: unknown; snoozed_until?: unknown } | null | undefined,
+  now: Date = new Date(),
+): DecisionSnoozeStanding | null {
+  if (!row) return null;
+  const kind = typeof row.kind === 'string' ? row.kind.trim() : '';
+  if (!DECISION_SNOOZE_CHOICES.includes(kind as DecisionSnoozeChoice)) {
+    return null;
+  }
+  const until =
+    typeof row.snoozed_until === 'string' ? row.snoozed_until.trim() : '';
+  if (!until) return null;
+  const choice = kind as DecisionSnoozeChoice;
+  if (until === 'infinity') return { choice, snoozedUntil: until };
+  const lifts = new Date(until);
+  if (Number.isNaN(lifts.getTime())) return null;
+  return lifts > now ? { choice, snoozedUntil: until } : null;
+}
+
+/**
+ * `P-28` — the snooze already standing on this approval.
+ *
+ * The write was the only half the web had, so the choice lived exactly as long
+ * as the tab did and a reload drew the four acts as though she had never
+ * asked. RLS hands back her own row and nobody else's
+ * (`decision_snoozes_owner_select`, 00572), which is why this is a plain table
+ * read rather than another RPC: there is nothing to filter that the policy has
+ * not already filtered. A list rather than `.maybeSingle()` for the same reason
+ * iOS takes one — `UNIQUE (user_id, decision_id)` makes at most one row
+ * possible, a snooze being replaced rather than stacked.
+ */
+export function useDecisionSnooze(decisionId: string | undefined) {
+  return useQuery({
+    queryKey: projectApprovalKeys.snooze(decisionId ?? ''),
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase
+        .from('decision_snoozes')
+        .select('kind,snoozed_until')
+        .eq('decision_id', decisionId as string)
+        .limit(1);
+      if (error) throw error;
+      return standingDecisionSnooze(
+        (data as Array<{ kind: string; snoozed_until: string }> | null)?.[0],
+      );
+    },
+    enabled: !!decisionId,
+    ...approvalForegroundRefresh,
+  });
 }
 
 /**

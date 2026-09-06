@@ -22,6 +22,7 @@ jest.mock('@patina/supabase', () => ({
   useConfirmProjectApprovalReview: jest.fn(),
   useRespondProjectApproval: jest.fn(),
   useSetDecisionSnooze: jest.fn(),
+  useDecisionSnooze: jest.fn(),
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
@@ -52,6 +53,7 @@ import {
   useDecisionRealtime,
   useRespondProjectApproval,
   useSetDecisionSnooze,
+  useDecisionSnooze,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
@@ -67,6 +69,7 @@ import {
 const confirmHook = useConfirmProjectApprovalReview as jest.Mock;
 const respondHook = useRespondProjectApproval as jest.Mock;
 const snoozeHook = useSetDecisionSnooze as jest.Mock;
+const standingSnoozeHook = useDecisionSnooze as jest.Mock;
 const commentsHook = useDecisionComments as jest.Mock;
 const createCommentHook = useCreateDecisionComment as jest.Mock;
 const realtimeHook = useDecisionRealtime as jest.Mock;
@@ -179,6 +182,7 @@ beforeEach(() => {
   respondHook.mockReturnValue({ mutateAsync: respondMutate, isPending: false });
   snoozeMutateAsync.mockReset().mockResolvedValue({});
   snoozeHook.mockReturnValue({ mutateAsync: snoozeMutateAsync, isPending: false });
+  standingSnoozeHook.mockReturnValue({ data: null });
   commentsHook.mockReturnValue({ data: [], isLoading: false, isError: false });
   commentMutateAsync.mockReset().mockResolvedValue({});
   createCommentHook.mockReturnValue({
@@ -740,6 +744,25 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(acts[0]).toHaveTextContent('Review revised edition');
     expect(acts[0]).toHaveAttribute('href', '#approval-dec-2');
   });
+
+  /**
+   * `W3R1-01`. The act inherited clay (#C4A57B) on the doorstep's #FAF7F2 —
+   * 2.17:1, the doorstep's one serious axe contrast failure and Wave 3's own
+   * new element. Clay keeps the rules and the caps, where contrast is not a
+   * legibility question; a line she has to read takes body ink (6.94:1).
+   */
+  it('draws the revision act in body ink, never in clay', () => {
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, successorDecisionId: 'dec-2' }}
+        anchoredDecisionIds={['dec-1', 'dec-2']}
+      />,
+    );
+
+    const act = within(screen.getByTestId('approval-revisions')).getByRole('link');
+    expect(act).toHaveClass('text-[var(--text-body)]');
+    expect(act.className).not.toContain('clay');
+  });
 });
 
 /* ── P-28 · she sets the pace, on this one approval ───────────────────────── */
@@ -807,6 +830,54 @@ describe('ApprovalAsk — remind me', () => {
 
     expect(await screen.findByTestId('approval-snooze-said')).toHaveTextContent(
       "I won't remind you again until it's past its date.",
+    );
+  });
+
+  /**
+   * `W3R1-02`. The write was the only half the web had: a reload of an approval
+   * she had already quieted drew the four acts with no said-line, identical to
+   * one never snoozed. iOS reads the row back on the way in; so does this.
+   */
+  it('says the snooze already standing on a fresh load, before she presses anything', () => {
+    standingSnoozeHook.mockReturnValue({
+      data: { choice: 'sunday', snoozedUntil: '2026-09-06T13:00:00Z' },
+    });
+
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    expect(screen.getByTestId('approval-snooze-said')).toHaveTextContent(
+      "I'll ask you Sunday.",
+    );
+    // The menu stands: a standing hold she cannot change is a hold she is stuck in.
+    expect(
+      within(screen.getByTestId('approval-snooze')).getByRole('button', {
+        name: 'Tomorrow morning',
+      }),
+    ).toBeInTheDocument();
+    expect(standingSnoozeHook).toHaveBeenCalledWith('dec-1');
+  });
+
+  it('says nothing about a hold that is not standing', () => {
+    standingSnoozeHook.mockReturnValue({ data: null });
+
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    expect(screen.queryByTestId('approval-snooze-said')).not.toBeInTheDocument();
+  });
+
+  /** This session's answer is the newer of the two, and wins over the row. */
+  it('lets the choice she just made speak over the one already stored', async () => {
+    standingSnoozeHook.mockReturnValue({
+      data: { choice: 'sunday', snoozedUntil: '2026-09-06T13:00:00Z' },
+    });
+
+    render(<ApprovalAsk approval={APPROVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: "Don't remind me" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-snooze-said')).toHaveTextContent(
+        "I won't remind you again until it's past its date.",
+      ),
     );
   });
 
@@ -1396,12 +1467,12 @@ describe('ApprovalReceipt', () => {
     const thread = screen.getByTestId('approval-discussion');
     expect(thread).toHaveAttribute(
       'aria-label',
-      'Discussion about Library elevations · Edition 3',
+      'Discussion about Library elevations · Edition 3 · approval dec-1',
     );
     expect(thread).not.toHaveAttribute('aria-labelledby');
     expect(
       screen.getByRole('region', {
-        name: 'Discussion about Library elevations · Edition 3',
+        name: 'Discussion about Library elevations · Edition 3 · approval dec-1',
       }),
     ).toBeInTheDocument();
     // The heading a reader sees is unchanged.
@@ -1426,9 +1497,34 @@ describe('ApprovalReceipt', () => {
     render(<ApprovalAsk approval={{ ...APPROVAL, artifactVersion: 3 }} />);
     const third = screen.getByTestId('approval-discussion').getAttribute('aria-label');
 
-    expect(second).toBe('Discussion about Library elevations · Edition 2');
-    expect(third).toBe('Discussion about Library elevations · Edition 3');
+    expect(second).toBe('Discussion about Library elevations · Edition 2 · approval dec-1');
+    expect(third).toBe('Discussion about Library elevations · Edition 3 · approval dec-1');
     expect(second).not.toBe(third);
+  });
+
+  /**
+   * `W3R1-03`. Two approvals hanging off ONE artifact edition is the ordinary
+   * case, not a contrivance — the walk fixture's own G1/G2 and G6/G7 pairs each
+   * share one — and title-plus-edition left both landmarks reading identically,
+   * which is what axe's `landmark-unique` fires on. The decision id closes
+   * every name.
+   */
+  it('tells two approvals on one artifact edition apart', () => {
+    render(
+      <div>
+        <ApprovalAsk approval={APPROVAL} />
+        <ApprovalAsk approval={{ ...APPROVAL, decisionId: 'dec-9' }} />
+      </div>,
+    );
+
+    const names = screen
+      .getAllByTestId('approval-discussion')
+      .map((thread) => thread.getAttribute('aria-label'));
+
+    expect(names).toHaveLength(2);
+    expect(new Set(names).size).toBe(2);
+    expect(names[0]).toBe('Discussion about Library elevations · Edition 3 · approval dec-1');
+    expect(names[1]).toBe('Discussion about Library elevations · Edition 3 · approval dec-9');
   });
 
   it('falls back to the decision id when the edition has no title to name', () => {
@@ -1636,6 +1732,9 @@ describe('ApprovalReceipt — the way forward', () => {
     const forward = screen.getByTestId('approval-receipt-forward');
     expect(forward).toHaveTextContent('Review revised edition');
     expect(forward).toHaveAttribute('href', '#approval-dec-2');
+    // `W3R1-01`: clay on the doorstep's paper is 2.17:1. Body ink is 6.94:1.
+    expect(forward).toHaveClass('text-[var(--text-body)]');
+    expect(forward.className).not.toContain('clay');
   });
 
   it('claims no revised edition the page is not drawing', () => {
