@@ -353,3 +353,103 @@ pass made its poll counted rather than clock-raced, and it is green in a full-su
 (the push fallback branch is unreachable at this deployment target), 7 (the paged spread wants the
 walker's eye at four or more options) and 8 (cross-surface clay ink) are unchanged. Advisory 1 is
 withdrawn — `M2` closed it.
+
+---
+
+# Round 2 — the fix pass
+
+Two findings open (`R2-M1`, `R2-M2`). `B1`, `M1`, `M2` and `M3` were re-verified fixed by the
+round-2 reviewer against the round-1 commits; nothing was re-touched for them.
+
+## `R2-M1` — the snooze promised a silence `R16` overrides
+
+`DecisionSnooze.never.confirmation` was **"I won’t ask again. It’s here when you want it."** —
+the one promise `R16` explicitly forbids, and the one confirmation string
+`DecisionPaceTests.theSnoozeCarriesFourWords` did not pin (it pinned `.sunday` only).
+
+The backend lane's own code is the counter-evidence, and it is unambiguous. In
+`supabase/functions/_shared/decision-notify.ts`, `decisionMailHold` runs:
+
+```ts
+if (gate.kind === "decision_overdue") return null;          // before the snooze test
+…
+if (!gate.isSupersedingEdition && isSnoozeActive(gate.snoozedUntil, gate.now)) return "snoozed";
+```
+
+so a passed date and a superseding edition both walk straight past every snooze — `never`
+included, which `00572_she_sets_the_pace.sql` stores as `snoozed_until = 'infinity'` under the
+comment "Nothing here suppresses the overdue notice or a superseding edition (R16)". The sentence
+was true only for an undated approval that is never re-issued.
+
+The weaker half of the same family: `tomorrow_morning` / `sunday` / `when_due` said "I’ll ask you
+tomorrow morning". A snooze does not schedule an ask — it only UNBLOCKS the letter at its hour,
+after which `decisionMailHold`'s `cadence_digest` leg still runs. Under `weekly_sunday` that named
+a day Patina will not speak on.
+
+**Fixed.** The confirmation is now built from two halves, and both are pinned:
+
+- `DecisionSnooze.holdsUntil` — what the snooze itself does. "I’ll hold the reminders until
+  tomorrow morning." / "…until Sunday." / "…until the day it’s due." / "…until you come back."
+  It claims a hold, never an hour Patina will speak at.
+- `DecisionPaceCopy.theTwoThatStillReachHer` — "If the date passes or a new edition arrives, I’ll
+  still say so." Said in the same breath as the hold, so the exception is not buried.
+
+`confirmation` is `"\(holdsUntil) \(theTwoThatStillReachHer)"` for all four kinds.
+
+Tests: `everyConfirmationIsHonestAboutTheHold` pins **all four** `holdsUntil` strings, the shared
+clause, and the composition — then walks `DecisionSnooze.allCases` asserting no confirmation
+contains "won’t ask again" / "won’t ask" / "never ask" / "silence", none contains "I’ll ask you",
+every one contains "hold the reminders" and "I’ll still say so", and none says "overdue", "sorry",
+"gate", "task" or "dashboard". `theStandingSnoozeIsStillInterrupted` covers `never` on its own.
+
+## `R2-M2` — the past-due line drew under an approval she had just answered
+
+`ProjectApprovalScreen.pace`'s else-branch was
+`viewModel.approvalIsPastDue(), viewModel.approvalReview?.canRespond == true`. The happy path of
+`submitApprovalResponse` calls `record(outcome)`, which sets `answeredOutcome` and never refetches
+the review — so `canRespond` stays true, `canSnoozeApproval()` goes false on its
+`!hasAnsweredApproval` leg, and control fell into the past-due branch. Result: **"This one is past
+its date. The reminders stay until it’s answered."** printed directly beneath the mark recording
+that she answered it.
+
+**Fixed.** New `DecisionDetailViewModel.approvalPaceIsHeldByDate(now:)` — every leg of
+`canSnoozeApproval` except the date, which is the one that is failing:
+
+```swift
+review.canRespond && review.viewerAnswers && !hasAnsweredApproval && approvalIsPastDue(now: now)
+```
+
+The screen's branch is now `} else if viewModel.approvalPaceIsHeldByDate() {`. This also picks up
+the `viewerAnswers` leg the old branch was missing (`r2 m1`): a studio co-member who is not the one
+being asked is told nothing about a pace that was never hers to set.
+
+Tests: `anAnsweredPastDueApprovalSaysNothing` first asserts the trap is real — with
+`answeredOutcome = .approved` at `2026-09-22`, `approvalIsPastDue` is true, `canRespond` is true
+and `canSnoozeApproval` is false, i.e. all three legs of the old branch — then asserts
+`approvalPaceIsHeldByDate` is false. `anOpenPastDueApprovalSaysTheReminderStays` keeps the case the
+line exists for; `anObserverIsGivenNoReason` covers the reader. `theScreenCarriesTheAct` now pins
+`viewModel.approvalPaceIsHeldByDate()` present and `viewModel.approvalReview?.canRespond == true`
+absent (`SourcePin`'s `SourceScan.code` strips `//` comments, so the doc comment naming the old
+expression cannot satisfy the pin).
+
+## Gates, round 2
+
+Run from this worktree, unsandboxed, `IOS_GATE_UDID=B6AD6271-E9E1-4BC6-B94A-F115E270CCAE`.
+
+| Gate | Result |
+|---|---|
+| `ios-gate.sh build` | **PASS** — `** BUILD SUCCEEDED **` |
+| `ios-gate.sh unit` | **PASS** — `Test run with 2699 tests in 289 suites passed after 8.042 seconds with 2 known issues.` · `** TEST SUCCEEDED **` (2694 → 2699; the five are this pass's) |
+| `ios-gate.sh lint-delta main` | **PASS** — `✓ lint-delta: no new warnings in touched files` |
+
+`Suite DecisionPaceTests passed after 5.934 seconds` with no known issues. The two known issues are
+the pre-existing `withKnownIssue` markers in `BrandVoiceLintTests` ("curated_mix") and
+`RoomLifecycleTests.theTodayRailFollowsALocalDelete` — both unchanged from round 1.
+`CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` did not flake in either
+round-2 full-suite run.
+
+## Advisories
+
+Advisory 5 from the build pass ("the snooze confirmation is session-local") is unchanged and still
+stands. Advisory 1 stays withdrawn. Nothing new: the two fixes are copy and one predicate, and
+neither widens the lane's surface.
