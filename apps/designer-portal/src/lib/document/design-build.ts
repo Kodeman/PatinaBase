@@ -44,7 +44,11 @@ import {
 
 /* ── Reading a jsonb payload defensively ─────────────────────────────────── */
 
-const COST_LINE_CATEGORIES = ["sub", "general_conditions", "allowance"] as const;
+const COST_LINE_CATEGORIES = [
+  "sub",
+  "general_conditions",
+  "allowance",
+] as const;
 export type CostLineCategory = (typeof COST_LINE_CATEGORIES)[number];
 
 function readInt(value: unknown): number | null {
@@ -58,7 +62,8 @@ function readInt(value: unknown): number | null {
  *  read as the same category rather than silently becoming an unknown one. */
 function readCategory(value: unknown): CostLineCategory | null {
   if (typeof value !== "string") return null;
-  const normalized = value === "generalConditions" ? "general_conditions" : value;
+  const normalized =
+    value === "generalConditions" ? "general_conditions" : value;
   return (COST_LINE_CATEGORIES as readonly string[]).includes(normalized)
     ? (normalized as CostLineCategory)
     : null;
@@ -458,7 +463,9 @@ export function validatePricingBasis(
       return "Set the not-to-exceed amount.";
     }
   }
-  if (!(SUB_DISCLOSURE_MODES as readonly string[]).includes(basis.subDisclosure)) {
+  if (
+    !(SUB_DISCLOSURE_MODES as readonly string[]).includes(basis.subDisclosure)
+  ) {
     return "Choose whether the trades are shown open-book or closed-book.";
   }
   return null;
@@ -552,7 +559,9 @@ export function validateNoDoubleCount(input: {
     (supervision?.supervisionFeeCents ?? 0) > 0 ||
     (supervision?.supervisionFeeBps ?? 0) > 0;
   const takesMarkup = (input.subMarkupBps ?? 0) > 0;
-  return billsSupervision && takesMarkup ? DESIGN_BUILD_COPY.noDoubleCount : null;
+  return billsSupervision && takesMarkup
+    ? DESIGN_BUILD_COPY.noDoubleCount
+    : null;
 }
 
 /** The markup a pricing-basis payload carries on the trades, in basis

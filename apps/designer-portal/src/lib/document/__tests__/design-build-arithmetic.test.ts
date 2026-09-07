@@ -44,7 +44,12 @@ interface HalvorsenFixture {
   }[];
   feePct: number;
   retainagePct: number;
-  draws: { id: string; label: string; pct: number; retainageApplies: boolean }[];
+  draws: {
+    id: string;
+    label: string;
+    pct: number;
+    retainageApplies: boolean;
+  }[];
   expected: {
     costBasisCents: number;
     feeCents: number;
@@ -243,9 +248,7 @@ describe("the Halvorsen draw schedule", () => {
     expect(totalPaidCents(drawTable(sum, draws))).toBe(
       halvorsen.expected.totalPaidCents,
     );
-    expect(halvorsen.expected.totalPaidCents).toBe(
-      halvorsen.expected.gmpCents,
-    );
+    expect(halvorsen.expected.totalPaidCents).toBe(halvorsen.expected.gmpCents);
   });
 
   it("draws no release row when nothing is withheld", () => {
@@ -286,7 +289,10 @@ describe("the draw schedule's refusals", () => {
 
   it("refuses retainage above ten percent", () => {
     expect(
-      validateDrawSet(sum, readDraws({ ...drawsPayload(), retainageBps: 1_500 })),
+      validateDrawSet(
+        sum,
+        readDraws({ ...drawsPayload(), retainageBps: 1_500 }),
+      ),
     ).toBe("Retainage must be between 0 and 10 percent.");
   });
 
