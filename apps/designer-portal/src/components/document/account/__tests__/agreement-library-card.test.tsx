@@ -10,6 +10,8 @@ import {
   AgreementLibraryCard,
   MEMBERS_COMPOSE_NOTE,
   NO_COMPOSITION_EDITOR_NOTE,
+  REMOVE_PART_WARNING,
+  REMOVE_TEMPLATE_WARNING,
 } from "../agreement-library-card";
 
 const mockTemplates = jest.fn();
@@ -19,13 +21,27 @@ const mockDeleteTemplate = jest.fn();
 const mockSavePart = jest.fn();
 const mockDeletePart = jest.fn();
 
+/** Every Library mutation binds the acting studio at construction — the
+ *  @patina/supabase shape. The mocks record it so a card that stopped passing
+ *  it would fail here rather than at integration. */
+const mockBoundStudio = jest.fn();
+
 jest.mock("@patina/supabase", () => ({
   useAgreementTemplates: (studioId: string) => mockTemplates(studioId),
   useStudioAgreementParts: (studioId: string) => mockParts(studioId),
-  useRenameAgreementTemplate: () => ({ mutateAsync: mockRenameTemplate }),
-  useDeleteAgreementTemplate: () => ({ mutateAsync: mockDeleteTemplate }),
+  useRenameAgreementTemplate: (studioId: string) => {
+    mockBoundStudio("rename-template", studioId);
+    return { mutateAsync: mockRenameTemplate };
+  },
+  useDeleteAgreementTemplate: (studioId: string) => {
+    mockBoundStudio("delete-template", studioId);
+    return { mutateAsync: mockDeleteTemplate };
+  },
   useSaveAgreementPart: () => ({ mutateAsync: mockSavePart }),
-  useDeleteStudioAgreementPart: () => ({ mutateAsync: mockDeletePart }),
+  useDeleteStudioAgreementPart: (studioId: string) => {
+    mockBoundStudio("delete-part", studioId);
+    return { mutateAsync: mockDeletePart };
+  },
 }));
 
 function template(
@@ -105,7 +121,14 @@ const rowFor = (title: string) =>
     .getAllByRole("listitem")
     .find((item) => within(item).queryByText(title)) as HTMLElement;
 
+/** The two-step remove: Delete, then Remove it. */
+const removeFrom = (row: HTMLElement) => {
+  fireEvent.click(within(row).getByRole("button", { name: "Delete" }));
+  fireEvent.click(within(row).getByRole("button", { name: "Remove it" }));
+};
+
 beforeEach(() => {
+  mockBoundStudio.mockReset();
   mockTemplates.mockReset();
   mockParts.mockReset();
   mockRenameTemplate.mockReset().mockResolvedValue(undefined);
@@ -168,10 +191,23 @@ describe("the Agreement Library card", () => {
 
     await waitFor(() =>
       expect(mockRenameTemplate).toHaveBeenCalledWith({
-        templateKey: "studio.full-service",
+        id: "studio.full-service",
         title: "Full service, residential",
       }),
     );
+  });
+
+  it("binds the acting studio into every Library mutation", () => {
+    renderCard();
+    expect(mockBoundStudio).toHaveBeenCalledWith(
+      "rename-template",
+      "studio-1",
+    );
+    expect(mockBoundStudio).toHaveBeenCalledWith(
+      "delete-template",
+      "studio-1",
+    );
+    expect(mockBoundStudio).toHaveBeenCalledWith("delete-part", "studio-1");
   });
 
   it("refuses a blank rename without calling the server", async () => {
@@ -189,15 +225,31 @@ describe("the Agreement Library card", () => {
     expect(mockRenameTemplate).not.toHaveBeenCalled();
   });
 
-  it("deletes a studio template", async () => {
+  it("asks before it removes a studio template, and only then removes it", async () => {
     renderCard();
     const row = rowFor("Full-service residential");
     fireEvent.click(within(row).getByRole("button", { name: "Delete" }));
+
+    expect(within(row).getByText(REMOVE_TEMPLATE_WARNING)).toBeInTheDocument();
+    expect(mockDeleteTemplate).not.toHaveBeenCalled();
+
+    fireEvent.click(within(row).getByRole("button", { name: "Remove it" }));
     await waitFor(() =>
-      expect(mockDeleteTemplate).toHaveBeenCalledWith({
-        templateKey: "studio.full-service",
-      }),
+      expect(mockDeleteTemplate).toHaveBeenCalledWith("studio.full-service"),
     );
+  });
+
+  it("keeps a template the studio decides to keep", () => {
+    renderCard();
+    const row = rowFor("Full-service residential");
+    fireEvent.click(within(row).getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Keep it" }));
+
+    expect(mockDeleteTemplate).not.toHaveBeenCalled();
+    expect(
+      within(row).queryByText(REMOVE_TEMPLATE_WARNING),
+    ).not.toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Delete" })).toBeVisible();
   });
 
   it("renames a Library part through the upsert, carrying its payload", async () => {
@@ -210,27 +262,42 @@ describe("the Agreement Library card", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(mockSavePart).toHaveBeenCalledWith({
-        studioId: "studio-1",
-        part: expect.objectContaining({
+      expect(mockSavePart).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studioId: "studio-1",
           partKey: "studio.house-rules",
           title: "Studio house rules",
           payload: { body: "The studio own words." },
         }),
-      }),
+      ),
     );
   });
 
-  it("deletes a Library part", async () => {
+  it("asks before it removes a Library part, and only then removes it", async () => {
     renderCard();
     const row = rowFor("Site day rate");
     fireEvent.click(within(row).getByRole("button", { name: "Delete" }));
+
+    expect(within(row).getByText(REMOVE_PART_WARNING)).toBeInTheDocument();
+    expect(mockDeletePart).not.toHaveBeenCalled();
+
+    fireEvent.click(within(row).getByRole("button", { name: "Remove it" }));
     await waitFor(() =>
-      expect(mockDeletePart).toHaveBeenCalledWith({
-        studioId: "studio-1",
-        partId: "studio.day-rate",
-      }),
+      expect(mockDeletePart).toHaveBeenCalledWith("studio.day-rate"),
     );
+  });
+
+  it("asks about one row at a time", () => {
+    renderCard();
+    const first = rowFor("Site day rate");
+    fireEvent.click(within(first).getByRole("button", { name: "Delete" }));
+    const second = rowFor("House rules");
+    fireEvent.click(within(second).getByRole("button", { name: "Delete" }));
+
+    expect(
+      within(first).queryByText(REMOVE_PART_WARNING),
+    ).not.toBeInTheDocument();
+    expect(within(second).getByText(REMOVE_PART_WARNING)).toBeInTheDocument();
   });
 
   it("offers a plain member no acts, and says why (R3)", () => {
@@ -254,8 +321,7 @@ describe("the Agreement Library card", () => {
       message: "only a studio owner or admin may edit the Library",
     });
     renderCard();
-    const row = rowFor("Full-service residential");
-    fireEvent.click(within(row).getByRole("button", { name: "Delete" }));
+    removeFrom(rowFor("Full-service residential"));
     expect(
       await screen.findByText(
         "only a studio owner or admin may edit the Library",

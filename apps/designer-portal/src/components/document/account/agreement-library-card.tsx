@@ -49,6 +49,13 @@ export const MEMBERS_COMPOSE_NOTE =
   "Owners and admins edit the Library. Every member composes from it.";
 export const NO_COMPOSITION_EDITOR_NOTE =
   "A template keeps the parts it was saved with. To change them, compose an agreement the way you want it and save that as a template.";
+/** The sentence the second click reads. Agreements already composed from a
+ *  Template or a Part keep what they were composed with — `source_part_id` is
+ *  a soft pointer — so what is lost is the shelf entry, and only that. */
+export const REMOVE_TEMPLATE_WARNING =
+  "This takes the template off the studio's shelf. Agreements already composed from it are untouched.";
+export const REMOVE_PART_WARNING =
+  "This takes the part off the studio's shelf. Agreements already composed from it are untouched.";
 
 /** Kind → the plural the count line uses. */
 const KIND_PLURAL: Record<string, string> = {
@@ -78,15 +85,23 @@ export function AgreementLibraryCard({
 }) {
   const templates = useAgreementTemplates(studioId);
   const parts = useStudioAgreementParts(studioId);
-  const renameTemplate = useRenameAgreementTemplate();
-  const deleteTemplate = useDeleteAgreementTemplate();
+  const renameTemplate = useRenameAgreementTemplate(studioId);
+  const deleteTemplate = useDeleteAgreementTemplate(studioId);
   const savePart = useSaveAgreementPart();
-  const deletePart = useDeleteStudioAgreementPart();
+  const deletePart = useDeleteStudioAgreementPart(studioId);
 
   const [renamingTemplate, setRenamingTemplate] = useState<string | null>(null);
   const [renamingPart, setRenamingPart] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [note, setNote] = useState<string | null>(null);
+  // Removing is the one act on this card that cannot be typed back. It asks
+  // twice, the way the room's template picker does before it replaces a
+  // composition — one id at a time, so a second Delete elsewhere puts the
+  // first row back to rest.
+  const [removing, setRemoving] = useState<{
+    shelf: "template" | "part";
+    id: string;
+  } | null>(null);
 
   const shelf = ((templates.data ?? []) as AgreementTemplate[])
     .slice()
@@ -112,6 +127,7 @@ export function AgreementLibraryCard({
 
   const beginRenameTemplate = (template: AgreementTemplate) => {
     setNote(null);
+    setRemoving(null);
     setRenamingPart(null);
     setRenamingTemplate(template.templateKey);
     setDraft(template.title);
@@ -119,9 +135,17 @@ export function AgreementLibraryCard({
 
   const beginRenamePart = (part: StudioAgreementPart) => {
     setNote(null);
+    setRemoving(null);
     setRenamingTemplate(null);
     setRenamingPart(part.id);
     setDraft(part.title);
+  };
+
+  const askToRemove = (shelf: "template" | "part", id: string) => {
+    setNote(null);
+    setRenamingTemplate(null);
+    setRenamingPart(null);
+    setRemoving({ shelf, id });
   };
 
   const commitTemplateRename = async (template: AgreementTemplate) => {
@@ -131,10 +155,7 @@ export function AgreementLibraryCard({
       return;
     }
     try {
-      await renameTemplate.mutateAsync({
-        templateKey: template.templateKey,
-        title,
-      });
+      await renameTemplate.mutateAsync({ id: template.id, title });
       setRenamingTemplate(null);
     } catch (error) {
       setNote(refusal(error, "That template could not be renamed."));
@@ -150,19 +171,35 @@ export function AgreementLibraryCard({
     try {
       await savePart.mutateAsync({
         studioId,
-        part: {
-          partKey: part.partKey,
-          kind: part.kind,
-          variant: part.variant,
-          title,
-          payload: part.payload,
-          requiredDefault: part.requiredDefault,
-          clientVisibleDefault: part.clientVisibleDefault,
-        },
+        partKey: part.partKey,
+        kind: part.kind,
+        variant: part.variant,
+        title,
+        payload: part.payload,
+        requiredDefault: part.requiredDefault,
+        clientVisibleDefault: part.clientVisibleDefault,
       });
       setRenamingPart(null);
     } catch (error) {
       setNote(refusal(error, "That part could not be renamed."));
+    }
+  };
+
+  const commitTemplateRemove = async (template: AgreementTemplate) => {
+    try {
+      await deleteTemplate.mutateAsync(template.id);
+      setRemoving(null);
+    } catch (error) {
+      setNote(refusal(error, "That template could not be removed."));
+    }
+  };
+
+  const commitPartRemove = async (part: StudioAgreementPart) => {
+    try {
+      await deletePart.mutateAsync(part.id);
+      setRemoving(null);
+    } catch (error) {
+      setNote(refusal(error, "That part could not be removed."));
     }
   };
 
@@ -221,39 +258,52 @@ export function AgreementLibraryCard({
                         {template.title}
                       </span>
                     </span>
-                    {canManage && template.kind === "studio" && (
-                      <span className="flex shrink-0 items-center gap-3">
-                        <button
-                          type="button"
-                          className={ACT}
-                          onClick={() => beginRenameTemplate(template)}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          type="button"
-                          className={ACT}
-                          onClick={() =>
-                            void deleteTemplate
-                              .mutateAsync({
-                                templateKey: template.templateKey,
-                              })
-                              .catch((error: unknown) =>
-                                setNote(
-                                  refusal(
-                                    error,
-                                    "That template could not be removed.",
-                                  ),
-                                ),
-                              )
-                          }
-                        >
-                          Delete
-                        </button>
-                      </span>
-                    )}
+                    {canManage &&
+                      template.kind === "studio" &&
+                      (removing?.shelf === "template" &&
+                      removing.id === template.id ? (
+                        <span className="flex shrink-0 items-center gap-3">
+                          <button
+                            type="button"
+                            className={ACT}
+                            onClick={() => void commitTemplateRemove(template)}
+                          >
+                            Remove it
+                          </button>
+                          <button
+                            type="button"
+                            className={ACT}
+                            onClick={() => setRemoving(null)}
+                          >
+                            Keep it
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="flex shrink-0 items-center gap-3">
+                          <button
+                            type="button"
+                            className={ACT}
+                            onClick={() => beginRenameTemplate(template)}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            className={ACT}
+                            onClick={() => askToRemove("template", template.id)}
+                          >
+                            Delete
+                          </button>
+                        </span>
+                      ))}
                   </div>
                 )}
+                {removing?.shelf === "template" &&
+                  removing.id === template.id && (
+                    <p role="alert" className={HELP}>
+                      {REMOVE_TEMPLATE_WARNING}
+                    </p>
+                  )}
               </li>
             ))}
           </ul>
@@ -316,36 +366,49 @@ export function AgreementLibraryCard({
                           {part.title}
                         </span>
                       </span>
-                      {canManage && (
-                        <span className="flex shrink-0 items-center gap-3">
-                          <button
-                            type="button"
-                            className={ACT}
-                            onClick={() => beginRenamePart(part)}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            className={ACT}
-                            onClick={() =>
-                              void deletePart
-                                .mutateAsync({ studioId, partId: part.id })
-                                .catch((error: unknown) =>
-                                  setNote(
-                                    refusal(
-                                      error,
-                                      "That part could not be removed.",
-                                    ),
-                                  ),
-                                )
-                            }
-                          >
-                            Delete
-                          </button>
-                        </span>
-                      )}
+                      {canManage &&
+                        (removing?.shelf === "part" &&
+                        removing.id === part.id ? (
+                          <span className="flex shrink-0 items-center gap-3">
+                            <button
+                              type="button"
+                              className={ACT}
+                              onClick={() => void commitPartRemove(part)}
+                            >
+                              Remove it
+                            </button>
+                            <button
+                              type="button"
+                              className={ACT}
+                              onClick={() => setRemoving(null)}
+                            >
+                              Keep it
+                            </button>
+                          </span>
+                        ) : (
+                          <span className="flex shrink-0 items-center gap-3">
+                            <button
+                              type="button"
+                              className={ACT}
+                              onClick={() => beginRenamePart(part)}
+                            >
+                              Rename
+                            </button>
+                            <button
+                              type="button"
+                              className={ACT}
+                              onClick={() => askToRemove("part", part.id)}
+                            >
+                              Delete
+                            </button>
+                          </span>
+                        ))}
                     </div>
+                  )}
+                  {removing?.shelf === "part" && removing.id === part.id && (
+                    <p role="alert" className={HELP}>
+                      {REMOVE_PART_WARNING}
+                    </p>
                   )}
                 </li>
               ))}
