@@ -92,7 +92,10 @@ export function AgreementLibraryCard({
       return a.title.localeCompare(b.title);
     });
 
-  const libraryParts = (parts.data ?? []) as StudioAgreementPart[];
+  const libraryParts = useMemo(
+    () => (parts.data ?? []) as StudioAgreementPart[],
+    [parts.data],
+  );
 
   const countLine = useMemo(() => {
     const counts = new Map<string, number>();

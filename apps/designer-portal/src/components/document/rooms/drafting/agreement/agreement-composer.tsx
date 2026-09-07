@@ -337,7 +337,7 @@ export function AgreementComposer({
    * room throws away the composition it was holding and re-reads the one the
    * database now has.
    */
-  const useTemplate = async (template: AgreementTemplate) => {
+  const applyTemplate = async (template: AgreementTemplate) => {
     setTemplateError(null);
     try {
       await materializeTemplate.mutateAsync({
@@ -669,7 +669,7 @@ export function AgreementComposer({
             onClose={() => setTemplatesOpen(false)}
             studioId={studioId}
             documentKind={document.kind}
-            onMaterialize={(template) => void useTemplate(template)}
+            onMaterialize={(template) => void applyTemplate(template)}
             pending={materializeTemplate.isPending}
             error={templateError}
           />
