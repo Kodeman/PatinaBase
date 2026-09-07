@@ -36,6 +36,30 @@ jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'owner-user' } }),
 }));
 
+// 00575's Agreement defaults card sits below Billing. This suite renders the
+// page without a QueryClientProvider, so its data hook has to be stubbed the
+// way every other hook on this page already is. The card's own behaviour is
+// covered in agreement-defaults-card.test.tsx.
+jest.mock('@/hooks/use-studio-agreement-defaults', () => ({
+  useStudioAgreementDefaults: () => ({
+    data: {
+      studio_id: 'studio-1',
+      rate_card: [],
+      deposit_percent: null,
+      cadence: 'monthly',
+      retainer_credit_rule: 'credited',
+      default_exclusions: [],
+      updated_by: null,
+    },
+  }),
+  useUpdateStudioAgreementDefaults: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));

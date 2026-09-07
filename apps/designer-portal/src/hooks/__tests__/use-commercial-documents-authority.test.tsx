@@ -72,6 +72,38 @@ describe("project billing authority RPC adapter", () => {
     expect(result?.furnishingsDepositPercent).toBe(50);
   });
 
+  // F-2: `get_project_authority_summary` returns `billing_ceiling_cents` for
+  // BOTH `ceilingCents` and `authorizedCents` (00575:1492-1493), so an
+  // uncapped agreement sends null for both. Coercing either to 0 prints a
+  // spent budget on three surfaces.
+  it("keeps an uncapped ceiling and an uncapped authorized figure null", () => {
+    const result = adaptProjectBillingAuthority({
+      authority: {
+        id: "authority-1",
+        projectId: "project-1",
+        agreementId: "agreement-1",
+        state: "active",
+        currency: "USD",
+        ceilingCents: null,
+      },
+      rates: [],
+      summary: {
+        authorizedCents: null,
+        accruedCents: 120_000,
+        invoicedCents: 0,
+        pendingAuthorizationCents: 0,
+        remainingCents: null,
+        billingThrough: null,
+      },
+    });
+
+    expect(result?.ceilingCents).toBeNull();
+    expect(result?.authorizedCents).toBeNull();
+    expect(result?.remainingCents).toBeNull();
+    // Everything that genuinely IS a figure still lands as a number.
+    expect(result?.accruedCents).toBe(120_000);
+  });
+
   it("fails closed on an unknown authority state", () => {
     expect(
       adaptProjectBillingAuthority({

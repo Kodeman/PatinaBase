@@ -35,6 +35,10 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import {
+  useStudioAgreementDefaults,
+  useUpdateStudioAgreementDefaults,
+} from '@/hooks/use-studio-agreement-defaults';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
 import { monogramOf } from '@/lib/document/account-identity';
 import { clampInvitableRole, friendlyInviteError, isInviteExpired } from '@/lib/document/invite-status';
@@ -65,6 +69,40 @@ function friendlyStudioError(err: unknown, fallback: string): string {
 
 /** Card fee (%) input ↔ card_surcharge_bps (migration 00428). 300 bps = 3%. */
 const BILLING_BPS_MAX = 300;
+
+/** Agreement defaults (00575). The chips the Contract Room's own deposit
+ *  facet offers, and the three credit rules the retainer part carries. */
+const AGREEMENT_DEPOSIT_CHIPS = [0, 25, 50, 100] as const;
+const AGREEMENT_CREDIT_RULES = [
+  { value: 'credited', label: 'Credited' },
+  { value: 'non_refundable', label: 'Non-refundable' },
+  { value: 'replenishing', label: 'Replenishing' },
+] as const;
+
+type AgreementDefaultsForm = {
+  rateCard: { roleName: string; hourlyRateCents: number; sortOrder: number }[];
+  depositPercent: string;
+  cadence: 'monthly' | 'biweekly' | 'milestone';
+  retainerCreditRule: 'credited' | 'non_refundable' | 'replenishing';
+  defaultExclusions: string;
+};
+
+/** Empty means "no answer", not "no deposit" — exactly the distinction
+ *  percentInputToBps keeps for the card fee, and the same reason: the
+ *  release RPC's 50% house default can only apply to an unset value. */
+function agreementPercentInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.min(100, Math.max(0, Math.round(parsed)));
+}
+
+const agreementDollars = (cents: number) => (cents / 100).toString();
+const agreementCents = (value: string) => {
+  const amount = Number(value.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100)) : 0;
+};
 
 function bpsToPercentInput(bps: number): string {
   return String(bps / 100);
@@ -119,6 +157,9 @@ export function AccountStudioPage() {
   // disabled, "coming with the rolodex" — studio-setup-checklist.tsx's
   // default when onSkipSeed/onOpenSeedReview are omitted).
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  // "The Agreement, Composed" W1 (P3). Fail-closed: the defaults card, and the
+  // read behind it, exist only for a studio the flag has reached.
+  const { value: agreementPartsOn } = useFeatureFlag('agreement-parts');
   const [seedReviewOpen, setSeedReviewOpen] = useState(false);
   const [skipSeedError, setSkipSeedError] = useState<string | null>(null);
 
@@ -134,6 +175,9 @@ export function AccountStudioPage() {
   const { data: projects } = useProjects();
   const { data: contacts } = useStudioContacts(callSheetOn ? (studio?.id ?? null) : null);
   const { data: billingSettings } = useStudioBillingSettings(studio?.id);
+  const { data: agreementDefaults } = useStudioAgreementDefaults(
+    agreementPartsOn ? studio?.id : null,
+  );
 
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
@@ -142,6 +186,7 @@ export function AccountStudioPage() {
   const leaveOrg = useLeaveOrganization();
   const transferOwner = useTransferOrganizationOwnership();
   const updateBilling = useUpdateStudioBillingSettings();
+  const updateAgreementDefaults = useUpdateStudioAgreementDefaults();
   const resendInvite = useInviteMember();
 
   const [newStudioName, setNewStudioName] = useState('');
@@ -209,6 +254,33 @@ export function AccountStudioPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billingSettings?.studio_id]);
+
+  // Agreement defaults (00575) — the same three mechanics as Billing above:
+  // local form state, one seeding effect keyed on the row's OWN studio_id so a
+  // background refetch cannot clobber an edit in progress, and a save handler
+  // that re-seeds from what was actually persisted.
+  const [agreementForm, setAgreementForm] = useState<AgreementDefaultsForm>({
+    rateCard: [],
+    depositPercent: '',
+    cadence: 'monthly',
+    retainerCreditRule: 'credited',
+    defaultExclusions: '',
+  });
+
+  useEffect(() => {
+    if (!agreementDefaults) return;
+    setAgreementForm({
+      rateCard: agreementDefaults.rate_card,
+      depositPercent:
+        agreementDefaults.deposit_percent === null
+          ? ''
+          : String(agreementDefaults.deposit_percent),
+      cadence: agreementDefaults.cadence,
+      retainerCreditRule: agreementDefaults.retainer_credit_rule,
+      defaultExclusions: agreementDefaults.default_exclusions.join('\n'),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agreementDefaults?.studio_id]);
 
   const myRole = studio?.membership.role ?? null;
   const canManage = myRole === 'owner' || myRole === 'admin';
@@ -339,6 +411,49 @@ export function AccountStudioPage() {
           setBilling({
             cardFeePercent: bpsToPercentInput(cardSurchargeBps),
             checkRemitTo: checkRemitTo ?? '',
+          });
+        },
+      },
+    );
+  };
+
+  const handleSaveAgreementDefaults = () => {
+    if (!studio || updateAgreementDefaults.isPending) return;
+    const rateCard = agreementForm.rateCard
+      .filter((role) => role.roleName.trim())
+      .map((role, sortOrder) => ({
+        roleName: role.roleName.trim(),
+        hourlyRateCents: role.hourlyRateCents,
+        sortOrder,
+      }));
+    const depositPercent = agreementPercentInput(agreementForm.depositPercent);
+    const defaultExclusions = agreementForm.defaultExclusions
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    updateAgreementDefaults.mutate(
+      {
+        studioId: studio.id,
+        rateCard,
+        depositPercent,
+        cadence: agreementForm.cadence,
+        retainerCreditRule: agreementForm.retainerCreditRule,
+        defaultExclusions,
+      },
+      {
+        onSuccess: () => {
+          // Re-seed from what was PERSISTED, for Billing's own reason: the
+          // trimmed, clamped, blank-dropped values are what the studio now
+          // has, and a trailing newline would otherwise leave the form
+          // permanently dirty. The seeding effect cannot do it — it is keyed
+          // on the row's studio_id, which a refetch does not change.
+          setAgreementForm({
+            rateCard,
+            depositPercent:
+              depositPercent === null ? '' : String(depositPercent),
+            cadence: agreementForm.cadence,
+            retainerCreditRule: agreementForm.retainerCreditRule,
+            defaultExclusions: defaultExclusions.join('\n'),
           });
         },
       },
@@ -478,6 +593,29 @@ export function AccountStudioPage() {
     !!billingSettings &&
     (billingBps !== billingSettings.card_surcharge_bps ||
       billing.checkRemitTo !== (billingSettings.check_remit_to ?? ''));
+  const agreementDepositPercent = agreementPercentInput(
+    agreementForm.depositPercent,
+  );
+  const agreementFormRateCard = agreementForm.rateCard
+    .filter((role) => role.roleName.trim())
+    .map((role, sortOrder) => ({
+      roleName: role.roleName.trim(),
+      hourlyRateCents: role.hourlyRateCents,
+      sortOrder,
+    }));
+  const agreementDefaultsDirty =
+    !!agreementDefaults &&
+    (JSON.stringify(agreementFormRateCard) !==
+      JSON.stringify(agreementDefaults.rate_card) ||
+      agreementDepositPercent !== agreementDefaults.deposit_percent ||
+      agreementForm.cadence !== agreementDefaults.cadence ||
+      agreementForm.retainerCreditRule !==
+        agreementDefaults.retainer_credit_rule ||
+      agreementForm.defaultExclusions
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join('\n') !== agreementDefaults.default_exclusions.join('\n'));
   const addressLines = [
     asStr(currentAddress.line1),
     asStr(currentAddress.line2),
@@ -921,6 +1059,328 @@ export function AccountStudioPage() {
           </dl>
         )}
       </div>
+
+      {/* Agreement defaults (00575) — placed after Billing, which is
+          untouched. What a new agreement starts from; every member composes
+          from these, owners and admins change them (R3).
+
+          Behind `agreement-parts`, fail-closed like every other surface in
+          this wave: `useFeatureFlag` reads false while it is loading, so a
+          non-pilot studio never sees the card flash, and a studio the flag
+          never reaches sees the Account page it has today, byte for byte. */}
+      {agreementPartsOn && (
+        <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
+          <h3 className={`${LABEL} mb-3`}>Agreement defaults</h3>
+          <p className={`${HELP} mb-4 mt-0`}>
+            What a new agreement starts from. Every member composes from these;
+            owners and admins change them.
+          </p>
+
+          {canManage ? (
+            <div className="max-w-md">
+              <div className="mb-4">
+                <span className={LABEL}>Rate card</span>
+                <div className="space-y-2">
+                  {agreementForm.rateCard.map((role, index) => (
+                    <div
+                      key={index}
+                      className="grid grid-cols-[minmax(0,1fr)_120px_auto] items-center gap-2"
+                    >
+                      <input
+                        aria-label={`Default role ${index + 1}`}
+                        value={role.roleName}
+                        onChange={(e) =>
+                          setAgreementForm((form) => ({
+                            ...form,
+                            rateCard: form.rateCard.map((row, rowIndex) =>
+                              rowIndex === index
+                                ? { ...row, roleName: e.target.value }
+                                : row,
+                            ),
+                          }))
+                        }
+                        placeholder="Principal designer"
+                        className={FIELD}
+                      />
+                      <input
+                        aria-label={`Default role ${index + 1} hourly rate`}
+                        inputMode="decimal"
+                        value={agreementDollars(role.hourlyRateCents)}
+                        onChange={(e) =>
+                          setAgreementForm((form) => ({
+                            ...form,
+                            rateCard: form.rateCard.map((row, rowIndex) =>
+                              rowIndex === index
+                                ? {
+                                    ...row,
+                                    hourlyRateCents: agreementCents(
+                                      e.target.value,
+                                    ),
+                                  }
+                                : row,
+                            ),
+                          }))
+                        }
+                        placeholder="$ / hour"
+                        className={FIELD}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAgreementForm((form) => ({
+                            ...form,
+                            rateCard: form.rateCard.filter(
+                              (_, rowIndex) => rowIndex !== index,
+                            ),
+                          }))
+                        }
+                        className="text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAgreementForm((form) => ({
+                      ...form,
+                      rateCard: [
+                        ...form.rateCard,
+                        {
+                          roleName: '',
+                          hourlyRateCents: 0,
+                          sortOrder: form.rateCard.length,
+                        },
+                      ],
+                    }))
+                  }
+                  className="mt-2 text-[12px] text-[var(--color-clay-ink)]"
+                >
+                  + Add a role
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <span className={LABEL}>Furnishings deposit</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {AGREEMENT_DEPOSIT_CHIPS.map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      aria-pressed={agreementDepositPercent === chip}
+                      onClick={() =>
+                        setAgreementForm((form) => ({
+                          ...form,
+                          depositPercent: String(chip),
+                        }))
+                      }
+                      className={`rounded-[3px] border px-3 py-1.5 text-[12px] transition-colors ${
+                        agreementDepositPercent === chip
+                          ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
+                          : 'border-[var(--color-pearl)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
+                      }`}
+                    >
+                      {chip}%
+                    </button>
+                  ))}
+                  <label className="flex items-center gap-1.5 text-[12px] text-[var(--color-charcoal)]">
+                    <span>Other</span>
+                    <input
+                      aria-label="Other default furnishings deposit percent"
+                      inputMode="numeric"
+                      value={
+                        agreementDepositPercent === null ||
+                        (AGREEMENT_DEPOSIT_CHIPS as readonly number[]).includes(
+                          agreementDepositPercent,
+                        )
+                          ? ''
+                          : String(agreementDepositPercent)
+                      }
+                      onChange={(e) =>
+                        setAgreementForm((form) => ({
+                          ...form,
+                          depositPercent: e.target.value,
+                        }))
+                      }
+                      placeholder="Unset"
+                      className={`${FIELD} w-24`}
+                    />
+                  </label>
+                </div>
+                {agreementDepositPercent === null && (
+                  <p className={HELP}>
+                    No deposit set — a new agreement leaves it open, and
+                    authorizations fall back to 50%.
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="studio-agreement-cadence" className={LABEL}>
+                  Billing cadence
+                </label>
+                <Select
+                  id="studio-agreement-cadence"
+                  value={agreementForm.cadence}
+                  onChange={(e) =>
+                    setAgreementForm((form) => ({
+                      ...form,
+                      cadence: e.target
+                        .value as AgreementDefaultsForm['cadence'],
+                    }))
+                  }
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="biweekly">Every two weeks</option>
+                  <option value="milestone">At named milestones</option>
+                </Select>
+              </div>
+
+              <div className="mb-4">
+                <span className={LABEL}>Retainer credit rule</span>
+                <div className="flex flex-wrap gap-2">
+                  {AGREEMENT_CREDIT_RULES.map((rule) => (
+                    <button
+                      key={rule.value}
+                      type="button"
+                      aria-pressed={
+                        agreementForm.retainerCreditRule === rule.value
+                      }
+                      onClick={() =>
+                        setAgreementForm((form) => ({
+                          ...form,
+                          retainerCreditRule: rule.value,
+                        }))
+                      }
+                      className={`rounded-[3px] border px-3 py-1.5 text-[12px] transition-colors ${
+                        agreementForm.retainerCreditRule === rule.value
+                          ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
+                          : 'border-[var(--color-pearl)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
+                      }`}
+                    >
+                      {rule.label}
+                    </button>
+                  ))}
+                </div>
+                <p className={HELP}>
+                  Stored now; it starts appearing on new agreements in a later
+                  release.
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="studio-agreement-exclusions" className={LABEL}>
+                  Default exclusions
+                </label>
+                <textarea
+                  id="studio-agreement-exclusions"
+                  rows={3}
+                  value={agreementForm.defaultExclusions}
+                  onChange={(e) =>
+                    setAgreementForm((form) => ({
+                      ...form,
+                      defaultExclusions: e.target.value,
+                    }))
+                  }
+                  placeholder={'Construction labor\nFurnishings, freight, tax, and installation'}
+                  className={`${FIELD} resize-none`}
+                />
+                <p className={HELP}>One per line.</p>
+              </div>
+
+              <DocumentActionGroup
+                surfaceKey="account"
+                regionKey="studio-agreement-defaults"
+                className="mt-4 items-center"
+              >
+                <DocumentAction
+                  actionKey="save-studio-agreement-defaults"
+                  variant="primary"
+                  onClick={handleSaveAgreementDefaults}
+                  disabled={
+                    !agreementDefaultsDirty || updateAgreementDefaults.isPending
+                  }
+                  loading={updateAgreementDefaults.isPending}
+                  loadingLabel="Saving…"
+                >
+                  Save agreement defaults
+                </DocumentAction>
+                {!agreementDefaultsDirty &&
+                  !updateAgreementDefaults.isPending && (
+                    <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                      Saved
+                    </span>
+                  )}
+              </DocumentActionGroup>
+              {updateAgreementDefaults.isError && (
+                <p
+                  role="alert"
+                  className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]"
+                >
+                  {friendlyStudioError(
+                    updateAgreementDefaults.error,
+                    'Failed to save agreement defaults.',
+                  )}
+                </p>
+              )}
+            </div>
+          ) : (
+            <dl className="max-w-md space-y-3">
+              <div>
+                <dt className={LABEL}>Rate card</dt>
+                <dd className="text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults && agreementDefaults.rate_card.length > 0 ? (
+                    agreementDefaults.rate_card.map((role) => (
+                      <div key={role.roleName}>
+                        {role.roleName} · ${agreementDollars(role.hourlyRateCents)}
+                        /hr
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-[var(--color-aged-oak)]">Not set</span>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className={LABEL}>Furnishings deposit</dt>
+                <dd className="text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults?.deposit_percent === null ||
+                  agreementDefaults === undefined ? (
+                    <span className="text-[var(--color-aged-oak)]">Not set</span>
+                  ) : (
+                    `${agreementDefaults.deposit_percent}%`
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className={LABEL}>Billing cadence</dt>
+                <dd className="text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults?.cadence ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className={LABEL}>Retainer credit rule</dt>
+                <dd className="text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults?.retainer_credit_rule ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className={LABEL}>Default exclusions</dt>
+                <dd className="whitespace-pre-line text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults &&
+                  agreementDefaults.default_exclusions.length > 0 ? (
+                    agreementDefaults.default_exclusions.join('\n')
+                  ) : (
+                    <span className="text-[var(--color-aged-oak)]">Not set</span>
+                  )}
+                </dd>
+              </div>
+            </dl>
+          )}
+        </div>
+      )}
 
       {/* Members */}
       <div className="mb-2 flex items-center justify-between">

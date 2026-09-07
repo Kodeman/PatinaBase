@@ -128,6 +128,14 @@ jest.mock("@/lib/document/room-origin", () => ({
   clearRoomOrigin: jest.fn(),
 }));
 
+// `agreement-parts` is fail-closed. Every case in this file is a FLAG-OFF
+// case: the seven-facet room, exactly as it renders on main. The snapshot
+// below was generated against the unmodified room before the flag branch
+// existed — that is what makes it evidence rather than a tautology.
+jest.mock("@/hooks/use-feature-flag", () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+
 describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
   beforeAll(() => {
     Element.prototype.scrollIntoView = jest.fn();
@@ -141,6 +149,31 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
       (_input: unknown, callbacks: { onSuccess: () => void }) =>
         callbacks.onSuccess(),
     );
+  });
+
+  // FLAG-OFF BYTE-IDENTITY (W1 gate). Generated on the unmodified room, then
+  // re-run after the flag branch landed. If the composer ever leaks into the
+  // flag-off path — or the seven facets are reformatted, reordered or
+  // reworded — this diff is the alarm.
+  it("renders the seven-facet room unchanged when agreement-parts is off", () => {
+    const { container } = render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          description: "Seeded from Discovery · budget 60,000–80,000",
+          client: null,
+        }}
+      />,
+    );
+
+    // The seven facet headings, in order — the composer renders none of them.
+    expect(
+      screen.getByRole("heading", { name: "Services & deliverables" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Terms" })).toBeInTheDocument();
+    expect(container.firstChild).toMatchSnapshot();
   });
 
   it("prefills and persists the non-financial defaults from the discovery proposal", async () => {

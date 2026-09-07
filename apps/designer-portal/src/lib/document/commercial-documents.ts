@@ -1,36 +1,37 @@
 /**
  * App-local commercial-document contract.
  *
- * Wave 1 intentionally keeps this adapter beside the designer UI while the
- * canonical workspace DTOs land on the integration branch. Database rows are
- * mapped into these camel-case shapes at one boundary; components never read
- * raw commercial tables or spread their rows into a client preview.
+ * P0 of "The Agreement, Composed": the vocabulary and the two money DTOs no
+ * longer live here twice. `@patina/types` is the single declaration; this
+ * module re-exports it so the ~40 call sites that import from here keep their
+ * import path, and adds only the shapes that are genuinely designer-portal
+ * local (the preview model, the readiness verdict, the status view).
+ *
+ * Database rows are mapped into these camel-case shapes at one boundary;
+ * components never read raw commercial tables or spread their rows into a
+ * client preview.
  */
+
+import {
+  COMMERCIAL_DOCUMENT_KINDS,
+  COMMERCIAL_STATES,
+  type BillingCadence,
+  type CommercialDocumentKind,
+  type CommercialState,
+  type DesignServiceRate,
+  type DesignServiceTerms,
+  type RetainerActivationPolicy,
+} from "@patina/types";
 
 import { formatCalendarDate } from "./format";
 
-export const COMMERCIAL_DOCUMENT_KINDS = [
-  "legacy",
-  "design_services",
-  "furnishings_authorization",
-  "service_addendum",
-] as const;
-
-export type CommercialDocumentKind = (typeof COMMERCIAL_DOCUMENT_KINDS)[number];
-
-export const COMMERCIAL_STATES = [
-  "draft",
-  "sent",
-  "client_signed",
-  "executed",
-  "declined",
-  "expired",
-  "superseded",
-] as const;
-
-export type CommercialState = (typeof COMMERCIAL_STATES)[number];
-export type RetainerActivationPolicy = "immediate" | "retainer_paid";
-export type BillingCadence = "monthly" | "biweekly" | "milestone";
+export { COMMERCIAL_DOCUMENT_KINDS, COMMERCIAL_STATES } from "@patina/types";
+export type {
+  BillingCadence,
+  CommercialDocumentKind,
+  CommercialState,
+  RetainerActivationPolicy,
+} from "@patina/types";
 
 export interface CommercialDocument {
   id: string;
@@ -46,36 +47,11 @@ export interface CommercialDocument {
   replacementProposalId: string | null;
 }
 
-export interface ServiceAgreementTerms {
-  proposalId: string;
-  scope: string;
-  deliverables: string[];
-  exclusions: string[];
-  billingCeilingCents: number;
-  retainerAmountCents: number;
-  retainerActivationPolicy: RetainerActivationPolicy;
-  billingCadence: BillingCadence;
-  currency: string;
-  terms: string;
-  currentRateVersion: number;
-  updatedAt: string | null;
-  /** R8: the deposit percent the studio commits to on EACH furnishings
-   *  authorization released under this agreement (0–100). A term of the
-   *  design services agreement, not of any one authorization — chips in the
-   *  drafting room offer 0/25/50/100/other. Nullable by design — the studio
-   *  may leave it unset, and create_furnishings_authorization_from_schedule
-   *  (00422) falls back to a 50% house default at release time. */
-  furnishingsDepositPercent: number | null;
-}
-
-export interface ServiceRate {
-  id: string;
-  proposalId: string;
-  version: number;
-  roleName: string;
-  hourlyRateCents: number;
-  effectiveAt: string | null;
-}
+/** Alias, never a second declaration — see the module comment. The canonical
+ *  shape (including `billingCeilingCents: number | null`, where NULL means
+ *  uncapped) lives in `@patina/types`. */
+export type ServiceAgreementTerms = DesignServiceTerms;
+export type ServiceRate = DesignServiceRate;
 
 export interface CommercialSignature {
   party: "client" | "studio";
@@ -104,12 +80,22 @@ export interface ProjectBillingAuthority {
   agreementId: string;
   state: "active" | "retainer_pending" | "exhausted" | "superseded";
   currency: string;
-  ceilingCents: number;
-  authorizedCents: number;
+  /** F-2: NULL = uncapped. Legal only when the executed agreement carries no
+   *  rate_card part (00575 `_agreement_requires_rate_card`). Render as "No
+   *  ceiling", never as `$0` — `greatest(ceiling - accrued, 0)` used to make
+   *  those two look the same. */
+  ceilingCents: number | null;
+  /** F-2: NULL = uncapped, mirroring `ceilingCents` —
+   *  `get_project_authority_summary` returns the same
+   *  `billing_ceiling_cents` for both (00575:1492-1493). Render as
+   *  "No ceiling", never as `$0`: a flat-fee agreement has no budget figure,
+   *  and `$0 budget` reads as an exhausted one. */
+  authorizedCents: number | null;
   accruedCents: number;
   invoicedCents: number;
   pendingAuthorizationCents: number;
-  remainingCents: number;
+  /** F-2: NULL = uncapped, mirroring `ceilingCents`. */
+  remainingCents: number | null;
   retainerAmountCents: number;
   retainerPaidCents: number;
   retainerActivationPolicy: RetainerActivationPolicy;
@@ -203,8 +189,13 @@ export function assessServiceAgreementReadiness({
   ) {
     blockers.push("Add at least one role with an hourly rate.");
   }
+  // Unchanged verdict, null-safe reading. `billingCeilingCents` widened to
+  // `number | null` in W1 (F-2), but the seven-facet room this function still
+  // serves never writes null — and an absent ceiling was already a blocker
+  // here, so null lands on the same answer a 0 does.
   if (
     !terms ||
+    terms.billingCeilingCents === null ||
     !Number.isFinite(terms.billingCeilingCents) ||
     terms.billingCeilingCents <= 0
   ) {
@@ -261,7 +252,9 @@ export interface ServiceAgreementPreview {
   scope: string;
   deliverables: string[];
   exclusions: string[];
-  billingCeilingCents: number;
+  /** NULL = uncapped (F-2) — the preview prints the "no ceiling" sentence
+   *  rather than a figure or "Not yet set". */
+  billingCeilingCents: number | null;
   retainerAmountCents: number;
   retainerActivationPolicy: RetainerActivationPolicy;
   billingCadence: BillingCadence;

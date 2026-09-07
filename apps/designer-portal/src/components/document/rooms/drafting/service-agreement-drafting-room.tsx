@@ -9,6 +9,7 @@ import { Button, Input, Select, Textarea } from "@/components/ui/controls";
 import { ClientPicker } from "@/components/portal/client-picker";
 import { useAttachDocumentClient } from "@/hooks/use-attach-client";
 import { useAuth } from "@/hooks/use-auth";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { useClients } from "@/hooks/use-clients";
 import {
   useCommercialDocument,
@@ -20,6 +21,7 @@ import {
   type ServiceAgreementTerms,
   type ServiceRate,
 } from "@/lib/document/commercial-documents";
+import { AgreementComposer } from "./agreement/agreement-composer";
 import { ServiceAgreementPreview } from "../../commercial/service-agreement-preview";
 import { ServiceAgreementSendSheet } from "../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
@@ -75,8 +77,16 @@ const cents = (value: string) => {
 export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
   const proposalId = String(proposal.id);
   const bundle = useCommercialDocument(proposalId);
+  // Above every early return — a conditional return reorders hooks and breaks
+  // hydration. Fail-closed: `useFeatureFlag` starts { value: false,
+  // isLoading: true }, so the composer can never flash to a non-pilot user.
+  const { value: partsOn, isLoading: flagLoading } =
+    useFeatureFlag("agreement-parts");
 
-  if (bundle.isLoading) {
+  if (bundle.isLoading || flagLoading) {
+    // The same component and the same sentence the room has always shown. The
+    // only observable delta for a flag-off designer is that this gate may hold
+    // one extra frame while PostHog answers.
     return <AgreementGate message="Opening the design agreement…" />;
   }
   if (bundle.error || !bundle.data) {
@@ -88,6 +98,23 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
             Retry
           </Button>
         }
+      />
+    );
+  }
+
+  if (partsOn) {
+    return (
+      // Keyed on the agreement itself, and on nothing that a save changes.
+      // `upsert_agreement_parts` projects through `_project_agreement_terms`,
+      // whose upsert ends `updated_at = now()`, so a terms/parts key remounted
+      // the composer on EVERY save — throwing the designer back to the first
+      // part and wiping the "All agreement changes saved." note she had just
+      // earned. The composer holds the composition after mount and re-reads
+      // the bundle only through props, so one mount per agreement is right.
+      <AgreementComposer
+        key={proposalId}
+        proposal={proposal}
+        bundle={bundle.data}
       />
     );
   }
@@ -471,7 +498,7 @@ function ServiceAgreementEditor({
                   <Input
                     className="mt-2"
                     inputMode="decimal"
-                    value={dollars(terms.billingCeilingCents)}
+                    value={dollars(terms.billingCeilingCents ?? 0)}
                     onChange={(event) =>
                       changeTerms({
                         billingCeilingCents: cents(event.target.value),

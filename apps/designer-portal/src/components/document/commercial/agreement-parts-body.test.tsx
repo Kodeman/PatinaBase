@@ -1,0 +1,443 @@
+import { render, screen } from "@testing-library/react";
+import {
+  AGREEMENT_PART_COPY,
+  agreementCadenceText,
+  agreementDepositLine,
+  type AgreementPart,
+} from "@patina/types";
+import { AgreementPartsBody } from "./agreement-parts-body";
+import { ServiceAgreementPreview } from "./service-agreement-preview";
+import type {
+  CommercialDocument,
+  ServiceAgreementTerms,
+} from "@/lib/document/commercial-documents";
+
+let seq = 0;
+function part(
+  input: Partial<AgreementPart> & { partKey: string },
+): AgreementPart {
+  seq += 1;
+  return {
+    id: input.id ?? `part-${seq}`,
+    proposalId: "agreement-1",
+    position: input.position ?? seq,
+    kind: input.kind ?? "clause",
+    variant: input.variant ?? null,
+    title: input.title ?? "Part",
+    payload: input.payload ?? {},
+    required: input.required ?? false,
+    clientVisible: input.clientVisible ?? true,
+    sourceTemplateKey: null,
+    sourcePartId: null,
+    updatedAt: null,
+    partKey: input.partKey,
+  };
+}
+
+beforeEach(() => {
+  seq = 0;
+});
+
+const renderParts = (parts: AgreementPart[]) =>
+  render(<AgreementPartsBody parts={parts} currency="USD" />);
+
+describe("AgreementPartsBody", () => {
+  it("renders parts in position order, not array order", () => {
+    renderParts([
+      part({
+        partKey: "patina.terms",
+        position: 9,
+        title: "Terms",
+        payload: { body: "Ownership and cancellation." },
+      }),
+      part({
+        partKey: "patina.services",
+        position: 1,
+        title: "Services",
+        payload: { body: "Interior design services." },
+      }),
+    ]);
+    const headings = screen
+      .getAllByRole("heading")
+      .map((node) => node.textContent);
+    expect(headings).toEqual(["Services", "Terms"]);
+  });
+
+  it("renders a list with notes and the optional suffix", () => {
+    renderParts([
+      part({
+        partKey: "patina.deliverables",
+        kind: "list",
+        title: "Deliverables",
+        payload: {
+          items: [
+            { id: "a", text: "Concept presentation" },
+            {
+              id: "b",
+              text: "Site visit",
+              note: "Twice a month",
+              optional: true,
+            },
+          ],
+        },
+      }),
+    ]);
+    expect(screen.getByText("— Concept presentation")).toBeInTheDocument();
+    expect(screen.getByText("— Site visit (optional)")).toBeInTheDocument();
+    expect(screen.getByText("Twice a month")).toBeInTheDocument();
+  });
+
+  it("says what an open ceiling means rather than printing a figure", () => {
+    renderParts([
+      part({
+        partKey: "patina.ceiling",
+        kind: "schedule",
+        variant: "ceiling",
+        title: "Ceiling",
+        payload: { cents: null },
+      }),
+    ]);
+    expect(
+      screen.getByText(
+        "No ceiling — professional time is billed as it is worked.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
+  });
+
+  it("prints a set ceiling as money", () => {
+    renderParts([
+      part({
+        partKey: "patina.ceiling",
+        kind: "schedule",
+        variant: "ceiling",
+        title: "Ceiling",
+        payload: { cents: 2_400_000 },
+      }),
+    ]);
+    expect(screen.getByText("$24,000")).toBeInTheDocument();
+  });
+
+  it("omits a part the designer marked studio-only", () => {
+    renderParts([
+      part({
+        partKey: "custom.internal",
+        title: "Internal note",
+        clientVisible: false,
+        payload: { body: "Do not send." },
+      }),
+      part({
+        partKey: "patina.services",
+        title: "Services",
+        payload: { body: "Interior design services." },
+      }),
+    ]);
+    expect(screen.queryByText("Internal note")).not.toBeInTheDocument();
+    expect(screen.queryByText("Do not send.")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Services" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders an attachment as its own lettered leaf, after every section", () => {
+    const { container } = renderParts([
+      part({
+        partKey: "patina.attachment.wi",
+        kind: "attachment",
+        position: 1,
+        title: "Wisconsin notice",
+        payload: { body: "Statutory text.", acknowledgeRequired: true },
+      }),
+      part({
+        partKey: "patina.services",
+        position: 2,
+        title: "Services",
+        payload: { body: "Interior design services." },
+      }),
+    ]);
+    expect(
+      screen.getByText("Attachment A · Wisconsin notice"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("I received this")).toBeInTheDocument();
+    expect(container.querySelectorAll("hr")).toHaveLength(1);
+    // The attachment is last on the page even though its position is first.
+    const text = container.textContent ?? "";
+    expect(text.indexOf("Services")).toBeLessThan(
+      text.indexOf("Attachment A · Wisconsin notice"),
+    );
+  });
+
+  it("never renders an attestation", () => {
+    renderParts([
+      part({
+        partKey: "studio.attestation",
+        kind: "attestation",
+        title: "License",
+        payload: { credentialType: "NCIDQ", number: "12345" },
+      }),
+    ]);
+    expect(screen.queryByText("License")).not.toBeInTheDocument();
+    expect(screen.queryByText(/12345/)).not.toBeInTheDocument();
+  });
+
+  it("survives an unknown kind and variant without raw JSON", () => {
+    const wormhole = {
+      ...part({ partKey: "custom.wormhole", title: "Wormhole" }),
+      kind: "wormhole",
+      variant: "quantum",
+      payload: { secret: "should never print" },
+    } as unknown as AgreementPart;
+    renderParts([wormhole]);
+    expect(
+      screen.getByRole("heading", { name: "Wormhole" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Recorded with your agreement."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/should never print/)).not.toBeInTheDocument();
+  });
+
+  it("survives an unknown SCHEDULE variant without raw JSON", () => {
+    renderParts([
+      part({
+        partKey: "custom.draws",
+        kind: "schedule",
+        variant: "draws",
+        title: "Draw schedule",
+        payload: { draws: [{ label: "First", cents: 100 }] },
+      }),
+    ]);
+    expect(
+      screen.getByRole("heading", { name: "Draw schedule" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Recorded with your agreement."),
+    ).toBeInTheDocument();
+  });
+
+  // ── §4.5's ten rows, asserted as the literal sentences the client shell
+  // prints. These four are what D5 found drifted; the fixture below pins the
+  // shared constants to the same literals so neither surface can move alone.
+
+  it("prints the retainer's activation sentence, not a designer shorthand", () => {
+    renderParts([
+      part({
+        partKey: "patina.retainer",
+        kind: "schedule",
+        variant: "retainer",
+        title: "Retainer",
+        payload: { cents: 250_000, activationPolicy: "retainer_paid" },
+      }),
+    ]);
+    expect(screen.getByText("$2,500")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Design work begins after the fully executed agreement and retainer payment.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("prints the other activation policy's sentence", () => {
+    renderParts([
+      part({
+        partKey: "patina.retainer",
+        kind: "schedule",
+        variant: "retainer",
+        title: "Retainer",
+        payload: { cents: 250_000, activationPolicy: "immediate" },
+      }),
+    ]);
+    expect(
+      screen.getByText("Due under the terms of the fully executed agreement."),
+    ).toBeInTheDocument();
+  });
+
+  it("prints the cadence as the client reads it, with the authorization note", () => {
+    renderParts([
+      part({
+        partKey: "patina.cadence",
+        kind: "schedule",
+        variant: "cadence",
+        title: "Billing cadence",
+        payload: { cadence: "biweekly" },
+      }),
+    ]);
+    expect(screen.getByText("biweekly")).toBeInTheDocument();
+    expect(screen.queryByText("Every two weeks")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Additional work requires written authorization before it can be invoiced.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("prints the deposit line the client portal prints", () => {
+    renderParts([
+      part({
+        partKey: "patina.deposit",
+        kind: "schedule",
+        variant: "procurement",
+        title: "Furnishings deposit",
+        payload: { depositPercent: 50 },
+      }),
+    ]);
+    expect(screen.getByText("50% deposit")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/on each furnishings authorization/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the heading of a part with nothing written in it", () => {
+    renderParts([
+      part({
+        partKey: "patina.exclusions",
+        kind: "list",
+        title: "Exclusions",
+        payload: { items: [] },
+      }),
+      part({
+        partKey: "patina.retainer",
+        kind: "schedule",
+        variant: "retainer",
+        title: "Retainer",
+        payload: {},
+      }),
+    ]);
+    // The client shell prints the heading either way — a part the studio kept
+    // is a part the client can see is there.
+    expect(
+      screen.getByRole("heading", { name: "Exclusions" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Retainer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Recorded with your agreement."),
+    ).toBeInTheDocument();
+  });
+});
+
+// The fixture both surfaces assert against. If a sentence changes it changes
+// here, in @patina/types, and both renderers move together or neither does.
+describe("AGREEMENT_PART_COPY — the shared sentences", () => {
+  it("is the client shell's wording, verbatim", () => {
+    expect(AGREEMENT_PART_COPY).toEqual({
+      ceilingUncapped:
+        "No ceiling — professional time is billed as it is worked.",
+      retainerOnPayment:
+        "Design work begins after the fully executed agreement and retainer payment.",
+      retainerOnExecution:
+        "Due under the terms of the fully executed agreement.",
+      cadenceNote:
+        "Additional work requires written authorization before it can be invoiced.",
+      recorded: "Recorded with your agreement.",
+      attachmentAcknowledgment: "I received this",
+    });
+  });
+
+  it("opens the underscore in a cadence and leaves the case to the page", () => {
+    expect(agreementCadenceText("per_draw")).toBe("per draw");
+    expect(agreementCadenceText("monthly")).toBe("monthly");
+  });
+
+  it("names the deposit without naming the authorization", () => {
+    expect(agreementDepositLine(0)).toBe("0% deposit");
+    expect(agreementDepositLine(50)).toBe("50% deposit");
+  });
+});
+
+// ── The preview's own branch: Core kept, seven sections replaced.
+
+const document: CommercialDocument = {
+  id: "agreement-1",
+  projectId: null,
+  kind: "design_services",
+  state: "draft",
+  title: "Okafor design agreement",
+  version: 1,
+  waveName: null,
+  sentAt: null,
+  executedAt: null,
+  supersededAt: null,
+  replacementProposalId: null,
+};
+
+const terms: ServiceAgreementTerms = {
+  proposalId: "agreement-1",
+  scope: "Interior design services.",
+  deliverables: ["Concept presentation"],
+  exclusions: ["Construction labor"],
+  billingCeilingCents: 0,
+  retainerAmountCents: 0,
+  retainerActivationPolicy: "immediate",
+  billingCadence: "monthly",
+  currency: "USD",
+  terms: "Ownership and cancellation.",
+  currentRateVersion: 1,
+  updatedAt: null,
+  furnishingsDepositPercent: 50,
+};
+
+describe("ServiceAgreementPreview · parts branch", () => {
+  it("keeps the flag-off body when there are no parts, Not yet set included", () => {
+    render(
+      <ServiceAgreementPreview
+        document={document}
+        terms={terms}
+        rates={[]}
+        signatures={[]}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "What you will receive" }),
+    ).toBeInTheDocument();
+    // The zero ceiling on the legacy path still reads "Not yet set" — that
+    // branch survives exactly for flag-off (P0).
+    expect(screen.getAllByText("Not yet set").length).toBeGreaterThan(0);
+  });
+
+  it("replaces the seven sections with the parts, and never prints Not yet set", () => {
+    render(
+      <ServiceAgreementPreview
+        document={document}
+        terms={terms}
+        rates={[]}
+        signatures={[]}
+        parts={[
+          part({
+            partKey: "patina.services",
+            position: 1,
+            title: "Services",
+            payload: { body: "Interior design services." },
+          }),
+          part({
+            partKey: "custom.flat",
+            position: 2,
+            kind: "schedule",
+            variant: "flat",
+            title: "Flat fee",
+            payload: { cents: 1_100_000 },
+          }),
+        ]}
+      />,
+    );
+    // Gone: the fixed sections, and every "Not yet set" they could carry.
+    expect(
+      screen.queryByRole("heading", { name: "What you will receive" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
+    // Kept: the Core, above and below.
+    expect(
+      screen.getByRole("heading", { name: "Okafor design agreement" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Agreement signatures")).toBeInTheDocument();
+    expect(
+      screen.getByText(/outside this design services agreement/),
+    ).toBeInTheDocument();
+    // And the parts themselves.
+    expect(
+      screen.getByRole("heading", { name: "Flat fee" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("$11,000")).toBeInTheDocument();
+  });
+});
