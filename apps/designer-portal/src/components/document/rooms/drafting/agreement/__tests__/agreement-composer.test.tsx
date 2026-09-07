@@ -183,6 +183,22 @@ const railRows = () =>
     .getAllByRole("listitem")
     .map((row) => row.textContent ?? "");
 
+// The rail row's select button is the one control in the row with no
+// aria-label of its own (Reorder/Rename/Part options all carry one).
+const selectPart = (title: string) => {
+  const row = within(
+    screen.getByRole("navigation", { name: "Agreement parts" }),
+  )
+    .getAllByRole("listitem")
+    .find((item) => item.textContent?.includes(title));
+  if (!row) throw new Error(`No rail row for ${title}`);
+  const button = within(row)
+    .getAllByRole("button")
+    .find((candidate) => !candidate.getAttribute("aria-label"));
+  if (!button) throw new Error(`No select control for ${title}`);
+  fireEvent.click(button);
+};
+
 const openRowMenu = (title: string) =>
   fireEvent.click(
     screen.getByRole("button", { name: `Part options for ${title}` }),
@@ -320,6 +336,42 @@ describe("AgreementComposer · composing", () => {
       await screen.findByText("All agreement changes saved."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Saved" })).toBeDisabled();
+  });
+
+  it("keeps her on the part she was writing when Save hands back new ids", async () => {
+    // `upsert_agreement_parts` is DELETE-then-INSERT and does not carry `id`
+    // through (00575) — every part comes back with a fresh uuid. Re-selecting
+    // by id matched nothing and dropped her onto part one after every Save.
+    mockSaveParts.mockImplementation(async (written: AgreementPart[]) =>
+      bundleWith(
+        written.map((p, index) => ({
+          ...p,
+          id: `server-${index + 1}`,
+          position: index + 1,
+        })),
+      ),
+    );
+    renderComposer();
+
+    selectPart("Exclusions");
+    expect(
+      screen.getByRole("region", { name: "Exclusions editor" }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Item 1" }), {
+      target: { value: "Construction labour" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+
+    expect(
+      await screen.findByText("All agreement changes saved."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Exclusions editor" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Services editor" }),
+    ).not.toBeInTheDocument();
   });
 
   it("edits a clause body through the editor", () => {

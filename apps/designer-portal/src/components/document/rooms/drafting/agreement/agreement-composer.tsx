@@ -120,7 +120,7 @@ export function AgreementComposer({
             : "The standard parts could not be opened.",
         ),
     });
-    // The bundle identity is the remount key upstream; re-running this on a
+    // The agreement id is the remount key upstream; re-running this on a
     // background refetch would re-ask a question already answered.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalId]);
@@ -186,16 +186,23 @@ export function AgreementComposer({
   };
 
   const persist = async () => {
+    // `upsert_agreement_parts` is DELETE-then-INSERT and does not carry `id`
+    // through, so every part comes back with a new uuid. `part_key` is the
+    // identity that survives a save — matching on `id` re-selected nothing
+    // and dropped the designer onto part one after every Save.
+    const selectedKey = selected?.partKey ?? null;
     try {
       const next = await save.mutateAsync(parts);
       const saved = renumber(
         [...next.parts].sort((a, b) => a.position - b.position),
       );
       setParts(saved);
-      setSelectedId((current) =>
-        saved.some((part) => part.id === current)
-          ? current
-          : (saved[0]?.id ?? null),
+      setSelectedId(
+        (selectedKey === null
+          ? null
+          : (saved.find((part) => part.partKey === selectedKey)?.id ?? null)) ??
+          saved[0]?.id ??
+          null,
       );
       setDirty(false);
       setSaveNote("All agreement changes saved.");

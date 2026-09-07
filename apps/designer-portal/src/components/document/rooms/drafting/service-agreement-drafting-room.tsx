@@ -104,8 +104,15 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
 
   if (partsOn) {
     return (
+      // Keyed on the agreement itself, and on nothing that a save changes.
+      // `upsert_agreement_parts` projects through `_project_agreement_terms`,
+      // whose upsert ends `updated_at = now()`, so a terms/parts key remounted
+      // the composer on EVERY save — throwing the designer back to the first
+      // part and wiping the "All agreement changes saved." note she had just
+      // earned. The composer holds the composition after mount and re-reads
+      // the bundle only through props, so one mount per agreement is right.
       <AgreementComposer
-        key={`${bundle.data.terms?.updatedAt ?? "new"}-${bundle.data.parts.length}`}
+        key={proposalId}
         proposal={proposal}
         bundle={bundle.data}
       />
