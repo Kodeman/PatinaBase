@@ -321,10 +321,11 @@ describe("the Contract Room with the Library on", () => {
     fireEvent.click(screen.getByRole("button", { name: "Replace the parts" }));
 
     await waitFor(() =>
-      expect(mockMaterializeTemplate).toHaveBeenCalledWith({
-        proposalId: "agreement-1",
-        templateKey: "studio.full-service",
-      }),
+      // The hook binds the proposal at construction; the template key is the
+      // whole of what the mutation takes (@patina/supabase).
+      expect(mockMaterializeTemplate).toHaveBeenCalledWith(
+        "studio.full-service",
+      ),
     );
     await waitFor(() => expect(railRows()).toHaveLength(1));
     expect(mockRefetch).toHaveBeenCalledTimes(1);

@@ -157,7 +157,7 @@ export function AgreementComposer({
   // says rather than trusting a shape the mutation was never promised to
   // return.
   const partsRead = useAgreementParts(proposalId);
-  const materializeTemplate = useMaterializeAgreementTemplate();
+  const materializeTemplate = useMaterializeAgreementTemplate(proposalId);
   const ownsProposal = user?.id === proposal.designer_id;
   const ownerClients = useMemo(
     () =>
@@ -340,10 +340,7 @@ export function AgreementComposer({
   const applyTemplate = async (template: AgreementTemplate) => {
     setTemplateError(null);
     try {
-      await materializeTemplate.mutateAsync({
-        proposalId,
-        templateKey: template.templateKey,
-      });
+      await materializeTemplate.mutateAsync(template.templateKey);
       const fresh = await partsRead.refetch();
       const landed = renumber(
         [...(fresh.data ?? [])].sort((a, b) => a.position - b.position),
