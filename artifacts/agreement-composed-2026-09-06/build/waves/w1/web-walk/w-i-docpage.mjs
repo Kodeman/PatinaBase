@@ -1,0 +1,14 @@
+import { browser, ctx, shot, HERE } from './lib.mjs';
+const id = process.argv[2];
+const b = await browser();
+const c = await ctx(b, { storageState: `${HERE}/state-designer.json` });
+const page = await c.newPage();
+page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 200)));
+await page.goto(`http://localhost:3000/doc/${id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(14000);
+console.log('URL', page.url());
+await shot(page, `wi-doc-${id.slice(-4)}`);
+console.log(JSON.stringify(await page.$$eval('button,a', (ns) => ns.map((n) => n.innerText.trim().slice(0,45)).filter(Boolean))));
+console.log('--- TEXT ---');
+console.log((await page.evaluate(() => document.body.innerText)).slice(0, 2500));
+await b.close();

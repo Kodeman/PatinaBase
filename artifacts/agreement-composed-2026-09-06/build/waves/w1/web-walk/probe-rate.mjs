@@ -1,0 +1,20 @@
+import { browser, ctx, shot, HERE } from './lib.mjs';
+const id = process.argv[2];
+const b = await browser();
+const c = await ctx(b, { storageState: `${HERE}/state-designer.json` });
+const page = await c.newPage();
+await page.goto(`http://localhost:3000/drafting/${id}`, { waitUntil: 'domcontentloaded' });
+for (let i = 0; i < 60; i++) { if (await page.locator('nav[aria-label="Agreement parts"] li').count()) break; await page.waitForTimeout(2000); }
+await page.waitForTimeout(3000);
+await page.locator('nav[aria-label="Agreement parts"] li').filter({hasText:'Role rates'}).first().locator('button').nth(1).click();
+await page.waitForTimeout(800);
+console.log('EDITOR BEFORE:', (await page.$eval('section[aria-label$="editor"]', n=>n.innerText)).replace(/\n+/g,' | '));
+console.log('INPUTS BEFORE:', JSON.stringify(await page.$$eval('section[aria-label$="editor"] input', ns=>ns.map(n=>({al:n.getAttribute('aria-label'),v:n.value})))));
+await page.getByRole('button', { name: /\+ Add a role/ }).click();
+await page.waitForTimeout(1000);
+console.log('INPUTS AFTER ADD:', JSON.stringify(await page.$$eval('section[aria-label$="editor"] input', ns=>ns.map(n=>({al:n.getAttribute('aria-label'),v:n.value})))));
+console.log('READINESS:', (await page.$eval('section[aria-label="Agreement readiness"]', n=>n.innerText)).replace(/\n+/g,' | '));
+const sb = page.getByRole('button', { name: /^Save agreement$/ });
+console.log('SAVE present:', await sb.count(), 'disabled:', await sb.count() ? await sb.isDisabled() : null);
+await shot(page, 'probe-blank-role');
+await b.close();
