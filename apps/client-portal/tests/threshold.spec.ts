@@ -77,13 +77,12 @@ const SEEDED_ROOMS = ['Study', 'Hall', 'Stair'];
 const COMPOSED_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb01';
 
 /* ── THE DOOR THE COMPOSED AGREEMENT STANDS AT (Wave 2, P6 · R26) ────────────
-   ⚠ THIS FIXTURE IS OWED. `supabase/seed/the-client-page.sql` today lays every
-   commercial paper down EXECUTED (`:255`, `:552`, `:671`) and writes no
-   `commercial_document_signatures` row at all, so no seeded client's page has
-   a door to drive. `supabase/seed/**` is the backend lane's pathspec; this
-   test is written unconditionally (R26) against the fixture below, and it goes
-   green when that fixture and the Wave 2 migrations are on the stack. Until
-   then it is a red that names its own cause in the first assertion.
+   `supabase/seed/the-client-page.sql` lays this one down SENT with no
+   `commercial_document_signatures` row — every other commercial paper it
+   writes is EXECUTED (`:255`, `:552`, `:671`), so this is the only seeded
+   client's page with a door to drive. The test is written unconditionally
+   (R26) against the fixture below; on a stack missing it or the Wave 2
+   migrations it is a red that names its own cause in the first assertion.
 
    Note the id: `…cb02` is ALREADY TAKEN — it is the solo household's seeded
    furnishings authorization (`the-client-page.sql:358`, `v_fa_proposal`).
@@ -627,11 +626,10 @@ test.describe('The Threshold — the client page', () => {
    * No `page.waitForTimeout` anywhere — the hold is driven by pressing and
    * then waiting on a state the app itself publishes.
    *
-   * Unconditional (R26): the fixture is named at the head of this file, and it
-   * is OWED — the seed does not lay it down yet, and `supabase/seed/**` is the
-   * backend lane's pathspec. Until that fixture and the Wave 2 migrations are
-   * on the stack this test is red at its first assertion, which says so in its
-   * own message. It is not made conditional to hide that.
+   * Unconditional (R26): the fixture is named at the head of this file and
+   * `supabase/seed/the-client-page.sql` lays it down. It is not made
+   * conditional — on a stack without the Wave 2 migrations and that seed it is
+   * red at its first assertion, which says so in its own message.
    */
   test('signs a composed agreement at its door, and files what she agreed to', async ({
     page,

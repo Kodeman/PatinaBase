@@ -714,14 +714,11 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         signedOnPaper: first(row, 'signedOnPaper', 'signed_on_paper') === true,
         paperSignedOn: nullableText(first(row, 'paperSignedOn', 'paper_signed_on')),
         paperScanDocumentId: nullableText(first(row, 'paperScanDocumentId', 'paper_scan_document_id')),
+        // The sentence this signer ticked, written into
+        // `commercial_document_signatures.metadata` at insert and projected as
+        // one scalar by the bundle RPC (00425 — raw metadata never crosses
+        // this edge). Null on every document signed before R36.
         consentSentence: nullableText(first(row, 'consentSentence', 'consent_sentence')),
-        // NOT read here: the sentence this signer ticked. It is written into
-        // `commercial_document_signatures.metadata` at insert, and the bundle
-        // RPC projects a signature's keys one by one (00425 — raw metadata
-        // never crosses this edge), so there is no consent key on this row to
-        // read. A DTO field that is null for every document is a feature the
-        // keepsake would print nothing from; the wave that rules the bundle
-        // addition adds both halves together.
       }];
     }) : [],
     furnishings: Object.keys(furnishingRaw).length === 0 ? null : {
