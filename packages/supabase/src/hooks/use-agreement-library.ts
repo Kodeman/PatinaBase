@@ -11,6 +11,21 @@ import { agreementPartsKeys } from './use-agreement-parts';
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
 
+/**
+ * A value inside a PostgREST `or=(...)` string, quoted.
+ *
+ * `or` is parsed as text, not as parameters: a comma ends a condition, a
+ * parenthesis ends the group, and a period separates column from operator — so
+ * an unescaped value is an injection into the filter grammar itself. Studio ids
+ * are uuids today and none of that can occur in one, which is precisely why
+ * this is worth writing down rather than relying on: the day this filter takes
+ * a name or a key, the quoting is already here. Double quotes are PostgREST's
+ * own; a literal quote or backslash inside is backslash-escaped.
+ */
+function postgrestValue(value: string): string {
+  return `"${String(value).replace(/["\\]/g, '\\$&')}"`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // THE AGREEMENT LIBRARY — "The Agreement, Composed" Wave 2 (migration 00576,
 // tables `agreement_templates` and `studio_agreement_parts`)
@@ -177,7 +192,7 @@ export function useAgreementTemplates(studioId: string | null | undefined) {
       const { data, error } = await supabase
         .from('agreement_templates')
         .select('*')
-        .or(`studio_id.is.null,studio_id.eq.${studioId}`)
+        .or(`studio_id.is.null,studio_id.eq.${postgrestValue(studioId as string)}`)
         .order('kind', { ascending: true })
         .order('title', { ascending: true });
       if (error) throw error;

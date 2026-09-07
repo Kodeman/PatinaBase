@@ -44,6 +44,16 @@
 -- ambiguity the DROPs above were written to avoid. Every call has one
 -- candidate; no signature anything already holds has moved.
 --
+-- ONE BACKFILL, AND IT IS A CLAIM ABOUT THE PAST. R37:
+-- project_billing_authorities.retainer_credit_rule arrives NOT NULL DEFAULT
+-- 'credited', so every authority already executed — every one snapshotted
+-- before this column existed — is stamped 'credited' by the ALTER, and nobody
+-- wrote that value at their countersign. It is correct: credited against fees
+-- is what a Patina retainer has always meant and what every one of those
+-- agreements said in prose. It is still a value the deploy note has to name,
+-- because reading one of those rows afterwards cannot tell a rule that was
+-- agreed from a rule that was defaulted.
+--
 -- WHAT THIS FILE DOES NOT DO:
 --   · It adds NO new caller of app_private.issue_invoice_for_actor. The
 --     hardening contract test asserts the caller universe exhaustively
@@ -480,6 +490,11 @@ DECLARE
   c_recorded CONSTANT text := 'Recorded with your agreement.';
   c_not_yet_set CONSTANT text := 'Not yet set';
   c_attachment_ack CONSTANT text := 'I received this';
+  -- R37 — AgreementPartsBody closes every composed body with this, always, and
+  -- the copy she keeps is the page she signed. Losing it loses the one line
+  -- that says what she did NOT authorize.
+  c_boundary CONSTANT text :=
+    'This agreement authorizes design services only. Furnishings, freight, tax, installation, and purchasing require a separate named furnishings authorization.';
 
   v_part public.proposal_agreement_parts%ROWTYPE;
   v_html text := '';
@@ -488,6 +503,8 @@ DECLARE
   v_cents numeric;
   v_text text;
   v_why text;
+  v_letter text;
+  v_index integer := 0;
 BEGIN
   -- R34 — the change, and why it was made, in that order, exactly as the door
   -- prints them.
@@ -496,16 +513,16 @@ BEGIN
     v_html := '<p class="why">' || public._agreement_html_escape(v_why) || '</p>';
   END IF;
 
+  -- R37 — the same three passes AgreementPartsBody makes, in the same order:
+  -- the sections, the boundary that closes them, then the attachments as
+  -- lettered leaves below both. An attestation is drawn nowhere at all, here
+  -- exactly as there.
   FOR v_part IN
     SELECT ap.* FROM public.proposal_agreement_parts ap
     WHERE ap.proposal_id = p_proposal_id AND ap.client_visible
+      AND ap.kind NOT IN ('attachment', 'attestation')
     ORDER BY ap.position, ap.id
   LOOP
-    -- An attestation reaches the homeowner as nothing at all, here exactly as
-    -- in the body she read: AgreementPartsBody filters `kind === 'attestation'`
-    -- out before it draws a single section.
-    CONTINUE WHEN v_part.kind = 'attestation';
-
     v_body := '';
 
     IF v_part.kind = 'clause' THEN
@@ -529,19 +546,6 @@ BEGIN
         WITH ORDINALITY AS e(item, ord)
       WHERE NULLIF(btrim(COALESCE(e.item->>'text', '')), '') IS NOT NULL;
       v_body := CASE WHEN v_body = '' THEN '' ELSE '<ul>' || v_body || '</ul>' END;
-
-    ELSIF v_part.kind = 'attachment' THEN
-      v_body := '<article class="leaf">';
-      v_text := NULLIF(btrim(COALESCE(v_part.payload->>'body', '')), '');
-      IF v_text IS NOT NULL THEN
-        v_body := v_body || '<p>' || replace(
-          public._agreement_html_escape(v_part.payload->>'body'),
-          E'\n', '<br>') || '</p>';
-      END IF;
-      IF (v_part.payload->'acknowledgeRequired') = 'true'::jsonb THEN
-        v_body := v_body || '<p>' || public._agreement_html_escape(c_attachment_ack) || '</p>';
-      END IF;
-      v_body := v_body || '</article>';
 
     ELSIF v_part.kind = 'schedule' THEN
       IF v_part.variant = 'rate_card' THEN
@@ -667,6 +671,41 @@ BEGIN
     IF v_body IS NOT NULL AND v_body <> '' THEN
       v_html := v_html || '<h2>' || public._agreement_html_escape(v_part.title)
                        || '</h2>' || v_body;
+    END IF;
+  END LOOP;
+
+  v_html := v_html || '<p class="boundary">'
+                   || public._agreement_html_escape(c_boundary) || '</p>';
+
+  -- An attachment is a rule across the page, not another section of it:
+  -- AttachmentLeaf draws a line, then ATTACHMENT {letter} · {title}, then the
+  -- body and the acknowledgment sentence if the part carries one. Unlike a
+  -- clause it is drawn even when its body is empty — the eyebrow IS the leaf,
+  -- and a notice with nothing typed under it is still a notice the paper
+  -- names. The lettering is AgreementPartsBody's own: A..Z, then the ordinal.
+  FOR v_part IN
+    SELECT ap.* FROM public.proposal_agreement_parts ap
+    WHERE ap.proposal_id = p_proposal_id AND ap.client_visible
+      AND ap.kind = 'attachment'
+    ORDER BY ap.position, ap.id
+  LOOP
+    v_letter := CASE WHEN v_index < 26 THEN chr(65 + v_index)
+                     ELSE (v_index + 1)::text END;
+    v_index := v_index + 1;
+
+    v_html := v_html || '<hr>'
+                     || '<p class="attachment-eyebrow">ATTACHMENT ' || v_letter
+                     || ' · ' || public._agreement_html_escape(v_part.title)
+                     || '</p>';
+    v_text := NULLIF(btrim(COALESCE(v_part.payload->>'body', '')), '');
+    IF v_text IS NOT NULL THEN
+      v_html := v_html || '<p>' || replace(
+        public._agreement_html_escape(v_part.payload->>'body'),
+        E'\n', '<br>') || '</p>';
+    END IF;
+    IF (v_part.payload->'acknowledgeRequired') = 'true'::jsonb THEN
+      v_html := v_html || '<p>'
+                       || public._agreement_html_escape(c_attachment_ack) || '</p>';
     END IF;
   END LOOP;
 

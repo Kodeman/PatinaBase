@@ -237,11 +237,17 @@ export interface AgreementPartEvent {
 
 /** `public.agreement_execution_snapshots` (W2, R12) — the frozen HTML the
  *  client keeps at execution. No PDF, no client-side render stored, no
- *  re-render on read. `null` on the bundle until countersign. */
+ *  re-render on read. `null` on the bundle until countersign.
+ *
+ *  R37 — three keys, because three keys are what
+ *  `get_client_commercial_document_bundle` projects. `proposalId` and
+ *  `partSet` were on this type and on no payload: the row's `part_set` is the
+ *  studio's own record of the shapes it froze and deliberately stays behind
+ *  the client edge, and the id is the document she is already reading. A type
+ *  that promises fields nothing sends is a type every reader has to distrust.
+ */
 export interface AgreementExecutionSnapshot {
-  proposalId: string;
   html: string;
-  partSet: Record<string, unknown>[];
   documentHash: string;
-  createdAt: string;
+  createdAt: string | null;
 }

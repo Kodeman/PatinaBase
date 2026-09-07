@@ -757,6 +757,12 @@ BEGIN
                          'title', 'Schedule of rates',
                          'payload', jsonb_build_object(
                            'body', 'Attached.', 'acknowledgeRequired', true)),
+      -- An attachment with nothing typed under it is still a notice the paper
+      -- names, and AttachmentLeaf draws it. It sits BEFORE the other leaf in
+      -- rail order, which is exactly what the lettering has to survive.
+      jsonb_build_object('kind', 'attachment', 'partKey', 'custom.leaf_b',
+                         'title', 'Lead-safe practices',
+                         'payload', '{}'::jsonb),
       jsonb_build_object('kind', 'clause', 'partKey', 'custom.private_note',
                          'title', 'Internal note', 'clientVisible', false,
                          'payload', jsonb_build_object('body', 'Studio eyes only.'))),
@@ -801,7 +807,27 @@ BEGIN
      AND position('Studio eyes only' IN v_html) = 0,
     'R8: a studio-only part is not on the copy she keeps';
 
-  RAISE NOTICE 'PASS 13: the copy she keeps reads as the page she signed — no key, no cent, no enum';
+  -- R37 — LEAF FOR LEAF WHAT agreement-parts-body.tsx SAID. Two things the
+  -- renderer used to lose: the closing boundary, and the attachments' place on
+  -- the page. AttachmentLeaf draws them last, below the boundary, each with a
+  -- rule and an `ATTACHMENT {letter} · {title}` eyebrow.
+  ASSERT position(
+    'This agreement authorizes design services only. Furnishings, freight, tax, installation, and purchasing require a separate named furnishings authorization.'
+    IN v_html) > 0,
+    'the copy she keeps closes with the boundary the page she signed closed with';
+  ASSERT position('ATTACHMENT A · Schedule of rates' IN v_html) > 0,
+    format('an attachment is a lettered leaf: %L', v_html);
+  ASSERT position('ATTACHMENT B · Lead-safe practices' IN v_html) > 0,
+    'the lettering runs in rail order, whatever else stands between them';
+  ASSERT position('This agreement authorizes design services only' IN v_html)
+       < position('ATTACHMENT A' IN v_html),
+    'the leaves sit below the boundary that closes the agreement';
+  ASSERT position('<h2>Schedule of rates</h2>' IN v_html) = 0,
+    'an attachment is not another section of the body';
+  ASSERT position('<h2>' IN v_html) < position('ATTACHMENT A' IN v_html),
+    'every section is drawn before the first leaf';
+
+  RAISE NOTICE 'PASS 13: the copy she keeps reads as the page she signed — no key, no cent, no enum, and the leaves sit where she saw them';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -1158,11 +1184,17 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- (17) R34 — THE ADDENDUM'S WHY REACHES THE HOMEOWNER. The composer tells the
---      designer "your client reads it beside the change", and until this
---      ruling that was not true of any surface: the line went into the
---      studio's change log and stopped there. It now reaches the door and the
---      copy she keeps, and nothing else about the log goes with it.
+-- (17) P7 — copy_agreement_parts_from_authority, and R34's why.
+--
+--      P7 is the whole backend of composing an addendum from the authority the
+--      studio is already working under, and it shipped with no test at all: a
+--      kind guard, a draft guard, a project-binding guard, the read of the
+--      active authority, verbatim ordering, and a re-run of the projection and
+--      the event log, none of them asserted anywhere.
+--
+--      R34 rides with it. The composer tells the designer "your client reads
+--      it beside the change", and until this ruling that was true of no
+--      surface: the line went into the studio's change log and stopped there.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 DO $$
@@ -1173,6 +1205,9 @@ DECLARE
   v_copied integer;
   v_bundle jsonb;
   v_html text;
+  v_titles text[];
+  v_terms public.proposal_service_terms%ROWTYPE;
+  v_refused boolean;
   v_why CONSTANT text := 'Added the study to the scope';
 BEGIN
   SELECT project_id INTO v_project_id FROM public.proposals
@@ -1186,9 +1221,47 @@ BEGIN
   ASSERT v_addendum IS NOT NULL,
     format('the addendum must be created, got %s', v_created);
 
+  -- An agreement is not an addendum, and the RPC says so before it copies.
+  v_refused := false;
+  BEGIN
+    PERFORM public.copy_agreement_parts_from_authority(
+      'a7300000-0000-4000-8000-000000000002', v_why);
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN v_refused := true;
+  END;
+  ASSERT v_refused, 'only a service_addendum composes from the authority';
+
   v_copied := public.copy_agreement_parts_from_authority(v_addendum, v_why);
-  ASSERT v_copied > 0,
-    format('the addendum must carry the authority''s parts, got %s', v_copied);
+  ASSERT v_copied = 4,
+    format('the addendum must carry the authority''s four parts, got %s', v_copied);
+
+  -- Verbatim, and in the order the executed paper carried them.
+  SELECT array_agg(ap.title ORDER BY ap.position, ap.id)
+  INTO v_titles FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = v_addendum;
+  ASSERT v_titles = ARRAY['Services', 'Per-phase fee', 'Retainer', 'Internal note'],
+    format('the parts arrive in the executed paper''s own order, got %s', v_titles);
+
+  -- The projection runs on the way in, so the addendum bills the way the
+  -- agreement it amends bills.
+  SELECT * INTO v_terms FROM public.proposal_service_terms
+  WHERE proposal_id = v_addendum;
+  ASSERT v_terms.fee_basis = 'per_phase'
+     AND v_terms.fee_amount_cents = 1100000
+     AND jsonb_array_length(v_terms.fee_schedule) = 3
+     AND v_terms.retainer_credit_rule = 'non_refundable',
+    format('the addendum''s money row must carry the copied fee, got %L / %s / %L',
+           v_terms.fee_basis, v_terms.fee_amount_cents, v_terms.retainer_credit_rule);
+
+  -- P8 — every copied part is an addition, and each one carries the why and
+  -- the hand that wrote it.
+  ASSERT (SELECT count(*) FROM public.agreement_part_events
+          WHERE proposal_id = v_addendum AND action = 'added') = 4,
+    'each copied part is recorded as an addition';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.agreement_part_events
+    WHERE proposal_id = v_addendum
+      AND (why IS DISTINCT FROM v_why OR actor_name IS DISTINCT FROM 'Marguerite')),
+    'every event carries the designer''s why and her first name';
 
   -- The client's bundle opens at send, so the addendum has to leave draft
   -- before she has anything to read.
@@ -1218,7 +1291,17 @@ BEGIN
   ASSERT position(v_why IN v_html) < position('<h2>' IN v_html),
     'the why sits above the change, which is the order she reads it in';
 
-  RAISE NOTICE 'PASS 17: R34 — the addendum''s why reaches the door and the keepsake, and the log does not';
+  -- And once it has left draft, the act cannot be run again over it.
+  v_refused := false;
+  BEGIN
+    PERFORM pg_temp.assume_role('a7000000-0000-4000-8000-000000000001');
+    PERFORM public.copy_agreement_parts_from_authority(v_addendum, v_why);
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN v_refused := true;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_refused, 'R6 — a sent addendum is frozen, and this door is closed too';
+
+  RAISE NOTICE 'PASS 17: P7 copies the authority verbatim and projects it, and R34''s why reaches the door and the keepsake';
 END $$;
 
 ROLLBACK;

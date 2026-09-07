@@ -1005,13 +1005,18 @@ INSERT INTO public.agreement_templates (
       'payload', jsonb_build_object('items', jsonb_build_array(
         jsonb_build_object('text', 'Selection schedules'),
         jsonb_build_object('text', 'Purchase orders and tracking')))),
+    -- R37/R19 — `patina.deposit` is ONE key with ONE kind everywhere. It was
+    -- schedule/procurement in patina.design_services and a clause here, so the
+    -- same key meant two different things depending on which Template a studio
+    -- happened to start from, and the projection reads a deposit by shape. The
+    -- deposit figure keeps the standard key; the prose beside it gets its own.
     jsonb_build_object(
-      'partKey', 'patina.procurement_terms', 'kind', 'schedule', 'variant', 'procurement',
-      'title', 'Procurement terms', 'required', false, 'clientVisible', true,
+      'partKey', 'patina.deposit', 'kind', 'schedule', 'variant', 'procurement',
+      'title', 'Furnishings deposit', 'required', false, 'clientVisible', true,
       'payload', jsonb_build_object('depositPercent', NULL)),
     jsonb_build_object(
-      'partKey', 'patina.deposit', 'kind', 'clause', 'variant', NULL,
-      'title', 'Deposit', 'required', false, 'clientVisible', true,
+      'partKey', 'patina.deposit_terms', 'kind', 'clause', 'variant', NULL,
+      'title', 'Deposit terms', 'required', false, 'clientVisible', true,
       'payload', jsonb_build_object('body',
         'Each furnishings authorization names its own deposit and is signed separately.')),
     jsonb_build_object(
