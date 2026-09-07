@@ -73,6 +73,37 @@ branch has therefore been re-merged onto the current `origin/main` tip
 
 ---
 
+## Close-out fix lane reset — 2026-09-07
+
+**The close-out fix lane (R22–R29) took the stack twice, and owns it now.**
+Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration`,
+branch `agreement/w1-integration`, head at the start
+`f1b0c31f16b1228de24cac55078b96a2a03538ba`.
+
+The rulings changed `supabase/migrations/00575_agreement_parts.sql` (R22's fee
+predicate and its four call sites, R25's `composed` key on the client bundle,
+R28's seeding rule) and `supabase/seed/the-client-page.sql` (R26's composed
+fixture), so the stack HAD to be reset — an unreset stack would have carried
+the pre-R22 bodies while the file on disk said otherwise, exactly the drift the
+round-2 entry above warns about.
+
+- **Reset 1** (mid-lane, to validate the edits):
+  `supabase db reset --workdir <this worktree>` → "Finished supabase db reset on
+  branch main", head `00575 / 00574 / 00573`.
+- **Reset 2** (the gate run, at the final tree): same command, same result. The
+  composed fixture was probed out of the database rather than inferred —
+  `proposal_agreement_parts` for `b0000000-…cb01` returns the seven parts in
+  position order, the proposal reads `accepted / executed / design_services`,
+  and `get_client_commercial_document_bundle` answers
+  `composed: true` with those seven titles.
+- `python3 scripts/generate-legacy-grants.py` was re-run (R22 adds one REVOKE);
+  the regenerated seed is committed and replays 2233 statements.
+- **No other agent may reset, seed, stop, or start the shared stack.** The
+  stack is left running at head `00575`, now carrying the close-out bodies and
+  the composed agreement the client e2e reads.
+
+---
+
 This notice exists per the parallel-work discipline in
 `.claude/skills/patina-parallel-work` and the shared-stack lesson in project
 memory (`feedback_shared_local_supabase_stack_last_reset_wins.md`): concurrent

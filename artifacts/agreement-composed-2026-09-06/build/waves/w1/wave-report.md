@@ -368,3 +368,105 @@ studio-defaults half and open for the agreement-parts hooks (the package's
 `use-agreement-parts.ts` is still unimported — the ruled item named the
 studio-defaults layer only), **M3**, client **F-1/F-2**, **F-4**, and designer
 **N1**.
+
+---
+
+## 10 · Close-out fixes (R22–R29)
+
+Added by the close-out fix lane on this same branch, after the re-gate
+(`integration-regate.md`). Head at the start
+`f1b0c31f16b1228de24cac55078b96a2a03538ba`; head now `3aab2a54f`.
+**18 product files, +989 / −196** (excluding these program docs).
+
+**Every advisory §9.3 left open is closed, and so is R17(b)'s room half** —
+the one finding the re-gate called NOT gate-clean. Nothing is carried.
+
+### 10.1 · What each ruling moved
+
+| Ruling | Commit | What moved |
+|---|---|---|
+| **R22** (backend M1-new) | `f5592e389` | R4's floor had two halves and 00575 implemented one. `_agreement_fee_unnamed` is the sibling predicate, asked at the four places `_agreement_floor_unmet` is asked — the save, the send, the signature, the paper door. A composed `design_services`/`service_addendum` document must carry at least one **client-visible** schedule part in the fee set (`rate_card`, `flat`, `per_phase`) with a value actually set. Reviewer probes **R3** (two clause parts, no money at all) and **Q5** (a rate card and a ceiling both marked studio-only) are pinned as SQL case 36; both used to save AND send. A document with no parts is never asked, so the flag-off contract is unmoved. |
+| **R22** (designer F4) | `756749e90` | The readiness panel counted `ceiling` among the fee variants, so "we will not exceed $24,000" passed a floor that asks what the work costs. `FEE_VARIANTS` is now the DB's three, and the refusal sentence is the panel's own: *"This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee."* |
+| **R23** (backend M2) | `b102f2038` | The composer imports `useSaveAgreementParts` / `useMaterializeStandardParts` from `@patina/supabase`; the app-local `agreementPartsKey`, `toPartPayload`, `settleAgreementParts` and both hooks are deleted. No cache behaviour changes — the package hooks invalidate `commercialKeys.all`, which is the prefix of this app's own bundle key. The bundle read stays app-local: it is this app's composite and it fails soft on a MISSING RELATION, which the package's plain table read does not. |
+| **R24** (backend M3) | `3800e3814`, `3aab2a54f` | `discard_agreement_parts` had existed since round 4 with no caller. The composed room now offers **"Return to the seven facets"** (draft only, studio side) and the room above renders the seven facets for the rest of the visit; opening it again still materializes, as ruled. And the flag-off room reads the composition: it prints one plain sentence and **holds Save and Review & send** before the co-member retypes seven facets — which also closes the re-gate's **F1** (R17(b)'s room half). Both sentences are `AGREEMENT_PART_COPY`. |
+| **R25** (client F-1/F-2) | `2d247dee3` | The bundle emits `composed`, read over EVERY part rather than the client-visible array beside it: an agreement whose every part the studio hid arrives with `parts: []` and must still render as composed. The retired early-return answers `false`. The client shell already branched on the key; it had no producer. |
+| **R26** (client F-4) | `1e50b9ec4` | `the-client-page.sql` lays the solo client's executed agreement down composed — draft, then terms + rates, then seven parts, then the promotion under the capability GUCs, in the order the guards insist on. The e2e assertion is unconditional and names the seven titles in position order. |
+| **R27** (client F-5/F3) | `48987b5a0` | The homeowner's page reads every shared sentence from `@patina/types` instead of hard-coding it (the carry-fix note claimed this; only the designer did it). And the same body contract on both surfaces: a leaf that draws nothing takes its section with it, so the preview no longer shows an "Exclusions" heading the signed page does not have. The test that pinned the old behaviour is flipped and split. |
+| **R28** (client F-6) | `9c25b2ec5` | Beyond the deposit, `materialize_standard_parts` invented a retainer of 0 and a cadence of `'monthly'` for a draft with no terms row — and the cadence printed "Monthly" on the page the homeowner signs. Every seeded money part now comes from a value somebody set, or is left unset. The projection still falls to 0 and 'monthly' when it writes the money row. |
+| **R29** (designer N1) | `62fc9210e` | The duplicate's sentence is a blocker ON a part, and the panel prints only the blockers that belong to no part — so the rail marked two rows and the room never said why, while Save still offered an act the database refuses with 23514. The sentence is now printed, built in one place, and the duplicate is the one blocker that holds Save and Review (every other blocker still saves — a draft is allowed to be unfinished). Two cases pin both ends of the two-click path. |
+
+### 10.2 · Deviations from the ruling text, and why
+
+- **R22's "the same three doors"** — `_agreement_floor_unmet` is asked at four
+  places, not three: send, sign, the paper issue (which is the countersign door
+  for an agreement executed on paper) and the save. The fee predicate is asked
+  at all four, beside it. Countersign proper is not asked: parts freeze when the
+  document leaves draft, so a document that passed send and sign cannot arrive
+  there with the floor unmet, and a refusal at that door could only strand a
+  client-signed agreement.
+- **R28's "the part is unset and prints 'Not yet set'"** — for the retainer that
+  is already true through R21 (zero is unwritten on both surfaces), so the
+  change is to stop the seeder INVENTING a figure where the terms row says
+  nothing at all, not to re-read a stored 0. `billing_cadence` has no unset
+  state on the column; the fabricated `'monthly'` literal is what was removed.
+  The seeded ceiling was already NULL-when-unset and is untouched.
+- **R26's "a seed file creates one composed agreement"** — the composed
+  agreement is created in `the-client-page.sql`, the file that already creates
+  the fixture the e2e reads, rather than in a new file beside it. Parts can only
+  be written while the proposal is a draft, so retro-composing an executed
+  agreement from a later seed is not possible; and a second design-services
+  document on the same project would have made
+  `previously-line … .filter(/design services/i).first()` ambiguous.
+
+### 10.3 · Gates — every one re-run at `3aab2a54f`
+
+| Gate | Command | Result |
+|---|---|---|
+| Stack | `supabase db reset --workdir <worktree>` (unsandboxed) | "Finished supabase db reset on branch main"; `schema_migrations` → **00575 / 00574 / 00573**. See `stack-notice.md`. |
+| SQL suite | `./scripts/run-sql-tests.sh` (unsandboxed) | **total 162 · green 141 · expected-fail 21 · unexpected-fail 0 · effective-green 162/162** — identical to the re-gate's baseline |
+| — parts | `psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_parts_test.sql` | **rc=0** — PASS 1–38, including the new **36** (R22, probes R3 and Q5 at the save, send and paper doors), **37** (R28) and **38** (R25) |
+| — projection | `… agreement_parts_projection_test.sql` | **rc=0** — PASS 1–9 |
+| — hardening contract | `… edge_api/public_sd_hardening_contract_test.sql` | **rc=0**. No pinned body was touched — the pinned set is the two `_execute_*`, `_countersign_design_services_agreement_impl`, `_prepare_spec_book_issue_00403`, `_publish_project_review_00448_impl` and `guard_commercial_signature_insert`, none of which this lane redefines — so **no hash was re-pinned** |
+| ACL seed | `python3 scripts/generate-legacy-grants.py` | R22 adds one REVOKE; regenerated (baseline + **2233** replayed statements) and committed |
+| Generated types | `SUPABASE_DB_URL=… pnpm db:generate` then `git diff --exit-code packages/supabase/src/database.types.ts` | **rc=0 — in sync** (`_agreement_fee_unnamed` is the only addition) |
+| `@patina/types` | `pnpm exec turbo build --filter=@patina/types --force` | **1 successful, 1 total, uncached** |
+| `@patina/types` | `type-check` | clean |
+| `@patina/supabase` | `type-check` | clean |
+| `@patina/supabase` | `test` (vitest) | **87 files · 1068 passed \| 12 skipped** |
+| designer-portal | `type-check` — the real gate | clean |
+| designer-portal | **full** `test` (jest) | **523 suites · 6332 tests · 2 snapshots — all passed** (the re-gate's 6326, +6 from this lane) |
+| client-portal | `type-check` — the real gate | clean |
+| client-portal | `test:coverage` (floor 70/60/70/70) | **129 suites · 1995 tests passed** · All files **73.97 / 69.29 / 74.01 / 76.28** — over floor |
+| admin-portal | `build` (unsandboxed, `.next/types` removed first) | **✓ Compiled successfully in 18.3s**, 137/137 static pages, full route table |
+
+Flag-off byte-identity holds: the committed seven-facet snapshot
+(`__snapshots__/service-agreement-drafting-room.test.tsx.snap`) is unchanged and
+passes, and the room's new notice renders only when the bundle carries parts —
+`composed={!returnedToFacets && (bundle.data.parts?.length ?? 0) > 0}`, which is
+`false` for every document that exists today.
+
+### 10.4 · Deploy set, unchanged in shape
+
+Still one migration (`supabase/migrations/00575_agreement_parts.sql`, edited in
+place and still unapplied on Strata — its applied head is `00574`), no edge
+functions (`git diff --name-only origin/main HEAD -- supabase/functions/` is
+empty), and the two portals. §6's table stands. `supabase/seed/**` never runs on
+prod, so R26's fixture is local-only.
+
+### 10.5 · What this lane did NOT do
+
+- Did not push. No `supabase db push`, no `supabase functions deploy`, no
+  `wrangler`. Strata was not contacted.
+- Did not run the client Playwright suite or the designer agreement e2e. R26's
+  fixture is proved by probing the database directly (the seven parts, the
+  proposal's state, and `get_client_commercial_document_bundle` answering
+  `composed: true` with those seven titles) — the e2e itself was not executed,
+  and the four pre-existing e2e reds recorded in R21 are untouched.
+- Did not run designer-portal `lint` (the two errors ruled pre-existing in R21
+  are unchanged; neither sits in a file this lane touched).
+- Did not touch `.claude/`, `.agents/`, hooks, settings, or any `.env` file, and
+  did not create or remove a worktree.
+- Did not resolve the main-backlog items R21 records:
+  `threshold.spec.ts:221` seed accumulation, `:158` timezone fragility, the two
+  designer-portal lint errors, `pnpm db:generate`'s destructive redirect (F5,
+  hit again in this lane and recovered with `git checkout --`).
