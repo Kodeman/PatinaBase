@@ -10746,4 +10746,12 @@ Consequences recorded so nobody re-opens them:
 - **Regeneration is a designer act with one confirmation** — "The old link stops working. Anyone who has it will see a dead page." — and the RPC refuses while a checkout attempt is live, which the folio renders as "A payment is in progress on this invoice. Try again later."
 - **K9 — settle-in-place is retired separately.** `/pay` ships additive: the letterbox's settlement and `/invoices/[id]/print` stay live and working while `/pay` links are new in the wild. Their retirement is W3b, a later deploy after the functions have soaked, so every step rolls back alone.
 
-*Entries add: R137 · last id = R137*
+### R138 · R85 does not bind the Agreement Library — 2026-09-06
+
+**Asked in `artifacts/agreement-composed-2026-09-06/`, ruled by Kody as recommended (R1).** R85 (`DECISIONS.md:2680`) retired *proposal templates* because the Discovery-seeded path covers the seeded case. The table it retired, `proposal_templates` (`00063_proposal_system_v2.sql:12-22`), is **per-user**: its RLS reads own-or-system rows (`:31-32`), so two designers in one studio never saw each other's. The Agreement Library is a different object — **studio-scoped, namespaced, seeded by Patina, and it feeds the same Discovery-seeded draft rather than replacing it.** R85 stands for proposals; it does not bind agreements.
+
+What that buys, and its fence. `agreement_templates` and `studio_agreement_parts` take the `board_templates` shape (`00408:18-50`): `kind` seeded|studio, an owner-shape CHECK, `patina.*` / `studio.*` key namespaces, seeded rows immutable except under `app.allow_patina_template_mutation`, and INSERT that is RPC-only so no authenticated caller can forge an unsanitized part. One deliberate divergence: write policies use `is_org_admin_or_owner`, not `is_active_org_member` — **owners and admins edit the Library, every active member composes from it** (R3). Scope is the studio and never the person; "mine" is a filter, not a scope (R2). The words are **Agreement · Part · Library · Template · Addendum** — "clause library" and "contract builder" stay out of the studio's face (R7).
+
+Nothing here reopens `proposal_templates`. Its two surviving call sites in `packages/supabase/src/hooks/use-proposals.ts` (`:600`, `:1485`) are untouched, and no path materializes a proposal template into an agreement.
+
+*Entries add: R138 · last id = R138*
