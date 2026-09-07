@@ -146,6 +146,7 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  useAgreementPartEvents: () => ({ data: [], isLoading: false }),
 }));
 
 jest.mock("../../../../commercial/service-agreement-preview", () => ({

@@ -59,6 +59,7 @@ import { PartsRail } from "./parts-rail";
 import { AddPartSheet, type AddPartChoice } from "./add-part-sheet";
 import { TemplatePickerSheet } from "./template-picker-sheet";
 import { SaveAsTemplateAction } from "./save-as-template-action";
+import { PartHistoryStrip } from "./part-history-strip";
 import {
   assessAgreementReadiness,
   BLANK_ROLE_BLOCKER,
@@ -587,15 +588,28 @@ export function AgreementComposer({
             }
           />
 
-          <div>
+          {/* The history strip needs a rhythm under the editor; flag off there
+              is no strip, and the column stays the bare div Wave 1 shipped. */}
+          <div className={libraryOn ? "space-y-6" : undefined}>
             {selected ? (
-              <PartEditor
-                key={selected.id}
-                part={selected}
-                onChange={(payload) => changePayload(selected.id, payload)}
-                readOnly={readOnly}
-                libraryOn={libraryOn}
-              />
+              <>
+                <PartEditor
+                  key={selected.id}
+                  part={selected}
+                  onChange={(payload) => changePayload(selected.id, payload)}
+                  readOnly={readOnly}
+                  libraryOn={libraryOn}
+                />
+                {/* P8 — under the open part, and only under a part that has a
+                    history. A part nobody has touched draws nothing. */}
+                {libraryOn && (
+                  <PartHistoryStrip
+                    key={`history-${selected.partKey}`}
+                    proposalId={proposalId}
+                    partKey={selected.partKey}
+                  />
+                )}
+              </>
             ) : (
               <p className="text-[12.5px] italic text-[var(--text-muted)]">
                 Pick a part on the left, or add one.

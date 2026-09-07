@@ -110,6 +110,7 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  useAgreementPartEvents: () => ({ data: [], isLoading: false }),
 }));
 
 // Fail-closed, and this suite pins Wave 1's room: `agreement-library` off.
