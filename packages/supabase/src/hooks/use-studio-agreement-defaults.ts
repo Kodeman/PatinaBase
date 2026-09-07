@@ -109,8 +109,14 @@ export interface UpdateStudioAgreementDefaultsInput {
 
 /**
  * Upserts a studio's agreement defaults on the `studio_id` primary key. RLS
- * admits only an owner or admin (00575, R3); a plain member's write reaches
- * no rows rather than erroring, so the caller checks the returned row.
+ * admits only an owner or admin (00575, R3), and a plain member's write THROWS
+ * rather than reaching no rows: an insert violates the policy (42501) and an
+ * update matches nothing, which `.select().single()` turns into PGRST116.
+ * Either way the mutation rejects and the card shows its error.
+ *
+ * `updatedBy` is the caller's own user id (DR7). The column is NULL with no
+ * default and no trigger, so a write that omits it makes "who last changed the
+ * studio's defaults" permanently unanswerable.
  */
 export function useUpdateStudioAgreementDefaults() {
   const queryClient = useQueryClient();

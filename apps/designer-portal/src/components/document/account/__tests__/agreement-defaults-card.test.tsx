@@ -4,15 +4,15 @@ import { AccountStudioPage } from "../account-studio-page";
 const mockUpdateAgreementDefaults = jest.fn();
 let memberRole = "owner";
 let agreementDefaultsRow: any = {
-  studio_id: "studio-1",
-  rate_card: [
+  studioId: "studio-1",
+  rateCard: [
     { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 0 },
   ],
-  deposit_percent: 50,
+  depositPercent: 50,
   cadence: "monthly",
-  retainer_credit_rule: "credited",
-  default_exclusions: ["Construction labor"],
-  updated_by: null,
+  retainerCreditRule: "credited",
+  defaultExclusions: ["Construction labor"],
+  updatedBy: null,
 };
 
 jest.mock("@/hooks/use-auth", () => ({
@@ -29,7 +29,10 @@ jest.mock("@/hooks/use-feature-flag", () => ({
   }),
 }));
 
-jest.mock("@/hooks/use-studio-agreement-defaults", () => ({
+// DR21 — one data layer. The card reads and writes through
+// `@patina/supabase`'s hooks, so they are stubbed in that factory rather than
+// in an app-local one.
+jest.mock("@patina/supabase", () => ({
   useStudioAgreementDefaults: () => ({ data: agreementDefaultsRow }),
   useUpdateStudioAgreementDefaults: () => ({
     mutate: mockUpdateAgreementDefaults,
@@ -37,9 +40,6 @@ jest.mock("@/hooks/use-studio-agreement-defaults", () => ({
     isError: false,
     error: null,
   }),
-}));
-
-jest.mock("@patina/supabase", () => ({
   useOrganizations: () => ({
     data: [
       {
@@ -69,7 +69,7 @@ jest.mock("@patina/supabase", () => ({
   useStudioContacts: () => ({ data: [] }),
   useStudioBillingSettings: () => ({
     data: {
-      studio_id: "studio-1",
+      studioId: "studio-1",
       card_surcharge_bps: 300,
       check_remit_to: null,
       created_at: "",
@@ -125,15 +125,15 @@ beforeEach(() => {
   memberRole = "owner";
   agreementPartsOn = true;
   agreementDefaultsRow = {
-    studio_id: "studio-1",
-    rate_card: [
+    studioId: "studio-1",
+    rateCard: [
       { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 0 },
     ],
-    deposit_percent: 50,
+    depositPercent: 50,
     cadence: "monthly",
-    retainer_credit_rule: "credited",
-    default_exclusions: ["Construction labor"],
-    updated_by: null,
+    retainerCreditRule: "credited",
+    defaultExclusions: ["Construction labor"],
+    updatedBy: null,
   };
 });
 
@@ -242,11 +242,15 @@ describe("Account · Studio · Agreement defaults", () => {
       cadence: "monthly",
       retainerCreditRule: "credited",
       defaultExclusions: ["Construction labor", "Freight"],
+      // DR7 — the write names who made it. `updated_by` is NULL with no
+      // default and no trigger (00575), so a save that omits it makes "who
+      // last changed the studio's defaults" permanently unanswerable.
+      updatedBy: "designer-1",
     });
   });
 
   it("keeps an unset deposit unset rather than saving a zero nobody chose", async () => {
-    agreementDefaultsRow = { ...agreementDefaultsRow, deposit_percent: null };
+    agreementDefaultsRow = { ...agreementDefaultsRow, depositPercent: null };
     render(<AccountStudioPage />);
     expect(
       screen.getByText(/No deposit set — a new agreement leaves it open/),

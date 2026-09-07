@@ -30,15 +30,13 @@ import {
   useStudioContacts,
   useStudioBillingSettings,
   useUpdateStudioBillingSettings,
+  useStudioAgreementDefaults,
+  useUpdateStudioAgreementDefaults,
   type MemberRole,
   type OrganizationMemberWithProfile,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import {
-  useStudioAgreementDefaults,
-  useUpdateStudioAgreementDefaults,
-} from '@/hooks/use-studio-agreement-defaults';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
 import { monogramOf } from '@/lib/document/account-identity';
 import { clampInvitableRole, friendlyInviteError, isInviteExpired } from '@/lib/document/invite-status';
@@ -270,17 +268,17 @@ export function AccountStudioPage() {
   useEffect(() => {
     if (!agreementDefaults) return;
     setAgreementForm({
-      rateCard: agreementDefaults.rate_card,
+      rateCard: agreementDefaults.rateCard,
       depositPercent:
-        agreementDefaults.deposit_percent === null
+        agreementDefaults.depositPercent === null
           ? ''
-          : String(agreementDefaults.deposit_percent),
+          : String(agreementDefaults.depositPercent),
       cadence: agreementDefaults.cadence,
-      retainerCreditRule: agreementDefaults.retainer_credit_rule,
-      defaultExclusions: agreementDefaults.default_exclusions.join('\n'),
+      retainerCreditRule: agreementDefaults.retainerCreditRule,
+      defaultExclusions: agreementDefaults.defaultExclusions.join('\n'),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agreementDefaults?.studio_id]);
+  }, [agreementDefaults?.studioId]);
 
   const myRole = studio?.membership.role ?? null;
   const canManage = myRole === 'owner' || myRole === 'admin';
@@ -439,6 +437,10 @@ export function AccountStudioPage() {
         cadence: agreementForm.cadence,
         retainerCreditRule: agreementForm.retainerCreditRule,
         defaultExclusions,
+        // DR7 — who last changed the studio's defaults. The column is NULL
+        // with no default and no trigger (00575), so a write that omits it
+        // makes the question permanently unanswerable.
+        updatedBy: user?.id ?? null,
       },
       {
         onSuccess: () => {
@@ -606,16 +608,16 @@ export function AccountStudioPage() {
   const agreementDefaultsDirty =
     !!agreementDefaults &&
     (JSON.stringify(agreementFormRateCard) !==
-      JSON.stringify(agreementDefaults.rate_card) ||
-      agreementDepositPercent !== agreementDefaults.deposit_percent ||
+      JSON.stringify(agreementDefaults.rateCard) ||
+      agreementDepositPercent !== agreementDefaults.depositPercent ||
       agreementForm.cadence !== agreementDefaults.cadence ||
       agreementForm.retainerCreditRule !==
-        agreementDefaults.retainer_credit_rule ||
+        agreementDefaults.retainerCreditRule ||
       agreementForm.defaultExclusions
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
-        .join('\n') !== agreementDefaults.default_exclusions.join('\n'));
+        .join('\n') !== agreementDefaults.defaultExclusions.join('\n'));
   const addressLines = [
     asStr(currentAddress.line1),
     asStr(currentAddress.line2),
@@ -1331,8 +1333,8 @@ export function AccountStudioPage() {
               <div>
                 <dt className={LABEL}>Rate card</dt>
                 <dd className="text-[13px] text-[var(--color-charcoal)]">
-                  {agreementDefaults && agreementDefaults.rate_card.length > 0 ? (
-                    agreementDefaults.rate_card.map((role) => (
+                  {agreementDefaults && agreementDefaults.rateCard.length > 0 ? (
+                    agreementDefaults.rateCard.map((role) => (
                       <div key={role.roleName}>
                         {role.roleName} · ${agreementDollars(role.hourlyRateCents)}
                         /hr
@@ -1346,11 +1348,11 @@ export function AccountStudioPage() {
               <div>
                 <dt className={LABEL}>Furnishings deposit</dt>
                 <dd className="text-[13px] text-[var(--color-charcoal)]">
-                  {agreementDefaults?.deposit_percent === null ||
+                  {agreementDefaults?.depositPercent === null ||
                   agreementDefaults === undefined ? (
                     <span className="text-[var(--color-aged-oak)]">Not set</span>
                   ) : (
-                    `${agreementDefaults.deposit_percent}%`
+                    `${agreementDefaults.depositPercent}%`
                   )}
                 </dd>
               </div>
@@ -1363,15 +1365,15 @@ export function AccountStudioPage() {
               <div>
                 <dt className={LABEL}>Retainer credit rule</dt>
                 <dd className="text-[13px] text-[var(--color-charcoal)]">
-                  {agreementDefaults?.retainer_credit_rule ?? '—'}
+                  {agreementDefaults?.retainerCreditRule ?? '—'}
                 </dd>
               </div>
               <div>
                 <dt className={LABEL}>Default exclusions</dt>
                 <dd className="whitespace-pre-line text-[13px] text-[var(--color-charcoal)]">
                   {agreementDefaults &&
-                  agreementDefaults.default_exclusions.length > 0 ? (
-                    agreementDefaults.default_exclusions.join('\n')
+                  agreementDefaults.defaultExclusions.length > 0 ? (
+                    agreementDefaults.defaultExclusions.join('\n')
                   ) : (
                     <span className="text-[var(--color-aged-oak)]">Not set</span>
                   )}
