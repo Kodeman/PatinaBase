@@ -42,7 +42,7 @@ import {
 } from '@/hooks/use-project-correspondence';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
-import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
+import { commercialSummaryFromProposal, isOriginKind } from '@/lib/commercial-documents';
 import { standsUnfiled } from '@/lib/threshold/adopted-house';
 import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import {
@@ -446,11 +446,15 @@ export function Threshold({
     // `?proposal=` folded to a page that did not draw it. It stands on every
     // house's doorstep instead, so it is reachable from wherever she is.
     //
-    // `design_services` only, exactly as R30 scopes it: an addendum always
-    // binds to a project, and a furnishings authorization is minted from the
-    // schedule of one — neither is a paper that comes before a house.
+    // `ORIGIN_DOCUMENT_KINDS` only (lib/commercial-documents.ts): an addendum
+    // always binds to a project, and a furnishings authorization is minted
+    // from the schedule of one — neither is a paper that comes before a
+    // house. A design-build prime is, so Wave 3 put it in that list; without
+    // it, a household that already has a house and is sent a turnkey prime
+    // would have it filtered off every door she owns, which is the R30 defect
+    // exactly.
     const houseless =
-      commercial.projectId === null && commercial.kind === 'design_services';
+      commercial.projectId === null && isOriginKind(commercial.kind);
     if (!houseless && commercial.projectId !== projectId) return [];
     return [
       {

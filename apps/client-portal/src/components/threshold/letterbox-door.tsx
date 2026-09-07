@@ -22,6 +22,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import {
   commercialSummaryFromProposal,
+  isOriginKind,
   type CommercialDocumentBundle,
 } from '@/lib/commercial-documents';
 import { useNamedInvoice } from '@/lib/threshold/checkout-return';
@@ -255,8 +256,11 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   );
 
   // ── the agreements waiting for her name ────────────────────────────────────
-  // An ORIGIN agreement is a pending design-services document bound to no
-  // project. `service_addendum` is deliberately absent: an addendum amends a
+  // An ORIGIN agreement is a pending document bound to no project —
+  // design-services, and from Wave 3 a design-build prime, which is
+  // project-less through her signature for exactly the same reason.
+  // `ORIGIN_DOCUMENT_KINDS` (lib/commercial-documents.ts) is the one list, and
+  // `service_addendum` is deliberately absent from it: an addendum amends a
   // standing engagement and therefore always has a house to be read in.
   //
   // The summary's projectId, never the raw column — `list_client_proposals`
@@ -273,7 +277,7 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
         // payload entirely (jsonb_strip_nulls), so the summary's projectId is
         // `undefined` on exactly the papers this door exists for.
         const boundTo = commercial.projectId ?? null;
-        if (boundTo !== null || commercial.kind !== 'design_services') return [];
+        if (boundTo !== null || !isOriginKind(commercial.kind)) return [];
         const paper: DoorProposal = {
           id: proposal.id,
           title: proposal.title,
@@ -299,13 +303,13 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
     () =>
       acceptedProposals.flatMap<KeptRecord>((proposal) => {
         const commercial = commercialSummaryFromProposal(proposal);
-        if ((commercial.projectId ?? null) !== null || commercial.kind !== 'design_services') {
+        if ((commercial.projectId ?? null) !== null || !isOriginKind(commercial.kind)) {
           return [];
         }
         return [
           {
             proposalId: proposal.id,
-            label: `${KIND_LABEL.design_services ?? 'Document'} · ${proposal.title}`,
+            label: `${KIND_LABEL[commercial.kind] ?? 'Document'} · ${proposal.title}`,
             // `executedAt` is the COUNTERSIGNATURE's date, and a countersigned
             // paper has already left this door — so on every record this door
             // can draw it is null, and the line would be permanently undated.

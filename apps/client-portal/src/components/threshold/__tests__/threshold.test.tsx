@@ -1132,6 +1132,31 @@ describe('Threshold — the doorstep’s own asks', () => {
       expect(container.querySelector('#door-door-prop-addendum')).toBeNull();
       expect(container.querySelector('#door')).toBeNull();
     });
+
+    /* Wave 3. A turnkey prime is project-less through her signature for the
+       same reason a design-services agreement is — the project appears at
+       countersignature — so it is a paper that comes before a house too, and
+       the R30 defect would otherwise repeat itself on the one paper that
+       prices a whole job. */
+    it('stands the turnkey prime on the doorstep too', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...ORIGIN_AGREEMENT,
+            id: 'prop-turnkey',
+            title: 'Halvorsen kitchen and mudroom',
+            document_kind: 'design_build',
+          } as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door-door-prop-turnkey')).not.toBeNull();
+      expect(screen.getByTestId('door-houseless')).toBeInTheDocument();
+    });
   });
 });
 
@@ -2455,6 +2480,78 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     // own idiom and not a double render. The next visit settles to the line
     // alone (the test below).
     expect(screen.getByTestId('previously-line')).toBeInTheDocument();
+  });
+
+  /* ── WAVE 3 · THE TURNKEY PRIME IS AN ORIGIN AGREEMENT TOO ───────────────
+     `proposals.project_id` is NULL on a design-build prime through her
+     signature — the project is minted at countersignature (walk steps 12 and
+     15) — so it arrives at a household with no house exactly as a
+     design-services agreement does. Left out of `ORIGIN_DOCUMENT_KINDS` it
+     would have been drawn by no door at all: the household's very first
+     paper, priced at $84,134, reachable from nowhere. This is the R30 defect
+     on the largest paper in the program, and E2E-2 (which mints a
+     project-less turnkey agreement and opens `/#door`) cannot pass without
+     these two cases holding. ─────────────────────────────────────────────── */
+  const TURNKEY_ORIGIN = {
+    ...ORIGIN_AGREEMENT,
+    id: 'prop-turnkey',
+    title: 'Halvorsen kitchen and mudroom',
+    document_kind: 'design_build',
+    total_amount: 8_413_400,
+  } as unknown as Proposal;
+
+  it('stands a turnkey prime at the door, in its own words', () => {
+    proposalsMock.mockReturnValue(settled([TURNKEY_ORIGIN]));
+    bundles['prop-turnkey'] = { document: { kind: 'design_build' } };
+
+    renderDoor();
+
+    expect(screen.getByText('One agreement is waiting for you.')).toBeInTheDocument();
+    expect(
+      within(theDoor()).getByRole('heading', { name: 'Halvorsen kitchen and mudroom' }),
+    ).toBeInTheDocument();
+    // The turnkey sentence, not the design-services one and not the generic
+    // fallback — a missed branch on the signing surface looks exactly like
+    // the latter.
+    expect(
+      within(theDoor()).getByText(
+        'I agree to these design-build terms and understand my signature alone does not authorize work until the studio countersigns.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(theDoor()).getByLabelText('Type your full name')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  /* The visit after she signs (walk step 13, amended round 1). The record
+     stands, nothing says the agreement is incomplete for want of money, and
+     the deposit — project-less exactly as the prime is — is a LETTER in this
+     door's own letterbox with its own act. That is the offer's persistent
+     half; the post-signature sentence belongs to the moment of signing. */
+  it('keeps the signed turnkey record, with the deposit standing as a letter', () => {
+    proposalsMock.mockReturnValue(
+      settled([
+        {
+          ...TURNKEY_ORIGIN,
+          commercial_state: 'client_signed',
+          status: 'accepted',
+          updated_at: '2026-09-07',
+        } as unknown as Proposal,
+      ]),
+    );
+    bundles['prop-turnkey'] = { document: { kind: 'design_build' } };
+    clientInvoicesMock.mockReturnValue(
+      settled([{ ...STUDIO_INVOICE, id: 'inv-deposit', title: 'Deposit at signing' }]),
+    );
+
+    renderDoor();
+
+    const line = screen.getByTestId('previously-line');
+    expect(line).toHaveTextContent('Design-build agreement · Halvorsen kitchen and mudroom');
+    expect(within(line).getByTestId('previously-state')).toHaveTextContent('SIGNED');
+    expect(screen.getByTestId('letterbox')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    // Nothing on the page holds the record behind the money.
+    expect(screen.queryByText(/payment required/i)).not.toBeInTheDocument();
   });
 
   // Countersigning creates the project, so `/` opens the house from that point

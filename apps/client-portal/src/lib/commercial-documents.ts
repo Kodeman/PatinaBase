@@ -442,6 +442,34 @@ function resolveLegacyState(
   return projectedState === 'superseded' ? 'superseded' : legacyState;
 }
 
+/* ── THE PAPERS THAT COME BEFORE A HOUSE (R30, widened in Wave 3) ────────────
+   An ORIGIN agreement is bound to no project until the studio countersigns
+   it — countersigning is what CREATES the project (00331, 00566 "ORIGIN") —
+   so it arrives before the household has a house, and every door that reads
+   papers is project-scoped. R30 made the front door draw them anyway, for
+   `design_services`.
+
+   A design-build prime is the same kind of paper: `proposals.project_id` is
+   NULL through her signature (the Wave 3 walk's step 12 reads
+   `project_id IS NULL` at `client_signed`, and step 15 mints
+   `project_commercial_documents … is_origin = true` only at countersignature).
+   Left out of this set it would be filtered off every door she owns — the
+   exact R30 defect, on the one paper that prices a whole job.
+
+   An addendum amends a standing engagement and a furnishings authorization is
+   minted from the schedule of one: both always have a house to be read in, so
+   neither belongs here. `trade_scope` is the client's own contract with a
+   trade and likewise binds to a project. ─────────────────────────────────── */
+export const ORIGIN_DOCUMENT_KINDS: readonly CommercialDocumentKind[] = [
+  'design_services',
+  'design_build',
+];
+
+/** Whether a paper of this kind can stand on a doorstep with no house behind it. */
+export function isOriginKind(kind: CommercialDocumentKind): boolean {
+  return ORIGIN_DOCUMENT_KINDS.includes(kind);
+}
+
 /**
  * Adapts the additive commercial fields returned by list_client_proposals.
  * Legacy rows remain first-class and keep their historical status semantics.

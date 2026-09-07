@@ -173,6 +173,16 @@ export function DoorGate({
    * recorded. Null until then, null when the route could not mint the
    * invoice, and null on every kind of paper but a turnkey prime. It takes no
    * part in `ready`, in the act's `disabled`, or in any preflight.
+   *
+   * IT IS A MOMENT, NOT A FIXTURE (ruled round 1 — client-notes.md §11, walk
+   * step 13 amended). This is the visit in which she signed; on the next one
+   * the paper is a record and the deposit is a LETTER, standing in her
+   * letterbox with its own `/pay/<token>` act, which is the surface that owns
+   * money. Nothing is blocked either way, and a second "Your deposit is
+   * ready" printed permanently over a signed paper would be the same ask
+   * repeated at her. Re-minting the sentence here on a later visit would need
+   * the draw ledger to carry its invoice's id (PART 12, backend) — named in
+   * the notes rather than guessed at from a title match.
    */
   const [depositOffer, setDepositOffer] = useState<DepositOfferModel | null>(null);
   const [doorState, setDoorState] = useState<DoorState>('shut');
