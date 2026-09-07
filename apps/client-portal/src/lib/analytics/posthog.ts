@@ -75,11 +75,11 @@ export function isAnalyticsPossible(): boolean {
 // rather than folding into the generic hex one below.
 const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
 
-// /share, /rfq, /evidence, /plans and /pay all mint the same 64-char
+// /share, /rfq, /evidence, /plans, /pay and /trade all mint the same 64-char
 // lowercase-hex bearer (sha256/gen_random_bytes idiom — document_shares,
 // trade_rfq_tokens, fulfillment_mint_evidence_token, plan_transmittal_tokens,
-// invoice_links) — one generic pattern covers all five while preserving which
-// prefix gets redacted back into the URL.
+// invoice_links, trade_agreement_tokens) — one generic pattern covers all six
+// while preserving which prefix gets redacted back into the URL.
 //
 // /pay is the one that reaches a till: its token is a PERMANENT credential
 // that stays live for the invoice's life, so a raw pageview URL in PostHog
@@ -90,8 +90,14 @@ const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
 // handler with no HTML, and an HTTP redirect preserves Stripe's own Referer),
 // the asymmetry would be a trap for whoever next hrefs that path or turns the
 // hop into a page.
+//
+// /trade is the second one that is a live capability rather than a read: the
+// sub's link IS the signing credential, so anyone holding the URL can sign
+// the Trade Agreement in their name. It is also the first guest surface here
+// to mount HoldAction, whose own events carry the page URL — so the prefix
+// must be registered here as well as in middleware.ts and app-chrome.tsx.
 const HEX_BEARER_IN_URL =
-  /\/(share|rfq|evidence|plans|pay)\/(?:return\/)?[0-9a-f]{64}(?![0-9a-f])/gi;
+  /\/(share|rfq|evidence|plans|pay|trade)\/(?:return\/)?[0-9a-f]{64}(?![0-9a-f])/gi;
 
 // The till writes ids onto the address it hands back — `session_id=cs_live_…`
 // above all — and §9's property law is "no id of any kind". `redactBearerPaths`

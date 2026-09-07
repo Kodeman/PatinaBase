@@ -17,6 +17,7 @@ const rfqToken = 'b'.repeat(64);
 const evidenceToken = 'c'.repeat(64);
 const plansToken = 'd'.repeat(64);
 const payToken = 'e'.repeat(64);
+const tradeToken = 'f'.repeat(64);
 const initMock = (posthog as unknown as { init: jest.Mock }).init;
 
 describe('PostHog Field bearer privacy boundary', () => {
@@ -202,5 +203,50 @@ describe('PostHog Field bearer privacy boundary', () => {
     expect(event.properties?.$current_url).toBe(
       'https://client.patina.cloud/pay/[redacted]/state',
     );
+  });
+
+  // S1 (W3). The Trade Agreement link is a LIVE SIGNING CREDENTIAL: whoever
+  // holds the URL can sign the agreement as the sub. /trade is also the first
+  // guest surface in this portal to mount HoldAction, which fires its own
+  // events from a page whose address is the token.
+  it('redacts Trade Agreement bearers from pageview, referrer, autocapture, and nested values', () => {
+    const event = sanitizePostHogEvent({
+      event: '$autocapture',
+      properties: {
+        $current_url: `https://client.patina.cloud/trade/${tradeToken}?from=email`,
+        $referrer: `/trade/${tradeToken}`,
+        $elements: [{
+          tag_name: 'button',
+          attributes: {
+            href: `/trade/${tradeToken}`,
+            'data-source': JSON.stringify({ returnTo: `/trade/${tradeToken}` }),
+          },
+        }],
+        already_redacted: '/trade/[redacted]',
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(tradeToken);
+    expect(serialized.match(/\/trade\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(event.properties?.already_redacted).toBe('/trade/[redacted]');
+  });
+
+  it('redacts the Trade Agreement token out of a held-action event', () => {
+    const event = sanitizePostHogEvent({
+      event: 'client_making_action_selected',
+      properties: {
+        $current_url: `https://client.patina.cloud/trade/${tradeToken}`,
+        action_key: 'trade_agreement_sign',
+        surface_key: 'trade_agreement',
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(tradeToken);
+    expect(event.properties?.$current_url).toBe(
+      'https://client.patina.cloud/trade/[redacted]',
+    );
+    expect(event.properties?.action_key).toBe('trade_agreement_sign');
   });
 });
