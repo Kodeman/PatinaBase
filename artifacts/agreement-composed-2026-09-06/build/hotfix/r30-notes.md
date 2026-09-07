@@ -150,7 +150,12 @@ unit suite (`threshold.test.tsx`, which asserts the POST to
 the spec read-only lets it run beside every other spec.
 
 It leaves throwaway `r30-origin-*@patina.dev` households behind, in the same spirit as
-`pay-link.spec.ts`: this is the local stack and `supabase db reset` is the broom.
+`pay-link.spec.ts`: this is the local stack and `supabase db reset` is the broom. Four
+such households (from this lane's development runs) are on the shared local stack now;
+sweeping them was attempted and refused by `guard_commercial_authored_child`
+("proposal_service_rates is immutable after its proposal leaves draft"), and reaching
+past that guard is not a lane's call. Each owns zero projects and one sent agreement, so
+the only assertion they could drift is a count of `designer@patina.dev`'s clients.
 
 ## 7. Not covered, deliberately
 
