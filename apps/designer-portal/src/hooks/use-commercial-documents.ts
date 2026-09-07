@@ -830,7 +830,12 @@ export function adaptProjectBillingAuthority(
     // different facts, and get_project_authority_summary now returns null for
     // both of these on a no-rate-card agreement.
     ceilingCents: nullableFiniteCents(row.ceilingCents ?? row.ceiling_cents),
-    authorizedCents: finiteCents(row.authorizedCents ?? row.authorized_cents),
+    // The RPC returns `billing_ceiling_cents` for authorizedCents too
+    // (00575:1493), so this is null on exactly the agreements ceilingCents is
+    // null on. finiteCents would turn "uncapped" into "$0 budget".
+    authorizedCents: nullableFiniteCents(
+      row.authorizedCents ?? row.authorized_cents,
+    ),
     accruedCents: finiteCents(row.accruedCents ?? row.accrued_cents),
     invoicedCents: finiteCents(row.invoicedCents ?? row.invoiced_cents),
     pendingAuthorizationCents: finiteCents(

@@ -85,7 +85,12 @@ export interface ProjectBillingAuthority {
    *  ceiling", never as `$0` — `greatest(ceiling - accrued, 0)` used to make
    *  those two look the same. */
   ceilingCents: number | null;
-  authorizedCents: number;
+  /** F-2: NULL = uncapped, mirroring `ceilingCents` —
+   *  `get_project_authority_summary` returns the same
+   *  `billing_ceiling_cents` for both (00575:1492-1493). Render as
+   *  "No ceiling", never as `$0`: a flat-fee agreement has no budget figure,
+   *  and `$0 budget` reads as an exhausted one. */
+  authorizedCents: number | null;
   accruedCents: number;
   invoicedCents: number;
   pendingAuthorizationCents: number;

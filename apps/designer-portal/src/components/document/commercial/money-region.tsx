@@ -206,12 +206,22 @@ export function MoneyRegion({
     : 'no budget yet';
   // The table's seam states the same two figures as one sentence: what has been
   // authorized, against the budget it is being spent out of.
+  // F-2 again: an uncapped agreement has no budget figure either. `$0 budget`
+  // would state a budget that was spent; `no ceiling` states the fact.
+  const budgetFigure =
+    authority && authority.authorizedCents !== null
+      ? money(authority.authorizedCents)
+      : null;
   const seamSummary = tableSeam
     ? authority
-      ? `${money(committedCents)} authorized of ${money(authority.authorizedCents)} budget`
+      ? budgetFigure
+        ? `${money(committedCents)} authorized of ${budgetFigure} budget`
+        : `${money(committedCents)} authorized · no ceiling`
       : `${money(committedCents)} authorized · no budget yet`
     : authority
-      ? `${money(authority.authorizedCents)} budget · ${money(committedCents)} authorized`
+      ? budgetFigure
+        ? `${budgetFigure} budget · ${money(committedCents)} authorized`
+        : `no ceiling · ${money(committedCents)} authorized`
       : `no budget yet · ${money(committedCents)} authorized`;
 
   // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else.

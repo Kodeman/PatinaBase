@@ -73,7 +73,11 @@ export function ProjectAuthorityBand({
       <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11.5px] text-[var(--color-charcoal)] sm:grid-cols-4">
         <AuthorityFigure
           label="authorized"
-          value={money(authority.authorizedCents, authority.currency)}
+          value={
+            authority.authorizedCents === null
+              ? "No ceiling"
+              : money(authority.authorizedCents, authority.currency)
+          }
         />
         <AuthorityFigure
           label="accrued"
