@@ -64,6 +64,27 @@ describe("ProjectAuthorityBand", () => {
     expect(screen.getByText("Budget · active")).toBeVisible();
   });
 
+  // F-2. `get_project_authority_summary` returns the same
+  // `billing_ceiling_cents` for both `ceilingCents` and `authorizedCents`
+  // (00575:1492-1493), so a flat-fee agreement carries null in both. Printing
+  // `$0` for either states an exhausted budget where there is no budget.
+  it("says No ceiling on an uncapped agreement rather than printing $0", () => {
+    const { container } = render(
+      <ProjectAuthorityBand
+        authority={{
+          ...authority,
+          ceilingCents: null,
+          authorizedCents: null,
+          remainingCents: null,
+          accruedCents: 320_000,
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText("No ceiling")).toHaveLength(2);
+    expect(container).not.toHaveTextContent("$0");
+  });
+
   it("narrates the unpaid retainer gate", () => {
     render(
       <ProjectAuthorityBand

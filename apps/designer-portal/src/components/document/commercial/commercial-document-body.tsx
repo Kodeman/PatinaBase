@@ -39,6 +39,12 @@ export function ServiceAgreementDocumentBody({
       rates={bundle.data.rates}
       signatures={bundle.data.signatures}
       clientName={clientName}
+      // A composed agreement reads as its parts on EVERY designer surface, not
+      // only inside the composer. Without this a sent flat-fee agreement fell
+      // back to the seven fixed sections here and printed "Not yet set" for a
+      // ceiling it deliberately does not have (P0). An agreement with no parts
+      // passes `[]` and the flag-off body is untouched.
+      parts={bundle.data.parts}
     />
   );
 }

@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CommercialDeclineDialog, CommercialDocumentShell } from '../commercial-document-shell';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
-import { adaptCommercialDocumentBundle, type CommercialDocumentBundle } from '@/lib/commercial-documents';
+import {
+  adaptCommercialDocumentBundle,
+  type CommercialAgreementPart,
+  type CommercialDocumentBundle,
+} from '@/lib/commercial-documents';
 
 jest.mock('@/hooks/use-commercial-client', () => ({
   useDeclineCommercialDocument: jest.fn(),
@@ -26,9 +30,51 @@ function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDo
       currentRateVersion: 1,
     },
     rates: [{ id: 'r1', version: 1, roleName: 'Principal designer', hourlyRateCents: 22_500, effectiveAt: '2026-08-01' }],
+    parts: [],
+    composed: null,
     signatures: [], furnishings: null, tradeScope: null, ...overrides,
   };
 }
+
+function part(
+  overrides: Partial<CommercialAgreementPart> & Pick<CommercialAgreementPart, 'kind' | 'title'>,
+): CommercialAgreementPart {
+  return {
+    id: `part-${overrides.kind}`,
+    position: 1,
+    variant: null,
+    partKey: `custom.${overrides.kind}`,
+    payload: {},
+    required: false,
+    ...overrides,
+  };
+}
+
+/**
+ * The nine standard parts, in the order `materialize_standard_parts` seeds
+ * them (build/waves/w1/build-sheet.md §2.4), carrying the same figures the
+ * seven-facet fixture above carries — so a reader can put the two renderings
+ * side by side and see that the money did not move, only its arrangement.
+ */
+const NINE_PARTS: CommercialAgreementPart[] = [
+  part({ id: 'p1', position: 1, partKey: 'patina.services', kind: 'clause', title: 'Services', required: true, payload: { body: 'Concept and design development\nfor the whole house.' } }),
+  part({ id: 'p2', position: 2, partKey: 'patina.deliverables', kind: 'list', title: 'Deliverables', payload: { items: [
+    { id: 'i1', text: 'Concept package', note: 'Two revisions included.' },
+    { id: 'i2', text: 'Site visit', optional: true },
+    { id: 'i3', text: '' },
+  ] } }),
+  part({ id: 'p3', position: 3, partKey: 'patina.exclusions', kind: 'list', title: 'Exclusions', payload: { items: [{ id: 'x1', text: 'Furnishings' }] } }),
+  part({ id: 'p4', position: 4, partKey: 'patina.role_rates', kind: 'schedule', variant: 'rate_card', title: 'Role rates', payload: { roles: [
+    { roleName: 'Principal designer', hourlyRateCents: 22_500, sortOrder: 2 },
+    { roleName: 'Studio director', hourlyRateCents: 32_500, sortOrder: 1 },
+    { roleName: '', hourlyRateCents: 10_000, sortOrder: 3 },
+  ] } }),
+  part({ id: 'p5', position: 5, partKey: 'patina.ceiling', kind: 'schedule', variant: 'ceiling', title: 'Ceiling', payload: { cents: 1_800_000 } }),
+  part({ id: 'p6', position: 6, partKey: 'patina.deposit', kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: { depositPercent: 50, termsOfSale: 'Net 30 from invoice date.' } }),
+  part({ id: 'p7', position: 7, partKey: 'patina.retainer', kind: 'schedule', variant: 'retainer', title: 'Retainer', payload: { cents: 300_000, creditRule: 'credited', activationPolicy: 'retainer_paid' } }),
+  part({ id: 'p8', position: 8, partKey: 'patina.cadence', kind: 'schedule', variant: 'cadence', title: 'Billing cadence', payload: { cadence: 'monthly' } }),
+  part({ id: 'p9', position: 9, partKey: 'patina.terms', kind: 'clause', title: 'Terms', required: true, payload: { body: 'Actual time billed monthly.' } }),
+];
 
 /**
  * An executed furnishings authorization over two rooms. Deliberately includes
@@ -120,6 +166,21 @@ describe('CommercialDocumentShell', () => {
     expect(screen.getByText('$18,000')).toBeInTheDocument();
     expect(screen.getByText('$3,000')).toBeInTheDocument();
     expect(screen.getByText(/require a separate named furnishings authorization/i)).toBeInTheDocument();
+  });
+
+  /**
+   * FLAG-OFF BYTE-IDENTITY — Wave 1 of "The Agreement, Composed".
+   *
+   * A design services agreement that carries no parts is the only shape any
+   * document can take today, and the only shape a flag-off document can take
+   * tomorrow. Its rendered tree must not move by one attribute when
+   * `DesignServicesBody` learns its parts branch. This snapshot was WRITTEN
+   * AGAINST THE PRE-BRANCH COMPONENT and is never regenerated: if the parts
+   * path ever leaks into the parts-less path, this is the test that fails.
+   */
+  it('renders a parts-less design services agreement byte-identically to today', () => {
+    const { container } = render(<CommercialDocumentShell bundle={bundle()} />);
+    expect(container.firstChild).toMatchSnapshot();
   });
 
   /**
@@ -565,6 +626,468 @@ describe('CommercialDocumentShell', () => {
       screen.getByText(/^This document was withdrawn and no longer asks anything of you\./),
     ).toBeInTheDocument();
     expect(screen.getByText(/Ask your studio for the current edition/)).toBeInTheDocument();
+  });
+
+  /* ── The composed agreement (Wave 1, flag `agreement-parts`) ─────────────── */
+
+  describe('an agreement whose bundle carries parts', () => {
+    it('renders the parts in position order and drops today’s seven fixed sections', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: NINE_PARTS })} />);
+
+      expect(screen.getByTestId('agreement-parts-body')).toBeInTheDocument();
+      expect(
+        screen.getAllByTestId('agreement-part').map((el) => el.getAttribute('data-part-key')),
+      ).toEqual([
+        'patina.services',
+        'patina.deliverables',
+        'patina.exclusions',
+        'patina.role_rates',
+        'patina.ceiling',
+        'patina.deposit',
+        'patina.retainer',
+        'patina.cadence',
+        'patina.terms',
+      ]);
+      // Today's body is gone: its "Rates & design authorization" heading and its
+      // "Design authorization ceiling" row belong to the seven-facet path only.
+      expect(screen.queryByText('Rates & design authorization')).not.toBeInTheDocument();
+      expect(screen.queryByText('Design authorization ceiling')).not.toBeInTheDocument();
+      // The composed titles are what the client reads instead.
+      expect(screen.getByText('Role rates')).toBeInTheDocument();
+      expect(screen.getByText('Ceiling')).toBeInTheDocument();
+    });
+
+    it('orders by position even when the RPC hands them over out of order', () => {
+      const shuffled = [NINE_PARTS[4], NINE_PARTS[0], NINE_PARTS[8], NINE_PARTS[2]];
+      render(<CommercialDocumentShell bundle={bundle({ parts: shuffled })} />);
+      expect(
+        screen.getAllByTestId('agreement-part').map((el) => el.getAttribute('data-position')),
+      ).toEqual(['1', '3', '5', '9']);
+    });
+
+    it('carries the separate-purchase boundary exactly once', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: NINE_PARTS })} />);
+      expect(
+        screen.getAllByText(/require a separate named furnishings authorization/i),
+      ).toHaveLength(1);
+    });
+
+    it('prints a clause body as written, with its line breaks intact', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: [NINE_PARTS[0]] })} />);
+      const body = screen.getByText(/Concept and design development/);
+      expect(body).toHaveClass('whitespace-pre-wrap');
+    });
+
+    it('prints list items with their notes and marks the optional ones', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: [NINE_PARTS[1]] })} />);
+      expect(screen.getByText(/Concept package/)).toBeInTheDocument();
+      expect(screen.getByText('Two revisions included.')).toBeInTheDocument();
+      expect(screen.getByText(/Site visit \(optional\)/)).toBeInTheDocument();
+    });
+
+    /**
+     * R21 — `materialize_standard_parts` seeds `patina.terms` as
+     * `{ body: COALESCE(terms, '') }` over a nullable column, and
+     * deliverables/exclusions from arrays that default to `[]`, so a first
+     * composed agreement carries prose parts with nothing in them. Today's body
+     * omits the whole section for each (`{terms.terms && …}`); so does this one.
+     */
+    it('draws nothing at all for a clause part with no body', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'empty', position: 1, partKey: 'patina.terms', kind: 'clause', title: 'Terms', required: true, payload: { body: '' } }),
+          part({ id: 'kept', position: 2, partKey: 'patina.services', kind: 'clause', title: 'Services', required: true, payload: { body: 'Concept and design development.' } }),
+        ],
+      })} />);
+      expect(
+        screen.getAllByTestId('agreement-part').map((el) => el.getAttribute('data-part-key')),
+      ).toEqual(['patina.services']);
+      expect(screen.queryByText('Terms')).not.toBeInTheDocument();
+    });
+
+    it('draws nothing at all for a list part with no item that carries text', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'empty-list', position: 1, partKey: 'patina.deliverables', kind: 'list', title: 'Deliverables', payload: { items: [] } }),
+          part({ id: 'blank-list', position: 2, partKey: 'patina.exclusions', kind: 'list', title: 'Exclusions', payload: { items: [{ id: 'x', text: '' }] } }),
+        ],
+      })} />);
+      expect(screen.queryAllByTestId('agreement-part')).toHaveLength(0);
+      expect(screen.queryByText('Deliverables')).not.toBeInTheDocument();
+      expect(screen.queryByText('Exclusions')).not.toBeInTheDocument();
+      // The boundary is the body's own, not a part's — it still prints.
+      expect(
+        screen.getByText(/require a separate named furnishings authorization/i),
+      ).toBeInTheDocument();
+    });
+
+    it('records a rate card with no roles rather than standing a bare title on the page', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ partKey: 'patina.role_rates', kind: 'schedule', variant: 'rate_card', title: 'Role rates', payload: { roles: [] } })],
+      })} />);
+      expect(screen.getByText('Role rates')).toBeInTheDocument();
+      expect(screen.getByText('Recorded with your agreement.')).toBeInTheDocument();
+    });
+
+    it('prints role rates in sortOrder, not payload order', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: [NINE_PARTS[3]] })} />);
+      const roles = screen.getAllByText(/designer$|^Studio director$/).map((el) => el.textContent);
+      expect(roles).toEqual(['Studio director', 'Principal designer']);
+      expect(screen.getByText('$325 / hr')).toBeInTheDocument();
+      expect(screen.getByText('$225 / hr')).toBeInTheDocument();
+    });
+
+    it('states an absent ceiling in words rather than printing $0', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ partKey: 'patina.ceiling', kind: 'schedule', variant: 'ceiling', title: 'Ceiling', payload: { cents: null } })],
+      })} />);
+      expect(
+        screen.getByText('No ceiling — professional time is billed as it is worked.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('$0')).not.toBeInTheDocument();
+    });
+
+    it('prints a ceiling figure when the part carries one', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: [NINE_PARTS[4]] })} />);
+      expect(screen.getByText('$18,000')).toBeInTheDocument();
+    });
+
+    /**
+     * R21, and the case the very first composed agreement in production takes:
+     * `proposal_service_terms.retainer_amount_cents` is NOT NULL DEFAULT 0
+     * (00412) and `billing_ceiling_cents` starts at 0 on a fresh agreement, so
+     * `materialize_standard_parts` seeds `{ cents: 0 }` into both. Zero is an
+     * amount nobody wrote. The homeowner reads today's words for it, on both
+     * paths — never `$0`.
+     */
+    it('names a ceiling written as zero unset, in today’s words, rather than printing $0', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ partKey: 'patina.ceiling', kind: 'schedule', variant: 'ceiling', title: 'Ceiling', payload: { cents: 0 } })],
+      })} />);
+      expect(screen.getByText('Not yet set')).toBeInTheDocument();
+      expect(screen.queryByText('$0')).not.toBeInTheDocument();
+      // Zero is not the uncapped sentence either — that belongs to NULL alone.
+      expect(
+        screen.queryByText('No ceiling — professional time is billed as it is worked.'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('names a retainer written as zero unset, and withholds the activation sentence', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ partKey: 'patina.retainer', kind: 'schedule', variant: 'retainer', title: 'Retainer', payload: { cents: 0, activationPolicy: 'retainer_paid' } })],
+      })} />);
+      expect(screen.getByText('Not yet set')).toBeInTheDocument();
+      expect(screen.queryByText('$0')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Design work begins after the fully executed agreement and retainer payment.'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Due under the terms of the fully executed agreement.'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('names a flat fee written as zero unset rather than printing $0', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ kind: 'schedule', variant: 'flat', title: 'Flat fee', payload: { cents: 0 } })],
+      })} />);
+      expect(screen.getByText('Not yet set')).toBeInTheDocument();
+      expect(screen.queryByText('$0')).not.toBeInTheDocument();
+    });
+
+    it('never prints a 0% deposit, and keeps the terms of sale that were written', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ partKey: 'patina.deposit', kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: { depositPercent: 0, termsOfSale: 'Net 30 from invoice date.' } })],
+      })} />);
+      expect(screen.queryByText('0% deposit')).not.toBeInTheDocument();
+      expect(screen.getByText('Net 30 from invoice date.')).toBeInTheDocument();
+    });
+
+    /**
+     * R28 (re-gate 2, F2) — a deposit written as zero with nothing beside it
+     * is a term nobody set, and an unset term is nothing on her page: no
+     * heading, no "Recorded with your agreement." asserting that something was.
+     */
+    it('draws nothing at all for a deposit part written as zero with nothing beside it', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ partKey: 'patina.deposit', kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: { depositPercent: 0 } })],
+      })} />);
+      expect(screen.queryByText('0% deposit')).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Furnishings deposit' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Recorded with your agreement.')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('agreement-part')).not.toBeInTheDocument();
+    });
+
+    /**
+     * The whole nine-part set as `materialize_standard_parts` seeds it on a
+     * brand-new agreement: no ceiling, no retainer, no rate card typed yet. Not
+     * one zero reaches the page as a figure.
+     */
+    it('prints no figure at all for a freshly composed agreement whose money is untyped', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'z1', position: 1, partKey: 'patina.ceiling', kind: 'schedule', variant: 'ceiling', title: 'Ceiling', payload: { cents: 0 } }),
+          part({ id: 'z2', position: 2, partKey: 'patina.retainer', kind: 'schedule', variant: 'retainer', title: 'Retainer', payload: { cents: 0, activationPolicy: 'immediate' } }),
+          part({ id: 'z3', position: 3, partKey: 'patina.deposit', kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: { depositPercent: 0 } }),
+        ],
+      })} />);
+      expect(screen.getAllByText('Not yet set')).toHaveLength(2);
+      expect(screen.queryByText('$0')).not.toBeInTheDocument();
+      expect(screen.queryByText('0% deposit')).not.toBeInTheDocument();
+      // The unset deposit is not on the page at all (R28, F2) — the ceiling
+      // and the retainer are, and they say they are unwritten.
+      expect(screen.queryByRole('heading', { name: 'Furnishings deposit' })).not.toBeInTheDocument();
+      expect(screen.getAllByTestId('agreement-part')).toHaveLength(2);
+    });
+
+    it('prints the retainer figure with the activation sentence its policy names', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: [NINE_PARTS[6]] })} />);
+      expect(screen.getByText('$3,000')).toBeInTheDocument();
+      expect(
+        screen.getByText('Design work begins after the fully executed agreement and retainer payment.'),
+      ).toBeInTheDocument();
+    });
+
+    it('falls back to the immediate activation sentence for any other policy', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ kind: 'schedule', variant: 'retainer', title: 'Retainer', payload: { cents: 100_000, activationPolicy: 'immediate' } })],
+      })} />);
+      expect(
+        screen.getByText('Due under the terms of the fully executed agreement.'),
+      ).toBeInTheDocument();
+    });
+
+    it('records a retainer part with no figure rather than printing one', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ kind: 'schedule', variant: 'retainer', title: 'Retainer', payload: {} })],
+      })} />);
+      expect(screen.getByText('Recorded with your agreement.')).toBeInTheDocument();
+      expect(screen.queryByText('$0')).not.toBeInTheDocument();
+    });
+
+    it('prints the cadence and the written-authorization sentence', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: [NINE_PARTS[7]] })} />);
+      expect(screen.getByText('monthly')).toBeInTheDocument();
+      expect(
+        screen.getByText('Additional work requires written authorization before it can be invoiced.'),
+      ).toBeInTheDocument();
+    });
+
+    it('prints the furnishings deposit percent and any terms of sale beside it', () => {
+      render(<CommercialDocumentShell bundle={bundle({ parts: [NINE_PARTS[5]] })} />);
+      expect(screen.getByText('50% deposit')).toBeInTheDocument();
+      expect(screen.getByText('Net 30 from invoice date.')).toBeInTheDocument();
+      expect(screen.getByText('Terms of sale')).toBeInTheDocument();
+    });
+
+    it('drops a deposit part that names neither a percent nor a term, and keeps its neighbours', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'd1', position: 1, partKey: 'patina.deposit', kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: {} }),
+          part({ id: 'd2', position: 2, partKey: 'patina.terms', kind: 'clause', title: 'Terms', payload: { body: 'Actual time billed monthly.' } }),
+        ],
+      })} />);
+      expect(screen.queryByRole('heading', { name: 'Furnishings deposit' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Recorded with your agreement.')).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Terms' })).toBeInTheDocument();
+      expect(screen.getAllByTestId('agreement-part')).toHaveLength(1);
+    });
+
+    it('prints a flat fee, and records one that names no figure', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'flat-1', position: 1, kind: 'schedule', variant: 'flat', title: 'Flat fee', payload: { cents: 950_000 } }),
+          part({ id: 'flat-2', position: 2, kind: 'schedule', variant: 'flat', title: 'Second fee', payload: {} }),
+        ],
+      })} />);
+      expect(screen.getByText('$9,500')).toBeInTheDocument();
+      expect(screen.getByText('Recorded with your agreement.')).toBeInTheDocument();
+    });
+
+    it('prints per-phase rows, and an em dash for a phase with no figure', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({
+          kind: 'schedule', variant: 'per_phase', title: 'Fee by phase',
+          payload: { phases: [
+            { key: 'sd', label: 'Schematic design', cents: 400_000 },
+            { key: 'dd', label: 'Design development', cents: null },
+            { key: 'blank', label: '', cents: 100 },
+          ] },
+        })],
+      })} />);
+      expect(screen.getByText('Schematic design')).toBeInTheDocument();
+      expect(screen.getByText('$4,000')).toBeInTheDocument();
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
+
+    it('records a per-phase part with no phases at all', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ kind: 'schedule', variant: 'per_phase', title: 'Fee by phase', payload: {} })],
+      })} />);
+      expect(screen.getByText('Recorded with your agreement.')).toBeInTheDocument();
+    });
+
+    /**
+     * The eight record-only schedule variants (R9) and any variant a later wave
+     * adds. The client reads that the part is part of the agreement; the client
+     * never reads its payload as JSON.
+     */
+    it('records a schedule variant this build does not draw, without printing its payload', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ kind: 'schedule', variant: 'cost_plus', title: 'Cost plus', payload: { basis: 'cost + 18%' } })],
+      })} />);
+      expect(screen.getByText('Cost plus')).toBeInTheDocument();
+      expect(screen.getByText('Recorded with your agreement.')).toBeInTheDocument();
+      expect(screen.queryByText(/cost \+ 18%/)).not.toBeInTheDocument();
+    });
+
+    it('records an unknown kind as a titled line rather than throwing', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ kind: 'phases', variant: null, title: 'Phases', payload: { phases: [] } })],
+      })} />);
+      expect(screen.getByText('Phases')).toBeInTheDocument();
+      expect(screen.getByText('Recorded with your agreement.')).toBeInTheDocument();
+    });
+
+    /**
+     * Wave 1 seeds no attachment. The renderer implements the leaf anyway,
+     * because a Wave 2 template emits one onto a page this build already
+     * shipped — and because a half-implemented leaf is how the studio's copy
+     * and the client's copy drift apart.
+     */
+    it('sets attachments below every other part, lettered, each with its own rule', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'att-b', position: 1, kind: 'attachment', title: 'Wisconsin notice', payload: { body: 'Notice body.', acknowledgeRequired: true } }),
+          part({ id: 'clause-z', position: 9, kind: 'clause', title: 'Terms', payload: { body: 'Terms body.' } }),
+          part({ id: 'att-c', position: 2, kind: 'attachment', title: 'Photography release', payload: { body: 'Release body.', acknowledgeRequired: false } }),
+        ],
+      })} />);
+
+      expect(
+        screen.getAllByTestId('agreement-part').map((el) => el.getAttribute('data-kind')),
+      ).toEqual(['clause', 'attachment', 'attachment']);
+      expect(screen.getByText(/ATTACHMENT A · Wisconsin notice/)).toBeInTheDocument();
+      expect(screen.getByText(/ATTACHMENT B · Photography release/)).toBeInTheDocument();
+      // Display only in Wave 1 — a sentence, never a control.
+      expect(screen.getByText('I received this')).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('never draws an attestation part', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'att-1', position: 1, kind: 'attestation', title: 'Wisconsin registration', payload: { number: 'A-1234', state: 'WI' } }),
+          part({ id: 'clause-1', position: 2, kind: 'clause', title: 'Services', payload: { body: 'Body.' } }),
+        ],
+      })} />);
+      expect(screen.getAllByTestId('agreement-part')).toHaveLength(1);
+      expect(screen.queryByText('Wisconsin registration')).not.toBeInTheDocument();
+      expect(screen.queryByText('A-1234')).not.toBeInTheDocument();
+    });
+
+    it('draws nothing but the boundary for a part set with no drawable leaves', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ kind: 'attestation', title: 'Wisconsin registration', payload: {} })],
+      })} />);
+      expect(screen.queryAllByTestId('agreement-part')).toHaveLength(0);
+      expect(
+        screen.getByText(/require a separate named furnishings authorization/i),
+      ).toBeInTheDocument();
+    });
+
+    it('survives a malformed payload on every leaf without throwing', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'p1', position: 1, kind: 'clause', title: 'Services', payload: { body: 42 } }),
+          part({ id: 'p2', position: 2, kind: 'list', title: 'Deliverables', payload: { items: 'not-a-list' } }),
+          part({ id: 'p3', position: 3, kind: 'schedule', variant: 'rate_card', title: 'Role rates', payload: { roles: [{ hourlyRateCents: 'lots' }] } }),
+          part({ id: 'p4', position: 4, kind: 'schedule', variant: 'ceiling', title: 'Ceiling', payload: { cents: 'none' } }),
+          part({ id: 'p5', position: 5, kind: 'schedule', variant: 'cadence', title: 'Billing cadence', payload: {} }),
+        ],
+      })} />);
+      // The two prose parts read as empty and take their sections with them
+      // (R21); the three schedule leaves keep their titles and say what they
+      // can. Nothing throws, and no payload is printed as JSON.
+      expect(
+        screen.getAllByTestId('agreement-part').map((el) => el.getAttribute('data-part-key')),
+      ).toEqual(['custom.schedule', 'custom.schedule', 'custom.schedule']);
+      expect(screen.queryByText('Services')).not.toBeInTheDocument();
+      expect(screen.queryByText('Deliverables')).not.toBeInTheDocument();
+      expect(screen.getByText('Role rates')).toBeInTheDocument();
+      // A ceiling whose figure is unreadable is an absent ceiling, not $0.
+      expect(
+        screen.getByText('No ceiling — professional time is billed as it is worked.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('$0')).not.toBeInTheDocument();
+      expect(screen.queryByText('NaN')).not.toBeInTheDocument();
+    });
+
+    it('still prints the signature ledger and the footer around the composed body', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: NINE_PARTS,
+        document: { ...bundle().document, state: 'executed', executedAt: '2026-08-10T12:00:00Z' },
+        signatures: [{
+          party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-09T12:00:00Z',
+          consentVersion: 'v1', documentFingerprint: 'f1', signedOnPaper: false,
+          paperSignedOn: null, paperScanDocumentId: null,
+        }],
+      })} />);
+      expect(screen.getByTestId('commercial-document-executed')).toBeInTheDocument();
+      expect(screen.getByText('Sarah Whitfield')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * R17 at the client edge. Which body a homeowner reads is the bundle's
+   * answer when it gives one, and the part count only when it does not —
+   * `parts.length` is the wrong question in both directions:
+   *
+   *   - hide every part and the array arrives empty, so counting would revert
+   *     the homeowner to today's body and print the scope, rates, ceiling,
+   *     retainer and cadence the studio had just hidden;
+   *   - un-compose the agreement and the rows stay in the table, so counting
+   *     would keep the composed body on a document the studio is editing in
+   *     the seven-facet room. That is how the `agreement-parts` kill switch
+   *     reaches a homeowner, who has no flag of her own to read.
+   */
+  describe('which body the bundle says to read', () => {
+    it('keeps a composed agreement composed when every part is hidden from the client', () => {
+      render(<CommercialDocumentShell bundle={bundle({ composed: true, parts: [] })} />);
+
+      expect(screen.getByTestId('agreement-parts-body')).toBeInTheDocument();
+      // Nothing the studio hid comes back through today's body.
+      expect(screen.queryByText('Concept and design development')).not.toBeInTheDocument();
+      expect(screen.queryByText('Rates & design authorization')).not.toBeInTheDocument();
+      expect(screen.queryByText('Design authorization ceiling')).not.toBeInTheDocument();
+      expect(screen.queryByText('$18,000')).not.toBeInTheDocument();
+      expect(screen.queryByText('$3,000')).not.toBeInTheDocument();
+      expect(screen.queryByText('Principal designer')).not.toBeInTheDocument();
+      // The agreement is still an agreement: the boundary is said once.
+      expect(
+        screen.getAllByText(/require a separate named furnishings authorization/i),
+      ).toHaveLength(1);
+    });
+
+    it('returns the homeowner to today’s body when the bundle says the agreement is no longer composed', () => {
+      render(<CommercialDocumentShell bundle={bundle({ composed: false, parts: NINE_PARTS })} />);
+
+      expect(screen.queryByTestId('agreement-parts-body')).not.toBeInTheDocument();
+      expect(screen.queryAllByTestId('agreement-part')).toHaveLength(0);
+      expect(screen.getByText('Rates & design authorization')).toBeInTheDocument();
+      expect(screen.getByText('Concept and design development')).toBeInTheDocument();
+    });
+
+    it('leaves the choice to the part count when the bundle says nothing, which is every document today', () => {
+      const { unmount } = render(
+        <CommercialDocumentShell bundle={bundle({ composed: null, parts: NINE_PARTS })} />,
+      );
+      expect(screen.getByTestId('agreement-parts-body')).toBeInTheDocument();
+      unmount();
+
+      render(<CommercialDocumentShell bundle={bundle({ composed: null, parts: [] })} />);
+      expect(screen.queryByTestId('agreement-parts-body')).not.toBeInTheDocument();
+      expect(screen.getByText('Rates & design authorization')).toBeInTheDocument();
+    });
   });
 });
 

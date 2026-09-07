@@ -195,17 +195,33 @@ export function MoneyRegion({
   // The head and the seam speak the ladder's own words: rung 1 is `Budget`
   // and rung 3 is `Authorized`. `authority`/`committed` named neither rung
   // after SP-03, and `authority` is the word direction-a §5 sends away.
+  // F-2: an uncapped agreement (no rate card) has no remaining figure. Say so
+  // rather than printing `$0 remaining`, which reads as exhausted.
   const headStatus = authority
-    ? `${money(authority.remainingCents)} remaining · ${money(committedCents)} authorized`
+    ? `${
+        authority.remainingCents === null
+          ? 'no ceiling'
+          : `${money(authority.remainingCents)} remaining`
+      } · ${money(committedCents)} authorized`
     : 'no budget yet';
   // The table's seam states the same two figures as one sentence: what has been
   // authorized, against the budget it is being spent out of.
+  // F-2 again: an uncapped agreement has no budget figure either. `$0 budget`
+  // would state a budget that was spent; `no ceiling` states the fact.
+  const budgetFigure =
+    authority && authority.authorizedCents !== null
+      ? money(authority.authorizedCents)
+      : null;
   const seamSummary = tableSeam
     ? authority
-      ? `${money(committedCents)} authorized of ${money(authority.authorizedCents)} budget`
+      ? budgetFigure
+        ? `${money(committedCents)} authorized of ${budgetFigure} budget`
+        : `${money(committedCents)} authorized · no ceiling`
       : `${money(committedCents)} authorized · no budget yet`
     : authority
-      ? `${money(authority.authorizedCents)} budget · ${money(committedCents)} authorized`
+      ? budgetFigure
+        ? `${budgetFigure} budget · ${money(committedCents)} authorized`
+        : `no ceiling · ${money(committedCents)} authorized`
       : `no budget yet · ${money(committedCents)} authorized`;
 
   // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else.

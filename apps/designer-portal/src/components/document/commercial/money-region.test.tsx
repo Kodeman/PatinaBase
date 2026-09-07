@@ -368,6 +368,34 @@ describe('MoneyRegion', () => {
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
   });
 
+  // F-2. `get_project_authority_summary` returns `billing_ceiling_cents` for
+  // `authorizedCents` too (00575:1493), so a flat-fee agreement carries null.
+  // `$0 budget` / `$0 approved` would state a budget that had been spent.
+  it('says no ceiling rather than a $0 budget on an uncapped agreement', () => {
+    mockAuthority = {
+      data: { authorizedCents: null, remainingCents: null },
+      isLoading: false,
+      error: null,
+    };
+    render(<MoneyRegion projectId="project-1" />);
+    unfoldIfNeeded();
+
+    expect(screen.getByText('Budget · nothing approved yet')).toBeVisible();
+    expect(screen.getByText(/^no ceiling · /)).toBeVisible();
+  });
+
+  it('states the uncapped seam summary without a $0 budget', () => {
+    mockAuthority = {
+      data: { authorizedCents: null, remainingCents: null },
+      isLoading: false,
+      error: null,
+    };
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByText('no ceiling · $0 authorized')).toBeVisible();
+  });
+
   it('states the seam summary on a sparse project she folded herself', () => {
     // The seam's own claim — its summary line — kept whole under the one cause
     // a stop can still have (OD-10).

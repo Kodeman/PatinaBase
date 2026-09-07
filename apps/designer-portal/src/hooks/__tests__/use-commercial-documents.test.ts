@@ -1012,6 +1012,15 @@ describe('designer commercial document hooks', () => {
 describe('fetchCommercialDocumentBundle — signature provenance', () => {
   function stubBundleTables(signatureRows: Array<Record<string, unknown>>) {
     fromMock.mockImplementation((table: string) => {
+      if (table === 'proposal_agreement_parts') {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => Promise.resolve({ data: [], error: null }),
+            }),
+          }),
+        };
+      }
       if (table === 'proposals') {
         return {
           select: () => ({
@@ -1106,6 +1115,186 @@ describe('fetchCommercialDocumentBundle — signature provenance', () => {
     expect(bundle.signatures[0]).toMatchObject({
       executedOnPaper: false,
       paperSignedOn: null,
+    });
+  });
+});
+
+/**
+ * The bundle's two floors under "The Agreement, Composed" W1: a NULL ceiling
+ * is a real answer (F-2), and a parts read that failed is not an empty
+ * composition.
+ */
+describe('fetchCommercialDocumentBundle — the parts read and the ceiling', () => {
+  function stubBundle({
+    termsRow = null,
+    partsResult = { data: [] as unknown[], error: null as unknown },
+  }: {
+    termsRow?: Record<string, unknown> | null;
+    partsResult?: { data: unknown[]; error: unknown };
+  }) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === 'proposals') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () =>
+                Promise.resolve({
+                  data: {
+                    id: 'agreement-1',
+                    document_kind: 'design_services',
+                    commercial_state: 'sent',
+                    title: 'Okafor design agreement',
+                  },
+                  error: null,
+                }),
+            }),
+          }),
+        };
+      }
+      if (table === 'proposal_service_terms') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: termsRow, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'proposal_service_rates') {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                order: () => Promise.resolve({ data: [], error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'proposal_agreement_parts') {
+        return {
+          select: () => ({
+            eq: () => ({ order: () => Promise.resolve(partsResult) }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }),
+        }),
+      };
+    });
+  }
+
+  it('keeps a NULL billing ceiling null instead of reading it as zero', async () => {
+    stubBundle({
+      termsRow: {
+        proposal_id: 'agreement-1',
+        scope: 'Interior design services.',
+        deliverables: [],
+        exclusions: [],
+        billing_ceiling_cents: null,
+        retainer_amount_cents: 0,
+        retainer_activation_policy: 'immediate',
+        billing_cadence: 'monthly',
+        currency: 'USD',
+        terms: 'Ownership and cancellation.',
+        current_rate_version: 1,
+      },
+    });
+
+    const bundle = await fetchCommercialDocumentBundle('agreement-1');
+
+    expect(bundle.terms?.billingCeilingCents).toBeNull();
+  });
+
+  it('still reads a written ceiling as its integer', async () => {
+    stubBundle({
+      termsRow: {
+        proposal_id: 'agreement-1',
+        billing_ceiling_cents: 2_400_000,
+        retainer_amount_cents: 0,
+        billing_cadence: 'monthly',
+        currency: 'USD',
+        current_rate_version: 1,
+      },
+    });
+
+    const bundle = await fetchCommercialDocumentBundle('agreement-1');
+
+    expect(bundle.terms?.billingCeilingCents).toBe(2_400_000);
+  });
+
+  it('reads no parts when the table is not there yet', async () => {
+    stubBundle({
+      partsResult: {
+        data: [],
+        error: { code: '42P01', message: 'relation "proposal_agreement_parts" does not exist' },
+      },
+    });
+
+    await expect(fetchCommercialDocumentBundle('agreement-1')).resolves.toMatchObject({
+      parts: [],
+    });
+  });
+
+  it('reads no parts when PostgREST has not cached the table yet', async () => {
+    stubBundle({
+      partsResult: {
+        data: [],
+        error: { code: 'PGRST205', message: "Could not find the table 'public.proposal_agreement_parts' in the schema cache" },
+      },
+    });
+
+    await expect(fetchCommercialDocumentBundle('agreement-1')).resolves.toMatchObject({
+      parts: [],
+    });
+  });
+
+  it('refuses to call a denied or failed parts read an empty composition', async () => {
+    // An RLS denial answered `[]` before. The composer would then show an
+    // empty rail over a stored composition, and one Save would replace it.
+    stubBundle({
+      partsResult: {
+        data: [],
+        error: { code: '42501', message: 'permission denied for table proposal_agreement_parts' },
+      },
+    });
+
+    await expect(fetchCommercialDocumentBundle('agreement-1')).rejects.toMatchObject({
+      code: '42501',
+    });
+  });
+
+  it('carries the parts it did read, in position order', async () => {
+    stubBundle({
+      partsResult: {
+        data: [
+          {
+            id: 'part-1',
+            proposal_id: 'agreement-1',
+            position: 1,
+            kind: 'clause',
+            variant: null,
+            part_key: 'patina.services',
+            title: 'Services',
+            payload: { body: 'Interior design services.' },
+            required: true,
+            client_visible: true,
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const bundle = await fetchCommercialDocumentBundle('agreement-1');
+
+    expect(bundle.parts).toHaveLength(1);
+    expect(bundle.parts[0]).toMatchObject({
+      partKey: 'patina.services',
+      kind: 'clause',
+      required: true,
+      clientVisible: true,
     });
   });
 });

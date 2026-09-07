@@ -1,4 +1,5 @@
 import {
+  asCommercialDocumentKind,
   assessServiceAgreementReadiness,
   buildServiceAgreementPreview,
   commercialDocumentExperience,
@@ -65,6 +66,21 @@ describe("commercial document routing", () => {
     );
     expect(commercialDocumentExperience(null)).toBe("legacy");
     expect(commercialDocumentExperience("unexpected")).toBe("legacy");
+  });
+
+  // P0 collapsed COMMERCIAL_DOCUMENT_KINDS onto @patina/types, which carries
+  // 'trade_scope' — a kind the app-local array omitted. asCommercialDocumentKind
+  // therefore stops coercing it to 'legacy'. These two cases pin the pair:
+  // the coercion widened, the ROUTING answer did not move, so no branch
+  // anywhere in the portal changes its mind about a trade-scope document.
+  it("recognizes trade_scope now that the kinds array is the shared one", () => {
+    expect(asCommercialDocumentKind("trade_scope")).toBe("trade_scope");
+    expect(asCommercialDocumentKind("wormhole")).toBe("legacy");
+    expect(asCommercialDocumentKind(null)).toBe("legacy");
+  });
+
+  it("still routes a trade_scope document to the legacy experience", () => {
+    expect(commercialDocumentExperience("trade_scope")).toBe("legacy");
   });
 });
 

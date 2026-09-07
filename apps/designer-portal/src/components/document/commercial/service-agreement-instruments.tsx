@@ -9,6 +9,7 @@ import {
   useReplayCommercialNotification,
 } from "@/hooks/use-commercial-documents";
 import { commercialStatusView } from "@/lib/document/commercial-documents";
+import { assessAgreementReadiness } from "../rooms/drafting/agreement/readiness";
 import { rememberRoomOrigin } from "@/lib/document/room-origin";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { DocSheet } from "../overlays/doc-sheet";
@@ -127,6 +128,12 @@ export function ServiceAgreementInstruments({
   }
 
   const { document, terms, rates, signatures } = bundle.data;
+  // A composed agreement is read and judged as its parts here too, not only in
+  // the composer: the preview below renders them, and the send sheet asks the
+  // parts version of readiness. Without this a flat-fee composition — legal
+  // under R4, with no rate card and no ceiling — was refused a send from this
+  // surface and printed "Not yet set" in its own client copy.
+  const parts = bundle.data.parts ?? [];
   const clientPaperSignature = signatures.find(
     (signature) => signature.party === "client" && signature.executedOnPaper,
   );
@@ -140,6 +147,14 @@ export function ServiceAgreementInstruments({
   const projectId = resultProjectId ?? document.projectId;
   const clientEmail =
     typeof proposal.client?.email === "string" ? proposal.client.email : null;
+  const composedReadiness =
+    parts.length > 0
+      ? assessAgreementReadiness({
+          document,
+          parts,
+          recipientEmail: clientEmail,
+        })
+      : null;
   // 00477 — a draft can be issued on paper instead of emailed. The gate is the
   // SERVER's bar, not the fuller client-side readiness assessment: the RPC
   // requires terms and at least one role rate, exactly as Send agreement does,
@@ -338,6 +353,7 @@ export function ServiceAgreementInstruments({
               rates={rates}
               signatures={signatures}
               clientName={clientName}
+              parts={parts}
             />
           </DocSheet>
           <ServiceAgreementSendSheet
@@ -348,6 +364,17 @@ export function ServiceAgreementInstruments({
             rates={rates}
             recipientEmail={clientEmail}
             recipientName={clientName}
+            readinessOverride={
+              composedReadiness
+                ? {
+                    ready: composedReadiness.ready,
+                    blockers: composedReadiness.blockers.map(
+                      (blocker) => blocker.message,
+                    ),
+                    notes: composedReadiness.notes,
+                  }
+                : undefined
+            }
             // The send sheet is where a studio meets the wall — two buttons,
             // both of which assume an email. The third path belongs there, not
             // only in the sibling block below it, so a signature taken at a

@@ -1,0 +1,18 @@
+import { browser, ctx, shot, HERE } from './lib2.mjs';
+const path = process.argv[2]; const tag = process.argv[3];
+const b = await browser();
+const c = await ctx(b, { storageState: `${HERE}/r2-state-client.json` });
+const page = await c.newPage();
+page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 250)));
+await page.goto(`http://localhost:3002${path}`, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(15000);
+await page.getByRole('button', { name: /READ IT IN FULL/i }).first().click();
+await page.waitForTimeout(4000);
+await shot(page, `${tag}-1280`);
+const t = await page.evaluate(() => document.body.innerText);
+const i = t.indexOf('DESIGN SERVICES AGREEMENT', t.indexOf('READ IT IN FULL'));
+console.log('--- COMPOSED BODY ---\n' + t.slice(i, i + 2200));
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(1500);
+await shot(page, `${tag}-390`);
+await b.close();

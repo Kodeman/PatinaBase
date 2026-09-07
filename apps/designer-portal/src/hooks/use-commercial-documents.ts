@@ -8,6 +8,7 @@ import {
   invalidateProjectWorkflow,
   settleScheduleWrite,
 } from "@patina/supabase";
+import type { AgreementPart } from "@patina/types";
 import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
 import {
   asCommercialDocumentKind,
@@ -140,6 +141,11 @@ export interface CommercialDocumentBundle {
   terms: ServiceAgreementTerms | null;
   rates: ServiceRate[];
   signatures: CommercialSignature[];
+  /** "The Agreement, Composed" W1. `[]` for every document authored before
+   *  00575 and for every document the flag never reached — which is what
+   *  keeps the flag-off room and the legacy preview on exactly the path they
+   *  were on. Never absent, so no caller branches on undefined. */
+  parts: AgreementPart[];
 }
 
 const finiteCents = (value: unknown) => {
@@ -211,7 +217,11 @@ function mapTerms(
     scope: String(row.scope ?? ""),
     deliverables: stringList(row.deliverables),
     exclusions: stringList(row.exclusions),
-    billingCeilingCents: finiteCents(row.billing_ceiling_cents),
+    // F-2: NULL means uncapped, and it has to survive the read to say so —
+    // coercing it to 0 here is what made a flat-fee agreement print "Not yet
+    // set" on a document that was already sent. `?? 0` at the seven-facet
+    // room's own input keeps the flag-off editor on integers.
+    billingCeilingCents: nullableFiniteCents(row.billing_ceiling_cents),
     retainerAmountCents: finiteCents(row.retainer_amount_cents),
     retainerActivationPolicy:
       row.retainer_activation_policy === "retainer_paid"
@@ -285,6 +295,90 @@ function mapSignature(row: any): CommercialSignature {
   };
 }
 
+/**
+ * `proposal_agreement_parts` → the camelCase part the composer and both
+ * renderers read. Defensive throughout: `payload` is jsonb and `kind` /
+ * `variant` are un-CHECKed vocabulary columns (contract §1), so a row written
+ * by a later wave must map without throwing.
+ */
+function mapAgreementPart(row: any): AgreementPart {
+  const payload = row.payload;
+  return {
+    id: String(row.id),
+    proposalId: String(row.proposal_id),
+    position: Number(row.position ?? 0),
+    kind: String(row.kind ?? "clause") as AgreementPart["kind"],
+    variant:
+      typeof row.variant === "string" && row.variant.length > 0
+        ? (row.variant as AgreementPart["variant"])
+        : null,
+    partKey: String(row.part_key ?? ""),
+    title: String(row.title ?? ""),
+    payload:
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : {},
+    required: row.required === true,
+    clientVisible: row.client_visible !== false,
+    sourceTemplateKey:
+      typeof row.source_template_key === "string"
+        ? row.source_template_key
+        : null,
+    sourcePartId:
+      typeof row.source_part_id === "string" ? row.source_part_id : null,
+    updatedAt: typeof row.updated_at === "string" ? row.updated_at : null,
+  };
+}
+
+/** The two ways PostgREST reports a table that is not there yet: Postgres's
+ *  own undefined_table, and PostgREST's schema-cache miss. */
+const MISSING_RELATION_CODES = new Set(["42P01", "PGRST205"]);
+
+function isMissingRelation(error: any): boolean {
+  if (!error) return false;
+  if (
+    typeof error.code === "string" &&
+    MISSING_RELATION_CODES.has(error.code)
+  ) {
+    return true;
+  }
+  return (
+    typeof error.message === "string" &&
+    /relation .* does not exist|could not find the table/i.test(error.message)
+  );
+}
+
+/**
+ * The parts read, isolated so it can fail soft for exactly one reason.
+ *
+ * 00575 lands on Strata separately from this Worker, and the flag is
+ * fail-closed on top of that. A portal that reaches a database without
+ * `proposal_agreement_parts` must render exactly what it rendered before — so
+ * a MISSING RELATION resolves to "this document has no parts".
+ *
+ * Nothing else does. An RLS denial or a dropped connection also returns rows
+ * this reader cannot see, and answering `[]` to those would hand the composer
+ * an empty rail over a stored composition — where one added part and a Save
+ * would replace the whole array (`upsert_agreement_parts` writes wholesale)
+ * and destroy it. A read that failed throws, the bundle query errors, and the
+ * room says so instead of quietly offering to overwrite.
+ */
+async function fetchAgreementParts(
+  supabase: any,
+  proposalId: string,
+): Promise<AgreementPart[]> {
+  const { data, error } = await supabase
+    .from("proposal_agreement_parts")
+    .select("*")
+    .eq("proposal_id", proposalId)
+    .order("position", { ascending: true });
+  if (error) {
+    if (isMissingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []).map(mapAgreementPart);
+}
+
 export async function fetchCommercialDocumentBundle(
   proposalId: string,
 ): Promise<CommercialDocumentBundle> {
@@ -319,6 +413,7 @@ export async function fetchCommercialDocumentBundle(
         .eq("proposal_id", proposalId)
         .order("signed_at", { ascending: true }),
     ]);
+  const parts = await fetchAgreementParts(supabase, proposalId);
 
   if (proposalResult.error) throw proposalResult.error;
   if (termsResult.error) throw termsResult.error;
@@ -346,6 +441,7 @@ export async function fetchCommercialDocumentBundle(
     terms: mapTerms(termsResult.data, proposalId, currentRateVersion),
     rates: rates.filter((rate) => rate.version === currentRateVersion),
     signatures,
+    parts,
   };
 }
 
@@ -378,7 +474,11 @@ export function useSaveServiceAgreement(proposalId: string) {
           exclusions: terms.exclusions
             .map((item) => item.trim())
             .filter(Boolean),
-          billingCeilingCents: Math.round(terms.billingCeilingCents),
+          // The seven-facet room never writes null (its input coerces to 0),
+          // so this stays the integer 00575's projection expects from the
+          // flag-off path. The `?? 0` is the type widening's belt, not a
+          // behavior change.
+          billingCeilingCents: Math.round(terms.billingCeilingCents ?? 0),
           retainerAmountCents: Math.round(terms.retainerAmountCents),
           retainerActivationPolicy: terms.retainerActivationPolicy,
           billingCadence: terms.billingCadence,
@@ -419,6 +519,18 @@ export function useSaveServiceAgreement(proposalId: string) {
     },
   });
 }
+
+/**
+ * R23 — one data layer. The agreement-parts hooks (`useAgreementParts`,
+ * `useSaveAgreementParts`, `useMaterializeStandardParts`,
+ * `useDiscardAgreementParts`, `agreementPartsKey`) live in `@patina/supabase`,
+ * where Supabase reads and writes belong. This file carried a second copy of
+ * them while the package and the Contract Room were built in parallel
+ * worktrees; the copies are gone. The bundle read below still reads the parts
+ * table directly, because the bundle is this app's own composite and has one
+ * behaviour the package hook does not: a MISSING RELATION resolves to "this
+ * document has no parts".
+ */
 
 function mapCountersignResult(value: any): CountersignDesignServicesResult {
   const row = Array.isArray(value) ? value[0] : value;
@@ -648,14 +760,24 @@ export function adaptProjectBillingAuthority(
         ? row.state
         : "superseded",
     currency: String(row.currency ?? "USD"),
-    ceilingCents: finiteCents(row.ceilingCents ?? row.ceiling_cents),
-    authorizedCents: finiteCents(row.authorizedCents ?? row.authorized_cents),
+    // F-2: NULL survives as NULL — "uncapped" and "$0 of headroom" are
+    // different facts, and get_project_authority_summary now returns null for
+    // both of these on a no-rate-card agreement.
+    ceilingCents: nullableFiniteCents(row.ceilingCents ?? row.ceiling_cents),
+    // The RPC returns `billing_ceiling_cents` for authorizedCents too
+    // (00575:1493), so this is null on exactly the agreements ceilingCents is
+    // null on. finiteCents would turn "uncapped" into "$0 budget".
+    authorizedCents: nullableFiniteCents(
+      row.authorizedCents ?? row.authorized_cents,
+    ),
     accruedCents: finiteCents(row.accruedCents ?? row.accrued_cents),
     invoicedCents: finiteCents(row.invoicedCents ?? row.invoiced_cents),
     pendingAuthorizationCents: finiteCents(
       row.pendingAuthorizationCents ?? row.pending_authorization_cents,
     ),
-    remainingCents: finiteCents(row.remainingCents ?? row.remaining_cents),
+    remainingCents: nullableFiniteCents(
+      row.remainingCents ?? row.remaining_cents,
+    ),
     retainerAmountCents: finiteCents(
       row.retainerAmountCents ?? row.retainer_amount_cents,
     ),

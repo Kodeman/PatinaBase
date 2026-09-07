@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { RoomShell } from "../room-shell";
 import { DocSheet } from "../../overlays/doc-sheet";
@@ -9,11 +10,13 @@ import { Button, Input, Select, Textarea } from "@/components/ui/controls";
 import { ClientPicker } from "@/components/portal/client-picker";
 import { useAttachDocumentClient } from "@/hooks/use-attach-client";
 import { useAuth } from "@/hooks/use-auth";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { useClients } from "@/hooks/use-clients";
 import {
   useCommercialDocument,
   useSaveServiceAgreement,
 } from "@/hooks/use-commercial-documents";
+import { AGREEMENT_PART_COPY } from "@patina/types";
 import {
   assessServiceAgreementReadiness,
   type CommercialDocument,
@@ -23,6 +26,24 @@ import {
 import { ServiceAgreementPreview } from "../../commercial/service-agreement-preview";
 import { ServiceAgreementSendSheet } from "../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
+
+// DR13 / criterion J — a flag-off designer must not download the composer.
+// A static import pulls `parts-rail`, `part-editor`, `add-part-menu`,
+// `readiness` and `@dnd-kit` into the chunk this room ships to EVERY designer;
+// `agreement-parts` is fail-closed, so almost none of them can open it. The
+// dynamic import puts all of that behind the flag branch below. `ssr: false`
+// because the composer is a client-only surface and the room already holds a
+// frame for the flag itself — the same gate, the same sentence.
+const AgreementComposer = dynamic(
+  () =>
+    import("./agreement/agreement-composer").then((mod) => ({
+      default: mod.AgreementComposer,
+    })),
+  {
+    ssr: false,
+    loading: () => <AgreementGate message="Opening the design agreement…" />,
+  },
+);
 
 const labelClass =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
@@ -75,8 +96,20 @@ const cents = (value: string) => {
 export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
   const proposalId = String(proposal.id);
   const bundle = useCommercialDocument(proposalId);
+  // Above every early return — a conditional return reorders hooks and breaks
+  // hydration. Fail-closed: `useFeatureFlag` starts { value: false,
+  // isLoading: true }, so the composer can never flash to a non-pilot user.
+  const { value: partsOn, isLoading: flagLoading } =
+    useFeatureFlag("agreement-parts");
+  // R24 — the composer can hand the draft back. Held here, above every early
+  // return, because it decides WHICH room renders and a conditional hook
+  // would reorder the rest.
+  const [returnedToFacets, setReturnedToFacets] = useState(false);
 
-  if (bundle.isLoading) {
+  if (bundle.isLoading || flagLoading) {
+    // The same component and the same sentence the room has always shown. The
+    // only observable delta for a flag-off designer is that this gate may hold
+    // one extra frame while PostHog answers.
     return <AgreementGate message="Opening the design agreement…" />;
   }
   if (bundle.error || !bundle.data) {
@@ -88,6 +121,24 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
             Retry
           </Button>
         }
+      />
+    );
+  }
+
+  if (partsOn && !returnedToFacets) {
+    return (
+      // Keyed on the agreement itself, and on nothing that a save changes.
+      // `upsert_agreement_parts` projects through `_project_agreement_terms`,
+      // whose upsert ends `updated_at = now()`, so a terms/parts key remounted
+      // the composer on EVERY save — throwing the designer back to the first
+      // part and wiping the "All agreement changes saved." note she had just
+      // earned. The composer holds the composition after mount and re-reads
+      // the bundle only through props, so one mount per agreement is right.
+      <AgreementComposer
+        key={proposalId}
+        proposal={proposal}
+        bundle={bundle.data}
+        onReturnToFacets={() => setReturnedToFacets(true)}
       />
     );
   }
@@ -106,6 +157,14 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
             Math.max(1, ...bundle.data.rates.map((item) => item.version))),
       )}
       signatures={bundle.data.signatures}
+      // R17(b) / R24 — once a proposal carries a part, this room's Save is
+      // refused by the database (00575) and the write grant on the money row
+      // is gone. `agreement-parts` is a per-person rollout, so a co-member the
+      // flag has not reached can stand here over an agreement someone else
+      // composed. She is told before she retypes seven facets, not after.
+      // A document with no parts is every document today: `false`, and this
+      // room renders exactly as it always has.
+      composed={!returnedToFacets && (bundle.data.parts?.length ?? 0) > 0}
     />
   );
 }
@@ -132,6 +191,7 @@ function ServiceAgreementEditor({
   initialRates,
   initiallyDirty,
   signatures,
+  composed = false,
 }: {
   proposal: any;
   document: CommercialDocument;
@@ -139,6 +199,7 @@ function ServiceAgreementEditor({
   initialRates: ServiceRate[];
   initiallyDirty: boolean;
   signatures: Parameters<typeof ServiceAgreementPreview>[0]["signatures"];
+  composed?: boolean;
 }) {
   const router = useRouter();
   const save = useSaveServiceAgreement(document.id);
@@ -225,6 +286,7 @@ function ServiceAgreementEditor({
     }
   };
   const reviewAndSend = async () => {
+    if (composed) return;
     if (dirty && !(await persist())) return;
     setSendOpen(true);
   };
@@ -272,6 +334,7 @@ function ServiceAgreementEditor({
           actionKey="review-design-agreement"
           variant="primary"
           trailing="→"
+          disabled={composed}
           onClick={() => void reviewAndSend()}
         >
           Review & send
@@ -300,7 +363,7 @@ function ServiceAgreementEditor({
               <Button
                 onClick={() => void persist()}
                 loading={save.isPending}
-                disabled={!dirty}
+                disabled={!dirty || composed}
               >
                 {dirty ? "Save agreement" : "Saved"}
               </Button>
@@ -340,6 +403,14 @@ function ServiceAgreementEditor({
               </p>
             )}
           </div>
+          {composed && (
+            <p
+              role="status"
+              className="mt-2 text-[11px] italic text-[var(--text-muted)]"
+            >
+              {AGREEMENT_PART_COPY.composedElsewhere}
+            </p>
+          )}
           {saveNote && (
             <p
               role="status"
@@ -471,7 +542,7 @@ function ServiceAgreementEditor({
                   <Input
                     className="mt-2"
                     inputMode="decimal"
-                    value={dollars(terms.billingCeilingCents)}
+                    value={dollars(terms.billingCeilingCents ?? 0)}
                     onChange={(event) =>
                       changeTerms({
                         billingCeilingCents: cents(event.target.value),

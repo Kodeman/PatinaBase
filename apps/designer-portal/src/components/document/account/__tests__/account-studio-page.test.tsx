@@ -30,6 +30,28 @@ jest.mock('@patina/supabase', () => ({
   useUpdateMemberRole: jest.fn(),
   useUpdateOrganization: jest.fn(),
   useUpdateStudioBillingSettings: jest.fn(),
+  // 00575's Agreement defaults card sits below Billing. This suite renders the
+  // page without a QueryClientProvider, so its data hooks are stubbed the way
+  // every other hook on this page already is. The card's own behaviour is
+  // covered in agreement-defaults-card.test.tsx.
+  useStudioAgreementDefaults: () => ({
+    data: {
+      studioId: 'studio-1',
+      rateCard: [],
+      depositPercent: null,
+      cadence: 'monthly',
+      retainerCreditRule: 'credited',
+      defaultExclusions: [],
+      updatedBy: null,
+      updatedAt: null,
+    },
+  }),
+  useUpdateStudioAgreementDefaults: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({

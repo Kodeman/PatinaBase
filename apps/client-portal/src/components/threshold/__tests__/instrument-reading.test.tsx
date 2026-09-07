@@ -39,6 +39,8 @@ function bundle(
     },
     serviceTerms: null,
     rates: [],
+    parts: [],
+    composed: null,
     signatures: [],
     furnishings: {
       checkpointId: null,

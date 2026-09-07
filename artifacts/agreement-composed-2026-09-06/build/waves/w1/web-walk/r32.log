@@ -1,0 +1,9 @@
+COMPOSER RAIL: 0
+SHELL: · 7 of 7 facets written
+  RPC upsert_design_services_draft 200 {"rateCount": 1, "proposalId": "e2000000-0000-0000-0000-0000000000a3", "documentKind": "design_services", "commercialState": "draf
+NOTES: []
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r32-p9-facets-1280.png
+SEND ENABLED: true
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r32-p9-send-sheet.png
+  RPC send_commercial_document 200 {"sentAt": "2026-09-07T13:35:01.557945+00:00", "status": "sent", "updatedAt": "2026-09-07T13:35:01.557945+00:00", "proposalId": "e
+URL http://localhost:3000/doc/b0000000-0000-0000-0000-0000000000d1

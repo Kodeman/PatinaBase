@@ -34,6 +34,7 @@ export type {
 export * from "./events";
 export * from "./proposal";
 export * from "./commercial";
+export * from "./agreement";
 export * from "./project";
 export * from "./project-v2";
 export * from "./ffe";
@@ -126,3 +127,12 @@ export * as UserManagement from "./user-management";
 // Vendor pipeline types (discovery → live partnership, Claude Cowork integration)
 // Exported as namespace to avoid conflict with catalog.ts Vendor
 export * as VendorPipeline from "./vendor-pipeline";
+
+// The agreement's client-facing sentences — one source, two surfaces
+// ("The Agreement, Composed" W1, build-sheet §4.5 / §5.2). Deliberately NOT
+// adjacent to `./agreement` above: the designer, client, and backend lanes all
+// add that one line, and an identical addition merges clean while a second
+// line beside it would not. Steward note in
+// build/waves/w1/designer-notes.md — this file is the designer lane's one
+// declared deviation from its `packages/**` boundary.
+export * from "./agreement-copy";

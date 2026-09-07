@@ -64,6 +64,21 @@ const STANDING_NOTE_BODY =
 const SEEDED_ROOMS = ['Study', 'Hall', 'Stair'];
 
 /**
+ * The composed agreement's parts, in `position` order, as
+ * `the-client-page.sql` writes them (R26). Titles, not keys: this is the page
+ * the homeowner reads.
+ */
+const SEEDED_AGREEMENT_PART_TITLES = [
+  'Services',
+  'Deliverables',
+  'Exclusions',
+  'Role rates',
+  'Ceiling',
+  'Billing cadence',
+  'Terms',
+];
+
+/**
  * Signs in as a seeded household. The golden-hour restyle made sign-in
  * email-first: the password leg sits behind a disclosure, and submitting
  * without opening it sends a six-digit passcode instead. Same shape as
@@ -375,6 +390,77 @@ test.describe('The Threshold — the client page', () => {
     await page.keyboard.press('Escape');
     await expect(sheet).toHaveCount(0);
     expect(new URL(page.url()).pathname).toBe(`/projects/${PROJECT_ID}`);
+  });
+
+  /**
+   * "The Agreement, Composed" (Wave 1) — build sheet §6.6, the client half.
+   *
+   * The agreement opens in full from the fold on its Previously line, and the
+   * part titles appear in `position` order, every one of them written, with
+   * the separate-purchase boundary said exactly once.
+   *
+   * R26 — this assertion is unconditional. `supabase/seed/the-client-page.sql`
+   * lays the solo client's executed agreement down COMPOSED: a
+   * `proposal_service_terms` row, its rates, and seven
+   * `proposal_agreement_parts` rows written while the proposal was still a
+   * draft, then promoted to executed under the capability GUCs. It was
+   * previously a branch — "assert the composed shape if the stack carries one,
+   * otherwise assert there are no parts" — which on every stack that existed
+   * took the second leg and could not fail.
+   *
+   * The renderer's own unit coverage is the jsdom suite
+   * (`src/components/__tests__/commercial-document-shell.test.tsx`), against
+   * hand-built bundles; this is the one reading that goes through the real RPC.
+   */
+  test('reads the composed agreement in full — its parts in position order', async ({
+    page,
+  }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    const reading = page.getByTestId('instrument-reading');
+    await pressUntilOpen(
+      page
+        .getByTestId('previously-line')
+        .filter({ hasText: /design services/i })
+        .first()
+        .getByRole('button'),
+      reading,
+    );
+
+    const shell = reading.getByTestId('commercial-document-shell');
+
+    // The whole reading is asserted inside one retry, not statement by
+    // statement: the house re-enters its settle gate on a background refetch,
+    // which unmounts everything below the doorplate mid-assertion. Every
+    // locator below is therefore re-resolved on each attempt.
+    await expect(async () => {
+      await expect(shell).toBeVisible({ timeout: 5_000 });
+      // The instrument that opened is the agreement, not a neighbouring paper.
+      expect(await shell.getByText('Design services agreement').count()).toBe(1);
+
+      // The body is the composed one — read from the parts, never from the
+      // terms row (R25).
+      expect(await shell.getByTestId('agreement-parts-body').count()).toBe(1);
+
+      const parts = shell.getByTestId('agreement-part');
+      expect(await parts.count()).toBe(SEEDED_AGREEMENT_PART_TITLES.length);
+
+      const positions = await parts.evaluateAll((nodes) =>
+        nodes.map((node) => Number(node.getAttribute('data-position'))),
+      );
+      expect(positions).toEqual([...positions].sort((a, b) => a - b));
+
+      const titles = await parts.evaluateAll((nodes) =>
+        nodes.map((node) => node.querySelector('h2, p')?.textContent?.trim() ?? ''),
+      );
+      expect(titles).toEqual(SEEDED_AGREEMENT_PART_TITLES);
+
+      // The separate-purchase boundary is said once, by the parts body.
+      expect(
+        await shell.getByText(/require a separate named furnishings authorization/i).count(),
+      ).toBe(1);
+    }).toPass({ timeout: 90_000 });
   });
 
   /* ── Wave 2: the retired routes ─────────────────────────────────────────── */
