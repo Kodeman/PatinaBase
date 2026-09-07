@@ -47,6 +47,7 @@ const BUNDLE: CommercialDocumentBundle = {
   },
   serviceTerms: null,
   rates: [],
+  parts: [],
   signatures: [
     {
       party: 'client',

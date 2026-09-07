@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@patina/design-system';
+import { AgreementPartsBody } from '@/components/agreement-parts-body';
 import { Stamp } from '@/components/threshold/instruments/stamp';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { formatCalendarDate } from '@/lib/utils/format';
@@ -180,12 +181,32 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   const terms = bundle.serviceTerms;
   if (!terms) return null;
 
+  // Wave 1 of "The Agreement, Composed" — build sheet §5.2, the frozen
+  // cross-lane branch. A document that carries parts is read as the ordered
+  // list the studio composed; every other document — which is every document
+  // today, and every flag-off document tomorrow — falls through to the body
+  // below, untouched.
+  //
+  // `terms` does two jobs from here down: it supplies the currency this
+  // renderer prints in, and below the branch it is the body itself. A
+  // parts-carrying agreement with no proposal_service_terms row therefore
+  // renders nothing at all — unreachable while upsert_agreement_parts always
+  // projects a terms row, and the thing to revisit when W2 adds the
+  // consultation / furnishings_services classes.
+  if (bundle.parts.length > 0) {
+    return <AgreementPartsBody parts={bundle.parts} currency={terms.currency} />;
+  }
+
   // A brand-new agreement defaults both of these to 0 and nothing blocks a
   // send, so an untouched figure would reach the client as a real authorized
   // amount. An amount nobody wrote is named as unwritten — the same gate the
-  // studio-side preview applies (service-agreement-preview.tsx).
+  // studio-side preview applies (service-agreement-preview.tsx). NULL is the
+  // composed agreement's "uncapped" (00575) and never reaches this body, but
+  // it is a legal value on the column now, so it is read as unset here rather
+  // than formatted.
+  const ceilingCents = terms.billingCeilingCents;
   const ceilingIsSet =
-    Number.isFinite(terms.billingCeilingCents) && terms.billingCeilingCents > 0;
+    ceilingCents !== null && Number.isFinite(ceilingCents) && ceilingCents > 0;
   const retainerIsSet =
     Number.isFinite(terms.retainerAmountCents) && terms.retainerAmountCents > 0;
 
@@ -222,7 +243,7 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
           <div className="flex items-baseline justify-between gap-4 py-4">
             <span className="type-body-small font-medium text-[var(--text-primary)]">Design authorization ceiling</span>
             <span className={ceilingIsSet ? 'type-data-large' : 'type-data-large italic text-[var(--text-muted)]'}>
-              {ceilingIsSet ? money(terms.billingCeilingCents, terms.currency) : 'Not yet set'}
+              {ceilingIsSet ? money(ceilingCents, terms.currency) : 'Not yet set'}
             </span>
           </div>
         </div>

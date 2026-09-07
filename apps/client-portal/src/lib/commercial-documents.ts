@@ -178,11 +178,38 @@ export interface TradeScopeAuthorization {
   depositInvoiceId: string | null;
 }
 
+/**
+ * One part of a composed agreement, as the bundle RPC projects it.
+ *
+ * `kind` and `variant` stay plain strings on purpose: the vocabulary is
+ * code-resident and un-CHECKed (build/contract.md §1), so a part written by a
+ * later wave must arrive here intact and render as an unknown leaf rather than
+ * be coerced into a kind this build happens to know. `client_visible = false`
+ * rows never cross this edge, and neither do `source_template_key` /
+ * `source_part_id` — the client reads the agreement, not its provenance.
+ */
+export interface CommercialAgreementPart {
+  id: string;
+  position: number;
+  kind: string;
+  variant: string | null;
+  partKey: string;
+  title: string;
+  payload: Record<string, unknown>;
+  required: boolean;
+}
+
 export interface CommercialDocumentBundle {
   document: CommercialDocumentBundleSummary;
   serviceTerms: DesignServicesTerms | null;
   rates: CommercialRate[];
   signatures: CommercialSignature[];
+  /**
+   * Always present, `[]` when the document has none. An empty array is the
+   * only shape any document takes today and the only shape a flag-off document
+   * takes tomorrow — the client body reads it as "render today's body".
+   */
+  parts: CommercialAgreementPart[];
   furnishings: FurnishingsAuthorization | null;
   tradeScope: TradeScopeAuthorization | null;
 }
@@ -249,6 +276,15 @@ function nullableText(value: unknown): string | null {
 
 function number(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * For a money column 00575 made nullable, where NULL is a stated value
+ * ("uncapped") and not a missing one. Collapsing it onto 0 would make an
+ * uncapped ceiling indistinguishable from a zero one.
+ */
+function nullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function strings(value: unknown): string[] {
@@ -335,6 +371,39 @@ function adaptRates(value: unknown): CommercialRate[] {
       effectiveAt: text(first(row, 'effectiveAt', 'effective_at')),
     };
   });
+}
+
+/**
+ * Adapts the bundle's `parts` array. Absent, non-array, or malformed input
+ * yields `[]` — the parts-less path, which is today's body. A row missing the
+ * three things a leaf cannot be drawn without (`id`, `kind`, `title`) is
+ * dropped rather than rendered blank, the same discipline the signature
+ * adapter applies to an incomplete receipt. Sorted by `position` as a belt:
+ * the RPC already orders, and the renderer must not depend on it having.
+ */
+function adaptAgreementParts(value: unknown): CommercialAgreementPart[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .flatMap((item, index) => {
+      const row = record(item);
+      const id = text(first(row, 'id'));
+      const kind = text(first(row, 'kind'));
+      const title = text(first(row, 'title'));
+      if (!id || !kind || !title) return [];
+      return [{
+        id,
+        // A row whose position the RPC omitted keeps the order it arrived in
+        // rather than collapsing onto 0 with every one of its siblings.
+        position: number(first(row, 'position'), index),
+        kind,
+        variant: nullableText(first(row, 'variant')),
+        partKey: text(first(row, 'partKey', 'part_key')),
+        title,
+        payload: record(first(row, 'payload')),
+        required: first(row, 'required') === true,
+      }];
+    })
+    .sort((a, b) => a.position - b.position);
 }
 
 /**
@@ -455,6 +524,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
   const replacementRaw = record(first(raw, 'replacement'));
   const signatureRows = first(raw, 'signatures') ?? first(source, 'signatures');
   const rateRows = first(raw, 'rates') ?? first(source, 'rates');
+  const partRows = first(raw, 'parts') ?? first(source, 'parts');
   const depositRequiredValue = first(
     furnishingRaw,
     'depositRequiredCents',
@@ -517,7 +587,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       scope: nullableText(first(serviceRaw, 'scope')),
       deliverables: strings(first(serviceRaw, 'deliverables')),
       exclusions: strings(first(serviceRaw, 'exclusions')),
-      billingCeilingCents: number(first(serviceRaw, 'billingCeilingCents', 'billing_ceiling_cents')),
+      billingCeilingCents: nullableNumber(first(serviceRaw, 'billingCeilingCents', 'billing_ceiling_cents')),
       retainerAmountCents: number(first(serviceRaw, 'retainerAmountCents', 'retainer_amount_cents')),
       retainerActivationPolicy: oneOf(first(serviceRaw, 'retainerActivationPolicy', 'retainer_activation_policy'), ['immediate', 'retainer_paid'] as const, 'immediate'),
       billingCadence: oneOf(first(serviceRaw, 'billingCadence', 'billing_cadence'), ['monthly', 'biweekly', 'milestone'] as const, 'monthly'),
@@ -526,6 +596,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       currentRateVersion: number(first(serviceRaw, 'currentRateVersion', 'current_rate_version'), 1),
     },
     rates: adaptRates(rateRows),
+    parts: adaptAgreementParts(partRows),
     signatures: Array.isArray(signatureRows) ? signatureRows.flatMap((item) => {
       const row = record(item);
       const party = first(row, 'party', 'partyRole', 'party_role');

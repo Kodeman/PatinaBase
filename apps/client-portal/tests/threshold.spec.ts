@@ -377,6 +377,118 @@ test.describe('The Threshold — the client page', () => {
     expect(new URL(page.url()).pathname).toBe(`/projects/${PROJECT_ID}`);
   });
 
+  /**
+   * "The Agreement, Composed" (Wave 1), the reachable half. The agreement opens
+   * in full from the fold on its Previously line, and — because this stack has
+   * no composed agreement on it — it carries no parts body.
+   *
+   * That second clause is the whole point of keeping this test: it is the
+   * flag-off shape, and it is the shape every agreement in production takes
+   * until 00575 is applied and a studio composes something. If a parts body
+   * ever appears here, parts have leaked onto a document that has none.
+   *
+   * The seed lays the solo client's executed agreement down as a proposal plus
+   * a `project_commercial_documents` row with NO `proposal_service_terms` row
+   * (`supabase/seed/the-client-page.sql:95-118`), so `DesignServicesBody`
+   * returns null and the shell prints its header, its execution mark and its
+   * footer around nothing.
+   */
+  test('reads the agreement in full, and carries no parts body on a stack with nothing composed', async ({
+    page,
+  }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    const reading = page.getByTestId('instrument-reading');
+    await pressUntilOpen(
+      page
+        .getByTestId('previously-line')
+        .filter({ hasText: /design services/i })
+        .first()
+        .getByRole('button'),
+      reading,
+    );
+
+    const shell = reading.getByTestId('commercial-document-shell');
+
+    // The whole reading is asserted inside one retry, not statement by
+    // statement: the house re-enters its settle gate on a background refetch,
+    // which unmounts everything below the doorplate mid-assertion. Every
+    // locator below is therefore re-resolved on each attempt.
+    await expect(async () => {
+      await expect(shell).toBeVisible({ timeout: 5_000 });
+      // The instrument that opened is the agreement, not a neighbouring paper.
+      expect(await shell.getByText('Design services agreement').count()).toBe(1);
+      expect(await shell.getByTestId('agreement-parts-body').count()).toBe(0);
+      expect(await shell.getByTestId('agreement-part').count()).toBe(0);
+    }).toPass({ timeout: 90_000 });
+  });
+
+  /**
+   * The other half — the one assertion the build sheet asks for (§6.6): "the
+   * part titles appear in position order" on an agreement whose bundle carries
+   * parts. It cannot run yet and it is marked so rather than hidden behind a
+   * condition that is always false.
+   *
+   * MISSING FIXTURE: no seeded agreement carries parts. Both halves are owed
+   * before this can be un-fixmed —
+   *   1. migration `00575_agreement_parts.sql` (the backend lane's) applied to
+   *      the local stack, which creates `proposal_agreement_parts` and adds the
+   *      `parts` key to `get_client_commercial_document_bundle`; and
+   *   2. a seed, in `supabase/seed/the-client-page.sql` beside the solo
+   *      client's executed agreement, laying down BOTH a
+   *      `proposal_service_terms` row and the parts — `DesignServicesBody`
+   *      returns null without the terms row, before it ever reaches the parts
+   *      branch, so parts alone would not light this up.
+   *
+   * The integration steward owns both, after the backend lane merges. Until
+   * then the part renderer is covered by the jsdom suite
+   * (`src/components/__tests__/commercial-document-shell.test.tsx`), against
+   * hand-built bundles — never against a real RPC.
+   */
+  test.fixme(
+    'reads a composed agreement’s part titles in position order — needs 00575 + a seeded composed agreement',
+    async ({ page }) => {
+      await signInAsClient(page);
+      await openTheHouse(page);
+
+      const reading = page.getByTestId('instrument-reading');
+      await pressUntilOpen(
+        page
+          .getByTestId('previously-line')
+          .filter({ hasText: /design services/i })
+          .first()
+          .getByRole('button'),
+        reading,
+      );
+
+      const shell = reading.getByTestId('commercial-document-shell');
+
+      await expect(async () => {
+        await expect(shell).toBeVisible({ timeout: 5_000 });
+        expect(await shell.getByTestId('agreement-parts-body').count()).toBe(1);
+
+        const parts = shell.getByTestId('agreement-part');
+        expect(await parts.count()).toBeGreaterThan(0);
+
+        const positions = await parts.evaluateAll((nodes) =>
+          nodes.map((node) => Number(node.getAttribute('data-position'))),
+        );
+        expect(positions).toEqual([...positions].sort((a, b) => a - b));
+
+        const titles = await parts.evaluateAll((nodes) =>
+          nodes.map((node) => node.querySelector('h2, p')?.textContent?.trim() ?? ''),
+        );
+        expect(titles.every((title) => title.length > 0)).toBe(true);
+
+        // The separate-purchase boundary is said once, by the parts body.
+        expect(
+          await shell.getByText(/require a separate named furnishings authorization/i).count(),
+        ).toBe(1);
+      }).toPass({ timeout: 90_000 });
+    },
+  );
+
   /* ── Wave 2: the retired routes ─────────────────────────────────────────── */
 
   test('answers the retired routes with a 308 to the page anchor', async ({ page }) => {

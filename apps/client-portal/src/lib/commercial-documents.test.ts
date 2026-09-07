@@ -647,6 +647,122 @@ describe('commercial document client adapter', () => {
       expect(bundle?.tradeScope?.progress.acceptanceScanDocumentId).toBeNull();
     });
   });
+
+  /* ── The composed agreement's parts (Wave 1) ─────────────────────────────── */
+
+  describe('agreement parts', () => {
+    function withParts(parts: unknown) {
+      return adaptCommercialDocumentBundle({
+        document: {
+          id: 'ds-parts',
+          projectId: null,
+          kind: 'design_services',
+          state: 'sent',
+          title: 'Composed agreement',
+          version: 1,
+        },
+        parts,
+      });
+    }
+
+    it('reads an absent parts key as no parts, which is today’s body', () => {
+      const bundle = adaptCommercialDocumentBundle({
+        document: { id: 'ds-1', kind: 'design_services', state: 'sent', title: 'Agreement' },
+      });
+      expect(bundle?.parts).toEqual([]);
+    });
+
+    it('reads a non-array parts value as no parts', () => {
+      expect(withParts('nine')?.parts).toEqual([]);
+      expect(withParts(null)?.parts).toEqual([]);
+      expect(withParts({ 0: { id: 'p1', kind: 'clause', title: 'Services' } })?.parts).toEqual([]);
+    });
+
+    it('adapts a full part row into the camelCase leaf the renderer reads', () => {
+      const bundle = withParts([{
+        id: 'p1',
+        position: 1,
+        kind: 'schedule',
+        variant: 'rate_card',
+        part_key: 'patina.role_rates',
+        title: 'Role rates',
+        payload: { roles: [{ roleName: 'Principal designer', hourlyRateCents: 22_500, sortOrder: 1 }] },
+        required: true,
+      }]);
+      expect(bundle?.parts).toEqual([{
+        id: 'p1',
+        position: 1,
+        kind: 'schedule',
+        variant: 'rate_card',
+        partKey: 'patina.role_rates',
+        title: 'Role rates',
+        payload: { roles: [{ roleName: 'Principal designer', hourlyRateCents: 22_500, sortOrder: 1 }] },
+        required: true,
+      }]);
+    });
+
+    it('orders the parts by position, whatever order they arrived in', () => {
+      const bundle = withParts([
+        { id: 'c', position: 9, kind: 'clause', title: 'Terms' },
+        { id: 'a', position: 1, kind: 'clause', title: 'Services' },
+        { id: 'b', position: 4, kind: 'schedule', variant: 'ceiling', title: 'Ceiling' },
+      ]);
+      expect(bundle?.parts.map((p) => p.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    /**
+     * A leaf cannot be drawn without an id, a kind, and a title, so a row
+     * missing any of the three is dropped rather than rendered as a blank
+     * section — the same discipline the signature adapter applies to an
+     * incomplete receipt.
+     */
+    it('drops a row missing its id, kind, or title', () => {
+      const bundle = withParts([
+        { id: 'p1', position: 1, kind: 'clause', title: 'Services' },
+        { position: 2, kind: 'clause', title: 'No id' },
+        { id: 'p3', position: 3, title: 'No kind' },
+        { id: 'p4', position: 4, kind: 'clause' },
+        'not-a-row',
+      ]);
+      expect(bundle?.parts.map((p) => p.id)).toEqual(['p1']);
+    });
+
+    it('keeps arrival order for rows the RPC sent without a position', () => {
+      const bundle = withParts([
+        { id: 'first', kind: 'clause', title: 'Services' },
+        { id: 'second', kind: 'clause', title: 'Terms' },
+      ]);
+      expect(bundle?.parts.map((p) => p.id)).toEqual(['first', 'second']);
+    });
+
+    it('defaults a malformed variant, payload, and required flag rather than passing them through', () => {
+      const bundle = withParts([
+        { id: 'p1', position: 1, kind: 'clause', title: 'Services', variant: '', payload: 'body', required: 'yes' },
+      ]);
+      expect(bundle?.parts[0]).toMatchObject({ variant: null, payload: {}, required: false });
+    });
+
+    /**
+     * Provenance never crosses this edge. The client reads the agreement, not
+     * which template or Library part it was composed from.
+     */
+    it('never carries a part’s template or source provenance to the client', () => {
+      const bundle = withParts([{
+        id: 'p1', position: 1, kind: 'clause', title: 'Services',
+        source_template_key: 'studio.leah_default', source_part_id: 'sp-1',
+      }]);
+      expect(JSON.stringify(bundle)).not.toContain('leah_default');
+      expect(JSON.stringify(bundle)).not.toContain('sp-1');
+    });
+
+    it('reads a null billing ceiling as uncapped rather than collapsing it onto zero', () => {
+      const bundle = adaptCommercialDocumentBundle({
+        document: { id: 'ds-1', kind: 'design_services', state: 'sent', title: 'Agreement' },
+        serviceTerms: { billingCeilingCents: null, currency: 'USD' },
+      });
+      expect(bundle?.serviceTerms?.billingCeilingCents).toBeNull();
+    });
+  });
 });
 
 describe('signature provenance (paper vs. on-screen)', () => {
