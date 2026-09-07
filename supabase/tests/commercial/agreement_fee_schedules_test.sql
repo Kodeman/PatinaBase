@@ -1,0 +1,691 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00577 — Fee schedules, the consent sentence, the change history, and the
+--         copy she keeps.
+-- Runner: plain psql, ON_ERROR_STOP=1. Single transaction, ROLLBACK at the end.
+-- Run:
+--   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+--     -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_fee_schedules_test.sql
+--
+-- What this file exists to prove:
+--   (1)  THE CONSENT SENTENCE, byte for byte, for four part sets. The
+--        literals below are reproduced verbatim from build-sheet §5.1 and are
+--        the SAME STRINGS the client portal's consent-copy.test.ts pins
+--        against composeConsentLine. Two implementations, one sentence: if
+--        either moves, one of these two suites goes red. That is the whole
+--        job of this case.
+--   (2)  Zero money parts returns the legacy literal, character for
+--        character — note it has no comma before "and understand", and the
+--        composed form does.
+--   (3)  R9. A record-only variant PROJECTS NOTHING. Written straight through
+--        the RPC, not through a chip in the room.
+--   (4)  One fee basis. flat beside per_phase is refused in the designer's
+--        words.
+--   (5)  The projection: flat, per_phase (amount AND schedule), and the
+--        retainer's credit rule.
+--   (6)  Countersign snapshots all four onto the billing authority.
+--   (7)  R12. The execution snapshot's hash IS the fingerprint both parties
+--        signed against; the HTML carries every client-visible part's title
+--        and none of a hidden one's.
+--   (8)  The snapshot is immutable and one per agreement; a countersign retry
+--        does not mint a second.
+--   (9)  P8. The change history records added/edited with the designer's why
+--        and their given name, writes nothing for a no-op save, and cannot be
+--        edited afterwards.
+--   (10) The history is studio-only: the client reads none of it, and no key
+--        of the bundle mentions it.
+--   (11) The bundle carries the consent sentence always and the snapshot only
+--        after execution.
+--   (12) What she ticked is frozen with the act: the consent sentence and the
+--        acknowledged attachments land in the signature row's metadata.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id uuid, p_role text DEFAULT 'authenticated')
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims', jsonb_build_object(
+    'sub', p_user_id, 'role', p_role
+  )::text, true);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid, text) TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION pg_temp.assume_role(p_user_id uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_temp.assume_user(p_user_id);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_role(uuid) TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION pg_temp.reset_role()
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE 'RESET ROLE';
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION pg_temp.send_agreement(p_id uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_snapshot jsonb;
+BEGIN
+  v_snapshot := public.get_commercial_document_send_snapshot(p_id);
+  PERFORM public.send_commercial_document(
+    p_id, v_snapshot->>'documentFingerprint', NULL, TIMESTAMPTZ '2027-06-01 00:00:00+00'
+  );
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.send_agreement(uuid) TO PUBLIC;
+
+-- The four sentences the build sheet pins, reproduced VERBATIM. The TypeScript
+-- suite pins the same four; diff them by eye at review.
+CREATE TEMP TABLE _fs_consent (label text PRIMARY KEY, sentence text NOT NULL)
+  ON COMMIT DROP;
+INSERT INTO _fs_consent VALUES
+  ('legacy',
+   'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.'),
+  ('nine',
+   'I agree to these design-services terms, the signed role rates, the design authorization ceiling, the retainer credited against fees, and the furnishings deposit, and understand my signature alone does not authorize work until the studio countersigns.'),
+  ('consultation',
+   'I agree to these design-services terms, the signed role rates, and the design authorization ceiling, and understand my signature alone does not authorize work until the studio countersigns.'),
+  ('flat',
+   'I agree to these design-services terms and the flat design fee, and understand my signature alone does not authorize work until the studio countersigns.'),
+  ('per_phase',
+   'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.'),
+  ('furnishings',
+   'I agree to these design-services terms and the furnishings deposit, and understand my signature alone does not authorize work until the studio countersigns.');
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (0) FIXTURE — one studio, its owner (the lead), one co-member, one client.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO auth.users (
+  id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+  instance_id, aud, role
+) VALUES
+  ('a7000000-0000-4000-8000-000000000001', 'fs-lead@test.invalid', '', now(), now(), now(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('a7000000-0000-4000-8000-000000000002', 'fs-comember@test.invalid', '', now(), now(), now(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('a7000000-0000-4000-8000-000000000004', 'fs-client@test.invalid', '', now(), now(), now(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+SET LOCAL session_replication_role = replica;
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('a7000000-0000-4000-8000-000000000001', 'fs-lead@test.invalid', 'Marguerite  Vaudrey', true, now(), now()),
+  ('a7000000-0000-4000-8000-000000000002', 'fs-comember@test.invalid', 'Fee Co-member', true, now(), now()),
+  ('a7000000-0000-4000-8000-000000000004', 'fs-client@test.invalid', 'Fee Client', false, now(), now())
+ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name;
+SET LOCAL session_replication_role = origin;
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('a7100000-0000-4000-8000-000000000001', 'design_studio', 'Fee Studio', 'agreement-fees-test', 'active');
+
+SELECT pg_temp.assume_user('a7000000-0000-4000-8000-000000000001', 'service_role');
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('a7110000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001',
+   'a7100000-0000-4000-8000-000000000001', 'owner', 'active', now() - interval '2 days'),
+  ('a7110000-0000-4000-8000-000000000002', 'a7000000-0000-4000-8000-000000000002',
+   'a7100000-0000-4000-8000-000000000001', 'member', 'active', now() - interval '1 day');
+
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'a7000000-0000-4000-8000-000000000001'::uuid, role.id,
+       'a7000000-0000-4000-8000-000000000001'::uuid
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
+INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, status, source)
+VALUES ('a7200000-0000-4000-8000-000000000001',
+        'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000004',
+        'Fee Client', 'proposal', 'direct');
+
+CREATE OR REPLACE FUNCTION pg_temp.mint_agreement(p_id uuid, p_title text)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO public.proposals (
+    id, designer_id, designer_client_id, client_id, title, description,
+    total_amount, status, valid_until
+  ) VALUES (
+    p_id, 'a7000000-0000-4000-8000-000000000001',
+    'a7200000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000004',
+    p_title, 'A composed agreement.', 0, 'draft', DATE '2027-06-01'
+  );
+  INSERT INTO public.proposal_phases (
+    proposal_id, name, phase_key, duration_days, lane, fee_cents, sort_order
+  ) VALUES (p_id, 'Design development', 'design-development', 30, 'main', 0, 0);
+  PERFORM public.upsert_design_services_draft(
+    p_id,
+    jsonb_build_object(
+      'scope', 'Whole-home interior design services.',
+      'deliverables', jsonb_build_array('Concept', 'Selections'),
+      'exclusions', jsonb_build_array('Structural engineering'),
+      'billingCeilingCents', 2400000,
+      'retainerAmountCents', 500000,
+      'retainerActivationPolicy', 'immediate',
+      'billingCadence', 'monthly', 'currency', 'USD',
+      'terms', 'Actual hours to the signed ceiling.',
+      'currentRateVersion', 1,
+      'furnishingsDepositPercent', 50
+    ),
+    jsonb_build_array(jsonb_build_object(
+      'version', 1, 'roleName', 'Lead Designer',
+      'hourlyRateCents', 15000, 'sortOrder', 0, 'effectiveAt', DATE '2026-01-01'
+    ))
+  );
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.mint_agreement(uuid, text) TO PUBLIC;
+
+SELECT pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-000000000001', 'The nine standard parts');
+SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-000000000002', 'The per-phase agreement');
+SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-000000000003', 'The variant bench');
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (1) (2) THE CONSENT SENTENCE — four part sets, byte for byte, plus the
+--         legacy literal on zero money parts.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_got text;
+BEGIN
+  -- (a) the nine standard parts
+  PERFORM public.materialize_standard_parts('a7300000-0000-4000-8000-000000000001');
+  v_got := public.compose_agreement_consent('a7300000-0000-4000-8000-000000000001');
+  ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'nine'),
+    format('the nine standard parts compose the wrong sentence:%s  got: %L%s  want: %L',
+           E'\n', v_got, E'\n', (SELECT sentence FROM _fs_consent WHERE label = 'nine'));
+
+  -- (b) consultation: a rate card and a ceiling
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000003',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+                         'payload', jsonb_build_object('body', 'Consultation.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+                         'partKey', 'patina.role_rates', 'title', 'Role rates',
+                         'payload', jsonb_build_object('roles', jsonb_build_array(
+                           jsonb_build_object('roleName', 'Principal',
+                                              'hourlyRateCents', 22500, 'sortOrder', 0)))),
+      jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+                         'partKey', 'patina.ceiling', 'title', 'Ceiling',
+                         'payload', jsonb_build_object('cents', 1200000))));
+  v_got := public.compose_agreement_consent('a7300000-0000-4000-8000-000000000003');
+  ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'consultation'),
+    format('the consultation set composes the wrong sentence: %L', v_got);
+
+  -- (c) a flat fee alone, with seven record-only variants beside it (case 8
+  --     of the drift suite: record-only contributes nothing)
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000003',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+                         'partKey', 'custom.flat', 'title', 'Flat design fee',
+                         'payload', jsonb_build_object('cents', 800000)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'percent_of_cost',
+                         'partKey', 'custom.poc', 'title', 'Percent of cost',
+                         'payload', jsonb_build_object('basis', 'cost', 'percent', 12)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'percent_of_spend',
+                         'partKey', 'custom.pos', 'title', 'Percent of spend',
+                         'payload', jsonb_build_object('basis', 'spend', 'percent', 10)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'cost_plus',
+                         'partKey', 'custom.cp', 'title', 'Cost plus',
+                         'payload', jsonb_build_object('markupPercent', 18)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'day_rate',
+                         'partKey', 'custom.dr', 'title', 'Day rate',
+                         'payload', jsonb_build_object('dayRateCents', 250000, 'minimumDays', 2)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'package',
+                         'partKey', 'custom.pk', 'title', 'Package',
+                         'payload', jsonb_build_object('name', 'Refresh', 'priceCents', 400000)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'pricing_basis',
+                         'partKey', 'custom.pb', 'title', 'Pricing basis',
+                         'payload', jsonb_build_object('basis', 'stipulated sum')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'draws',
+                         'partKey', 'custom.dw', 'title', 'Draws',
+                         'payload', jsonb_build_object('draws', jsonb_build_array())),
+      jsonb_build_object('kind', 'schedule', 'variant', 'allowances',
+                         'partKey', 'custom.al', 'title', 'Allowances',
+                         'payload', jsonb_build_object('allowances', jsonb_build_array()))));
+  v_got := public.compose_agreement_consent('a7300000-0000-4000-8000-000000000003');
+  ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'flat'),
+    format('a flat fee beside seven record-only variants composes the wrong sentence: %L', v_got);
+
+  -- (3) and NOTHING of those seven reached the money row.
+  ASSERT (SELECT fee_basis FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 'flat',
+    'R9: the flat part names the basis';
+  ASSERT (SELECT fee_amount_cents FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 800000,
+    'R9: the flat part names the amount';
+  ASSERT (SELECT fee_schedule FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') IS NULL,
+    'R9: a flat fee has no schedule';
+
+  -- (d) per-phase beside a non-refundable retainer
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000003',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'schedule', 'variant', 'per_phase',
+                         'partKey', 'custom.perphase', 'title', 'Per-phase fee',
+                         'payload', jsonb_build_object('phases', jsonb_build_array(
+                           jsonb_build_object('key', 'a', 'label', 'Concept', 'cents', 350000),
+                           jsonb_build_object('key', 'b', 'label', 'Documentation', 'cents', 450000),
+                           jsonb_build_object('key', 'c', 'label', 'Selections', 'cents', 300000)))),
+      jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+                         'partKey', 'patina.retainer', 'title', 'Retainer',
+                         'payload', jsonb_build_object(
+                           'cents', 500000, 'creditRule', 'non_refundable',
+                           'activationPolicy', 'immediate'))));
+  v_got := public.compose_agreement_consent('a7300000-0000-4000-8000-000000000003');
+  ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'per_phase'),
+    format('per-phase beside a non-refundable retainer composes the wrong sentence: %L', v_got);
+
+  -- (5) the per-phase projection
+  ASSERT (SELECT fee_basis FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 'per_phase',
+    'a per-phase agreement names its basis';
+  ASSERT (SELECT fee_amount_cents FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 1100000,
+    'the per-phase amount is the sum of the phases';
+  ASSERT (SELECT jsonb_array_length(fee_schedule) FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 3,
+    'the per-phase schedule rides across whole';
+  ASSERT (SELECT retainer_credit_rule FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 'non_refundable',
+    'the retainer''s credit rule reaches the money row';
+
+  -- (e) furnishings: a procurement deposit alone
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000003',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+                         'payload', jsonb_build_object('body', 'Furnishings only.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'procurement',
+                         'partKey', 'patina.deposit', 'title', 'Furnishings deposit',
+                         'payload', jsonb_build_object('depositPercent', 50))));
+  v_got := public.compose_agreement_consent('a7300000-0000-4000-8000-000000000003');
+  ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'furnishings'),
+    format('a furnishings deposit alone composes the wrong sentence: %L', v_got);
+
+  -- and with the deposit gone, and no other money part, the legacy literal.
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000003',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+                         'payload', jsonb_build_object('body', 'Prose only.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'cadence',
+                         'partKey', 'patina.cadence', 'title', 'Billing cadence',
+                         'payload', jsonb_build_object('cadence', 'monthly'))));
+  v_got := public.compose_agreement_consent('a7300000-0000-4000-8000-000000000003');
+  ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'legacy'),
+    format('a cadence is not an authorization — expected the legacy literal, got %L', v_got);
+
+  -- (3, continued) and after all of that the money row says nothing at all.
+  ASSERT (SELECT fee_basis FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') IS NULL,
+    'no fee part means no fee basis';
+  ASSERT (SELECT fee_amount_cents FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') IS NULL,
+    'no fee part means no fee amount';
+  ASSERT (SELECT retainer_credit_rule FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 'credited',
+    'no retainer part falls back to credited';
+
+  -- money parts the studio kept to itself contribute nothing (R8)
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000003',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms', 'title', 'Terms',
+                         'payload', jsonb_build_object('body', 'Terms.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat', 'clientVisible', false,
+                         'partKey', 'custom.hidden_flat', 'title', 'Flat design fee',
+                         'payload', jsonb_build_object('cents', 800000))));
+  v_got := public.compose_agreement_consent('a7300000-0000-4000-8000-000000000003');
+  ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'legacy'),
+    format('a hidden money part is not consented to — expected the legacy literal, got %L', v_got);
+  -- but it still reaches the authority, because it still bills her.
+  ASSERT (SELECT fee_basis FROM public.proposal_service_terms
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 'flat',
+    'a studio-only fee still projects — the authority draws on it either way';
+
+  RAISE NOTICE 'PASS 1-3,5: the consent sentence is byte-exact for six part sets, and R9 projects nothing it should not';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (4) One fee basis.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE v_message text;
+BEGIN
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a7300000-0000-4000-8000-000000000003',
+      jsonb_build_array(
+        jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+                           'partKey', 'custom.flat', 'title', 'Flat design fee',
+                           'payload', jsonb_build_object('cents', 800000)),
+        jsonb_build_object('kind', 'schedule', 'variant', 'per_phase',
+                           'partKey', 'custom.perphase', 'title', 'Per-phase fee',
+                           'payload', jsonb_build_object('phases', jsonb_build_array(
+                             jsonb_build_object('key', 'a', 'label', 'Concept', 'cents', 350000))))));
+    RAISE EXCEPTION 'an agreement carrying two fee bases must be refused';
+  EXCEPTION WHEN check_violation THEN
+    GET STACKED DIAGNOSTICS v_message = MESSAGE_TEXT;
+    ASSERT v_message = 'an agreement carries one fee basis',
+      format('the refusal must be worded for the designer, got %L', v_message);
+  END;
+
+  -- Two flats are the same problem, and earn the same sentence.
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a7300000-0000-4000-8000-000000000003',
+      jsonb_build_array(
+        jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+                           'partKey', 'custom.flat_a', 'title', 'Flat design fee',
+                           'payload', jsonb_build_object('cents', 800000)),
+        jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+                           'partKey', 'custom.flat_b', 'title', 'Another flat fee',
+                           'payload', jsonb_build_object('cents', 900000))));
+    RAISE EXCEPTION 'two flat fees must be refused';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  -- A phase fee stated as a string is refused before it reaches the column.
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a7300000-0000-4000-8000-000000000003',
+      jsonb_build_array(jsonb_build_object(
+        'kind', 'schedule', 'variant', 'per_phase',
+        'partKey', 'custom.perphase', 'title', 'Per-phase fee',
+        'payload', jsonb_build_object('phases', jsonb_build_array(
+          jsonb_build_object('key', 'a', 'label', 'Concept', 'cents', '350000'))))));
+    RAISE EXCEPTION 'a phase fee stated as a string must be refused';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  RAISE NOTICE 'PASS 4: one fee basis, in the designer''s words, and a malformed phase fee never reaches the column';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (9) P8 — the change history.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_event public.agreement_part_events%ROWTYPE;
+  v_before integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
+  DELETE FROM public.agreement_part_events
+  WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000002',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+      'payload', jsonb_build_object('body', 'The study is in scope.'))),
+    'Added the study to the scope');
+
+  SELECT * INTO v_event FROM public.agreement_part_events
+  WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002'
+    AND part_key = 'patina.services';
+  ASSERT v_event.action = 'added',
+    format('the first save of a part is an addition, got %L', v_event.action);
+  ASSERT v_event.why = 'Added the study to the scope', 'the why is kept with the change';
+  ASSERT v_event.actor_name = 'Marguerite',
+    format('the attribution is the first token of the full name, got %L', v_event.actor_name);
+  ASSERT v_event.actor = 'a7000000-0000-4000-8000-000000000001', 'the actor is recorded';
+  ASSERT v_event.before IS NULL AND v_event.after IS NOT NULL,
+    'an addition has an after and no before';
+
+  -- an edit with no why carries no attribution either
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000002',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+      'payload', jsonb_build_object('body', 'The study and the landing.'))));
+
+  SELECT * INTO v_event FROM public.agreement_part_events
+  WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002'
+    AND action = 'edited';
+  ASSERT v_event.id IS NOT NULL, 'a payload change is an edit';
+  ASSERT v_event.why IS NULL AND v_event.actor_name IS NULL,
+    'no why means no attribution — an attribution with nothing attributed to it is noise';
+  ASSERT v_event.before->>'part_key' = 'patina.services'
+     AND v_event.after->>'part_key' = 'patina.services',
+    'an edit carries both sides';
+
+  -- a no-op save writes nothing at all
+  SELECT count(*) INTO v_before FROM public.agreement_part_events
+  WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000002',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+      'payload', jsonb_build_object('body', 'The study and the landing.'))));
+  ASSERT (SELECT count(*) FROM public.agreement_part_events
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002') = v_before,
+    'a no-op save writes no history';
+
+  -- removing a part is recorded as a removal
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000002',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'clause', 'partKey', 'patina.terms', 'title', 'Terms',
+      'payload', jsonb_build_object('body', 'Terms.'))));
+  ASSERT EXISTS (SELECT 1 FROM public.agreement_part_events
+                 WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002'
+                   AND part_key = 'patina.services' AND action = 'removed'),
+    'a removed part is recorded as removed';
+  ASSERT (SELECT part_id FROM public.agreement_part_events
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002'
+            AND part_key = 'patina.services' AND action = 'removed') IS NULL,
+    'a removed part''s event points at no row';
+
+  -- the history is append-only
+  BEGIN
+    UPDATE public.agreement_part_events SET why = 'rewritten'
+    WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+    RAISE EXCEPTION 'the history must refuse UPDATE';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL;
+  END;
+  BEGIN
+    DELETE FROM public.agreement_part_events
+    WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+    RAISE EXCEPTION 'the history must refuse DELETE';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL;
+  END;
+
+  RAISE NOTICE 'PASS 9: the change history records added/edited/removed with the why and the attribution, and cannot be rewritten';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (10) The history is studio-only.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE v_seen integer;
+BEGIN
+  PERFORM pg_temp.assume_role('a7000000-0000-4000-8000-000000000004');
+  SELECT count(*) INTO v_seen FROM public.agreement_part_events;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_seen = 0,
+    format('R8: the client reads the agreement, not the studio''s revision log — saw %s rows', v_seen);
+
+  PERFORM pg_temp.assume_role('a7000000-0000-4000-8000-000000000002');
+  SELECT count(*) INTO v_seen FROM public.agreement_part_events
+  WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+  PERFORM pg_temp.reset_role();
+  ASSERT v_seen > 0, 'a studio co-member reads the history';
+
+  RAISE NOTICE 'PASS 10: the change history is studio-only';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (6) (7) (8) (11) (12) THE FULL RAIL on a per-phase agreement:
+--         compose → send → sign (with consent) → countersign.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_signed jsonb;
+  v_executed jsonb;
+  v_authority public.project_billing_authorities%ROWTYPE;
+  v_snapshot public.agreement_execution_snapshots%ROWTYPE;
+  v_terms public.proposal_service_terms%ROWTYPE;
+  v_bundle jsonb;
+  v_sentence text;
+  v_signature public.commercial_document_signatures%ROWTYPE;
+  v_created timestamptz;
+BEGIN
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-000000000002',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+                         'payload', jsonb_build_object('body', 'Whole-home design.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'per_phase',
+                         'partKey', 'custom.perphase', 'title', 'Per-phase fee',
+                         'payload', jsonb_build_object('phases', jsonb_build_array(
+                           jsonb_build_object('key', 'a', 'label', 'Concept', 'cents', 350000),
+                           jsonb_build_object('key', 'b', 'label', 'Documentation', 'cents', 450000),
+                           jsonb_build_object('key', 'c', 'label', 'Selections', 'cents', 300000)))),
+      jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+                         'partKey', 'patina.retainer', 'title', 'Retainer',
+                         'payload', jsonb_build_object(
+                           'cents', 500000, 'creditRule', 'non_refundable',
+                           'activationPolicy', 'immediate')),
+      jsonb_build_object('kind', 'clause', 'partKey', 'custom.private_note',
+                         'title', 'Internal note', 'clientVisible', false,
+                         'payload', jsonb_build_object('body', 'Studio eyes only.'))),
+    'Composed for execution');
+
+  -- (11a) the bundle carries the sentence, and no snapshot yet.
+  v_bundle := public.get_client_commercial_document_bundle('a7300000-0000-4000-8000-000000000002');
+  v_sentence := v_bundle->>'consentSentence';
+  ASSERT v_sentence = (SELECT sentence FROM _fs_consent WHERE label = 'per_phase'),
+    format('the bundle must carry the composed sentence, got %L', v_sentence);
+  ASSERT jsonb_typeof(v_bundle->'executionSnapshot') = 'null',
+    'there is no snapshot before execution';
+  ASSERT NOT (v_bundle::text ~* 'agreement_part_events|partEvents|"history"'),
+    'no key of the client bundle mentions the studio''s revision log';
+
+  PERFORM pg_temp.send_agreement('a7300000-0000-4000-8000-000000000002');
+
+  -- (12) the client signs, and what she ticked is frozen with the act.
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000004', 'service_role');
+  EXECUTE 'SET LOCAL ROLE service_role';
+  v_signed := public.sign_design_services_agreement_with_trusted_ip(
+    'a7300000-0000-4000-8000-000000000002', 'Fee Client',
+    'a7000000-0000-4000-8000-000000000004', '203.0.113.7',
+    jsonb_build_object(
+      'consentSentence', v_sentence,
+      'attachmentsAcknowledged', jsonb_build_array('custom.leaf_a', 'custom.leaf_b')));
+  PERFORM pg_temp.reset_role();
+  ASSERT (v_signed->>'newlyClientSigned')::boolean,
+    format('the per-phase agreement must be signable: %s', v_signed);
+
+  SELECT * INTO v_signature FROM public.commercial_document_signatures
+  WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002' AND party_role = 'client';
+  ASSERT v_signature.metadata->>'consentSentence' = v_sentence,
+    format('the sentence she ticked must be frozen with the signature, got %L',
+           v_signature.metadata->>'consentSentence');
+  ASSERT v_signature.metadata->'attachmentsAcknowledged'
+         = jsonb_build_array('custom.leaf_a', 'custom.leaf_b'),
+    format('the acknowledged attachments ride with the signature, got %s',
+           v_signature.metadata->'attachmentsAcknowledged');
+  ASSERT v_signature.metadata->>'via' = 'sign_design_services_agreement',
+    'the existing metadata is not displaced by the consent';
+
+  -- (6) countersign snapshots the four fee columns onto the authority.
+  PERFORM pg_temp.assume_role('a7000000-0000-4000-8000-000000000001');
+  v_executed := public.countersign_design_services_agreement(
+    'a7300000-0000-4000-8000-000000000002', 'Marguerite Vaudrey');
+  PERFORM pg_temp.reset_role();
+  ASSERT (v_executed->>'newlyExecuted')::boolean,
+    format('the per-phase agreement must countersign: %s', v_executed);
+
+  SELECT * INTO v_terms FROM public.proposal_service_terms
+  WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+  SELECT * INTO v_authority FROM public.project_billing_authorities
+  WHERE id = (v_executed->>'billingAuthorityId')::uuid;
+  ASSERT v_authority.fee_basis = 'per_phase' AND v_authority.fee_basis = v_terms.fee_basis,
+    format('the authority snapshots the fee basis, got %L', v_authority.fee_basis);
+  ASSERT v_authority.fee_amount_cents = 1100000
+     AND v_authority.fee_amount_cents = v_terms.fee_amount_cents,
+    format('the authority snapshots the fee amount, got %s', v_authority.fee_amount_cents);
+  ASSERT jsonb_array_length(v_authority.fee_schedule) = 3
+     AND v_authority.fee_schedule = v_terms.fee_schedule,
+    'the authority snapshots the per-phase schedule whole';
+  ASSERT v_authority.retainer_credit_rule = 'non_refundable'
+     AND v_authority.retainer_credit_rule = v_terms.retainer_credit_rule,
+    format('the authority snapshots the credit rule, got %L', v_authority.retainer_credit_rule);
+
+  -- (7) R12 — the snapshot's hash IS the fingerprint both parties signed.
+  SELECT * INTO v_snapshot FROM public.agreement_execution_snapshots
+  WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+  ASSERT v_snapshot.proposal_id IS NOT NULL, 'countersign writes the copy she keeps';
+  ASSERT v_snapshot.document_hash = (
+    SELECT evidence_fingerprint FROM public.commercial_document_signatures
+    WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002' AND party_role = 'studio'),
+    'the snapshot hash is the studio signature''s evidence fingerprint';
+  ASSERT v_snapshot.document_hash =
+    public._commercial_document_fingerprint('a7300000-0000-4000-8000-000000000002'),
+    'the snapshot hash is the document fingerprint';
+  ASSERT char_length(v_snapshot.html) > 0, 'the snapshot html is not empty';
+  ASSERT position('Per-phase fee' IN v_snapshot.html) > 0,
+    'the snapshot carries a client-visible part''s title';
+  ASSERT position('Services' IN v_snapshot.html) > 0,
+    'the snapshot carries every client-visible part''s title';
+  ASSERT position('Internal note' IN v_snapshot.html) = 0,
+    'R8: the snapshot carries NO studio-only part''s title';
+  ASSERT position('Studio eyes only' IN v_snapshot.html) = 0,
+    'R8: nor a studio-only part''s body';
+  ASSERT jsonb_array_length(v_snapshot.part_set) = 4,
+    'part_set records EVERY part, visible or not — it is the instrument, not the page';
+
+  -- (8) immutable, and one per agreement.
+  v_created := v_snapshot.created_at;
+  BEGIN
+    UPDATE public.agreement_execution_snapshots SET html = 'x'
+    WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+    RAISE EXCEPTION 'the snapshot must refuse UPDATE';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL;
+  END;
+  BEGIN
+    DELETE FROM public.agreement_execution_snapshots
+    WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002';
+    RAISE EXCEPTION 'the snapshot must refuse DELETE';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL;
+  END;
+
+  PERFORM pg_temp.assume_role('a7000000-0000-4000-8000-000000000001');
+  PERFORM public.countersign_design_services_agreement(
+    'a7300000-0000-4000-8000-000000000002', 'Marguerite Vaudrey');
+  PERFORM pg_temp.reset_role();
+  ASSERT (SELECT count(*) FROM public.agreement_execution_snapshots
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002') = 1,
+    'a countersign retry must not mint a second snapshot';
+  ASSERT (SELECT created_at FROM public.agreement_execution_snapshots
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002') = v_created,
+    'a countersign retry leaves the original snapshot untouched';
+
+  -- (11b) and the bundle hands the client the frozen copy.
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle('a7300000-0000-4000-8000-000000000002');
+  ASSERT v_bundle->'executionSnapshot'->>'documentHash' = v_snapshot.document_hash,
+    'the bundle projects the snapshot hash';
+  ASSERT v_bundle->'executionSnapshot'->>'html' = v_snapshot.html,
+    'the bundle projects the frozen html';
+  ASSERT NOT (v_bundle->'executionSnapshot' ? 'partSet'),
+    'the client reads the html she was given, not the studio''s row shapes';
+
+  RAISE NOTICE 'PASS 6-8,11-12: the rail carries the fee basis to the authority, freezes the copy she keeps, and records what she ticked';
+END $$;
+
+ROLLBACK;
