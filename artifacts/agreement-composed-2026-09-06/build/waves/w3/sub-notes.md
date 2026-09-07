@@ -258,3 +258,158 @@ backend lane's migration, which does not exist yet on any stack.
 Advisory: `prettier --check` warns on every file this lane touched, including
 the two it only edited — `posthog.ts` at `main` warns identically, so the drift
 predates the wave and is not the lane's.
+
+---
+
+# Round 2 — the five findings
+
+Commit: `6a8c32217 fix(client): ink a trade signature only on positive evidence,
+and never in the wrong name` (4 files, +179 / −21). Two findings are code, three
+are not this lane's to close.
+
+## N2 (major) — FIXED: a success allowlist, and a reload instead of a claim
+
+Round 1's S5 fix made the answer FAILURE-first: a recognised failure word or an
+empty answer was a failure, and everything else was a committed signature. That
+closed one hole and opened its mirror. `sign_trade_agreement_by_token`'s return
+shape is still unfrozen, so a sixth classification the backend adds later —
+`not_sent`, `contact_mismatch`, `token_consumed`, `error` — returned without
+raising would have fallen straight through to the receipt and printed
+"Signed. Dana Hall" to a sub with no signature row. The sub walks away believing
+they signed. That is strictly worse than the sentence S5 was protecting against.
+
+Neither pure reading is safe, because an unheard-of word belongs to neither
+list. So the action now inks a receipt only on **positive evidence**:
+
+- a recognised success word — `signed`, `saved`, `already_signed`; **or**
+- a receipt key actually present on the answer — `signedName` / `signed_name` /
+  `signedAt` / `signed_at`, non-empty string only (a `signed_at: null` is not a
+  receipt).
+
+Everything else returns the new `{ status: 'unknown' }`, which asserts neither
+outcome. `trade-agreement-signature.tsx` answers it with
+`window.location.reload()` — the reload half of S5's own recommended hardening,
+which round 1 dropped — using the portal's existing idiom (`quiz-flow.tsx:98`,
+`site-request-guest.tsx:872`), guarded by `typeof window !== 'undefined'`. The
+page comes back saying whatever is actually true of that token. Nothing is
+inked, no alert is raised, and the act is not settled.
+
+Recognised failure words keep their own sentences exactly as before, and the
+S5 shapes stay green: `{ ok: true, signed_at: … }` is still a signature (it
+carries a receipt key), `[{ status: 'signed' }]` is still a signature (a
+success word), and a snake_case receipt still reads as one.
+
+Note the interaction with S4: under the implemented §3.2 reading, the reload
+after an `unknown` lands on a token that may already be spent, so the sub may
+read "Page not found". That is the honest answer to "I cannot tell you whether
+this committed" — it is not a receipt over nothing, and it changes if S4 is
+ruled the other way.
+
+Tests added to `__tests__/actions.test.ts` (4) and
+`__tests__/trade-agreement-signature.test.tsx` (1):
+
+- four unknown refusal words (`not_sent`, `contact_mismatch`,
+  `token_consumed`, `error`) each → `unknown`;
+- `{ ok: true }` with no receipt key at all → `unknown`;
+- `{ status: 'contact_mismatch', signed_at: null }` → `unknown` (an empty
+  receipt key is not evidence);
+- `{ status: 'not_sent', signed_at: '…' }` → `saved` (the other half of the
+  OR: a real `signed_at` IS the signature);
+- the component: on `unknown`, `location.reload` is called once, no receipt
+  renders, no "Signed." renders, and no alert is raised.
+
+## N3 (major) — FIXED: a replay never carries the replayer's name
+
+`signedName: readString(row, …) ?? signedName` was correct for a fresh
+signature and wrong for a replay. §4.5 and RC-1 both require the replay to show
+THE ORIGINAL receipt, and the RPC's shape is unfrozen, so a bare
+`{ status: 'already_signed' }` rendered "Signed. <whoever just typed a name>".
+Reachable without any backend bug: two people hold the emailed link, A signs,
+B's already-loaded page completes its hold, B reads a receipt in B's name over
+A's signature.
+
+`already_signed` now returns the receipt's own name **or null** — never the
+typed fallback, which is kept only on `saved`. `SignTradeAgreementResult`'s
+`already_signed` arm widens to `signedName: string | null`, and the `Receipt`
+component builds its second line from `[signedName, date].filter(Boolean)`, so
+a nameless replay prints the date alone and a receipt with neither prints no
+second line at all. The existing "Dana Hall · 6 September 2026" rendering is
+unchanged.
+
+Tests: two in `actions.test.ts` (`already_signed` with a date but no name →
+`signedName: null`; a bare `already_signed` → both null) and one component test
+asserting the receipt shows "Signed." and "6 September 2026" and does NOT show
+the name the replayer just typed.
+
+## S2 (blocker) — re-confirmed, still NOT this lane's work
+
+The gate is red on this branch for exactly the same two cross-lane errors as
+round 1, unchanged by the round-2 fix:
+
+```
+src/components/commercial-document-shell.tsx(26,7): error TS2741: Property 'design_build' is missing …
+src/components/threshold/door-gate.tsx(266,7): error TS2322: Type '"design_build"' is not assignable to type 'MakingGateKind'.
+```
+
+`tsc` reports every error in the project, and **both** are in client-lane files
+(build-sheet §2.4) that `git diff main...HEAD --name-only` shows this branch
+does not touch — so this lane's own files carry zero type errors.
+
+I also tried to prove the merged state green by grafting the three fixed files
+from `agreement/w3-client` in temporarily. It does not work as a proof and the
+graft was reverted immediately (`git checkout HEAD -- <the three paths>`,
+working tree confirmed clean of them afterwards): those three files import
+`@/components/commercial/design-build-body`, `./deposit-offer` and a
+`designBuild` key on `CommercialDocumentBundle` that only exist on the full
+client branch, so a partial graft trades two errors for four. **The gate can
+only be run green on the integration merge, by the steward, after
+`agreement/w3-client` lands.** No edit is made here: editing those two files in
+this lane would collide with the client lane's own edit of the same lines.
+
+## N5 (major) — acknowledged, and blocking on the backend, not on this lane
+
+Nothing here has executed against a database, because
+`resolve_trade_agreement_link`, `sign_trade_agreement_by_token` and
+`mint_trade_agreement_token` exist on no branch — `agreement/w3-backend` still
+carries no migration. `tests/trade-agreement-link.spec.ts` therefore still only
+`--list`s:
+
+```
+Total: 4 tests in 1 file   (all [chromium])
+```
+
+unchanged by round 2. The bid-ledger half of R13 is proven at the unit level
+(`page.test.tsx` and `trade-agreement-signature.test.tsx` bolt a full studio
+ledger onto the props and assert none of it reaches the DOM), and the round-2
+work above is proven the same way. **Integration must not merge this branch
+until migration 2 lands, the sign RPC's return shape is frozen I-3-style, and
+`pnpm --filter @patina/client-portal test:e2e -- tests/trade-agreement-link.spec.ts --workers=1`
+has actually run green.** When that shape is frozen, the N2 allowlist above is
+the thing to check it against: if the frozen success word is not one of
+`signed` / `saved` / `already_signed` and the receipt keys are spelled some
+third way, the action will read a real signature as `unknown` and reload —
+safe, but wrong, and a one-line fix at that point.
+
+## S4 (major) — still open, still the orchestrator's to rule
+
+No ruling has arrived, so nothing changed: `page.tsx`'s header still writes the
+contradiction out rather than assuming a side, and
+`trade-agreement-link.spec.ts` still asserts only what both horns agree on
+(`getByText(/page not found/i).or(getByTestId('trade-agreement-receipt'))`,
+plus zero signable form and zero name field). The two horns are restated
+above under "S4 (major) — ESCALATED". Re-pin the e2e to the single ruled horn
+once it lands. N2's reload path inherits the same ruling, as noted above.
+
+## Gates, round 2
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @patina/client-portal type-check` | **FAIL, exit 2** — the same two S2 cross-lane errors, 0 in this lane's files |
+| `pnpm --filter @patina/client-portal test` | **PASS** — 132 suites, 2144 tests (was 2136; +8 from N2 and N3) |
+| `pnpm --filter @patina/client-portal test:coverage` | **PASS** — 74.78 / 70.28 / 74.79 / 77.10 against the 70 / 60 / 70 / 70 floor; `src/app/trade/[token]` at 94.66 / 92.92 / 100 / 99.21 |
+| `jest src/app/trade` | **PASS** — 3 suites, 56 tests |
+| `playwright … trade-agreement-link.spec.ts --list` | 4 tests, chromium — still cannot RUN (N5) |
+
+Advisory unchanged: `prettier --check` warns on the two source files this
+round touched, as it did at round 1 and as it does at `main` for their
+neighbours.
