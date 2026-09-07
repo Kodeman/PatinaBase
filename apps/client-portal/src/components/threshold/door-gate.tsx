@@ -101,7 +101,12 @@ export interface DoorGateProps {
    * same signature.
    */
   note: NoteModel | null;
-  projectId: string;
+  /**
+   * Null on the household door (R30): an ORIGIN agreement is bound to no
+   * project until the studio countersigns it, and `DoorActs` and the
+   * invalidation both already take null — the ask simply has no thread.
+   */
+  projectId: string | null;
   /**
    * Fired the moment the signature lands, BEFORE the refetch that takes the
    * paper out of the open papers. The Threshold answers it by keeping this

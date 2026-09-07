@@ -47,7 +47,9 @@ jest.mock('@/components/projects/ProjectsEmptyState', () => ({
 }));
 
 jest.mock('@/components/threshold/letterbox-door', () => ({
-  LetterboxDoor: () => <div data-testid="letterbox-door" />,
+  LetterboxDoor: ({ namedProposalId }: { namedProposalId?: string | null }) => (
+    <div data-testid="letterbox-door" data-named-proposal={namedProposalId ?? ''} />
+  ),
 }));
 
 const mockProjects = fetchClientProjects as jest.Mock;
@@ -243,5 +245,37 @@ describe('the front door', () => {
     });
     expect(mockActiveHouse).not.toHaveBeenCalled();
     expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p1');
+  });
+
+  /* R30. An ORIGIN agreement is bound to no project until the studio
+     countersigns it, so `/proposals/<id>` folds to `/?proposal=<id>#door` for
+     a household with no house at all. `resolveHouseForInstrument` has no house
+     to answer with and rightly says null — the param names the DOOR, and it
+     has to reach the door rather than being dropped with the house. */
+  it('carries the named agreement to the household door when there is no house', async () => {
+    mockProjects.mockResolvedValue([]);
+    mockActiveHouse.mockResolvedValue(null);
+
+    render(await HomePage({ searchParams: Promise.resolve({ proposal: 'prop-origin' }) }));
+
+    expect(screen.getByTestId('letterbox-door')).toHaveAttribute(
+      'data-named-proposal',
+      'prop-origin',
+    );
+    expect(mockProjectView).not.toHaveBeenCalled();
+  });
+
+  it('opens the house, not the household door, once countersigning made one', async () => {
+    // The same `?proposal=` address, after the studio countersigned: the
+    // project exists now, so the agreement is read on its own doorstep and
+    // nothing renders it twice.
+    mockProjects.mockResolvedValue([listItem('p1', 'The Vale Residence')]);
+    mockActiveHouse.mockResolvedValue('p1');
+    mockProjectView.mockResolvedValue(view('p1'));
+
+    render(await HomePage({ searchParams: Promise.resolve({ proposal: 'prop-origin' }) }));
+
+    expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p1');
+    expect(screen.queryByTestId('letterbox-door')).not.toBeInTheDocument();
   });
 });
