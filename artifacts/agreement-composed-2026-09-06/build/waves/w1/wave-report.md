@@ -301,3 +301,70 @@ Walk targets for all of the above are written up in `walk-env.md` §5.
   the steward's gate list names the client suite only.
 - Did not resolve any lane finding. The majors in §7 are open.
 - Did not verify anything in production. Strata was not contacted.
+
+
+---
+
+## 9 · Carry fixes (round 4, 2026-09-06)
+
+Added by the carry-fix lane on this same branch, after the round-2 report
+above. Head at the start: `51edd76c71445a18d6decd23c2d4f080c9a8ef39`. Full
+detail in `carry-fix-notes.md`; the short of it:
+
+**Already closed on arrival, verified rather than rebuilt:** R17 (all three
+walls in `00575`, with reviewer probes P16 and P3b reproduced as
+`agreement_parts_test.sql` case 25), R18 (the Add menu filters, readiness
+reports the duplicate, the save refuses), R19 (standard parts keep their
+`patina.*` keys; projection parity is `agreement_parts_projection_test.sql`
+cases 1-4), and the readiness/renderer half of R21.
+
+**Closed by this lane:**
+
+| Item | What moved |
+|---|---|
+| **R21** (client F-5) | The designer's live preview printed `$0` where the homeowner's page prints "Not yet set" — and printed the retainer's activation sentence under a retainer that does not exist. Ceiling, retainer and flat now print the room's own unwritten treatment; a 0 % deposit draws no term. The sentence lives in `AGREEMENT_PART_COPY.notYetSet`, read by both surfaces. |
+| **R20** | `build-sheet.md` §3.7 step 6 and §6.2 cases 6-7 amended to kind + variant, each carrying the sentence it replaced; the projection test's header cites the ruling. |
+| **B-7** | `materialize_standard_parts` widens `'legacy'` → `'design_services'`. |
+| **B-8** | The bundle's `parts` key is present on the retired early-return too. |
+| **B-9** | A rate carries `effectiveAt` through the parts door — seeded beside the rate, read back by `v_rates`, carried through the designer's `readRoles`. |
+| **B11 / N6 / R5 (m6)** | The last three raw casts (`required`, `clientVisible`, `sourcePartId`, the rate card's `sortOrder`, the new `effectiveAt`) answer in the designer's words. |
+| **client R3-5 (F-6)** | The furnishings deposit is seeded only from a percent somebody set. The literal `50` is gone. |
+| **DR5** | The rail no longer chips `flat` / `per_phase` "creates authority" against their own editors' words; `PerPhaseEditor` gained the record-only sentence. |
+| **DR13** | `AgreementComposer` loads through `next/dynamic`, out of the flag-off chunk. |
+| **DR21 / DR7 / M2** | One studio-defaults data layer: the `@patina/supabase` hooks, writing `updated_by`. The app-local duplicate is deleted. |
+
+### 9.1 · Gates, all re-run at the final tree
+
+| Gate | Command | Result |
+|---|---|---|
+| Stack | `supabase db reset --workdir <worktree>` (unsandboxed) | applied clean through `00575`; 33 seed files replayed; "Finished supabase db reset on branch main." |
+| SQL | `psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_parts_test.sql` | **rc=0** — PASS 1-35, including the new 32 (B-7), 33 (B-8), 34 (B-9), 35 (R3-5) and refusal probes (i)-(l) |
+| SQL | `… agreement_parts_projection_test.sql` | **rc=0** — PASS 1-9, now comparing `effective_at` as well |
+| SQL | `… edge_api/public_sd_hardening_contract_test.sql` | **rc=0** — no pinned body was touched, so no hash was re-pinned |
+| SQL | `… commercial/design_services_paper_issue_test.sql` | **rc=0** |
+| ACL seed | `python3 scripts/generate-legacy-grants.py` + `git status` | byte-identical (2232 replayed statements); no GRANT/REVOKE changed |
+| Types | `pnpm db:generate` + `git diff --exit-code packages/supabase/src/database.types.ts` | **rc=0, in sync** — the edits are function bodies, no schema change |
+| `@patina/types` | `type-check` | clean |
+| `@patina/supabase` | `type-check` | clean |
+| `@patina/supabase` | `test` (vitest) | **87 files · 1068 passed | 12 skipped** |
+| designer-portal | `type-check` | clean |
+| designer-portal | **full** `test` (jest) | **523 suites · 6326 tests · 2 snapshots — all passed** (round 2 was 6319; +7 from this lane) |
+| client-portal | `type-check` | clean |
+| client-portal | `test:coverage` (floor 70/60/70/70) | **129 suites · 1995 tests** · 73.96 / 69.30 / 74.01 / 76.28 — over floor |
+| admin-portal | `build` (unsandboxed) | **Compiled successfully in 19.1s**, full route table emitted |
+
+### 9.2 · Deploy set, unchanged in shape
+
+Still one migration (`supabase/migrations/00575_agreement_parts.sql`, edited in
+place and still unapplied on Strata), no edge functions
+(`git diff --name-only origin/main HEAD -- supabase/functions/` is empty), and
+the two portals. §6's table stands.
+
+### 9.3 · What §7's advisories look like now
+
+`client R3-5 / F-6` and `client F-5` are **closed** (they were majors). The
+rest of §7 stands as written: backend **M1-new**, **M2** is closed for the
+studio-defaults half and open for the agreement-parts hooks (the package's
+`use-agreement-parts.ts` is still unimported — the ruled item named the
+studio-defaults layer only), **M3**, client **F-1/F-2**, **F-4**, and designer
+**N1**.

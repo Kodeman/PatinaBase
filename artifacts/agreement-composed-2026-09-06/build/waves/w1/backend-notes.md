@@ -1121,3 +1121,50 @@ pushed. No `.env`, no `.claude/`, no hooks or settings touched.
 - Re-check the migration tip before merge; `00575` is still provisional — and
   the shared stack already carries an OLDER body under that number.
 
+
+---
+
+## Round-4 acceptance (carry-fix lane, 2026-09-06)
+
+Written by the carry-fix lane on `agreement/w1-integration`, not by the backend
+lane. Round 4's open backend findings were ruled into a carry list; this is
+what happened to each of them.
+
+**Accepted and fixed** — `00575` was edited IN PLACE (unapplied on Strata), the
+banner's Reconciles block gained `(B-7)`, `(B-8)`, `(B-9)` and `(R3-5)`, and
+`agreement_parts_test.sql` gained cases 32-35 plus refusal probes (i)-(l):
+
+| Finding | Fix |
+|---|---|
+| **m2 / B7** | `materialize_standard_parts` widens `'legacy'` → `'design_services'`, the same widen `upsert_agreement_parts` performs. `commercial_state` untouched — seeding is not authoring. Probed by case 32. |
+| **m1 / B8** | `'parts', '[]'::jsonb` added to the bundle's retired early-return. Probed by case 33, read as the client. |
+| **m4 / B9** | `v_rates` carries `effectiveAt`, `materialize_standard_parts` seeds it beside the rate, and the designer's `readRoles` carries it through the editor. `RateCardPayload` gained the optional field. Probed by case 34 (seed → save → the date is unmoved) and by the projection parity test, which now compares `effective_at` instead of excluding it. |
+| **m6 / B11 / N6 / R5** | `required`, `clientVisible`, `sourcePartId`, the rate card's `sortOrder` and the new `effectiveAt` are each validated and worded before the rows land. `sourcePartId` is checked against a uuid regex rather than cast; `effectiveAt` inside a `BEGIN … EXCEPTION` cast probe. |
+| **F-6 / R3-5** | The `patina.deposit` seed reads `COALESCE(v_terms.furnishings_deposit_percent, v_defaults.deposit_percent)` — the literal `50` is gone. Probed by case 35, which clears the studio default, seeds, asserts the payload is JSON `null`, then sets a studio default and asserts it still seeds. |
+| **M2 (half)** | The studio-defaults duplicate is resolved: the `@patina/supabase` hooks survive and write `updated_by`; the app-local copy is deleted. **The agreement-parts half is NOT resolved** — `packages/supabase/src/hooks/use-agreement-parts.ts` is still imported by nothing, and the designer portal still uses its own `useSaveAgreementParts` / `useMaterializeStandardParts` / `useDiscardAgreementParts`. The ruled item named the studio-defaults layer only. |
+| **m3** | The doc comment on `useUpdateStudioAgreementDefaults` no longer claims a plain member's write "reaches no rows rather than erroring". |
+| **n7** | R20's paperwork is done — `build-sheet.md` §3.7 step 6 and §6.2 cases 6-7 amended, the ruling cited in the projection test's header, and the single-instance refusal declared. |
+
+**Not in the carry list, still open, re-stated so nobody reads this note as a
+clean bill:** `M1-new` (the DB floor asks only the ceiling question, so an
+agreement with no money on the homeowner's page can still send), `M3`
+(`discard_agreement_parts` has no product caller and the mount effect still
+composes on open), `m-new` (an Addendum to a composed Agreement drops the
+composition), `m5` (the parts table's withdrawn write grant contradicts four
+documents), `m7` (five gate suites — now settled: the full `supabase db reset`
+run this lane made puts `agreement_parts`, `agreement_parts_projection`,
+`public_sd_hardening_contract` and `design_services_paper_issue` at rc=0 on a
+correctly-reset stack), and nits `n1`-`n6`, `n8`-`n16`.
+
+**Contract-test hashes:** none re-pinned. The functions this lane edited
+(`upsert_agreement_parts`, `materialize_standard_parts`,
+`get_client_commercial_document_bundle`) are not among the bodies
+`public_sd_hardening_contract_test.sql` pins; `_countersign_design_services_agreement_impl`,
+which it does pin, was not touched.
+
+**Grants:** none added or removed, so `seed/00-legacy-grants.sql` regenerates
+byte-identically (verified, 2232 replayed statements).
+
+**Generated types:** regenerated; `git diff --exit-code
+packages/supabase/src/database.types.ts` is rc=0. The edits are function bodies
+only — no table, column or nullability moved.
