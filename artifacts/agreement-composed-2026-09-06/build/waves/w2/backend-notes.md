@@ -396,7 +396,9 @@ Two halves, both closed:
   agreement's lead designer actively belong to — resolved with
   `save_agreement_as_template`'s own query, except that belonging to more than
   one studio is not itself a refusal here; the Template merely has to be one of
-  them.
+  them. **⚠ This half was WRONG — see "Round 2" below. Accepting "any one of
+  them" still let the two-studio LEAD designer land studio B's Template on
+  studio A's paper. Round 2 replaced it with the exactly-one rule.**
 - `useAgreementTemplates` gained `.or('studio_id.is.null,studio_id.eq.<id>')`.
   RLS answers "may this member see it", which for a two-studio designer is yes
   to both Libraries; the filter means the other studio's Templates are never
@@ -463,3 +465,134 @@ Everything under "Not verified by this lane" above still stands. Additionally:
 `useAgreementTemplates`'s new filter has no unit test — `packages/supabase`
 carries no jest/vitest harness — so it is covered by the SQL half (the RPC
 refusal) plus the designer lane's picker walk.
+
+# Round 2 fixes — adversarial review (2026-09-07)
+
+Round 2 confirmed B1, B2 and M1 fixed and independently re-proved. One finding
+was left standing: **F1**, the half of M2 that did not hold.
+
+## F1 · the two-studio Template guard missed the designer it was written for
+
+**What was wrong.** Round 1 resolved the agreement's studio as *every* active
+non-guest design studio that both `auth.uid()` and `proposals.designer_id`
+belong to, then accepted a Template whose studio was **any one of them**. When
+the two-studio designer is *herself the lead*, both studios answer for both
+people, so both resolve — and studio B's private Template landed on studio A's
+agreement. Round 1's own test could not catch it: case (11) puts her on a
+proposal whose lead (`a6000000-…-001`) belongs to studio A alone, so the join
+collapses to studio A and the refusal fired for the wrong reason. That test
+passes against the broken body.
+
+**Reproduced first, on the round-1 body**, with the new case (12) below:
+
+```
+psql:…/agreement_library_test.sql:775: ERROR:  studio B's Template must not
+compose into the agreement she leads
+CONTEXT:  PL/pgSQL function inline_code_block line 21 at ASSERT
+rc=3   (PASS 1-11 all green above it)
+```
+
+**The fix** (`00576` PART 8) resolves the studio with
+`save_agreement_as_template`'s query *including its ambiguity rule*: zero or
+several is a refusal, not a guess.
+
+```sql
+IF COALESCE(array_length(v_studio_ids, 1), 0) <> 1 THEN
+  RAISE EXCEPTION 'this agreement does not sit in a single studio, so a studio
+                   Template cannot be composed into it'
+    USING ERRCODE = 'insufficient_privilege';
+END IF;
+IF v_template.studio_id <> v_studio_ids[1] THEN
+  RAISE EXCEPTION 'template belongs to another studio'
+    USING ERRCODE = 'insufficient_privilege';
+END IF;
+```
+
+The two RPCs are now symmetric, which is the argument for the shape: a designer
+in that position already cannot **save** this agreement as a Template
+(`save_agreement_as_template` has refused `<> 1` since round 0), so she cannot
+compose one into it either. Seeded Templates carry `studio_id IS NULL` and skip
+the block entirely, so the standard three are unaffected for everyone. The
+migration's R2 comment was rewritten to say exactly this — round 1's comment
+claimed a refusal the body did not make.
+
+**The cost, stated plainly.** A designer who is an active non-guest member of
+two studios *and* is the lead on the agreement cannot materialize **either**
+studio's Template into it. She still composes from the three seeded Templates,
+from `materialize_standard_parts`, and part by part. Narrowing that would mean
+pinning a studio onto the proposal, which is a schema decision this wave did
+not mint and R2 does not ask for.
+
+**The test.** `agreement_library_test.sql` case (12) mints a fifth agreement
+whose lead **is** the two-studio designer (`a6000000-…-006`, admin in studio A
+and studio B) and asserts, in order: studio B's Template is refused; no row
+titled `Studio B scope` reached her parts; studio A's Template is refused too
+(the honest consequence of an unsettled studio); **no** `source_template_key
+LIKE 'studio.%'` row landed at all; and `patina.design_services` still
+composes. Case (11) is unchanged and still asserts the single-studio-lead
+persona, so both shapes are pinned.
+
+## Gates re-run (round 2)
+
+Scratch DB `patina_w2r3`: `pg_dump --no-owner --exclude-schema=cron` of the
+shared `postgres` (head **00575**, Wave 1 applied, W2 objects absent) restored
+into a fresh database, then 00576 → 00577 applied in order. The shared stack
+was never written to.
+
+```
+--- apply 00576 ---  rc=0  (only "policy … does not exist, skipping" notices)
+--- apply 00577 ---  rc=0  (only "trigger/policy … does not exist, skipping" notices)
+
+OK   commercial/agreement_library_test.sql            rc=0  13 PASS
+OK   commercial/agreement_fee_schedules_test.sql      rc=0   8 PASS
+OK   commercial/agreement_parts_test.sql              rc=0  30 PASS
+OK   commercial/agreement_parts_projection_test.sql   rc=0   5 PASS
+OK   commercial/multi_studio_signature_test.sql       rc=0   7 PASS
+OK   commercial/design_services_paper_issue_test.sql  rc=0  13 PASS
+OK   schedule/ceremony_hardening_test.sql             rc=0  15 PASS
+OK   edge_api/public_sd_hardening_contract_test.sql   rc=0   0 PASS (assert-only)
+```
+
+The Library suite went 11 PASS → 13 PASS (case 12 added; the count also picks up
+`PASS 3b`, which round 1's tally folded in with `PASS 3`).
+
+```
+pnpm --filter @patina/supabase type-check   → clean, no output
+pnpm --filter @patina/types    type-check   → clean, no output
+```
+
+**Types: unchanged, and proved so rather than assumed.** Only a function *body*
+moved — no signature, table or column. Regenerated against `patina_w2r3` with
+`supabase gen types typescript`: `diff -q` against the committed
+`packages/supabase/src/database.types.ts` is **byte-identical** (0 lines
+changed). That regeneration required re-adding the seven public-schema FKs the
+dump's data COPY drops on a clone (`organization_members_user_id_fkey`,
+`user_roles_user_id_fkey`, `engagement_events_user_id_fkey`,
+`user_sessions_user_id_fkey`, `proposal_send_dispatches_proposal_id_fkey`,
+`invoice_links_invoice_id_fkey`, `invoice_links_created_by_fkey`) as `NOT
+VALID` — the same clone artefact round 1 recorded, not a schema change.
+
+**No GRANT or REVOKE moved**, so `seed/00-legacy-grants.sql` is untouched and
+`generate-legacy-grants.py` was not re-run. **Neither pinned hardening manifest
+was touched** — no signature changed this round — and
+`public_sd_hardening_contract_test.sql` exits 0 as proof.
+
+The four suites the sheet lists as "must still pass" and that fail on the W1
+baseline still fail identically on this clone (`rc=3`, same fixture-not-found
+errors at the same lines): `design_services_authority_test`,
+`design_services_gap_hardening_test`, `authorized_schedule_test`,
+`executed_on_paper_test`. Clone artefact, not code — the integration steward's
+`supabase:reset` replay is the run that gates these.
+
+Scratch DB `patina_w2r3` dropped at the end; shared stack re-confirmed at head
+00575 with the W2 tables absent.
+
+## Round 2 — out of scope, still open
+
+The round-2 review's minors F2–F12 were **not** addressed: F2/F3/F4 are the
+client lane's snapshot-vs-page parity and live in its files, F5 is a
+`@patina/types` interface widening, F6 asks for a hook harness `packages/supabase`
+does not have, F7–F9 are coverage and vocabulary notes, F10–F12 are nits. None
+were in the fix brief's findings list, and each changes a behaviour a walk or a
+ruling should settle rather than a fix agent.
+
