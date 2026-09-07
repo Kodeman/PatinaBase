@@ -609,4 +609,93 @@ BEGIN
   RAISE NOTICE 'PASS 9: R6 — a template composes only into a draft';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (11) THE TWO-STUDIO DESIGNER. R2 — a Template belongs to one studio, and so
+--      does the agreement it lands in. Case (5) covers a stranger to studio A;
+--      this covers the person the 00566 walk script singles out, who belongs
+--      to BOTH studios and for whom every visibility predicate says yes.
+--      Without materialize_agreement_template's studio check she can put
+--      studio B's private paper on studio A's agreement.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO auth.users (
+  id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+  instance_id, aud, role
+) VALUES
+  ('a6000000-0000-4000-8000-000000000006', 'al-both@test.invalid', '', now(), now(), now(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+SET LOCAL session_replication_role = replica;
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES ('a6000000-0000-4000-8000-000000000006', 'al-both@test.invalid',
+        'Library Both', true, now(), now())
+ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name;
+SET LOCAL session_replication_role = origin;
+
+SELECT pg_temp.assume_user('a6000000-0000-4000-8000-000000000001', 'service_role');
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('a6110000-0000-4000-8000-000000000005', 'a6000000-0000-4000-8000-000000000006',
+   'a6100000-0000-4000-8000-000000000001', 'admin', 'active', now()),
+  ('a6110000-0000-4000-8000-000000000006', 'a6000000-0000-4000-8000-000000000006',
+   'a6100000-0000-4000-8000-000000000002', 'admin', 'active', now());
+
+INSERT INTO public.agreement_templates (
+  template_key, kind, studio_id, class, title, parts, created_by
+) VALUES (
+  'studio.b1100000-0000-4000-8000-000000000002', 'studio',
+  'a6100000-0000-4000-8000-000000000002', 'design_services',
+  'Studio B private template',
+  jsonb_build_array(jsonb_build_object(
+    'partKey', 'patina.services', 'kind', 'clause', 'title', 'Studio B scope',
+    'payload', jsonb_build_object('body', 'Studio B only.'),
+    'required', true, 'clientVisible', true)),
+  'a6000000-0000-4000-8000-000000000004');
+
+DO $$
+DECLARE
+  v_studio_a_key text;
+  v_landed integer;
+BEGIN
+  SELECT template_key INTO v_studio_a_key FROM public.agreement_templates
+  WHERE kind = 'studio' AND studio_id = 'a6100000-0000-4000-8000-000000000001'
+  LIMIT 1;
+
+  -- She is an active member of both studios, so both Libraries are visible to
+  -- her and agreement_templates_select says yes to studio B's row.
+  PERFORM pg_temp.assume_role('a6000000-0000-4000-8000-000000000006');
+  ASSERT (SELECT count(*) FROM public.agreement_templates
+          WHERE template_key = 'studio.b1100000-0000-4000-8000-000000000002') = 1,
+    'the two-studio member must be able to SEE studio B''s template';
+  PERFORM pg_temp.reset_role();
+
+  -- Studio A's agreement, composed by her. Studio B's Template must not land.
+  PERFORM pg_temp.assume_user('a6000000-0000-4000-8000-000000000006');
+  BEGIN
+    PERFORM public.materialize_agreement_template(
+      'a6300000-0000-4000-8000-000000000004',
+      'studio.b1100000-0000-4000-8000-000000000002');
+    RAISE EXCEPTION 'a Template from another studio must not compose into this agreement';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.proposal_agreement_parts
+    WHERE proposal_id = 'a6300000-0000-4000-8000-000000000004'
+      AND title = 'Studio B scope'),
+    'studio B''s words must not be on studio A''s agreement';
+
+  -- The positive control: her own studio's Template still composes.
+  v_landed := public.materialize_agreement_template(
+    'a6300000-0000-4000-8000-000000000004', v_studio_a_key);
+  ASSERT v_landed > 0, 'studio A''s own template must still compose';
+
+  -- And a seeded Template (studio_id IS NULL) is nobody's and everybody's.
+  v_landed := public.materialize_agreement_template(
+    'a6300000-0000-4000-8000-000000000004', 'patina.design_services');
+  ASSERT v_landed > 0, 'a seeded template must still compose';
+
+  RAISE NOTICE 'PASS 11: R2 — a Template from the other studio is refused for the member of both';
+END $$;
+
 ROLLBACK;
