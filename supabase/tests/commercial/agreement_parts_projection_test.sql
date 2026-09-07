@@ -23,6 +23,18 @@
 --
 -- Last, the flag-off door: upsert_design_services_draft still turns an omitted
 -- or JSON-null ceiling into 0, exactly as 00422 did.
+--
+-- RULING R20 (rulings-2026-09-06.md, "Wave 1 integration rulings"). Cases 6
+-- and 7 pin MONEY PROJECTED BY KIND + VARIANT, not by part_key. The build
+-- sheet's §3.7 step 6 and its §6.2 originally specified the opposite — "derive
+-- the projection by part_key" — and the deviation is accepted and recorded as
+-- R20 rather than left silent: the composer mints `custom.<uuid>` for every
+-- part added from the rail, so a key-derived projection would render a rate
+-- card, a ceiling, a retainer, a cadence or a deposit on the page the client
+-- signs and write none of it to the money row the authority snapshots. The
+-- single-instance refusal ("an agreement carries only one %") is what makes
+-- shape-derived projection unambiguous, and it is pinned here too. The build
+-- sheet's §3.7 and §6.2 are amended to match.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -47,12 +59,14 @@ LANGUAGE sql AS $$
 $$;
 GRANT EXECUTE ON FUNCTION pg_temp.terms_shape(uuid) TO PUBLIC;
 
--- effective_at is excluded for the same reason: the seven-facet room sends one
--- and a rate_card part does not, so both fall to the projection's now().
+-- effective_at IS compared (B-9): both doors now carry the date a rate took
+-- effect, so a back-dated rate that projects to now() through one door and to
+-- its own date through the other is exactly the fork this file exists to
+-- catch.
 CREATE OR REPLACE FUNCTION pg_temp.rates_shape(p_id uuid) RETURNS jsonb
 LANGUAGE sql AS $$
   SELECT COALESCE(jsonb_agg(
-    to_jsonb(r) - 'id' - 'proposal_id' - 'created_at' - 'effective_at'
+    to_jsonb(r) - 'id' - 'proposal_id' - 'created_at'
     ORDER BY r.version, r.sort_order, r.role_name
   ), '[]'::jsonb)
   FROM public.proposal_service_rates r WHERE r.proposal_id = p_id;
@@ -164,9 +178,12 @@ BEGIN
       jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
         'partKey', 'patina.role_rates', 'title', 'Role rates',
         'payload', jsonb_build_object('roles', jsonb_build_array(
-          jsonb_build_object('roleName', 'Principal', 'hourlyRateCents', 22500, 'sortOrder', 0),
-          jsonb_build_object('roleName', 'Senior Designer', 'hourlyRateCents', 15000, 'sortOrder', 1),
-          jsonb_build_object('roleName', 'Junior Designer', 'hourlyRateCents', 9500, 'sortOrder', 2)))),
+          jsonb_build_object('roleName', 'Principal', 'hourlyRateCents', 22500,
+            'sortOrder', 0, 'effectiveAt', DATE '2026-01-01'),
+          jsonb_build_object('roleName', 'Senior Designer', 'hourlyRateCents', 15000,
+            'sortOrder', 1, 'effectiveAt', DATE '2026-01-01'),
+          jsonb_build_object('roleName', 'Junior Designer', 'hourlyRateCents', 9500,
+            'sortOrder', 2, 'effectiveAt', DATE '2026-01-01')))),
       jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
         'partKey', 'patina.ceiling', 'title', 'Ceiling',
         'payload', jsonb_build_object('cents', 2400000)),
