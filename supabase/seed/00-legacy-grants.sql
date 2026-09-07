@@ -13318,6 +13318,12 @@ END $g$;
 
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._record_paper_client_signature_impl(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.get_project_authority_summary(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

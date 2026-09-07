@@ -16,6 +16,9 @@
 --   send_commercial_document                    00412 → 00423:1546
 --   _sign_design_services_agreement_authorized  00412:767
 --   _issue_design_services_agreement_on_paper   00477:252
+--   _record_paper_client_signature_impl         00425:416 (as
+--                                                record_paper_client_signature,
+--                                                renamed 00462:1797)
 --   _countersign_design_services_agreement_impl 00475 → 00511 → 00566:304
 --   get_project_authority_summary               00422:2381
 --   classify_project_time_entry_authority       00412:2400
@@ -58,10 +61,10 @@
 --         prose slots still read their key (two clauses cannot both be "the
 --         scope"); and a second part of any money shape is refused, so the
 --         money row is never choosing between two ceilings.
---   (N-3) R4's floor is ONE predicate, _agreement_floor_unmet, asked where a
---         composition is SAVED (upsert_agreement_parts) and at every door a
---         document can leave draft by (send, sign, the paper issue). It used
---         to be asked at exactly one of those four, so
+--   (N-3) R4's floor is ONE predicate, _agreement_floor_unmet, asked at every
+--         door a document can leave draft by (send, sign, the paper issue) and
+--         at none of the doors it merely gets written by. It used to be asked
+--         at exactly one of those three, so
 --         materialize_standard_parts could seed an uncapped hourly agreement
 --         from a terms row whose ceiling a co-member had cleared, and
 --         send_commercial_document — which only ever asked whether rate ROWS
@@ -154,12 +157,14 @@
 --         (_agreement_fee_unnamed): a composed design_services /
 --         service_addendum document must carry at least one CLIENT-VISIBLE
 --         schedule part in the fee set — rate_card, flat, per_phase, each with
---         a value actually set — before it may be saved, sent, signed or
---         issued on paper. A ceiling is a cap on a fee, not a fee. Without it
---         a composition of two clause parts, or one whose rate card and
---         ceiling were both marked studio-only, saved and SENT and
---         countersigned into an hourly authority behind a page naming no
---         money at all. The refusal is the readiness panel's own sentence.
+--         a value actually set — before it may be sent, signed or issued on
+--         paper. A ceiling is a cap on a fee, not a fee. Without it a
+--         composition of two clause parts, or one whose rate card and ceiling
+--         were both marked studio-only, SENT and countersigned into an hourly
+--         authority behind a page naming no money at all. The refusal is the
+--         readiness panel's own sentence. Neither half is asked at the SAVE
+--         door: a draft is allowed to be unfinished, and a composition that
+--         cannot save cannot be composed at all (walk r1, B1).
 --   (R25) The bundle says `composed` itself. The client shell cannot count it
 --         off `parts`: that array is filtered to client_visible, so an
 --         agreement whose every part the studio kept arrives with `parts: []`
@@ -347,7 +352,7 @@ REVOKE ALL ON FUNCTION public._agreement_requires_rate_card(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 -- R4's floor, as ONE predicate, so that every door a document can leave draft
--- by asks the same question rather than three doors asking two questions.
+-- by asks the same question rather than each door asking its own.
 -- TRUE means the floor is UNMET: the agreement bills time and carries no cap.
 --
 -- "Bills time" is a rate card holding at least one named role at a real rate
@@ -419,7 +424,8 @@ REVOKE ALL ON FUNCTION public._agreement_floor_unmet(uuid)
 
 -- R22 — the OTHER half of R4's floor: "one typed money part for a class that
 -- bills". _agreement_floor_unmet asks the ceiling question; this asks the fee
--- question, and both are asked at the same four places.
+-- question, and both are asked at the same three places — the doors a
+-- document leaves draft by, and no other.
 --
 -- TRUE means the floor is UNMET: this agreement is composed and names no fee
 -- on the page the homeowner reads.
@@ -582,7 +588,8 @@ REVOKE ALL ON FUNCTION public._commercial_document_fingerprint(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- PART 4 — The three refusals that relax (A: send, B: sign, C: on paper)
+-- PART 4 — The four refusals that relax (A: send, B: sign, C: on paper,
+--          D: the paper signature recorded)
 --
 -- Each function is redefined from its head body VERBATIM with only the
 -- role-rate predicate swapped for _agreement_requires_rate_card.
@@ -1125,6 +1132,155 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public._issue_design_services_agreement_on_paper(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- D · _record_paper_client_signature_impl, head 00425:416 (defined there under
+-- the pre-rename name record_paper_client_signature; 00462:1797 renamed it and
+-- 00477:361 rebuilt only the wrapper above it, so that body is still the head).
+-- The fourth door onto the same paper. C issues the document on paper; this
+-- records that the homeowner signed the printed copy — and it asked for a role
+-- rate the other three had already stopped asking for, so a composed flat-fee
+-- agreement could leave the studio and never come back.
+--
+-- R4's floor is NOT added here. This door does not take a document out of
+-- draft: it is reached only at 'sent', which means send already asked both
+-- halves, and parts freeze at send (R6). A refusal here could only strand a
+-- homeowner's real signature on a real piece of paper.
+CREATE OR REPLACE FUNCTION public._record_paper_client_signature_impl(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_paper_signed_on date,
+  p_scan_document_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_recorder uuid := auth.uid();
+  v_proposal public.proposals%ROWTYPE;
+  v_signature public.commercial_document_signatures%ROWTYPE;
+  v_name text := btrim(COALESCE(p_signed_name, ''));
+  v_fingerprint text;
+  v_previous_commercial text := current_setting('app.commercial_document_id', true);
+BEGIN
+  IF v_recorder IS NULL OR char_length(v_name) < 2 THEN
+    RAISE EXCEPTION 'recording a paper client signature requires an authenticated studio author and legal name'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO v_proposal FROM public.proposals
+  WHERE id = p_proposal_id FOR UPDATE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_proposal.designer_id)
+     OR v_proposal.client_id IS NULL
+     OR v_proposal.document_kind NOT IN ('design_services', 'service_addendum')
+  THEN
+    RAISE EXCEPTION 'design services agreement % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF COALESCE(v_proposal.commercial_state, 'draft') IN ('superseded', 'declined') THEN
+    RAISE EXCEPTION 'design services agreement % is % and can no longer be recorded on paper',
+      p_proposal_id, v_proposal.commercial_state
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- The retry branch, taken BEFORE the state guard because a successful record
+  -- is precisely what moved the state off 'sent'. It answers only when the row
+  -- standing there is THIS record — recorded on paper, under this name. A
+  -- portal signature, or a paper signature under another name, is not a retry;
+  -- it falls through and the guards below refuse it exactly as they always did.
+  SELECT * INTO v_signature FROM public.commercial_document_signatures
+  WHERE proposal_id = p_proposal_id AND party_role = 'client' FOR UPDATE;
+  IF v_signature.id IS NOT NULL
+     AND COALESCE((v_signature.metadata->>'executedOnPaper')::boolean, false)
+     AND v_signature.signed_name IS NOT DISTINCT FROM v_name
+  THEN
+    RETURN jsonb_build_object(
+      'agreementId', p_proposal_id,
+      'proposalId', p_proposal_id,
+      'commercialState', v_proposal.commercial_state,
+      'projectId', NULL,
+      'signatureId', v_signature.id,
+      'evidenceFingerprint', v_signature.evidence_fingerprint,
+      'signedOnPaper', true,
+      'paperSignedOn', (v_signature.metadata->>'paperSignedOn')::date,
+      'paperScanDocumentId', (v_signature.metadata->>'paperScanDocumentId')::uuid,
+      'recorded', false,
+      'newlyClientSigned', false
+    );
+  END IF;
+
+  IF v_proposal.commercial_state IS DISTINCT FROM 'sent' THEN
+    RAISE EXCEPTION 'design services agreement % is not recordable on paper (%)',
+      p_proposal_id, COALESCE(v_proposal.commercial_state, 'NULL')
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- 00575: the same relaxation the other three doors took. Terms always; role
+  -- rates only when the agreement carries a rate_card part, or carries no
+  -- parts at all. Without it a composed FLAT-FEE agreement could be sent and
+  -- then never recorded on paper: the studio was offered a door that could
+  -- not open (walk r1, M4).
+  IF NOT EXISTS (SELECT 1 FROM public.proposal_service_terms t WHERE t.proposal_id = p_proposal_id)
+     OR (public._agreement_requires_rate_card(p_proposal_id)
+         AND NOT EXISTS (SELECT 1 FROM public.proposal_service_rates r WHERE r.proposal_id = p_proposal_id))
+  THEN
+    RAISE EXCEPTION 'design services agreement requires terms, and at least one role rate whenever a rate card is present'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  v_fingerprint := public._commercial_document_fingerprint(p_proposal_id);
+  IF v_fingerprint IS NULL THEN
+    RAISE EXCEPTION 'could not fingerprint design services agreement %', p_proposal_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Already fetched and locked by the retry probe above; a row still standing
+  -- here at 'sent' is a topology the rail cannot explain.
+  IF v_signature.id IS NOT NULL THEN
+    RAISE EXCEPTION 'paper signature topology conflicts with document state'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  INSERT INTO public.commercial_document_signatures (
+    proposal_id, party_role, signer_user_id, signed_name, signed_ip,
+    evidence_fingerprint, metadata
+  ) VALUES (
+    -- The CLIENT signed. party_role and signer_user_id say so, because
+    -- countersign reads exactly these two and must keep passing.
+    p_proposal_id, 'client', v_proposal.client_id, v_name,
+    NULL, v_fingerprint,
+    public._paper_signature_metadata(
+      p_proposal_id, 'record_paper_client_signature',
+      p_paper_signed_on, v_recorder, p_scan_document_id
+    )
+  ) RETURNING * INTO v_signature;
+
+  PERFORM set_config('app.commercial_document_id', p_proposal_id::text, true);
+  UPDATE public.proposals
+  SET commercial_state = 'client_signed', updated_at = now()
+  WHERE id = p_proposal_id;
+  PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
+
+  RETURN jsonb_build_object(
+    'agreementId', p_proposal_id,
+    'proposalId', p_proposal_id,
+    'commercialState', 'client_signed',
+    'projectId', NULL,
+    'signatureId', v_signature.id,
+    'evidenceFingerprint', v_signature.evidence_fingerprint,
+    'signedOnPaper', true,
+    'paperSignedOn', p_paper_signed_on,
+    'paperScanDocumentId', p_scan_document_id,
+    'recorded', true,
+    'newlyClientSigned', true
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
+  RAISE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._record_paper_client_signature_impl(uuid, text, date, uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -2732,23 +2888,28 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  -- R4, as a DB floor and not only a UI one: an agreement that bills time is
-  -- an agreement with a cap. The readiness panel says the same thing first;
-  -- this is the sentence that holds when the panel is bypassed. It is the
-  -- SAME predicate send, sign and the paper door ask, reading the same shapes
-  -- the projection below reads.
-  IF public._agreement_floor_unmet(p_proposal_id) THEN
-    RAISE EXCEPTION 'an agreement that bills time needs a ceiling'
-      USING ERRCODE = 'check_violation';
-  END IF;
-
-  -- R22, the fee half of the same floor, asked here as at the three doors: an
-  -- agreement that bills has to name what it charges, on the page the
-  -- homeowner reads. Same sentence the readiness panel says first.
-  IF public._agreement_fee_unnamed(p_proposal_id) THEN
-    RAISE EXCEPTION 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.'
-      USING ERRCODE = 'check_violation';
-  END IF;
+  -- R4'S FLOOR IS NOT ASKED HERE. A DRAFT IS ALLOWED TO BE UNFINISHED.
+  --
+  -- R22 places the floor at the doors a document LEAVES DRAFT by — send, sign
+  -- and the paper door — and Wave 1 also asked it here, at Save. The walk
+  -- showed what that costs: a freshly materialized composition seeds a rate
+  -- card from the studio's defaults with no ceiling beside it and no fee typed
+  -- yet, so the first Save of the first sentence the designer writes is
+  -- refused, and every Save after it, until a fee AND a cap are typed. There
+  -- is no order of work that reaches a saved draft. Composing an agreement is
+  -- writing, and writing is saved half-done.
+  --
+  -- Nothing is lost by moving it: _agreement_floor_unmet and
+  -- _agreement_fee_unnamed are asked at send_commercial_document,
+  -- _sign_design_services_agreement_authorized and
+  -- _issue_design_services_agreement_on_paper, and parts freeze when the
+  -- document leaves draft (R6) — so no composition below the floor can reach
+  -- a homeowner. The readiness panel names both blockers in the room the
+  -- moment the rail renders, which is where the designer needs to read them.
+  --
+  -- The duplicate refusal above STAYS at this door: it is not a floor, it is
+  -- the projection's precondition — two ceilings leave the money row picking
+  -- between them, and there is no half-composed state that wants that.
 
   SELECT * INTO v_existing FROM public.proposal_service_terms
   WHERE proposal_id = p_proposal_id;
@@ -3089,15 +3250,12 @@ BEGIN
      jsonb_build_object('depositPercent',
        COALESCE(v_terms.furnishings_deposit_percent, v_defaults.deposit_percent)),
      false, true),
-    -- (R28) Nothing the designer did not type prints as a term. Every seeded
-    -- money part is seeded from a value SOMEBODY SET — this document's terms
-    -- row, or the studio's defaults — and from nothing else. The retainer's
-    -- old COALESCE(..., 0) and the cadence's old COALESCE(..., 'monthly')
-    -- invented a figure and a term for a draft that has no terms row yet: the
-    -- cadence in particular printed "Monthly" on the page the homeowner signs
-    -- under a schedule nobody had chosen. Unset stays unset; the room's
-    -- readiness panel asks for both, and the projection still falls to 0 and
-    -- 'monthly' when it writes the money row, exactly as before.
+    -- (R28) Nothing the designer did not type prints as a MONEY term. A
+    -- retainer is an amount, and an amount nobody wrote is unwritten: the old
+    -- COALESCE(..., 0) invented a figure for a draft with no terms row. Unset
+    -- stays unset; the room's readiness panel asks for it, and the projection
+    -- still falls to 0 when it writes the money row, exactly as before.
+    -- (A billing cadence is not an amount — see the amendment below it.)
     (p_proposal_id, 7, 'schedule', 'retainer', 'patina.retainer', 'Retainer',
      jsonb_build_object(
        'cents', v_terms.retainer_amount_cents,
@@ -3110,11 +3268,19 @@ BEGIN
     -- cadence saved from the seven-facet room counts as chosen — the room shows
     -- the select with Monthly preselected and the designer saves it, exactly as
     -- today's shipped agreement does, and the composed room shows the cadence
-    -- part the same way. The cadence is seeded from the terms row by ruling, not
-    -- by oversight.
+    -- part the same way.
+    --
+    -- The last COALESCE arm is the FRESH DRAFT, which the amendment did not
+    -- have in view: a document with no terms row at all seeded {"cadence":
+    -- null} while the composed room's select showed Monthly preselected, so
+    -- readiness demanded a cadence the designer could see was already chosen —
+    -- and re-picking the selected option fires no change event, so there was no
+    -- act that cleared it. The seven-facet room writes 'monthly' onto exactly
+    -- this draft (emptyTerms), so 'monthly' is what the part carries here too.
+    -- The part says what the editor shows, on every road in.
     (p_proposal_id, 8, 'schedule', 'cadence', 'patina.cadence', 'Billing cadence',
      jsonb_build_object('cadence',
-       COALESCE(v_terms.billing_cadence, v_defaults.cadence)),
+       COALESCE(v_terms.billing_cadence, v_defaults.cadence, 'monthly')),
      false, true),
     (p_proposal_id, 9, 'clause', NULL, 'patina.terms', 'Terms',
      jsonb_build_object('body', COALESCE(v_terms.terms, '')), true, true);
@@ -3127,10 +3293,11 @@ BEGIN
   -- room can show it. Refusing here would lock that studio out of the
   -- composer altogether, with a sentence about a part it has not been shown
   -- yet. The room's readiness panel names the missing ceiling the moment the
-  -- rail renders, upsert_agreement_parts refuses to SAVE the composition
-  -- without it, and send / sign / the paper door each refuse to let the
+  -- rail renders, and send / sign / the paper door each refuse to let the
   -- document leave draft — which is where the harm was: an uncapped hourly
-  -- agreement that seeded, and then SENT.
+  -- agreement that seeded, and then SENT. The save door does not ask it
+  -- either, for the same reason this one does not: a draft is allowed to be
+  -- unfinished (see upsert_agreement_parts).
   RETURN jsonb_build_object(
     'proposalId', p_proposal_id,
     'materialized', true,
@@ -3565,8 +3732,8 @@ COMMENT ON FUNCTION public.materialize_standard_parts(uuid) IS
   'returned unchanged with materialized = false. Does not re-project: the '
   'terms row it read is already the projection. Deliberately does NOT ask '
   'R4''s floor: seeding lays out a state that already exists so the room can '
-  'show it, and the floor is asked where a composition is SAVED and at every '
-  'door out of draft.';
+  'show it, and the floor is asked at every door out of draft — never at a '
+  'door that only writes a draft.';
 
 COMMENT ON FUNCTION public.discard_agreement_parts(uuid) IS
   '00575: leaves the parts behind. Removes every part of a DRAFT agreement '
@@ -3585,11 +3752,10 @@ COMMENT ON FUNCTION public._agreement_floor_unmet(uuid) IS
   'on either (R21): the client-visible parts, because the homeowner cannot be '
   'capped by a ceiling no page shows her, and every part, because a rate card '
   'she never sees still projects rates into the billing authority. Asked by '
-  'upsert_agreement_parts, materialize_standard_parts, send_commercial_document, '
-  '_sign_design_services_agreement_authorized and '
-  '_issue_design_services_agreement_on_paper, so the floor is the same height '
-  'at every door — and it reads the same shapes the readiness panel in the '
-  'room reads, so panel and database cannot drift.';
+  'send_commercial_document, _sign_design_services_agreement_authorized and '
+  '_issue_design_services_agreement_on_paper — every door out of draft, and '
+  'only those: saving a draft never asks it. It reads the same shapes the '
+  'readiness panel in the room reads, so panel and database cannot drift.';
 
 COMMENT ON FUNCTION public._agreement_fee_unnamed(uuid) IS
   '00575 (R22): the other half of R4''s floor — TRUE when a COMPOSED agreement '
@@ -3599,10 +3765,11 @@ COMMENT ON FUNCTION public._agreement_fee_unnamed(uuid) IS
   'when invoices go out. Client-visible parts only (R21): the composed body '
   'renders parts and never the terms row, so a rate card the studio kept to '
   'itself leaves her signing a page with no money on it. A document with no '
-  'parts is not asked. Asked by upsert_agreement_parts, '
-  'send_commercial_document, _sign_design_services_agreement_authorized and '
-  '_issue_design_services_agreement_on_paper — the same doors '
-  '_agreement_floor_unmet is asked at — in the readiness panel''s own sentence.';
+  'parts is not asked. Asked by send_commercial_document, '
+  '_sign_design_services_agreement_authorized and '
+  '_issue_design_services_agreement_on_paper — the same doors out of draft '
+  '_agreement_floor_unmet is asked at, and no other — in the readiness '
+  'panel''s own sentence.';
 
 COMMENT ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) IS
   '00575: the terms/rates projection, lifted verbatim out of '
