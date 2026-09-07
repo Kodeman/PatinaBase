@@ -36,6 +36,25 @@ async function notifyCommercialTransition(
   }
 }
 
+/**
+ * The attachments a composed agreement requires the client to acknowledge,
+ * read off the bundle the database just answered with — never off the browser
+ * payload. Both key spellings, because the bundle RPC's jsonb is read raw
+ * here rather than through the portal's DTO adapter.
+ */
+function requiredAttachmentKeys(bundle: unknown): string[] {
+  const parts = (bundle as { parts?: unknown } | null)?.parts;
+  if (!Array.isArray(parts)) return [];
+  return parts.flatMap((item) => {
+    const part = (item ?? {}) as Record<string, unknown>;
+    if (part.kind !== 'attachment') return [];
+    const payload = (part.payload ?? {}) as Record<string, unknown>;
+    if (payload.acknowledgeRequired !== true && payload.acknowledge_required !== true) return [];
+    const key = part.partKey ?? part.part_key;
+    return typeof key === 'string' && key.length > 0 ? [key] : [];
+  });
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getUser();
   if (!user) {
@@ -45,11 +64,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as {
     signedByName?: unknown;
+    attachmentsAcknowledged?: unknown;
   };
   const signedByName = typeof body.signedByName === 'string' ? body.signedByName.trim() : '';
   if (signedByName.length < 2) {
     return NextResponse.json({ error: 'invalid_name' }, { status: 400 });
   }
+  const claimedAcknowledgments = Array.isArray(body.attachmentsAcknowledged)
+    ? body.attachmentsAcknowledged.filter(
+        (key): key is string => typeof key === 'string' && key.length > 0,
+      )
+    : [];
 
   const clientIp = resolveClientIp(request.headers);
 
@@ -227,19 +252,65 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     }
 
+    // WAVE 2, P6 — WHAT SHE CONSENTED TO IS THE DATABASE'S ANSWER, NOT THE
+    // BROWSER'S. The sentence recorded against the signature is
+    // `compose_agreement_consent`'s, read off the bundle above; a client that
+    // could choose its own consent sentence could sign one agreement and file
+    // the record of another.
+    //
+    // The acknowledgments are the browser's, but only as a claim: every key is
+    // checked against the attachments the bundle carries, unknown keys are
+    // dropped without comment, and an agreement whose required attachment is
+    // unticked is simply not signable yet. That refusal reuses `not_signable`
+    // — the door already speaks it, and REFUSAL_TOKENS is pinned by the drift
+    // guard against this file, so a new token would be a second edit in two
+    // places for a state the client already reads correctly.
+    const required = requiredAttachmentKeys(commercialBundle);
+    const acknowledged = required.filter((key) => claimedAcknowledgments.includes(key));
+    if (acknowledged.length !== required.length) {
+      return NextResponse.json({ error: 'not_signable' }, { status: 409 });
+    }
+
     // A services agreement/addendum records the client's act only. The RPC
     // never activates or creates a project; that remains the studio's separate
     // countersignature transaction.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const commercialService = createServiceClient() as any;
+
+    // DEPLOY ORDER IS NOT A PROMISE. `p_consent` is the fifth argument the
+    // Wave 2 migration adds; PostgREST resolves an RPC by the argument NAMES
+    // it is sent, so a portal that sends `p_consent` to a database that has
+    // not been migrated yet cannot find the function at all and answers
+    // `sign_failed` for EVERY services signature — composed or not.
+    //
+    // So the wider call is made only when there is something to record: a
+    // bundle the database itself calls composed, an agreement carrying
+    // acknowledgments, or a sentence `compose_agreement_consent` composed. An
+    // un-composed agreement — which is every agreement today, and every
+    // agreement with either flag off — keeps taking the four-argument call it
+    // has always taken, and signs whichever way round the two deploys land.
+    const composedBundle =
+      commercialBundle?.composed === true ||
+      commercialDocument?.composed === true ||
+      (Array.isArray(commercialBundle?.parts) && commercialBundle.parts.length > 0);
+    const consentSentence =
+      commercialBundle?.consentSentence ?? commercialBundle?.consent_sentence ?? null;
+    const signArgs: Record<string, unknown> = {
+      p_proposal_id: id,
+      p_signed_name: signedByName,
+      p_client_id: user.id,
+      p_signed_ip: clientIp,
+    };
+    if (composedBundle || required.length > 0 || consentSentence !== null) {
+      signArgs.p_consent = {
+        consentSentence,
+        attachmentsAcknowledged: acknowledged,
+      };
+    }
+
     const { data: signResult, error: signError } = await commercialService.rpc(
       'sign_design_services_agreement_with_trusted_ip',
-      {
-        p_proposal_id: id,
-        p_signed_name: signedByName,
-        p_client_id: user.id,
-        p_signed_ip: clientIp,
-      }
+      signArgs
     );
     if (signError) {
       // The token, never the database's own sentence (`W1-02`).

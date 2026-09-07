@@ -49,6 +49,8 @@ const BUNDLE: CommercialDocumentBundle = {
   rates: [],
   parts: [],
   composed: null,
+  consentSentence: null,
+  executionSnapshot: null,
   signatures: [
     {
       party: 'client',
@@ -282,5 +284,175 @@ describe('/proposals/[id]/record — a refusal', () => {
     expect(
       screen.getByText('This record could not be read just now. Refresh to try again.'),
     ).toBeInTheDocument();
+  });
+});
+
+/* ── Wave 2: the agreement as executed ───────────────────────────────────────
+   ONE addition to this sheet: the frozen HTML from
+   `agreement_execution_snapshots`, written once at countersign and never
+   re-rendered (R12), under its own mark.
+
+   Absent, it prints nothing at all: a pre-Wave-2 execution and an agreement
+   with no parts read exactly as this sheet has always read. No PDF, no
+   download, no "snapshot pending".
+
+   What she agreed to is deliberately NOT on this sheet in Wave 2 — the
+   sentence lives in the signature's `metadata` and the bundle RPC projects a
+   signature's keys one by one (00425), so there is nothing to print without a
+   ruled addition to that projection. A record must never re-compose it from
+   today's parts: an addendum moves the parts, and a record that quietly
+   restates today's terms is a record of a signature nobody gave.
+   ────────────────────────────────────────────────────────────────────────── */
+
+describe('/proposals/[id]/record — the composed agreement (Wave 2)', () => {
+  it('says nothing about a snapshot when the execution predates one', async () => {
+    await renderPage();
+
+    expect(screen.queryByTestId('record-executed')).not.toBeInTheDocument();
+    expect(screen.queryByText('The agreement as executed')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('record-executed-checksum')).not.toBeInTheDocument();
+  });
+
+  it('shows the frozen agreement the countersignature sealed, with its own mark', async () => {
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        executionSnapshot: {
+          html: '<h2>Services</h2><p>Interior design services.</p><h2>Per-phase fee</h2>',
+          documentHash: 'a1b2c3d4e5f6' + '0'.repeat(52),
+          createdAt: '2026-08-05T18:31:00Z',
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.getByText('The agreement as executed')).toBeInTheDocument();
+    const executed = screen.getByTestId('record-executed');
+    expect(executed).toHaveTextContent('Services');
+    expect(executed).toHaveTextContent('Per-phase fee');
+    // Twelve characters of the frozen document's own hash, never the whole of
+    // it — the same discipline the signature's mark keeps.
+    expect(screen.getByTestId('record-executed-checksum')).toHaveTextContent(
+      'Mark a1b2c3d4e5f6',
+    );
+    expect(screen.getByTestId('record-executed-checksum').textContent).not.toContain(
+      'a1b2c3d4e5f6' + '0'.repeat(52),
+    );
+  });
+
+  it('keeps saying how she signed, which is the fact this sheet carries', async () => {
+    await renderPage();
+
+    expect(screen.getByTestId('record-consent')).toHaveTextContent(
+      'Signed electronically by typed name: Harper Vale.',
+    );
+    // And says nothing about WHAT she agreed to — there is no projected
+    // sentence to print, and it is never re-composed from today's parts.
+    expect(screen.queryByTestId('record-agreed')).not.toBeInTheDocument();
+  });
+
+  it('asks the old question of a record with no parts', async () => {
+    await renderPage();
+
+    expect(
+      screen.getByText(/you authorize only the named furnishing lines/),
+    ).toBeInTheDocument();
+  });
+
+  it('stops the question naming terms a composed agreement does not carry', async () => {
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        document: {
+          ...BUNDLE.document,
+          kind: 'design_services' as const,
+          title: 'Cedar Lane — Design Services',
+        },
+        parts: [
+          {
+            id: 'p1',
+            position: 1,
+            kind: 'schedule',
+            variant: 'per_phase',
+            partKey: 'patina.per_phase',
+            title: 'Per-phase fee',
+            payload: { phases: [{ key: 'concept', label: 'Concept', cents: 350000 }] },
+            required: true,
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(
+      screen.getByText(
+        'By signing, you accept the services, per-phase fee schedule, and terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/signed role rates/)).not.toBeInTheDocument();
+  });
+
+  /* R12 — THE DOCUMENT, NOT A DRAFT OF IT. The snapshot is composed and
+     escaped once by `_render_agreement_snapshot_html`, and the mark beneath it
+     is the executed document's own fingerprint. The sheet therefore sets it
+     exactly as it came and rewrites nothing: prose is ordinary text, and `=`
+     is not in the escape chain, so an agreement that says "phase one=Concept"
+     must arrive on the keepsake saying it. */
+  it('sets the frozen agreement exactly as the database wrote it', async () => {
+    const frozen =
+      '<h2>Phases</h2>' +
+      '<p>Phase one=Concept, phase two=Documentation.</p>' +
+      '<p>Delivery online=yes, and fees are billed per phase.</p>';
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        executionSnapshot: {
+          html: frozen,
+          documentHash: 'a1b2c3d4e5f6' + '0'.repeat(52),
+          createdAt: '2026-08-05T18:31:00Z',
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    const executed = screen.getByTestId('record-executed');
+    expect(executed.innerHTML).toBe(frozen);
+    expect(executed).toHaveTextContent('Phase one=Concept, phase two=Documentation.');
+    expect(executed).toHaveTextContent('Delivery online=yes, and fees are billed per phase.');
+  });
+
+  /* Setting markup is not running it: a script element inserted through
+     `innerHTML` never executes, which is why the keepsake can hold the frozen
+     document whole without a rewrite standing between it and the reader. */
+  it('runs nothing when it sets the snapshot', async () => {
+    const marker = '__patina_snapshot_ran';
+    delete (globalThis as Record<string, unknown>)[marker];
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        executionSnapshot: {
+          html:
+            '<h2>Services</h2>' +
+            `<script>globalThis.${marker} = true;</script>` +
+            '<p>Interior design services.</p>',
+          documentHash: 'a1b2c3d4e5f6' + '0'.repeat(52),
+          createdAt: '2026-08-05T18:31:00Z',
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect((globalThis as Record<string, unknown>)[marker]).toBeUndefined();
+    expect(screen.getByTestId('record-executed')).toHaveTextContent(
+      'Interior design services.',
+    );
   });
 });

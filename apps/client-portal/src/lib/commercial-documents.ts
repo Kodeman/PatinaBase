@@ -72,6 +72,18 @@ export type CommercialSignature = Pick<
   paperScanDocumentId: string | null;
 };
 
+/**
+ * The frozen HTML the studio's countersignature seals (R12). Written once, at
+ * execution, and never re-rendered — `documentHash` is the same fingerprint
+ * the studio signature carries, which is what makes the keepsake checkable.
+ * Null until countersign, and null forever on an agreement with no parts.
+ */
+export interface AgreementExecutionSnapshot {
+  html: string;
+  documentHash: string;
+  createdAt: string | null;
+}
+
 export type DesignServicesTerms = Omit<
   Pick<
     DesignServiceTerms,
@@ -231,6 +243,19 @@ export interface CommercialDocumentBundle {
    * so this key is inert until the backend emits it.
    */
   composed: boolean | null;
+  /**
+   * The composed consent sentence, said by the database
+   * (`compose_agreement_consent`) at read time — Wave 2 P6. The door renders
+   * its own composition of the same parts; this is what the SIGN ROUTE sends
+   * to the RPC, because the sentence recorded against a signature may never be
+   * one the browser chose.
+   *
+   * Null when the bundle did not say — every document today, and every paper
+   * that is not a services agreement.
+   */
+  consentSentence: string | null;
+  /** R12 — the frozen agreement, written at countersign. Null before it. */
+  executionSnapshot: AgreementExecutionSnapshot | null;
   furnishings: FurnishingsAuthorization | null;
   tradeScope: TradeScopeAuthorization | null;
 }
@@ -428,6 +453,24 @@ function adaptAgreementParts(value: unknown): CommercialAgreementPart[] {
 }
 
 /**
+ * Adapts the bundle's `executionSnapshot`. A snapshot with no HTML, or no
+ * hash to check it against, is not a snapshot — the keepsake shows nothing
+ * rather than an empty frame under "The agreement as executed" (R12: the
+ * no-snapshot page renders exactly as it does today, with no empty state).
+ */
+function adaptExecutionSnapshot(value: unknown): AgreementExecutionSnapshot | null {
+  const row = record(value);
+  const html = text(first(row, 'html'));
+  const documentHash = text(first(row, 'documentHash', 'document_hash'));
+  if (!html || !documentHash) return null;
+  return {
+    html,
+    documentHash,
+    createdAt: nullableText(first(row, 'createdAt', 'created_at')),
+  };
+}
+
+/**
  * The RPC (get_client_commercial_document_bundle, send_commercial_document,
  * list_trade_scopes — 00423) emits the party on the `tradeScope` object
  * itself as FLAT keys (`partyDisplayName` / `partyCompanyName` / `partyTrade`
@@ -548,6 +591,10 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
   const partRows = first(raw, 'parts') ?? first(source, 'parts');
   const composedRaw = first(raw, 'composed', 'agreementComposed', 'agreement_composed') ??
     first(source, 'composed', 'agreementComposed', 'agreement_composed');
+  const consentSentenceRaw = first(raw, 'consentSentence', 'consent_sentence') ??
+    first(source, 'consentSentence', 'consent_sentence');
+  const executionSnapshotRaw = first(raw, 'executionSnapshot', 'execution_snapshot') ??
+    first(source, 'executionSnapshot', 'execution_snapshot');
   const depositRequiredValue = first(
     furnishingRaw,
     'depositRequiredCents',
@@ -624,6 +671,8 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
     // is "the bundle did not say", never a coerced yes or no. `required` on a
     // part row is read the same way.
     composed: composedRaw === true ? true : composedRaw === false ? false : null,
+    consentSentence: nullableText(consentSentenceRaw),
+    executionSnapshot: adaptExecutionSnapshot(executionSnapshotRaw),
     signatures: Array.isArray(signatureRows) ? signatureRows.flatMap((item) => {
       const row = record(item);
       const party = first(row, 'party', 'partyRole', 'party_role');
@@ -648,6 +697,13 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         signedOnPaper: first(row, 'signedOnPaper', 'signed_on_paper') === true,
         paperSignedOn: nullableText(first(row, 'paperSignedOn', 'paper_signed_on')),
         paperScanDocumentId: nullableText(first(row, 'paperScanDocumentId', 'paper_scan_document_id')),
+        // NOT read here: the sentence this signer ticked. It is written into
+        // `commercial_document_signatures.metadata` at insert, and the bundle
+        // RPC projects a signature's keys one by one (00425 — raw metadata
+        // never crosses this edge), so there is no consent key on this row to
+        // read. A DTO field that is null for every document is a feature the
+        // keepsake would print nothing from; the wave that rules the bundle
+        // addition adds both halves together.
       }];
     }) : [],
     furnishings: Object.keys(furnishingRaw).length === 0 ? null : {

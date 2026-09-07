@@ -801,6 +801,65 @@ describe('commercial document client adapter', () => {
       });
     });
 
+    /* ── Wave 2: the sentence and the frozen paper ────────────────────────── */
+
+    describe('the composed consent sentence', () => {
+      function withConsent(payload: Record<string, unknown>) {
+        return adaptCommercialDocumentBundle({
+          document: { id: 'ds-1', kind: 'design_services', state: 'sent', title: 'Agreement' },
+          ...payload,
+        });
+      }
+
+      it('reads an absent key as the bundle not having said', () => {
+        expect(withConsent({})?.consentSentence).toBeNull();
+      });
+
+      it('reads the sentence the database composed, under either spelling', () => {
+        expect(withConsent({ consentSentence: 'I agree to these design-services terms and the flat design fee, and understand my signature alone does not authorize work until the studio countersigns.' })?.consentSentence).toBe(
+          'I agree to these design-services terms and the flat design fee, and understand my signature alone does not authorize work until the studio countersigns.',
+        );
+        expect(withConsent({ consent_sentence: 'A sentence.' })?.consentSentence).toBe('A sentence.');
+      });
+
+      it('reads an empty sentence as nothing said', () => {
+        expect(withConsent({ consentSentence: '' })?.consentSentence).toBeNull();
+      });
+    });
+
+    describe('the execution snapshot (R12)', () => {
+      function withSnapshot(snapshot: unknown) {
+        return adaptCommercialDocumentBundle({
+          document: { id: 'ds-1', kind: 'design_services', state: 'executed', title: 'Agreement' },
+          executionSnapshot: snapshot,
+        });
+      }
+
+      it('is null before the studio countersigns', () => {
+        expect(withSnapshot(undefined)?.executionSnapshot).toBeNull();
+        expect(withSnapshot(null)?.executionSnapshot).toBeNull();
+      });
+
+      it('reads the frozen html, its hash and its day', () => {
+        expect(
+          withSnapshot({
+            html: '<h2>Services</h2>',
+            document_hash: 'a'.repeat(64),
+            created_at: '2026-09-07T12:00:00Z',
+          })?.executionSnapshot,
+        ).toEqual({
+          html: '<h2>Services</h2>',
+          documentHash: 'a'.repeat(64),
+          createdAt: '2026-09-07T12:00:00Z',
+        });
+      });
+
+      it('is nothing at all when there is no paper or no hash to check it against', () => {
+        expect(withSnapshot({ documentHash: 'a'.repeat(64) })?.executionSnapshot).toBeNull();
+        expect(withSnapshot({ html: '<h2>Services</h2>' })?.executionSnapshot).toBeNull();
+      });
+    });
+
     it('reads a null billing ceiling as uncapped rather than collapsing it onto zero', () => {
       const bundle = adaptCommercialDocumentBundle({
         document: { id: 'ds-1', kind: 'design_services', state: 'sent', title: 'Agreement' },
@@ -869,6 +928,33 @@ describe('signature provenance (paper vs. on-screen)', () => {
       }],
     });
     expect(bundle?.signatures[0]).toMatchObject({ signedOnPaper: false, paperSignedOn: null });
+  });
+
+  /* Wave 2 note: a signature row carries no consent sentence across this
+     edge. The sentence she ticked is written into the signature's `metadata`
+     at insert, and the bundle RPC projects a signature's keys one by one
+     (00425 — raw metadata never crosses here), so nothing is read for it and
+     nothing is claimed. The pin that matters is the one above: a key the RPC
+     does not project must not appear on the DTO at all. */
+  it('projects only the signature keys the bundle RPC actually sends', () => {
+    const bundle = adaptCommercialDocumentBundle({
+      document: { id: 'ds-w2-1', documentKind: 'design_services', commercialState: 'client_signed' },
+      signatures: [{
+        party: 'client', signerName: 'Jamie Client', signedAt: '2026-09-07T14:20:00Z',
+        consentVersion: 'v1', documentFingerprint: 'fp-1',
+        metadata: { consentSentence: 'A sentence nobody projected.' },
+      }],
+    });
+    expect(Object.keys(bundle?.signatures[0] ?? {}).sort()).toEqual([
+      'consentVersion',
+      'documentFingerprint',
+      'paperScanDocumentId',
+      'paperSignedOn',
+      'party',
+      'signedAt',
+      'signedOnPaper',
+      'signerName',
+    ]);
   });
 });
 
