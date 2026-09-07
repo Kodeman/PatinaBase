@@ -379,3 +379,166 @@ timing suite, not an agreement one.
 - The 14-step walk (build-sheet §9), steps 1–8 and 14. No browser was opened.
 - Nothing here touched the SQL suites, `db:generate`, Playwright, the shared
   Supabase stack, or production.
+
+---
+
+# Fix round 2 — 2026-09-07
+
+Four findings came back (R2-1 … R2-4). Two are code defects and are fixed on
+this branch; two are seam facts that only integration can close, and both are
+raised below rather than papered over.
+
+## R2-3 — a percent could not hold a decimal point
+
+`percent-editor.tsx` and `cost-plus-editor.tsx` each rendered
+`value={String(readPercent(raw))}` against a controlled input. `Number("12.")`
+is `12`, so the field re-rendered as `12` on the keystroke that typed the point
+and 12.5% was unreachable — on two record-only schedules where a fractional
+percentage is the ordinary case, and against a `readNumber` in `part-kinds.ts`
+that deliberately does not round because "12.5% is a percent somebody typed".
+
+New `schedules/percent-field.ts` holds one `usePercentField(value, commit)`:
+the keystrokes are kept verbatim in local state while the field is being typed
+into, the parsed number is committed on **every** keystroke (so a Save that
+never sees a blur still carries the figure), and blur drops the draft so the
+stored value comes back in canonical form. `readPercent` moved into the same
+module; both editors now read it from there rather than each declaring its own.
+
+Four tests in `part-editor.test.tsx`, driven through `PartEditor` rather than
+the editor in isolation: the point survives on a percent and on a markup, the
+committed payload is `12.5`, emptying the field commits `null`, and blur hands
+back the stored value. The first two fail on the old code (`toHaveValue("12.")`
+was `"12"`).
+
+Scope note — the money editors (`flat`, `per_phase`, `package`, `day_rate`)
+share the shape through `dollars(readCents(...))`, but those are Wave 1's
+editors lifted here unchanged and are deployed; the finding named these two and
+they are the two that changed.
+
+## R2-4 — "Replace the parts" was silent about the unsaved edits
+
+`REPLACE_WARNING` said *"Nothing else on the draft changes"*, which is true of
+the saved document and false of the room: `applyTemplate` runs `setParts(landed)`
+and `setDirty(false)`, so every locally typed, unsaved edit went with the
+replaced parts and the warning never mentioned it.
+
+The sheet now takes `unsavedChanges` and shows `REPLACE_WARNING_UNSAVED` —
+*"This replaces the parts on this agreement, including the changes you have not
+saved yet. Nothing else on the draft changes."* — whenever the room is dirty.
+`agreement-composer.tsx` passes `unsavedChanges={dirty}`; the `applyTemplate`
+comment says why. Refusing while dirty was the alternative and was rejected: the
+only way out of dirty is Save, and a Save immediately before a wholesale replace
+writes an intermediate composition into the change history for nothing.
+
+Two tests: the sheet spec pins the swapped sentence, and
+`agreement-composer-library-on.test.tsx` drives the real room — lay a Library
+part in without saving, open the template picker, confirm — and asserts the
+unsaved sentence is the one on screen and the plain one is not.
+
+## R2-1 — SEAM: the type-check gate is red on this branch alone
+
+Reproduced exactly as reported. On the committed branch:
+
+```
+$ pnpm --filter @patina/designer-portal type-check
+12 errors, all TS2724/TS2305 "has no exported member" across 7 import sites
+(useAgreementTemplates, useDeleteAgreementTemplate, useDeleteStudioAgreementPart,
+ useRenameAgreementTemplate, useSaveAgreementPart, useStudioAgreementParts,
+ useCopyAgreementPartsFromAuthority, useMaterializeAgreementTemplate,
+ useAgreementPartEvents, useSaveAgreementAsTemplate)
+Exit status 2
+```
+
+Every one of the twelve is the backend lane's `packages/supabase` not being on
+this branch. **No error names a designer-lane symbol**, and the count did not
+move across this round's two commits.
+
+Merged-tree probe, re-run after both fixes landed. Four files copied from
+`agreement/w2-backend` into the working tree, uncommitted —
+`packages/supabase/src/{database.types.ts,hooks/index.ts,hooks/use-agreement-library.ts,hooks/use-agreement-part-events.ts}`:
+
+```
+$ pnpm --filter @patina/designer-portal type-check
+(no output)
+type-check exit: 0
+```
+
+Working tree restored afterwards; `git status --porcelain -- packages/` is
+empty. `packages/types/src/agreement.ts` and `index.ts` are already byte-identical
+between this branch and backend's (`git diff HEAD agreement/w2-backend -- <those>`
+is empty), so the T0 handshake needs nothing further.
+
+**This is merge order, not a defect, and this lane cannot close it.** Build
+sheet §2: "Backend merges first … No lane blocks on another for *authoring*."
+Integration runs `pnpm --filter @patina/designer-portal type-check` on the
+merged tree before either branch is called done. The probe above says what that
+run will return.
+
+## R2-2 — SEAM: the `packages/supabase` commit, formally raised
+
+Commit `6a28247ec` *"a part's Library origin survives the next Save"* touches
+three files under `packages/supabase/**`, which build sheet §2 assigns to the
+backend lane ("everything under `packages/`"). The finding is correct: this lane
+reached across the seam instead of raising. **Raising it is what this section
+is.**
+
+What the change is, in full — `toAgreementPartPayload` in
+`packages/supabase/src/hooks/use-agreement-parts.ts` dropped two keys the RPC
+reads:
+
+```ts
+     required: part.required,
+     clientVisible: part.clientVisible,
++    sourceTemplateKey: part.sourceTemplateKey ?? null,
++    sourcePartId: part.sourcePartId ?? null,
+   }));
+```
+
+Why it matters: `upsert_agreement_parts` is DELETE-then-INSERT and reads
+`sourceTemplateKey` / `sourcePartId` off each entry (00575:1168-1181 on the
+backend branch reads both keys). A mapper that drops them blanks the provenance
+columns `materialize_agreement_template` had just written — on the very next
+Save. The Library entry a part came from would survive exactly until the
+designer typed into it. Two specs pin it:
+`__tests__/to-agreement-part-payload.test.ts` (new, 60 lines) and an added case
+in `__tests__/use-agreement-parts.test.ts`.
+
+Why it is still on this branch rather than moved:
+
+- The backend branch has **never touched this file** —
+  `git log main..agreement/w2-backend -- packages/supabase/src/hooks/use-agreement-parts.ts`
+  is empty — so the change is conflict-free at merge and is not duplicated.
+- This lane cannot write to `agreement/w2-backend`: it is another lane's branch
+  and worktree, a concurrent backend fix agent may hold it, and the brief
+  forbids reaching outside this worktree. Deleting the fix instead would hand
+  the merged product a live provenance bug in exchange for a tidier log.
+
+**Integration: review this commit as a backend change** — the first of the two
+remedies the reviewer named — or move it onto `agreement/w2-backend` before
+merge and re-run `pnpm --filter @patina/supabase test`. It was green here at
+round 1 (88 files, 1071 passed / 12 skipped), but the backend lane's own gates
+and reviewer have never seen it.
+
+## Gates — fix round 2, on the committed tree
+
+| gate | result |
+|---|---|
+| `pnpm --filter @patina/designer-portal type-check`, branch alone | **12 errors, exit 2** — all `has no exported member` from the un-merged backend; none names a designer symbol (R2-1) |
+| `pnpm --filter @patina/designer-portal type-check`, backend's 4 files probed in | **no output, exit 0** |
+| `pnpm --filter @patina/designer-portal lint` | **205 problems — 2 errors, 203 warnings**: the recorded baseline, unchanged. Both errors are pre-existing, in `piece-room-save-gate.test.tsx:159` and `use-commercial-documents.test.ts:930`, neither touched by this branch (`git log main..HEAD -- <those>` is empty) |
+| `npx eslint` on this round's 8 touched files | **exit 0** — no errors, no warnings |
+| `pnpm --filter @patina/designer-portal test -- <the 3 touched specs>` | **3 suites · 52 tests · all passed** |
+| `pnpm --filter @patina/designer-portal test` (full) | **534 suites · 6501 tests · 7 snapshots — all passed** |
+
+The 7 snapshots include Wave 1's flag-off byte-identity snapshot
+(`agreement-composer-library-off.test.tsx.snap`) — re-run, not regenerated, and
+green.
+
+## Still owed after fix round 2
+
+- **R2-1 and R2-2 are integration's, not this lane's** — the merged-tree
+  type-check, and the review (or relocation) of `6a28247ec`.
+- The 14-step walk (build-sheet §9), steps 1–8 and 14. No browser was opened
+  this round either.
+- Nothing here touched the SQL suites, `db:generate`, Playwright, the shared
+  Supabase stack, or production.
