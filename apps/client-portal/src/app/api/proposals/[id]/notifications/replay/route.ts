@@ -8,7 +8,15 @@ type ClientNotificationTransition =
 
 type DeliveryState = 'delivered' | 'pending_retry';
 
-const SERVICES_KINDS = new Set(['design_services', 'service_addendum']);
+/**
+ * `design_build` is a services kind here for the same reason it is one in the
+ * sign route: a turnkey prime is signed by the client and countersigned by the
+ * studio, so the transition whose notice can be replayed is `client_signed`.
+ * The edge function's own `SERVICES_KINDS` learns the kind in the same wave —
+ * a replay this route allows and that function refuses would answer
+ * `pending_retry` forever.
+ */
+const SERVICES_KINDS = new Set(['design_services', 'service_addendum', 'design_build']);
 
 function value(source: Record<string, unknown>, ...keys: string[]) {
   for (const key of keys) {

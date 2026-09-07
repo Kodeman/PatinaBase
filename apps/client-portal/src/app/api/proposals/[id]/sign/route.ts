@@ -5,7 +5,112 @@ import { resolveClientIp } from '@/lib/utils/client-ip';
 
 const COMMERCIAL_DOCUMENT_KIND_SET = new Set<string>(COMMERCIAL_DOCUMENT_KINDS);
 
+/* ── WHICH KINDS SIGN THROUGH THE SERVICES RPC (Wave 3, P9) ──────────────────
+   A POSITIVE list, and the reason it exists is a defect this wave found in
+   its own route.
+
+   The allowlist above is derived from `COMMERCIAL_DOCUMENT_KINDS`, so the
+   moment `design_build` was appended to that array in `@patina/types` this
+   route began ADMITTING a turnkey signature — while the routing below was a
+   `furnishings → trade_scope → else` chain, so the new kind fell into the
+   `else` and would have been signed as a plain design-services agreement:
+   no design-build validation, no deposit offer, and an HTTP 200 identical to
+   the correct one. A closed set that omits a kind fails closed and is found
+   in the first walk; a double-negative default fails OPEN and is not.
+
+   So the fall-through is retired. Every kind that signs through
+   `sign_design_services_agreement_with_trusted_ip` is named here, and a kind
+   this build does not know refuses rather than borrowing another kind's
+   transaction. `design_build` takes the same RPC — a turnkey prime is
+   countersigned exactly as a services agreement is — and then makes the
+   SEPARATE deposit call below.
+   ────────────────────────────────────────────────────────────────────────── */
+const SERVICES_SIGNING_KINDS = new Set<string>([
+  'design_services',
+  'service_addendum',
+  'design_build',
+]);
+
 type CommercialNotificationState = 'delivered' | 'pending_retry' | 'not_requested';
+
+/**
+ * P13 / R15 — what the door may offer once the signature is already recorded.
+ * `payPath` is a plain link to the shipped payer surface
+ * (`app/pay/[token]/page.tsx`); Wave 3 mints no Checkout session and holds no
+ * Stripe key. Null whenever the offer could not be made, for any reason.
+ */
+interface DepositOffer {
+  invoiceId: string;
+  amountCents: number;
+  label: string;
+  payPath: string;
+}
+
+function offerRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/* ── THE OFFER IS A SECOND CALL, AND IT MAY FAIL (D-W3-2, R15) ───────────────
+   "Offer after signature; never gate" is made STRUCTURAL here rather than
+   careful. The signature transaction has already committed by the time this
+   runs: `sign_design_services_agreement_with_trusted_ip` returned, the
+   `commercial_document_signatures` row exists, and `commercial_state` is
+   `client_signed`. Minting the deposit invoice is a separate, independently
+   failable RPC — so a billing failure has nothing left to roll back.
+
+   Every failure shape returns `null`, and `null` renders NOTHING on the door
+   (deposit-offer.tsx): no error, no retry prompt, no "payment unavailable".
+   The signature stands alone and the studio can still send the invoice. The
+   detail stays in the server log, where it is useful.
+   ────────────────────────────────────────────────────────────────────────── */
+async function offerDepositDraw(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  service: any,
+  proposalId: string,
+): Promise<DepositOffer | null> {
+  try {
+    const { data, error } = await service.rpc('issue_agreement_draw_invoice', {
+      p_proposal_id: proposalId,
+      p_draw_key: 'deposit',
+    });
+    if (error) {
+      console.warn('design build deposit offer unavailable', {
+        proposalId,
+        error: error.message ?? 'unconfirmed',
+      });
+      return null;
+    }
+    const row = offerRecord(data);
+    const invoiceId = row.invoiceId ?? row.invoice_id;
+    const payToken = row.payToken ?? row.pay_token;
+    // The invoice bills the NET of the draw — retainage is withheld, not
+    // billed — so the figure the offer names is the net one. `amountCents` is
+    // read only as the alias a future payload might use for the same number.
+    const amount = row.netCents ?? row.net_cents ?? row.amountCents ?? row.amount_cents;
+    const label = row.label;
+    if (
+      typeof invoiceId !== 'string' || invoiceId.length === 0 ||
+      typeof payToken !== 'string' || payToken.length === 0 ||
+      typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0
+    ) {
+      return null;
+    }
+    return {
+      invoiceId,
+      amountCents: amount,
+      label: typeof label === 'string' && label.length > 0 ? label : 'Deposit',
+      payPath: `/pay/${encodeURIComponent(payToken)}`,
+    };
+  } catch (error) {
+    console.warn('design build deposit offer unavailable', {
+      proposalId,
+      error: error instanceof Error ? error.message : 'transport_error',
+    });
+    return null;
+  }
+}
 
 async function notifyCommercialTransition(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,10 +228,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       documentKind === 'furnishings_authorization' && commercialState === 'executed';
     const isRetryableTradeScopeExecution =
       documentKind === 'trade_scope' && commercialState === 'executed';
+    // Read off the same positive list the routing below uses, so the retry
+    // window and the transaction it retries can never disagree about which
+    // kinds are services kinds. It used to be the double negative
+    // `!== furnishings && !== trade_scope`, which admitted `design_build` by
+    // accident rather than by decision — the admission is correct (a turnkey
+    // prime IS retried the same way) and is now made on purpose.
     const isClientSignedServicesRetry =
-      documentKind !== 'furnishings_authorization' &&
-      documentKind !== 'trade_scope' &&
-      commercialState === 'client_signed';
+      SERVICES_SIGNING_KINDS.has(documentKind) && commercialState === 'client_signed';
     if (
       commercialState !== 'sent' &&
       !isRetryableFurnishingsExecution &&
@@ -252,6 +361,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     }
 
+    // Every remaining signable kind is named, never inferred. See
+    // SERVICES_SIGNING_KINDS above: the `else` this replaced would have signed
+    // a design-build prime as a design-services agreement and answered 200.
+    if (!SERVICES_SIGNING_KINDS.has(documentKind)) {
+      return NextResponse.json({ error: 'not_signable' }, { status: 409 });
+    }
+
     // WAVE 2, P6 — WHAT SHE CONSENTED TO IS THE DATABASE'S ANSWER, NOT THE
     // BROWSER'S. The sentence recorded against the signature is
     // `compose_agreement_consent`'s, read off the bundle above; a client that
@@ -325,11 +441,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       notificationDelivery = await notifyCommercialTransition(supabase, id, 'client_signed');
     }
 
+    // P13 — SIGN, THEN OFFER. The signature is already recorded above; this
+    // is the separate, failable call, and its failure is `depositOffer: null`
+    // rather than a refused signature. No `deposit_ready` notice is sent: the
+    // design-build deposit reaches the client on the door, in the same act,
+    // and an email would be a second, contradictory notice
+    // (commercial-document-notify/policy.ts leaves the kind out of that
+    // branch on purpose).
+    const depositOffer =
+      documentKind === 'design_build' && signedState === 'client_signed'
+        ? await offerDepositDraw(commercialService, id)
+        : null;
+
     return NextResponse.json({
       ok: true,
       commercialState: signedState,
       newlyClientSigned,
       notificationDelivery: { state: notificationDelivery },
+      depositOffer,
     });
   }
 

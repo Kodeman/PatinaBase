@@ -80,6 +80,27 @@ describe('POST /api/proposals/[id]/notifications/replay', () => {
     });
   });
 
+  /* Wave 3 — a turnkey prime is signed by the client and countersigned by the
+     studio, so the notice it can replay is the same signature receipt. The
+     deposit is NOT replayed here: it reaches her on the door, in the same act,
+     and an email would be a second, contradictory notice. */
+  it('replays the signature receipt on a design-build prime, and nothing else', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        document: { documentKind: 'design_build', commercialState: 'client_signed' },
+      },
+      error: null,
+    });
+
+    const response = await POST(request, context);
+
+    expect(response.status).toBe(200);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith('commercial-document-notify', {
+      body: { documentId: 'proposal-1', transition: 'client_signed' },
+    });
+  });
+
   it('replays authorization and outstanding deposit notices without signature data', async () => {
     rpc.mockResolvedValue({
       data: {
