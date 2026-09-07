@@ -238,3 +238,128 @@ Billing card is untouched, byte for byte.
   `studio_agreement_parts`, `agreement_templates`, `compose_agreement_consent`
   or `agreement_execution_snapshots` anywhere in this lane's diff. The add
   menu offers blank kinds only; `Save as template…` is not rendered.
+
+---
+
+# Round 1 — the adversarial review's findings, fixed
+
+Eight findings (1 blocker, 7 majors). All eight are addressed. Gates re-run at
+the bottom of this section.
+
+| ID | Sev | Fix | Files |
+|---|---|---|---|
+| D1 | blocker | The parts reach EVERY designer surface, not only the composer: `commercial-document-body.tsx` and `service-agreement-instruments.tsx` both hold the bundle and now pass `parts={…}` to `ServiceAgreementPreview`. A sent flat-fee composition can no longer fall back to the seven fixed sections and print "Not yet set". | `commercial/commercial-document-body.tsx`, `commercial/service-agreement-instruments.tsx`, + `commercial-document-body.test.tsx` (new) |
+| D2 | major | The document page's send sheet gets a `readinessOverride` computed with `assessAgreementReadiness(bundle.parts)` whenever the document has parts. A flat-fee agreement — no rate card, no ceiling, legal under R4 — is sendable from that surface, and an incomplete part still blocks. | `commercial/service-agreement-instruments.tsx` |
+| D3 | major | R-5 no longer reads `AUTHORITY_VARIANTS` (R9's Wave-2 authority list, which contains `retainer` and `cadence`). A local `FEE_VARIANTS = rate_card · flat · per_phase · ceiling` is exactly the sentence the blocker prints. A retainer of zero plus a monthly cadence is no longer a fee. | `drafting/agreement/readiness.ts` |
+| D4 | major | `mapTerms` reads `billing_ceiling_cents` through `nullableFiniteCents`, so F-2's NULL-means-uncapped survives into the bundle instead of being coerced to `0`. This was the mechanism behind D1's "Not yet set" on a sent document. | `hooks/use-commercial-documents.ts` |
+| D5 | major | The designer's client copy is the client shell's copy: retainer activation sentences, the cadence's own value (capitalized by type, not remapped to "Every two weeks"), `{p}% deposit`, and the client's empty-part rule (heading always; the recorded line where the client prints one). The sentences now live in ONE place — `packages/types/src/agreement-copy.ts` — and both suites can assert the same fixture. | `packages/types/src/agreement-copy.ts` (new), `packages/types/src/index.ts`, `commercial/agreement-parts-body.tsx` |
+| D6 | major | `fetchAgreementParts` fails soft ONLY on a missing relation (`42P01` / `PGRST205`, or the matching message). An RLS denial or a transport failure throws, the bundle query errors, and the room says so — instead of showing an empty rail over a stored composition that one Save would replace wholesale. | `hooks/use-commercial-documents.ts` |
+| D7 | major | The P3 "Agreement defaults" card is behind `useFeatureFlag('agreement-parts')`, fail-closed (hidden while loading). The `studio_agreement_defaults` read is gated with it, so a flag-off studio makes no request for a table that may not exist yet. Billing above it is untouched. | `account/account-studio-page.tsx` |
+| D8 | major | The e2e spec is `e2e/agreement/agreement-parts.agreement.pw.ts` and `playwright.agreement.config.ts` adds `testMatch: "**/*.agreement.pw.ts"`. The base config (uneditable — secret-scan trap) no longer collects a spec whose flag is off in that run. `playwright.config.ts` is unchanged. | `e2e/agreement/agreement-parts.agreement.pw.ts` (renamed), `playwright.agreement.config.ts` |
+
+## Rulings taken inside the fix, and why
+
+- **D3 — which variants satisfy the floor.** The orchestrator's ruling in the
+  finding: `rate_card | flat | per_phase | ceiling`. `ceiling` stays on the
+  list because a stated maximum IS a stated amount; `retainer` and `cadence`
+  come off because money held against a fee and the day invoices go out are
+  not the fee. The blocker sentence was already written this way.
+- **D5 — one empty-part rule, and whose.** The client shell's, adopted here:
+  a part the studio kept prints its heading either way. The designer's
+  preview is a preview of the client's page, so where the two differed the
+  client's wording and the client's layout rule won. The unknown-variant line
+  also drops its `· Draws` kind suffix for the client's plain sentence — the
+  kind is visible to the designer in the rail and the editor, not on the
+  client's paper.
+- **D5 — where the shared fixture lives.** `packages/types/src/agreement-copy.ts`.
+  Both portals already depend on `@patina/types`, so it is the only home that
+  is genuinely shared. The designer renderer imports it; the designer suite
+  pins the literals. **The client lane must import the same module** — until
+  it does, the two surfaces agree by inspection rather than by construction.
+  Recorded as an advisory for the integration steward.
+- **D7 — flag or carve-out.** Gated. The program rule ("features are dark
+  until the flag reaches them"; "flag-off must be byte-identical") is the
+  binding text and the build sheet's silence is not a carve-out. With the
+  flag off, Account → Studio renders exactly what it renders on `main`.
+
+## Gates, re-run after the fixes
+
+Run from a bare `cd` into the worktree.
+
+```
+pnpm turbo build --filter=@patina/types
+  → 1 successful, 1 total (the new agreement-copy module compiles)
+
+pnpm --filter @patina/designer-portal type-check
+  → tsc --noEmit, no output, exit 0
+
+pnpm --filter @patina/designer-portal lint
+  → 205 problems (2 errors, 203 warnings) — IDENTICAL to the pre-fix run,
+    and both errors are the same two pre-existing ones on `main`
+    (piece-room-save-gate.test.tsx:159, use-commercial-documents.test.ts:930).
+  Scoped to the 9 files this round changed:
+    npx eslint <those files>
+      → 1 problem (0 errors, 1 warning) — the same pre-existing unused
+        eslint-disable on account-studio-page.tsx's studio-logo <img>.
+
+pnpm --filter @patina/designer-portal test -- <the 7 touched test files>
+  → 6 suites, 133 tests passed (first pass)
+  → service-agreement-instruments.test.tsx: 19 tests passed
+  → commercial-document-body.test.tsx: 2 tests passed
+
+pnpm --filter @patina/designer-portal test          # THE merge gate
+  → Test Suites: 522 passed, 522 total
+    Tests:       6298 passed, 6298 total
+    Snapshots:   2 passed, 2 total   ← flag-off byte-identity still holds
+```
+
+Playwright collection, proving D8 both ways (both runs still fail on this
+environment's missing `SUPABASE_SERVICE_ROLE_KEY`, exactly as every
+pre-existing spec does — the point is WHICH files get loaded):
+
+```
+npx playwright test --list --project=chromium
+  → no e2e/agreement file loaded at all (grep -i agreement: no matches)
+
+npx playwright test --list --config playwright.agreement.config.ts --project=chromium
+  → loads e2e/agreement/agreement-parts.agreement.pw.ts (the error trace
+    originates in it), then stops on the missing service-role key
+```
+
+## New tests this round
+
+- `commercial/commercial-document-body.test.tsx` (new, 2) — a SENT composed
+  agreement reads as its parts and never prints "Not yet set"; a document
+  with no parts keeps the seven-facet body.
+- `commercial/service-agreement-instruments.test.tsx` (+4) — the same two
+  cases on the document page, plus a flat-fee composition that IS sendable
+  from there and an incomplete part that still blocks.
+- `commercial/agreement-parts-body.test.tsx` (+7, 1 rewritten) — the four
+  drifted rows asserted as the client shell's literal sentences, the empty
+  part that keeps its heading, and a fixture describe pinning
+  `AGREEMENT_PART_COPY` / `agreementCadenceText` / `agreementDepositLine`.
+- `drafting/agreement/__tests__/readiness.test.ts` (+3) — the nine
+  materialized parts with nothing typed, a retainer-plus-cadence agreement,
+  and a per-phase fee that does satisfy the floor.
+- `hooks/__tests__/use-commercial-documents.test.ts` (+6) — NULL ceiling
+  stays null, a written ceiling stays an integer, the two missing-relation
+  codes read as no parts, a denied read throws, and the parts that were read
+  map through.
+- `account/__tests__/agreement-defaults-card.test.tsx` (+1, flag mock
+  rewritten) — with `agreement-parts` off the card is not on the page and
+  Billing is untouched.
+
+## Still open after this round (advisories, not blockers)
+
+- The client lane's `agreement-parts-body.tsx` should import
+  `AGREEMENT_PART_COPY` from `@patina/types` rather than repeat the
+  sentences. Its rendering already matches; the construction does not.
+- `per_phase` with a NULL phase amount: the client prints `—`, the designer
+  prints `$0`, because `readPhases` (part-kinds.ts) coerces a null amount to
+  zero for the editor. Not in the review's findings and out of this round's
+  scope; the editor never writes null.
+- `pnpm --filter @patina/admin-portal build` (the repo's strictest
+  shared-package gate) was NOT re-run this round. The only `packages/**`
+  change is a new additive module, and `pnpm turbo build --filter=@patina/types`
+  (tsc --build) is green; the integration steward should still run it once
+  before merge.
