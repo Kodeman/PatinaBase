@@ -584,6 +584,38 @@ export type {
   DiscardAgreementPartsResult,
 } from "./use-agreement-parts";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// The Agreement Library — a studio's own Parts and Templates beside Patina's
+// seeded ones, and the change history of one agreement's parts
+// (migrations 00576, 00577). R3: owners and admins edit, every member composes.
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  agreementLibraryKeys,
+  mapAgreementTemplate,
+  mapStudioAgreementPart,
+  useAgreementTemplates,
+  useStudioAgreementParts,
+  useSaveAgreementPart,
+  useSaveAgreementAsTemplate,
+  useMaterializeAgreementTemplate,
+  useRenameAgreementTemplate,
+  useDeleteAgreementTemplate,
+  useDeleteStudioAgreementPart,
+  useCopyAgreementPartsFromAuthority,
+} from "./use-agreement-library";
+export type {
+  AgreementTemplateRow,
+  StudioAgreementPartRow,
+  SaveAgreementPartInput,
+} from "./use-agreement-library";
+
+export {
+  agreementPartEventsKeys,
+  mapAgreementPartEvent,
+  useAgreementPartEvents,
+} from "./use-agreement-part-events";
+export type { AgreementPartEventRow } from "./use-agreement-part-events";
+
 export type {
   Proposal,
   ProposalItem,
