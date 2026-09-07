@@ -172,6 +172,60 @@ describe('signTradeAgreement', () => {
     expect(result).toEqual({ status: 'already_signed', signedName: 'Dana Hall', signedAt: null });
   });
 
+  // N2. The success half needs an allowlist too, or a refusal word the backend
+  // adds later — the RPC's return shape is not frozen — falls through to a
+  // receipt and prints "Signed." over a signature that never committed.
+  it('claims nothing on a refusal word this file has never heard of', async () => {
+    for (const word of ['not_sent', 'contact_mismatch', 'token_consumed', 'error']) {
+      mockAdmin({ data: { status: word }, error: null });
+      // eslint-disable-next-line no-await-in-loop
+      const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
+      expect(result).toEqual({ status: 'unknown' });
+    }
+  });
+
+  it('claims nothing on an answer with neither a word nor a receipt in it', async () => {
+    mockAdmin({ data: { ok: true }, error: null });
+    const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
+    expect(result).toEqual({ status: 'unknown' });
+  });
+
+  it('does not count an empty receipt key as a receipt', async () => {
+    mockAdmin({ data: { status: 'contact_mismatch', signed_at: null }, error: null });
+    const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
+    expect(result).toEqual({ status: 'unknown' });
+  });
+
+  it('takes an actual receipt key as evidence even beside a word it does not know', async () => {
+    // The other half of the allowlist: a real signed_at IS the signature.
+    mockAdmin({ data: { status: 'not_sent', signed_at: '2026-09-07T15:04:00Z' }, error: null });
+    const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
+    expect(result).toEqual({
+      status: 'saved',
+      signedName: 'Dana Hall',
+      signedAt: '2026-09-07T15:04:00Z',
+    });
+  });
+
+  // N3. Two people can hold the same emailed link. If A signs and B's
+  // already-loaded page then completes its hold, substituting B's typed name
+  // would print B as the signatory of A's signature.
+  it('never substitutes the replayer’s typed name when the replay receipt names nobody', async () => {
+    mockAdmin({ data: { status: 'already_signed', signedAt: '2026-09-06T11:00:00Z' }, error: null });
+    const result = await signTradeAgreement(validToken, { signedName: 'Someone Else' });
+    expect(result).toEqual({
+      status: 'already_signed',
+      signedName: null,
+      signedAt: '2026-09-06T11:00:00Z',
+    });
+  });
+
+  it('reports a bare already_signed with no receipt at all, and still no typed name', async () => {
+    mockAdmin({ data: { status: 'already_signed' }, error: null });
+    const result = await signTradeAgreement(validToken, { signedName: 'Someone Else' });
+    expect(result).toEqual({ status: 'already_signed', signedName: null, signedAt: null });
+  });
+
   it('still reads every recognised failure word as its own sentence', async () => {
     for (const word of ['invalid_link', 'not_found', 'expired', 'revoked']) {
       mockAdmin({ data: { status: word }, error: null });

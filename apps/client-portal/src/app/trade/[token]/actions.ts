@@ -18,16 +18,30 @@
  * backend that raises and a backend that returns produce the same sentence on
  * the page and neither can fall through to a raw DB message.
  *
- * READING THE ANSWER (S5). The build sheet freezes resolve's DTO (I-4) but
+ * READING THE ANSWER (S5, N2). The build sheet freezes resolve's DTO (I-4) but
  * freezes no success shape for this RPC — it names only the three failure
- * classifications. So the answer is read FAILURE-FIRST: a recognised failure
- * word, or an empty answer, is a failure; anything else the RPC handed back
- * without raising is a committed signature, whatever it chose to call the
- * keys. Reading it success-first would mean an unrecognised receipt shape
- * ({ ok: true }, snake_case names) printed "This link is no longer active."
- * to a sub whose signature had just committed — the one sentence that must
- * never appear over a real signature. Both key spellings are read for the
- * same reason rfq/[token]/actions.ts reads amountCents and amount_cents.
+ * classifications. Two sentences must therefore never be printed: "This link
+ * is no longer active." over a signature that committed, and "Signed." over a
+ * signature that did not. Neither a pure failure-first nor a pure
+ * success-first reading avoids both, because a word this file has never heard
+ * of — `not_sent`, `contact_mismatch`, `token_consumed` — belongs to neither
+ * list.
+ *
+ * So a receipt is inked only on POSITIVE EVIDENCE: a recognised success word
+ * (`signed`, `saved`, `already_signed`), or a receipt key actually present on
+ * the answer (`signedAt`/`signed_at`/`signedName`/`signed_name`). Recognised
+ * failure words keep their own sentences. Everything else is `unknown`, which
+ * asserts nothing and sends the page back to the server to be told the truth
+ * — the reload half of S5's own recommended hardening. Both key spellings are
+ * read for the same reason rfq/[token]/actions.ts reads amountCents and
+ * amount_cents.
+ *
+ * THE REPLAY'S NAME (N3). On `already_signed` the typed name is NOT
+ * substituted for a missing one. §4.5 and RC-1 require the replay to show THE
+ * ORIGINAL receipt, and two people can hold the same emailed link: if A signs
+ * and B's already-loaded page then completes its hold, substituting would
+ * print B's name over A's signature. A replay whose receipt carries no name
+ * shows no name.
  *
  * sign_trade_agreement_by_token is service_role ONLY — this file is the only
  * caller a login-less guest surface has.
@@ -43,9 +57,11 @@ export const MIN_SIGNED_NAME_LENGTH = 2;
 
 export type SignTradeAgreementResult =
   | { status: 'saved'; signedName: string; signedAt: string | null }
-  | { status: 'already_signed'; signedName: string; signedAt: string | null }
+  | { status: 'already_signed'; signedName: string | null; signedAt: string | null }
   | { status: 'agreement_void' }
-  | { status: 'invalid' };
+  | { status: 'invalid' }
+  /** The answer claimed nothing this file can read as either outcome — assert nothing, reload. */
+  | { status: 'unknown' };
 
 function classifyMessage(message: string): 'agreement_void' | 'invalid' {
   // Only the withdrawn case gets its own sentence. invalid_link and every
@@ -59,6 +75,13 @@ const VOID_OUTCOMES = new Set(['agreement_void', 'void', 'voided']);
 
 /** The dead-link classifications — every one reads as the same sentence. */
 const INVALID_OUTCOMES = new Set(['invalid_link', 'invalid', 'not_found', 'expired', 'revoked']);
+
+/** The only words that are, by themselves, evidence that a signature exists. */
+const SIGNED_OUTCOMES = new Set(['signed', 'saved', 'already_signed']);
+
+/** The receipt's own keys, in both spellings the RPC might use. */
+const RECEIPT_NAME_KEYS = ['signedName', 'signed_name'];
+const RECEIPT_DATE_KEYS = ['signedAt', 'signed_at'];
 
 /**
  * The outcome word, wherever the RPC put it: a classification string, or a
@@ -126,15 +149,30 @@ export async function signTradeAgreement(
   if (outcome && VOID_OUTCOMES.has(outcome)) return { status: 'agreement_void' };
   if (outcome && INVALID_OUTCOMES.has(outcome)) return { status: 'invalid' };
 
+  const receiptName = readString(row, RECEIPT_NAME_KEYS);
+  const receiptDate = readString(row, RECEIPT_DATE_KEYS);
+  const hasReceiptKey = receiptName !== null || receiptDate !== null;
+  const saysSigned = outcome !== null && SIGNED_OUTCOMES.has(outcome);
+
+  // No positive evidence of a signature and no recognised failure: a word this
+  // file has never heard of. Claim neither outcome — the page reloads and the
+  // server says what is actually true of this token.
+  if (!saysSigned && !hasReceiptKey) return { status: 'unknown' };
+
   // No revalidatePath here (S3). The token is revoked in the same transaction
   // as the signature, so re-rendering this route on the way back would resolve
   // the now-spent token to NULL and replace the just-inked receipt with the
   // not-found page. The receipt is rendered from the component's own state and
   // the route is force-dynamic, so the call bought nothing even when it was
   // harmless.
+  if (outcome === 'already_signed') {
+    // N3: the ORIGINAL receipt or none — never the replayer's typed name.
+    return { status: 'already_signed', signedName: receiptName, signedAt: receiptDate };
+  }
+
   return {
-    status: outcome === 'already_signed' ? 'already_signed' : 'saved',
-    signedName: readString(row, ['signedName', 'signed_name']) ?? signedName,
-    signedAt: readString(row, ['signedAt', 'signed_at']),
+    status: 'saved',
+    signedName: receiptName ?? signedName,
+    signedAt: receiptDate,
   };
 }

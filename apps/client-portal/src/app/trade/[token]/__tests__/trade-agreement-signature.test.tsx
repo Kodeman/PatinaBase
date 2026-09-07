@@ -28,7 +28,30 @@ async function hold() {
   });
 }
 
+/**
+ * jsdom's own location cannot navigate, so the reload the unknown-answer path
+ * performs is observed rather than executed.
+ */
+const reload = jest.fn();
+const realLocation = window.location;
+
 describe('TradeAgreementSignature', () => {
+  beforeAll(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: { ...realLocation, reload },
+    });
+  });
+
+  afterAll(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: realLocation,
+    });
+  });
+
   beforeEach(() => jest.clearAllMocks());
   afterEach(() => jest.useRealTimers());
 
@@ -107,6 +130,34 @@ describe('TradeAgreementSignature', () => {
 
     expect(screen.getByText('Signed.')).toBeInTheDocument();
     expect(screen.getByText(/Dana Hall · 6 September 2026/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('settles a nameless replay on the date alone, never on the name just typed (N3)', async () => {
+    (signTradeAgreement as jest.Mock).mockResolvedValue({
+      status: 'already_signed',
+      signedName: null,
+      signedAt: '2026-09-06T11:00:00Z',
+    });
+    render(<TradeAgreementSignature token={token} existingSignature={null} />);
+    fireEvent.change(nameField(), { target: { value: 'Someone Else' } });
+    await hold();
+
+    const receipt = screen.getByTestId('trade-agreement-receipt');
+    expect(receipt).toHaveTextContent('Signed.');
+    expect(receipt).toHaveTextContent('6 September 2026');
+    expect(receipt).not.toHaveTextContent('Someone Else');
+  });
+
+  it('inks nothing and reloads when the answer says neither signed nor refused (N2)', async () => {
+    (signTradeAgreement as jest.Mock).mockResolvedValue({ status: 'unknown' });
+    render(<TradeAgreementSignature token={token} existingSignature={null} />);
+    fireEvent.change(nameField(), { target: { value: 'Dana Hall' } });
+    await hold();
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('trade-agreement-receipt')).not.toBeInTheDocument();
+    expect(screen.queryByText('Signed.')).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

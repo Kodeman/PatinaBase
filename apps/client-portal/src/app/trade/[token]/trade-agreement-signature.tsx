@@ -25,11 +25,22 @@ import { signTradeAgreement } from './actions';
 import { formatLongDate, type TradeAgreementSignatureReceipt } from './types';
 
 type Outcome =
-  | { kind: 'signed'; signedName: string; signedAt: string | null }
+  | { kind: 'signed'; signedName: string | null; signedAt: string | null }
   | { kind: 'agreement_void' };
 
-function Receipt({ signedName, signedAt }: TradeAgreementSignatureReceipt) {
-  const date = formatLongDate(signedAt);
+/**
+ * The receipt's second line is whatever the receipt actually carries. A replay
+ * whose receipt names nobody (N3) prints no name rather than the name the
+ * replayer just typed, so a receipt never credits the wrong person.
+ */
+function Receipt({
+  signedName,
+  signedAt,
+}: {
+  signedName: string | null;
+  signedAt: string | null;
+}) {
+  const line = [signedName, formatLongDate(signedAt)].filter(Boolean).join(' · ');
   return (
     <section
       data-testid="trade-agreement-receipt"
@@ -37,10 +48,7 @@ function Receipt({ signedName, signedAt }: TradeAgreementSignatureReceipt) {
       className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-6"
     >
       <p className="type-item-name">Signed.</p>
-      <p className="type-body-small mt-2 text-[var(--text-muted)]">
-        {signedName}
-        {date ? ` · ${date}` : ''}
-      </p>
+      {line && <p className="type-body-small mt-2 text-[var(--text-muted)]">{line}</p>}
       <p className="type-body-small mt-3 text-[var(--text-muted)]">
         Your studio holds a copy of this agreement as you signed it.
       </p>
@@ -86,6 +94,13 @@ export function TradeAgreementSignature({
       const result = await signTradeAgreement(token, { signedName: name });
       if (result.status === 'invalid') {
         setError('This link is no longer active.');
+        return;
+      }
+      // N2: the answer was neither a signature nor a failure this page can
+      // read. Ink nothing — go back to the server and be told the truth,
+      // rather than print "Signed." over a signature that may not exist.
+      if (result.status === 'unknown') {
+        if (typeof window !== 'undefined') window.location.reload();
         return;
       }
       if (result.status === 'agreement_void') {
