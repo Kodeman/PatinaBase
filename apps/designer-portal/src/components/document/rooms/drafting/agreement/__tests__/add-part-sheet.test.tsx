@@ -158,6 +158,74 @@ describe("the Add-a-part picker", () => {
     expect(within(studioCeiling).getByRole("button")).toBeDisabled();
   });
 
+  it("refuses a second fee basis in the Schedule menu, in the RPC's words (R18 · 00577)", () => {
+    renderSheet([
+      onAgreement({
+        partKey: "custom.flat",
+        kind: "schedule",
+        variant: "flat",
+        title: "Flat fee",
+      }),
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Schedule ▾" }));
+    const menu = screen.getByRole("list", { name: "Schedule variants" });
+    const rowFor = (label: string) =>
+      within(menu)
+        .getAllByRole("listitem")
+        .find((row) => within(row).queryByText(label)) as HTMLElement;
+
+    for (const label of ["Flat fee", "Fee by phase"]) {
+      const row = rowFor(label);
+      expect(within(row).getByRole("button")).toBeDisabled();
+      expect(
+        within(row).getByText("this agreement carries one fee basis"),
+      ).toBeInTheDocument();
+    }
+    // Everything that is not a fee basis is still on offer.
+    expect(within(rowFor("Ceiling")).getByRole("button")).toBeEnabled();
+  });
+
+  it("refuses a Library fee-basis part beside a fee by phase already on the agreement", () => {
+    renderSheet(
+      [
+        onAgreement({
+          partKey: "custom.per-phase",
+          kind: "schedule",
+          variant: "per_phase",
+          title: "Fee by phase",
+        }),
+      ],
+      jest.fn(),
+      [
+        studioPart({
+          partKey: "studio.flat",
+          title: "Studio flat fee",
+          kind: "schedule",
+          variant: "flat",
+        }),
+      ],
+    );
+    const row = partRows().find((item) =>
+      within(item).queryByText("Studio flat fee"),
+    ) as HTMLElement;
+    expect(within(row).getByRole("button")).toBeDisabled();
+    expect(
+      within(row).getByText("this agreement carries one fee basis"),
+    ).toBeInTheDocument();
+  });
+
+  it("offers both fee bases on an agreement that names neither", () => {
+    renderSheet();
+    fireEvent.click(screen.getByRole("button", { name: "Schedule ▾" }));
+    const menu = screen.getByRole("list", { name: "Schedule variants" });
+    for (const label of ["Flat fee", "Fee by phase"]) {
+      const row = within(menu)
+        .getAllByRole("listitem")
+        .find((item) => within(item).queryByText(label)) as HTMLElement;
+      expect(within(row).getByRole("button")).toBeEnabled();
+    }
+  });
+
   it("offers all fifteen schedule variants under Schedule ▾", () => {
     renderSheet();
     fireEvent.click(screen.getByRole("button", { name: "Schedule ▾" }));

@@ -35,6 +35,8 @@ import { Button } from "@/components/ui/controls";
 import { DocSheet } from "../../../overlays/doc-sheet";
 import {
   blankPayload,
+  feeBasisParts,
+  FEE_BASIS_VARIANTS,
   partKindLabel,
   SINGLE_INSTANCE_VARIANTS,
 } from "./part-kinds";
@@ -83,11 +85,17 @@ function newCustomKey(): string {
   return `custom.${uuid}`;
 }
 
+/** The picker's word for a second fee basis. `flat` and `per_phase` are not
+ *  the same part, so "already on this agreement" would be a lie — what the
+ *  agreement already has is A fee basis, and it carries one (R18, 00577). */
+export const FEE_BASIS_REFUSAL = "this agreement carries one fee basis";
+
 /**
  * Why this choice cannot be added — or null when it can.
  *
- * Two reasons, one sentence: the agreement already carries this exact part
- * (same key), or it already carries a part of this money shape (R18).
+ * Three reasons: the agreement already carries this exact part (same key), it
+ * already carries a part of this money shape, or it already names a fee basis
+ * and a second one would leave the projection choosing between two (R18).
  */
 function refusalFor(
   choice: { partKey: string; kind: string; variant: string | null },
@@ -96,15 +104,21 @@ function refusalFor(
   if (parts.some((part) => part.partKey === choice.partKey)) {
     return "already on this agreement";
   }
-  if (
-    choice.kind === "schedule" &&
-    choice.variant &&
-    choice.variant in SINGLE_INSTANCE_VARIANTS &&
-    parts.some(
-      (part) => part.kind === "schedule" && part.variant === choice.variant,
-    )
-  ) {
-    return "already on this agreement";
+  if (choice.kind === "schedule" && choice.variant) {
+    if (
+      choice.variant in SINGLE_INSTANCE_VARIANTS &&
+      parts.some(
+        (part) => part.kind === "schedule" && part.variant === choice.variant,
+      )
+    ) {
+      return "already on this agreement";
+    }
+    if (
+      FEE_BASIS_VARIANTS.includes(choice.variant) &&
+      feeBasisParts(parts).length > 0
+    ) {
+      return FEE_BASIS_REFUSAL;
+    }
   }
   return null;
 }

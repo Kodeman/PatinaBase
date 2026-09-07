@@ -22,6 +22,8 @@ import type { AgreementPart } from "@patina/types";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import {
   duplicateMoneyVariants,
+  FEE_BASIS_BLOCKER,
+  feeBasisParts,
   readBody,
   readCents,
   readItems,
@@ -133,6 +135,15 @@ export function assessAgreementReadiness({
     for (const partId of duplicate.partIds.slice(1)) {
       add(partId, duplicateMoneyBlocker(duplicate.label));
     }
+  }
+
+  // R18's second half — one fee basis. A flat fee standing beside a fee by
+  // phase is one of each, so the per-variant rule above sees nothing, while
+  // `upsert_agreement_parts` raises `an agreement carries one fee basis`
+  // (check_violation, 00577) at Save. The picker no longer offers the second;
+  // this catches one that arrives from a template or a Library part.
+  for (const extra of feeBasisParts(parts).slice(1)) {
+    add(extra.id, FEE_BASIS_BLOCKER);
   }
 
   for (const part of parts) {

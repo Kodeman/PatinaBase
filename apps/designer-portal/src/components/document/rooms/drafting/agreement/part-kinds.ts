@@ -179,6 +179,36 @@ export const SINGLE_INSTANCE_VARIANTS: Record<string, string> = {
   procurement: "furnishings deposit",
 };
 
+/**
+ * R18, the other half — ONE FEE BASIS.
+ *
+ * `flat` and `per_phase` both answer "what does the work cost", and the
+ * projection writes one `fee_basis` from whichever is present, so two of them
+ * IN ANY COMBINATION leave that column choosing between two answers.
+ * `upsert_agreement_parts` refuses it — "an agreement carries one fee basis"
+ * (check_violation, 00577) — and the W1 duplicate rule above cannot catch it,
+ * because that rule asks about one variant at a time and flat-beside-per_phase
+ * is one of each.
+ *
+ * Neither is in `SINGLE_INSTANCE_VARIANTS`: that map is the RPC's per-variant
+ * refusal, keyed by variant, and this is a refusal about a pair.
+ */
+export const FEE_BASIS_VARIANTS: readonly string[] = ["flat", "per_phase"];
+
+/** The fee-basis parts this composition carries, in rail order. */
+export function feeBasisParts(parts: AgreementPart[]): AgreementPart[] {
+  return parts.filter(
+    (part) =>
+      part.kind === "schedule" &&
+      part.variant !== null &&
+      FEE_BASIS_VARIANTS.includes(part.variant),
+  );
+}
+
+/** The RPC's own sentence, in exactly one place — the rail marks the row with
+ *  it and the readiness panel prints it. */
+export const FEE_BASIS_BLOCKER = "An agreement carries one fee basis.";
+
 function takenSingleInstanceVariants(parts: AgreementPart[]): Set<string> {
   const taken = new Set<string>();
   for (const part of parts) {
@@ -195,9 +225,12 @@ function takenSingleInstanceVariants(parts: AgreementPart[]): Set<string> {
  */
 export function addPartOptions(parts: AgreementPart[]): AddPartOption[] {
   const taken = takenSingleInstanceVariants(parts);
-  return ADD_PART_OPTIONS.filter(
-    (option) => !(option.variant && taken.has(option.variant)),
-  );
+  const basisTaken = feeBasisParts(parts).length > 0;
+  return ADD_PART_OPTIONS.filter((option) => {
+    if (!option.variant) return true;
+    if (taken.has(option.variant)) return false;
+    return !(basisTaken && FEE_BASIS_VARIANTS.includes(option.variant));
+  });
 }
 
 /**
@@ -420,12 +453,24 @@ export const CREDIT_RULE_OPTIONS = [
 
 export const DEPOSIT_CHIPS = [0, 25, 50, 100] as const;
 
+/** A number as a payload field holds it — a percent, a count of days. Unlike
+ *  `readCents` this does not round: 12.5% is a percent somebody typed. */
+function readNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /**
  * Is this schedule part's typed value actually filled in?
  *
  * Two callers: R-4 (a `required` part must be complete) and R-5 (the class
- * floor needs one money part that says something). A variant with no editor
- * answers `true` — Wave 1 will not block a send on a part it cannot open.
+ * floor needs one money part that says something). A variant THE ROOM DOES NOT
+ * OPEN AN EDITOR FOR answers `true` — the room will not block a send on a part
+ * it cannot open. Every variant `schedules/index.ts` has an editor for answers
+ * from its own payload, including the five Wave 2 added: without them a
+ * required, empty `package` or `cost_plus` read complete and the readiness
+ * panel had nothing to say about a part the designer had never filled in.
  */
 export function scheduleValueIsSet(part: AgreementPart): boolean {
   const payload = part.payload ?? {};
@@ -458,6 +503,31 @@ export function scheduleValueIsSet(part: AgreementPart): boolean {
     case "procurement": {
       const percent = readCents(payload.depositPercent);
       return percent !== null && percent >= 0 && percent <= 100;
+    }
+    // ── The Wave 2 fee schedules. Record only (R9), which is a statement
+    // about the money projection, not about whether the part is written: a
+    // required part still has to say something.
+    case "percent_of_cost":
+    case "percent_of_spend": {
+      const percent = readNumber(payload.percent);
+      return percent !== null && percent >= 0;
+    }
+    case "cost_plus": {
+      const markup = readNumber(payload.markupPercent);
+      return markup !== null && markup >= 0;
+    }
+    case "day_rate": {
+      const cents = readCents(payload.dayRateCents);
+      return cents !== null && cents > 0;
+    }
+    case "package": {
+      const price = readCents(payload.priceCents);
+      return (
+        typeof payload.name === "string" &&
+        payload.name.trim().length > 0 &&
+        price !== null &&
+        price > 0
+      );
     }
     default:
       return true;
