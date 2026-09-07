@@ -78,7 +78,9 @@ jest.mock("@/hooks/use-clients", () => ({
   useClients: () => ({ isLoading: false, data: [] }),
 }));
 
-jest.mock("@/hooks/use-commercial-documents", () => ({
+// R23 — one data layer. The composer reads and writes the parts through
+// `@patina/supabase`, so the hooks are stubbed in that factory.
+jest.mock("@patina/supabase", () => ({
   useSaveAgreementParts: () => ({
     mutateAsync: mockSaveParts,
     isPending: false,

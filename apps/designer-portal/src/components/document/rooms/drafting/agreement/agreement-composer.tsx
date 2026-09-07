@@ -20,6 +20,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  useMaterializeStandardParts,
+  useSaveAgreementParts,
+} from "@patina/supabase";
 import type { AgreementPart } from "@patina/types";
 import { RoomShell } from "../../room-shell";
 import { DocSheet } from "../../../overlays/doc-sheet";
@@ -29,11 +33,7 @@ import { ClientPicker } from "@/components/portal/client-picker";
 import { useAttachDocumentClient } from "@/hooks/use-attach-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients } from "@/hooks/use-clients";
-import {
-  useMaterializeStandardParts,
-  useSaveAgreementParts,
-  type CommercialDocumentBundle,
-} from "@/hooks/use-commercial-documents";
+import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import { ServiceAgreementPreview } from "../../../commercial/service-agreement-preview";
 import { ServiceAgreementSendSheet } from "../../../commercial/service-agreement-send-sheet";
@@ -65,6 +65,14 @@ export function AgreementComposer({
   const document: CommercialDocument = bundle.document;
   const proposalId = document.id;
 
+  // R23 — one data layer. The parts hooks live in `@patina/supabase` with the
+  // rest of the Supabase reads and writes; the portal kept a second copy of
+  // them while the package and this room were built in parallel worktrees.
+  // They hand back the saved rows, which is what this room reads, and they
+  // invalidate `commercialKeys.all` — the prefix of this app's own document
+  // bundle key (`commercialDocumentKeys.bundle` is ['commercial-documents',
+  // id]) — so the bundle behind the preview refetches on every save without
+  // this room asking it to.
   const save = useSaveAgreementParts(proposalId);
   const materialize = useMaterializeStandardParts(proposalId);
   const attachClient = useAttachDocumentClient();

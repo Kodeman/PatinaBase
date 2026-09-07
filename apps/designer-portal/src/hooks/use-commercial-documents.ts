@@ -520,83 +520,17 @@ export function useSaveServiceAgreement(proposalId: string) {
   });
 }
 
-/** The key the `@patina/supabase` parts hook uses. Invalidated alongside the
- *  bundle so the two never disagree about what this agreement is made of. */
-export const agreementPartsKey = (proposalId: string) =>
-  ["agreement-parts", proposalId] as const;
-
-/** What `upsert_agreement_parts` takes: the whole ordered array, every time.
- *  The RPC replaces wholesale — a removed part is ABSENT, not blank — so
- *  there is no per-row write and no half-saved composition. */
-function toPartPayload(parts: AgreementPart[]) {
-  return parts.map((part) => ({
-    kind: part.kind,
-    variant: part.variant,
-    partKey: part.partKey,
-    title: part.title.trim(),
-    payload: part.payload ?? {},
-    required: part.required,
-    clientVisible: part.clientVisible,
-  }));
-}
-
-function settleAgreementParts(
-  queryClient: QueryClient,
-  proposalId: string,
-  bundle: CommercialDocumentBundle,
-) {
-  queryClient.setQueryData(commercialDocumentKeys.bundle(proposalId), bundle);
-  void queryClient.invalidateQueries({
-    queryKey: agreementPartsKey(proposalId),
-  });
-  void queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] });
-  void queryClient.invalidateQueries({ queryKey: commercialKeys.all });
-}
-
 /**
- * Writes the composition. One call, the whole ordered array, and the terms
- * row is the server's projection of the money parts (R5) — this hook never
- * writes `proposal_service_terms` itself.
+ * R23 — one data layer. The agreement-parts hooks (`useAgreementParts`,
+ * `useSaveAgreementParts`, `useMaterializeStandardParts`,
+ * `useDiscardAgreementParts`, `agreementPartsKey`) live in `@patina/supabase`,
+ * where Supabase reads and writes belong. This file carried a second copy of
+ * them while the package and the Contract Room were built in parallel
+ * worktrees; the copies are gone. The bundle read below still reads the parts
+ * table directly, because the bundle is this app's own composite and has one
+ * behaviour the package hook does not: a MISSING RELATION resolves to "this
+ * document has no parts".
  */
-export function useSaveAgreementParts(proposalId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationKey: ["save-agreement-parts", proposalId],
-    mutationFn: async (parts: AgreementPart[]) => {
-      const supabase = getSupabase();
-      const { error } = await supabase.rpc("upsert_agreement_parts", {
-        p_proposal_id: proposalId,
-        p_parts: toPartPayload(parts),
-      });
-      if (error) throw error;
-      return await fetchCommercialDocumentBundle(proposalId);
-    },
-    onSuccess: (bundle) =>
-      settleAgreementParts(queryClient, proposalId, bundle),
-  });
-}
-
-/**
- * Seeds the nine standard parts from the terms row this agreement already
- * has. Idempotent server-side — a second call returns the existing set and
- * writes nothing, so two tabs opening the same room cannot double-seed.
- */
-export function useMaterializeStandardParts(proposalId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationKey: ["materialize-standard-parts", proposalId],
-    mutationFn: async () => {
-      const supabase = getSupabase();
-      const { error } = await supabase.rpc("materialize_standard_parts", {
-        p_proposal_id: proposalId,
-      });
-      if (error) throw error;
-      return await fetchCommercialDocumentBundle(proposalId);
-    },
-    onSuccess: (bundle) =>
-      settleAgreementParts(queryClient, proposalId, bundle),
-  });
-}
 
 function mapCountersignResult(value: any): CountersignDesignServicesResult {
   const row = Array.isArray(value) ? value[0] : value;
