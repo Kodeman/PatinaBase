@@ -239,3 +239,190 @@ pnpm --filter @patina/supabase test             → 87 files, 1060 passed | 12 s
 - Nothing in `apps/` — no portal type-check, no jest, no Playwright. Out of
   lane.
 - Strata: untouched, unqueried, not pushed.
+
+---
+
+## Round 1 — adversarial review fixes (2026-09-06)
+
+Five findings, all addressed. Scratch DB for this round: `patina_w1f`
+(`pg_dump --no-owner --exclude-schema=cron` of the shared stack at head
+`00574`, restored WITH ACLs — a `--no-acl` restore makes every `SET LOCAL ROLE
+authenticated` section fail `permission denied for table proposals`, so the
+brief's `--no-acl` flag was dropped deliberately). A second DB, `patina_w1base`,
+holds the same snapshot WITHOUT `00575` as a control.
+
+### B1 (blocker) — `classify_project_time_entry_authority` was F-2's fourth reader
+
+`00412:2607-2613` compares `v_prior_cents + NEW.rated_amount_cents <=
+COALESCE(v_project_ceiling_cents, v_authority.billing_ceiling_cents)`. On an
+uncapped authority that comparison is NULL, the `ELSE` fires, and every
+billable hour lands `pending_authorization` forever — a project that looks
+healthy and bills nothing.
+
+Grafted the whole `00412:2400` body into `00575` (PART 4c, now "the FOUR
+NULL-unsafe ceiling readers") verbatim — extracted programmatically from
+`00412`, not retyped — with one delta: the comparison gains a leading
+`COALESCE(…) IS NULL OR`. `00412` is the sole and current head
+(`grep -rln "CREATE OR REPLACE FUNCTION[^(]*classify_project_time_entry_authority"
+supabase/migrations/*.sql | sort` → one file). The trigger
+`aac_classify_project_time_entry_authority_trg` is untouched (CREATE OR REPLACE
+swaps the body beneath it), and the stable-project-row `FOR UPDATE` that
+`design_services_authority_test.sql:191` pins is exactly where `00412` put it.
+The function is **not** pinned in `public_sd_hardening_contract_test.sql` (no
+occurrence in `supabase/tests/edge_api/`), so no hash re-pin was owed.
+
+Banner: the F-2 paragraph now names four readers and cites `00412:2607-2613`;
+the lineage block gains `classify_project_time_entry_authority 00412:2400`.
+
+**Negative control.** With the fix in place `agreement_parts_test.sql` exits 0.
+Re-applying the untouched `00412` body to the same scratch DB and re-running:
+
+```
+psql:supabase/tests/commercial/agreement_parts_test.sql:949: ERROR:
+  F-2: NULL is uncapped — a billable hour on an uncapped authority is
+  authorized, got 'pending_authorization'
+exit=3
+```
+
+### B2 (major) — R5: a standard key was enough; the shape was not checked
+
+`upsert_agreement_parts` derived the money projection from `part_key` alone, so
+a `clause` keyed `patina.ceiling` wrote `billing_ceiling_cents`. All ten
+projection subqueries (nine keys; `patina.retainer` reads twice) now assert the
+kind, and every schedule key also asserts the variant:
+
+| key | shape now required |
+|---|---|
+| `patina.services`, `patina.terms` | `kind = 'clause'` |
+| `patina.deliverables`, `patina.exclusions` | `kind = 'list'` |
+| `patina.ceiling` | `schedule` / `ceiling` |
+| `patina.retainer` (×2) | `schedule` / `retainer` |
+| `patina.cadence` | `schedule` / `cadence` |
+| `patina.deposit` | `schedule` / `procurement` |
+| `patina.role_rates` | `schedule` / `rate_card` |
+
+### B3 (major) — the refusal and the projection read different parts
+
+`_agreement_requires_rate_card` keyed on `kind='schedule' AND
+variant='rate_card'` (ANY part) while the rate projection keys on
+`part_key='patina.role_rates'` (ONE part), so a rate card under any other key
+demanded role rates that nothing would ever project and the document could
+never be sent. The predicate now reads `part_key = 'patina.role_rates'` in the
+`schedule`/`rate_card` shape — the smaller side, and the one that matches the
+projection's own "by part_key, never by variant" doctrine.
+
+The R4 floor inside `upsert_agreement_parts` was keyed the same wrong way (it
+would have refused a custom-key rate card for lacking a cap on money it never
+carries), so both halves of that floor now read `patina.role_rates` and
+`patina.ceiling` in shape too. Projection, floor and refusal are one set.
+
+### B4 (major) — `authorizedCents` was still `number`
+
+`get_project_authority_summary` returns the same nullable
+`billing_ceiling_cents` for `authorizedCents` that `ceilingCents` and
+`remainingCents` were widened for. `packages/types/src/commercial.ts` →
+`authorizedCents: number | null`, with the sibling comment. `pnpm --filter
+@patina/types build` re-emitted `dist/` so the designer and client lanes see it.
+The app-local mirrors (`apps/designer-portal/src/lib/document/commercial-documents.ts`,
+`apps/client-portal/src/lib/commercial-documents.ts`) are those lanes' — flagged
+as an advisory, not touched from here. The client mirror's
+`ProjectAuthoritySummary extends Omit<ProjectBillingAuthoritySummary, 'rates'>`
+still type-checks: its `number(...)` coercion widens into `number | null`.
+
+### B5 (major) — the flag-off write path had changed
+
+`_project_agreement_terms` had replaced `00422:1756`'s
+`COALESCE((p_terms->>'billingCeilingCents')::integer, 0)` with a NULL-preserving
+read for BOTH callers, so an omitted or JSON-null ceiling through
+`upsert_design_services_draft` — the flag-off RPC, `GRANT`ed to `authenticated`
+— landed NULL where 00422 landed 0.
+
+The helper now takes `p_allow_null_ceiling boolean DEFAULT false`; the `false`
+branch is `00422:1756` character for character. `upsert_design_services_draft`
+passes `false`, `upsert_agreement_parts` passes `true`. A
+`DROP FUNCTION IF EXISTS public._project_agreement_terms(uuid, jsonb, jsonb)`
+precedes the definition so a re-run cannot leave two ambiguous overloads. The
+guarantee now lives in the function, not in one TypeScript caller's discipline.
+
+### Tests added
+
+`supabase/tests/commercial/agreement_parts_test.sql`
+- **(22)** a `schedule`/`rate_card` under `custom.trade_rates`: projects no
+  rates, `_agreement_requires_rate_card` is false, the R4 floor stays quiet, and
+  the document **sends** (B3).
+- **(23)** the uncapped-with-rates authority, reached the way a studio reaches
+  it — the terms row is studio-writable while the document is a draft
+  (`proposal_service_terms_studio_rw`, `00412:318`), so the ceiling is cleared
+  there, then send → sign → countersign. A billable hour on that authority is
+  `authorized` and rates at 15000; the summary reads `accrued 15000 / pending 0
+  / state active`; and a ceiling of 1 still parks the next hour (B1).
+
+`supabase/tests/commercial/agreement_parts_projection_test.sql`
+- **(8)** six parts under standard keys in the WRONG shape — a clause keyed
+  `patina.ceiling` carrying `cents`, a clause keyed `patina.cadence` naming a
+  cadence, a list keyed `patina.retainer` carrying cents and an activation
+  policy, a list keyed `patina.role_rates` carrying roles, a clause keyed
+  `patina.deposit` quoting a percent — project **nothing**, are all still
+  stored, and the one correctly-shaped part still projects (B2).
+- **(9)** the flag-off door: omitted ceiling → 0, explicit JSON null → 0, a real
+  number → whole (B5).
+
+### Gates, round 1
+
+```
+# scratch DB, head 00574 confirmed
+select version from supabase_migrations.schema_migrations order by version desc limit 3
+  → 00574 / 00573 / 00572
+
+psql -d patina_w1f -v ON_ERROR_STOP=1 -f supabase/migrations/00575_agreement_parts.sql
+  → COMMIT, exit 0
+  → re-applied a second time on the same DB: exit 0 (idempotent)
+
+psql -d patina_w1f -f supabase/tests/commercial/agreement_parts_test.sql
+  → exit 0, 14 PASS notices (was 12; (22) and (23) are new)
+psql -d patina_w1f -f supabase/tests/commercial/agreement_parts_projection_test.sql
+  → exit 0, 5 PASS notices (was 3; (8) and (9) are new)
+psql -d patina_w1f -f supabase/tests/edge_api/public_sd_hardening_contract_test.sql
+  → exit 0   (same file on patina_w1base, no 00575: exit 3,
+              "an exact 00511 dependency profile drifted" — the re-pin is right)
+
+PGURL=…/patina_w1f  scripts/run-sql-tests.sh -d supabase/tests/commercial
+  → 12 total, 6 green, 6 fail
+PGURL=…/patina_w1base scripts/run-sql-tests.sh -d supabase/tests/commercial
+  → 12 total, 3 green, 9 fail
+```
+
+The six red files are **identical in both runs** — `authorized_schedule`,
+`design_services_authority`, `design_services_gap_hardening`,
+`executed_on_paper`, `trade_rfq`, `trade_scope`. They are scratch-DB
+environment failures, not `00575`: the `pg_dump` restore could not carry the
+`cron` schema, the vault secrets, or the seed rows behind five FK constraints,
+and these suites lean on that seed. `00575` moves three files from red to
+green (`agreement_parts_test`, `agreement_parts_projection_test`,
+`design_services_paper_issue_test`) and moves none the other way.
+
+```
+supabase gen types typescript --db-url …/patina_w1f > packages/supabase/src/database.types.ts
+git diff --stat → 1 file, 6 insertions(+), 1 deletion(-)
+```
+
+The only delta is `_project_agreement_terms`'s `Args` gaining
+`p_allow_null_ceiling?: boolean`. Five FK-relationship blocks that the degraded
+restore had dropped were repaired on the scratch DB first (orphan rows deleted
+with `session_replication_role = replica`, then the five `ADD CONSTRAINT`s from
+the dump replayed) so the regen would not silently strip real relationship
+metadata from the committed file.
+
+```
+python3 scripts/generate-legacy-grants.py
+  → baseline + 2222 replayed statements; +7/-1
+  → picks up REVOKE on classify_project_time_entry_authority(), and
+    _project_agreement_terms's new 4-arg signature
+
+pnpm --filter @patina/types type-check     → clean
+pnpm --filter @patina/supabase type-check  → clean
+pnpm --filter @patina/supabase test        → 87 files, 1060 passed | 12 skipped
+```
+
+Scratch DBs `patina_w1f` and `patina_w1base` dropped at the end of the round.
+Shared stack never reset, never written. Strata untouched.
