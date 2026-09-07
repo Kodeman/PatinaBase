@@ -326,5 +326,15 @@ test.describe('R30 — the household door with no house', () => {
     await expect(page.getByTestId('empty-state')).toHaveCount(0);
     // A record, not a second ask: the paper is not still waiting for her hand.
     await expect(page.locator('[data-threshold-unit="door"]')).toHaveCount(0);
+
+    // And it opens. The line unfolds into the paper read in full, over
+    // `get_client_commercial_document_bundle` — the read the ruling said would
+    // need widening if it refused a project-less document. It does not.
+    await line.getByRole('button').click();
+    const body = page.getByTestId('previously-body');
+    await expect(body).toBeVisible();
+    await expect(body).toContainText('Full-house interior design services for the Vale residence.');
+    await expect(page.getByTestId('instrument-reading-absent')).toHaveCount(0);
+    await expect(page.getByTestId('instrument-reading-refused')).toHaveCount(0);
   });
 });
