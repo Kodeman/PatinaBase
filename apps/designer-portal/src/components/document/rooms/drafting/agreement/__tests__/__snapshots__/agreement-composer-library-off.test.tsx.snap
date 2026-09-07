@@ -37,7 +37,7 @@ exports[`the composed room with agreement-library off leaves a record-only varia
           </p>
         </div>
         <div
-          class="flex items-center gap-3"
+          class="flex flex-wrap items-center gap-3"
         >
           <button
             class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
@@ -277,7 +277,7 @@ exports[`the composed room with agreement-library off renders the flat-fee edito
           </p>
         </div>
         <div
-          class="flex items-center gap-3"
+          class="flex flex-wrap items-center gap-3"
         >
           <button
             class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
@@ -511,7 +511,7 @@ exports[`the composed room with agreement-library off renders the furnishings-de
           </p>
         </div>
         <div
-          class="flex items-center gap-3"
+          class="flex flex-wrap items-center gap-3"
         >
           <button
             class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
@@ -792,7 +792,7 @@ exports[`the composed room with agreement-library off renders the per-phase edit
           </p>
         </div>
         <div
-          class="flex items-center gap-3"
+          class="flex flex-wrap items-center gap-3"
         >
           <button
             class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
@@ -1075,7 +1075,7 @@ exports[`the composed room with agreement-library off renders the rail and the s
           </p>
         </div>
         <div
-          class="flex items-center gap-3"
+          class="flex flex-wrap items-center gap-3"
         >
           <button
             class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"

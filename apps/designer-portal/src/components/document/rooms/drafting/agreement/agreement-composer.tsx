@@ -538,7 +538,10 @@ export function AgreementComposer({
                 purchasing stay outside it.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            {/* The three acts wrap on a narrow phone: unwrapped they measured
+                617px against a 390px viewport and carried Save agreement off
+                the right edge of the room. */}
+            <div className="flex flex-wrap items-center gap-3">
               <Button variant="secondary" onClick={() => setPreviewOpen(true)}>
                 Preview client copy
               </Button>

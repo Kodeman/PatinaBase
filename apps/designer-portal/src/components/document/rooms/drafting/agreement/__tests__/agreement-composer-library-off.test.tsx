@@ -11,6 +11,15 @@
  * ruling that deliberately moves the flag-off room, it re-pins this file with
  * that ruling named in the commit — it does not run `-u` and move on.
  *
+ * RE-PINNED ONCE, deliberately: walk round 2, finding W2R2-06. The header's
+ * three acts (Preview client copy / Return to the seven facets / Save
+ * agreement) sat in an unwrapped row that measured 617px against a 390px
+ * viewport and carried Save agreement off the right edge of the room, in both
+ * flag states. The only markup that moved is `flex items-center gap-3` →
+ * `flex flex-wrap items-center gap-3` on that row, in all five snapshots; the
+ * diff is five lines and nothing else. A ruling on whether the flag-off room
+ * may move for a defect fix like this one is owed — see the Wave 2 report.
+ *
  * The five cases are exactly the surfaces Wave 2 reaches into: the room shell
  * and rail, and the four schedule editors whose dispatch moves into
  * `schedules/` (flat, per-phase, procurement) or arrives new (a record-only
