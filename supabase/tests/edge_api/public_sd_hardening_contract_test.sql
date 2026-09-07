@@ -1903,19 +1903,19 @@ VALUES
     'app_private.issue_invoice_for_actor(uuid,date,uuid)',
     'p_invoice_id uuid, p_due_date date, p_actor_id uuid', 'invoices',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'bdf903ba6445367c7f18551859a0a14aeaa2f0dfbec95d4304110e39b537c727'
+    '19ed2037eedd20097f1a9c1b28d812db520d37e49650d1772aed65f555437f00'
   ),
   (
     'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'd1ea9e357d5f1c685677365601abaff4c96cf83f6006ab8c3479f1d745487293'
+    '4cb2a23d819be51eaf2de2c67a393c53c64230b39f4107b5b6ac82d7e818da58'
   ),
   (
     'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '02f9aab1ace96f0e439dee937ecd50e5b0b58a8366c732caafe66d70e1b25dd8'
+    '4ef70c443cbcc685d7f573f22d12fd64f110bc156213616f1b96a89e4b317e56'
   ),
   (
     -- 00566 rewrote the origin branch's studio resolution (00511's hash was
@@ -1946,19 +1946,19 @@ VALUES
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'a5c8dfec6d6798dc7bc8c2ab0f0ac71f97b715536a33be466f65ab0840e9221b'
+    'd3a2cade68987dc446b7e0d2ded11540a85d947eb3d5bec8934e367960068fc1'
   ),
   (
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
     'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '81d54e2f271e78c1c901c6cec0b1d763cffecb87ce7d5c20990dddd789b3e432'
+    '71e3700f9a100f863a968cba9afab3a66e701d1dc369a491f5e9c31d1eacd4a3'
   ),
   (
     'public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)',
     'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '99c9545b3b59638bab7a034d62e743d32eb36bfe31b8a18f070f325fc69d0626'
+    'f36f824ebdfb279f1f2e23e46e2cbd03b1d4d71576e14516b21d99e455a23d14'
   ),
   (
     'public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)',
@@ -1982,7 +1982,7 @@ VALUES
     -- row, same trigger signature and search_path.
     'public.guard_commercial_signature_insert()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '0f12aca3038b2165fc75dbabcbe41391821fa1eac5905d775c378f63b9c7f471'
+    '8146f364549e9ee0b37f5cd9873fc779264a5c38ebe3477e8e41e75340f5fa7b'
   );
 
 UPDATE _00511_expected_dependency

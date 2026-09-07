@@ -2373,4 +2373,94 @@ BEGIN
 END
 $invoice_links_00574_contract$;
 
+-- The Agreement, Composed · Wave 3 (00578/00579): the turnkey class's own
+-- RPCs and the Trade Agreement rail. The sub has no role and no policy — their
+-- whole access is two service_role RPCs called from the client-portal server
+-- action, exactly the posture /rfq/[token] has carried since 00424.
+DO $agreement_turnkey_00578_contract$
+DECLARE
+  v_sig text;
+BEGIN
+  -- Service-only: minting a link, resolving one, and signing on one.
+  FOREACH v_sig IN ARRAY ARRAY[
+    'public.mint_trade_agreement_token(uuid)',
+    'public.resolve_trade_agreement_link(text)',
+    'public.sign_trade_agreement_by_token(text,text,text)'
+  ] LOOP
+    ASSERT to_regprocedure(v_sig) IS NOT NULL, format('%s must exist', v_sig);
+    ASSERT has_function_privilege('service_role', v_sig, 'EXECUTE'),
+      format('service_role must execute %s', v_sig);
+    ASSERT NOT has_function_privilege('anon', v_sig, 'EXECUTE'),
+      format('anon must not execute %s', v_sig);
+    ASSERT NOT has_function_privilege('authenticated', v_sig, 'EXECUTE'),
+      format('authenticated must not execute service-only %s', v_sig);
+    ASSERT NOT has_function_privilege('agent_writer', v_sig, 'EXECUTE'),
+      format('agent_writer must not execute %s', v_sig);
+  END LOOP;
+
+  -- Studio-called: the composer's four, and the licensing predicate.
+  FOREACH v_sig IN ARRAY ARRAY[
+    'public.create_trade_agreement(uuid,uuid,jsonb)',
+    'public.send_trade_agreement(uuid)',
+    'public.void_trade_agreement(uuid,text)',
+    'public.list_trade_agreements(uuid)',
+    'public.studio_has_live_license_attestation(uuid)'
+  ] LOOP
+    ASSERT to_regprocedure(v_sig) IS NOT NULL, format('%s must exist', v_sig);
+    ASSERT has_function_privilege('authenticated', v_sig, 'EXECUTE'),
+      format('authenticated must execute %s', v_sig);
+    ASSERT NOT has_function_privilege('anon', v_sig, 'EXECUTE'),
+      format('anon must not execute %s', v_sig);
+    ASSERT NOT has_function_privilege('agent_writer', v_sig, 'EXECUTE'),
+      format('agent_writer must not execute %s', v_sig);
+  END LOOP;
+
+  -- The draw rail is called by the studio AND by the client-portal sign
+  -- route's service client (D-W3-2: the deposit is offered by a second,
+  -- independently failable call after the signature commits).
+  ASSERT has_function_privilege(
+           'authenticated', 'public.issue_agreement_draw_invoice(uuid,text)', 'EXECUTE')
+     AND has_function_privilege(
+           'service_role', 'public.issue_agreement_draw_invoice(uuid,text)', 'EXECUTE')
+     AND NOT has_function_privilege(
+           'anon', 'public.issue_agreement_draw_invoice(uuid,text)', 'EXECUTE'),
+    'issue_agreement_draw_invoice is the studio''s and the sign route''s, never anon''s';
+
+  ASSERT NOT has_table_privilege(
+           'anon', 'public.studio_trade_agreement_tokens', 'SELECT')
+     AND NOT has_table_privilege(
+           'authenticated', 'public.studio_trade_agreement_tokens', 'SELECT')
+     AND has_table_privilege(
+           'service_role', 'public.studio_trade_agreement_tokens', 'SELECT'),
+    'studio_trade_agreement_tokens is a service-only table';
+  ASSERT (SELECT relrowsecurity FROM pg_class
+          WHERE oid = 'public.studio_trade_agreement_tokens'::regclass)
+     AND NOT EXISTS (SELECT 1 FROM pg_policies
+                     WHERE schemaname = 'public'
+                       AND tablename = 'studio_trade_agreement_tokens'),
+    'studio_trade_agreement_tokens has RLS on with zero policies';
+
+  -- The signature ledger is append-only at the grant layer as well as the
+  -- trigger layer: no UPDATE, no DELETE, for any browser role.
+  ASSERT NOT has_table_privilege(
+           'authenticated', 'public.studio_trade_agreement_signatures', 'UPDATE')
+     AND NOT has_table_privilege(
+           'authenticated', 'public.studio_trade_agreement_signatures', 'DELETE')
+     AND NOT has_table_privilege(
+           'authenticated', 'public.studio_trade_agreement_signatures', 'INSERT'),
+    'a trade agreement signature is written only through its definer seam';
+
+  -- And the draw ledger: the studio reads it, nobody writes it directly.
+  ASSERT has_table_privilege(
+           'authenticated', 'public.agreement_draw_invoices', 'SELECT')
+     AND NOT has_table_privilege(
+           'authenticated', 'public.agreement_draw_invoices', 'INSERT')
+     AND NOT has_table_privilege(
+           'authenticated', 'public.agreement_draw_invoices', 'UPDATE')
+     AND NOT has_table_privilege(
+           'anon', 'public.agreement_draw_invoices', 'SELECT'),
+    'agreement_draw_invoices is machine-owned: read by the studio, written by the send door';
+END
+$agreement_turnkey_00578_contract$;
+
 ROLLBACK;

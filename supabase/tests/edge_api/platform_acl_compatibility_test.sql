@@ -427,7 +427,24 @@ BEGIN
         'public.recover_invoice_checkout_session_evidence(uuid,uuid,text,text,uuid)',
         'service_role'
       ),
-      ('public.expire_stale_invoice_checkout_attempts(interval)', 'service_role')
+      ('public.expire_stale_invoice_checkout_attempts(interval)', 'service_role'),
+      -- The Agreement, Composed · Wave 3 (00578/00579). The turnkey class's
+      -- own RPCs, plus the Trade Agreement rail: four studio-called, three
+      -- service-only (the sub reaches the database through the client-portal
+      -- server action and holds no role of their own).
+      ('public.issue_agreement_draw_invoice(uuid,text)', 'authenticated'),
+      ('public.issue_agreement_draw_invoice(uuid,text)', 'service_role'),
+      ('public.studio_has_live_license_attestation(uuid)', 'authenticated'),
+      ('public.create_trade_agreement(uuid,uuid,jsonb)', 'authenticated'),
+      ('public.send_trade_agreement(uuid)', 'authenticated'),
+      ('public.void_trade_agreement(uuid,text)', 'authenticated'),
+      ('public.list_trade_agreements(uuid)', 'authenticated'),
+      ('public.mint_trade_agreement_token(uuid)', 'service_role'),
+      ('public.resolve_trade_agreement_link(text)', 'service_role'),
+      (
+        'public.sign_trade_agreement_by_token(text,text,text)',
+        'service_role'
+      )
     ) AS required(signature, role_name)
     LEFT JOIN pg_roles AS role ON role.rolname = required.role_name
     LEFT JOIN pg_proc AS routine
@@ -868,6 +885,80 @@ BEGIN
     'invoice_links must not be readable by a browser role';
 END
 $invoice_links_00574$;
+
+-- The Agreement, Composed · Wave 3 (00578/00579, SQL-T12). Strata predates the
+-- 2026-05-30 grant-default flip and auto-grants anon EXECUTE at creation, so
+-- every function this wave added is asserted anon-denied BY NAME. The
+-- service-only Trade Agreement rail is denied to authenticated as well: the
+-- sub has no role, and a studio member who could mint a link would be minting
+-- it out of band of the send that is supposed to hand it over.
+DO $agreement_turnkey_00578$
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY[
+      'public.studio_has_live_license_attestation(uuid)',
+      'public.issue_agreement_draw_invoice(uuid,text)',
+      'public.guard_agreement_draw_ledger()',
+      'public._agreement_is_int(jsonb)',
+      'public._validate_pricing_basis_payload(jsonb)',
+      'public._agreement_contract_sum_cents(jsonb)',
+      'public._validate_draws_payload(jsonb)',
+      'public._validate_allowances_payload(jsonb,jsonb)',
+      'public._validate_no_double_count(jsonb)',
+      'public._agreement_draw_rows(jsonb,bigint)',
+      'public._agreement_parts_json(uuid)',
+      'public._agreement_design_build_part(uuid,text)',
+      'public._agreement_sub_disclosure(uuid)',
+      'public._agreement_design_build_subs(uuid,text)',
+      'public.create_trade_agreement(uuid,uuid,jsonb)',
+      'public.send_trade_agreement(uuid)',
+      'public.void_trade_agreement(uuid,text)',
+      'public.list_trade_agreements(uuid)',
+      'public.mint_trade_agreement_token(uuid)',
+      'public.resolve_trade_agreement_link(text)',
+      'public.sign_trade_agreement_by_token(text,text,text)',
+      'public._trade_agreement_fingerprint(uuid)',
+      'public.guard_trade_agreement_authored()',
+      'public.guard_trade_agreement_signature_immutable()'
+    ]::text[]) AS item(signature)
+    WHERE to_regprocedure(item.signature) IS NULL
+       OR has_function_privilege('anon', item.signature, 'EXECUTE')
+  ), 'anon must hold EXECUTE on none of the Wave 3 turnkey functions';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY[
+      'public.mint_trade_agreement_token(uuid)',
+      'public.resolve_trade_agreement_link(text)',
+      'public.sign_trade_agreement_by_token(text,text,text)',
+      'public._trade_agreement_fingerprint(uuid)',
+      'public._agreement_parts_json(uuid)',
+      'public._agreement_design_build_part(uuid,text)',
+      'public._agreement_sub_disclosure(uuid)',
+      'public._agreement_design_build_subs(uuid,text)'
+    ]::text[]) AS item(signature)
+    WHERE has_function_privilege('authenticated', item.signature, 'EXECUTE')
+  ), 'a service-only or private Wave 3 RPC widened to authenticated';
+
+  -- The credential table is unreachable from a browser role, in both
+  -- directions: RLS is on with zero policies AND the grant is absent.
+  ASSERT NOT has_table_privilege(
+           'anon', 'public.studio_trade_agreement_tokens', 'SELECT')
+     AND NOT has_table_privilege(
+           'authenticated', 'public.studio_trade_agreement_tokens', 'SELECT'),
+    'studio_trade_agreement_tokens must not be readable by a browser role';
+  ASSERT NOT has_table_privilege(
+           'anon', 'public.studio_license_attestations', 'SELECT')
+     AND NOT has_table_privilege(
+           'anon', 'public.agreement_draw_invoices', 'SELECT')
+     AND NOT has_table_privilege(
+           'anon', 'public.agreement_draw_lien_waivers', 'SELECT')
+     AND NOT has_table_privilege(
+           'anon', 'public.agreement_jurisdiction_notices', 'SELECT'),
+    'anon must hold nothing on the Wave 3 tables';
+END
+$agreement_turnkey_00578$;
 
 DO $extension_helpers$
 BEGIN
