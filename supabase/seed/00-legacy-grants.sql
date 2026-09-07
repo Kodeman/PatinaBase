@@ -11990,13 +11990,223 @@ END $g$;
 
 -- 00484_public_rpc_authorization_contract.sql
 DO $g$ BEGIN
-  REVOKE ALL PRIVILEGES ON FUNCTION public.is_comms_admin(uuid), public.is_comms_thread_participant(uuid, uuid), public.is_coordination_party(uuid, uuid), public.is_org_admin_or_owner(uuid, uuid), public.is_project_team_member(uuid, uuid), public.user_has_role_domain(uuid, varchar), public.user_has_role(uuid, varchar), public.find_products_similar_to(uuid, integer), public.find_products_for_style(uuid, integer), public.search_products(text, text, integer, integer, text, text, integer, integer), public.get_decision_analytics_by_type(uuid), public.get_decision_analytics_by_client(uuid), public.get_decision_bottleneck_phases(uuid), public.generate_unique_org_slug(text), public._provision_studio(uuid, text), public.create_studio_workspace(text), public._primary_studio_for(uuid), public.is_org_owner(uuid, uuid), public.guard_org_membership_changes(), public.transfer_studio_ownership(uuid, uuid), public.agent_tasks_set_updated_at(), public.enforce_agent_task_transition(), public.agent_task_audit_trigger(), public.enqueue_agent_task( text, jsonb, text, integer, text, text, uuid, text, timestamp with time zone, integer, text, text, text, uuid, numeric, jsonb, text ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+  REVOKE ALL PRIVILEGES ON FUNCTION public.is_comms_admin(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00484_public_rpc_authorization_contract.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.is_comms_admin(uuid), public.is_comms_thread_participant(uuid, uuid), public.is_coordination_party(uuid, uuid), public.is_org_admin_or_owner(uuid, uuid), public.is_project_team_member(uuid, uuid), public.user_has_role_domain(uuid, varchar), public.user_has_role(uuid, varchar), public.find_products_similar_to(uuid, integer), public.find_products_for_style(uuid, integer), public.search_products(text, text, integer, integer, text, text, integer, integer), public.get_decision_analytics_by_type(uuid), public.get_decision_analytics_by_client(uuid), public.get_decision_bottleneck_phases(uuid) TO authenticated;
+  REVOKE ALL PRIVILEGES ON FUNCTION public.is_comms_thread_participant(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.is_coordination_party(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.is_org_admin_or_owner(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.is_project_team_member(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.user_has_role_domain(uuid, varchar) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.user_has_role(uuid, varchar) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.find_products_similar_to(uuid, integer) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.find_products_for_style(uuid, integer) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.search_products(text, text, integer, integer, text, text, integer, integer) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.get_decision_analytics_by_type(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.get_decision_analytics_by_client(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.get_decision_bottleneck_phases(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.generate_unique_org_slug(text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public._provision_studio(uuid, text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.create_studio_workspace(text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public._primary_studio_for(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.is_org_owner(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.guard_org_membership_changes() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.transfer_studio_ownership(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.agent_tasks_set_updated_at() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.enforce_agent_task_transition() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.agent_task_audit_trigger() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.enqueue_agent_task( text, jsonb, text, integer, text, text, uuid, text, timestamp with time zone, integer, text, text, text, uuid, numeric, jsonb, text ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_comms_admin(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_comms_thread_participant(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_coordination_party(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_org_admin_or_owner(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_project_team_member(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.user_has_role_domain(uuid, varchar) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.user_has_role(uuid, varchar) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.find_products_similar_to(uuid, integer) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.find_products_for_style(uuid, integer) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.search_products(text, text, integer, integer, text, text, integer, integer) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_decision_analytics_by_type(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_decision_analytics_by_client(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00484_public_rpc_authorization_contract.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_decision_bottleneck_phases(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -14630,6 +14840,24 @@ END $g$;
 
 -- 00576_agreement_library.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_studio_id(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00576_agreement_library.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.agreement_studio_context(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00576_agreement_library.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.agreement_studio_context(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00576_agreement_library.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.save_agreement_as_template(uuid, text) FROM PUBLIC, anon, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -14703,6 +14931,12 @@ END $g$;
 -- 00577_agreement_fee_schedules.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._agreement_money(numeric) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00577_agreement_fee_schedules.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_addendum_why(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
