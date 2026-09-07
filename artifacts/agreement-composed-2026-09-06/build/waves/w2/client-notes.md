@@ -265,3 +265,304 @@ this lane adds in full:
 - `The agreement as executed` (the keepsake's eyebrow)
 - `Mark {twelve characters}` (the keepsake's frozen-document mark, the existing idiom)
 - the composed consent sentences above.
+
+---
+
+# Round 1 fixes — 2026-09-07
+
+Against `03a5a233a` (the review commit). Findings C1–C5 from
+`client-review-r1.md`. Gates re-run and pasted in §F6 below.
+
+**10 files changed, +544 / −21** — nine under `apps/client-portal/src`, one
+under `apps/client-portal/tests`, plus this log.
+
+| # | Severity | Where it landed |
+|---|---|---|
+| C1 | blocker | `tests/threshold.spec.ts` — the touchpoint the sheet names, written in full |
+| C2 | major | escalated, §F1 — a one-line amendment to the frozen bundle interface |
+| C3 | major | `consent-copy.ts` + `door-gate.tsx` + `record/page.tsx` — the summary no longer names terms the paper does not carry |
+| C4 | major | `sign/route.ts` — `p_consent` only when there is something to record |
+| C5 | major | `record-sheet.tsx` — the snapshot is made inert, and a case pins it |
+
+---
+
+## F1 · ESCALATIONS — three asks that need the orchestrator, not this lane
+
+### E1 (C2) · CONTRACT AMENDMENT REQUEST — one scalar key on the bundle's signature projection
+
+**Ask:** add to `get_client_commercial_document_bundle`'s per-signature
+projection, in the same migration that widens the signature metadata:
+
+```sql
+'consentSentence', s.metadata->>'consentSentence',
+```
+
+**Why it is not optional.** Build sheet §5.4 requires the keepsake to print the
+sentence she ticked *from the signature's own metadata*, never
+`compose_agreement_consent` at read time — an addendum moves the parts, and a
+record that quietly restates today's terms is a record of a signature nobody
+gave. The only place that sentence lives is
+`commercial_document_signatures.metadata.consentSentence`, which
+`00575_agreement_parts.sql` deliberately does not cross that edge:
+
+> *Raw metadata never crosses this edge — it carries `recordedBy`, which is a
+> studio member's uuid, and the client has no business with it.*
+
+That discipline is right and the amendment keeps it: **a scalar text key
+extracted with `->>`, never the metadata object.** No uuid, no actor, nothing
+but the sentence she agreed to.
+
+**Until it is ruled and built,** `record-sheet`'s `agreedSentence` is null for
+every signature and §5.4's "what she agreed to" ships dead. The client adapter
+already reads a flat `consentSentence` *or* a nested `metadata.consentSentence`
+on the signature row (`lib/commercial-documents.ts:715-717`), so either
+projection shape works and no client change is needed once it lands. Nothing
+breaks in the meantime — the line is simply absent.
+
+**Who rules:** the orchestrator, before the backend lane merges. The frozen
+bundle interface in build sheet §2 lists only document-level `consentSentence`
+and `executionSnapshot`, and §2 says a lane that needs another lane's change
+raises it rather than reaching across. This is that raise.
+
+### E2 (C3) · RULING RECORDED, AND THE READING TAKEN
+
+The reviewer found the composed door contradicting itself: `summaryLineFor`'s
+services sentence — *"By signing, you accept the services, signed role rates,
+design authorization ceiling, retainer, and terms in …"* — was printed directly
+above a consent line that may read *"…and the flat design fee"*. On a flat-fee
+or per-phase agreement the homeowner was told, **on the signing surface**, that
+she accepts role rates, a ceiling and a retainer the paper does not contain.
+
+The build sheet froze `summaryLineFor` byte-identical (§5.3, "Nothing else in
+the gate changes"), so the lane was compliant — and composition is exactly what
+made the frozen sentence false. **A false statement on a signing act is not a
+thing to leave standing while a ruling is sought**, so this lane took the
+reviewer's second option and says so here rather than shipping the
+contradiction:
+
+- `summaryLineFor` is **untouched, still byte-identical**, still exported, still
+  pinned by its own tests. It answers every uncomposed paper.
+- A new **add-only** export, `composeSummaryLine(kind, title, parts)`, returns
+  `summaryLineFor` verbatim for any paper with no parts — flag off, legacy,
+  pre-Wave-2 — and for every kind but the two services kinds. For a **composed**
+  agreement it returns the half that is true of all of them:
+
+  > `By signing, you accept the terms in “{title}”. The agreement becomes effective only after the studio countersigns.`
+
+  Both sentences are `summaryLineFor`'s own words; the composed one is its
+  second half, verbatim, with the four-facet clause reduced to "the terms".
+- The door (`door-gate.tsx:520`) and the keepsake's `question`
+  (`record/page.tsx`) both call it. What money the paper carries is named once,
+  below, by `composeConsentLine`.
+
+**If the orchestrator prefers option one** — compose `summaryLineFor` from the
+same parts, so the summary enumerates them a second time — it is a change to one
+function and its six new cases. This lane's reading is that saying the money
+twice on one leaf is worse than saying it once, and that the reduction is the
+smaller edit to a frozen string.
+
+### E3 (C5) · HOLD THE RENDERER TO THE FULL ESCAPE CHAIN
+
+`public._render_agreement_snapshot_html` is the whole escaping contract for the
+one piece of markup this portal sets rather than writes. Two asks on it:
+
+1. **Escape `'` as well as `& < > "`.** Build sheet §3.3 names a four-character
+   replace chain. A single quote inside a designer-typed part title lands inside
+   an attribute the moment the renderer emits one, and `<table>`/`<article
+   class="leaf">` already do.
+2. **SQL test case 7 should assert inertness, not only presence.** Give a part a
+   title and a body carrying `<script>`, `<img src=x onerror=…>` and `'`, and
+   assert the rendered `html` contains no `<script`, no `onerror` and no bare
+   quote inside an attribute.
+
+The client no longer *depends* on either (see F5), but a snapshot is written
+once and kept for years; the escaping is the layer that should be right.
+
+---
+
+## F2 · C1 — the e2e touchpoint, written
+
+`tests/threshold.spec.ts` now carries the test build sheet §6 names, in one act
+and unconditionally (R26):
+
+1. the door of a seeded per-phase agreement shows the composed consent
+   sentence, asserted with `toHaveText` against the literal — the same string
+   `composeConsentLine` and `compose_agreement_consent` must both produce;
+2. the acknowledgment gate: name typed and consent ticked, the act is still
+   **disabled** and the hint says why; ticking *I received the lead-paint
+   notice.* arms it;
+3. after signing, **`expect.poll` against the database** — the client
+   signature's `metadata->>'consentSentence'` equals the composed line and
+   `metadata->'attachmentsAcknowledged'` equals `['patina.lead_paint_notice']`.
+
+Mechanics worth naming:
+
+- The DB read goes through a lazily-built service-role client, the pattern
+  `pay-link.spec.ts` / `plans-link.spec.ts` already keep in this directory. The
+  key is **not** written into the file (the pre-commit scan rejects any file
+  carrying a service_role JWT, the CLI's demo key included) — it is exported
+  from `supabase status` before the run, exactly as those two say.
+- The act is a press-and-hold, so it is driven as one: `mouse.down()`, wait on
+  the `data-hold-state="holding"` attribute the control itself publishes, and
+  release once the doorway has gone. **No `page.waitForTimeout` anywhere** —
+  `grep -n waitForTimeout tests/threshold.spec.ts` returns one hit, and it is
+  the sentence in the doc comment saying there is none.
+- Assertions poll (`expect`/`expect.poll`), never `networkidle`.
+
+### THE FIXTURE THIS TEST NEEDS — the ask that goes with it
+
+`supabase/seed/**` is the **backend lane's** pathspec, and this lane may not
+write there. The seed today lays every commercial paper down **executed**
+(`the-client-page.sql:255`, `:552`, `:671`) and writes no
+`commercial_document_signatures` row at all, so there is no `sent` door on
+either seeded client's page for any e2e to drive. R26 says a seed file creates
+the fixture; this is the fixture it must create:
+
+```sql
+-- In supabase/seed/the-client-page.sql, beside v_ds_proposal, in the same
+-- draft → terms → parts → promote order the composed agreement above uses.
+-- Left at 'sent': this is the one door the client suite drives.
+--   proposals   b0000000-0000-0000-0000-00000000cb02
+--               'Cedar Lane — Phase Work', design_services,
+--               status 'sent', commercial_state 'sent',
+--               client uid_solo, designer uid_designer, project v_project
+--   parts       1 clause              'Services'
+--               2 schedule/per_phase  'Phase fees'
+--                   {"phases":[{"key":"concept","label":"Concept","cents":350000},
+--                              {"key":"documentation","label":"Documentation","cents":450000},
+--                              {"key":"selections","label":"Selections","cents":300000}]}
+--               3 schedule/retainer   'Retainer'
+--                   {"cents":500000,"creditRule":"non_refundable"}
+--               4 attachment          part_key 'patina.lead_paint_notice',
+--                   title 'the lead-paint notice',
+--                   {"body":"…","acknowledgeRequired":true}
+--               5 clause              'Terms'
+--   signatures  none — the e2e writes the client's
+```
+
+The expected sentence, byte for byte, is the per-phase + non-refundable-retainer
+row of build sheet §5.1 and is pinned as `PER_PHASE_CONSENT_LINE` at the head of
+the spec.
+
+**The test is written against that fixture and runs unconditionally.** It goes
+green when two things are true on the stack: the fixture above exists, and the
+Wave 2 migrations are applied (the sentence comes from
+`compose_agreement_consent` and the metadata from the widened
+`sign_design_services_agreement_with_trusted_ip`). Both land at integration,
+which is also where build sheet §7 runs `pnpm supabase:reset` **before** the
+e2e — the order this test is written for, and the same order every SQL suite in
+that list assumes.
+
+**It signs, so it consumes the fixture.** Run twice against one stack with no
+reset and the second run finds a door already open; that is the fixture's
+nature, not a flake, and the spec says so at the constant.
+
+**Not run in this lane**, and this is the one thing in this fix round without
+command output behind it: the shared local stack carries neither the fixture nor
+the Wave 2 migrations, and this lane may not write to it or reset it. What was
+verified here is that the spec type-checks standalone (`tsc --noEmit` over
+`tests/threshold.spec.ts`, clean) and that Playwright collects it
+(`playwright test --list` → **16 tests in 1 file**, the new one at `:623`).
+
+---
+
+## F3 · C4 — the portal survives either deploy order
+
+`sign/route.ts` sent `p_consent` on **every** design-services signature,
+composed or not, flag on or off. PostgREST resolves an RPC by the argument
+**names** it is given, so a client-portal Worker live ahead of the migration
+that widens `sign_design_services_agreement_with_trusted_ip` cannot resolve the
+call at all — and every services signature answers `sign_failed`, including
+agreements carrying no parts. The deploy order was documented; nothing in the
+code degraded.
+
+Now the wider call is made only when there is something to record:
+
+```ts
+const composedBundle =
+  commercialBundle?.composed === true ||
+  commercialDocument?.composed === true ||
+  (Array.isArray(commercialBundle?.parts) && commercialBundle.parts.length > 0);
+…
+if (composedBundle || required.length > 0 || consentSentence !== null) {
+  signArgs.p_consent = { consentSentence, attachmentsAcknowledged: acknowledged };
+}
+```
+
+An un-composed agreement — every agreement today, and every agreement with
+either flag off — keeps taking the four-argument call it has always taken and
+signs whichever way round the two deploys land. Four new route cases pin it:
+nothing to record → **no `p_consent` key**; `composed:false` with an empty part
+array → no key; one part → the key; `composed:true` → the key. The pre-existing
+case at `:227` was re-pinned to the four-argument call with the reason written
+above it.
+
+---
+
+## F4 · C3 — what the code now does
+
+`composeSummaryLine` is add-only; `summaryLineFor` and every other export in
+`consent-copy.ts` are still byte-identical, and the file's "nothing here may be
+reworded" rule still binds them. Six new cases in `consent-copy.test.ts` (its
+own `describe`, no existing block touched), two in `door-gate.test.tsx`, two in
+the record page's spec. Reasoning and the alternative are in E2 above.
+
+---
+
+## F5 · C5 — the snapshot is made inert here too
+
+`record-sheet.tsx` is the client portal's only `dangerouslySetInnerHTML`
+(`grep -rln dangerouslySetInnerHTML apps/client-portal/src` → one file), and the
+strings inside the snapshot are designer-typed part titles and bodies. The
+escaping contract is real and is `_render_agreement_snapshot_html`'s — but it
+lives in a database function on the far side of a deploy, and this sheet renders
+inside the homeowner's signed-in PWA session. One layer is not enough for that.
+
+`inertSnapshotHtml(html)` runs before the set: paired `<script>`/`<style>`
+blocks removed **with their contents** (so a script's source does not survive as
+visible text on the keepsake), then any stray
+script/style/iframe/object/embed/link/meta/base/form tag, then every `on*`
+handler attribute, then every `javascript:` URL in `href`/`src`/`xlink:href`. A
+snapshot the renderer escaped correctly passes through untouched — there is
+nothing in it for these rules to find.
+
+Pinned by a case that feeds the sheet `<img src=x onerror=…>`, `<script>`,
+`<a href="javascript:…">` and an `<iframe>` and asserts the rendered node
+carries no `script`, no `iframe`, no `onerror`, no `javascript:` and no visible
+trace of the script's source — while the agreement's own text still reads.
+
+This is **defence in depth, not a replacement** for the server's escaping: E3
+above still asks the backend lane for the full chain and the SQL assertion. A
+string sanitizer is not a parser, and the layer that should be right is the one
+that writes the snapshot once and keeps it.
+
+---
+
+## F6 · Gates, re-run
+
+Run from `/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-client`.
+
+| Gate | Command | Result |
+|---|---|---|
+| Types | `pnpm --filter @patina/client-portal type-check` | **clean** — `tsc --noEmit`, no output |
+| Jest | `pnpm --filter @patina/client-portal test` | **129 suites · 2050 tests · 1 snapshot — all passed** (was 2035 before the fixes) |
+| Coverage floor 70/60/70/70 | `pnpm --filter @patina/client-portal test:coverage` | **74.2 / 69.54 / 74.3 / 76.51 — over floor**, no threshold error |
+| The touched suites | `test -- --testPathPattern "(consent-copy\|door-gate\|record\|sign)"` | **7 suites · 192 tests passed** |
+| The e2e, type-checked | `npx tsc --noEmit … tests/threshold.spec.ts` | clean |
+| The e2e, collected | `npx playwright test tests/threshold.spec.ts --list` | **16 tests in 1 file**, the new one at `:623` |
+
+Unchanged from the first round, and still true: `lint` fails on the base with 11
+errors in files this lane never touched, and it is not a build-sheet gate for
+this portal; the SQL suites, `db:generate` and the other portals' gates belong to
+lanes whose files this one does not carry.
+
+### What was NOT verified, plainly
+
+- **The new e2e has not been executed.** See the last paragraph of F2. It is
+  written, it type-checks, Playwright collects it; it needs the seed fixture and
+  the Wave 2 migrations, and this lane may neither write the seed nor touch the
+  shared stack.
+- **E1 is unresolved**, so `agreedSentence` is still null on every signature
+  until the bundle projects the key.
+- The `record-sheet` sanitizer is asserted against the four vectors named above,
+  not against an exhaustive corpus.
