@@ -840,7 +840,11 @@ BEGIN
     ASSERT false, 'a document with no terms or rates must not be issuable on paper';
   EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
   END;
-  ASSERT v_err = 'design services agreement requires terms and at least one role rate',
+  -- 00575 relaxed this refusal to "role rates whenever a rate card is present"
+  -- and reworded it to say so. This fixture carries NO agreement parts, so
+  -- _agreement_requires_rate_card returns true and the bar is exactly the bar
+  -- it always was — only the sentence moved.
+  ASSERT v_err = 'design services agreement requires terms, and at least one role rate whenever a rate card is present',
     format('bare-issue refusal: %L', v_err);
 
   -- And the emailed rail refuses the same document for the same reason, so the
@@ -850,7 +854,7 @@ BEGIN
     ASSERT false, 'the emailed rail must refuse the same bare document';
   EXCEPTION WHEN check_violation THEN v_send_err := SQLERRM;
   END;
-  ASSERT v_send_err = 'design-services send requires terms and role rates',
+  ASSERT v_send_err = 'design-services send requires terms, and role rates whenever a rate card is present',
     format('bare-send refusal: %L', v_send_err);
 END $$;
 

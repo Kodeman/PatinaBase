@@ -1891,10 +1891,19 @@ VALUES
     -- SECURITY DEFINER, still no nonowner ACL row, same signature and
     -- search_path, and the canonical roles -> user_roles -> memberships ->
     -- organization lock order is untouched — the resolution takes no lock.
+    --
+    -- 00575 added one `IS NULL` disjunct to the addendum promotion loop's
+    -- ceiling test, because billing_ceiling_cents is now nullable and NULL
+    -- means uncapped (00566's hash was
+    -- 430d3a45b0f3a3cc35b85160e244c045c2500e91dd952297eb8ef44ea854a770).
+    -- Nothing else moved: same signature, same arguments string, same result
+    -- type, same proconfig, still SECURITY DEFINER, no new lock — so the ACL
+    -- contract, the caller contract and the authority-lock-order contract in
+    -- this file all still hold unchanged.
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '430d3a45b0f3a3cc35b85160e244c045c2500e91dd952297eb8ef44ea854a770'
+    '8995735d7c966a6bd4db4a1669ee043b12398b9d64fe676c2281ece2536bc0b3'
   ),
   (
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',

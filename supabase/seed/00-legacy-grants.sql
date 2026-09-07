@@ -13237,3 +13237,165 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.regenerate_invoice_link(uuid), public.get_invoice_link(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.proposal_agreement_parts FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.proposal_agreement_parts FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.proposal_agreement_parts TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.proposal_agreement_parts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_authored_child() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_requires_rate_card(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_floor_unmet(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._commercial_document_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_commercial_document(uuid, text, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_commercial_document(uuid, text, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._sign_design_services_agreement_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._issue_design_services_agreement_on_paper(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_authority_summary(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_authority_summary(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_design_services_draft(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_design_services_draft(uuid, jsonb, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_agreement_defaults FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON TABLE public.studio_agreement_defaults TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.studio_agreement_defaults TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_agreement_parts(uuid, jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_agreement_parts(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.materialize_standard_parts(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.materialize_standard_parts(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
