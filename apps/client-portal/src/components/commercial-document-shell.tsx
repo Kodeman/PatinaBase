@@ -15,7 +15,6 @@ import { AgreementPartsBody } from '@/components/agreement-parts-body';
 import { Stamp } from '@/components/threshold/instruments/stamp';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { formatCalendarDate } from '@/lib/utils/format';
-import { agreementPartsMatchTerms } from '@/lib/commercial-documents';
 import type {
   CommercialDocumentBundle,
   CommercialDocumentKind,
@@ -182,15 +181,19 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   const terms = bundle.serviceTerms;
   if (!terms) return null;
 
-  // Wave 1 of "The Agreement, Composed". A document that carries parts is read
-  // as the ordered list the studio composed — but only while those parts are
-  // still the projection of the terms row this document will be countersigned
-  // against. See agreementPartsMatchTerms: a flag-off edit in the seven-facet
-  // room moves the money on the terms row and leaves the parts where they were,
-  // and the homeowner must never read a figure the countersignature will not
-  // authorize. Every other document — which is every document today, and every
-  // flag-off document tomorrow — falls through to the body below, untouched.
-  if (bundle.parts.length > 0 && agreementPartsMatchTerms(bundle.parts, terms, bundle.rates)) {
+  // Wave 1 of "The Agreement, Composed" — build sheet §5.2, the frozen
+  // cross-lane branch. A document that carries parts is read as the ordered
+  // list the studio composed; every other document — which is every document
+  // today, and every flag-off document tomorrow — falls through to the body
+  // below, untouched.
+  //
+  // `terms` does two jobs from here down: it supplies the currency this
+  // renderer prints in, and below the branch it is the body itself. A
+  // parts-carrying agreement with no proposal_service_terms row therefore
+  // renders nothing at all — unreachable while upsert_agreement_parts always
+  // projects a terms row, and the thing to revisit when W2 adds the
+  // consultation / furnishings_services classes.
+  if (bundle.parts.length > 0) {
     return <AgreementPartsBody parts={bundle.parts} currency={terms.currency} />;
   }
 

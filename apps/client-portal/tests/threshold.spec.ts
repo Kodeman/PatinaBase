@@ -437,9 +437,9 @@ test.describe('The Threshold — the client page', () => {
    *      `parts` key to `get_client_commercial_document_bundle`; and
    *   2. a seed, in `supabase/seed/the-client-page.sql` beside the solo
    *      client's executed agreement, laying down BOTH a
-   *      `proposal_service_terms` row and the parts that project into it —
-   *      the client renders parts only while those two agree
-   *      (`agreementPartsMatchTerms`), so parts alone would not light this up.
+   *      `proposal_service_terms` row and the parts — `DesignServicesBody`
+   *      returns null without the terms row, before it ever reaches the parts
+   *      branch, so parts alone would not light this up.
    *
    * The integration steward owns both, after the backend lane merges. Until
    * then the part renderer is covered by the jsdom suite
