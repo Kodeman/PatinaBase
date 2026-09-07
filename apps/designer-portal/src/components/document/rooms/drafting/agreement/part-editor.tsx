@@ -591,6 +591,14 @@ function PerPhaseEditor({ payload, onChange, readOnly }: EditorProps) {
       >
         + Add a phase
       </Button>
+      {/* DR5 — the same sentence FlatEditor carries, for the same reason: a
+          per-phase fee is recorded on the agreement now and creates no
+          billing authority until a later release. The rail chips it
+          accordingly. */}
+      <p className="text-[11px] normal-case tracking-normal text-[var(--text-muted)]">
+        Recorded on the agreement now; it starts creating billing authority in a
+        later release.
+      </p>
     </div>
   );
 }

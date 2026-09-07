@@ -183,6 +183,41 @@ describe("PartsRail", () => {
     expect(rows()[0]).not.toContain("creates authority");
   });
 
+  // DR5 — `AUTHORITY_VARIANTS` (@patina/types) is R9's Wave-2 list and it
+  // includes `flat` and `per_phase`. Neither creates authority TODAY: nothing
+  // projects from either into the money row, and both editors tell the
+  // designer so in as many words on the same screen. The chip must not say
+  // the opposite.
+  it("does not chip a fee that only gets recorded", () => {
+    render(
+      <Host
+        initial={[
+          part({
+            partKey: "custom.flat",
+            title: "Flat fee",
+            kind: "schedule",
+            variant: "flat",
+          }),
+          part({
+            partKey: "custom.phases",
+            title: "Phase fees",
+            kind: "schedule",
+            variant: "per_phase",
+          }),
+          part({
+            partKey: "patina.cadence",
+            title: "Billing cadence",
+            kind: "schedule",
+            variant: "cadence",
+          }),
+        ]}
+      />,
+    );
+    expect(rows()[0]).not.toContain("creates authority");
+    expect(rows()[1]).not.toContain("creates authority");
+    expect(rows()[2]).toContain("creates authority");
+  });
+
   it("selects a part when its row is clicked", () => {
     render(<Host initial={four()} />);
     const exclusions = within(

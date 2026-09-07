@@ -72,13 +72,24 @@ export function partKindLabel(
   return KIND_LABELS[kind as AgreementPartKind] ?? kind.replace(/_/g, " ");
 }
 
-/** R9 — this variant will create billing authority in Wave 2. In W1 the chip
- *  is the only reader; nothing projects from it. */
+/**
+ * DR5 — the chip and the editor must not contradict each other on the same
+ * screen. `AUTHORITY_VARIANTS` (@patina/types) is R9's list of what will
+ * create billing authority once Wave 2 has columns for it, and it includes
+ * `flat` and `per_phase`. Neither creates authority TODAY — nothing projects
+ * from either into `proposal_service_terms` — and both editors say so in
+ * words. So the rail chips only the variants that create authority in this
+ * build, and the two agree.
+ */
+const W1_AUTHORITY_VARIANTS: readonly string[] = (
+  AUTHORITY_VARIANTS as readonly string[]
+).filter((variant) => variant !== "flat" && variant !== "per_phase");
+
 export function createsAuthority(variant: string | null | undefined): boolean {
   return (
     variant !== null &&
     variant !== undefined &&
-    (AUTHORITY_VARIANTS as readonly string[]).includes(variant)
+    W1_AUTHORITY_VARIANTS.includes(variant)
   );
 }
 
@@ -294,6 +305,12 @@ export interface PartRole {
   roleName: string;
   hourlyRateCents: number;
   sortOrder: number;
+  /** B-9 — the date this rate started applying, read back so the editor hands
+   *  it to the save unchanged. The projection falls to now() when it is
+   *  absent, and `classify_project_time_entry_authority` filters authority
+   *  rates on `effective_at <= started_at` — so dropping it here would stop a
+   *  back-dated rate applying to the hours it was written for. */
+  effectiveAt?: string;
 }
 
 export function readRoles(payload: Record<string, unknown>): PartRole[] {
@@ -308,6 +325,9 @@ export function readRoles(payload: Record<string, unknown>): PartRole[] {
         sortOrder: Number.isFinite(Number(role.sortOrder))
           ? Number(role.sortOrder)
           : index,
+        ...(typeof role.effectiveAt === "string" && role.effectiveAt
+          ? { effectiveAt: role.effectiveAt }
+          : {}),
       },
     ];
   });
