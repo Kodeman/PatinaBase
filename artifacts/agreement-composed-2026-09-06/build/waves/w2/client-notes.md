@@ -4,10 +4,15 @@
 Lane: `client` · Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-client`
 (`git -C … rev-parse --show-toplevel` →
 `/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-client`)
-Branch `agreement/w2-client` · base `a6584dbc5a07dd91af9eec67489ec669deb5961e`
+Branch `agreement/w2-client` · wave base `a6584dbc5a07dd91af9eec67489ec669deb5961e`,
+**lane start `213686f399cf6f9635daf1dbad03dd822e3786e4`** — the T0 handshake commit
+(`feat(types): agreement parts vocabulary and payloads`, one file,
+`packages/types/src/agreement.ts`) was already cherry-picked onto this branch before the
+lane opened. It is not this lane's work and was not touched.
 
-**14 files changed, +1202 / −22**, all under `apps/client-portal/`. No file outside the
-lane's pathspec was touched.
+Lane head `4ff95d3adf27652dcbc042adb73a881019bbb82e`.
+**15 files changed, +1464 / −22** against the lane start: 14 under `apps/client-portal/`
+plus this log. No file outside the lane's pathspec was touched.
 
 ---
 
