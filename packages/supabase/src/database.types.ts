@@ -29881,16 +29881,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      _sign_design_services_agreement_authorized: {
-        Args: {
-          p_client_id: string
-          p_consent?: Json
-          p_proposal_id: string
-          p_signed_name: string
-          p_trusted_signed_ip?: string
-        }
-        Returns: Json
-      }
+      _sign_design_services_agreement_authorized:
+        | {
+            Args: {
+              p_client_id: string
+              p_proposal_id: string
+              p_signed_name: string
+              p_trusted_signed_ip?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_client_id: string
+              p_consent: Json
+              p_proposal_id: string
+              p_signed_name: string
+              p_trusted_signed_ip: string
+            }
+            Returns: Json
+          }
       _sign_proposal_authorized_00400: {
         Args: {
           p_client_id: string
@@ -34847,16 +34857,26 @@ export type Database = {
         Args: { p_proposal_id: string; p_signed_name: string }
         Returns: Json
       }
-      sign_design_services_agreement_with_trusted_ip: {
-        Args: {
-          p_client_id: string
-          p_consent?: Json
-          p_proposal_id: string
-          p_signed_ip?: string
-          p_signed_name: string
-        }
-        Returns: Json
-      }
+      sign_design_services_agreement_with_trusted_ip:
+        | {
+            Args: {
+              p_client_id: string
+              p_proposal_id: string
+              p_signed_ip?: string
+              p_signed_name: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_client_id: string
+              p_consent: Json
+              p_proposal_id: string
+              p_signed_ip: string
+              p_signed_name: string
+            }
+            Returns: Json
+          }
       sign_proposal:
         | {
             Args: { p_proposal_id: string; p_signed_name: string }
@@ -35568,10 +35588,12 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      upsert_agreement_parts: {
-        Args: { p_parts: Json; p_proposal_id: string; p_why?: string }
-        Returns: Json
-      }
+      upsert_agreement_parts:
+        | { Args: { p_parts: Json; p_proposal_id: string }; Returns: Json }
+        | {
+            Args: { p_parts: Json; p_proposal_id: string; p_why: string }
+            Returns: Json
+          }
       upsert_design_services_draft: {
         Args: { p_proposal_id: string; p_rates: Json; p_terms: Json }
         Returns: Json

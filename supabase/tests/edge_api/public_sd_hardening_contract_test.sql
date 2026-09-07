@@ -1745,16 +1745,31 @@ VALUES
     -- public.sign_design_services_agreement_with_trusted_ip(uuid,text,uuid,text)
     -- and its hash was
     -- 6c615ca417d594865e1f0772ee862c312e7a398d037c141366c8a1b97fd6f17d).
-    -- The four-argument arity was DROPped in the same file rather than left
-    -- standing beside the wider one, so PostgREST still resolves exactly one
-    -- candidate; a four-argument call reaches this body through the default.
+    -- The four-argument arity was DROPped before the wide body is created and
+    -- then RESTORED as a wrapper immediately after it (R31), so 00511's arity
+    -- is still a real, hardened object: the seed replays 00511's REVOKE
+    -- against it, five live callers still resolve to it, and the row below
+    -- pins it. Because both arities stand, the wide body carries NO DEFAULTS —
+    -- a default here would give a four-argument call two candidates.
     -- Everything else this file pins is unchanged: still SECURITY DEFINER,
     -- same search_path, same result type, and the ACL is re-issued to
     -- service_role alone after the DROP took it.
     'public.sign_design_services_agreement_with_trusted_ip(uuid,text,uuid,text,jsonb)',
-    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_signed_ip text DEFAULT NULL::text, p_consent jsonb DEFAULT NULL::jsonb',
+    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_signed_ip text, p_consent jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '8539825f7dc69971ae5ab3ec81c7e86d7b663f7beea5133fb4cbe010fd7f0288',
+    ARRAY['service_role']::text[]
+  ),
+  (
+    -- R31 — the restored four-argument arity. 00511 hardened THIS signature,
+    -- and the manifest has to cover it or a public service_role entry point
+    -- stands unpinned. It is a wrapper and nothing else: no authority, no
+    -- lock, no invoice core — the service_role gate, the capability GUC and
+    -- the txid stamp all live in the five-argument body above.
+    'public.sign_design_services_agreement_with_trusted_ip(uuid,text,uuid,text)',
+    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_signed_ip text DEFAULT NULL::text',
+    'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    '29e3d31ef4de9a31002a3ad58794eb30ac03e7ffb7aa412b4fb92673f673bc6f',
     ARRAY['service_role']::text[]
   ),
   (
@@ -1774,8 +1789,12 @@ WHERE signature IN (
 
 DO $public_catalog_contract$
 BEGIN
-  ASSERT (SELECT count(*) FROM _00511_expected_public) = 17,
-    'the public hardening manifest must contain exactly 17 rows';
+  -- 18, not 00511's 17: R31 restored the four-argument
+  -- sign_design_services_agreement_with_trusted_ip beside the widened one, and
+  -- an unpinned public service_role entry point is exactly what this manifest
+  -- exists to make impossible.
+  ASSERT (SELECT count(*) FROM _00511_expected_public) = 18,
+    'the public hardening manifest must contain exactly 18 rows';
 
   ASSERT NOT EXISTS (
     SELECT 1

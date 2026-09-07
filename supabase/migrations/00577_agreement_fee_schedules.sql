@@ -29,9 +29,20 @@
 -- plpgsql function CREATES A NEW OVERLOAD; the old one survives and PostgREST
 -- then has two candidates for the same call. Each widened function is
 -- DROPped at its old arity first, and its REVOKE/GRANT pair re-issued after —
--- a DROP takes the ACL with it. A four-argument call still resolves against
--- the five-argument function through the default, which is what the contract
--- means by "the old signature still resolves".
+-- a DROP takes the ACL with it.
+--
+-- R31 then puts each old arity BACK, as a thin wrapper that delegates to the
+-- wide body with the new argument NULL, carrying the same ACL the migration
+-- that hardened it wrote. A hardened arity is a name other things hold: five
+-- live plpgsql callers hold the four-argument
+-- _sign_design_services_agreement_authorized, the sign route holds the
+-- four-argument sign_design_services_agreement_with_trusted_ip, the Wave 1
+-- hook holds the two-argument upsert_agreement_parts — and 00511's
+-- seventeen-function REVOKE, replayed by seed/00-legacy-grants.sql, holds the
+-- fourth. Because both arities exist, the WIDE bodies carry no defaults: a
+-- default on the wide body beside a narrow one of the same name is the exact
+-- ambiguity the DROPs above were written to avoid. Every call has one
+-- candidate; no signature anything already holds has moved.
 --
 -- WHAT THIS FILE DOES NOT DO:
 --   · It adds NO new caller of app_private.issue_invoice_for_actor. The
@@ -863,6 +874,25 @@ REVOKE ALL ON FUNCTION public._log_agreement_part_events(uuid, jsonb, jsonb, tex
 --
 -- A DROP takes the ACL with it; every REVOKE/GRANT pair is re-issued beside
 -- the new body below.
+--
+-- R31 — AND THE OLD ARITY COMES BACK, as a thin wrapper. Dropping a hardened
+-- arity outright is what this file did first, and it broke something no gate
+-- in this wave could see: seed/00-legacy-grants.sql replays 00511's hardening
+-- as ONE statement naming seventeen functions, guarded against
+-- undefined_function. With the four-argument
+-- sign_design_services_agreement_with_trusted_ip gone, that statement raised
+-- and the guard swallowed the hardening of the other SIXTEEN — eight EXECUTE
+-- tuples survived on a fresh `supabase db reset` that the 00511 manifest says
+-- must not, and three suites went red. The generator now emits one guarded
+-- statement per function, so a dropped signature can only ever cost itself;
+-- and every arity 00511 hardened is restored below with the same ACL, so the
+-- manifest it pins is whole.
+--
+-- Each restored arity delegates to the widened one, which therefore carries NO
+-- DEFAULTS: a defaulted argument on the wide body beside a narrow body of the
+-- same name is exactly the ambiguity PART 7 was written to avoid. Old callers
+-- reach the wrapper, new callers name every argument, and neither call has two
+-- candidates.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 DROP FUNCTION IF EXISTS public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text);
@@ -889,7 +919,7 @@ DROP FUNCTION IF EXISTS public.upsert_agreement_parts(uuid, jsonb);
 CREATE OR REPLACE FUNCTION public.upsert_agreement_parts(
   p_proposal_id uuid,
   p_parts jsonb,
-  p_why text DEFAULT NULL
+  p_why text
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1468,6 +1498,27 @@ REVOKE ALL ON FUNCTION public.upsert_agreement_parts(uuid, jsonb, text)
 GRANT EXECUTE ON FUNCTION public.upsert_agreement_parts(uuid, jsonb, text)
   TO authenticated;
 
+-- R31 — the two-argument arity 00575 granted, restored as a wrapper. The Wave
+-- 1 hook still calls it with two named arguments; a save with no why is a save
+-- with no why, not a save through a different door.
+CREATE OR REPLACE FUNCTION public.upsert_agreement_parts(
+  p_proposal_id uuid,
+  p_parts jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RETURN public.upsert_agreement_parts(p_proposal_id, p_parts, NULL::text);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.upsert_agreement_parts(uuid, jsonb)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.upsert_agreement_parts(uuid, jsonb)
+  TO authenticated;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PART 9 — _sign_design_services_agreement_authorized, widened
 --
@@ -1482,8 +1533,8 @@ CREATE OR REPLACE FUNCTION public._sign_design_services_agreement_authorized(
   p_proposal_id uuid,
   p_signed_name text,
   p_client_id uuid,
-  p_trusted_signed_ip text DEFAULT NULL,
-  p_consent jsonb DEFAULT NULL
+  p_trusted_signed_ip text,
+  p_consent jsonb
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1616,6 +1667,29 @@ $$;
 REVOKE ALL ON FUNCTION public._sign_design_services_agreement_authorized(uuid, text, uuid, text, jsonb)
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- R31 — the four-argument arity, restored as a wrapper. Three live functions
+-- still call it with four arguments (00412's two legs, 00462's two, 00511's
+-- trusted-IP leg), and none of them is redefined here.
+CREATE OR REPLACE FUNCTION public._sign_design_services_agreement_authorized(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_client_id uuid,
+  p_trusted_signed_ip text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RETURN public._sign_design_services_agreement_authorized(
+    p_proposal_id, p_signed_name, p_client_id, p_trusted_signed_ip, NULL::jsonb
+  );
+END;
+$$;
+REVOKE ALL ON FUNCTION public._sign_design_services_agreement_authorized(uuid, text, uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PART 10 — sign_design_services_agreement_with_trusted_ip, widened
 --
@@ -1629,8 +1703,8 @@ CREATE OR REPLACE FUNCTION public.sign_design_services_agreement_with_trusted_ip
   p_proposal_id uuid,
   p_signed_name text,
   p_client_id uuid,
-  p_signed_ip text DEFAULT NULL,
-  p_consent jsonb DEFAULT NULL
+  p_signed_ip text,
+  p_consent jsonb
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1676,6 +1750,35 @@ $$;
 REVOKE ALL ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text, jsonb)
   FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text, jsonb)
+  TO service_role;
+
+-- R31 — 00511's four-argument arity, restored as a wrapper and hardened
+-- exactly as 00511 hardened it. The sign route still takes this call for every
+-- un-composed agreement; more importantly, this is the signature the
+-- seventeen-function REVOKE in 00511 names, and the public hardening manifest
+-- pins the arity as well as the body. The service_role gate, the capability
+-- GUC and the txid stamp all live in the five-argument body it delegates to,
+-- so this wrapper adds no authority of its own.
+CREATE OR REPLACE FUNCTION public.sign_design_services_agreement_with_trusted_ip(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_client_id uuid,
+  p_signed_ip text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+  RETURN public.sign_design_services_agreement_with_trusted_ip(
+    p_proposal_id, p_signed_name, p_client_id, p_signed_ip, NULL::jsonb
+  );
+END;
+$$;
+REVOKE ALL ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text)
   TO service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
