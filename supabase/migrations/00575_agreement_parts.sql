@@ -126,6 +126,29 @@
 --         the parts and touches nothing else — the terms row stays as the
 --         last projection left it, which is what the seven-facet room reads —
 --         so the document returns to exactly the paper it was on.
+--   (B-7) materialize_standard_parts widens 'legacy' -> 'design_services' the
+--         way upsert_agreement_parts does. Seeding is what makes a document
+--         composed, and the client's bundle takes the RETIRED early-return
+--         for a legacy kind — so nine parts were hashed into the fingerprint
+--         she signs against and invisible on the page she reads.
+--   (B-8) The bundle's `parts` key is present on EVERY document, `[]` when
+--         there are none (contract §2.4), the retired legacy early-return
+--         included. A reader that branches on the key's absence is a reader
+--         with two contracts.
+--   (B-9) A rate carries the date it took effect through the parts door.
+--         v_rates built only version/roleName/hourlyRateCents/sortOrder, so
+--         the projection fell to now() for every role — and
+--         classify_project_time_entry_authority filters authority rates on
+--         `effective_at <= started_at`, so a rate written for January stopped
+--         applying to January's hours the first time the agreement was opened
+--         in the Contract Room. materialize seeds the date beside the rate;
+--         the projection reads it back; a role with no date still means now.
+--   (R3-5) A furnishings deposit is seeded only from a percent somebody set —
+--         this document's own, or the studio's default. The 50 the
+--         furnishings authorization falls back to is a house constant, not a
+--         term of THIS agreement, and seeded here it printed "50% deposit" on
+--         the page the homeowner signs, three paragraphs above the sentence
+--         saying furnishings require a separate named authorization.
 --
 -- Every new SECURITY DEFINER here pins `search_path = public, pg_temp` — the
 -- posture of the surrounding commercial family (00412 / 00422 / 00423), and
@@ -2431,6 +2454,27 @@ BEGIN
     END IF;
     v_keys := v_keys || v_key;
 
+    -- The three fields the INSERT below casts. Postgres answers a bad cast
+    -- with `invalid input syntax for type boolean` and the like, and the
+    -- composer prints the RPC's text verbatim as its save note — so these are
+    -- asked here, in the words of the room, exactly as every money figure is.
+    IF v_part ? 'required'
+       AND jsonb_typeof(v_part->'required') NOT IN ('boolean', 'null') THEN
+      RAISE EXCEPTION 'whether the part titled "%" is required is a yes or a no', v_title
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_part ? 'clientVisible'
+       AND jsonb_typeof(v_part->'clientVisible') NOT IN ('boolean', 'null') THEN
+      RAISE EXCEPTION 'whether the client sees the part titled "%" is a yes or a no', v_title
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NULLIF(btrim(COALESCE(v_part->>'sourcePartId', '')), '') IS NOT NULL
+       AND btrim(v_part->>'sourcePartId') !~*
+           '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+      RAISE EXCEPTION 'the part that "%" was copied from could not be read', v_title
+        USING ERRCODE = 'check_violation';
+    END IF;
+
     IF v_kind = 'schedule' AND v_variant = 'rate_card' THEN
       IF v_payload ? 'roles' AND jsonb_typeof(v_payload->'roles') <> 'array' THEN
         RAISE EXCEPTION 'a rate card is a list of roles and their hourly rates'
@@ -2464,6 +2508,21 @@ BEGIN
             USING ERRCODE = 'check_violation';
         END IF;
         PERFORM public._agreement_assert_cents(v_role, 'hourlyRateCents', 'hourly rate');
+        IF v_role ? 'sortOrder'
+           AND jsonb_typeof(v_role->'sortOrder') NOT IN ('number', 'null') THEN
+          RAISE EXCEPTION 'the rate card''s order could not be read at %', v_role_name
+            USING ERRCODE = 'check_violation';
+        END IF;
+        -- (B-9) A date the projection cannot read would reach
+        -- proposal_service_rates as a raw cast error. Asked here instead.
+        IF NULLIF(btrim(COALESCE(v_role->>'effectiveAt', '')), '') IS NOT NULL THEN
+          BEGIN
+            PERFORM (v_role->>'effectiveAt')::timestamptz;
+          EXCEPTION WHEN OTHERS THEN
+            RAISE EXCEPTION 'the date % takes effect could not be read', v_role_name
+              USING ERRCODE = 'check_violation';
+          END;
+        END IF;
       END LOOP;
     END IF;
 
@@ -2659,12 +2718,20 @@ BEGIN
     'currentRateVersion', v_version
   );
 
+  -- (B-9) effectiveAt rides through the parts door. Without it the
+  -- projection falls to now() for every role, and
+  -- classify_project_time_entry_authority filters authority rates on
+  -- `effective_at <= started_at` — so a rate written for January stopped
+  -- applying to January's hours the first time the agreement was opened in
+  -- the Contract Room. A role that carries no date still falls to now(),
+  -- which is what a rate written today means.
   v_rates := COALESCE((
     SELECT jsonb_agg(jsonb_build_object(
       'version', v_version,
       'roleName', e.rate->>'roleName',
       'hourlyRateCents', (e.rate->>'hourlyRateCents')::integer,
-      'sortOrder', COALESCE((e.rate->>'sortOrder')::integer, 0)
+      'sortOrder', COALESCE((e.rate->>'sortOrder')::integer, 0),
+      'effectiveAt', NULLIF(e.rate->>'effectiveAt', '')
     ) ORDER BY e.ord)
     FROM public.proposal_agreement_parts ap
     CROSS JOIN LATERAL jsonb_array_elements(
@@ -2845,11 +2912,14 @@ BEGIN
     );
   END IF;
 
+  -- (B-9) The date each rate took effect is seeded with it, so opening the
+  -- Contract Room and saving does not re-stamp a back-dated rate to today.
   v_rate_card := COALESCE((
     SELECT jsonb_agg(jsonb_build_object(
       'roleName', r.role_name,
       'hourlyRateCents', r.hourly_rate_cents,
-      'sortOrder', r.sort_order
+      'sortOrder', r.sort_order,
+      'effectiveAt', r.effective_at
     ) ORDER BY r.sort_order, r.role_name)
     FROM public.proposal_service_rates r
     WHERE r.proposal_id = p_proposal_id
@@ -2858,6 +2928,17 @@ BEGIN
   IF jsonb_array_length(v_rate_card) = 0 THEN
     v_rate_card := COALESCE(v_defaults.rate_card, '[]'::jsonb);
   END IF;
+
+  -- (B-7) The same widen upsert_agreement_parts performs at its own door.
+  -- Seeding is the act that makes a document composed, and the client's
+  -- bundle takes the RETIRED early-return for document_kind 'legacy' — so
+  -- nine parts would be hashed into the fingerprint she signs against and
+  -- invisible on the page she reads. commercial_state is deliberately NOT
+  -- touched here: seeding lays out what already exists, and the first real
+  -- save through upsert_agreement_parts is what authors.
+  UPDATE public.proposals
+  SET document_kind = 'design_services', updated_at = now()
+  WHERE id = p_proposal_id AND document_kind = 'legacy';
 
   INSERT INTO public.proposal_agreement_parts (
     proposal_id, position, kind, variant, part_key, title, payload,
@@ -2875,9 +2956,16 @@ BEGIN
      jsonb_build_object('roles', v_rate_card), false, true),
     (p_proposal_id, 5, 'schedule', 'ceiling', 'patina.ceiling', 'Ceiling',
      jsonb_build_object('cents', v_terms.billing_ceiling_cents), false, true),
+    -- (R3-5) The deposit is seeded ONLY from a percent somebody set — this
+    -- document's own, or the studio's default. The 50 the furnishings
+    -- authorization falls back to is a house constant, not a term of this
+    -- agreement: seeded here it printed "50% deposit" on the page the
+    -- homeowner signs, three paragraphs above the sentence saying furnishings
+    -- require a separate named authorization. Unset stays unset, and the
+    -- client's copy prints no deposit term at all.
     (p_proposal_id, 6, 'schedule', 'procurement', 'patina.deposit', 'Furnishings deposit',
      jsonb_build_object('depositPercent',
-       COALESCE(v_terms.furnishings_deposit_percent, v_defaults.deposit_percent, 50)),
+       COALESCE(v_terms.furnishings_deposit_percent, v_defaults.deposit_percent)),
      false, true),
     (p_proposal_id, 7, 'schedule', 'retainer', 'patina.retainer', 'Retainer',
      jsonb_build_object(
@@ -3037,8 +3125,12 @@ BEGIN
   END IF;
 
   -- 00414: a legacy edition is not an error, it is a retired document.
+  -- (B-8) The `parts` key is ALWAYS present, `[]` when the document has none
+  -- (contract §2.4), including on this early-return — a reader that has to
+  -- branch on the key's absence is a reader with two contracts.
   IF v_proposal.document_kind = 'legacy' THEN
     RETURN jsonb_build_object(
+      'parts', '[]'::jsonb,
       'document', jsonb_build_object(
         'id', v_proposal.id,
         'documentKind', 'legacy',

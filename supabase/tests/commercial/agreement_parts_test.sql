@@ -36,6 +36,13 @@
 --        composes the draft; discard_agreement_parts takes it back, moves no
 --        money, and restores the fingerprint and the flag-off door.
 --   (11) The save hands back the rows it wrote, re-keyed, in order.
+--   (12) B-7 / B-8. Composing a RETIRED agreement widens its kind the way
+--        saving does, and the retired bundle answers the `parts` key too.
+--   (13) B-9. A rate carries the date it took effect through the parts door,
+--        so a back-dated rate is not re-stamped to today by merely opening
+--        the room.
+--   (14) R3-5. A furnishings deposit nobody set is not seeded as a term of
+--        the agreement the homeowner signs.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -1660,7 +1667,57 @@ BEGIN
     format('R7(h): %L', v_err);
   v_errs := v_errs || v_err;
 
-  -- And not one of the eight names a constraint, a column or a table. This is
+  -- (i) the client-visibility flag as a word — was: invalid input syntax for
+  --     type boolean: "maybe".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'clause',
+      'partKey', 'patina.services', 'title', 'Services',
+      'clientVisible', 'maybe',
+      'payload', jsonb_build_object('body', 'Interior design services.'))));
+  ASSERT v_err = 'whether the client sees the part titled "Services" is a yes or a no',
+    format('R7(i): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (j) a source part that is not an id — was: invalid input syntax for type
+  --     uuid: "not-a-uuid".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'clause',
+      'partKey', 'patina.services', 'title', 'Services',
+      'sourcePartId', 'not-a-uuid',
+      'payload', jsonb_build_object('body', 'Interior design services.'))));
+  ASSERT v_err = 'the part that "Services" was copied from could not be read',
+    format('R7(j): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (k) a rate card ordered by a word — was: invalid input syntax for type
+  --     integer: "first".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+      'partKey', 'patina.role_rates', 'title', 'Role rates',
+      'payload', jsonb_build_object('roles', jsonb_build_array(
+        jsonb_build_object('roleName', 'Lead Designer',
+          'hourlyRateCents', 22500, 'sortOrder', 'first'))))));
+  ASSERT v_err = 'the rate card''s order could not be read at Lead Designer',
+    format('R7(k): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (l) a date the money row cannot read (B-9's new field) — was: invalid
+  --     input syntax for type timestamp with time zone.
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+      'partKey', 'patina.role_rates', 'title', 'Role rates',
+      'payload', jsonb_build_object('roles', jsonb_build_array(
+        jsonb_build_object('roleName', 'Lead Designer',
+          'hourlyRateCents', 22500, 'effectiveAt', 'last spring'))))));
+  ASSERT v_err = 'the date Lead Designer takes effect could not be read',
+    format('R7(l): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- And not one of the twelve names a constraint, a column or a table. This is
   -- the assertion that survives a reworded refusal.
   FOREACH v_one IN ARRAY v_errs LOOP
     ASSERT v_one !~* '(violates|constraint|column|relation|proposal_service|proposal_agreement|uniq_agreement)',
@@ -1984,6 +2041,185 @@ BEGIN
     'the returned rows carry the composition''s own order';
 
   RAISE NOTICE 'PASS 31: the save returns the saved rows, re-keyed, in order';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (32) (33) B-7 AND B-8 — THE RETIRED DOOR.
+--
+-- Seeding is the act that makes a document composed. materialize_standard_parts
+-- did not widen 'legacy' -> 'design_services' the way upsert_agreement_parts
+-- does, and the client's bundle takes a RETIRED early-return for a legacy
+-- kind — so the nine parts were hashed into the fingerprint she signs against
+-- and shown on no page she reads. And that early-return omitted `parts`
+-- entirely, against contract §2.4's "always present, [] when there are none".
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+
+INSERT INTO public.proposals (
+  id, designer_id, designer_client_id, client_id, title, description,
+  total_amount, status, valid_until, document_kind
+) VALUES
+  ('a5300000-0000-4000-8000-000000000012',
+   'a5000000-0000-4000-8000-000000000001',
+   'a5200000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-000000000004',
+   'The retired agreement, opened', 'Authored before parts.', 0, 'draft',
+   DATE '2027-06-01', 'legacy'),
+  ('a5300000-0000-4000-8000-000000000013',
+   'a5000000-0000-4000-8000-000000000001',
+   'a5200000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-000000000004',
+   'The retired agreement, untouched', 'Authored before parts.', 0, 'draft',
+   DATE '2027-06-01', 'legacy');
+
+-- A retired document that the client can read is one that was SENT before
+-- 00412 existed. `send_proposal` is the only legal road into 'sent' today
+-- (guard_proposal_authority), and it is not the road this fixture travelled,
+-- so the fixture is placed the way this file already places profiles.
+SET LOCAL session_replication_role = replica;
+UPDATE public.proposals
+SET status = 'sent', sent_at = now()
+WHERE id = 'a5300000-0000-4000-8000-000000000013';
+SET LOCAL session_replication_role = origin;
+
+DO $$
+DECLARE v_seeded jsonb; v_kind text;
+BEGIN
+  ASSERT (SELECT p.document_kind FROM public.proposals p
+          WHERE p.id = 'a5300000-0000-4000-8000-000000000012') = 'legacy',
+    'the fixture must start on the retired kind';
+
+  v_seeded := public.materialize_standard_parts('a5300000-0000-4000-8000-000000000012');
+  ASSERT (v_seeded->>'materialized')::boolean, 'a retired draft still composes';
+  ASSERT (v_seeded->>'partCount')::integer = 9, 'nine parts either way';
+
+  SELECT p.document_kind INTO v_kind FROM public.proposals p
+  WHERE p.id = 'a5300000-0000-4000-8000-000000000012';
+  ASSERT v_kind = 'design_services',
+    format('B-7: seeding must widen the kind the way saving does, got %L', v_kind);
+
+  RAISE NOTICE 'PASS 32: composing a retired agreement widens its kind (B-7)';
+END $$;
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000004');
+
+DO $$
+DECLARE v_bundle jsonb;
+BEGIN
+  v_bundle := public.get_client_commercial_document_bundle(
+    'a5300000-0000-4000-8000-000000000013');
+  ASSERT (v_bundle->'document'->>'retired')::boolean,
+    'the untouched fixture must still take the retired early-return';
+  ASSERT v_bundle ? 'parts',
+    format('B-8: the parts key is present on every document: %s', v_bundle::text);
+  ASSERT v_bundle->'parts' = '[]'::jsonb,
+    format('B-8: a document with no parts answers []: %s', (v_bundle->'parts')::text);
+
+  RAISE NOTICE 'PASS 33: the retired bundle answers the parts key too (B-8)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (34) B-9 — A BACK-DATED RATE STAYS BACK-DATED.
+--
+-- classify_project_time_entry_authority filters authority rates on
+-- `effective_at <= started_at`. v_rates built only version / roleName /
+-- hourlyRateCents / sortOrder, so the projection fell to now() for every
+-- role: a rate written for January stopped applying to January's hours the
+-- first time the agreement was opened in the Contract Room and saved.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000014', 'The back-dated rate');
+
+DO $$
+DECLARE v_before timestamptz; v_after timestamptz; v_parts jsonb; v_seeded text;
+BEGIN
+  SELECT r.effective_at INTO v_before FROM public.proposal_service_rates r
+  WHERE r.proposal_id = 'a5300000-0000-4000-8000-000000000014';
+  ASSERT v_before = TIMESTAMPTZ '2026-01-01 00:00:00',
+    format('the fixture must carry a back-dated rate, got %L', v_before);
+
+  PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000014');
+
+  SELECT ap.payload->'roles'->0->>'effectiveAt' INTO v_seeded
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000014'
+    AND ap.part_key = 'patina.role_rates';
+  ASSERT v_seeded IS NOT NULL AND v_seeded::timestamptz = v_before,
+    format('B-9: the seeded rate card must carry the date beside the rate, got %L', v_seeded);
+
+  -- The composition the room would send back, unchanged.
+  SELECT jsonb_agg(jsonb_build_object(
+    'kind', ap.kind, 'variant', ap.variant, 'partKey', ap.part_key,
+    'title', ap.title, 'payload', ap.payload,
+    'required', ap.required, 'clientVisible', ap.client_visible
+  ) ORDER BY ap.position) INTO v_parts
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000014';
+
+  PERFORM public.upsert_agreement_parts('a5300000-0000-4000-8000-000000000014', v_parts);
+
+  SELECT r.effective_at INTO v_after FROM public.proposal_service_rates r
+  WHERE r.proposal_id = 'a5300000-0000-4000-8000-000000000014';
+  ASSERT v_after = v_before,
+    format('B-9: the parts door re-stamped a back-dated rate: %L -> %L', v_before, v_after);
+
+  RAISE NOTICE 'PASS 34: a rate carries the date it took effect through the parts door (B-9)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (35) R3-5 — A DEPOSIT NOBODY SET IS NOT A TERM.
+--
+-- materialize_standard_parts fell back to the literal 50 — the percentage the
+-- separate furnishings authorization defaults to, a house constant nobody
+-- typed on THIS agreement. Seeded client-visible, it printed "50% deposit" on
+-- the page the homeowner signs, three paragraphs above the sentence saying
+-- furnishings require a separate named authorization.
+--
+-- This case runs last: it clears the studio's default deposit so that neither
+-- source has anything to say.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+UPDATE public.studio_agreement_defaults SET deposit_percent = NULL
+WHERE studio_id = 'a5100000-0000-4000-8000-000000000001';
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+
+INSERT INTO public.proposals (
+  id, designer_id, designer_client_id, client_id, title, description,
+  total_amount, status, valid_until, document_kind
+) VALUES (
+  'a5300000-0000-4000-8000-000000000015',
+  'a5000000-0000-4000-8000-000000000001',
+  'a5200000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-000000000004',
+  'The agreement nobody priced', 'No terms row yet.', 0, 'draft',
+  DATE '2027-06-01', 'design_services');
+
+DO $$
+DECLARE v_percent jsonb; v_stored numeric;
+BEGIN
+  PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000015');
+
+  SELECT ap.payload->'depositPercent' INTO v_percent
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000015'
+    AND ap.part_key = 'patina.deposit';
+  ASSERT jsonb_typeof(v_percent) = 'null',
+    format('R3-5: an unset deposit must stay unset, got %s', v_percent::text);
+
+  -- And the studio's own default still seeds when the studio HAS one.
+  UPDATE public.studio_agreement_defaults SET deposit_percent = 30
+  WHERE studio_id = 'a5100000-0000-4000-8000-000000000001';
+  PERFORM public.discard_agreement_parts('a5300000-0000-4000-8000-000000000015');
+  PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000015');
+
+  SELECT (ap.payload->>'depositPercent')::numeric INTO v_stored
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000015'
+    AND ap.part_key = 'patina.deposit';
+  ASSERT v_stored = 30,
+    format('R3-5: a percent the studio DID set still seeds, got %s', v_stored);
+
+  RAISE NOTICE 'PASS 35: a furnishings deposit nobody set is not seeded as a term (R3-5)';
 END $$;
 
 ROLLBACK;
