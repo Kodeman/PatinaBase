@@ -230,9 +230,58 @@ describe("assessAgreementReadiness — R-4, required parts", () => {
 });
 
 describe("assessAgreementReadiness — R-5, the class floor", () => {
+  const noFeeBlocker =
+    "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.";
+
   it("blocks an agreement that names no fee at all", () => {
-    expect(messages([services(), terms()])).toContain(
-      "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
+    expect(messages([services(), terms()])).toContain(noFeeBlocker);
+  });
+
+  it("blocks the nine standard parts with nothing typed into any of them", () => {
+    // What a designer sees the instant `materialize_standard_parts` seeds the
+    // room: every part present, no money written anywhere. A retainer of zero
+    // and a monthly cadence are not a fee — the sentence the blocker prints
+    // names the three things that are.
+    const untouched = [
+      services(),
+      deliverables(),
+      exclusions(),
+      roleRates([]),
+      ceiling(null),
+      deposit(null),
+      retainer({
+        cents: 0,
+        creditRule: "credited",
+        activationPolicy: "immediate",
+      }),
+      cadence("monthly"),
+      terms(),
+    ];
+    const readiness = assess(untouched);
+    expect(readiness.blockers.map((blocker) => blocker.message)).toContain(
+      noFeeBlocker,
+    );
+    expect(readiness.ready).toBe(false);
+  });
+
+  it("is not satisfied by a retainer and a cadence alone", () => {
+    expect(messages([services(), retainer(), cadence(), terms()])).toContain(
+      noFeeBlocker,
+    );
+  });
+
+  it("is satisfied by a per-phase fee", () => {
+    const perPhase = part({
+      partKey: "custom.per_phase",
+      kind: "schedule",
+      variant: "per_phase",
+      title: "Fee by phase",
+      payload: {
+        phases: [{ key: "concept", label: "Concept", cents: 400_000 }],
+      },
+    });
+    expect(messages([services(), perPhase, terms()])).not.toContain(
+      noFeeBlocker,
     );
   });
 });

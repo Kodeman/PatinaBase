@@ -18,7 +18,7 @@
  * untouched and still serves the flag-off room.
  */
 
-import { AUTHORITY_VARIANTS, type AgreementPart } from "@patina/types";
+import type { AgreementPart } from "@patina/types";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import {
   readBody,
@@ -42,6 +42,20 @@ export interface AgreementReadiness {
   /** Advisory only — never gates `ready`. */
   notes: string[];
 }
+
+/**
+ * The variants that can satisfy the R4 class floor on their own — the fee the
+ * agreement charges.
+ *
+ * NOT `AUTHORITY_VARIANTS` (@patina/types), which is R9's Wave-2 list of what
+ * creates billing authority and includes `retainer` and `cadence`. A retainer
+ * is money held against a fee and a cadence is when invoices go out; neither
+ * one states what the work costs, so an agreement carrying only those still
+ * names no fee. This list is exactly the blocker sentence below: a rate card,
+ * a flat fee, a per-phase fee — plus a ceiling, which is itself a stated
+ * amount the studio may not exceed.
+ */
+const FEE_VARIANTS = ["rate_card", "flat", "per_phase", "ceiling"] as const;
 
 /** The blocker that is about the client account rather than the agreement.
  *  Excluded from the attention count, exactly as the seven-facet room
@@ -177,8 +191,9 @@ export function assessAgreementReadiness({
   // somewhere typed; prose never carries money (R5).
   const namesAFee = parts.some(
     (part) =>
+      part.kind === "schedule" &&
       part.variant !== null &&
-      (AUTHORITY_VARIANTS as readonly string[]).includes(part.variant) &&
+      (FEE_VARIANTS as readonly string[]).includes(part.variant) &&
       scheduleValueIsSet(part),
   );
   if (!namesAFee) {
