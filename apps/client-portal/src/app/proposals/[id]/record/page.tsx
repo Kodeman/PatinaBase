@@ -157,17 +157,17 @@ export default function ProposalRecordPage({
       signatureHeading={block.heading}
       signedName={block.name}
       signedOn={block.dateLine}
-      consentSentence={block.sentence}
-      /* WHAT she ticked is NOT printed here in Wave 2. It lives in
-         `commercial_document_signatures.metadata.consentSentence`, written at
-         insert by the sign route, and 00425's rule holds that raw metadata
-         never crosses the client bundle's edge — the bundle RPC projects the
-         signature's keys one by one and projects no consent key. Re-composing
+      /* R36 — WHAT SHE TICKED, off her own signature row. It was written into
+         `commercial_document_signatures.metadata.consentSentence` at insert by
+         the sign route, and the bundle now projects that one key beside
+         `signedOnPaper` and `paperSignedOn` — one scalar at a time, in 00425's
+         discipline; raw metadata still never crosses the edge. Re-composing
          the sentence from today's parts is the one thing a record must never
-         do (the parts move under an addendum; her signature does not), so the
-         sheet says nothing here rather than something untrue. The sentence is
-         recorded, and the keepsake prints it in the wave that rules the
-         bundle key. */
+         do: the parts move under an addendum, and her signature does not. A
+         signature taken before the consent was recorded carries none, and the
+         sheet falls back to the standing sentence for the method, exactly as
+         it did in Wave 1. */
+      consentSentence={signature.consentSentence ?? block.sentence}
       /* R12. Present only once the studio has countersigned a composed
          agreement. A pre-Wave-2 execution, or an agreement with no parts,
          carries none — and the sheet then reads exactly as it does today,

@@ -70,6 +70,12 @@ export type CommercialSignature = Pick<
    *  omits it otherwise, so this is never a pointer to a file the client
    *  isn't allowed to open. */
   paperScanDocumentId: string | null;
+  /** R36 — the sentence this signer ticked, frozen in the signature row at
+   *  insert and projected as one scalar by the bundle RPC. The record prints
+   *  THIS, never a sentence recomposed from today's parts: the parts move
+   *  under an addendum and her signature does not. Null on every signature
+   *  taken before the consent was recorded. */
+  consentSentence: string | null;
 };
 
 /**
@@ -708,6 +714,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         signedOnPaper: first(row, 'signedOnPaper', 'signed_on_paper') === true,
         paperSignedOn: nullableText(first(row, 'paperSignedOn', 'paper_signed_on')),
         paperScanDocumentId: nullableText(first(row, 'paperScanDocumentId', 'paper_scan_document_id')),
+        consentSentence: nullableText(first(row, 'consentSentence', 'consent_sentence')),
         // NOT read here: the sentence this signer ticked. It is written into
         // `commercial_document_signatures.metadata` at insert, and the bundle
         // RPC projects a signature's keys one by one (00425 — raw metadata

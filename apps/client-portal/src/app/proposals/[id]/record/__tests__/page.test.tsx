@@ -61,6 +61,7 @@ const BUNDLE: CommercialDocumentBundle = {
       signedOnPaper: false,
       paperSignedOn: null,
       paperScanDocumentId: null,
+      consentSentence: null,
     },
   ],
   furnishings: {
@@ -342,15 +343,36 @@ describe('/proposals/[id]/record — the composed agreement (Wave 2)', () => {
     );
   });
 
-  it('keeps saying how she signed, which is the fact this sheet carries', async () => {
+  it('keeps saying how she signed when her row recorded no sentence', async () => {
     await renderPage();
 
+    // Every signature taken before the consent was recorded. The standing
+    // sentence for the method stands, exactly as Wave 1 printed it.
     expect(screen.getByTestId('record-consent')).toHaveTextContent(
       'Signed electronically by typed name: Harper Vale.',
     );
-    // And says nothing about WHAT she agreed to — there is no projected
-    // sentence to print, and it is never re-composed from today's parts.
-    expect(screen.queryByTestId('record-agreed')).not.toBeInTheDocument();
+  });
+
+  /* R36 — what she ticked, off her own signature row. */
+  it('prints the sentence her signature froze, not one recomposed from today’s parts', async () => {
+    const recorded =
+      'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.';
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        // The paper says something else NOW. The record does not care.
+        consentSentence: 'I agree to something the studio changed later.',
+        signatures: [{ ...BUNDLE.signatures[0], consentSentence: recorded }],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.getByTestId('record-consent')).toHaveTextContent(recorded);
+    expect(screen.getByTestId('record-consent')).not.toHaveTextContent(
+      'the studio changed later',
+    );
   });
 
   it('asks the old question of a record with no parts', async () => {

@@ -2668,7 +2668,15 @@ BEGIN
         WHERE scan.id = (s.metadata->>'paperScanDocumentId')::uuid
           AND scan.proposal_id = p_proposal_id
           AND scan.client_visible
-      )
+      ),
+      -- 00577 (R36): THE SENTENCE SHE ACTUALLY TICKED, frozen with the act.
+      -- Not compose_agreement_consent, which is recomputed from today's parts
+      -- and would re-word a record every time an addendum moved something —
+      -- the record must say what she agreed to, not what the paper says now.
+      -- Projected as its own key, one scalar, in 00425's discipline: the
+      -- signature's metadata carries recordedBy and other studio-side facts,
+      -- and raw metadata never crosses this edge.
+      'consentSentence', NULLIF(btrim(COALESCE(s.metadata->>'consentSentence', '')), '')
     ) ORDER BY s.signed_at, s.id) FROM public.commercial_document_signatures s
       WHERE s.proposal_id = p_proposal_id), '[]'::jsonb),
     'furnishings', CASE WHEN v_document.document_kind = 'furnishings_authorization'
