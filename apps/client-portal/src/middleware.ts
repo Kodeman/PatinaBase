@@ -113,6 +113,12 @@ export async function middleware(req: NextRequest) {
   // server-side via resolve_trade_rfq_link() — a sub or installer replying to
   // an ask has no Patina account and never will.
   const isRfqPage = req.nextUrl.pathname.startsWith('/rfq/');
+  // /trade/[token] is the same login-less pattern for a subcontractor signing
+  // a Trade Agreement (The Agreement, Composed · Wave 3 · P14): the token is
+  // resolved server-side via resolve_trade_agreement_link() — a sub the studio
+  // hires has no Patina account and never will, and R16 rules that they sign
+  // by token link with no login.
+  const isTradePage = req.nextUrl.pathname.startsWith('/trade/');
   // /evidence/[token] is the same login-less pattern for a client asked to
   // photograph receiving-exception damage (Back of House S7): the token is
   // resolved server-side via fulfillment_evidence_token_context() — a client
@@ -153,11 +159,21 @@ export async function middleware(req: NextRequest) {
   // link's sheet list. force-dynamic + meta tags govern Next and crawlers that
   // read the document — these headers govern everything in between.
   //
-  // S8: this covers ALL six bearer prefixes, not just /plans. The other four
-  // have carried neither header since they shipped — /share, /rfq, /evidence
-  // and /field are the same kind of address as /plans, and /pay is the one
-  // that reaches a till. Widening it costs nothing and closes four gaps.
-  if (isPlansPage || isPayPage || isSharePage || isFieldPage || isRfqPage || isEvidencePage) {
+  // S8: this covers ALL SEVEN bearer prefixes, not just /plans. The others
+  // have carried neither header since they shipped — /share, /rfq, /trade,
+  // /evidence and /field are the same kind of address as /plans, and /pay is
+  // the one that reaches a till. Widening it costs nothing and closes the gap.
+  // /trade in particular carries a signature act, so a cached copy would keep
+  // serving a spent link's form.
+  if (
+    isPlansPage ||
+    isPayPage ||
+    isSharePage ||
+    isFieldPage ||
+    isRfqPage ||
+    isTradePage ||
+    isEvidencePage
+  ) {
     res.headers.set('Cache-Control', 'private, no-store, max-age=0');
     res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
@@ -172,6 +188,7 @@ export async function middleware(req: NextRequest) {
     isSharePage ||
     isFieldPage ||
     isRfqPage ||
+    isTradePage ||
     isEvidencePage ||
     isPlansPage ||
     isPayPage ||
