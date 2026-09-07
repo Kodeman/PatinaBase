@@ -18,6 +18,7 @@ import type { DesignBuildAllowance, DesignBuildCostLine } from "@patina/types";
 import {
   readAllowances,
   readPricingBasis,
+  unbackedAllowanceLine,
   validateAllowances,
 } from "@/lib/document/design-build";
 import { dollars, toCentsOrNull } from "../part-kinds";
@@ -44,28 +45,58 @@ export function AllowancesEditor({
   const basisPayload = payloadOf(turnkey, TURNKEY_PART_KEYS.pricingBasis);
   const basis = readPricingBasis(basisPayload);
   const refusal = validateAllowances({ allowances }, basis);
+  const orphanNote = unbackedAllowanceLine({ allowances }, basis);
 
   /**
    * Writes the allowances AND the pricing basis' allowance cost lines in one
-   * act. Every non-allowance cost line is left exactly where it was; the
-   * allowance lines are rebuilt from this list, so removing an allowance
-   * takes its line out of the contract sum too.
+   * act.
+   *
+   * Every line is rewritten IN PLACE. Order is load-bearing on the pricing
+   * basis: the schedule of values gives the last row the rounding remainder
+   * (`scheduleOfValues`), so a rebuild that dropped the allowance lines and
+   * re-appended them would move which row absorbs the cents — a silent change
+   * to the paper from typing in a field that has nothing to do with it.
+   *
+   * And a line this editor never wrote is never taken away. An allowance the
+   * designer just removed takes its own line with it; an allowance-category
+   * cost line authored on the pricing basis, with no allowance behind it,
+   * stays exactly where it was and is NAMED instead — `unbackedAllowanceLine`
+   * says so in readiness and below.
    */
   const write = (next: DesignBuildAllowance[]) => {
     onChange({ ...payload, allowances: next });
     if (!turnkey) return;
-    const keptLines = basis.costLines.filter(
-      (line) => line.category !== "allowance",
-    );
-    const allowanceLines: DesignBuildCostLine[] = next.map((allowance) => ({
+    const wasAnAllowance = new Set(allowances.map((entry) => entry.id));
+    const nextById = new Map(next.map((entry) => [entry.id, entry]));
+    const lineFor = (allowance: DesignBuildAllowance): DesignBuildCostLine => ({
       id: allowance.id,
       label: allowance.label,
       category: "allowance",
       basisCents: allowance.amountCents,
-    }));
+    });
+    const placed = new Set<string>();
+    const costLines: DesignBuildCostLine[] = [];
+    for (const line of basis.costLines) {
+      if (line.category !== "allowance") {
+        costLines.push(line);
+        continue;
+      }
+      const allowance = nextById.get(line.id);
+      if (allowance) {
+        costLines.push(lineFor(allowance));
+        placed.add(allowance.id);
+        continue;
+      }
+      if (wasAnAllowance.has(line.id)) continue;
+      costLines.push(line);
+    }
+    for (const allowance of next) {
+      if (placed.has(allowance.id)) continue;
+      costLines.push(lineFor(allowance));
+    }
     turnkey.writePart(TURNKEY_PART_KEYS.pricingBasis, {
       ...basisPayload,
-      costLines: [...keptLines, ...allowanceLines],
+      costLines,
     });
   };
 
@@ -213,6 +244,15 @@ export function AllowancesEditor({
           className="text-[11.5px] leading-relaxed text-[var(--color-mocha)]"
         >
           {refusal}
+        </p>
+      )}
+
+      {orphanNote && (
+        <p
+          role="status"
+          className="text-[11.5px] leading-relaxed text-[var(--text-muted)]"
+        >
+          {orphanNote}
         </p>
       )}
     </div>

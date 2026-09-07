@@ -330,6 +330,139 @@ describe("the draws editor", () => {
   });
 });
 
+describe("minting a draw key", () => {
+  /**
+   * The key is the identity the ledger row and the invoice are stamped with
+   * (I-3 takes `p_draw_key`), and it is frozen once minted — so a key minted
+   * from the array's LENGTH is a bug with no escape hatch: remove a middle
+   * draw, add one, and `draw_3` arrives twice with no rename control anywhere
+   * in this editor.
+   */
+  const keysWritten = (onChange: jest.Mock) => {
+    const payload = onChange.mock.calls.at(-1)?.[0] as {
+      draws: { key: string }[];
+    };
+    return payload.draws.map((draw) => draw.key);
+  };
+
+  it("does not repeat a key after a middle draw is removed", () => {
+    // [deposit, rough_in, cabinets_set, substantial_completion] with the
+    // middle two removed leaves [deposit, substantial_completion]; the row
+    // added next used to be `draw_3`, which is nothing here, but the shape is
+    // the same one that collides. Drive the real removal first.
+    const onChange = jest.fn();
+    const { rerender } = render(
+      <PartEditor
+        part={DRAWS}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, DRAWS])}
+      />,
+    );
+    // Remove "Cabinets set" (row 3 of 4).
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[2]);
+    const afterRemoval = keysWritten(onChange);
+    expect(afterRemoval).toEqual([
+      "deposit",
+      "rough_in",
+      "substantial_completion",
+    ]);
+
+    const shortened = {
+      ...DRAWS,
+      payload: {
+        ...DRAWS.payload,
+        draws: (onChange.mock.calls.at(-1)?.[0] as { draws: unknown[] }).draws,
+      },
+    };
+    onChange.mockClear();
+    rerender(
+      <PartEditor
+        part={shortened}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, shortened])}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a draw" }));
+    const keys = keysWritten(onChange);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.filter((key) => key === "deposit")).toHaveLength(1);
+  });
+
+  it("never mints the reserved retainage-release key", () => {
+    const onChange = jest.fn();
+    const nearlyReserved = {
+      ...DRAWS,
+      payload: {
+        retainageBps: 500,
+        draws: [
+          {
+            key: "deposit",
+            label: "Deposit",
+            sortOrder: 0,
+            pct: 50,
+            retainageApplies: false,
+          },
+          {
+            key: "retainage_release",
+            label: "Retainage release",
+            sortOrder: 1,
+            pct: 50,
+            retainageApplies: true,
+          },
+        ],
+      },
+    };
+    render(
+      <PartEditor
+        part={nearlyReserved}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, nearlyReserved])}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a draw" }));
+    const keys = keysWritten(onChange);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("keeps the first row's key `deposit`, whatever it is called", () => {
+    const onChange = jest.fn();
+    const keyless = {
+      ...DRAWS,
+      payload: {
+        retainageBps: 0,
+        draws: [
+          {
+            key: "",
+            label: "",
+            sortOrder: 0,
+            pct: 100,
+            retainageApplies: false,
+          },
+        ],
+      },
+    };
+    render(
+      <PartEditor
+        part={keyless}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, keyless])}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Draw 1"), {
+      target: { value: "Money on signing" },
+    });
+    expect(keysWritten(onChange)).toEqual(["deposit"]);
+  });
+});
+
 describe("the allowances editor", () => {
   const allowances = part({
     partKey: TURNKEY_PART_KEYS.allowances,
@@ -374,6 +507,134 @@ describe("the allowances editor", () => {
     expect(tile?.basisCents).toBe(450_000);
     // Every non-allowance line survives untouched.
     expect(lines.filter((line) => line.id === "cabinetry")).toHaveLength(1);
+  });
+
+  it("rewrites the allowance line in place, never at the end", () => {
+    // The pricing basis' LAST cost line takes the schedule of values'
+    // rounding remainder. A rebuild that dropped the allowance lines and
+    // re-appended them would move which row absorbs the cents — a change to
+    // the paper made by typing in a field that has nothing to do with it.
+    const writePart = jest.fn();
+    const basisWithAllowanceInTheMiddle = {
+      ...PRICING_BASIS,
+      payload: {
+        ...PRICING_BASIS.payload,
+        costLines: [
+          {
+            id: "cabinetry",
+            label: "Cabinetry & millwork",
+            category: "sub",
+            basisCents: 3_800_000,
+          },
+          {
+            id: "tile",
+            label: "Tile allowance",
+            category: "allowance",
+            basisCents: 400_000,
+          },
+          {
+            id: "electrical",
+            label: "Electrical",
+            category: "sub",
+            basisCents: 950_000,
+          },
+        ],
+      },
+    };
+    render(
+      <PartEditor
+        part={allowances}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf(
+          [basisWithAllowanceInTheMiddle, allowances],
+          writePart,
+        )}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Allowance 1 amount"), {
+      target: { value: "4500" },
+    });
+    const [, payload] = writePart.mock.calls[0];
+    const lines = (payload as { costLines: { id: string }[] }).costLines;
+    expect(lines.map((line) => line.id)).toEqual([
+      "cabinetry",
+      "tile",
+      "electrical",
+    ]);
+  });
+
+  it("leaves an allowance line it never wrote alone, and names it", () => {
+    // A designer can give a cost line the "Allowance" category on the pricing
+    // basis itself. `_validate_allowances_payload` asks allowance → line only,
+    // so that line is legal — and it used to be deleted, silently changing the
+    // contract sum, the moment any allowance field was touched.
+    const writePart = jest.fn();
+    const basisWithAnOrphan = {
+      ...PRICING_BASIS,
+      payload: {
+        ...PRICING_BASIS.payload,
+        costLines: [
+          {
+            id: "tile",
+            label: "Tile allowance",
+            category: "allowance",
+            basisCents: 400_000,
+          },
+          {
+            id: "appliances",
+            label: "Appliance allowance",
+            category: "allowance",
+            basisCents: 900_000,
+          },
+        ],
+      },
+    };
+    render(
+      <PartEditor
+        part={allowances}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([basisWithAnOrphan, allowances], writePart)}
+      />,
+    );
+    expect(
+      screen.getByText(/Appliance allowance is an allowance line/),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Allowance 1 amount"), {
+      target: { value: "4500" },
+    });
+    const [, payload] = writePart.mock.calls[0];
+    const lines = (
+      payload as {
+        costLines: { id: string; basisCents: number }[];
+      }
+    ).costLines;
+    expect(lines.map((line) => line.id)).toEqual(["tile", "appliances"]);
+    expect(lines.find((line) => line.id === "appliances")?.basisCents).toBe(
+      900_000,
+    );
+  });
+
+  it("takes a removed allowance's own line out of the contract sum", () => {
+    const writePart = jest.fn();
+    render(
+      <PartEditor
+        part={allowances}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, allowances], writePart)}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
+    const [, payload] = writePart.mock.calls[0];
+    const lines = (payload as { costLines: { id: string }[] }).costLines;
+    expect(lines.some((line) => line.id === "tile")).toBe(false);
+    expect(lines.some((line) => line.id === "cabinetry")).toBe(true);
   });
 
   it("refuses an allowance whose cost line disagrees with it", () => {

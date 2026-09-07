@@ -287,3 +287,113 @@ describe("a design-services agreement is untouched", () => {
     expect(readiness.ready).toBe(true);
   });
 });
+
+/**
+ * The flag-off half of the same floor.
+ *
+ * `turnkey` is supplied by the composer only when `design-build` resolves on,
+ * so its ABSENCE is the rollback path — and a rollback must be the stricter
+ * side, never the looser one. Exempting the class fee floor on the document's
+ * KIND alone let a `design_build` agreement carrying no money at all pass
+ * readiness clean, when the same document raised "This agreement names no
+ * fee." before Wave 3 touched this file.
+ */
+describe("a design-build agreement with the flag off", () => {
+  const FEE_FLOOR =
+    "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.";
+
+  const bare = () => [
+    part({
+      partKey: "patina.terms",
+      title: "Terms",
+      required: true,
+      payload: { body: "Ownership and cancellation." },
+    }),
+  ];
+
+  it("falls back to the pre-Wave-3 fee floor rather than passing clean", () => {
+    const readiness = assessAgreementReadiness({
+      document,
+      parts: bare(),
+      recipientEmail: "halvorsen@example.com",
+    });
+    expect(readiness.blockers.map((blocker) => blocker.message)).toContain(
+      FEE_FLOOR,
+    );
+    expect(readiness.ready).toBe(false);
+  });
+
+  it("asks none of the turnkey questions it has no context for", () => {
+    const messages = assessAgreementReadiness({
+      document,
+      parts: bare(),
+      recipientEmail: "halvorsen@example.com",
+    }).blockers.map((blocker) => blocker.message);
+    expect(messages).not.toContain(TURNKEY_PRICING_BASIS_BLOCKER);
+    expect(messages).not.toContain(TURNKEY_DRAWS_BLOCKER);
+    expect(messages).not.toContain(TURNKEY_ATTESTATION_BLOCKER);
+  });
+
+  it("still exempts the class fee floor when the turnkey floor IS asked", () => {
+    const messages = assessAgreementReadiness({
+      document,
+      parts: bare(),
+      recipientEmail: "halvorsen@example.com",
+      turnkey: { attestationLive: true, enabledJurisdictions: [] },
+    }).blockers.map((blocker) => blocker.message);
+    expect(messages).not.toContain(FEE_FLOOR);
+    expect(messages).toContain(TURNKEY_PRICING_BASIS_BLOCKER);
+    expect(messages).toContain(TURNKEY_DRAWS_BLOCKER);
+  });
+});
+
+/**
+ * An allowance-category cost line with no allowance behind it is legal — the
+ * database asks allowance → line only — so the room NAMES it and does not
+ * refuse the send. It is a note precisely because the allowances editor no
+ * longer sweeps such a line out of the contract sum.
+ */
+describe("an allowance line with no allowance behind it", () => {
+  it("is a note, never a blocker", () => {
+    const orphaned = part({
+      partKey: "patina.pricing_basis",
+      kind: "schedule",
+      variant: "pricing_basis",
+      title: "Pricing basis",
+      payload: {
+        basis: "fixed",
+        fixedCents: 1_000_000,
+        subDisclosure: "closed_book",
+        costLines: [
+          {
+            id: "appliances",
+            label: "Appliance allowance",
+            category: "allowance",
+            basisCents: 900_000,
+          },
+        ],
+      },
+    });
+    const empty = part({
+      partKey: "patina.allowances",
+      kind: "schedule",
+      variant: "allowances",
+      title: "Allowances",
+      payload: { allowances: [] },
+    });
+    const readiness = assessAgreementReadiness({
+      document,
+      parts: [orphaned, empty, draws],
+      recipientEmail: "halvorsen@example.com",
+      turnkey: { attestationLive: true, enabledJurisdictions: [] },
+    });
+    expect(readiness.notes.join(" ")).toContain(
+      "Appliance allowance is an allowance line",
+    );
+    expect(
+      readiness.blockers.filter((blocker) =>
+        blocker.message.includes("allowance line"),
+      ),
+    ).toHaveLength(0);
+  });
+});

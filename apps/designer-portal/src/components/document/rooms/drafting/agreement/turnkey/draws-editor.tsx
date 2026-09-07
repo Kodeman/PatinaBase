@@ -28,6 +28,7 @@ import {
   MAX_RETAINAGE_BPS,
   readDraws,
   readPricingBasis,
+  RETAINAGE_RELEASE_KEY,
   totalPaidCents,
   validateDrawSet,
 } from "@/lib/document/design-build";
@@ -39,16 +40,42 @@ const LABEL =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
 const CELL = "font-mono text-[11px] text-[var(--color-charcoal)]";
 
-/** A stable key from a label the studio typed. Draw keys are the identity the
- *  draw ledger and every invoice are stamped with, so they are slugged once,
- *  when the row is created, and left alone thereafter — renaming a draw must
- *  not orphan its invoice. */
-function drawKeyFrom(label: string, index: number): string {
+/**
+ * A key no other row in this schedule carries.
+ *
+ * Draw keys are the identity the draw ledger and every invoice are stamped
+ * with (I-3 takes `p_draw_key`), so they are minted once, when the row is
+ * created, and left alone thereafter — renaming a draw must not orphan its
+ * invoice. Which is exactly why they cannot be minted from the array's
+ * LENGTH: remove a middle draw from [deposit, draw_2, draw_3] and the next
+ * one added is `draw_3` again, `validateDrawSet` refuses with "Two draws
+ * share a key. Rename one." and — the key being frozen — there is nothing in
+ * this editor that could rename it. So the mint reads the keys actually in
+ * use, `retainage_release` included (it is the pinned final row's key), and
+ * counts past every one of them.
+ */
+function mintDrawKey(
+  others: readonly DesignBuildDraw[],
+  position: number,
+  label = "",
+): string {
+  // The first row is the deposit and its key is `deposit` — validateDrawSet
+  // says so, and the ledger and the P13 offer both read it by that name.
+  if (position === 0) return "deposit";
+  const taken = new Set<string>([RETAINAGE_RELEASE_KEY, "deposit"]);
+  for (const draw of others) {
+    const key = draw.key.trim();
+    if (key) taken.add(key);
+  }
   const slug = label
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
-  return slug || `draw_${index + 1}`;
+  if (slug && !taken.has(slug)) return slug;
+  const base = slug || "draw";
+  let ordinal = position + 1;
+  while (taken.has(`${base}_${ordinal}`)) ordinal += 1;
+  return `${base}_${ordinal}`;
 }
 
 export function DrawsEditor({
@@ -133,7 +160,15 @@ export function DrawsEditor({
                     // its invoice was stamped with.
                     ...(draw.key
                       ? {}
-                      : { key: drawKeyFrom(event.target.value, index) }),
+                      : {
+                          key: mintDrawKey(
+                            draws.draws.filter(
+                              (_, drawIndex) => drawIndex !== index,
+                            ),
+                            index,
+                            event.target.value,
+                          ),
+                        }),
                   })
                 }
                 placeholder="Rough-in"
@@ -215,10 +250,7 @@ export function DrawsEditor({
             writeDraws([
               ...draws.draws,
               {
-                key:
-                  draws.draws.length === 0
-                    ? "deposit"
-                    : `draw_${draws.draws.length + 1}`,
+                key: mintDrawKey(draws.draws, draws.draws.length),
                 label: "",
                 sortOrder: draws.draws.length,
                 pct: 0,

@@ -90,6 +90,18 @@ function renumber(parts: AgreementPart[]): AgreementPart[] {
 }
 
 /**
+ * The first part the rail actually shows — build sheet PART 13's eleventh
+ * entry, `patina.licensing_attestation`, is a `kind: 'attestation'` record
+ * materialized at compose and never editable here (§8 marks it "gate"). It
+ * rides in the composition and is saved with it; it is not a page of the
+ * paper, so it is neither listed nor selectable. `parts-rail.tsx` hides the
+ * same kind, and this keeps the room from opening on a row that is not there.
+ */
+export function firstRailPartId(parts: AgreementPart[]): string | null {
+  return parts.find((part) => part.kind !== "attestation")?.id ?? null;
+}
+
+/**
  * The sentence the database refused with — or, failing that, the room's own.
  *
  * PostgREST hands react-query a plain `{ message, code, details, hint }`, not
@@ -213,8 +225,8 @@ export function AgreementComposer({
   const [parts, setParts] = useState<AgreementPart[]>(() =>
     renumber([...bundle.parts].sort((a, b) => a.position - b.position)),
   );
-  const [selectedId, setSelectedId] = useState<string | null>(
-    bundle.parts[0]?.id ?? null,
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    firstRailPartId(bundle.parts),
   );
   const [dirty, setDirty] = useState(false);
   const [saveNote, setSaveNote] = useState<string | null>(null);
@@ -229,7 +241,13 @@ export function AgreementComposer({
     () => new Set<string>(),
   );
 
-  const readOnly = document.state !== "draft";
+  // §4.1 — with `design-build` off, a `design_build` agreement renders
+  // read-only prose. It cannot be created with the flag off, so the only way
+  // to stand here is a rollback or a co-member the flag has not reached: the
+  // parts are shown, the editors are frozen, and nothing this room cannot
+  // validate can be typed into a class whose validators are not mounted.
+  const turnkeyFrozen = document.kind === "design_build" && !designBuildOn;
+  const readOnly = document.state !== "draft" || turnkeyFrozen;
 
   // Seed the nine standard parts from the terms row this agreement already
   // has. The ref is React 18 StrictMode's double-effect, not correctness —
@@ -256,7 +274,7 @@ export function AgreementComposer({
           [...next.parts].sort((a, b) => a.position - b.position),
         );
         setParts(seeded);
-        setSelectedId((current) => current ?? seeded[0]?.id ?? null);
+        setSelectedId((current) => current ?? firstRailPartId(seeded));
       } catch (error) {
         setSaveNote(
           refusalMessage(error, "The standard parts could not be opened."),
@@ -316,14 +334,30 @@ export function AgreementComposer({
 
   const selected = parts.find((part) => part.id === selectedId) ?? null;
 
-  const mutate = (next: AgreementPart[]) => {
-    setParts(renumber(next));
+  /**
+   * Every act in this room goes through here, and every act may be one of a
+   * PAIR. A turnkey editor writes its own payload and a sibling's in the same
+   * handler — the allowances editor lays down its cost line, the
+   * sub-disclosure clause stores its mode where the validator reads it — and
+   * two setters derived from the same render's `parts` would have the second
+   * discard the first. So the updater form is the contract: each write is
+   * applied to what the one before it produced, not to the array this render
+   * closed over.
+   */
+  const mutate = (
+    next: AgreementPart[] | ((current: AgreementPart[]) => AgreementPart[]),
+  ) => {
+    setParts((current) =>
+      renumber(typeof next === "function" ? next(current) : next),
+    );
     setDirty(true);
     setSaveNote(null);
   };
 
   const changePayload = (id: string, payload: Record<string, unknown>) =>
-    mutate(parts.map((part) => (part.id === id ? { ...part, payload } : part)));
+    mutate((current) =>
+      current.map((part) => (part.id === id ? { ...part, payload } : part)),
+    );
 
   /**
    * One turnkey editor writing a sibling part's payload — an allowance laying
@@ -334,8 +368,8 @@ export function AgreementComposer({
    * editor must not resurrect it.
    */
   const writePart = (partKey: string, payload: Record<string, unknown>) =>
-    mutate(
-      parts.map((part) =>
+    mutate((current) =>
+      current.map((part) =>
         part.partKey === partKey ? { ...part, payload } : part,
       ),
     );
@@ -345,8 +379,10 @@ export function AgreementComposer({
    *  so where the designer typed it. This is the act that sets it. */
   const setClientVisible = (id: string, clientVisible: boolean) => {
     const target = parts.find((part) => part.id === id) ?? null;
-    mutate(
-      parts.map((part) => (part.id === id ? { ...part, clientVisible } : part)),
+    mutate((current) =>
+      current.map((part) =>
+        part.id === id ? { ...part, clientVisible } : part,
+      ),
     );
     if (target) {
       documentEvents.agreementPartVisibilityChanged({
@@ -363,13 +399,15 @@ export function AgreementComposer({
     : undefined;
 
   const renamePart = (id: string, title: string) =>
-    mutate(parts.map((part) => (part.id === id ? { ...part, title } : part)));
+    mutate((current) =>
+      current.map((part) => (part.id === id ? { ...part, title } : part)),
+    );
 
   const removePart = (id: string) => {
     const removed = parts.find((part) => part.id === id) ?? null;
     const next = parts.filter((part) => part.id !== id);
     mutate(next);
-    if (selectedId === id) setSelectedId(next[0]?.id ?? null);
+    if (selectedId === id) setSelectedId(firstRailPartId(next));
     if (libraryOn && removed) {
       documentEvents.agreementPartRemoved({
         proposal_id: proposalId,
@@ -494,7 +532,7 @@ export function AgreementComposer({
         [...(fresh.data ?? [])].sort((a, b) => a.position - b.position),
       );
       setParts(landed);
-      setSelectedId(landed[0]?.id ?? null);
+      setSelectedId(firstRailPartId(landed));
       setDirty(false);
       setTemplatesOpen(false);
       setSaveNote(`The parts of ${template.title} are on this agreement.`);
@@ -572,8 +610,7 @@ export function AgreementComposer({
         (selectedKey === null
           ? null
           : (saved.find((part) => part.partKey === selectedKey)?.id ?? null)) ??
-          saved[0]?.id ??
-          null,
+          firstRailPartId(saved),
       );
       setDirty(false);
       setSaveNote("All agreement changes saved.");

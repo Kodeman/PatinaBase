@@ -541,6 +541,38 @@ export function validateAllowances(
 }
 
 /**
+ * The other direction: an allowance-category cost line with no allowance
+ * behind it.
+ *
+ * The pricing basis' own category select offers "Allowance", so a designer
+ * can author such a line there and never open the allowances editor. It is
+ * not an error — `_validate_allowances_payload` asks allowance → line only,
+ * and a send carrying it is accepted — so this is a NOTE, never a blocker: a
+ * room stricter than the database would refuse a send the server would take.
+ * What it must not be is silent, because the allowances editor deliberately
+ * leaves such a line alone rather than sweeping it out of the contract sum.
+ */
+export function unbackedAllowanceLine(
+  payload: DesignBuildAllowancesPayload,
+  basis: DesignBuildPricingBasisPayload,
+): string | null {
+  const backed = new Set(payload.allowances.map((allowance) => allowance.id));
+  const orphans = basis.costLines.filter(
+    (line) => line.category === "allowance" && !backed.has(line.id),
+  );
+  if (orphans.length === 0) return null;
+  if (orphans.length === 1) {
+    const label = orphans[0].label.trim() || "One cost line";
+    return `${label} is an allowance line on the pricing basis with no allowance behind it. Add it here, or give it another category.`;
+  }
+  const labels = orphans
+    .map((line) => line.label.trim())
+    .filter((label) => label.length > 0);
+  const named = labels.length > 0 ? ` — ${labels.join(", ")}` : "";
+  return `The pricing basis carries allowance lines with no allowance behind them${named}. Add them here, or give them another category.`;
+}
+
+/**
  * The no-double-count rule (research 02 §3, §9 item 6, build sheet §4.3).
  *
  * A studio that bills supervision as its own line AND takes a markup on the

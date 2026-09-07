@@ -27,6 +27,7 @@ import {
   readPricingBasis,
   readSubMarkupBps,
   readSupervision,
+  unbackedAllowanceLine,
   validateAllowances,
   validateDrawSet,
   validateNoDoubleCount,
@@ -333,8 +334,17 @@ export function assessAgreementReadiness({
   // draw schedule is additionally required, and both are validated by the
   // same functions `send_commercial_document` calls — so the room asks the
   // question the send is going to ask.
+  //
+  // `turnkeyFloor` is the whole gate, and the SAME gate the class-fee
+  // exemption below reads. The composer supplies `turnkey` only when
+  // `design-build` resolves on, so with the flag off a `design_build`
+  // document falls all the way back to the pre-Wave-3 floor — including
+  // "This agreement names no fee." — rather than sailing through with no
+  // money question asked at all. That is the rollback path the fail-closed
+  // flag exists for, and it must be the stricter side, never the looser.
   const isTurnkey = document.kind === "design_build";
-  if (isTurnkey && turnkey) {
+  const turnkeyFloor = isTurnkey && turnkey ? turnkey : null;
+  if (turnkeyFloor) {
     const pricingBasisPart =
       parts.find(
         (part) => part.kind === "schedule" && part.variant === "pricing_basis",
@@ -364,11 +374,13 @@ export function assessAgreementReadiness({
       if (refusal) add(drawsPart.id, refusal);
     }
     if (allowancesPart) {
-      const refusal = validateAllowances(
-        readAllowances(allowancesPart.payload ?? {}),
-        basis,
-      );
+      const allowances = readAllowances(allowancesPart.payload ?? {});
+      const refusal = validateAllowances(allowances, basis);
       if (refusal) add(allowancesPart.id, refusal);
+      // Advisory, never a blocker — the database asks allowance → line only,
+      // and the room does not refuse a send the server would accept.
+      const orphan = unbackedAllowanceLine(allowances, basis);
+      if (orphan) notes.push(orphan);
     }
 
     // §4.3 — supervision is paid once. The refusal is about a PAIR, so it is
@@ -390,10 +402,10 @@ export function assessAgreementReadiness({
     // R10 — the gate holds at send too. An attestation that expired between
     // composing and sending locks the agreement, and the room says so rather
     // than letting the send fail with a database sentence.
-    if (!turnkey.attestationLive) add(null, TURNKEY_ATTESTATION_BLOCKER);
+    if (!turnkeyFloor.attestationLive) add(null, TURNKEY_ATTESTATION_BLOCKER);
 
     // R11 — a notice counsel has not cleared must not reach a client.
-    const cleared = new Set(turnkey.enabledJurisdictions);
+    const cleared = new Set(turnkeyFloor.enabledJurisdictions);
     for (const part of parts) {
       if (part.kind !== "attachment") continue;
       const jurisdiction = (part.payload ?? {}).jurisdiction;
@@ -419,9 +431,12 @@ export function assessAgreementReadiness({
   // hidden-fee sentence above already says the true thing — the fee is there
   // and cannot bill — so it stands alone and this one steps aside.
   //
-  // The turnkey class is exempt: it carries no rate card, no flat fee and no
-  // per-phase fee — its typed money part is the pricing basis, asked above.
-  if (!isTurnkey && !namesAFee && hiddenFees.length === 0) {
+  // The turnkey class is exempt exactly when its own floor was asked: it
+  // carries no rate card, no flat fee and no per-phase fee, and its typed
+  // money part is the pricing basis, asked above. Exempting it on its KIND
+  // alone would leave a `design_build` document with the turnkey block
+  // skipped — the flag off — carrying no money question at all.
+  if (!turnkeyFloor && !namesAFee && hiddenFees.length === 0) {
     add(
       null,
       "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
