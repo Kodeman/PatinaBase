@@ -234,7 +234,19 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
               id: `instrument:${proposal.id}`,
               kind: 'instrument',
               label: `${KIND_LABEL.design_services ?? 'Document'} · ${proposal.title}`,
-              date: parseSourceDate(commercial.executedAt),
+              // `executedAt` is the COUNTERSIGNATURE's date, and a
+              // countersigned paper has already left this door — so on every
+              // record this door can draw it is null, and the line would be
+              // permanently undated. `list_client_proposals` projects
+              // `proposals.signed_at` into it, and
+              // `_countersign_design_services_agreement_impl` is the only
+              // writer of that column; through the whole window this record
+              // exists for it is NULL. What the client's own act does write is
+              // `updated_at = now()`, stamped by
+              // `_sign_design_services_agreement_authorized` when it records
+              // her name — so the record is dated by the signature that made
+              // it, which is the date it is a record of.
+              date: parseSourceDate(commercial.executedAt ?? proposal.updated_at),
               state: 'signed',
             },
             designerId: proposal.designer_id ?? null,

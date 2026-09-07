@@ -2439,13 +2439,19 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
      house never does that: an accepted document is a lasting line in
      Previously, and this door keeps its own the same way. */
   it('keeps the signed agreement on the next visit, before the studio countersigns', () => {
+    /* The payload `list_client_proposals` actually emits in this window:
+       `signed_at` is written only by
+       `_countersign_design_services_agreement_impl`, so it is absent (and
+       jsonb_strip_nulls drops the key) from her signature until the studio's.
+       `_sign_design_services_agreement_authorized` stamps `updated_at` — the
+       only date on this row that her own act put there. */
     proposalsMock.mockReturnValue(
       settled([
         {
           ...ORIGIN_AGREEMENT,
           commercial_state: 'client_signed',
           status: 'accepted',
-          signed_at: '2026-09-06',
+          updated_at: '2026-09-06',
         } as unknown as Proposal,
       ]),
     );
@@ -2457,6 +2463,7 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     const line = screen.getByTestId('previously-line');
     expect(line).toHaveTextContent('Design services agreement · Design services agreement');
     expect(within(line).getByTestId('previously-state')).toHaveTextContent('SIGNED');
+    // Dated, not an em dash: the record says when she signed it.
     expect(within(line).getByTestId('previously-date')).toHaveTextContent('6 September');
     // It is a record, not an ask: nothing is waiting for her hand any more.
     expect(document.querySelector('[data-threshold-unit="door"]')).toBeNull();

@@ -295,3 +295,71 @@ demo anon key; `SUPABASE_SERVICE_ROLE_KEY` was read out of the running
 `supabase_storage_supabase` container's env rather than any `.env` file. The
 worktree carries no `.env.local` (only `.env.example`), so nothing could point
 at Strata. Nothing was deployed; no production mutation of any kind was run.
+
+---
+
+## Round 2 — R30-9: the kept record was permanently undated
+
+**The defect, as found.** `letterbox-door.tsx` dated the kept line off
+`parseSourceDate(commercial.executedAt)`. `commercialSummaryFromProposal`
+resolves `executedAt` from `executedAt / executed_at / signedAt / signed_at`,
+and `list_client_proposals` projects only `proposals.signed_at` — confirmed
+against the live local definition (`pg_get_functiondef`, head 00575): the
+payload carries `sent_at`, `signed_at`, `created_at`, `updated_at`, and no
+`executed_at`. `proposals.signed_at` has exactly one writer,
+`_countersign_design_services_agreement_impl` (`UPDATE public.proposals SET
+status='accepted', commercial_state='executed', signed_at =
+v_client_signature.signed_at`), so through the whole window this record exists
+for — her signature to the studio's — the column is NULL and the line rendered
+`—`. And a countersigned paper has left this door (its binding coalesces into
+`project_id`, so `/` opens the house), which is why the house never shows the
+undated shape and this door only ever showed it.
+
+**The fix.** `date: parseSourceDate(commercial.executedAt ?? proposal.updated_at)`.
+`_sign_design_services_agreement_authorized` stamps `updated_at = now()` in the
+same statement that moves the row to `client_signed` (`UPDATE public.proposals
+SET commercial_state='client_signed', updated_at = now()`), so `updated_at` is
+her own signature's timestamp — the date the record is a record of. It is the
+only such date the list row carries: `proposals` has no client-signature
+column, and the signature's own `signed_at` lives in
+`commercial_document_signatures`, which only the bundle returns and the bundle
+is fetched lazily, on unfold. `executedAt` stays first so nothing changes if a
+countersigned row is ever read here.
+
+**The fixture that could not fail.** The covering unit test carried
+`signed_at: '2026-09-06'` on a `client_signed` row — a shape the RPC never
+emits. It now carries `updated_at: '2026-09-06'` and no `signed_at`, which is
+the real payload. Proved it gates: with the source line reverted to
+`parseSourceDate(commercial.executedAt)` the test fails
+(`previously-date` received `—`), and passes with the fix.
+
+**And it is proved against real data.** `origin-door.spec.ts`'s kept-record
+test now asserts `previously-date` matches `/^\d{1,2} [A-Za-z]+$/`. Against
+the same reverted source, on the local stack, it failed with
+`Received string: "—"` (locator resolved 9× to
+`<span data-testid="previously-date" …>—</span>`); with the fix, green.
+
+### Gates (round 2, from the worktree)
+
+```
+pnpm --dir apps/client-portal type-check                    → clean (tsc --noEmit, no output)
+pnpm --dir apps/client-portal test:coverage                 → 129 suites / 2010 tests passed
+playwright test --workers=1 tests/origin-door.spec.ts       → 3 passed (29.3s)
+playwright test --workers=1 tests/threshold.spec.ts         → 13 passed, 1 failed
+```
+
+The single `threshold.spec.ts` red is the **same pre-existing shared-stack seed
+drift** round 1 recorded, re-confirmed by SQL rather than assumed:
+`threshold.spec.ts:250` expects `client@patina.dev` to keep
+`MULTI_OTHER_HOUSE_COUNT = 2` other houses and finds 4. The stack holds five
+projects for that client — the seed's three (`11:56:31Z`) plus two
+`Client User — design services agreement` houses at `12:18:25Z` and `12:27:14Z`,
+another lane's countersign, both predating every browser run in this round. It
+sits on the multi-house `<Threshold>` path; nothing in this round touches it.
+
+The e2e ran against a dev server started by hand on :3002 with
+`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`, the CLI demo anon key, and
+`SUPABASE_SERVICE_ROLE_KEY` read from `supabase status -o json` — the worktree
+carries no `.env.local`, so nothing could reach Strata. `plans-link.spec.ts` and
+`share-link.spec.ts` were not run. No migration was needed and none was minted;
+no production mutation of any kind was run.

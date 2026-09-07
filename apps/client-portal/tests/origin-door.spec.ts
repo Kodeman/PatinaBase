@@ -323,6 +323,13 @@ test.describe('R30 — the household door with no house', () => {
     await expect(line).toBeVisible({ timeout: 20_000 });
     await expect(line).toContainText(`Design services agreement · ${SIGNED_TITLE}`);
     await expect(line.getByTestId('previously-state')).toHaveText('SIGNED');
+    /* And it is DATED. `proposals.signed_at` is written only by the
+       countersignature, so a line dated off that column alone reads as an em
+       dash for the whole window this record exists for — the state this test
+       is standing in right now. */
+    await expect(line.getByTestId('previously-date')).toHaveText(
+      /^\d{1,2} [A-Za-z]+$/,
+    );
     await expect(page.getByTestId('empty-state')).toHaveCount(0);
     // A record, not a second ask: the paper is not still waiting for her hand.
     await expect(page.locator('[data-threshold-unit="door"]')).toHaveCount(0);
