@@ -7,6 +7,7 @@ import { join } from 'path';
 import { COMMERCIAL_DOCUMENT_KINDS } from '@patina/types';
 
 import {
+  DESIGN_BUILD_VARIANT_ORDER,
   KIND_LABEL,
   REFUSAL_TOKENS,
   SIGNATURE_NOTICE,
@@ -58,8 +59,10 @@ describe('the API can still answer every refusal the door reads', () => {
     expect(SIGN_ROUTE).toMatch(/SERVICES_SIGNING_KINDS[\s\S]{0,200}'design_build'/);
     expect(SIGN_ROUTE).toContain("SERVICES_SIGNING_KINDS.has(documentKind)");
     // The double negative this replaced. It admitted the new kind by accident.
-    expect(SIGN_ROUTE).not.toContain(
-      "documentKind !== 'furnishings_authorization' &&\n      documentKind !== 'trade_scope'",
+    // Matched across whatever whitespace a reformat leaves, so the shape is
+    // pinned rather than one printing of it.
+    expect(SIGN_ROUTE).not.toMatch(
+      /documentKind !== 'furnishings_authorization'\s*&&\s*documentKind !== 'trade_scope'/,
     );
   });
 
@@ -596,6 +599,24 @@ describe('composeConsentLine — the turnkey prime', () => {
     expect(composeConsentLine('design_build', [...HALVORSEN_PARTS].reverse())).toBe(
       HALVORSEN_CONSENT,
     );
+  });
+
+  /* ── THE HALF THIS LANE CANNOT SEE (round 1, F3) ──────────────────────────
+     `public.compose_agreement_consent(uuid)` is this function written a second
+     time, in SQL, and the sign route files the DATABASE's sentence while the
+     door renders this one. The turnkey arm of that composer must walk these
+     variants in this order; the integration steward compares the two halves
+     against this constant. Pinned here so a reorder on this side is a failing
+     test rather than a silent divergence between what she reads and what is
+     filed against her name. */
+  it('pins the canonical variant order the SQL composer must match', () => {
+    expect([...DESIGN_BUILD_VARIANT_ORDER]).toEqual([
+      'pricing_basis',
+      'draws',
+      'allowances',
+      'retainer',
+      'ceiling',
+    ]);
   });
 
   it('says the turnkey line for a paper with no money parts at all', () => {

@@ -244,7 +244,13 @@ function consentFragment(part: ConsentPart): string | null {
    part order; zero fragments returns `consentLineFor('design_build')`
    byte-for-byte.
    ────────────────────────────────────────────────────────────────────────── */
-const DESIGN_BUILD_VARIANT_ORDER: readonly string[] = [
+/**
+ * EXPORTED SO THE INTEGRATION GATE CAN PIN BOTH HALVES (round 1, F3). The SQL
+ * composer's `design_build` arm must walk these variants in this order; the
+ * sign route files the DATABASE's sentence while the door renders this one, so
+ * a divergence means a homeowner ticks one sentence and signs another.
+ */
+export const DESIGN_BUILD_VARIANT_ORDER: readonly string[] = [
   'pricing_basis',
   'draws',
   'allowances',

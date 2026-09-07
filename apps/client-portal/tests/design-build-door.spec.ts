@@ -21,8 +21,11 @@ import { randomUUID } from 'node:crypto';
  *   2. THE OFFER APPEARS AFTER THE SIGNATURE. Not before, not instead of it.
  *
  *   3. THE OFFER IS NOT REQUIRED. Ignore it, reload the door, and the
- *      signature still stands, the receipt still reads, and nothing is
- *      blocked behind an unpaid invoice.
+ *      signature still stands, the record still reads, and nothing is blocked
+ *      behind an unpaid invoice — the deposit is standing in her letterbox
+ *      with its own `/pay/<token>` act, which is where money lives on the
+ *      next visit (walk step 13, amended round 1: the post-signature sentence
+ *      is the moment of signing; the letter is what persists).
  *
  * Fixtures are minted through the honest rails, `origin-door.spec.ts`'s
  * discipline verbatim — every shortcut here is refused by a guard that exists
@@ -296,11 +299,18 @@ test.beforeAll(async () => {
   // The turnkey class is a Wave 3 migration. Skipping LOUDLY, by name, rather
   // than letting the fixture fail with a CHECK violation nobody can read: this
   // spec is a real gate the moment the migration is on the local stack.
+  //
+  // AND THE STEWARD CAN CLOSE THE ESCAPE. E2E-2 is a named wave gate, so a run
+  // that quietly skips is indistinguishable from a run that passed. Export
+  // `PATINA_W3_TURNKEY_GATE=1` at integration and the missing migration is a
+  // FAILURE with the same sentence, not a skip.
   const probe = await service().from('agreement_draw_invoices').select('id').limit(1);
-  test.skip(
-    probe.error !== null,
-    `the Wave 3 turnkey migration is not applied to this local stack (${probe.error?.message ?? 'unknown'}) — run pnpm supabase:reset first.`,
-  );
+  const missing =
+    probe.error !== null
+      ? `the Wave 3 turnkey migration is not applied to this local stack (${probe.error.message}) — run pnpm supabase:reset first.`
+      : null;
+  if (missing && process.env.PATINA_W3_TURNKEY_GATE === '1') throw new Error(missing);
+  test.skip(missing !== null, missing ?? '');
 
   studioId = await attestLicense();
   household = await mintTurnkeyAgreement();
@@ -421,6 +431,18 @@ test.describe('P13 — the deposit is offered after the signature, never before'
     await expect(page.getByText(/no active projects yet/i)).toHaveCount(0);
     await expect(page.getByText(/payment required/i)).toHaveCount(0);
     await expect(page.getByText(/unavailable/i)).toHaveCount(0);
+
+    // AND THE MONEY IS STILL REACHABLE. The deposit invoice is project-less
+    // exactly as the prime is, so it stands in this door's own letterbox with
+    // its own pay link — the persistent half of walk step 13. She is asked
+    // for nothing: it is a letter she may open, beside a record that is
+    // already complete.
+    const letterbox = page.getByTestId('letterbox');
+    await expect(letterbox).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('link', { name: 'Open the invoice' })).toHaveAttribute(
+      'href',
+      /^\/pay\/[0-9a-f]{64}$/,
+    );
 
     const { data: paper } = await service()
       .from('proposals')
