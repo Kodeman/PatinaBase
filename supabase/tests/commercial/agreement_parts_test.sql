@@ -47,6 +47,8 @@
 --        the page the homeowner reads. Reviewer probes R3 (prose only) and Q5
 --        (a rate card and a ceiling both kept from the client) refuse at the
 --        save door, the send door and the paper door; a ceiling is not a fee.
+--   (17) R25. The bundle says `composed` itself, read over EVERY part — the
+--        client shell cannot count it off an array filtered to what she sees.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -2388,6 +2390,48 @@ BEGIN
     'R22: a parts-less document is not asked the fee question';
 
   RAISE NOTICE 'PASS 36: R4''s fee floor stands at the save, send and paper doors (R22)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (38) R25 — THE BUNDLE SAYS WHETHER THE DOCUMENT IS COMPOSED.
+--
+-- The client shell branches on `composed`, and until now nothing in the stack
+-- produced the key: the `??` fell through to `parts.length > 0`, which is a
+-- different question. `parts` is filtered to client_visible, so an agreement
+-- whose every part the studio kept arrives with `parts: []` and would have
+-- rendered from the terms row — the very figures the studio hid.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000020', 'The uncomposed agreement');
+
+DO $$
+BEGIN
+  PERFORM pg_temp.send_agreement('a5300000-0000-4000-8000-000000000020');
+END $$;
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000004');
+
+DO $$
+DECLARE v_composed jsonb; v_plain jsonb; v_retired jsonb;
+BEGIN
+  v_composed := public.get_client_commercial_document_bundle(
+    'a5300000-0000-4000-8000-000000000001');
+  ASSERT v_composed ? 'composed', 'R25: the key is on every bundle';
+  ASSERT (v_composed->>'composed')::boolean,
+    'R25: an agreement with parts is composed';
+
+  v_plain := public.get_client_commercial_document_bundle(
+    'a5300000-0000-4000-8000-000000000020');
+  ASSERT v_plain ? 'composed', 'R25: the key is on every bundle';
+  ASSERT NOT (v_plain->>'composed')::boolean,
+    'R25: an agreement with no parts is not composed';
+
+  v_retired := public.get_client_commercial_document_bundle(
+    'a5300000-0000-4000-8000-000000000013');
+  ASSERT v_retired ? 'composed' AND NOT (v_retired->>'composed')::boolean,
+    'R25: the retired early-return answers the key too';
+
+  RAISE NOTICE 'PASS 38: the bundle says composed, over every part and not only the visible ones (R25)';
 END $$;
 
 ROLLBACK;

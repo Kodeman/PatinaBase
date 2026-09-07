@@ -160,6 +160,11 @@
 --         ceiling were both marked studio-only, saved and SENT and
 --         countersigned into an hourly authority behind a page naming no
 --         money at all. The refusal is the readiness panel's own sentence.
+--   (R25) The bundle says `composed` itself. The client shell cannot count it
+--         off `parts`: that array is filtered to client_visible, so an
+--         agreement whose every part the studio kept arrives with `parts: []`
+--         and must still render as composed — the homeowner reads the
+--         composition she was shown, never a terms row she was not.
 --
 -- Every new SECURITY DEFINER here pins `search_path = public, pg_temp` — the
 -- posture of the surrounding commercial family (00412 / 00422 / 00423), and
@@ -3236,6 +3241,9 @@ BEGIN
   IF v_proposal.document_kind = 'legacy' THEN
     RETURN jsonb_build_object(
       'parts', '[]'::jsonb,
+      -- (R25) A retired document is never composed. The key is present here
+      -- for the same reason `parts` is: one contract, no branch on absence.
+      'composed', false,
       'document', jsonb_build_object(
         'id', v_proposal.id,
         'documentKind', 'legacy',
@@ -3301,6 +3309,17 @@ BEGIN
     ) ORDER BY ap.position, ap.id)
       FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.client_visible), '[]'::jsonb),
+    -- (R25) Whether this document is composed, said by the database rather
+    -- than counted off the array above. The two are different questions: the
+    -- array is filtered to client_visible, so an agreement whose every part
+    -- the studio kept to itself arrives with `parts: []` and is STILL
+    -- composed — and the homeowner must read the composition she was shown
+    -- (nothing) rather than fall back to a terms row she was never shown.
+    -- Read over EVERY part, visible or not.
+    'composed', EXISTS (
+      SELECT 1 FROM public.proposal_agreement_parts ap
+      WHERE ap.proposal_id = p_proposal_id
+    ),
     'signatures', COALESCE((SELECT jsonb_agg(jsonb_build_object(
       'id', s.id, 'partyRole', s.party_role,
       'signedName', s.signed_name, 'signedAt', s.signed_at,
