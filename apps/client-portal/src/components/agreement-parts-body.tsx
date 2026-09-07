@@ -51,6 +51,18 @@ function payloadCents(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/**
+ * R21 — a written figure is a positive one. `proposal_service_terms
+ * .retainer_amount_cents` is NOT NULL DEFAULT 0 (00412) and
+ * `materialize_standard_parts` seeds `patina.retainer` from it, so the very
+ * first composed agreement carries a retainer part whose payload reads
+ * `{ cents: 0 }`. Zero is an amount nobody wrote, and the client reads it as
+ * unwritten — never as `$0`.
+ */
+function isWritten(cents: number | null): cents is number {
+  return cents !== null && cents > 0;
+}
+
 /** ATTACHMENT A, ATTACHMENT B … and plain numbers past Z rather than nothing. */
 function attachmentLetter(index: number): string {
   return index < 26 ? String.fromCharCode(65 + index) : String(index + 1);
@@ -71,12 +83,23 @@ function RecordedLine() {
   );
 }
 
+/**
+ * The words today's body prints for a figure nobody wrote, in today's
+ * treatment (`commercial-document-shell.tsx` — italic, muted, same type
+ * scale as a real figure). R21 carries them across composition unchanged.
+ */
+function NotYetSet() {
+  return <p className="type-data-large mt-2 italic text-[var(--text-muted)]">Not yet set</p>;
+}
+
+/** R21 — an empty clause is nothing at all, not a title over blank paper. */
 function ClauseLeaf({ part }: { part: CommercialAgreementPart }) {
   const body = payloadText(part.payload.body);
+  if (!body) return null;
   return (
     <>
       <PartHeading title={part.title} />
-      {body ? <p className="type-body mt-3 whitespace-pre-wrap">{body}</p> : null}
+      <p className="type-body mt-3 whitespace-pre-wrap">{body}</p>
     </>
   );
 }
@@ -91,21 +114,21 @@ function ListLeaf({ part }: { part: CommercialAgreementPart }) {
     }))
     .filter((item) => item.text.length > 0);
 
+  if (items.length === 0) return null;
+
   return (
     <>
       <PartHeading title={part.title} />
-      {items.length > 0 ? (
-        <ul className="mt-3 space-y-2 type-body-small">
-          {items.map((item) => (
-            <li key={item.key}>
-              — {item.text}{item.optional ? ' (optional)' : ''}
-              {item.note ? (
-                <span className="block type-body-small text-[var(--text-muted)]">{item.note}</span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <ul className="mt-3 space-y-2 type-body-small">
+        {items.map((item) => (
+          <li key={item.key}>
+            — {item.text}{item.optional ? ' (optional)' : ''}
+            {item.note ? (
+              <span className="block type-body-small text-[var(--text-muted)]">{item.note}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </>
   );
 }
@@ -133,15 +156,23 @@ function RateCardLeaf({ part, currency }: { part: CommercialAgreementPart; curre
             </div>
           ))}
         </div>
-      ) : null}
+      ) : (
+        // A rate card is a required money part when one is present at all
+        // (R4): it keeps its title and says it is on the paper, the way
+        // PerPhaseLeaf does, rather than standing as a bare heading.
+        <RecordedLine />
+      )}
     </>
   );
 }
 
 /**
- * A ceiling part with no figure is not an unwritten ceiling — it is a stated
- * absence of one, and it says so in words. That is the whole reason the column
- * became nullable (00575 / F-2): NULL means uncapped, never `$0`.
+ * Three states, and the middle one is the reason this leaf is longer than the
+ * others. A ceiling part with NO figure is not an unwritten ceiling — it is a
+ * stated absence of one, and it says so in words; that is the whole reason the
+ * column became nullable (00575 / F-2): NULL means uncapped, never `$0`. A
+ * ceiling written as zero is the opposite — a figure nobody has set yet, which
+ * reads exactly as it reads on today's paper (R21).
  */
 function CeilingLeaf({ part, currency }: { part: CommercialAgreementPart; currency: string }) {
   const cents = payloadCents(part.payload.cents);
@@ -152,8 +183,10 @@ function CeilingLeaf({ part, currency }: { part: CommercialAgreementPart; curren
         <p className="type-body-small mt-2">
           No ceiling — professional time is billed as it is worked.
         </p>
-      ) : (
+      ) : isWritten(cents) ? (
         <p className="type-data-large mt-2">{money(cents, currency)}</p>
+      ) : (
+        <NotYetSet />
       )}
     </>
   );
@@ -165,7 +198,7 @@ function RetainerLeaf({ part, currency }: { part: CommercialAgreementPart; curre
   return (
     <>
       <PartHeading title={part.title} />
-      {cents === null ? <RecordedLine /> : (
+      {cents === null ? <RecordedLine /> : isWritten(cents) ? (
         <>
           <p className="type-data-large mt-2">{money(cents, currency)}</p>
           <p className="type-body-small mt-1">
@@ -174,6 +207,11 @@ function RetainerLeaf({ part, currency }: { part: CommercialAgreementPart; curre
               : 'Due under the terms of the fully executed agreement.'}
           </p>
         </>
+      ) : (
+        // Today's body withholds the activation sentence with the figure —
+        // a clause about when a retainer is due, under no retainer, is a
+        // promise about nothing.
+        <NotYetSet />
       )}
     </>
   );
@@ -196,6 +234,9 @@ function CadenceLeaf({ part }: { part: CommercialAgreementPart }) {
 
 function ProcurementLeaf({ part }: { part: CommercialAgreementPart }) {
   const depositPercent = payloadCents(part.payload.depositPercent);
+  // R21 — `0% deposit` is not a deposit term, it is an unwritten one, and a
+  // percent has no "Not yet set" twin on today's paper. It draws nothing.
+  const depositIsWritten = isWritten(depositPercent);
   const notes = [
     { label: 'Markup basis', value: payloadText(part.payload.markupBasis) },
     { label: 'Freight and handling', value: payloadText(part.payload.freightHandling) },
@@ -205,9 +246,9 @@ function ProcurementLeaf({ part }: { part: CommercialAgreementPart }) {
   return (
     <>
       <PartHeading title={part.title} />
-      {depositPercent === null ? null : (
+      {depositIsWritten ? (
         <p className="type-data-large mt-2">{depositPercent}% deposit</p>
-      )}
+      ) : null}
       {notes.length > 0 ? (
         <dl className="mt-3 space-y-1">
           {notes.map((note) => (
@@ -218,7 +259,7 @@ function ProcurementLeaf({ part }: { part: CommercialAgreementPart }) {
           ))}
         </dl>
       ) : null}
-      {depositPercent === null && notes.length === 0 ? <RecordedLine /> : null}
+      {!depositIsWritten && notes.length === 0 ? <RecordedLine /> : null}
     </>
   );
 }
@@ -228,8 +269,10 @@ function FlatLeaf({ part, currency }: { part: CommercialAgreementPart; currency:
   return (
     <>
       <PartHeading title={part.title} />
-      {cents === null ? <RecordedLine /> : (
+      {cents === null ? <RecordedLine /> : isWritten(cents) ? (
         <p className="type-data-large mt-2">{money(cents, currency)}</p>
+      ) : (
+        <NotYetSet />
       )}
     </>
   );
@@ -290,7 +333,31 @@ function ScheduleLeaf({ part, currency }: { part: CommercialAgreementPart; curre
   }
 }
 
+/**
+ * The leaves are called, not mounted, so that a leaf which draws nothing can
+ * say so and take its `<section>` with it — R21: an empty clause or list is
+ * nothing on the page, not a naked heading and not an empty band of the
+ * body's `space-y-8`. None of them holds state or calls a hook.
+ */
 function PartSection({ part, currency }: { part: CommercialAgreementPart; currency: string }) {
+  const leaf =
+    part.kind === 'clause'
+      ? ClauseLeaf({ part })
+      : part.kind === 'list'
+        ? ListLeaf({ part })
+        : part.kind === 'schedule'
+          ? ScheduleLeaf({ part, currency })
+          : // `phases`, and any kind a later wave writes onto an agreement this
+            // build already shipped. Its title, and one sentence.
+            (
+              <>
+                <PartHeading title={part.title} />
+                <RecordedLine />
+              </>
+            );
+
+  if (leaf === null) return null;
+
   return (
     <section
       data-testid="agreement-part"
@@ -298,17 +365,7 @@ function PartSection({ part, currency }: { part: CommercialAgreementPart; curren
       data-position={part.position}
       data-kind={part.kind}
     >
-      {part.kind === 'clause' ? <ClauseLeaf part={part} /> : null}
-      {part.kind === 'list' ? <ListLeaf part={part} /> : null}
-      {part.kind === 'schedule' ? <ScheduleLeaf part={part} currency={currency} /> : null}
-      {part.kind !== 'clause' && part.kind !== 'list' && part.kind !== 'schedule' ? (
-        // `phases`, and any kind a later wave writes onto an agreement this
-        // build already shipped. Its title, and one sentence.
-        <>
-          <PartHeading title={part.title} />
-          <RecordedLine />
-        </>
-      ) : null}
+      {leaf}
     </section>
   );
 }
