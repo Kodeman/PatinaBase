@@ -142,3 +142,33 @@ the stack at all.** It still stands exactly as the re-gate-2 fix agent left it:
 `00575`/`00576`/`00577` applied.
 
 No dev server was started; ports 3000 and 3002 were not used.
+
+## 2026-09-07 — the WALK-FIX agent (round 2) TAKES THE STACK — migrations changed
+
+The Wave 2 **walk-fix agent, round 2** (findings W2R2-01 through W2R2-09) is the sole
+writer of the shared local stack at
+`postgresql://postgres:postgres@127.0.0.1:54322/postgres`, from the same worktree
+(`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-integration`, branch
+`agreement/w2-integration`).
+
+**Two migrations changed in place** (both unapplied on Strata, so in-place is the
+remediation; no number was minted, no banner lineage moved):
+
+- `supabase/migrations/00576_agreement_library.sql` — `_agreement_restore_list_item_ids`
+  now tests `IS DISTINCT FROM 'array'`, so a payload with no `items` key is returned
+  untouched instead of gaining a spurious `"items": []` (W2R2-04).
+- `supabase/migrations/00577_agreement_fee_schedules.sql` — `_agreement_money` prints
+  whole dollars, the cadence label is `initcap`'d, and the rate-card row reads `/ hr`,
+  all three matching `agreement-parts-body.tsx` per R37 (W2R2-05); and
+  `_log_agreement_part_events` resolves `actor_name` for every event, not only for the
+  ones carrying a why (W2R2-08).
+
+**No GRANT or REVOKE changed**, so `scripts/generate-legacy-grants.py` was NOT re-run
+and `supabase/seed/00-legacy-grants.sql` is untouched.
+
+**One reset, after all four edits:** `supabase db reset --workdir <this worktree>`,
+unsandboxed — every migration through `00577` and all 36 seed files. Logged with its
+result in `wave-report.md` under "Walk fixes (round 2)".
+
+**Nobody else may write this stack until this notice is superseded.** No dev server was
+started; ports 3000 and 3002 were not used.

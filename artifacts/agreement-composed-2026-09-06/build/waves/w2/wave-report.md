@@ -998,3 +998,220 @@ no `.prettierrc` at that level, so root Prettier defaults report drift on them �
 identically. The new code matches its surroundings rather than reformatting five
 files by ~2 200 lines; the pre-commit check is advisory locally and said so.
 
+
+---
+
+## Walk fixes (round 2) — W2R2-01, -04, -05, -06, -08
+
+Date 2026-09-07. Worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-integration`,
+branch `agreement/w2-integration`, head at start `0b9c4cbed` (one commit past
+`259fbd323`, the round-1 walk-fix report — no code moved between them).
+
+Five of the seven round-2 findings are fixed. Two — **W2R2-07** and **W2R2-09**
+— are rulings, not fixes, and are recorded below rather than guessed at.
+
+### W2R2-01 (major) — the papers without a house reach every door, for real
+
+`list_client_proposals` OMITS `project_id` from the row when the column is NULL;
+it does not send `null`. `commercialSummaryFromProposal` fell through to
+`proposal.project_id`, which is `undefined` at run time even though the
+interface declares `string | null` — so `commercial.projectId === null` was
+false, the next line filtered the paper off every door, and W-04's fix was inert
+against the one shape that matters.
+
+The fix is at the adapter, not at the caller: the fall-through is now
+`nullableText(proposal.project_id)`, so the summary honours the `string | null`
+it declares and every houseless test downstream — the door's, and any later
+one — reads the absence correctly.
+`apps/client-portal/src/lib/commercial-documents.ts:411-417`.
+
+Three new cases, and they are real regression tests, not decoration. With the
+one-line fix reverted, `pnpm --dir apps/client-portal test -- threshold.test.tsx
+commercial-documents.test.ts` reports **2 failed / 142 passed**; with it in
+place, 144 passed:
+
+- `commercial-documents.test.ts` — a row with no `project_id` key reads
+  `projectId === null`; a row with one still reads the id.
+- `threshold.test.tsx` — a `design_services` fixture built by DELETING the key
+  (`delete ROW_WITHOUT_THE_KEY.project_id`), not by spelling `project_id: null`,
+  stands on the doorstep and prints the houseless leaf. The existing
+  `project_id: null` case is kept; it is the shape the RPC never sends and it
+  proved less than it looked.
+
+### W2R2-04 (minor) — no more spurious `"items": []`
+
+`_agreement_restore_list_item_ids` tested `jsonb_typeof(p_payload->'items') <>
+'array'`. A payload with no `items` key answers NULL there, the WHEN is never
+true, and the ELSE branch wrote `"items": []` into every clause and money
+payload it touched. `IS DISTINCT FROM` closes it.
+`supabase/migrations/00576_agreement_library.sql:369`.
+
+Probed on the reset stack:
+
+```
+select public._agreement_restore_list_item_ids('{"body":"a clause"}'::jsonb)   → {"body": "a clause"}
+select public._agreement_restore_list_item_ids('{"cents":2400000}'::jsonb)     → {"cents": 2400000}
+select public._agreement_restore_list_item_ids('{"items":[{"text":"one"}]}')   → still carries items
+select … from proposal_agreement_parts where payload ? 'items' and kind <> 'list'   → 0 rows
+select … from agreement_templates … where p->'payload' ? 'items' and kind <> 'list' → 0
+```
+
+### W2R2-05 (minor) — the keepsake is the paper she signed (R37)
+
+Three divergences between `_render_agreement_snapshot_html` and
+`agreement-parts-body.tsx`, all in `00577`:
+
+| | live body | keepsake, before | now |
+|---|---|---|---|
+| money | `$24,000` | `$24,000.00` | `$24,000` |
+| cadence | `Monthly` (`capitalize`) | `monthly` | `Monthly` |
+| rate row | `$225 / hr` | `$225.00 per hour` | `$225 / hr` |
+
+`_agreement_money` now rounds to whole dollars — `to_char(round(p_cents/100.0),
+'FM999,999,990')`. That is exact parity with the live `money()`, which is
+`Intl.NumberFormat('en-US', { style: 'currency', currency,
+maximumFractionDigits: 0 })`: Postgres' half-away-from-zero is Intl's
+half-expand, so a figure that is not whole dollars reads the same on both
+surfaces rather than differing by the cents. The finding suggested keeping cents
+when they are non-zero; that would have left the two surfaces disagreeing on
+exactly the figures the finding is about, and R37 says *matches*.
+
+The rate-card row (`/ hr`) was not named in the finding — the walked paper had
+no visible rate card — but it is the same renderer, the same divergence and the
+same ruling, so it is fixed in the same pass rather than left to be found again.
+
+Proof, `_render_agreement_snapshot_html` on the seeded composed agreement
+`b0000000-…-cb01` after the reset:
+
+```
+<h2>Role rates</h2><table><tr><td>Principal designer</td><td>$225 / hr</td></tr>
+<tr><td>Project designer</td><td>$150 / hr</td></tr></table>
+<h2>Ceiling</h2><p>$6,400</p>
+<h2>Billing cadence</h2><p>Monthly</p>
+```
+
+`agreement_fee_schedules_test.sql`'s figure assertion was re-pinned to
+`$5,000` / `$225 / hr`, with a second assertion that `$5,000.00` and `$225.00`
+are ABSENT — the divergence cannot come back silently.
+
+### W2R2-06 (minor) — the Contract Room header wraps on a phone
+
+`flex items-center gap-3` → `flex flex-wrap items-center gap-3` on the row
+holding Preview client copy / Return to the seven facets / Save agreement.
+`agreement-composer.tsx:541`.
+
+**This moved the flag-off byte-identity snapshot, deliberately, and that needs a
+ruling it does not have.** `agreement-composer-library-off.test.tsx` pins the
+Contract Room as Wave 1 shipped it and its own header says a later wave re-pins
+it only "with that ruling named in the commit". The move is one class in five
+snapshots — `git diff --stat` on the `.snap`: **5 insertions, 5 deletions**, all
+of them that class — and the file's docstring now carries the finding id and the
+measurement (617px against a 390px viewport, Save agreement off the right edge,
+in BOTH flag states). It was re-pinned rather than left broken because the
+defect is in the room the flag-off state also renders. **Owed: a ruling that the
+flag-off room may move for a defect fix of this shape** — see Advisories.
+
+Not fixed, not asked for: Account → Studio measures 437 against 390 (the Desk
+behind the sheet), which the finding records but does not scope to this room.
+
+### W2R2-08 (nit) — the strip names the hand that made the change
+
+`_log_agreement_part_events` resolved `actor_name` only when a `why` was
+present, so the add path — which writes no why — produced "Added · A teammate ·
+today" about the part the designer had added herself seconds earlier. The name
+is now resolved for every event. "A teammate" remains what the strip says for an
+actor who cannot be named, which is what it was always for.
+`00577`, PART 6.
+
+This deviates from build-sheet §6.5 case 9 ("an `edited` row with `why IS NULL`
+and `actor_name IS NULL`"), which the walk shows was the wrong spec. The SQL
+assertion moved with it: the edit-with-no-why case now asserts `why IS NULL` AND
+`actor_name = 'Marguerite'`.
+
+### Rulings owed, not fixed
+
+- **W2R2-07 (minor).** No designer act anywhere sets a part hidden from the
+  client — the three add paths hard-code `clientVisible: true`, W-03's Keep in
+  the Library copies the part's current visibility, and the Library card offers
+  RENAME/DELETE only. R33 is therefore defence-in-depth against a state only SQL
+  can create. Adding a visibility control is a feature, not a walk fix, and no
+  ruling authorizes one; the alternative the finding offers — record it — is
+  what this paragraph does. **Kody/Leah rule: add the act, or keep R33 as the
+  guard for a state no UI creates.**
+- **W2R2-09 (nit).** The designer-facing chip prints `COST PLUS · RECORD ONLY
+  (R9)`. Build-sheet SS4.2 and walk step 7 specify exactly that string, so it is
+  compliant, not a deviation — but an internal ruling id in studio copy is not
+  something to change on an agent's own authority either. **Kody rules: keep the
+  string, or drop the "(R9)".**
+
+### The stack
+
+Two migrations changed in place (both unapplied on Strata; no number minted, no
+banner lineage moved), so the stack was reset — logged in `stack-notice.md`.
+**No GRANT or REVOKE changed**, so `scripts/generate-legacy-grants.py` was NOT
+re-run and `supabase/seed/00-legacy-grants.sql` is untouched.
+
+```
+supabase db reset --workdir <integration worktree>
+  … Applying migration 00576_agreement_library.sql / 00577_agreement_fee_schedules.sql …
+  … 36 seed files …  Finished supabase db reset on branch main.     clean, no errors
+```
+
+### Gates
+
+Every command's real output, from the integration worktree.
+
+```
+./scripts/run-sql-tests.sh          total 164 · green 143 · expected-fail 21 · unexpected 0
+                                    effective-green 164 / 164
+psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_library_test.sql            rc=0
+psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_fee_schedules_test.sql      rc=0
+psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_parts_test.sql              rc=0
+psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_parts_projection_test.sql   rc=0
+psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/multi_studio_signature_test.sql       rc=0
+psql -v ON_ERROR_STOP=1 -f supabase/tests/schedule/ceremony_hardening_test.sql             rc=0
+
+export SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+pnpm db:generate ; git diff --exit-code packages/supabase/src/database.types.ts
+                                    exit 0, no output — 36 072 lines, unchanged
+
+pnpm --dir apps/client-portal  exec tsc --noEmit    clean, no output
+pnpm --dir apps/client-portal  test                 129 suites / 2066 tests, all pass
+                                                    (was 2063 — the three new cases)
+                                                    1 snapshot passed; the coverage floor held
+pnpm --dir apps/designer-portal type-check          clean, no output
+pnpm --dir apps/designer-portal test                534 suites / 6513 tests, all pass
+                                                    7 snapshots PASSED, not written
+```
+
+The first `pnpm db:generate` ran sandboxed, hit "Docker Desktop is a
+prerequisite", and the shell redirect had already truncated
+`database.types.ts` to 0 bytes — the hazard the Wave 1 rulings record, firing
+for the sandbox rather than for a missing `SUPABASE_DB_URL`. Restored with
+`git checkout --`, re-run unsandboxed, byte-identical.
+
+NOT run, and why: `@patina/supabase` type-check and its vitest suite (no package
+file changed — `database.types.ts` regenerated identical); Playwright, either
+portal (no e2e spec touched, and all five fixes are unit- or SQL-covered);
+designer lint (the same two pre-existing errors the Wave 1 rulings record, in
+files this round does not touch); nothing against production — nothing pushed,
+nothing on Strata, no Worker deployed.
+
+### Advisories
+
+- **A ruling is owed on the flag-off snapshot re-pin (W2R2-06).** It was moved
+  by one class in five snapshots to fix a real clipping defect; the file's own
+  contract asks for a ruling, and this round had a finding instead. If the
+  ruling goes the other way, `git checkout` of the two designer files reverses
+  it exactly.
+- **W2R2-05's money fix rounds, it does not truncate.** A figure of, say,
+  $24,000.50 now prints `$24,001` on the keepsake — because that is what the
+  page the homeowner signed prints. If Leah wants cents on the paper, both
+  surfaces change together, not one.
+- **Two body implementations still stand** (SQL and TSX), which is how a
+  divergence like W2R2-05 became possible at all. The Wave 1 re-gate already
+  carried "two body implementations to unify" to the main backlog; this round is
+  the second time it has cost something.
+- The client-portal files are single-quoted against root Prettier defaults, as
+  the round-1 report records; the new code matches its surroundings.
