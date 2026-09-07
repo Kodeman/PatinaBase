@@ -18,6 +18,11 @@
 --        countersigns and reads back as uncapped rather than as exhausted (F-2).
 --   (5)  A client never touches the parts table. Their only edge is the bundle,
 --        which shows client-visible parts and nothing else.
+--   (6)  The projection, the R4 floor and the send refusal all read the SAME
+--        one rate part (patina.role_rates) — a rate card under another key
+--        projects nothing and demands nothing.
+--   (7)  F-2's fourth reader: a billable hour logged against an UNCAPPED
+--        authority is authorized, not parked forever.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -781,6 +786,166 @@ BEGIN
     'an untouched draft invents no ceiling';
 
   RAISE NOTICE 'PASS 21: studio defaults, then Patina literals — in that order (P3)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (22) A RATE CARD UNDER A NON-STANDARD KEY. The projection reads exactly one
+--      rate part (patina.role_rates), so _agreement_requires_rate_card must
+--      read the same one — otherwise the document owes role rates that nothing
+--      will ever project, and it can never be sent.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000006', 'The trade-rate agreement');
+
+DO $$
+BEGIN
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-000000000006',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+        'title', 'Services', 'required', true,
+        'payload', jsonb_build_object('body', 'A fixed scope, for a fixed fee.')),
+      -- A rate card the studio keeps for its own reference, under its own key.
+      jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+        'partKey', 'custom.trade_rates', 'title', 'Trade rates',
+        'payload', jsonb_build_object('roles', jsonb_build_array(
+          jsonb_build_object('roleName', 'Millworker', 'hourlyRateCents', 12500, 'sortOrder', 0)))),
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+        'title', 'Terms', 'required', true,
+        'payload', jsonb_build_object('body', 'Payable on the agreed cadence.'))
+    )
+  );
+
+  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000006') = 0,
+    'a rate card under a custom key projects no role rates (R5)';
+  ASSERT (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000006') IS NULL,
+    'the R4 floor must not demand a ceiling for rates that never project';
+  ASSERT NOT public._agreement_requires_rate_card('a5300000-0000-4000-8000-000000000006'),
+    'the refusal and the projection must read the same one part';
+END $$;
+
+SELECT pg_temp.send_agreement('a5300000-0000-4000-8000-000000000006');
+DO $$
+BEGIN
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = 'a5300000-0000-4000-8000-000000000006') = 'sent',
+    'an agreement whose only rate card is a custom part must still be sendable';
+  RAISE NOTICE 'PASS 22: projection, R4 floor and send refusal all read patina.role_rates';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (23) F-2's FOURTH READER. classify_project_time_entry_authority decides, on
+--      every logged hour, whether that hour is authorized. On an UNCAPPED
+--      authority its comparison used to evaluate to NULL, which parked every
+--      billable hour in 'pending_authorization' forever — a project that looks
+--      healthy and bills nothing.
+--
+--      The uncapped-with-rates state is reached the way a studio reaches it:
+--      the terms row is studio-writable while the document is a draft
+--      (proposal_service_terms_studio_rw, 00412:318), so the ceiling is
+--      cleared there and then the document is sent, signed and countersigned.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000007', 'The uncapped hourly agreement');
+
+DO $$
+DECLARE v_touched integer;
+BEGIN
+  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000001');
+  UPDATE public.proposal_service_terms SET billing_ceiling_cents = NULL
+  WHERE proposal_id = 'a5300000-0000-4000-8000-000000000007';
+  GET DIAGNOSTICS v_touched = ROW_COUNT;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_touched = 1, 'the studio may clear the ceiling on its own draft';
+  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000007') = 1,
+    'the uncapped agreement still carries its role rate';
+END $$;
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.send_agreement('a5300000-0000-4000-8000-000000000007');
+
+DO $$
+DECLARE
+  v_signed jsonb;
+  v_executed jsonb;
+  v_project_id uuid;
+  v_authority public.project_billing_authorities%ROWTYPE;
+  v_state text;
+  v_summary jsonb;
+BEGIN
+  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000004');
+  v_signed := public.sign_design_services_agreement(
+    'a5300000-0000-4000-8000-000000000007', 'Agreement Client');
+  PERFORM pg_temp.reset_role();
+  ASSERT (v_signed->>'newlyClientSigned')::boolean,
+    format('the uncapped hourly agreement must be signable: %s', v_signed);
+
+  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000001');
+  v_executed := public.countersign_design_services_agreement(
+    'a5300000-0000-4000-8000-000000000007', 'Agreement Lead');
+  PERFORM pg_temp.reset_role();
+  ASSERT (v_executed->>'newlyExecuted')::boolean,
+    format('the uncapped hourly agreement must countersign: %s', v_executed);
+
+  v_project_id := (v_executed->>'projectId')::uuid;
+  SELECT * INTO v_authority FROM public.project_billing_authorities
+  WHERE id = (v_executed->>'billingAuthorityId')::uuid;
+  ASSERT v_authority.billing_ceiling_cents IS NULL,
+    'the authority snapshots the cleared ceiling as NULL';
+  ASSERT EXISTS (SELECT 1 FROM public.project_billing_authority_rates
+                 WHERE billing_authority_id = v_authority.id),
+    'the uncapped authority carries the role rate the hour will bind to';
+
+  -- THE REGRESSION. One billable hour, logged by the lead, on an authority
+  -- with no ceiling. Before 00575's classifier delta this landed
+  -- 'pending_authorization' and never left it.
+  INSERT INTO public.project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes, billable, activity
+  ) VALUES (
+    'a5400000-0000-4000-8000-000000000001', v_project_id,
+    'a5000000-0000-4000-8000-000000000001',
+    TIMESTAMPTZ '2027-06-02 15:00:00+00', 60, true, 'design'
+  );
+  SELECT billing_state INTO v_state FROM public.project_time_entries
+  WHERE id = 'a5400000-0000-4000-8000-000000000001';
+  ASSERT v_state = 'authorized', format(
+    'F-2: NULL is uncapped — a billable hour on an uncapped authority is authorized, got %L',
+    v_state);
+  ASSERT (SELECT rated_amount_cents FROM public.project_time_entries
+          WHERE id = 'a5400000-0000-4000-8000-000000000001') = 15000,
+    'the hour still rates against the signed role rate';
+
+  PERFORM pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+  v_summary := public.get_project_authority_summary(v_project_id);
+  ASSERT (v_summary->>'accruedCents')::bigint = 15000,
+    format('the authorized hour accrues, got %s', v_summary->'accruedCents');
+  ASSERT (v_summary->>'pendingAuthorizationCents')::bigint = 0,
+    format('nothing is parked on an uncapped authority, got %s',
+           v_summary->'pendingAuthorizationCents');
+  ASSERT v_summary->>'state' = 'active',
+    format('an uncapped authority with time on it is active, got %L', v_summary->>'state');
+
+  -- And a ceiling that EXISTS still binds: the delta relaxed nothing else.
+  UPDATE public.project_billing_authorities SET billing_ceiling_cents = 1
+  WHERE id = v_authority.id;
+  INSERT INTO public.project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes, billable, activity
+  ) VALUES (
+    'a5400000-0000-4000-8000-000000000002', v_project_id,
+    'a5000000-0000-4000-8000-000000000001',
+    TIMESTAMPTZ '2027-06-03 15:00:00+00', 60, true, 'design'
+  );
+  SELECT billing_state INTO v_state FROM public.project_time_entries
+  WHERE id = 'a5400000-0000-4000-8000-000000000002';
+  ASSERT v_state = 'pending_authorization', format(
+    'a real ceiling still parks the hour that exceeds it, got %L', v_state);
+
+  RAISE NOTICE 'PASS 23: an uncapped authority authorizes its hours; a cap still caps';
 END $$;
 
 ROLLBACK;

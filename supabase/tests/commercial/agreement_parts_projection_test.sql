@@ -13,9 +13,14 @@
 -- sets must be indistinguishable. If they ever diverge, the money rail has
 -- two implementations and the one the guards enforce is a coin toss.
 --
--- Then R5: a removed part is ABSENT rather than sticky, and only the nine
+-- Then R5: a removed part is ABSENT rather than sticky; only the nine
 -- patina.* keys write the money row — a custom schedule part, even one
--- carrying cents, is recorded and hashed and projects nothing.
+-- carrying cents, is recorded and hashed and projects nothing; and a standard
+-- key is not enough on its own — a part must have the SHAPE its key promises,
+-- so a clause keyed patina.ceiling stays prose.
+--
+-- Last, the flag-off door: upsert_design_services_draft still turns an omitted
+-- or JSON-null ceiling into 0, exactly as 00422 did.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -316,6 +321,142 @@ BEGIN
     'the custom parts are stored on the document';
 
   RAISE NOTICE 'PASS 6-7: only the nine patina keys reach the money row (R5)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (8) R5 — A STANDARD KEY IS NOT ENOUGH. A part must also have the shape its
+--     key promises. A clause keyed patina.ceiling is prose, and prose never
+--     carries money, however many cents someone puts in its payload.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+BEGIN
+  PERFORM public.upsert_agreement_parts(
+    'a6300000-0000-4000-8000-00000000000b',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+        'title', 'Services', 'required', true,
+        'payload', jsonb_build_object(
+          'body', 'Full-service interior design for the whole house.')),
+      -- Prose about the cap, keyed as the cap, carrying a number.
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.ceiling',
+        'title', 'On our fee cap',
+        'payload', jsonb_build_object(
+          'body', 'We will talk before we approach the cap.', 'cents', 7777777)),
+      -- Prose about billing, keyed as the cadence, naming a cadence.
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.cadence',
+        'title', 'On billing',
+        'payload', jsonb_build_object(
+          'body', 'We invoice as the work reaches its marks.', 'cadence', 'milestone')),
+      -- A list keyed as the retainer, carrying retainer money.
+      jsonb_build_object('kind', 'list', 'partKey', 'patina.retainer',
+        'title', 'What the retainer covers',
+        'payload', jsonb_build_object(
+          'items', jsonb_build_array(jsonb_build_object('id', 'r1', 'text', 'Kickoff')),
+          'cents', 4200000, 'activationPolicy', 'retainer_paid')),
+      -- A list keyed as the rate card, carrying roles.
+      jsonb_build_object('kind', 'list', 'partKey', 'patina.role_rates',
+        'title', 'Who works on this',
+        'payload', jsonb_build_object(
+          'items', jsonb_build_array(jsonb_build_object('id', 'w1', 'text', 'The principal')),
+          'roles', jsonb_build_array(jsonb_build_object(
+            'roleName', 'Principal', 'hourlyRateCents', 22500, 'sortOrder', 0)))),
+      -- A clause keyed as the furnishings deposit, quoting a percent.
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.deposit',
+        'title', 'On deposits',
+        'payload', jsonb_build_object(
+          'body', 'Furnishings are ordered on deposit.', 'depositPercent', 99)),
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+        'title', 'Terms', 'required', true,
+        'payload', jsonb_build_object(
+          'body', 'Billed at actual hours against the signed ceiling.'))
+    )
+  );
+
+  ASSERT (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') IS NULL,
+    'a clause keyed patina.ceiling must not become the ceiling (R5)';
+  ASSERT (SELECT t.billing_cadence FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 'monthly',
+    'a clause keyed patina.cadence must not set the cadence (R5)';
+  ASSERT (SELECT t.retainer_amount_cents FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 0,
+    'a list keyed patina.retainer must not become the retainer (R5)';
+  ASSERT (SELECT t.retainer_activation_policy FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 'immediate',
+    'a list keyed patina.retainer must not set the activation policy (R5)';
+  ASSERT (SELECT t.furnishings_deposit_percent FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') IS NULL,
+    'a clause keyed patina.deposit must not set the deposit percent (R5)';
+  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+          WHERE proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 0,
+    'a list keyed patina.role_rates must not become the rate card (R5)';
+  -- The prose parts ARE recorded; refusing to read them as money is not
+  -- refusing to keep them.
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 7,
+    'every part is still stored on the document';
+  -- The one part that DID keep its shape still projects.
+  ASSERT (SELECT t.scope FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b')
+         = 'Full-service interior design for the whole house.',
+    'a part with the shape its key promises still projects';
+
+  RAISE NOTICE 'PASS 8: a standard key only projects when the part has its shape (R5)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (9) THE FLAG-OFF DOOR IS UNMOVED. 00422 wrote COALESCE(ceiling, 0), and
+--     upsert_design_services_draft still does — an omitted key and an explicit
+--     JSON null both land 0, exactly as they did before 00575. Only the parts
+--     door may write NULL, and it asks for that in the call.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_rates jsonb := jsonb_build_array(jsonb_build_object(
+    'version', 1, 'roleName', 'Principal', 'hourlyRateCents', 22500,
+    'sortOrder', 0, 'effectiveAt', DATE '2026-01-01'));
+BEGIN
+  -- The key is absent altogether.
+  PERFORM public.upsert_design_services_draft(
+    'a6300000-0000-4000-8000-00000000000a',
+    jsonb_build_object(
+      'scope', 'Full-service interior design for the whole house.',
+      'retainerAmountCents', 500000, 'currency', 'USD', 'currentRateVersion', 1),
+    v_rates
+  );
+  ASSERT (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000a') = 0,
+    'flag-off: an omitted ceiling still lands 0, as it did under 00422';
+
+  -- The key is present and JSON null — what Math.round(undefined) serializes to.
+  PERFORM public.upsert_design_services_draft(
+    'a6300000-0000-4000-8000-00000000000a',
+    jsonb_build_object(
+      'scope', 'Full-service interior design for the whole house.',
+      'billingCeilingCents', NULL,
+      'retainerAmountCents', 500000, 'currency', 'USD', 'currentRateVersion', 1),
+    v_rates
+  );
+  ASSERT (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000a') = 0,
+    'flag-off: an explicit JSON null still lands 0, as it did under 00422';
+
+  -- And a real number still lands whole.
+  PERFORM public.upsert_design_services_draft(
+    'a6300000-0000-4000-8000-00000000000a',
+    jsonb_build_object(
+      'scope', 'Full-service interior design for the whole house.',
+      'billingCeilingCents', 2400000,
+      'retainerAmountCents', 500000, 'currency', 'USD', 'currentRateVersion', 1),
+    v_rates
+  );
+  ASSERT (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000a') = 2400000,
+    'flag-off: a stated ceiling still lands whole';
+
+  RAISE NOTICE 'PASS 9: the flag-off write path is byte-for-byte 00422';
 END $$;
 
 ROLLBACK;
