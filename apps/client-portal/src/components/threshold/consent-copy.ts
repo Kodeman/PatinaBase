@@ -235,7 +235,9 @@ export function composeConsentLine(
   const fragments: string[] = [];
   for (const variant of CONSENT_VARIANT_ORDER) {
     // One part per money variant (R18). A set that carries two anyway says
-    // the fragment once rather than twice.
+    // the fragment once rather than twice — `compose_agreement_consent` takes
+    // the same one part per variant (`DISTINCT ON`, 00577), so the two agree
+    // on the set no caller can build.
     const part = money.find((candidate) => candidate.variant === variant);
     if (!part) continue;
     const fragment = consentFragment(part);

@@ -184,6 +184,7 @@ SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-000000000002', 'The per-p
 SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-000000000003', 'The variant bench');
 SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-00000000000a', 'The hidden fee');
 SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-00000000000b', 'The hidden fee, alone');
+SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-00000000000c', 'The duplicate variant');
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (1) (2) THE CONSENT SENTENCE — four part sets, byte for byte, plus the
@@ -1302,6 +1303,75 @@ BEGIN
   ASSERT v_refused, 'R6 — a sent addendum is frozen, and this door is closed too';
 
   RAISE NOTICE 'PASS 17: P7 copies the authority verbatim and projects it, and R34''s why reaches the door and the keepsake';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (18) TWO PARTS OF ONE MONEY VARIANT — the twelfth parity scenario.
+--
+-- The eleven scenarios the SQL and TS composers were compared on all carry at
+-- most one part per money variant, because upsert_agreement_parts refuses a
+-- second retainer (R18) and no caller can build the set. That is exactly why
+-- the two implementations could disagree on it unnoticed: SQL LOOPed every
+-- matching row and said the fragment once per row, TS reads one part per
+-- variant. This case builds the unreachable set by INSERTing straight into
+-- the table — the guard allows it only while the proposal is draft — and
+-- pins the composer to the TS side's answer: the term said ONCE, in the
+-- lowest-`position` part's words, and the sentence byte-identical to the
+-- one-retainer 'per_phase' literal above.
+--
+-- The TS twin is pinned on the same set in
+-- apps/client-portal/src/components/threshold/__tests__/consent-copy.test.ts
+-- ("says a money term once when a part set carries two of one variant").
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_id uuid := 'a7300000-0000-4000-8000-00000000000c';
+  v_got text;
+  v_refused boolean := false;
+BEGIN
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
+  PERFORM public.upsert_agreement_parts(v_id, jsonb_build_array(
+    jsonb_build_object('kind', 'schedule', 'variant', 'per_phase',
+                       'partKey', 'custom.perphase', 'title', 'Per-phase fee',
+                       'payload', jsonb_build_object('phases', jsonb_build_array(
+                         jsonb_build_object('key', 'a', 'label', 'Concept', 'cents', 350000)))),
+    jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+                       'partKey', 'patina.retainer', 'title', 'Retainer',
+                       'payload', jsonb_build_object(
+                         'cents', 500000, 'creditRule', 'non_refundable',
+                         'activationPolicy', 'immediate'))));
+
+  -- R18 first: the door a designer actually uses refuses the set outright.
+  BEGIN
+    PERFORM public.upsert_agreement_parts(v_id, jsonb_build_array(
+      jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+                         'partKey', 'patina.retainer', 'title', 'Retainer',
+                         'payload', jsonb_build_object('cents', 500000)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+                         'partKey', 'custom.retainer_two', 'title', 'Second retainer',
+                         'payload', jsonb_build_object('cents', 900000))));
+  EXCEPTION WHEN check_violation THEN v_refused := true;
+  END;
+  ASSERT v_refused, 'R18 — an agreement carries only one retainer';
+
+  -- Behind that door, the state the two composers must still agree on.
+  INSERT INTO public.proposal_agreement_parts (
+    proposal_id, position, kind, variant, part_key, title, payload, client_visible
+  ) VALUES (
+    v_id, 99, 'schedule', 'retainer', 'custom.retainer_two', 'Second retainer',
+    jsonb_build_object('cents', 900000, 'creditRule', 'replenishing'), true
+  );
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = v_id AND kind = 'schedule' AND variant = 'retainer') = 2,
+    'the unreachable set is on the table';
+
+  v_got := public.compose_agreement_consent(v_id);
+  ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'per_phase'),
+    format('two retainers must say the term once, in the first part''s words:%s  got:  %L%s  want: %L',
+           E'\n', v_got, E'\n', (SELECT sentence FROM _fs_consent WHERE label = 'per_phase'));
+
+  RAISE NOTICE 'PASS 18: two parts of one money variant say their term once, and the composers agree on the set no caller can build';
 END $$;
 
 ROLLBACK;

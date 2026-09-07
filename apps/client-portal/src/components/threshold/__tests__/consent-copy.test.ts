@@ -273,6 +273,27 @@ describe('composeConsentLine — the sentence she ticks', () => {
   it('composes for an addendum exactly as it composes for an agreement', () => {
     expect(composeConsentLine('service_addendum', NINE_STANDARD_PARTS)).toBe(NINE_STANDARD_LINE);
   });
+
+  /**
+   * The twelfth parity scenario. `upsert_agreement_parts` refuses a second
+   * retainer (R18), so this set cannot be composed through the RPC — but the
+   * two implementations read it differently unless both are told the rule,
+   * and only one of them enforces it. SQL takes the lowest-`position` part of
+   * each variant (`DISTINCT ON`, 00577); this side takes the first of the
+   * position-ordered array. Both say the term once, in the first part's
+   * words. Pinned in `agreement_fee_schedules_test.sql` case (18).
+   */
+  it('says a money term once when a part set carries two of one variant', () => {
+    expect(
+      composeConsentLine('design_services', [
+        schedule('per_phase', { phases: [{ key: 'a', label: 'Concept', cents: 350000 }] }),
+        schedule('retainer', { cents: 500000, creditRule: 'non_refundable' }),
+        schedule('retainer', { cents: 900000, creditRule: 'replenishing' }),
+      ]),
+    ).toBe(
+      'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.',
+    );
+  });
 });
 
 /* ── THE SUMMARY OVER THE CONSENT (Wave 2, P6) ───────────────────────────────

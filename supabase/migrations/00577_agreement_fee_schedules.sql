@@ -798,15 +798,30 @@ BEGIN
     RETURN v_legacy;
   END IF;
 
+  -- ONE PART PER MONEY VARIANT, and the sentence says its term once.
+  --
+  -- upsert_agreement_parts refuses a second rate card, ceiling, retainer or
+  -- deposit outright (R18) and a second CLIENT-VISIBLE fee basis with it, so a
+  -- set that reaches this loop carrying two of one variant cannot be composed
+  -- through the RPC. The TS twin (`composeConsentLine`) reads one part per
+  -- variant anyway — `money.find(...)` — and a LOOP over every row would say
+  -- the fragment twice, in an order nothing pins, on the one input the two
+  -- implementations could ever disagree about. DISTINCT ON makes the rule the
+  -- composer's own: lowest `position` wins, which is the part the TS side's
+  -- position-ordered array hands `find` first.
   FOR v_part IN
-    SELECT ap.* FROM public.proposal_agreement_parts ap
-    WHERE ap.proposal_id = p_proposal_id
-      AND ap.client_visible
-      AND ap.kind = 'schedule'
-      AND ap.variant IN ('rate_card', 'ceiling', 'flat', 'per_phase', 'retainer', 'procurement')
+    SELECT one_per_variant.* FROM (
+      SELECT DISTINCT ON (ap.variant) ap.*
+      FROM public.proposal_agreement_parts ap
+      WHERE ap.proposal_id = p_proposal_id
+        AND ap.client_visible
+        AND ap.kind = 'schedule'
+        AND ap.variant IN ('rate_card', 'ceiling', 'flat', 'per_phase', 'retainer', 'procurement')
+      ORDER BY ap.variant, ap.position, ap.id
+    ) AS one_per_variant
     ORDER BY array_position(
       ARRAY['rate_card', 'ceiling', 'flat', 'per_phase', 'retainer', 'procurement']::text[],
-      ap.variant)
+      one_per_variant.variant)
   LOOP
     IF v_part.variant = 'rate_card' THEN
       IF jsonb_typeof(v_part.payload->'roles') = 'array'
