@@ -8,6 +8,7 @@ import { act as act_, fireEvent, render, screen, waitFor } from '@testing-librar
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useStartProjectThread: jest.fn(),
+  useStartDirectThread: jest.fn(),
   useSendMessage: jest.fn(),
   useRequestProposalChange: jest.fn(),
   useDeclineProposal: jest.fn(),
@@ -40,6 +41,7 @@ import {
   useDeclineProposal,
   useRequestProposalChange,
   useSendMessage,
+  useStartDirectThread,
   useStartProjectThread,
 } from '@patina/supabase';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
@@ -47,6 +49,7 @@ import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { DoorActs } from '../door-acts';
 
 const startThreadMock = useStartProjectThread as jest.Mock;
+const startDirectThreadMock = useStartDirectThread as jest.Mock;
 const sendMessageMock = useSendMessage as jest.Mock;
 const requestChangeMock = useRequestProposalChange as jest.Mock;
 const declineProposalMock = useDeclineProposal as jest.Mock;
@@ -57,6 +60,7 @@ function mutation(mutateAsync: jest.Mock, isPending = false) {
 }
 
 let startThread: jest.Mock;
+let startDirectThread: jest.Mock;
 let sendMessage: jest.Mock;
 let requestChange: jest.Mock;
 let declineProposal: jest.Mock;
@@ -83,12 +87,14 @@ function type(testId: string, value: string) {
 describe('DoorActs', () => {
   beforeEach(() => {
     startThread = jest.fn().mockResolvedValue('thread-9');
+    startDirectThread = jest.fn().mockResolvedValue('thread-direct-3');
     sendMessage = jest.fn().mockResolvedValue({ id: 'msg-1' });
     requestChange = jest.fn().mockResolvedValue(undefined);
     declineProposal = jest.fn().mockResolvedValue(undefined);
     declineDocument = jest.fn().mockResolvedValue(undefined);
 
     startThreadMock.mockReturnValue(mutation(startThread));
+    startDirectThreadMock.mockReturnValue(mutation(startDirectThread));
     sendMessageMock.mockReturnValue(mutation(sendMessage));
     requestChangeMock.mockReturnValue(mutation(requestChange));
     declineProposalMock.mockReturnValue(mutation(declineProposal));
@@ -255,12 +261,79 @@ describe('DoorActs', () => {
     expect(screen.queryByTestId('door-declined')).not.toBeInTheDocument();
   });
 
-  it('does not offer the ask at all when the paper is filed under no project', () => {
-    renderActs({ projectId: null });
+  /* The rule is still "an act that cannot complete is not offered": with
+     neither a project nor a studio to address, there is genuinely no thread. */
+  it('does not offer the ask at all when there is no thread to ask in', () => {
+    renderActs({ projectId: null, studioProfileId: null });
 
     expect(screen.queryByRole('button', { name: 'Ask a question' })).not.toBeInTheDocument();
     expect(act('Request a change')).toBeInTheDocument();
     expect(act('Decline')).toBeInTheDocument();
+  });
+
+  /* ── THE ORIGIN DOOR CAN ASK ITS STUDIO A QUESTION (R30 · N1) ────────────
+     An agreement is bound to no project until the studio countersigns, so a
+     household's very first paper had three acts where every other door has
+     four — the one door in the house that could not ask a question. It could
+     always have asked; there was simply no PROJECT thread to ask in. ────── */
+  it('offers the ask on a project-less paper that names its studio', () => {
+    renderActs({ projectId: null, studioProfileId: 'designer-nora' });
+
+    expect(act('Ask a question')).toBeInTheDocument();
+    expect(act('Read it in full')).toBeInTheDocument();
+    expect(act('Request a change')).toBeInTheDocument();
+    expect(act('Decline')).toBeInTheDocument();
+  });
+
+  it('sends that question to the studio’s own thread, naming the paper', async () => {
+    renderActs({
+      projectId: null,
+      studioProfileId: 'designer-nora',
+      title: 'Design services agreement',
+    });
+    fireEvent.click(act('Ask a question'));
+    type('door-ask-question', 'When would we start?');
+    fireEvent.click(act('Send'));
+
+    await waitFor(() => {
+      expect(startDirectThread).toHaveBeenCalledWith('designer-nora');
+    });
+    // Never the project rail: there is no project on this paper.
+    expect(startThread).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith({
+      threadId: 'thread-direct-3',
+      body: 'About Design services agreement\n\nWhen would we start?',
+    });
+    expect(await screen.findByTestId('door-acts-receipt')).toHaveTextContent(
+      'Your question was sent',
+    );
+  });
+
+  /* A paper WITH a project keeps the project thread, whatever else the door
+     hands down — the studio reads it where the work lives. */
+  it('keeps the project thread when the paper has a project', async () => {
+    renderActs({ projectId: 'proj-1', studioProfileId: 'designer-nora' });
+    fireEvent.click(act('Ask a question'));
+    type('door-ask-question', 'Which finish is on the island?');
+    fireEvent.click(act('Send'));
+
+    await waitFor(() => {
+      expect(startThread).toHaveBeenCalledWith('proj-1');
+    });
+    expect(startDirectThread).not.toHaveBeenCalled();
+  });
+
+  it('says it refused the direct ask in its own words', async () => {
+    startDirectThread.mockRejectedValue(new Error('no relationship with that counterpart'));
+    renderActs({ projectId: null, studioProfileId: 'designer-nora' });
+    fireEvent.click(act('Ask a question'));
+    type('door-ask-question', 'When would we start?');
+    fireEvent.click(act('Send'));
+
+    const refusal = await screen.findByRole('alert');
+    expect(refusal).toHaveTextContent('Unable to send your question right now.');
+    expect(refusal).not.toHaveTextContent('counterpart');
+    expect(screen.getByTestId('door-ask-question')).toHaveValue('When would we start?');
   });
 
   it('withholds the decline until the paper has said what it is', () => {

@@ -117,6 +117,13 @@ export interface DoorGateProps {
    */
   projectId: string | null;
   /**
+   * R30 — the designer whose studio sent this paper. Only the household door
+   * has to supply it: with no project there is no project thread, and this is
+   * what lets "Ask a question" reach the studio anyway. A project-bound door
+   * leaves it null and asks in the project's thread as it always has.
+   */
+  designerId?: string | null;
+  /**
    * Fired the moment the signature lands, BEFORE the refetch that takes the
    * paper out of the open papers. The Threshold answers it by keeping this
    * mark and its paper for the rest of the visit, which is what leaves the
@@ -138,6 +145,7 @@ export function DoorGate({
   proposal,
   note,
   projectId,
+  designerId = null,
   onSigned,
   first = true,
   studioName,
@@ -793,6 +801,7 @@ export function DoorGate({
               <DoorActs
                 proposalId={proposal.id}
                 projectId={projectId}
+                studioProfileId={designerId}
                 title={proposal.title}
                 kind={resolvedKind}
                 validUntil={proposal.validUntil ?? null}

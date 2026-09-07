@@ -145,7 +145,22 @@ jest.mock('@/components/projects/ProjectsEmptyState', () => ({
 // Stubbed here so this file's boundary stays the wiring it is about.
 jest.mock('../door-acts', () => ({
   __esModule: true,
-  DoorActs: () => null,
+  // Rendered as a witness rather than as nothing: R30's origin door has to
+  // hand the acts a studio to ask in place of the project it has not got,
+  // and this file is where that wiring is asserted.
+  DoorActs: ({
+    projectId,
+    studioProfileId,
+  }: {
+    projectId: string | null;
+    studioProfileId?: string | null;
+  }) => (
+    <div
+      data-testid="door-acts-stub"
+      data-project-id={projectId ?? ''}
+      data-studio-profile-id={studioProfileId ?? ''}
+    />
+  ),
 }));
 
 jest.mock('@/hooks/use-project-correspondence', () => ({
@@ -2535,6 +2550,82 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
 
     expect(screen.getByTestId('letterbox-door-hold')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  /* ── THE ORIGIN DOOR CAN ASK ITS STUDIO A QUESTION (R30 · N1) ─────────────
+     The acts row withholds "Ask a question" when there is no thread to ask in,
+     and an origin agreement has no project — so the household's first paper
+     was the one door in the house offering three acts where every other door
+     offers four. It has a studio; it simply had not been handed one. ────── */
+  it('hands the acts the studio to ask, in place of the project it has not got', () => {
+    renderDoor();
+
+    const acts = screen.getByTestId('door-acts-stub');
+    expect(acts).toHaveAttribute('data-project-id', '');
+    expect(acts).toHaveAttribute('data-studio-profile-id', 'designer-nora');
+  });
+
+  /* ── WHEN THE PAPERS CANNOT BE READ (R30 · N2) ────────────────────────────
+     `useClientSafeProposals` sets no `retry`, so it inherits the app's
+     `retry: 2` and, after the third failure, settles with `isPending` false
+     and no data. The hold above covers the PENDING window; this covers the
+     FAILED one — where `origins` and `kept` are empty for a reason that has
+     nothing to do with what she owns, and the empty state would tell her she
+     has no projects over the very agreement this door exists to reach. ──── */
+  function failedPapers() {
+    return {
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch: jest.fn(),
+    };
+  }
+
+  it('says it could not draw the papers rather than saying she has none', () => {
+    proposalsMock.mockReturnValue(failedPapers());
+
+    renderDoor();
+
+    expect(screen.getByTestId('papers-unread')).toHaveTextContent(
+      'Your papers could not be drawn just now. Nothing on them has changed.',
+    );
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nothing is waiting for you.')).not.toBeInTheDocument();
+  });
+
+  it('offers the read again, and asks for it', () => {
+    const query = failedPapers();
+    proposalsMock.mockReturnValue(query);
+
+    renderDoor();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(query.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  /* A letter standing in the slot draws the page — and the page still has to
+     say that it does not know about the papers, rather than let the letter's
+     own sentence stand in for an answer it never gave. */
+  it('says so beside a letter, without holding the letter back', () => {
+    clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
+    proposalsMock.mockReturnValue(failedPapers());
+
+    renderDoor();
+
+    expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
+    expect(screen.getByText('One letter is waiting for you.')).toBeInTheDocument();
+    expect(screen.getByTestId('papers-unread')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  it('keeps the empty state for a household that genuinely has nothing', () => {
+    proposalsMock.mockReturnValue(settled([]));
+
+    renderDoor();
+
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('papers-unread')).not.toBeInTheDocument();
   });
 
   /* Her signature does not create the house — the studio's countersignature
