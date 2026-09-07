@@ -318,6 +318,44 @@ describe("AgreementComposer · composing", () => {
     ).toBeInTheDocument();
   });
 
+  // R21 — a blank money part opens with no amount at all, so the client copy
+  // cannot print a figure nobody wrote and readiness holds the send.
+  const attentionCount = () =>
+    Number(
+      /^(\d+) of \d+ parts need attention$/.exec(
+        screen.getAllByText(/parts need attention/)[0].textContent ?? "",
+      )?.[1] ?? -1,
+    );
+
+  it("opens a new Retainer with no amount, and marks it for attention", () => {
+    renderComposer();
+    const before = attentionCount();
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retainer" }));
+    expect(screen.getByLabelText(/Retainer · dollars/i)).toHaveValue("");
+    expect(attentionCount()).toBe(before + 1);
+  });
+
+  it("opens a new Flat fee with no amount, and marks it for attention", () => {
+    renderComposer();
+    const before = attentionCount();
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    fireEvent.click(screen.getByRole("button", { name: "Flat fee" }));
+    expect(screen.getByLabelText(/Flat fee · dollars/i)).toHaveValue("");
+    expect(attentionCount()).toBe(before + 1);
+  });
+
+  // R18 — and the menu will not offer it twice.
+  it("stops offering a money part once the agreement carries it", () => {
+    renderComposer();
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retainer" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    expect(
+      screen.queryByRole("button", { name: "Retainer" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("writes the whole ordered array in one call on Save", async () => {
     renderComposer();
     openRowMenu("Terms");
