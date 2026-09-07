@@ -464,6 +464,12 @@ describe("AGREEMENT_PART_COPY — the shared sentences", () => {
       // surfaces print exactly this for a money part whose amount is zero.
       notYetSet: "Not yet set",
       attachmentAcknowledgment: "I received this",
+      // R24 — the studio's own words for un-composing, and what the
+      // seven-facet room says to a co-member standing over a composed
+      // agreement. Neither reaches the homeowner's page.
+      returnToFacets: "Return to the seven facets",
+      composedElsewhere:
+        "This agreement is composed from parts. It is edited in the Contract Room with parts on, where it can also be returned to the seven facets.",
     });
   });
 
