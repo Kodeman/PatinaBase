@@ -31,6 +31,7 @@ function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDo
     },
     rates: [{ id: 'r1', version: 1, roleName: 'Principal designer', hourlyRateCents: 22_500, effectiveAt: '2026-08-01' }],
     parts: [],
+    composed: null,
     signatures: [], furnishings: null, tradeScope: null, ...overrides,
   };
 }
@@ -1016,6 +1017,59 @@ describe('CommercialDocumentShell', () => {
       })} />);
       expect(screen.getByTestId('commercial-document-executed')).toBeInTheDocument();
       expect(screen.getByText('Sarah Whitfield')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * R17 at the client edge. Which body a homeowner reads is the bundle's
+   * answer when it gives one, and the part count only when it does not —
+   * `parts.length` is the wrong question in both directions:
+   *
+   *   - hide every part and the array arrives empty, so counting would revert
+   *     the homeowner to today's body and print the scope, rates, ceiling,
+   *     retainer and cadence the studio had just hidden;
+   *   - un-compose the agreement and the rows stay in the table, so counting
+   *     would keep the composed body on a document the studio is editing in
+   *     the seven-facet room. That is how the `agreement-parts` kill switch
+   *     reaches a homeowner, who has no flag of her own to read.
+   */
+  describe('which body the bundle says to read', () => {
+    it('keeps a composed agreement composed when every part is hidden from the client', () => {
+      render(<CommercialDocumentShell bundle={bundle({ composed: true, parts: [] })} />);
+
+      expect(screen.getByTestId('agreement-parts-body')).toBeInTheDocument();
+      // Nothing the studio hid comes back through today's body.
+      expect(screen.queryByText('Concept and design development')).not.toBeInTheDocument();
+      expect(screen.queryByText('Rates & design authorization')).not.toBeInTheDocument();
+      expect(screen.queryByText('Design authorization ceiling')).not.toBeInTheDocument();
+      expect(screen.queryByText('$18,000')).not.toBeInTheDocument();
+      expect(screen.queryByText('$3,000')).not.toBeInTheDocument();
+      expect(screen.queryByText('Principal designer')).not.toBeInTheDocument();
+      // The agreement is still an agreement: the boundary is said once.
+      expect(
+        screen.getAllByText(/require a separate named furnishings authorization/i),
+      ).toHaveLength(1);
+    });
+
+    it('returns the homeowner to today’s body when the bundle says the agreement is no longer composed', () => {
+      render(<CommercialDocumentShell bundle={bundle({ composed: false, parts: NINE_PARTS })} />);
+
+      expect(screen.queryByTestId('agreement-parts-body')).not.toBeInTheDocument();
+      expect(screen.queryAllByTestId('agreement-part')).toHaveLength(0);
+      expect(screen.getByText('Rates & design authorization')).toBeInTheDocument();
+      expect(screen.getByText('Concept and design development')).toBeInTheDocument();
+    });
+
+    it('leaves the choice to the part count when the bundle says nothing, which is every document today', () => {
+      const { unmount } = render(
+        <CommercialDocumentShell bundle={bundle({ composed: null, parts: NINE_PARTS })} />,
+      );
+      expect(screen.getByTestId('agreement-parts-body')).toBeInTheDocument();
+      unmount();
+
+      render(<CommercialDocumentShell bundle={bundle({ composed: null, parts: [] })} />);
+      expect(screen.queryByTestId('agreement-parts-body')).not.toBeInTheDocument();
+      expect(screen.getByText('Rates & design authorization')).toBeInTheDocument();
     });
   });
 });

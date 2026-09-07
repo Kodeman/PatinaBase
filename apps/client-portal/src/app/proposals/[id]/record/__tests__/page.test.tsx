@@ -48,6 +48,7 @@ const BUNDLE: CommercialDocumentBundle = {
   serviceTerms: null,
   rates: [],
   parts: [],
+  composed: null,
   signatures: [
     {
       party: 'client',

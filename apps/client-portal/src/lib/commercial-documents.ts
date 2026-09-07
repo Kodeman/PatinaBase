@@ -210,6 +210,27 @@ export interface CommercialDocumentBundle {
    * takes tomorrow — the client body reads it as "render today's body".
    */
   parts: CommercialAgreementPart[];
+  /**
+   * Whether this document is composed FROM parts, said by the bundle rather
+   * than counted from the array — R17's client edge, and the answer to two
+   * things `parts.length` cannot answer:
+   *
+   *   - the `agreement-parts` kill switch. The flag lives on the studio, and a
+   *     homeowner has no flag to read; if the program un-composes a proposal,
+   *     the bundle says `false` here and the homeowner is back on today's body
+   *     with the parts rows still sitting in the table.
+   *   - a composed agreement whose every part is `client_visible = false`.
+   *     The bundle filters that edge, so the array arrives empty; without this
+   *     key the body would fall through and print the scope, rates, ceiling,
+   *     retainer and cadence the studio had just hidden. Hiding must not
+   *     invert into disclosure.
+   *
+   * `null` means the bundle did not say — every RPC shipped to date, and
+   * therefore every document today and every flag-off document tomorrow. On
+   * `null` the body falls back to the frozen §5.2 test (`parts.length > 0`),
+   * so this key is inert until the backend emits it.
+   */
+  composed: boolean | null;
   furnishings: FurnishingsAuthorization | null;
   tradeScope: TradeScopeAuthorization | null;
 }
@@ -525,6 +546,8 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
   const signatureRows = first(raw, 'signatures') ?? first(source, 'signatures');
   const rateRows = first(raw, 'rates') ?? first(source, 'rates');
   const partRows = first(raw, 'parts') ?? first(source, 'parts');
+  const composedRaw = first(raw, 'composed', 'agreementComposed', 'agreement_composed') ??
+    first(source, 'composed', 'agreementComposed', 'agreement_composed');
   const depositRequiredValue = first(
     furnishingRaw,
     'depositRequiredCents',
@@ -597,6 +620,10 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
     },
     rates: adaptRates(rateRows),
     parts: adaptAgreementParts(partRows),
+    // Only the two booleans are answers; a string, a number, or an absent key
+    // is "the bundle did not say", never a coerced yes or no. `required` on a
+    // part row is read the same way.
+    composed: composedRaw === true ? true : composedRaw === false ? false : null,
     signatures: Array.isArray(signatureRows) ? signatureRows.flatMap((item) => {
       const row = record(item);
       const party = first(row, 'party', 'partyRole', 'party_role');

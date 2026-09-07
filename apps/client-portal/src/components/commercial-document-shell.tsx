@@ -182,10 +182,19 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   if (!terms) return null;
 
   // Wave 1 of "The Agreement, Composed" — build sheet §5.2, the frozen
-  // cross-lane branch. A document that carries parts is read as the ordered
-  // list the studio composed; every other document — which is every document
-  // today, and every flag-off document tomorrow — falls through to the body
-  // below, untouched.
+  // cross-lane branch, with the bundle's own answer preferred over the count
+  // when it gives one (R17; see CommercialDocumentBundle.composed):
+  //
+  //   composed === true   composed, however few parts survived the
+  //                       client_visible filter — hiding every part shows the
+  //                       homeowner an agreement with nothing in it, never the
+  //                       figures that were hidden.
+  //   composed === false  un-composed; today's body, whatever rows remain in
+  //                       proposal_agreement_parts. This is how the flag's
+  //                       kill switch reaches a homeowner who has no flag.
+  //   composed === null   the bundle did not say — every document today and
+  //                       every flag-off document tomorrow — so the frozen
+  //                       §5.2 test decides, unchanged.
   //
   // `terms` does two jobs from here down: it supplies the currency this
   // renderer prints in, and below the branch it is the body itself. A
@@ -193,7 +202,7 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   // renders nothing at all — unreachable while upsert_agreement_parts always
   // projects a terms row, and the thing to revisit when W2 adds the
   // consultation / furnishings_services classes.
-  if (bundle.parts.length > 0) {
+  if (bundle.composed ?? bundle.parts.length > 0) {
     return <AgreementPartsBody parts={bundle.parts} currency={terms.currency} />;
   }
 

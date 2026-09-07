@@ -755,6 +755,52 @@ describe('commercial document client adapter', () => {
       expect(JSON.stringify(bundle)).not.toContain('sp-1');
     });
 
+    /**
+     * R17's client edge. `composed` is the bundle's own answer to "is this
+     * document composed from parts", which the length of the array cannot
+     * give: a composed agreement whose every part is hidden from the client
+     * arrives with `parts: []`, and an un-composed one can still have rows in
+     * the table. Absent — which is every RPC shipped to date — must read as
+     * `null`, not `false`, or today's documents would be answered rather than
+     * left to the frozen §5.2 count.
+     */
+    describe('the composed signal', () => {
+      function withComposed(payload: Record<string, unknown>) {
+        return adaptCommercialDocumentBundle({
+          document: { id: 'ds-1', kind: 'design_services', state: 'sent', title: 'Agreement' },
+          ...payload,
+        });
+      }
+
+      it('reads an absent composed key as unanswered, not as un-composed', () => {
+        expect(withComposed({})?.composed).toBeNull();
+      });
+
+      it('reads a composed document as composed, however few parts crossed the client edge', () => {
+        expect(withComposed({ composed: true, parts: [] })?.composed).toBe(true);
+      });
+
+      it('reads an un-composed document as un-composed, whatever rows remain', () => {
+        const bundle = withComposed({
+          composed: false,
+          parts: [{ id: 'p1', position: 1, kind: 'clause', title: 'Services' }],
+        });
+        expect(bundle?.composed).toBe(false);
+        expect(bundle?.parts).toHaveLength(1);
+      });
+
+      it('reads the key under its snake_case and prefixed spellings', () => {
+        expect(withComposed({ agreement_composed: true })?.composed).toBe(true);
+        expect(withComposed({ agreementComposed: false })?.composed).toBe(false);
+      });
+
+      it('never coerces a non-boolean into an answer', () => {
+        expect(withComposed({ composed: 'true' })?.composed).toBeNull();
+        expect(withComposed({ composed: 1 })?.composed).toBeNull();
+        expect(withComposed({ composed: null })?.composed).toBeNull();
+      });
+    });
+
     it('reads a null billing ceiling as uncapped rather than collapsing it onto zero', () => {
       const bundle = adaptCommercialDocumentBundle({
         document: { id: 'ds-1', kind: 'design_services', state: 'sent', title: 'Agreement' },
