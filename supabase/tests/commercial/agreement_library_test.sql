@@ -698,4 +698,80 @@ BEGIN
   RAISE NOTICE 'PASS 11: R2 — a Template from the other studio is refused for the member of both';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (12) THE TWO-STUDIO DESIGNER ON HER OWN PAPER. Case (11) sets her on an
+--      agreement whose lead belongs to studio A alone, so the studio that
+--      agreement sits in is never in doubt and the refusal there could fire
+--      for the wrong reason. Here she is the lead herself, and both studios
+--      answer for both people: the agreement's studio cannot be settled, and
+--      R2 makes that a refusal rather than a guess — for studio B's Template
+--      and, honestly, for studio A's too. A seeded Template is nobody's
+--      Library and still composes.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, status, source)
+VALUES
+  ('a6200000-0000-4000-8000-000000000003',
+   'a6000000-0000-4000-8000-000000000006', 'a6000000-0000-4000-8000-000000000005',
+   'Library Client', 'proposal', 'direct');
+
+SELECT pg_temp.assume_user('a6000000-0000-4000-8000-000000000006');
+SELECT pg_temp.mint_agreement('a6300000-0000-4000-8000-000000000005', 'Both studios, her paper',
+  'a6000000-0000-4000-8000-000000000006', 'a6200000-0000-4000-8000-000000000003');
+
+DO $$
+DECLARE
+  v_studio_a_key text;
+  v_landed integer;
+  v_refused boolean;
+BEGIN
+  SELECT template_key INTO v_studio_a_key FROM public.agreement_templates
+  WHERE kind = 'studio' AND studio_id = 'a6100000-0000-4000-8000-000000000001'
+  LIMIT 1;
+  ASSERT v_studio_a_key IS NOT NULL, 'the fixture must still hold a studio A template';
+
+  PERFORM pg_temp.assume_user('a6000000-0000-4000-8000-000000000006');
+
+  v_refused := false;
+  BEGIN
+    PERFORM public.materialize_agreement_template(
+      'a6300000-0000-4000-8000-000000000005',
+      'studio.b1100000-0000-4000-8000-000000000002');
+  EXCEPTION WHEN insufficient_privilege THEN v_refused := true;
+  END;
+  ASSERT v_refused,
+    'studio B''s Template must not compose into the agreement she leads';
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.proposal_agreement_parts
+    WHERE proposal_id = 'a6300000-0000-4000-8000-000000000005'
+      AND title = 'Studio B scope'),
+    'studio B''s words must not be on the agreement she leads';
+
+  -- Studio A's own Template is refused for the same reason: with both the
+  -- author and the lead in two studios there is no single studio this paper
+  -- sits in, and save_agreement_as_template already refuses the mirror act.
+  v_refused := false;
+  BEGIN
+    PERFORM public.materialize_agreement_template(
+      'a6300000-0000-4000-8000-000000000005', v_studio_a_key);
+  EXCEPTION WHEN insufficient_privilege THEN v_refused := true;
+  END;
+  ASSERT v_refused,
+    'an unsettled studio is a refusal, not a guess';
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.proposal_agreement_parts
+    WHERE proposal_id = 'a6300000-0000-4000-8000-000000000005'
+      AND source_template_key LIKE 'studio.%'),
+    'no studio Template may have landed on the unsettled agreement';
+
+  -- A seeded Template belongs to no Library, so it still composes.
+  v_landed := public.materialize_agreement_template(
+    'a6300000-0000-4000-8000-000000000005', 'patina.design_services');
+  ASSERT v_landed > 0, 'a seeded template must still compose onto her agreement';
+
+  RAISE NOTICE 'PASS 12: R2 — the two-studio LEAD gets a refusal, not another studio''s paper';
+END $$;
+
 ROLLBACK;

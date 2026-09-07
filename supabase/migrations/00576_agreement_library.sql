@@ -647,11 +647,16 @@ BEGIN
   -- for a designer who belongs to two studios is a different question from
   -- "does it belong to THIS agreement's studio": without this block she could
   -- materialize studio B's private Template into studio A's paper, and the
-  -- part rows would carry B's template key into A's Library forever. The
-  -- studio is resolved the way save_agreement_as_template resolves it — the
-  -- active, non-guest design studios that both the actor and the agreement's
-  -- lead designer belong to — except that membership in more than one is not
-  -- itself a refusal here; the Template merely has to be one of them.
+  -- part rows would carry B's template key into A's Library forever.
+  --
+  -- The studio is resolved EXACTLY the way save_agreement_as_template resolves
+  -- it, ambiguity included: the active, non-guest design studios in which both
+  -- the actor and the agreement's lead designer are members, and zero or
+  -- several is a refusal rather than a guess. Accepting "any one of them" is
+  -- what leaked — when the two-studio designer is herself the lead, both
+  -- studios answer for both people and studio B's paper passed. The mirror act
+  -- refuses on the same arithmetic: she cannot save this agreement AS a
+  -- Template either, so she cannot compose one into it.
   IF v_template.studio_id IS NOT NULL THEN
     SELECT array_agg(studio.id)
     INTO v_studio_ids
@@ -669,7 +674,12 @@ BEGIN
     WHERE studio.type = 'design_studio'
       AND studio.status = 'active';
 
-    IF NOT (v_template.studio_id = ANY(COALESCE(v_studio_ids, ARRAY[]::uuid[]))) THEN
+    IF COALESCE(array_length(v_studio_ids, 1), 0) <> 1 THEN
+      RAISE EXCEPTION 'this agreement does not sit in a single studio, so a studio Template cannot be composed into it'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    IF v_template.studio_id <> v_studio_ids[1] THEN
       RAISE EXCEPTION 'template belongs to another studio'
         USING ERRCODE = 'insufficient_privilege';
     END IF;
