@@ -21,11 +21,14 @@ import { useNamedInvoice } from '@/lib/threshold/checkout-return';
 import {
   parseSourceDate,
   toInvoiceModel,
+  type PreviouslyEntry,
   type ThresholdMark,
 } from '@/lib/threshold/derive';
 import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
 
+import { KIND_LABEL } from './consent-copy';
 import { DoorGate, type DoorProposal } from './door-gate';
+import { Previously } from './previously';
 
 /* ── The front door, when there is no house ─────────────────────────────────
    A studio invoice can reach a household the studio has never opened a
@@ -58,13 +61,23 @@ import { DoorGate, type DoorProposal } from './door-gate';
    and the same POST; only `projectId` is null, which `DoorActs` and the
    invalidation already accept.
 
+   AND IT KEEPS THE RECORD. Her signature does not create the house — the
+   studio's countersignature does, days later — so between the two acts the
+   agreement is `client_signed` and STILL bound to no project. Pending is the
+   only thing a door draws, so without this she would sign, come back, and meet
+   "no active projects yet" over the paper she had just put her name to. The
+   house does not do that: an accepted document becomes a lasting line in
+   Previously (`threshold.tsx`), and that is the idiom this door borrows —
+   the same `Previously`, the same `instrument:<id>` line, the same unfold into
+   the paper read in full.
+
    The moment the studio countersigns, the project exists: `list_client_proposals`
    coalesces the commercial binding's project_id, the summary stops reading
-   null, this door drops the paper, and `/` opens the house instead. Nothing
-   renders it twice.
+   null, this door drops both the paper and its record, and `/` opens the house
+   instead. Nothing renders it twice.
 
-   A household with neither a letter nor an agreement still meets the empty
-   state; this door only stands where something is waiting. ─────────────── */
+   A household with neither a letter, an agreement, nor a signed record still
+   meets the empty state; this door only stands where something is. ─────── */
 
 const OPEN_STATUSES = new Set<Invoice['status']>(['sent', 'partially_paid']);
 
@@ -75,8 +88,52 @@ interface SealedDoor {
   designerId: string | null;
 }
 
+/** A signed origin agreement, and the studio whose name is on it. */
+interface KeptRecord {
+  entry: PreviouslyEntry;
+  designerId: string | null;
+}
+
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/* ── ONE DOOR, ONE STUDIO ────────────────────────────────────────────────────
+   The plate names whichever studio's letter is standing in the slot; this door
+   may not. Two studios reach the same household — a studio invoice from one
+   alongside an origin agreement from another, or two agreements from two
+   studios, which the sentence above already pluralises for — and the sentence
+   THIS door prints is the receipt for a signature: `<studio> has your
+   signature.` So it is resolved from the paper's OWN designer, never from the
+   page's plate, or she is told the wrong studio holds her name.
+
+   `useStudioIdentity` keys on the ids it was asked with, so two doors from one
+   studio share a single read. Null resolves to the door's own "Your studio"
+   fallback, and the receipt only exists after she signs — long after this
+   settles — so the door never waits on it. ──────────────────────────────── */
+function OriginDoor({
+  door,
+  first,
+  onSigned,
+}: {
+  door: SealedDoor;
+  first: boolean;
+  onSigned: () => void;
+}) {
+  const identity = useStudioIdentity({ studioId: null, designerId: door.designerId });
+  return (
+    <DoorGate
+      mark={door.mark}
+      proposal={door.paper}
+      // The studio's note lives on a project thread; a household with no
+      // house has none to pin.
+      note={null}
+      projectId={null}
+      first={first}
+      studioName={identity.data?.name ?? null}
+      onSigned={onSigned}
+    />
+  );
 }
 
 function byDueDate(a: Invoice, b: Invoice): number {
@@ -131,7 +188,9 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   // The summary's projectId, never the raw column — `list_client_proposals`
   // coalesces `project_commercial_documents.project_id` into it, which is what
   // makes a countersigned agreement stop being an origin agreement here.
-  const pendingProposals = partitionProposals(proposalsQuery.data).pending;
+  const { pending: pendingProposals, accepted: acceptedProposals } = partitionProposals(
+    proposalsQuery.data,
+  );
   const origins = useMemo(
     () =>
       pendingProposals.flatMap((proposal) => {
@@ -155,11 +214,45 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
       }),
     [pendingProposals],
   );
+  // ── the agreement she has already signed ───────────────────────────────────
+  // `client_signed` and still project-less: her name is on it and the studio's
+  // is not yet, so no house exists to keep the record in. It is kept here, in
+  // the house's own back matter, until countersigning moves both the paper and
+  // its record into the project. The same filter as `origins` — a bound one is
+  // the house's to show — and the same `instrument:<id>` shape `threshold.tsx`
+  // mints, so `Previously` unfolds it into the paper read in full.
+  const kept = useMemo(
+    () =>
+      acceptedProposals.flatMap<KeptRecord>((proposal) => {
+        const commercial = commercialSummaryFromProposal(proposal);
+        if ((commercial.projectId ?? null) !== null || commercial.kind !== 'design_services') {
+          return [];
+        }
+        return [
+          {
+            entry: {
+              id: `instrument:${proposal.id}`,
+              kind: 'instrument',
+              label: `${KIND_LABEL.design_services ?? 'Document'} · ${proposal.title}`,
+              date: parseSourceDate(commercial.executedAt),
+              state: 'signed',
+            },
+            designerId: proposal.designer_id ?? null,
+          },
+        ];
+      }),
+    [acceptedProposals],
+  );
+
   const [sealed, setSealed] = useState<SealedDoor[]>([]);
   // Sticky across the signature: signing empties `origins`, and a plate that
   // reads its studio off `origins[0]` would fall back to "Your studio" the
   // moment the leaf swings — on the very page that says who holds her name.
-  const originDesignerId = origins[0]?.designerId ?? sealed[0]?.designerId ?? null;
+  // The kept record carries the same studio into the visits that come after,
+  // where nothing is waiting and the plate would otherwise have nothing to
+  // read at all.
+  const originDesignerId =
+    origins[0]?.designerId ?? sealed[0]?.designerId ?? kept[0]?.designerId ?? null;
 
   /* Signing takes the paper out of `pendingProposals`, and the invalidation
      the door runs afterwards refetches this very list — so without this the
@@ -217,17 +310,20 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   // reversal a money surface may not perform — and a page that says nothing is
   // waiting and then grows an agreement is the same reversal on the signature.
   const anyoneWaiting = standing.length > 0 || origins.length > 0 || sealed.length > 0;
+  // A signed agreement asks nothing of her, but it is still hers to find: the
+  // door stands for the record as readily as for the ask.
+  const anythingHere = anyoneWaiting || kept.length > 0;
   if (
     invoicesQuery.isPending ||
     proposalsQuery.isPending ||
-    (anyoneWaiting && plateAsked && identityQuery.isPending)
+    (anythingHere && plateAsked && identityQuery.isPending)
   ) {
     return (
       <div data-testid="letterbox-door-hold" aria-hidden="true" className="min-h-[40vh]" />
     );
   }
 
-  if (!anyoneWaiting) return <ProjectsEmptyState />;
+  if (!anythingHere) return <ProjectsEmptyState />;
 
   const studioName = identityQuery.data?.name?.trim() || 'Your studio';
   // Two standings, one voice. The agreement is named first because it is what
@@ -290,16 +386,10 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
       </p>
 
       {doors.map((door) => (
-        <DoorGate
+        <OriginDoor
           key={door.mark.id}
-          mark={door.mark}
-          proposal={door.paper}
-          // The studio's note lives on a project thread; a household with no
-          // house has none to pin.
-          note={null}
-          projectId={null}
+          door={door}
           first={door.mark.id === firstDoorId}
-          studioName={studioName}
           onSigned={() => sealDoor(door)}
         />
       ))}
@@ -315,6 +405,9 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
           />
         </div>
       )}
+
+      {/* Renders nothing until something has closed — the house's own rule. */}
+      <Previously entries={kept.map(({ entry }) => entry)} />
 
       <EmptyStateActs />
     </div>
