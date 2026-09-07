@@ -28,6 +28,14 @@
 --        the seeding of the standard parts, and send.
 --   (8)  F-2's fourth reader: a billable hour logged against an UNCAPPED
 --        authority is authorized, not parked forever.
+--   (9)  R21. The floor asks its question over TWO scopes and refuses on
+--        either: the parts the homeowner reads (a cap on no page she signs
+--        caps nothing) and every part (a rate card she never sees still
+--        reaches the authority). Probes C1 and C2.
+--   (10) N-8. The composing door opens both ways. Merely opening the room
+--        composes the draft; discard_agreement_parts takes it back, moves no
+--        money, and restores the fingerprint and the flag-off door.
+--   (11) The save hands back the rows it wrote, re-keyed, in order.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -1665,6 +1673,317 @@ BEGIN
     'a refused composition writes no parts';
 
   RAISE NOTICE 'PASS 28: every refusal is worded for the designer — no identifier reaches the room (R7)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (29) R21. THE FLOOR READS THE HOMEOWNER'S COPY AS WELL AS EVERY PART.
+--
+-- The floor used to ask its question once, over every part. That let a rate
+-- card on the client's page stand beside a ceiling marked studio-only: the
+-- document passed the floor and SENT, and the composed client body renders
+-- parts and never the terms row, so the homeowner signed a page naming an
+-- hourly rate with no cap anywhere on it while the studio's authority was
+-- capped. Probe C1 below is that document.
+--
+-- The all-parts question is deliberately KEPT as the second half (probe C2):
+-- a rate card the homeowner never reads still projects role rates into
+-- proposal_service_rates, and countersign snapshots those into the billing
+-- authority — rates with no ceiling are uncapped time whatever the page says.
+-- The readiness panel asks both in the same order and blocks on either, so
+-- no composition the room calls ready ever meets a refusal here.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-00000000000e', 'The cap she never sees');
+
+DO $$
+DECLARE v_err text; v_state text;
+BEGIN
+  -- C1, at the save door. A rate card she reads, a ceiling she does not.
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a5300000-0000-4000-8000-00000000000e',
+      jsonb_build_array(
+        jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+          'title', 'Services', 'required', true, 'clientVisible', true,
+          'payload', jsonb_build_object('body', 'Full-service interior design.')),
+        jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+          'partKey', 'patina.role_rates', 'title', 'Role rates', 'clientVisible', true,
+          'payload', jsonb_build_object('roles', jsonb_build_array(
+            jsonb_build_object('roleName', 'Lead Designer', 'hourlyRateCents', 22500, 'sortOrder', 0)))),
+        jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+          'partKey', 'patina.ceiling', 'title', 'Ceiling', 'clientVisible', false,
+          'payload', jsonb_build_object('cents', 2400000)),
+        jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+          'title', 'Terms', 'required', true, 'clientVisible', true,
+          'payload', jsonb_build_object('body', 'Billed at actual hours.'))));
+    ASSERT false, 'a cap the homeowner never reads must not satisfy the floor';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement that bills time needs a ceiling',
+    format('R21/C1: the save door must read the client copy: %L', v_err);
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000e') = 0,
+    'the refused composition wrote no parts';
+
+  -- The same state reached by hand — the road left open to a future writer —
+  -- and the predicate and the send door both hold.
+  INSERT INTO public.proposal_agreement_parts (
+    proposal_id, position, kind, variant, part_key, title, payload,
+    required, client_visible
+  ) VALUES
+    ('a5300000-0000-4000-8000-00000000000e', 1, 'clause', NULL, 'patina.services',
+     'Services', jsonb_build_object('body', 'Full-service interior design.'), true, true),
+    ('a5300000-0000-4000-8000-00000000000e', 2, 'schedule', 'rate_card', 'patina.role_rates',
+     'Role rates', jsonb_build_object('roles', jsonb_build_array(
+       jsonb_build_object('roleName', 'Lead Designer', 'hourlyRateCents', 22500, 'sortOrder', 0))),
+     false, true),
+    ('a5300000-0000-4000-8000-00000000000e', 3, 'schedule', 'ceiling', 'patina.ceiling',
+     'Ceiling', jsonb_build_object('cents', 2400000), false, false),
+    ('a5300000-0000-4000-8000-00000000000e', 4, 'clause', NULL, 'patina.terms',
+     'Terms', jsonb_build_object('body', 'Billed at actual hours.'), true, true);
+
+  ASSERT public._agreement_floor_unmet('a5300000-0000-4000-8000-00000000000e'),
+    'R21/C1: the floor reads the parts the homeowner reads';
+
+  v_err := NULL;
+  BEGIN
+    PERFORM pg_temp.send_agreement('a5300000-0000-4000-8000-00000000000e');
+    ASSERT false, 'an agreement whose cap is on no page she reads must not send';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement that bills time needs a ceiling',
+    format('R21/C1: the send door must read the client copy: %L', v_err);
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = 'a5300000-0000-4000-8000-00000000000e') = 'draft',
+    'the refused document stays a draft';
+
+  -- And the same document, with the cap put on the page she signs, is ready.
+  UPDATE public.proposal_agreement_parts SET client_visible = true
+  WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000e'
+    AND part_key = 'patina.ceiling';
+  ASSERT NOT public._agreement_floor_unmet('a5300000-0000-4000-8000-00000000000e'),
+    'a cap on the page she signs is a cap';
+  PERFORM pg_temp.send_agreement('a5300000-0000-4000-8000-00000000000e');
+  SELECT commercial_state INTO v_state FROM public.proposals
+  WHERE id = 'a5300000-0000-4000-8000-00000000000e';
+  ASSERT v_state <> 'draft', format('a capped hourly agreement sends: %L', v_state);
+END $$;
+
+-- C2, the mirror. A rate card the homeowner never reads and no ceiling at
+-- all: the stricter all-parts bar is kept, because hidden rates still reach
+-- the authority. The room reds on this too, so it is not a refusal a designer
+-- can walk into from a panel that called the composition ready.
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-00000000000f', 'The studio-only rate card');
+
+DO $$
+DECLARE v_err text;
+BEGIN
+  INSERT INTO public.proposal_agreement_parts (
+    proposal_id, position, kind, variant, part_key, title, payload,
+    required, client_visible
+  ) VALUES
+    ('a5300000-0000-4000-8000-00000000000f', 1, 'clause', NULL, 'patina.services',
+     'Services', jsonb_build_object('body', 'Full-service interior design.'), true, true),
+    ('a5300000-0000-4000-8000-00000000000f', 2, 'schedule', 'rate_card', 'patina.role_rates',
+     'Role rates', jsonb_build_object('roles', jsonb_build_array(
+       jsonb_build_object('roleName', 'Lead Designer', 'hourlyRateCents', 22500, 'sortOrder', 0))),
+     false, false),
+    ('a5300000-0000-4000-8000-00000000000f', 3, 'clause', NULL, 'patina.terms',
+     'Terms', jsonb_build_object('body', 'Billed at actual hours.'), true, true);
+
+  ASSERT public._agreement_floor_unmet('a5300000-0000-4000-8000-00000000000f'),
+    'R21/C2: a rate card nobody reads still bills time';
+
+  BEGIN
+    PERFORM pg_temp.send_agreement('a5300000-0000-4000-8000-00000000000f');
+    ASSERT false, 'an uncapped studio-only rate card must not send';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement that bills time needs a ceiling',
+    format('R21/C2: %L', v_err);
+
+  -- A cap the homeowner cannot read does not answer for a rate card she can,
+  -- but it does answer for one she cannot: both halves of the question, and
+  -- both scopes satisfied, is what clears the floor.
+  INSERT INTO public.proposal_agreement_parts (
+    proposal_id, position, kind, variant, part_key, title, payload,
+    required, client_visible
+  ) VALUES
+    ('a5300000-0000-4000-8000-00000000000f', 4, 'schedule', 'ceiling', 'patina.ceiling',
+     'Ceiling', jsonb_build_object('cents', 2400000), false, false);
+  ASSERT NOT public._agreement_floor_unmet('a5300000-0000-4000-8000-00000000000f'),
+    'a studio-only cap answers a studio-only rate card';
+
+  RAISE NOTICE 'PASS 29: R4''s floor reads the homeowner''s copy and every part, and refuses on either (R21)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (30) N-8. THE DOOR OPENS BOTH WAYS.
+--
+-- Opening the Contract Room composes the draft with no act from the designer
+-- — the room's mount effect calls materialize_standard_parts. From that
+-- instant R17's walls stand and the seven-facet room's Save is shut, and
+-- `agreement-parts` is a per-person rollout, so without a way back a
+-- co-member the flag has not reached could never save that agreement again.
+-- discard_agreement_parts is the handle on the inside: the parts go, the
+-- money row stays exactly as the last projection left it, and the document
+-- hashes what it hashed before the room was ever opened.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000010', 'The room merely opened');
+
+DO $$
+DECLARE
+  v_seeded jsonb;
+  v_left jsonb;
+  v_err text;
+  v_terms_before jsonb;
+  v_terms_after jsonb;
+  v_rates_before jsonb;
+  v_rates_after jsonb;
+  v_fingerprint_before text;
+BEGIN
+  v_fingerprint_before := pg_temp.fingerprint('a5300000-0000-4000-8000-000000000010');
+  SELECT to_jsonb(t) INTO v_terms_before FROM public.proposal_service_terms t
+  WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000010';
+  SELECT jsonb_agg(to_jsonb(r) ORDER BY r.role_name) INTO v_rates_before
+  FROM public.proposal_service_rates r
+  WHERE r.proposal_id = 'a5300000-0000-4000-8000-000000000010';
+
+  -- Merely opening the room.
+  v_seeded := public.materialize_standard_parts('a5300000-0000-4000-8000-000000000010');
+  ASSERT (v_seeded->>'materialized')::boolean AND (v_seeded->>'partCount')::integer = 9,
+    'the mount effect composes the draft with no act from the designer';
+
+  -- And the seven-facet door is shut, for every caller, flag or no flag.
+  BEGIN
+    PERFORM public.upsert_design_services_draft(
+      'a5300000-0000-4000-8000-000000000010',
+      jsonb_build_object('scope', 'Rewritten by the co-member', 'billingCeilingCents', 999900,
+        'billingCadence', 'monthly', 'currency', 'USD', 'currentRateVersion', 1),
+      jsonb_build_array(jsonb_build_object(
+        'version', 1, 'roleName', 'Lead Designer', 'hourlyRateCents', 15000, 'sortOrder', 0)));
+    ASSERT false, 'a composed draft must refuse the flag-off door';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'This agreement is composed from parts. Open it in the Contract Room with parts on to change it.',
+    format('R17(b) still stands: %L', v_err);
+
+  -- The handle.
+  v_left := public.discard_agreement_parts('a5300000-0000-4000-8000-000000000010');
+  ASSERT (v_left->>'discarded')::integer = 9 AND (v_left->>'partCount')::integer = 0,
+    format('discard reports what it removed: %s', v_left::text);
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000010') = 0,
+    'the parts are gone';
+
+  -- The money row is untouched — it is the state the seven-facet room reads.
+  SELECT to_jsonb(t) INTO v_terms_after FROM public.proposal_service_terms t
+  WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000010';
+  SELECT jsonb_agg(to_jsonb(r) ORDER BY r.role_name) INTO v_rates_after
+  FROM public.proposal_service_rates r
+  WHERE r.proposal_id = 'a5300000-0000-4000-8000-000000000010';
+  ASSERT v_terms_after = v_terms_before, 'leaving the parts behind moves no money';
+  ASSERT v_rates_after = v_rates_before, 'leaving the parts behind moves no rate';
+
+  -- And the document hashes what it hashed before the room was opened (F-1).
+  ASSERT pg_temp.fingerprint('a5300000-0000-4000-8000-000000000010') = v_fingerprint_before,
+    'the parts key is conditional, so the discarded document hashes as before';
+  ASSERT (v_left->>'documentFingerprint') = v_fingerprint_before,
+    'discard returns the fingerprint the document now carries';
+
+  -- The seven-facet door opens again.
+  PERFORM public.upsert_design_services_draft(
+    'a5300000-0000-4000-8000-000000000010',
+    jsonb_build_object('scope', 'Rewritten by the co-member', 'billingCeilingCents', 999900,
+      'billingCadence', 'monthly', 'currency', 'USD', 'currentRateVersion', 1),
+    jsonb_build_array(jsonb_build_object(
+      'version', 1, 'roleName', 'Lead Designer', 'hourlyRateCents', 15000, 'sortOrder', 0)));
+  ASSERT (SELECT scope FROM public.proposal_service_terms
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000010') = 'Rewritten by the co-member',
+    'the flag-off room authors again once the parts are gone';
+END $$;
+
+-- The handle is on the inside of the studio's door only, and only while the
+-- agreement is a draft: R6 freezes the parts at send, and a sent agreement's
+-- parts are the parts that bind.
+DO $$
+DECLARE v_err text;
+BEGIN
+  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000003');
+  BEGIN
+    PERFORM public.discard_agreement_parts('a5300000-0000-4000-8000-000000000010');
+    ASSERT false, 'an outsider must not discard a studio''s parts';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_err LIKE 'draft proposal % not found or access denied',
+    format('the outsider learns nothing else: %L', v_err);
+
+  PERFORM pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+  v_err := NULL;
+  BEGIN
+    -- 'a5…0001' was sent in (7)(8) above and still carries its nine parts.
+    PERFORM public.discard_agreement_parts('a5300000-0000-4000-8000-000000000001');
+    ASSERT false, 'a sent agreement''s parts must not be discardable';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err LIKE 'draft proposal % not found or access denied',
+    format('R6: the parts freeze at send: %L', v_err);
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001') > 0,
+    'the sent agreement keeps every part it was sent with';
+
+  RAISE NOTICE 'PASS 30: the composing door opens both ways — draft-only, author-only, and it moves no money (N-8)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (31) THE SAVE HANDS BACK WHAT IT WROTE.
+--
+-- upsert_agreement_parts is DELETE-then-INSERT: every part comes back
+-- re-keyed. A room that kept the array it sent would be holding ids the table
+-- no longer has, and the next save would read as a rename of every part. So
+-- the RPC returns the saved rows in order, the way materialize_standard_parts
+-- already did — one round trip, one truth, and no second fetch to reconcile.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000011', 'The saved composition');
+
+DO $$
+DECLARE v_saved jsonb; v_returned uuid[]; v_stored uuid[];
+BEGIN
+  v_saved := public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-000000000011',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+        'title', 'Services', 'required', true,
+        'payload', jsonb_build_object('body', 'Full-service interior design.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+        'partKey', 'custom.flat-fee', 'title', 'Design fee',
+        'payload', jsonb_build_object('cents', 4500000)),
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+        'title', 'Terms', 'required', true,
+        'payload', jsonb_build_object('body', 'Paid in three instalments.'))));
+
+  ASSERT jsonb_typeof(v_saved->'parts') = 'array'
+     AND jsonb_array_length(v_saved->'parts') = 3,
+    format('the save hands back the parts it wrote: %s', v_saved::text);
+
+  SELECT array_agg((e.part->>'id')::uuid ORDER BY (e.part->>'position')::integer)
+  INTO v_returned FROM jsonb_array_elements(v_saved->'parts') AS e(part);
+  SELECT array_agg(ap.id ORDER BY ap.position) INTO v_stored
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000011';
+  ASSERT v_returned = v_stored,
+    'the ids handed back are the ids the table now holds';
+
+  ASSERT (SELECT e.part->>'title' FROM jsonb_array_elements(v_saved->'parts') AS e(part)
+          WHERE (e.part->>'position')::integer = 2) = 'Design fee',
+    'the returned rows carry the composition''s own order';
+
+  RAISE NOTICE 'PASS 31: the save returns the saved rows, re-keyed, in order';
 END $$;
 
 ROLLBACK;

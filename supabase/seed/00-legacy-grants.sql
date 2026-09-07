@@ -13426,6 +13426,18 @@ END $g$;
 
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.discard_agreement_parts(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.discard_agreement_parts(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

@@ -68,7 +68,12 @@
 --         existed — let it out. Seeding itself does not ask: it lays out a
 --         state that already exists so the room can show it, and refusing
 --         there would lock a studio whose defaults carry a rate card and no
---         ceiling out of the composer entirely.
+--         ceiling out of the composer entirely. The predicate asks its
+--         question over TWO scopes and refuses on either (R21): the parts the
+--         homeowner reads, and every part. Over all parts alone, a rate card
+--         on the client's page beside a ceiling marked studio-only passed —
+--         and the composed client body renders parts, never the terms row, so
+--         she signed a page naming an hourly rate with no cap on it.
 --   (N-4) The parts table grants authenticated SELECT and nothing else. The
 --         money projection and the document fingerprint both live inside the
 --         RPC, so a direct UPDATE moved the figure the client signs without
@@ -112,6 +117,15 @@
 --         and an out-of-range deposit each used to answer with the name of a
 --         constraint, a column or a table. Every one of them is asked and
 --         worded here now, in the designer's words, BEFORE the rows land.
+--   (N-8) THE DOOR OPENS BOTH WAYS. R17's walls stand the moment a document
+--         carries one part, and materialize_standard_parts lays down nine of
+--         them. Without a way back, merely OPENING the Contract Room composed
+--         a draft irreversibly, and `agreement-parts` is a per-person
+--         rollout: the co-member the flag had not reached could never save
+--         that agreement again, in any room. discard_agreement_parts removes
+--         the parts and touches nothing else — the terms row stays as the
+--         last projection left it, which is what the seven-facet room reads —
+--         so the document returns to exactly the paper it was on.
 --
 -- Every new SECURITY DEFINER here pins `search_path = public, pg_temp` — the
 -- posture of the surrounding commercial family (00412 / 00422 / 00423), and
@@ -301,6 +315,25 @@ REVOKE ALL ON FUNCTION public._agreement_requires_rate_card(uuid)
 -- above), and both are total over a malformed payload — jsonb_typeof asks
 -- before any cast, so a garbage figure fails the test instead of raising in
 -- the middle of a send.
+--
+-- R21: THE QUESTION IS ASKED TWICE, OVER TWO SCOPES, AND EITHER ONE REFUSES.
+--
+--   · the homeowner's copy (client_visible parts only). R21 binds R4's floor
+--     to what the person signing actually reads. A rate card on her page
+--     beside a ceiling the studio kept to itself is an uncapped hourly
+--     agreement AS SHE READS IT: the composed client body renders parts and
+--     never the terms row, so the cap she is said to have is on no page she
+--     was shown. Asking only the all-parts question let exactly that send.
+--   · every part, visible or not. A rate card the client never sees still
+--     bills her hours: it projects role rates into proposal_service_rates,
+--     countersign snapshots them into the billing authority, and an authority
+--     with rates and no ceiling is uncapped time. R4 is about the money the
+--     studio may draw as much as about the page.
+--
+-- The readiness panel in the room asks both in the same order and blocks on
+-- either (`uncappedForTheClient || uncappedForTheDatabase`), so the panel and
+-- the database still cannot disagree — a composition the room calls ready
+-- never meets a refusal here, and one the room reds never slips past.
 CREATE OR REPLACE FUNCTION public._agreement_floor_unmet(p_proposal_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -308,27 +341,33 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT EXISTS (
-           SELECT 1
-           FROM public.proposal_agreement_parts ap
-           CROSS JOIN LATERAL jsonb_array_elements(
-             CASE WHEN jsonb_typeof(ap.payload->'roles') = 'array'
-                  THEN ap.payload->'roles' ELSE '[]'::jsonb END
-           ) AS e(role)
-           WHERE ap.proposal_id = p_proposal_id
-             AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
-             AND btrim(COALESCE(e.role->>'roleName', '')) <> ''
-             AND jsonb_typeof(e.role->'hourlyRateCents') = 'number'
-             AND (e.role->>'hourlyRateCents')::numeric > 0
-         )
-     AND NOT EXISTS (
-           SELECT 1
-           FROM public.proposal_agreement_parts ap
-           WHERE ap.proposal_id = p_proposal_id
-             AND ap.kind = 'schedule' AND ap.variant = 'ceiling'
-             AND jsonb_typeof(ap.payload->'cents') = 'number'
-             AND (ap.payload->>'cents')::numeric > 0
-         );
+  WITH bills_time AS (
+    SELECT bool_or(true)             AS anywhere,
+           bool_or(ap.client_visible) AS in_the_client_copy
+    FROM public.proposal_agreement_parts ap
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE WHEN jsonb_typeof(ap.payload->'roles') = 'array'
+           THEN ap.payload->'roles' ELSE '[]'::jsonb END
+    ) AS e(role)
+    WHERE ap.proposal_id = p_proposal_id
+      AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
+      AND btrim(COALESCE(e.role->>'roleName', '')) <> ''
+      AND jsonb_typeof(e.role->'hourlyRateCents') = 'number'
+      AND (e.role->>'hourlyRateCents')::numeric > 0
+  ), capped AS (
+    SELECT bool_or(true)             AS anywhere,
+           bool_or(ap.client_visible) AS in_the_client_copy
+    FROM public.proposal_agreement_parts ap
+    WHERE ap.proposal_id = p_proposal_id
+      AND ap.kind = 'schedule' AND ap.variant = 'ceiling'
+      AND jsonb_typeof(ap.payload->'cents') = 'number'
+      AND (ap.payload->>'cents')::numeric > 0
+  )
+  SELECT (COALESCE(bills_time.in_the_client_copy, false)
+          AND NOT COALESCE(capped.in_the_client_copy, false))
+      OR (COALESCE(bills_time.anywhere, false)
+          AND NOT COALESCE(capped.anywhere, false))
+  FROM bills_time, capped;
 $$;
 REVOKE ALL ON FUNCTION public._agreement_floor_unmet(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
@@ -2648,13 +2687,22 @@ BEGIN
   PERFORM set_config('app.agreement_projection', COALESCE(v_previous_projection, ''), true);
 
   PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
+  -- The saved rows come back, in order, exactly as materialize_standard_parts
+  -- returns them. The write is DELETE-then-INSERT and does not carry `id`
+  -- through, so every part has a NEW uuid — a room that kept the array it
+  -- sent would be holding ids the table no longer has, and the next save
+  -- would look like a rename of nine parts. One round trip, one truth.
   RETURN jsonb_build_object(
     'proposalId', p_proposal_id,
     'documentKind', CASE WHEN v_proposal.document_kind = 'legacy'
                          THEN 'design_services' ELSE v_proposal.document_kind END,
     'commercialState', 'draft',
     'partCount', jsonb_array_length(p_parts),
-    'documentFingerprint', public._commercial_document_fingerprint(p_proposal_id)
+    'documentFingerprint', public._commercial_document_fingerprint(p_proposal_id),
+    'parts', COALESCE((
+      SELECT jsonb_agg(to_jsonb(ap) ORDER BY ap.position, ap.id)
+      FROM public.proposal_agreement_parts ap WHERE ap.proposal_id = p_proposal_id
+    ), '[]'::jsonb)
   );
 EXCEPTION WHEN OTHERS THEN
   PERFORM set_config('app.agreement_projection', COALESCE(v_previous_projection, ''), true);
@@ -2870,6 +2918,75 @@ $$;
 REVOKE ALL ON FUNCTION public.materialize_standard_parts(uuid)
   FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.materialize_standard_parts(uuid)
+  TO authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PART 7b — The way back out (N-8)
+--
+-- Composing is a door, and a door with no handle on the inside is a trap.
+-- Seeding the nine standard parts is what turns proposal_service_terms into a
+-- projection, and from that instant R17's three walls stand: the seven-facet
+-- room's Save refuses with `agreement_composed`, the trigger refuses a direct
+-- write, and the grant is gone. Only a caller who can reach the Contract Room
+-- can move the document at all — and `agreement-parts` is a per-person
+-- rollout, so a co-member the flag has not reached is locked out of an
+-- agreement someone else merely OPENED.
+--
+-- This is that handle. It removes the parts and touches nothing else: the
+-- terms row and the rate rows stay exactly as the last projection left them,
+-- which is the state the seven-facet room reads and edits, so leaving the
+-- parts behind returns the document to precisely the paper it would have been
+-- on had the room never been opened. Draft-only (a sent agreement's parts are
+-- what bind — R6), author-only, and the document keeps its kind: 'legacy' was
+-- promoted to 'design_services' by the first save, and design_services is the
+-- kind the seven-facet room already authors.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.discard_agreement_parts(p_proposal_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals%ROWTYPE;
+  v_discarded integer;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'leaving the parts behind requires an authenticated author'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_proposal FROM public.proposals
+  WHERE id = p_proposal_id FOR UPDATE;
+  IF NOT FOUND OR v_proposal.status <> 'draft'
+     OR NOT public._can_author_proposal(v_proposal.designer_id)
+  THEN
+    RAISE EXCEPTION 'draft proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_proposal.document_kind NOT IN ('legacy', 'design_services', 'service_addendum') THEN
+    RAISE EXCEPTION 'proposal % is not a design-services draft', p_proposal_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  DELETE FROM public.proposal_agreement_parts WHERE proposal_id = p_proposal_id;
+  GET DIAGNOSTICS v_discarded = ROW_COUNT;
+
+  -- The fingerprint goes back to what it was before the first part landed:
+  -- the 'parts' key is conditional (F-1), so a parts-less document hashes
+  -- byte-identically to today.
+  RETURN jsonb_build_object(
+    'proposalId', p_proposal_id,
+    'discarded', v_discarded,
+    'partCount', 0,
+    'documentFingerprint', public._commercial_document_fingerprint(p_proposal_id)
+  );
+END;
+$$;
+REVOKE ALL ON FUNCTION public.discard_agreement_parts(uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.discard_agreement_parts(uuid)
   TO authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -3206,10 +3323,23 @@ COMMENT ON FUNCTION public.materialize_standard_parts(uuid) IS
   'show it, and the floor is asked where a composition is SAVED and at every '
   'door out of draft.';
 
+COMMENT ON FUNCTION public.discard_agreement_parts(uuid) IS
+  '00575: leaves the parts behind. Removes every part of a DRAFT agreement '
+  'and touches nothing else — proposal_service_terms and '
+  'proposal_service_rates stay exactly as the last projection left them, '
+  'which is the state the seven-facet room reads and edits. Without it, '
+  'opening the Contract Room composed a draft irreversibly (R17''s walls '
+  'stand from the first part) and a co-member the agreement-parts flag had '
+  'not reached could never save that agreement again. Draft-only (R6: parts '
+  'freeze at send), author-only.';
+
 COMMENT ON FUNCTION public._agreement_floor_unmet(uuid) IS
   '00575: R4''s floor as one predicate — TRUE when the agreement bills time '
   '(a rate card holding a named role at a real rate) and carries no cap (a '
-  'ceiling part stating an amount above zero). Asked by '
+  'ceiling part stating an amount above zero). Asked over two scopes and TRUE '
+  'on either (R21): the client-visible parts, because the homeowner cannot be '
+  'capped by a ceiling no page shows her, and every part, because a rate card '
+  'she never sees still projects rates into the billing authority. Asked by '
   'upsert_agreement_parts, materialize_standard_parts, send_commercial_document, '
   '_sign_design_services_agreement_authorized and '
   '_issue_design_services_agreement_on_paper, so the floor is the same height '

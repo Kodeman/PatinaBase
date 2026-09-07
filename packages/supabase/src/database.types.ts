@@ -31415,6 +31415,10 @@ export type Database = {
         }
         Returns: Json
       }
+      discard_agreement_parts: {
+        Args: { p_proposal_id: string }
+        Returns: Json
+      }
       dismiss_field_capture: { Args: { p_capture_id: string }; Returns: Json }
       dispatch_board_asset_gc: {
         Args: { p_dry_run?: boolean }
