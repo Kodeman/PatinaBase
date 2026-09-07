@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { RoomShell } from "../room-shell";
 import { DocSheet } from "../../overlays/doc-sheet";
@@ -21,10 +22,27 @@ import {
   type ServiceAgreementTerms,
   type ServiceRate,
 } from "@/lib/document/commercial-documents";
-import { AgreementComposer } from "./agreement/agreement-composer";
 import { ServiceAgreementPreview } from "../../commercial/service-agreement-preview";
 import { ServiceAgreementSendSheet } from "../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
+
+// DR13 / criterion J — a flag-off designer must not download the composer.
+// A static import pulls `parts-rail`, `part-editor`, `add-part-menu`,
+// `readiness` and `@dnd-kit` into the chunk this room ships to EVERY designer;
+// `agreement-parts` is fail-closed, so almost none of them can open it. The
+// dynamic import puts all of that behind the flag branch below. `ssr: false`
+// because the composer is a client-only surface and the room already holds a
+// frame for the flag itself — the same gate, the same sentence.
+const AgreementComposer = dynamic(
+  () =>
+    import("./agreement/agreement-composer").then((mod) => ({
+      default: mod.AgreementComposer,
+    })),
+  {
+    ssr: false,
+    loading: () => <AgreementGate message="Opening the design agreement…" />,
+  },
+);
 
 const labelClass =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";

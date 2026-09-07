@@ -138,22 +138,32 @@ describe("ServiceAgreementDraftingRoom · composer mount identity", () => {
     mockBundle = bundle(null, 3);
   });
 
-  it("mounts the composer once per agreement, whatever a save does to the bundle", () => {
+  // DR13 — the composer is loaded through `next/dynamic`, so on a cold module
+  // registry it arrives a microtask after the flag-on branch renders. That
+  // asynchrony IS the split that keeps `parts-rail`, `part-editor`,
+  // `add-part-menu`, `readiness` and `@dnd-kit` out of the chunk a flag-off
+  // designer downloads. Hence `findByTestId` rather than `getByTestId`: the
+  // mount count is the assertion, and the await is what makes it reachable.
+  // (The chunk boundary itself is a bundler fact jest cannot observe.)
+  it("mounts the composer once per agreement, whatever a save does to the bundle", async () => {
     const { rerender } = render(
       <ServiceAgreementDraftingRoom proposal={proposal} />,
     );
-    expect(screen.getByTestId("composer")).toBeInTheDocument();
+    expect(await screen.findByTestId("composer")).toBeInTheDocument();
     expect(mockMountCount).toBe(1);
 
     // Exactly what a save produces: a fresh terms.updatedAt, and a part count
     // that moved because the designer added one.
     mockBundle = bundle({ updatedAt: "2026-09-06T12:00:00.000Z" }, 4);
     rerender(<ServiceAgreementDraftingRoom proposal={proposal} />);
+    expect(await screen.findByTestId("composer")).toBeInTheDocument();
     expect(mockMountCount).toBe(1);
 
     // And a second save, which changes updatedAt again while the count holds.
     mockBundle = bundle({ updatedAt: "2026-09-06T12:05:00.000Z" }, 4);
     rerender(<ServiceAgreementDraftingRoom proposal={proposal} />);
+    expect(await screen.findByTestId("composer")).toBeInTheDocument();
     expect(mockMountCount).toBe(1);
   });
+
 });
