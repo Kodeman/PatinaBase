@@ -1,18 +1,13 @@
 import { Suspense } from 'react';
 import { act, render, screen } from '@testing-library/react';
 
-/* ── The keepsake for a signed agreement ─────────────────────────────────────
-   The boundary is the one client-scoped read the page makes —
-   `get_client_commercial_document_bundle`, through
-   `useClientCommercialDocument` — plus the studio's letterhead. A stranger's
-   call comes back with nothing, which is why these tests drive the page by
-   what the read returns rather than by a session.
+import type { CommercialDocumentBundle } from '@/lib/commercial-documents';
 
-   Wave 2 adds two things to this sheet and nothing else: the sentence she
-   actually ticked, taken from her own signature's metadata, and the frozen
-   agreement the countersignature sealed (R12). Both are absent on every
-   record written before the composer, and the sheet must then read exactly as
-   it does today — no empty state, nothing said about a snapshot.
+/* ── The Record of Decision, for a signed paper ──────────────────────────────
+   Two client-scoped reads: `get_client_commercial_document_bundle` (through
+   `useClientCommercialDocument`, the same read the door itself makes) and
+   `resolve_studio_identity`. A stranger's bundle comes back null, which is the
+   whole of the auth story on this sheet.
    ────────────────────────────────────────────────────────────────────────── */
 
 jest.mock('@patina/supabase', () => ({
@@ -26,7 +21,6 @@ jest.mock('@/hooks/use-commercial-client', () => ({
 }));
 
 import { useStudioIdentity } from '@patina/supabase';
-
 import { useClientCommercialDocument } from '@/hooks/use-commercial-client';
 
 import ProposalRecordPage from '../page';
@@ -34,48 +28,77 @@ import ProposalRecordPage from '../page';
 const bundleHook = useClientCommercialDocument as jest.Mock;
 const identityHook = useStudioIdentity as jest.Mock;
 
-const COMPOSED_LINE =
-  'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.';
-
-const SNAPSHOT_HTML =
-  '<h2>Services</h2><p>Interior design services.</p><h2>Per-phase fee</h2>';
-
-function bundle(overrides: Record<string, unknown> = {}) {
-  return {
-    isLoading: false,
-    isError: false,
-    error: null,
-    data: {
-      document: {
-        id: 'prop-9',
-        projectId: 'proj-1',
-        kind: 'design_services',
-        state: 'executed',
-        title: 'Cedar Lane — Design services',
-        version: 2,
-        sentAt: '2026-09-01T00:00:00Z',
-      },
-      signatures: [
-        {
-          party: 'client',
-          signerName: 'Nora Ellison',
-          signedAt: '2026-09-04T14:20:00Z',
-          consentVersion: 'v1',
-          documentFingerprint: 'f'.repeat(64),
-          signedOnPaper: false,
-          paperSignedOn: null,
-          paperScanDocumentId: null,
-          consentSentence: null,
-        },
-      ],
-      furnishings: null,
-      executionSnapshot: null,
-      ...overrides,
+const BUNDLE: CommercialDocumentBundle = {
+  document: {
+    id: 'prop-7',
+    projectId: 'proj-1',
+    kind: 'furnishings_authorization',
+    state: 'executed',
+    title: 'Furnishings authorization No. 7',
+    version: 2,
+    waveName: null,
+    sentAt: '2026-08-04T12:00:00Z',
+    executedAt: '2026-08-05T18:30:00Z',
+    supersededAt: null,
+    replacementProposalId: null,
+    documentFingerprint: 'FEEDFACE1234'.toLowerCase() + '0'.repeat(52),
+    totalAmountCents: 689000,
+    depositPercent: 50,
+  },
+  serviceTerms: null,
+  rates: [],
+  parts: [],
+  composed: null,
+  consentSentence: null,
+  executionSnapshot: null,
+  signatures: [
+    {
+      party: 'client',
+      signerName: 'Harper Vale',
+      signedAt: '2026-08-05T18:30:00Z',
+      consentVersion: 'v2',
+      documentFingerprint: 'FEEDFACE1234'.toLowerCase() + '0'.repeat(52),
+      signedOnPaper: false,
+      paperSignedOn: null,
+      paperScanDocumentId: null,
+      consentSentence: null,
     },
-  };
-}
+  ],
+  furnishings: {
+    checkpointId: null,
+    depositRequiredCents: 344500,
+    depositPaidCents: 0,
+    items: [
+      {
+        description: 'Sconces',
+        roomName: 'Stair hall',
+        quantity: 2,
+        clientUnitPriceCents: 117000,
+        clientLineTotalCents: 234000,
+        currency: 'USD',
+      },
+      {
+        description: 'Drapery',
+        roomName: 'Living room',
+        quantity: 1,
+        clientUnitPriceCents: 289000,
+        clientLineTotalCents: 289000,
+        currency: 'USD',
+      },
+      {
+        description: 'Runner',
+        roomName: 'Stair hall',
+        quantity: 1,
+        clientUnitPriceCents: 166000,
+        clientLineTotalCents: 166000,
+        currency: 'USD',
+      },
+    ],
+  },
+  tradeScope: null,
+};
 
-async function renderPage(id = 'prop-9') {
+async function renderPage(id = 'prop-7') {
   let result!: ReturnType<typeof render>;
   await act(async () => {
     result = render(
@@ -88,7 +111,7 @@ async function renderPage(id = 'prop-9') {
 }
 
 beforeEach(() => {
-  bundleHook.mockReturnValue(bundle());
+  bundleHook.mockReturnValue({ data: BUNDLE, isLoading: false, isError: false });
   identityHook.mockReturnValue({
     data: { name: 'Quist Interiors', logoUrl: null },
     isLoading: false,
@@ -96,16 +119,191 @@ beforeEach(() => {
   });
 });
 
-describe('/proposals/[id]/record — the keepsake', () => {
-  it('prints the sheet the signature earned', async () => {
+describe('/proposals/[id]/record — the owner', () => {
+  it('prints the sheet with her typed name, the day, and the consent sentence', async () => {
     await renderPage();
 
     expect(screen.getByTestId('record-studio-name')).toHaveTextContent('Quist Interiors');
     expect(screen.getByTestId('record-kind')).toHaveTextContent('Record of signature');
-    expect(screen.getByTestId('record-signed-name')).toHaveTextContent('Nora Ellison');
-    expect(screen.getByTestId('record-checksum')).toHaveTextContent('Mark ffffffffffff');
+    expect(screen.getByTestId('record-artifact-title')).toHaveTextContent(
+      'Furnishings authorization No. 7',
+    );
+    expect(screen.getByTestId('record-edition-line')).toHaveTextContent(
+      'Furnishings authorization · Edition 2 · Issued 4 August 2026',
+    );
+    expect(screen.getByTestId('record-signed-name')).toHaveTextContent('Harper Vale');
+    expect(screen.getByTestId('record-signed-on')).toHaveTextContent(
+      'Signed 5 August 2026',
+    );
+    expect(screen.getByTestId('record-signature')).toHaveTextContent('Signed');
+    expect(screen.getByTestId('record-consent')).toHaveTextContent(
+      'Signed electronically by typed name: Harper Vale.',
+    );
+    expect(screen.getByTestId('record-stamp')).toHaveAttribute('data-stamp-state', 'signed');
   });
 
+  it('says what the signature released, in words', async () => {
+    await renderPage();
+    expect(screen.getByTestId('record-release')).toHaveTextContent(
+      'It releases three pieces that were waiting on it.',
+    );
+  });
+
+  it('claims no release on a paper that names no lines', async () => {
+    bundleHook.mockReturnValue({
+      data: { ...BUNDLE, furnishings: null },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+    expect(screen.queryByTestId('record-release')).not.toBeInTheDocument();
+  });
+
+  it('stands a paper-signed mark upright and says so', async () => {
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        signatures: [
+          {
+            ...BUNDLE.signatures[0],
+            signedOnPaper: true,
+            // The day written on the paper, not the day the studio filed it.
+            paperSignedOn: '2026-08-01',
+            signedAt: '2026-08-09T12:00:00Z',
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.getByTestId('record-stamp')).toHaveAttribute(
+      'data-stamp-state',
+      'signed_on_paper',
+    );
+    expect(screen.getByTestId('record-consent')).toHaveTextContent('Signed on paper.');
+    expect(screen.getByTestId('record-signed-on')).toHaveTextContent(
+      'Signed 1 August 2026',
+    );
+  });
+
+  it('presses twelve characters of the fingerprint, and never the whole hash', async () => {
+    await renderPage();
+    const mark = screen.getByTestId('record-checksum').textContent ?? '';
+    expect(mark).toContain('feedface1234');
+    expect(mark).not.toContain(BUNDLE.document.documentFingerprint);
+  });
+
+  it('never prints an IP address', async () => {
+    const { container } = await renderPage();
+    expect(container.innerHTML).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+    expect(container.innerHTML).not.toMatch(/ip address/i);
+  });
+});
+
+describe('/proposals/[id]/record — anyone else', () => {
+  it('shows a record that could not be found, and nothing about the paper', async () => {
+    bundleHook.mockReturnValue({ data: null, isLoading: false, isError: false });
+    await renderPage();
+
+    expect(screen.getByText('This record could not be found.')).toBeInTheDocument();
+    expect(screen.queryByTestId('record-sheet')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Furnishings authorization No\. 7/)).not.toBeInTheDocument();
+  });
+
+  it('keeps nothing of a paper that carries no signature of hers', async () => {
+    bundleHook.mockReturnValue({
+      data: { ...BUNDLE, signatures: [] },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(
+      screen.getByText('This paper has not been signed yet, so there is nothing to keep.'),
+    ).toBeInTheDocument();
+  });
+
+  it('never prints the studio’s signature in place of hers', async () => {
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        signatures: [
+          { ...BUNDLE.signatures[0], party: 'studio' as const, signerName: 'Nora Quist' },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(screen.queryByText('Nora Quist')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('This paper has not been signed yet, so there is nothing to keep.'),
+    ).toBeInTheDocument();
+  });
+
+  it('says the read failed rather than claiming there is no record', async () => {
+    bundleHook.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    await renderPage();
+
+    expect(
+      screen.getByText('This record could not be read just now. Refresh to try again.'),
+    ).toBeInTheDocument();
+  });
+});
+
+/* `W3W-R1-04`. `get_client_commercial_document_bundle` refuses a reader the
+   paper is not addressed to with a 403, and React Query used to retry it
+   three times — five seconds of blank page, and then "Refresh to try again"
+   about a door that will never open. One answer, at once, in the sibling
+   rail's words. */
+describe('/proposals/[id]/record — a refusal', () => {
+  it('reads as a record that could not be found, with no refresh offered', async () => {
+    bundleHook.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { code: '42501', message: 'permission denied' },
+    });
+    await renderPage();
+
+    expect(screen.getByText('This record could not be found.')).toBeInTheDocument();
+    expect(screen.queryByText(/Refresh to try again/)).not.toBeInTheDocument();
+  });
+
+  it('still says a bad moment is a bad moment', async () => {
+    bundleHook.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('network'),
+    });
+    await renderPage();
+
+    expect(
+      screen.getByText('This record could not be read just now. Refresh to try again.'),
+    ).toBeInTheDocument();
+  });
+});
+
+/* ── Wave 2: what she agreed to, and the agreement as executed ───────────────
+   Two additions to this sheet and nothing else. The sentence comes from her
+   own signature's metadata — never `compose_agreement_consent` at read time,
+   because an addendum moves the parts and a record that quietly restates
+   today's terms is a record of a signature nobody gave. The frozen HTML comes
+   from `agreement_execution_snapshots`, written once at countersign (R12).
+
+   Absent, both print nothing at all: a pre-Wave-2 execution and an agreement
+   with no parts read exactly as this sheet has always read. No PDF, no
+   download, no "snapshot pending".
+   ────────────────────────────────────────────────────────────────────────── */
+
+const COMPOSED_LINE =
+  'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.';
+
+describe('/proposals/[id]/record — the composed agreement (Wave 2)', () => {
   it('says nothing about a snapshot when the execution predates one', async () => {
     await renderPage();
 
@@ -115,63 +313,56 @@ describe('/proposals/[id]/record — the keepsake', () => {
   });
 
   it('shows the frozen agreement the countersignature sealed, with its own mark', async () => {
-    bundleHook.mockReturnValue(
-      bundle({
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
         executionSnapshot: {
-          html: SNAPSHOT_HTML,
+          html: '<h2>Services</h2><p>Interior design services.</p><h2>Per-phase fee</h2>',
           documentHash: 'a1b2c3d4e5f6' + '0'.repeat(52),
-          createdAt: '2026-09-05T10:00:00Z',
+          createdAt: '2026-08-05T18:31:00Z',
         },
-      }),
-    );
-
+      },
+      isLoading: false,
+      isError: false,
+    });
     await renderPage();
 
     expect(screen.getByText('The agreement as executed')).toBeInTheDocument();
     const executed = screen.getByTestId('record-executed');
     expect(executed).toHaveTextContent('Services');
     expect(executed).toHaveTextContent('Per-phase fee');
+    // Twelve characters of the frozen document's own hash, never the whole of
+    // it — the same discipline the signature's mark keeps.
     expect(screen.getByTestId('record-executed-checksum')).toHaveTextContent(
       'Mark a1b2c3d4e5f6',
     );
+    expect(screen.getByTestId('record-executed-checksum').textContent).not.toContain(
+      'a1b2c3d4e5f6' + '0'.repeat(52),
+    );
   });
 
-  it('prints the sentence she ticked, not one composed today', async () => {
-    bundleHook.mockReturnValue(
-      bundle({
-        signatures: [
-          {
-            ...bundle().data.signatures[0],
-            consentSentence: COMPOSED_LINE,
-          },
-        ],
-      }),
-    );
-
+  it('prints the sentence she ticked, beside how she signed', async () => {
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        signatures: [{ ...BUNDLE.signatures[0], consentSentence: COMPOSED_LINE }],
+      },
+      isLoading: false,
+      isError: false,
+    });
     await renderPage();
 
     expect(screen.getByTestId('record-agreed')).toHaveTextContent(COMPOSED_LINE);
-    // The method statement stays beside it: how she signed and what she agreed
-    // to are two different facts, and the sheet has always carried the first.
+    // How she signed and what she agreed to are two different facts; the sheet
+    // has always carried the first and does not lose it to the second.
     expect(screen.getByTestId('record-consent')).toHaveTextContent(
-      'Signed electronically by typed name: Nora Ellison.',
+      'Signed electronically by typed name: Harper Vale.',
     );
   });
 
-  it('prints no consent line at all for a signature written before the composer', async () => {
+  it('prints no agreed sentence for a signature written before the composer', async () => {
     await renderPage();
 
     expect(screen.queryByTestId('record-agreed')).not.toBeInTheDocument();
-  });
-
-  it('keeps nothing for a paper nobody has signed', async () => {
-    bundleHook.mockReturnValue(bundle({ signatures: [] }));
-
-    await renderPage();
-
-    expect(screen.queryByTestId('record-sheet')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('This paper has not been signed yet, so there is nothing to keep.'),
-    ).toBeInTheDocument();
   });
 });
