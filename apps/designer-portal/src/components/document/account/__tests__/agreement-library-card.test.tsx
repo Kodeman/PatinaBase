@@ -199,14 +199,8 @@ describe("the Agreement Library card", () => {
 
   it("binds the acting studio into every Library mutation", () => {
     renderCard();
-    expect(mockBoundStudio).toHaveBeenCalledWith(
-      "rename-template",
-      "studio-1",
-    );
-    expect(mockBoundStudio).toHaveBeenCalledWith(
-      "delete-template",
-      "studio-1",
-    );
+    expect(mockBoundStudio).toHaveBeenCalledWith("rename-template", "studio-1");
+    expect(mockBoundStudio).toHaveBeenCalledWith("delete-template", "studio-1");
     expect(mockBoundStudio).toHaveBeenCalledWith("delete-part", "studio-1");
   });
 
