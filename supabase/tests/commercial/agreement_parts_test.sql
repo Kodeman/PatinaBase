@@ -47,6 +47,9 @@
 --        the page the homeowner reads. Reviewer probes R3 (prose only) and Q5
 --        (a rate card and a ceiling both kept from the client) refuse at the
 --        save door, the send door and the paper door; a ceiling is not a fee.
+--   (16) R28. Nothing the designer did not type is seeded as a term: a
+--        retainer of 0 and a cadence of 'monthly' were invented for a draft
+--        with no terms row.
 --   (17) R25. The bundle says `composed` itself, read over EVERY part — the
 --        client shell cannot count it off an array filtered to what she sees.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -2390,6 +2393,69 @@ BEGIN
     'R22: a parts-less document is not asked the fee question';
 
   RAISE NOTICE 'PASS 36: R4''s fee floor stands at the save, send and paper doors (R22)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (37) R28 — NOTHING THE DESIGNER DID NOT TYPE IS SEEDED AS A TERM.
+--
+-- materialize_standard_parts fell back to a retainer of 0 and a billing
+-- cadence of 'monthly' for a draft that carries no terms row at all. The
+-- cadence in particular printed "Monthly" on the page the homeowner signs,
+-- under a schedule nobody had chosen. Every seeded money part now comes from
+-- a value somebody set — this document's terms row, or the studio's defaults —
+-- or is left unset.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- `cadence` is NOT NULL on the defaults row, so "the studio has not said" is
+-- the absence of the row itself. This case runs after every other use of it.
+DELETE FROM public.studio_agreement_defaults
+WHERE studio_id = 'a5100000-0000-4000-8000-000000000001';
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+
+INSERT INTO public.proposals (
+  id, designer_id, designer_client_id, client_id, title, description,
+  total_amount, status, valid_until, document_kind
+) VALUES (
+  'a5300000-0000-4000-8000-000000000019',
+  'a5000000-0000-4000-8000-000000000001',
+  'a5200000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-000000000004',
+  'The agreement with no terms row', 'Nothing typed yet.', 0, 'draft',
+  DATE '2027-06-01', 'design_services');
+
+DO $$
+DECLARE v_retainer jsonb; v_cadence jsonb; v_stored text;
+BEGIN
+  PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000019');
+
+  SELECT ap.payload->'cents' INTO v_retainer
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000019'
+    AND ap.part_key = 'patina.retainer';
+  ASSERT jsonb_typeof(v_retainer) = 'null',
+    format('R28: a retainer nobody typed stays unset, got %s', v_retainer::text);
+
+  SELECT ap.payload->'cadence' INTO v_cadence
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000019'
+    AND ap.part_key = 'patina.cadence';
+  ASSERT jsonb_typeof(v_cadence) = 'null',
+    format('R28: a cadence nobody chose stays unset, got %s', v_cadence::text);
+
+  -- A cadence the studio DID set still seeds.
+  INSERT INTO public.studio_agreement_defaults (studio_id, cadence)
+  VALUES ('a5100000-0000-4000-8000-000000000001', 'biweekly');
+  PERFORM public.discard_agreement_parts('a5300000-0000-4000-8000-000000000019');
+  PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000019');
+
+  SELECT ap.payload->>'cadence' INTO v_stored
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000019'
+    AND ap.part_key = 'patina.cadence';
+  ASSERT v_stored = 'biweekly',
+    format('R28: a cadence the studio set still seeds, got %L', v_stored);
+
+  RAISE NOTICE 'PASS 37: a retainer and a cadence nobody set are not seeded as terms (R28)';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

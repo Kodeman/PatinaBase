@@ -165,6 +165,12 @@
 --         agreement whose every part the studio kept arrives with `parts: []`
 --         and must still render as composed — the homeowner reads the
 --         composition she was shown, never a terms row she was not.
+--   (R28) Nothing the designer did not type prints as a term. Beyond the
+--         deposit (R3-5), materialize_standard_parts invented two more
+--         values for a draft with no terms row: a retainer of 0 and a billing
+--         cadence of 'monthly' — and the cadence printed "Monthly" on the page
+--         the homeowner signs under a schedule nobody had chosen. Both are
+--         seeded now from a value somebody set, or left unset.
 --
 -- Every new SECURITY DEFINER here pins `search_path = public, pg_temp` — the
 -- posture of the surrounding commercial family (00412 / 00422 / 00423), and
@@ -3077,15 +3083,24 @@ BEGIN
      jsonb_build_object('depositPercent',
        COALESCE(v_terms.furnishings_deposit_percent, v_defaults.deposit_percent)),
      false, true),
+    -- (R28) Nothing the designer did not type prints as a term. Every seeded
+    -- money part is seeded from a value SOMEBODY SET — this document's terms
+    -- row, or the studio's defaults — and from nothing else. The retainer's
+    -- old COALESCE(..., 0) and the cadence's old COALESCE(..., 'monthly')
+    -- invented a figure and a term for a draft that has no terms row yet: the
+    -- cadence in particular printed "Monthly" on the page the homeowner signs
+    -- under a schedule nobody had chosen. Unset stays unset; the room's
+    -- readiness panel asks for both, and the projection still falls to 0 and
+    -- 'monthly' when it writes the money row, exactly as before.
     (p_proposal_id, 7, 'schedule', 'retainer', 'patina.retainer', 'Retainer',
      jsonb_build_object(
-       'cents', COALESCE(v_terms.retainer_amount_cents, 0),
+       'cents', v_terms.retainer_amount_cents,
        'creditRule', COALESCE(v_defaults.retainer_credit_rule, 'credited'),
        'activationPolicy', COALESCE(v_terms.retainer_activation_policy, 'immediate')),
      false, true),
     (p_proposal_id, 8, 'schedule', 'cadence', 'patina.cadence', 'Billing cadence',
      jsonb_build_object('cadence',
-       COALESCE(v_terms.billing_cadence, v_defaults.cadence, 'monthly')),
+       COALESCE(v_terms.billing_cadence, v_defaults.cadence)),
      false, true),
     (p_proposal_id, 9, 'clause', NULL, 'patina.terms', 'Terms',
      jsonb_build_object('body', COALESCE(v_terms.terms, '')), true, true);
