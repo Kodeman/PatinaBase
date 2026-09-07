@@ -389,9 +389,7 @@ describe("AgreementPartsBody", () => {
     // but the heading and the recorded line.
     expect(screen.queryByText("0% deposit")).not.toBeInTheDocument();
     expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
-    expect(
-      screen.getByText(AGREEMENT_PART_COPY.recorded),
-    ).toBeInTheDocument();
+    expect(screen.getByText(AGREEMENT_PART_COPY.recorded)).toBeInTheDocument();
   });
 
   it("still prints a figure somebody did write", () => {

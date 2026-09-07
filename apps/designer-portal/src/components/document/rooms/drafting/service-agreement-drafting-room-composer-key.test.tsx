@@ -165,5 +165,4 @@ describe("ServiceAgreementDraftingRoom · composer mount identity", () => {
     expect(await screen.findByTestId("composer")).toBeInTheDocument();
     expect(mockMountCount).toBe(1);
   });
-
 });
