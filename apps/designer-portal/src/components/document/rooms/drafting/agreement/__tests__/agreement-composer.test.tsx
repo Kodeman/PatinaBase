@@ -527,6 +527,73 @@ describe("AgreementComposer · readiness panel", () => {
   });
 });
 
+/* ── R29 · the two-click duplicate-variant path ──────────────────────────────
+   The designer lane's N1: from a materialized agreement, two clicks reached a
+   save the server cannot accept — "an agreement carries only one ceiling"
+   (23514) — with readiness green and nothing covering it. R18 closed the first
+   click (the Add menu no longer offers a money variant the agreement already
+   carries) and R29 pins BOTH ends of it: the menu does not name the act, and a
+   duplicate that arrives any other way is reported and holds the save.
+   ────────────────────────────────────────────────────────────────────────── */
+
+describe("AgreementComposer · one part per money variant (R18/R29)", () => {
+  const ceiling = (id: string, position: number) =>
+    part({
+      id,
+      partKey: position === 4 ? "patina.ceiling" : `custom.ceiling-${id}`,
+      position,
+      kind: "schedule",
+      variant: "ceiling",
+      title: "Ceiling",
+      payload: { cents: 2_400_000 },
+    });
+
+  it("does not offer a second ceiling once the agreement carries one", () => {
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith([...threeParts(), ceiling("ceiling-1", 4)])}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+
+    expect(screen.queryByRole("button", { name: "Ceiling" })).toBeNull();
+    // The menu is open and offering the parts that are still addable, so the
+    // absence above is a filter and not an unopened menu.
+    expect(screen.getByRole("button", { name: "Clause" })).toBeInTheDocument();
+  });
+
+  it("reports a duplicate money part and holds the save (R29)", () => {
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith([
+          ...threeParts(),
+          ceiling("ceiling-1", 4),
+          ceiling("ceiling-2", 5),
+        ])}
+      />,
+    );
+
+    expect(
+      screen.getByText("An agreement carries only one ceiling."),
+    ).toBeInTheDocument();
+
+    // Make the composition dirty, so nothing but the duplicate can be what
+    // holds the act.
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "Interior design services, revised." },
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Save agreement" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Review/ })).toBeDisabled();
+    expect(mockSaveParts).not.toHaveBeenCalled();
+  });
+});
+
 describe("AgreementComposer · resilience", () => {
   it("opens an unknown kind read-only rather than throwing", () => {
     const wormhole = {

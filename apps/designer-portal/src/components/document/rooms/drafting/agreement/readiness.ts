@@ -62,6 +62,13 @@ export interface AgreementReadiness {
  */
 const FEE_VARIANTS = ["rate_card", "flat", "per_phase"] as const;
 
+/** R18 — the duplicate's sentence, in the RPC's own words ("an agreement
+ *  carries only one ceiling", 00575), built in exactly one place because the
+ *  rail marks the row with it and the readiness panel prints it. */
+export function duplicateMoneyBlocker(label: string): string {
+  return `An agreement carries only one ${label}.`;
+}
+
 /** The blocker that is about the client account rather than the agreement.
  *  Excluded from the attention count, exactly as the seven-facet room
  *  excludes it today. */
@@ -116,7 +123,7 @@ export function assessAgreementReadiness({
   // arrives any other way, in the RPC's own words.
   for (const duplicate of duplicateMoneyVariants(parts)) {
     for (const partId of duplicate.partIds.slice(1)) {
-      add(partId, `An agreement carries only one ${duplicate.label}.`);
+      add(partId, duplicateMoneyBlocker(duplicate.label));
     }
   }
 

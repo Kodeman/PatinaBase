@@ -39,12 +39,13 @@ import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import { ServiceAgreementPreview } from "../../../commercial/service-agreement-preview";
 import { ServiceAgreementSendSheet } from "../../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
-import { createBlankPart } from "./part-kinds";
+import { createBlankPart, duplicateMoneyVariants } from "./part-kinds";
 import { PartEditor } from "./part-editor";
 import { PartsRail } from "./parts-rail";
 import {
   assessAgreementReadiness,
   documentBlockers,
+  duplicateMoneyBlocker,
   partsNeedingAttention,
 } from "./readiness";
 
@@ -157,6 +158,14 @@ export function AgreementComposer({
   }, [readiness]);
   const needAttention = partsNeedingAttention(readiness);
 
+  // R18 / R29 — a save the server cannot accept is not offered. The database
+  // refuses a second part of any money shape ("an agreement carries only one
+  // ceiling", 23514), and readiness says the same sentence first; holding the
+  // act as well is what keeps the room from ever earning that refusal. Every
+  // other blocker still saves — a draft is allowed to be unfinished.
+  const duplicates = useMemo(() => duplicateMoneyVariants(parts), [parts]);
+  const carriesADuplicate = duplicates.length > 0;
+
   const selected = parts.find((part) => part.id === selectedId) ?? null;
 
   const mutate = (next: AgreementPart[]) => {
@@ -200,6 +209,7 @@ export function AgreementComposer({
   };
 
   const persist = async () => {
+    if (carriesADuplicate) return false;
     // `upsert_agreement_parts` is DELETE-then-INSERT and does not carry `id`
     // through, so every part comes back with a new uuid. `part_key` is the
     // identity that survives a save — matching on `id` re-selected nothing
@@ -307,6 +317,7 @@ export function AgreementComposer({
           actionKey="review-design-agreement"
           variant="primary"
           trailing="→"
+          disabled={carriesADuplicate}
           onClick={() => void reviewAndSend()}
         >
           Review &amp; send
@@ -344,7 +355,7 @@ export function AgreementComposer({
               <Button
                 onClick={() => void persist()}
                 loading={save.isPending}
-                disabled={!dirty || readOnly}
+                disabled={!dirty || readOnly || carriesADuplicate}
               >
                 {dirty ? "Save agreement" : "Saved"}
               </Button>
@@ -431,9 +442,17 @@ export function AgreementComposer({
             <ReadinessPanel
               needAttention={needAttention}
               total={parts.length}
-              documentBlockers={documentBlockers(readiness).map(
-                (blocker) => blocker.message,
-              )}
+              documentBlockers={[
+                // The duplicate is a blocker ON a part, so the rail marks the
+                // row; it is also the one blocker that holds Save, so the
+                // panel says why in the same sentence.
+                ...duplicates.map((duplicate) =>
+                  duplicateMoneyBlocker(duplicate.label),
+                ),
+                ...documentBlockers(readiness).map(
+                  (blocker) => blocker.message,
+                ),
+              ]}
               notes={readiness.notes}
             />
             <div className="hidden min-[1180px]:block">
