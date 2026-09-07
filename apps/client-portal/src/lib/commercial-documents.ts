@@ -196,6 +196,53 @@ export interface TradeScopeAuthorization {
   depositInvoiceId: string | null;
 }
 
+/* ── THE TURNKEY LEDGER (Wave 3, P9 / P12 / R13) ─────────────────────────────
+   Everything the studio AUTHORED on a design-build agreement lives in
+   `parts` — the pricing basis and its cost lines, the draw schedule, the
+   allowances, the clauses, the attachments — inside the fingerprint W1 folds
+   parts into. What lives here instead is the machine state that only exists
+   AFTER the paper was signed: which draws have been billed, what each invoice
+   is doing, and which lien waiver came back against which draw.
+
+   R13 is enforced in the RPC and honoured again here. `subs` carries
+   IDENTITIES always and `awardedPriceCents` only under an `open_book`
+   sub-disclosure clause; the bid ledger (`trade_scope_bids`) has no key on
+   this object at any state, for any reason, and none may ever be added.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * One row of the client's draw ledger. `invoiceStatus` and `lienWaiver.type`
+ * stay plain strings for the same reason a part's `kind` does: both
+ * vocabularies are un-CHECKed and code-resident, so a value a later wave
+ * writes must arrive intact rather than be coerced into one this build knows.
+ */
+export interface DesignBuildDrawEntry {
+  drawKey: string;
+  label: string;
+  sortOrder: number;
+  grossCents: number;
+  retainageCents: number;
+  netCents: number;
+  isRetainageRelease: boolean;
+  invoiceStatus: string | null;
+  paidAt: string | null;
+  lienWaiver: { type: string; receivedAt: string | null } | null;
+}
+
+/** Who is doing the work. Never a price under `closed_book`, never a bid. */
+export interface DesignBuildSubIdentity {
+  displayName: string;
+  companyName: string | null;
+  trade: string | null;
+  awardedPriceCents: number | null;
+}
+
+export interface DesignBuildLedger {
+  draws: DesignBuildDrawEntry[];
+  retainageHeldCents: number;
+  subs: DesignBuildSubIdentity[];
+}
+
 /**
  * One part of a composed agreement, as the bundle RPC projects it.
  *
@@ -273,6 +320,10 @@ export interface CommercialDocumentBundle {
   executionSnapshot: AgreementExecutionSnapshot | null;
   furnishings: FurnishingsAuthorization | null;
   tradeScope: TradeScopeAuthorization | null;
+  /** Wave 3 — null on every other kind, and on a turnkey prime the bundle
+   *  did not project a ledger for (a document sent by a database this build
+   *  is ahead of). The body then reads the authored parts alone. */
+  designBuild: DesignBuildLedger | null;
 }
 
 export interface ProjectAuthoritySummary extends Omit<ProjectBillingAuthoritySummary, 'rates'> {
@@ -566,6 +617,57 @@ function adaptTradeScopeProgress(value: unknown): TradeScopeProgress {
   };
 }
 
+function adaptDesignBuildDraws(value: unknown): DesignBuildDrawEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .flatMap((item, index) => {
+      const row = record(item);
+      const drawKey = text(first(row, 'drawKey', 'draw_key'));
+      if (!drawKey) return [];
+      const waiver = record(first(row, 'lienWaiver', 'lien_waiver'));
+      const waiverType = text(first(waiver, 'type'));
+      return [{
+        drawKey,
+        label: text(first(row, 'label'), drawKey),
+        sortOrder: number(first(row, 'sortOrder', 'sort_order'), index),
+        grossCents: number(first(row, 'grossCents', 'gross_cents')),
+        retainageCents: number(first(row, 'retainageCents', 'retainage_cents')),
+        netCents: number(first(row, 'netCents', 'net_cents')),
+        isRetainageRelease:
+          first(row, 'isRetainageRelease', 'is_retainage_release') === true,
+        invoiceStatus: nullableText(first(row, 'invoiceStatus', 'invoice_status')),
+        paidAt: nullableText(first(row, 'paidAt', 'paid_at')),
+        // A waiver with no type is not a waiver — the strip says nothing
+        // rather than drawing an empty receipt against the draw.
+        lienWaiver: waiverType
+          ? { type: waiverType, receivedAt: nullableText(first(waiver, 'receivedAt', 'received_at')) }
+          : null,
+      }];
+    })
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * R13 at this edge: identities always, `awardedPriceCents` only when the RPC
+ * sent one (it sends none under `closed_book`), and no key for a bid — a row
+ * carrying extra keys loses them here, because this adapter maps the shape it
+ * knows and discards the rest.
+ */
+function adaptDesignBuildSubs(value: unknown): DesignBuildSubIdentity[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const row = record(item);
+    const displayName = text(first(row, 'displayName', 'display_name'));
+    if (!displayName) return [];
+    return [{
+      displayName,
+      companyName: nullableText(first(row, 'companyName', 'company_name')),
+      trade: nullableText(first(row, 'trade')),
+      awardedPriceCents: nullableNumber(first(row, 'awardedPriceCents', 'awarded_price_cents')),
+    }];
+  });
+}
+
 /** Maps the database-owned allowlist bundle and intentionally discards every unknown key. */
 export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumentBundle | null {
   const raw = record(value);
@@ -607,6 +709,11 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
   const tradeScopeRaw = Object.keys(nestedTradeScope).length > 0
     ? nestedTradeScope
     : kind === 'trade_scope' ? source : {};
+  // Wave 3. Unlike `tradeScope`, the turnkey ledger has NO kind-is-source
+  // fallback: a `design_build` document whose bundle carries no `designBuild`
+  // object has no ledger, and reading the document row as one would invent an
+  // empty draw schedule where the RPC said nothing at all.
+  const designBuildRaw = record(first(raw, 'designBuild', 'design_build'));
   const replacementRaw = record(first(raw, 'replacement'));
   const signatureRows = first(raw, 'signatures') ?? first(source, 'signatures');
   const rateRows = first(raw, 'rates') ?? first(source, 'rates');
@@ -765,6 +872,13 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       draws: adaptTradeScopeDraws(first(tradeScopeRaw, 'draws')),
       progress: adaptTradeScopeProgress(first(tradeScopeRaw, 'progress')),
       depositInvoiceId: nullableText(first(tradeScopeRaw, 'depositInvoiceId', 'deposit_invoice_id')),
+    },
+    designBuild: Object.keys(designBuildRaw).length === 0 ? null : {
+      draws: adaptDesignBuildDraws(first(designBuildRaw, 'draws')),
+      retainageHeldCents: number(
+        first(designBuildRaw, 'retainageHeldCents', 'retainage_held_cents'),
+      ),
+      subs: adaptDesignBuildSubs(first(designBuildRaw, 'subs')),
     },
   };
 }
