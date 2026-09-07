@@ -253,6 +253,12 @@ function ProcurementLeaf({ part }: { part: CommercialAgreementPart }) {
     { label: 'Terms of sale', value: payloadText(part.payload.termsOfSale) },
   ].filter((note) => note.value.length > 0);
 
+  // R28 (re-gate 2, F2) — a deposit nobody set is not something "recorded with
+  // your agreement": under a "Furnishings deposit" heading that sentence
+  // asserts a term exists when none does. The part takes its section with it,
+  // the way an empty clause does.
+  if (!depositIsWritten && notes.length === 0) return null;
+
   return (
     <>
       <PartHeading title={part.title} />
@@ -269,7 +275,6 @@ function ProcurementLeaf({ part }: { part: CommercialAgreementPart }) {
           ))}
         </dl>
       ) : null}
-      {!depositIsWritten && notes.length === 0 ? <RecordedLine /> : null}
     </>
   );
 }
@@ -327,7 +332,10 @@ function ScheduleLeaf({ part, currency }: { part: CommercialAgreementPart; curre
     case 'cadence':
       return <CadenceLeaf part={part} />;
     case 'procurement':
-      return <ProcurementLeaf part={part} />;
+      // Called, not mounted: an unset deposit draws nothing, and only a leaf
+      // that is CALLED can hand that `null` back up to `PartSection` so the
+      // whole section goes with it (R28, F2).
+      return ProcurementLeaf({ part });
     case 'flat':
       return <FlatLeaf part={part} currency={currency} />;
     case 'per_phase':

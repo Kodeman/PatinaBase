@@ -228,7 +228,10 @@ function renderPartBody(
       ).filter(([, value]) => typeof value === "string" && value.trim());
       // R21 — `0% deposit` is not a deposit term, it is an unwritten one, and
       // a percent has no "Not yet set" twin on today's paper: it draws nothing.
-      if (!isWritten(percent) && extras.length === 0) return <RecordedLine />;
+      // R28 (re-gate 2, F2) — and "Recorded with your agreement." under a
+      // "Furnishings deposit" heading asserts a term nobody wrote, so the
+      // unset part takes its whole section with it on both surfaces.
+      if (!isWritten(percent) && extras.length === 0) return null;
       return (
         <div className="space-y-1 text-[12.5px] text-[var(--color-charcoal)]">
           {isWritten(percent) && <p>{agreementDepositLine(percent)}</p>}

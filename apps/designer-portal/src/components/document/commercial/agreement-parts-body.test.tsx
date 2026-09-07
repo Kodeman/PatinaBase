@@ -403,7 +403,7 @@ describe("AgreementPartsBody", () => {
     expect(screen.queryByText("$0")).not.toBeInTheDocument();
   });
 
-  it("draws no deposit line for a deposit of zero percent", () => {
+  it("draws nothing at all for a deposit of zero percent", () => {
     renderParts([
       part({
         partKey: "patina.deposit",
@@ -413,11 +413,37 @@ describe("AgreementPartsBody", () => {
         payload: { depositPercent: 0 },
       }),
     ]);
-    // A percent has no "Not yet set" twin on today's paper: it draws nothing
-    // but the heading and the recorded line.
+    // A percent has no "Not yet set" twin on today's paper, and R28 (re-gate 2,
+    // F2) will not let the recorded line assert a term nobody wrote: the part
+    // takes its whole section with it, here and on the homeowner's page.
     expect(screen.queryByText("0% deposit")).not.toBeInTheDocument();
     expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
-    expect(screen.getByText(AGREEMENT_PART_COPY.recorded)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Furnishings deposit" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(AGREEMENT_PART_COPY.recorded),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a deposit part that names only a term of sale", () => {
+    renderParts([
+      part({
+        partKey: "patina.deposit",
+        kind: "schedule",
+        variant: "procurement",
+        title: "Furnishings deposit",
+        payload: {
+          depositPercent: 0,
+          termsOfSale: "Net 30 from invoice date.",
+        },
+      }),
+    ]);
+    expect(
+      screen.getByRole("heading", { name: "Furnishings deposit" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Net 30 from invoice date\./)).toBeInTheDocument();
+    expect(screen.queryByText("0% deposit")).not.toBeInTheDocument();
   });
 
   it("still prints a figure somebody did write", () => {

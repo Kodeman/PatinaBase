@@ -802,12 +802,19 @@ describe('CommercialDocumentShell', () => {
       expect(screen.getByText('Net 30 from invoice date.')).toBeInTheDocument();
     });
 
-    it('records a deposit part written as zero with nothing else beside it', () => {
+    /**
+     * R28 (re-gate 2, F2) — a deposit written as zero with nothing beside it
+     * is a term nobody set, and an unset term is nothing on her page: no
+     * heading, no "Recorded with your agreement." asserting that something was.
+     */
+    it('draws nothing at all for a deposit part written as zero with nothing beside it', () => {
       render(<CommercialDocumentShell bundle={bundle({
-        parts: [part({ kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: { depositPercent: 0 } })],
+        parts: [part({ partKey: 'patina.deposit', kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: { depositPercent: 0 } })],
       })} />);
       expect(screen.queryByText('0% deposit')).not.toBeInTheDocument();
-      expect(screen.getByText('Recorded with your agreement.')).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Furnishings deposit' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Recorded with your agreement.')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('agreement-part')).not.toBeInTheDocument();
     });
 
     /**
@@ -826,6 +833,10 @@ describe('CommercialDocumentShell', () => {
       expect(screen.getAllByText('Not yet set')).toHaveLength(2);
       expect(screen.queryByText('$0')).not.toBeInTheDocument();
       expect(screen.queryByText('0% deposit')).not.toBeInTheDocument();
+      // The unset deposit is not on the page at all (R28, F2) — the ceiling
+      // and the retainer are, and they say they are unwritten.
+      expect(screen.queryByRole('heading', { name: 'Furnishings deposit' })).not.toBeInTheDocument();
+      expect(screen.getAllByTestId('agreement-part')).toHaveLength(2);
     });
 
     it('prints the retainer figure with the activation sentence its policy names', () => {
@@ -868,11 +879,17 @@ describe('CommercialDocumentShell', () => {
       expect(screen.getByText('Terms of sale')).toBeInTheDocument();
     });
 
-    it('records a deposit part that names neither a percent nor a term', () => {
+    it('drops a deposit part that names neither a percent nor a term, and keeps its neighbours', () => {
       render(<CommercialDocumentShell bundle={bundle({
-        parts: [part({ kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: {} })],
+        parts: [
+          part({ id: 'd1', position: 1, partKey: 'patina.deposit', kind: 'schedule', variant: 'procurement', title: 'Furnishings deposit', payload: {} }),
+          part({ id: 'd2', position: 2, partKey: 'patina.terms', kind: 'clause', title: 'Terms', payload: { body: 'Actual time billed monthly.' } }),
+        ],
       })} />);
-      expect(screen.getByText('Recorded with your agreement.')).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Furnishings deposit' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Recorded with your agreement.')).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Terms' })).toBeInTheDocument();
+      expect(screen.getAllByTestId('agreement-part')).toHaveLength(1);
     });
 
     it('prints a flat fee, and records one that names no figure', () => {
