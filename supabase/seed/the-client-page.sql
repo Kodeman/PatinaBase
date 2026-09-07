@@ -454,20 +454,109 @@ BEGIN
     (v_room_stair, v_project, 'Stair',    2, ts, ts);
 
   -- ── The signed design-services instrument: origin 'commercial' ──────────
+  --
+  -- R26 — and it is COMPOSED. "The Agreement, Composed" Wave 1 gives an
+  -- agreement an ordered list of parts (00575), and the homeowner's page
+  -- renders those parts rather than the seven fixed facets. Until this fixture
+  -- existed the local stack carried no composed agreement at all, so the one
+  -- e2e assertion that reads a composed page (build/waves/w1/build-sheet.md
+  -- §6.6, apps/client-portal/tests/threshold.spec.ts) could only run against
+  -- an agreement with no parts and could never fail.
+  --
+  -- The order below is the order the database insists on, and each step is
+  -- refused if it is taken out of turn:
+  --   1. the proposal as a DRAFT — proposal_agreement_parts and
+  --      proposal_service_terms are authored content, frozen the moment the
+  --      proposal leaves draft (guard_commercial_authored_child);
+  --   2. the terms row and the rates BEFORE the parts — once a proposal has
+  --      parts the money row is a projection and only upsert_agreement_parts
+  --      may write it (guard_agreement_projection_write, R17);
+  --   3. the parts, whose money figures are exactly what step 2 wrote, so this
+  --      fixture is indistinguishable from one the Contract Room composed;
+  --   4. the promotion to executed, under the row-exact capability GUCs — the
+  --      same ⚠ that governs the trade scope above applies here.
 
   INSERT INTO public.proposals (
     id, project_id, designer_id, client_id, designer_client_id, title, description,
     status, document_kind, commercial_state, total_amount, subtotal,
-    sent_at, accepted_at, signed_at, signed_by_name, created_at, updated_at
+    sent_at, created_at, updated_at
   ) VALUES (
     v_ds_proposal, v_project, uid_designer, uid_solo, v_relationship,
     'Cedar Lane — Design Services',
     'The studio''s engagement for the study, hall and stair.',
-    'accepted', 'design_services', 'executed', 640000, 640000,
-    ts - INTERVAL '118 days', ts - INTERVAL '112 days',
-    ts - INTERVAL '112 days', 'Nora Ellison',
-    ts - INTERVAL '120 days', ts - INTERVAL '112 days'
+    'draft', 'design_services', 'draft', 640000, 640000,
+    ts - INTERVAL '118 days',
+    ts - INTERVAL '120 days', ts - INTERVAL '118 days'
   );
+
+  INSERT INTO public.proposal_service_terms (
+    proposal_id, scope, deliverables, exclusions,
+    billing_ceiling_cents, retainer_amount_cents, retainer_activation_policy,
+    billing_cadence, currency, terms, current_rate_version,
+    created_at, updated_at
+  ) VALUES (
+    v_ds_proposal,
+    'Interior design services for the study, hall and stair: survey, concept, documentation and selections.',
+    '["Concept presentation", "Design documentation", "Selection schedules"]'::jsonb,
+    '["Construction labor", "Furnishings, freight, tax, and installation"]'::jsonb,
+    640000, 0, 'immediate', 'monthly', 'USD',
+    'Work proceeds on the schedule agreed at kickoff. Additional scope is authorized in writing before it is invoiced.',
+    1, ts - INTERVAL '120 days', ts - INTERVAL '118 days'
+  );
+
+  INSERT INTO public.proposal_service_rates (
+    proposal_id, version, role_name, hourly_rate_cents, sort_order, effective_at, created_at
+  ) VALUES
+    (v_ds_proposal, 1, 'Principal designer', 22500, 0, ts - INTERVAL '120 days', ts - INTERVAL '120 days'),
+    (v_ds_proposal, 1, 'Project designer',   15000, 1, ts - INTERVAL '120 days', ts - INTERVAL '120 days');
+
+  INSERT INTO public.proposal_agreement_parts (
+    proposal_id, position, kind, variant, part_key, title, payload,
+    required, client_visible, created_at, updated_at
+  ) VALUES
+    (v_ds_proposal, 1, 'clause', NULL, 'patina.services', 'Services',
+     jsonb_build_object('body',
+       'Interior design services for the study, hall and stair: survey, concept, documentation and selections.'),
+     TRUE, TRUE, ts - INTERVAL '120 days', ts - INTERVAL '118 days'),
+    (v_ds_proposal, 2, 'list', NULL, 'patina.deliverables', 'Deliverables',
+     jsonb_build_object('items', jsonb_build_array(
+       jsonb_build_object('id', 'b0000000-0000-0000-0000-00000000cd01', 'text', 'Concept presentation'),
+       jsonb_build_object('id', 'b0000000-0000-0000-0000-00000000cd02', 'text', 'Design documentation'),
+       jsonb_build_object('id', 'b0000000-0000-0000-0000-00000000cd03', 'text', 'Selection schedules'))),
+     FALSE, TRUE, ts - INTERVAL '120 days', ts - INTERVAL '118 days'),
+    (v_ds_proposal, 3, 'list', NULL, 'patina.exclusions', 'Exclusions',
+     jsonb_build_object('items', jsonb_build_array(
+       jsonb_build_object('id', 'b0000000-0000-0000-0000-00000000cd04', 'text', 'Construction labor'),
+       jsonb_build_object('id', 'b0000000-0000-0000-0000-00000000cd05', 'text', 'Furnishings, freight, tax, and installation'))),
+     FALSE, TRUE, ts - INTERVAL '120 days', ts - INTERVAL '118 days'),
+    (v_ds_proposal, 4, 'schedule', 'rate_card', 'patina.role_rates', 'Role rates',
+     jsonb_build_object('roles', jsonb_build_array(
+       jsonb_build_object('roleName', 'Principal designer', 'hourlyRateCents', 22500, 'sortOrder', 0),
+       jsonb_build_object('roleName', 'Project designer', 'hourlyRateCents', 15000, 'sortOrder', 1))),
+     FALSE, TRUE, ts - INTERVAL '120 days', ts - INTERVAL '118 days'),
+    (v_ds_proposal, 5, 'schedule', 'ceiling', 'patina.ceiling', 'Ceiling',
+     jsonb_build_object('cents', 640000),
+     FALSE, TRUE, ts - INTERVAL '120 days', ts - INTERVAL '118 days'),
+    (v_ds_proposal, 6, 'schedule', 'cadence', 'patina.cadence', 'Billing cadence',
+     jsonb_build_object('cadence', 'monthly'),
+     FALSE, TRUE, ts - INTERVAL '120 days', ts - INTERVAL '118 days'),
+    (v_ds_proposal, 7, 'clause', NULL, 'patina.terms', 'Terms',
+     jsonb_build_object('body',
+       'Work proceeds on the schedule agreed at kickoff. Additional scope is authorized in writing before it is invoiced.'),
+     TRUE, TRUE, ts - INTERVAL '120 days', ts - INTERVAL '118 days');
+
+  PERFORM set_config('app.proposal_accept_id', v_ds_proposal::text, true);
+  PERFORM set_config('app.commercial_document_id', v_ds_proposal::text, true);
+  UPDATE public.proposals
+     SET status = 'accepted',
+         commercial_state = 'executed',
+         accepted_at = ts - INTERVAL '112 days',
+         signed_at = ts - INTERVAL '112 days',
+         signed_by_name = 'Nora Ellison',
+         updated_at = ts - INTERVAL '112 days'
+   WHERE id = v_ds_proposal;
+  PERFORM set_config('app.proposal_accept_id', '', true);
+  PERFORM set_config('app.commercial_document_id', '', true);
 
   INSERT INTO public.project_commercial_documents (
     id, project_id, proposal_id, document_kind, wave_name,

@@ -64,6 +64,21 @@ const STANDING_NOTE_BODY =
 const SEEDED_ROOMS = ['Study', 'Hall', 'Stair'];
 
 /**
+ * The composed agreement's parts, in `position` order, as
+ * `the-client-page.sql` writes them (R26). Titles, not keys: this is the page
+ * the homeowner reads.
+ */
+const SEEDED_AGREEMENT_PART_TITLES = [
+  'Services',
+  'Deliverables',
+  'Exclusions',
+  'Role rates',
+  'Ceiling',
+  'Billing cadence',
+  'Terms',
+];
+
+/**
  * Signs in as a seeded household. The golden-hour restyle made sign-in
  * email-first: the password leg sits behind a disclosure, and submitting
  * without opening it sends a six-digit passcode instead. Same shape as
@@ -378,43 +393,26 @@ test.describe('The Threshold — the client page', () => {
   });
 
   /**
-   * "The Agreement, Composed" (Wave 1) — build sheet §6.6, both halves of it,
-   * in one test because the two halves are the same reading of the same
-   * instrument and only the stack decides which one is true.
+   * "The Agreement, Composed" (Wave 1) — build sheet §6.6, the client half.
    *
-   * The agreement opens in full from the fold on its Previously line. Then:
+   * The agreement opens in full from the fold on its Previously line, and the
+   * part titles appear in `position` order, every one of them written, with
+   * the separate-purchase boundary said exactly once.
    *
-   *   - a stack that carries a composed agreement asserts the assertion the
-   *     sheet names — the part titles appear in `position` order, every one of
-   *     them written, and the separate-purchase boundary is said exactly once;
-   *   - a stack that carries none asserts the flag-off shape — no parts body
-   *     and no stray part. That is the shape every agreement in production
-   *     takes until 00575 is applied and a studio composes something, and if a
-   *     parts body ever appears there, parts have leaked onto a document that
-   *     has none.
+   * R26 — this assertion is unconditional. `supabase/seed/the-client-page.sql`
+   * lays the solo client's executed agreement down COMPOSED: a
+   * `proposal_service_terms` row, its rates, and seven
+   * `proposal_agreement_parts` rows written while the proposal was still a
+   * draft, then promoted to executed under the capability GUCs. It was
+   * previously a branch — "assert the composed shape if the stack carries one,
+   * otherwise assert there are no parts" — which on every stack that existed
+   * took the second leg and could not fail.
    *
-   * TODAY this stack takes the second branch: the seed lays the solo client's
-   * executed agreement down as a proposal plus a `project_commercial_documents`
-   * row with NO `proposal_service_terms` row (`supabase/seed/the-client-page.sql:95-118`),
-   * so `DesignServicesBody` returns null and the shell prints its header, its
-   * execution mark and its footer around nothing.
-   *
-   * The first branch lights up with NO edit to this file the moment the
-   * integration steward lands both halves of the fixture — (1) migration
-   * `00575_agreement_parts.sql` applied to the local stack, which creates
-   * `proposal_agreement_parts` and adds the `parts` key to
-   * `get_client_commercial_document_bundle`, and (2) a seed beside that
-   * agreement laying down BOTH a `proposal_service_terms` row and the parts
-   * (parts alone would not light it up: without the terms row
-   * `DesignServicesBody` returns null before it reaches the branch). Written
-   * as a live branch rather than a `test.fixme` so that landing the fixture is
-   * the only thing owed, and so this spec can never pass by never running.
-   *
-   * Until then the part renderer's own coverage is the jsdom suite
+   * The renderer's own unit coverage is the jsdom suite
    * (`src/components/__tests__/commercial-document-shell.test.tsx`), against
-   * hand-built bundles — never against a real RPC.
+   * hand-built bundles; this is the one reading that goes through the real RPC.
    */
-  test('reads the agreement in full — its parts in position order where the stack carries a composed one', async ({
+  test('reads the composed agreement in full — its parts in position order', async ({
     page,
   }) => {
     await signInAsClient(page);
@@ -441,28 +439,27 @@ test.describe('The Threshold — the client page', () => {
       // The instrument that opened is the agreement, not a neighbouring paper.
       expect(await shell.getByText('Design services agreement').count()).toBe(1);
 
+      // The body is the composed one — read from the parts, never from the
+      // terms row (R25).
+      expect(await shell.getByTestId('agreement-parts-body').count()).toBe(1);
+
       const parts = shell.getByTestId('agreement-part');
+      expect(await parts.count()).toBe(SEEDED_AGREEMENT_PART_TITLES.length);
 
-      if (await shell.getByTestId('agreement-parts-body').count()) {
-        expect(await parts.count()).toBeGreaterThan(0);
+      const positions = await parts.evaluateAll((nodes) =>
+        nodes.map((node) => Number(node.getAttribute('data-position'))),
+      );
+      expect(positions).toEqual([...positions].sort((a, b) => a - b));
 
-        const positions = await parts.evaluateAll((nodes) =>
-          nodes.map((node) => Number(node.getAttribute('data-position'))),
-        );
-        expect(positions).toEqual([...positions].sort((a, b) => a - b));
+      const titles = await parts.evaluateAll((nodes) =>
+        nodes.map((node) => node.querySelector('h2, p')?.textContent?.trim() ?? ''),
+      );
+      expect(titles).toEqual(SEEDED_AGREEMENT_PART_TITLES);
 
-        const titles = await parts.evaluateAll((nodes) =>
-          nodes.map((node) => node.querySelector('h2, p')?.textContent?.trim() ?? ''),
-        );
-        expect(titles.every((title) => title.length > 0)).toBe(true);
-
-        // The separate-purchase boundary is said once, by the parts body.
-        expect(
-          await shell.getByText(/require a separate named furnishings authorization/i).count(),
-        ).toBe(1);
-      } else {
-        expect(await parts.count()).toBe(0);
-      }
+      // The separate-purchase boundary is said once, by the parts body.
+      expect(
+        await shell.getByText(/require a separate named furnishings authorization/i).count(),
+      ).toBe(1);
     }).toPass({ timeout: 90_000 });
   });
 
