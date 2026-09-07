@@ -313,3 +313,148 @@ executed, exactly like the other four RPCs in the owed list above. It returns
 `jsonb`; `commitSend` reads `state` and `sent_at` off it (array-unwrapping
 first, as `mintToken` does) and reports `send_trade_agreement returned no row`
 if the shape is not that.
+
+> **Superseded by round 2.** The paragraph above was true when it was written
+> and is false now: the backend lane's migrations landed, every name was
+> checked against them, and one of them was wrong. See below.
+
+---
+
+# Round 2 fixes (adversarial review, 2026-09-07)
+
+Two majors, F7 and F16. Both were the same complaint in two costumes — *this
+lane's database names come from prose, not from SQL* — and both are now
+answered from applied SQL rather than from the build sheet.
+
+The fact that unblocked them: **the backend lane's two migrations now exist.**
+At round-1 time `agreement/w3-backend` carried three files and no migration. It
+now carries `00578_design_build_kind.sql` (7544 lines) and
+`00579_trade_agreements.sql` (1033 lines), branch tip `985e8ae94`. Every name
+below was re-derived by reading those two files, not by re-reading §3.2.
+
+## F7 — the names, checked against SQL, and the one that was wrong
+
+**One real drift, and it fails silently.** `public.send_trade_agreement`
+`RETURNS jsonb` (`00579:513`) and builds an object with **camelCase** keys
+(`00579:546-559`) — `'state'`, `'sentAt'`. `commitSend` read `row.sent_at`, a
+*column* name that is not a key of that object. It does not throw and it does
+not 502: `state` resolves, `sentAt` resolves `undefined → null`, and the
+function returns `200 {ok:true, …, sentAt:null}` on **every** send. The studio
+sees a success with no date on it.
+
+Fixed by moving both RPC payload shapes into exported pure functions, pinned by
+tests to the migration rather than to prose:
+
+| Function (`lib.ts`) | Pins |
+|---|---|
+| `mapCommitSendResult(data)` | `RETURNS jsonb`, single object, keys `state` + `sentAt`; a `sent_at` key is explicitly asserted **not** to be read (the regression test); missing/blank `state` → a reported error, never a bare row |
+| `mapMintTokenResult(data)` | `RETURNS TABLE (id uuid, token text)` (`00579:577`) → PostgREST array; `data[0].token`; empty array / no token → `no_token` |
+
+Six new Deno tests. `index.ts`'s two deps now call the mappers and keep only
+their `console.error` lines.
+
+**The full manifest, each row verified against applied SQL.** This is the list
+the integration steward re-checks before cutting the deploy set; every row here
+was read, not assumed. Line numbers are `agreement/w3-backend` @ `985e8ae94`.
+
+| Name this lane calls | Where it is defined | Verdict |
+|---|---|---|
+| `public.studio_trade_agreements` | `00579:47` | exists |
+| its 18 selected columns — `id, studio_id, title, scope, price_cents, currency, schedule, retainage_bps, pay_when_paid_days, insurance_certificate_required, lien_waiver_policy, contact_id, contact_display_name, contact_company_name, contact_email, created_by, state, sent_at` | `00579:48-87` | all 18 present, spelled as selected |
+| `GRANT ALL … TO service_role` on that table (the loader is a service-role client) | `00579:299` | granted |
+| `public.send_trade_agreement(p_agreement_id uuid)` | `00579:512`, arg name `p_agreement_id` | matches |
+| → `RETURNS jsonb`, keys `state` / `sentAt` | `00579:513`, `546-559` | **DRIFT — fixed here** |
+| → `GRANT EXECUTE … TO authenticated` (so it must run as the caller, not service role) | `00579:564` | matches the anon-key-plus-caller-header client |
+| → state gate `IN ('draft','sent')` | `00579:534` | matches `SENDABLE_STATES` |
+| → `sent_at = COALESCE(sent_at, now())` | `00579:541` | matches DENO-4's "stamps `sent_at` on first send only" |
+| `public.mint_trade_agreement_token(p_agreement_id uuid)` | `00579:575-576` | matches |
+| → `RETURNS TABLE (id uuid, token text)`, `RETURN QUERY` | `00579:577`, `617` | array unwrap correct |
+| → `service_role` only, and requires `state IN ('sent','signed')` | `00579:588-591`, `624-625` | correct: this lane commits the send **before** minting |
+| `public.is_active_studio_member(p_org uuid)` | `00417_studio_contacts.sql:40`, grant `:58` | pre-existing; arg name `p_org` matches |
+| `public.agreement_draw_invoices` + `id, proposal_id, invoice_id` | `00578:394`, `395`, `396`, `405` | all three present |
+| → `GRANT ALL … TO service_role` | `00578:547` | granted |
+| `public.invoices(id, status)` | pre-existing | unchanged by this wave |
+| `proposals.document_kind` admits `'design_build'` | `00578:118-124` | widened — this is what `proposal-send/index.ts:235`'s fallback reads |
+| `public.profiles(full_name, business_name, email)`, `resolveStudioIdentity(supa, {studioId})` | pre-existing; `_shared/studio-identity.ts:38-55` | unchanged |
+
+Two notes that fall out of the manifest and are **not** defects:
+
+- `proposal_send_dispatches` has no `document_kind` column at all
+  (`00388:19-45`; nothing adds one). `proposal-send/index.ts:105` reads it
+  optionally and `:228-238` falls back to `proposals.document_kind` — the
+  pre-existing path, and the one that carries `design_build`. No dispatch-side
+  widening is owed.
+- `agreement_draw_ready` appears nowhere in `00578`. It is not meant to: the
+  transition is posted by the designer portal
+  (`apps/designer-portal/src/app/api/commercial/[id]/paper-notify/route.ts`),
+  the same caller `trade_draw_ready` has. Designer lane's item, not a missing
+  migration.
+
+**What is still not proven, and by what.** Nothing was executed. This is a
+static cross-read of two migration files, which catches a wrong name and cannot
+catch a wrong grant at runtime, a policy that bites the service-role client, or
+a PostgREST serialization surprise. The live proof is the walk: `send` on a
+real Trade Agreement returning `200` with a **non-null `sentAt`** and a token
+link that resolves — that one response exercises `send_trade_agreement`,
+`mint_trade_agreement_token`, both mappers and `is_active_studio_member` at
+once. Until then, treat this manifest as the checklist, not as the evidence.
+
+## F16 — the resend guard: already column-scoped in the applied SQL
+
+The worry was exact and it was worth having: `send_trade_agreement` accepts
+`state IN ('draft','sent')` and then UPDATEs the row, so on a **resend** it
+writes a row that is already `'sent'`; a `SECURITY DEFINER` RPC does not bypass
+its own table's trigger, so a whole-row `guard_trade_agreement_authored` would
+abort inside the RPC and every resend would `502 commit_failed` forever.
+
+It does not. `guard_trade_agreement_authored` (`00579:210-260`) returns early
+when `OLD.state = 'draft'` and otherwise compares **only content columns** —
+`project_id, studio_id, source_proposal_id, contact_id, contact_display_name,
+contact_company_name, contact_email, trade, title, scope, price_cents,
+currency, schedule, retainage_bps, pay_when_paid_days,
+insurance_certificate_required, lien_waiver_policy, flow_down_clause_key,
+sov_line_ids, created_by, created_at`. `state`, `sent_at`, `signed_at`,
+`voided_at`, `void_reason` and `updated_at` are absent from that list, so the
+state machine still moves after `'sent'` and a resend passes. The freeze this
+lane relies on is intact in the same read: a content UPDATE after `'sent'`
+raises `check_violation`.
+
+The finding's real point stands anyway — nothing *made* the backend honour it.
+Both halves of its prescribed fix are now in the build sheet:
+
+- **§3.2** gained a paragraph stating the guard is column-scoped, naming both
+  column lists, and stating the consequence of getting it wrong (permanent
+  `502 commit_failed` on every resend). The same paragraph pins the two RPC
+  return shapes F7 caught, for the same reason: read wrong, they fail quietly.
+  The `send_trade_agreement` table row now points at it.
+- **§5** gained **SQL-A10**: send, send again, assert the second call does not
+  raise, `state` is still `'sent'`, `sent_at` is unchanged, the returned jsonb
+  carries `state`/`sentAt`, a direct content UPDATE on that row still raises,
+  and a second mint revokes the first token.
+
+**Owed to the backend lane:** `trade_agreement_test.sql` covers SQL-A1…A9 and
+sends five agreements but never sends one twice — no resend case exists. SQL-A10
+is specified and unwritten. It belongs in that file, not this one; the Deno side
+of the same behaviour is covered here (`index.test.ts`, "send mode, resend of a
+'sent' agreement"), but a DI harness cannot fire a trigger.
+
+## Gates re-run (round 2)
+
+```
+deno test --allow-all --config .../supabase/functions/deno.json .../_shared/
+  → ok | 352 passed | 0 failed (2s)
+deno test … supabase/functions/trade-agreement-send/
+  → ok | 41 passed | 0 failed (71ms)
+deno test … supabase/functions/commercial-document-notify/
+  → ok | 47 passed | 0 failed (112ms)
+deno test … supabase/functions/proposal-send/
+  → ok | 25 passed | 0 failed (87ms)
+deno check --config … {trade-agreement-send,commercial-document-notify,proposal-send}/index.ts
+  → Check ×3, no diagnostics
+```
+
+465 Deno tests green (was 459; +6 mapper tests). No `deno.lock` at the worktree
+root. Nothing deployed, no migration written by this lane, no shared-stack
+write. `prettier --check` still flags these files, as it does the untouched
+`trade-rfq-send/` on `origin/main` — advisory, not a gate for
+`supabase/functions`.

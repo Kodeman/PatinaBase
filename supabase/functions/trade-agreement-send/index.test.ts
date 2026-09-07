@@ -135,7 +135,7 @@ Deno.test("resolveContactRecipient returns null when nothing is usable", () => {
 // like it worked.
 
 Deno.test("mapCommitSendResult reads send_trade_agreement's camelCase jsonb", () => {
-  // The exact object 00579:545-558 builds.
+  // The exact object 00579:546-559 builds.
   const payload = {
     agreementId: "agreement-1",
     projectId: "project-1",

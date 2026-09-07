@@ -184,7 +184,7 @@ export type CommitSendResult = { row: CommittedSend } | { error: string };
  * Shape the payload `public.send_trade_agreement` actually returns.
  *
  * Pinned to the applied SQL, not to prose: `00579_trade_agreements.sql:513`
- * declares `RETURNS jsonb` and `:545-558` builds a single OBJECT whose keys are
+ * declares `RETURNS jsonb` and `:546-559` builds a single OBJECT whose keys are
  * **camelCase** — `state`, `sentAt` — never the table's snake_case column
  * names. PostgREST hands a scalar jsonb return back as that object, so there is
  * no row array to unwrap; the array branch is kept only so a future
@@ -218,7 +218,7 @@ export function mapCommitSendResult(data: unknown): CommitSendResult {
  * `00579_trade_agreements.sql:577` declares `RETURNS TABLE (id uuid, token
  * text)`, so PostgREST hands back an ARRAY of rows — `data[0].token` is the raw
  * token, emitted exactly once and never readable again (only its sha256 is
- * stored, `:611`).
+ * stored, `:609`).
  */
 export function mapMintTokenResult(data: unknown): MintTokenResult {
   const row = (Array.isArray(data) ? data[0] : data) as

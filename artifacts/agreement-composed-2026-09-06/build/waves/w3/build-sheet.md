@@ -682,7 +682,7 @@ Partial index on `(agreement_id) WHERE status = 'active'`. **Only `sha256(token)
 | RPC | Grant | Outline |
 |---|---|---|
 | `create_trade_agreement(p_project_id, p_contact_id, p_payload jsonb) → uuid` | `authenticated` | Authorize with `public.is_active_studio_member(<studio of project>)`; snapshot the contact's name/company/email/trade from `studio_contacts`; validate the eight essentials present; insert `state='draft'`. Refuses when the studio has no live attestation (a studio that cannot hold the prime should not be holding subs under it). |
-| `send_trade_agreement(p_agreement_id) → jsonb` | `authenticated` | Authorize as above; require `state IN ('draft','sent')`; freeze (a `guard_trade_agreement_authored` trigger refuses content UPDATEs once `state <> 'draft'`); stamp `state='sent'`, `sent_at`. Returns the row for the edge function; **does not mint the token** (minting is `service_role`, exactly as 00424 splits it). |
+| `send_trade_agreement(p_agreement_id) → jsonb` | `authenticated` | Authorize as above; require `state IN ('draft','sent')`; freeze (a `guard_trade_agreement_authored` trigger refuses content UPDATEs once `state <> 'draft'` — **column-scoped, see below**); stamp `state='sent'`, `sent_at`. Returns the row for the edge function; **does not mint the token** (minting is `service_role`, exactly as 00424 splits it). |
 | `mint_trade_agreement_token(p_agreement_id) → TABLE(id uuid, token text)` | `service_role` only | `auth.role() = 'service_role'` or raise; revoke-then-mint so at most one live link; `encode(extensions.gen_random_bytes(32),'hex')` raw, `encode(extensions.digest(raw,'sha256'),'hex')` stored. Verbatim from 00424:447-494. |
 | `resolve_trade_agreement_link(p_token) → jsonb` | `service_role` only | Returns **NULL on every miss** — bad hash, revoked, expired, agreement voided, agreement not in `('sent','signed')`. Bumps `last_used_at`. DTO in §4.5. |
 | `sign_trade_agreement_by_token(p_token, p_signed_name, p_signed_ip) → jsonb` | `service_role` only | Re-resolves the token itself (no pre-resolve — 00424's `submit_trade_rfq_response` reasoning). Classifies: `invalid_link` / `already_signed` (idempotent replay returns the existing signature, does not raise) / `agreement_void`. On success: insert the `sub` signature with the fingerprint computed **inside** the transaction, set `state='signed'`, `signed_at`, and **revoke the token in the same transaction** (a signed agreement's link is spent). |
@@ -690,6 +690,13 @@ Partial index on `(agreement_id) WHERE status = 'active'`. **Only `sha256(token)
 | `list_trade_agreements(p_project_id) → jsonb` | `authenticated` | Studio-side read for the designer surface. |
 
 Every definer RPC: `SECURITY DEFINER SET search_path = public, extensions, pg_temp`, `REVOKE ALL … FROM PUBLIC, anon, authenticated, service_role` then the single `GRANT` above.
+
+**`guard_trade_agreement_authored` is column-scoped, and must be** (amended 2026-09-07, edge round-2 F16). `send_trade_agreement` accepts `state IN ('draft','sent')` and stamps `state`/`sent_at` — so on a **resend** the RPC issues an UPDATE against a row whose `state` is already `'sent'`, and a `SECURITY DEFINER` RPC does not bypass its table's own trigger. A guard written over the whole row therefore aborts inside the RPC and every resend fails permanently — `502 commit_failed` at the edge, forever. The guard compares **only the content columns**: `project_id`, `studio_id`, `source_proposal_id`, `contact_id`, `contact_display_name`, `contact_company_name`, `contact_email`, `trade`, `title`, `scope`, `price_cents`, `currency`, `schedule`, `retainage_bps`, `pay_when_paid_days`, `insurance_certificate_required`, `lien_waiver_policy`, `flow_down_clause_key`, `sov_line_ids`, `created_by`, `created_at`. The state machine's own columns — `state`, `sent_at`, `signed_at`, `voided_at`, `void_reason`, `updated_at` — are **exempt** and still move after `'sent'`.
+
+Two further shapes the edge lane depends on, pinned here because reading them wrong fails silently rather than loudly:
+
+- `send_trade_agreement` `RETURNS jsonb` — a single **object with camelCase keys** (`state`, `sentAt`, …), never a row set and never the table's snake_case column names.
+- `mint_trade_agreement_token` `RETURNS TABLE (id uuid, token text)` — PostgREST hands back an **array**; the raw token is `data[0].token` and is emitted exactly once.
 
 ### 3.3 The exact list of closed `document_kind` sites that must learn `design_build`
 
@@ -1017,6 +1024,7 @@ Plain `psql` with asserts, `ON_ERROR_STOP=1`, everything rolled back. Model the 
 | SQL-A7 | **Content freeze at send.** An UPDATE of `scope`/`price_cents` on a `sent` agreement raises; on a `draft` one succeeds. |
 | SQL-A8 | **`void` refuses on a signed agreement**; succeeds on a sent one and revokes its tokens. |
 | SQL-A9 | **The prime's signature table is untouched.** Assert `commercial_document_signatures`' `party_role` CHECK and its `UNIQUE (proposal_id, party_role)` are byte-identical to their pre-wave definitions (`pg_get_constraintdef`). |
+| SQL-A10 | **A resend of a `sent` agreement survives its own freeze** (added 2026-09-07, edge round-2 F16). Send an agreement, then call `send_trade_agreement` on it a **second** time. Assert: the second call does **not** raise — in particular not `check_violation` from `guard_trade_agreement_authored`, which is the failure a whole-row guard produces and which reaches the studio as a permanent `502 commit_failed`; `state` is still `'sent'`; `sent_at` is **unchanged** from the first send (the RPC's `COALESCE(sent_at, now())`, so the instrument keeps the date the sub was first asked); the returned jsonb carries the camelCase keys `state` and `sentAt`. Then assert the freeze itself is intact on the same row: a direct UPDATE of `scope` or `price_cents` still raises. Finally mint a second token and assert the first is `status='revoked'` — one live link, per §3.2. |
 
 ### Deno
 
