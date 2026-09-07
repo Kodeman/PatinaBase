@@ -113,7 +113,9 @@ export interface ProjectBillingAuthoritySummary {
   /** NULL = uncapped (F-2) — legal only when the agreement carries no
    *  rate_card part. Render as "No ceiling", never as `$0`. */
   ceilingCents: number | null;
-  authorizedCents: number;
+  /** NULL = uncapped (F-2), mirrors `ceilingCents` — the RPC returns the same
+   *  `billing_ceiling_cents` for both. Render as "No ceiling", never as `$0`. */
+  authorizedCents: number | null;
   accruedCents: number;
   invoicedCents: number;
   pendingAuthorizationCents: number;
