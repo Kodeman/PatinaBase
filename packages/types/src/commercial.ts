@@ -6,12 +6,15 @@
  * contracts at the data-access boundary.
  */
 
+import type { DesignBuildPricingBasisPayload, LienWaiverType } from './agreement';
+
 export const COMMERCIAL_DOCUMENT_KINDS = [
   'legacy',
   'design_services',
   'furnishings_authorization',
   'service_addendum',
   'trade_scope',
+  'design_build',
 ] as const;
 
 export type CommercialDocumentKind = (typeof COMMERCIAL_DOCUMENT_KINDS)[number];
@@ -282,11 +285,72 @@ export interface TradeScopeExecutionResult {
   newlyExecuted: boolean;
 }
 
+/**
+ * Wave 3 — the turnkey class (P9). Frozen cross-lane interface:
+ * build/waves/w3/build-sheet.md §2.6 I-1.
+ */
+
+/** One line of the (derived, never separately authored) schedule of values —
+ *  pro-rated when the sub-disclosure clause reads `closed_book`, at-cost plus
+ *  its own fee line when `open_book` (build-sheet §4.1). */
+export interface DesignBuildScheduleOfValuesLine {
+  id: string;
+  label: string;
+  cents: number;
+}
+
+/** One row of the client's draw ledger — mirrors {@link TradeScopeDraw}'s
+ *  rendered-ledger shape, not the authored `draws` payload
+ *  ({@link DesignBuildDrawsPayload} in `./agreement`). `lienWaiver` is `null`
+ *  until a waiver is recorded against the draw (P12). */
+export interface DesignBuildDrawLedgerEntry {
+  drawKey: string;
+  label: string;
+  grossCents: number;
+  retainageCents: number;
+  netCents: number;
+  isRetainageRelease: boolean;
+  invoiceStatus: string | null;
+  paidAt: string | null;
+  lienWaiver: { type: LienWaiverType; receivedAt: string } | null;
+}
+
+/** One allowance as the client reads it (id/amount only — the overage/
+ *  underage rules are prose the studio already wrote into the clause). */
+export interface DesignBuildAllowanceLine {
+  id: string;
+  label: string;
+  amountCents: number;
+  overageRule: 'change_order' | 'client_credit';
+  underageRule: 'credit' | 'retain';
+}
+
+/** One attachment leaf (jurisdiction notice or lien-waiver form). A disabled
+ *  notice (R11) never reaches this array — enforced at send (backend PART 11). */
+export interface DesignBuildAttachment {
+  title: string;
+  body: string;
+  jurisdiction: string | null;
+  acknowledgeRequired: boolean;
+}
+
+export interface DesignBuildAgreement extends CommercialDocumentSummary {
+  kind: 'design_build';
+  projectId: string;
+  pricingBasis: DesignBuildPricingBasisPayload;
+  scheduleOfValues: DesignBuildScheduleOfValuesLine[];
+  draws: DesignBuildDrawLedgerEntry[];
+  allowances: DesignBuildAllowanceLine[];
+  attachments: DesignBuildAttachment[];
+  signatures: CommercialSignatureReceipt[];
+}
+
 export interface ClientCommercialDocumentBundle {
   document:
     | DesignServicesAgreement
     | FurnishingsAuthorization
     | TradeScopeAuthorization
+    | DesignBuildAgreement
     | CommercialDocumentSummary;
   authority: ProjectBillingAuthoritySummary | null;
   budgetVersion: WorkingBudgetVersion | null;
