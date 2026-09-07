@@ -287,7 +287,13 @@ describe("AgreementPartsBody", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps the heading of a part with nothing written in it", () => {
+  // R27 — the same body contract on both surfaces. An empty clause and an
+  // empty list are NOTHING on the homeowner's page: the leaf draws null and
+  // the client shell drops the whole section (`PartSection` returns null).
+  // This preview kept the heading, so the designer previewed an "Exclusions"
+  // section that the page the homeowner signs does not have. Every leaf that
+  // still has something to say keeps its heading and says it.
+  it("draws no section at all for an empty clause or an empty list", () => {
     renderParts([
       part({
         partKey: "patina.exclusions",
@@ -296,24 +302,46 @@ describe("AgreementPartsBody", () => {
         payload: { items: [] },
       }),
       part({
+        partKey: "patina.services",
+        kind: "clause",
+        title: "Services",
+        payload: { body: "   " },
+      }),
+    ]);
+    expect(
+      screen.queryByRole("heading", { name: "Exclusions" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Services" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the heading of a part that still has something to say", () => {
+    renderParts([
+      part({
         partKey: "patina.retainer",
         kind: "schedule",
         variant: "retainer",
         title: "Retainer",
         payload: {},
       }),
+      part({
+        partKey: "patina.role_rates",
+        kind: "schedule",
+        variant: "rate_card",
+        title: "Role rates",
+        payload: { roles: [] },
+      }),
     ]);
-    // The client shell prints the heading either way — a part the studio kept
-    // is a part the client can see is there.
-    expect(
-      screen.getByRole("heading", { name: "Exclusions" }),
-    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Retainer" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Recorded with your agreement."),
+      screen.getByRole("heading", { name: "Role rates" }),
     ).toBeInTheDocument();
+    expect(screen.getAllByText("Recorded with your agreement.")).toHaveLength(
+      2,
+    );
   });
 
   // ── R21 · an amount nobody wrote is unwritten, on BOTH surfaces ──────────

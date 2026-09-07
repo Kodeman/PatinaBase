@@ -1,3 +1,10 @@
+import {
+  AGREEMENT_PART_COPY,
+  agreementCadenceText,
+  agreementDepositLine,
+  agreementRetainerActivation,
+} from '@patina/types';
+
 import type { CommercialAgreementPart } from '@/lib/commercial-documents';
 
 /* ── THE AGREEMENT, READ AS PARTS ────────────────────────────────────────────
@@ -6,6 +13,11 @@ import type { CommercialAgreementPart } from '@/lib/commercial-documents';
    list the studio composed. The render spec is build/waves/w1/build-sheet.md
    §4.5 — one table, implemented twice (here, and in the designer preview's own
    agreement-parts-body.tsx) so the two surfaces read the same paper.
+
+   R27 — every sentence the homeowner reads that is not this document's own
+   words comes from `AGREEMENT_PART_COPY` (@patina/types), which the designer's
+   live preview reads too. Two renderers in two codebases cannot drift by
+   retyping a sentence they both import.
 
    Three rules the leaves below never break:
    · An unknown kind, an unknown schedule variant, and a malformed payload all
@@ -78,7 +90,7 @@ function PartHeading({ title }: { title: string }) {
 function RecordedLine() {
   return (
     <p className="type-body-small mt-2 text-[var(--text-muted)]">
-      Recorded with your agreement.
+      {AGREEMENT_PART_COPY.recorded}
     </p>
   );
 }
@@ -89,7 +101,11 @@ function RecordedLine() {
  * scale as a real figure). R21 carries them across composition unchanged.
  */
 function NotYetSet() {
-  return <p className="type-data-large mt-2 italic text-[var(--text-muted)]">Not yet set</p>;
+  return (
+    <p className="type-data-large mt-2 italic text-[var(--text-muted)]">
+      {AGREEMENT_PART_COPY.notYetSet}
+    </p>
+  );
 }
 
 /** R21 — an empty clause is nothing at all, not a title over blank paper. */
@@ -180,9 +196,7 @@ function CeilingLeaf({ part, currency }: { part: CommercialAgreementPart; curren
     <>
       <PartHeading title={part.title} />
       {cents === null ? (
-        <p className="type-body-small mt-2">
-          No ceiling — professional time is billed as it is worked.
-        </p>
+        <p className="type-body-small mt-2">{AGREEMENT_PART_COPY.ceilingUncapped}</p>
       ) : isWritten(cents) ? (
         <p className="type-data-large mt-2">{money(cents, currency)}</p>
       ) : (
@@ -202,9 +216,7 @@ function RetainerLeaf({ part, currency }: { part: CommercialAgreementPart; curre
         <>
           <p className="type-data-large mt-2">{money(cents, currency)}</p>
           <p className="type-body-small mt-1">
-            {activationPolicy === 'retainer_paid'
-              ? 'Design work begins after the fully executed agreement and retainer payment.'
-              : 'Due under the terms of the fully executed agreement.'}
+            {agreementRetainerActivation(activationPolicy)}
           </p>
         </>
       ) : (
@@ -223,11 +235,9 @@ function CadenceLeaf({ part }: { part: CommercialAgreementPart }) {
     <>
       <PartHeading title={part.title} />
       {cadence ? (
-        <p className="type-data-large mt-2 capitalize">{cadence.replace('_', ' ')}</p>
+        <p className="type-data-large mt-2 capitalize">{agreementCadenceText(cadence)}</p>
       ) : null}
-      <p className="type-body-small mt-1">
-        Additional work requires written authorization before it can be invoiced.
-      </p>
+      <p className="type-body-small mt-1">{AGREEMENT_PART_COPY.cadenceNote}</p>
     </>
   );
 }
@@ -247,7 +257,7 @@ function ProcurementLeaf({ part }: { part: CommercialAgreementPart }) {
     <>
       <PartHeading title={part.title} />
       {depositIsWritten ? (
-        <p className="type-data-large mt-2">{depositPercent}% deposit</p>
+        <p className="type-data-large mt-2">{agreementDepositLine(depositPercent)}</p>
       ) : null}
       {notes.length > 0 ? (
         <dl className="mt-3 space-y-1">
@@ -391,7 +401,7 @@ function AttachmentLeaf({ part, letter }: { part: CommercialAgreementPart; lette
       </p>
       {body ? <p className="type-body mt-3 whitespace-pre-wrap">{body}</p> : null}
       {part.payload.acknowledgeRequired === true ? (
-        <p className="type-body-small mt-3">I received this</p>
+        <p className="type-body-small mt-3">{AGREEMENT_PART_COPY.attachmentAcknowledgment}</p>
       ) : null}
     </section>
   );

@@ -10,9 +10,13 @@
  * surfaces cannot drift by retyping — a drift between them is a drift in the
  * agreement.
  *
- * The layout rule is the client shell's, too: a part always prints its
- * heading, and a leaf with nothing in it prints the recorded line rather than
- * vanishing. The designer sees the same page the client will.
+ * R27 — the layout rule is the client shell's, too, and it is the whole rule:
+ * a leaf that draws NOTHING takes its section with it. An empty clause and an
+ * empty list are nothing on the homeowner's page, not a naked heading over
+ * blank paper, and this preview must say what her page says. Every leaf that
+ * has something to say — an empty rate card, an unset retainer, a part of a
+ * kind this build does not open — keeps its heading and says the recorded
+ * line, exactly as the client shell does.
  *
  * What this file does NOT render: the header, the signature block, and the
  * closing "Furnishings, freight, tax…" notice. Those are the Core, they live
@@ -84,11 +88,9 @@ function NotYetSet() {
 }
 
 /**
- * The body under a part's heading, or `null` when the part has a heading and
- * nothing else — a clause nobody has written yet, an empty list, a rate card
- * with no roles. The heading itself is printed by the caller either way, which
- * is the client shell's rule: a part the studio kept is a part the client can
- * see is there.
+ * The body under a part's heading, or `null` when the part draws nothing at
+ * all — a clause nobody has written yet, an empty list. The caller drops the
+ * whole section on `null`, so the two surfaces print the same page.
  */
 function renderPartBody(
   part: AgreementPart,
@@ -138,7 +140,9 @@ function renderPartBody(
       const roles = readRoles(payload)
         .filter((role) => role.roleName.trim())
         .sort((a, b) => a.sortOrder - b.sortOrder);
-      if (roles.length === 0) return null;
+      // A rate card is a money part: present at all, it says it is on the
+      // paper rather than vanishing — the client shell's own treatment.
+      if (roles.length === 0) return <RecordedLine />;
       return (
         <div className="divide-y divide-[var(--doc-ink-border)] border-y border-[var(--doc-ink-border)]">
           {roles.map((role) => (
@@ -328,12 +332,16 @@ export function AgreementPartsBody({
 
   return (
     <>
-      {sections.map((part) => (
-        <section key={part.id} data-part-key={part.partKey}>
-          <PartHeading>{part.title}</PartHeading>
-          {renderPartBody(part, currency)}
-        </section>
-      ))}
+      {sections.map((part) => {
+        const body = renderPartBody(part, currency);
+        if (body === null) return null;
+        return (
+          <section key={part.id} data-part-key={part.partKey}>
+            <PartHeading>{part.title}</PartHeading>
+            {body}
+          </section>
+        );
+      })}
       {attachments.map((part, index) => (
         <AttachmentLeaf
           key={part.id}
