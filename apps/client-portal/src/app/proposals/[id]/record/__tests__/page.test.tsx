@@ -365,4 +365,89 @@ describe('/proposals/[id]/record — the composed agreement (Wave 2)', () => {
 
     expect(screen.queryByTestId('record-agreed')).not.toBeInTheDocument();
   });
+
+  it('asks the old question of a record with no parts', async () => {
+    await renderPage();
+
+    expect(
+      screen.getByText(/you authorize only the named furnishing lines/),
+    ).toBeInTheDocument();
+  });
+
+  it('stops the question naming terms a composed agreement does not carry', async () => {
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        document: {
+          ...BUNDLE.document,
+          kind: 'design_services' as const,
+          title: 'Cedar Lane — Design Services',
+        },
+        parts: [
+          {
+            id: 'p1',
+            position: 1,
+            kind: 'schedule',
+            variant: 'per_phase',
+            partKey: 'patina.per_phase',
+            title: 'Per-phase fee',
+            payload: { phases: [{ key: 'concept', label: 'Concept', cents: 350000 }] },
+            required: true,
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect(
+      screen.getByText(
+        'By signing, you accept the terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/signed role rates/)).not.toBeInTheDocument();
+  });
+
+  /* The snapshot is the only markup this portal sets rather than writes, and
+     the strings inside it are part titles and bodies a designer typed.
+     `_render_agreement_snapshot_html` escapes them — but that escaping lives in
+     a database function on the far side of a deploy, and this sheet renders
+     inside her signed-in session. What is pinned here is that nothing
+     executable survives the set, whatever the snapshot carries. */
+  it('renders a snapshot inert, whatever it carries', async () => {
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        executionSnapshot: {
+          html:
+            '<h2>Services</h2>' +
+            '<p><img src="x" onerror="globalThis.__patina_xss = true"> Interior design.</p>' +
+            '<script>globalThis.__patina_xss = true;</script>' +
+            '<p><a href="javascript:globalThis.__patina_xss = true">Terms</a></p>' +
+            '<iframe src="https://example.invalid"></iframe>',
+          documentHash: 'a1b2c3d4e5f6' + '0'.repeat(52),
+          createdAt: '2026-08-05T18:31:00Z',
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    const executed = screen.getByTestId('record-executed');
+    // The agreement itself still reads.
+    expect(executed).toHaveTextContent('Services');
+    expect(executed).toHaveTextContent('Interior design.');
+
+    // Nothing executable is in the document.
+    expect(executed.querySelectorAll('script')).toHaveLength(0);
+    expect(executed.querySelectorAll('iframe')).toHaveLength(0);
+    expect(executed.querySelector('img')?.getAttribute('onerror')).toBeNull();
+    expect(executed.querySelector('a')?.getAttribute('href')).toBeNull();
+    expect(executed.innerHTML).not.toContain('onerror');
+    expect(executed.innerHTML).not.toContain('javascript:');
+    // And the script's source did not survive as visible text on the keepsake.
+    expect(executed.textContent ?? '').not.toContain('__patina_xss');
+  });
 });
