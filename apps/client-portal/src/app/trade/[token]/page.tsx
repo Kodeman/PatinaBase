@@ -17,6 +17,17 @@
  * reached only through a still-live token whose agreement was withdrawn after
  * the page had already loaded.
  *
+ * OPEN RULING (S4). The build sheet carries both halves of a contradiction:
+ * §3.2 revokes a signed agreement's token inside the signing transaction and
+ * lists `revoked` among resolve's NULL cases, while §8 step 16 asks that "a
+ * fresh load of the same URL still shows the receipt". Under §3.2 — what is
+ * implemented here — resolve can never answer for a signed agreement, so the
+ * DTO's `state:'signed'` and `existingSignature` keys are unreachable in
+ * production and a sub who reopens their own signed link reads "Page not
+ * found". Both keys are kept because I-4 freezes the DTO and the component
+ * renders them correctly the moment resolve starts answering; nothing here
+ * needs to change if the ruling goes the other way. Flagged, not decided.
+ *
  * The DTO carries the sub's OWN price and nothing else that is money (R13):
  * no client price, no GMP, no schedule of values, no draw, no other sub, no
  * bid ledger, and no project name — a project name routinely carries the

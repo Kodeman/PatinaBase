@@ -232,11 +232,26 @@ test.describe('trade agreement guest link (Wave 3 · P14, R16)', () => {
         .eq('agreement_id', minted.agreementId);
       expect(tokens?.every((row) => (row as { status: string }).status === 'revoked')).toBe(true);
 
-      // A revoked link resolves to nothing at all — a spent link and one that
-      // never existed read identically.
+      // S4 — OPEN RULING, deliberately not prejudged here. The build sheet
+      // says two incompatible things about re-opening a signed link: §3.2
+      // revokes the token in the signing transaction and lists `revoked`
+      // among resolve's NULL cases (so a re-open is the not-found page, which
+      // is what this lane implements and what §4.5's `state:'signed'` and
+      // `existingSignature` keys then have no way to reach), while §8 step 16
+      // requires "a fresh load of the same URL still shows the receipt". What
+      // is asserted here is the part BOTH readings agree on: a re-open is
+      // never a second signable form and never a raw DB message. Re-pin this
+      // to the single ruled horn once the orchestrator rules.
       const second = await context.newPage();
       await second.goto(`/trade/${minted.token}`);
-      await expect(second.getByText(/page not found/i)).toBeVisible({ timeout: 20000 });
+      await expect(
+        second
+          .getByText(/page not found/i)
+          .or(second.getByTestId('trade-agreement-receipt'))
+          .first(),
+      ).toBeVisible({ timeout: 20000 });
+      await expect(second.getByTestId('trade-agreement-signed-name')).toHaveCount(0);
+      await expect(second.getByRole('button', { name: /sign this agreement/i })).toHaveCount(0);
       await second.close();
     } finally {
       await context.close();
