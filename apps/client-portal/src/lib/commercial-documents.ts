@@ -406,7 +406,14 @@ export function commercialSummaryFromProposal(proposal: Proposal): CommercialDoc
 
   return {
     id: text(first(source, 'id', 'proposalId', 'proposal_id'), proposal.id),
-    projectId: nullableText(first(source, 'projectId', 'project_id')) ?? proposal.project_id,
+    // `list_client_proposals` OMITS the project_id key entirely when the column
+    // is NULL, so the raw fall-through is `undefined`, not the `null` this
+    // field declares — and every houseless test downstream compares against
+    // `null`. The second nullableText normalises the absence, so a paper that
+    // comes before a house reads as houseless on both sides of the adapter.
+    projectId:
+      nullableText(first(source, 'projectId', 'project_id')) ??
+      nullableText(proposal.project_id),
     kind,
     state,
     title: text(first(source, 'title'), proposal.title),

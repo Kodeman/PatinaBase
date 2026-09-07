@@ -1068,3 +1068,38 @@ describe('adaptClientPlan', () => {
     expect(adaptClientPlan(null)).toBeNull();
   });
 });
+
+// R30, carried to Wave 2 — THE PAPERS WITHOUT A HOUSE. `list_client_proposals`
+// omits `project_id` from the row entirely when the column is NULL; it does not
+// send `null`. Every houseless test downstream compares against `null`, which is
+// the type this summary declares, so the adapter is the place the absence has to
+// become one.
+describe('a proposal whose row carries no project_id key at all', () => {
+  it('reads the missing key as null, the way the door tests for it', () => {
+    const summary = commercialSummaryFromProposal({
+      id: 'origin-1',
+      title: 'Design services agreement',
+      status: 'sent',
+      document_kind: 'design_services',
+      commercial_state: 'sent',
+      sent_at: '2026-09-04T00:00:00Z',
+    } as never);
+
+    expect(summary.projectId).toBeNull();
+    expect(summary.kind).toBe('design_services');
+  });
+
+  it('still reads a real project id when the row carries one', () => {
+    const summary = commercialSummaryFromProposal({
+      id: 'bound-1',
+      project_id: 'project-1',
+      title: 'Design services addendum',
+      status: 'sent',
+      document_kind: 'service_addendum',
+      commercial_state: 'sent',
+      sent_at: '2026-09-04T00:00:00Z',
+    } as never);
+
+    expect(summary.projectId).toBe('project-1');
+  });
+});

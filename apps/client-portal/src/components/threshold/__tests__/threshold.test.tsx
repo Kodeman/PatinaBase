@@ -1077,6 +1077,29 @@ describe('Threshold — the doorstep’s own asks', () => {
       );
     });
 
+    // The shape the RPC actually sends: `list_client_proposals` OMITS
+    // `project_id` when the column is NULL rather than sending `null`, so a
+    // fixture that spells `project_id: null` proves less than it looks. This
+    // one carries no such key at all.
+    it('stands on the doorstep when the row carries no project_id key at all', () => {
+      const ROW_WITHOUT_THE_KEY: Record<string, unknown> = {
+        ...(ORIGIN_AGREEMENT as unknown as Record<string, unknown>),
+      };
+      delete ROW_WITHOUT_THE_KEY.project_id;
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          ROW_WITHOUT_THE_KEY as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door-door-prop-origin')).not.toBeNull();
+      expect(screen.getByTestId('door-houseless')).toBeInTheDocument();
+    });
+
     it('leaves an addendum with no project off this house’s doors', () => {
       proposalsMock.mockReturnValue(
         settled([
