@@ -65,13 +65,27 @@ export default async function HomePage(props?: {
   // invoice belongs to the relationship, not to a project (ruling S1). The
   // letterbox stands as the whole front door for her, and it is also the only
   // thing that reads a `?checkout=` return, so the empty state would strand
-  // her twice. `LetterboxDoor` falls back to the empty state itself when no
-  // letter is waiting.
+  // her twice.
+  //
+  // R30: it may also have been sent the agreement that CREATES the house.
+  // `proposals.project_id` is NULL on an origin agreement until the studio
+  // countersigns (00331, 00566), so the first paper a household ever receives
+  // arrives before it has a project — and `?proposal=` off the folded
+  // `/proposals/<id>` names which of them takes `#door`. `resolveHouseForInstrument`
+  // has no house to answer with here and rightly said null; the param is the
+  // door's, not the house's, and it goes to the door directly.
+  //
+  // `LetterboxDoor` falls back to the empty state itself when neither a letter
+  // nor an agreement is waiting.
   if (!projectView) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)]">
         <main className="mx-auto flex w-full max-w-6xl flex-col px-6 py-12">
-          {projects.length === 0 ? <LetterboxDoor /> : <ProjectsEmptyState />}
+          {projects.length === 0 ? (
+            <LetterboxDoor namedProposalId={namedProposalId} />
+          ) : (
+            <ProjectsEmptyState />
+          )}
         </main>
       </div>
     );

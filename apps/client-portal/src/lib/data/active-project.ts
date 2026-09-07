@@ -99,6 +99,13 @@ export async function resolveHouseForInstrument(
   const { invoiceId, proposalId, decisionId } = instrument;
   if (!invoiceId && !proposalId && !decisionId) return null;
   if (env.useProjectFixtures) return null;
+  // R30. No house means no house to name, for any instrument — including an
+  // ORIGIN agreement, which is bound to no project by design until the studio
+  // countersigns it (00331, 00566). Null is the truth here, and it is NOT the
+  // reason that agreement was unreachable: `?proposal=` names the DOOR, and
+  // `page.tsx` hands it to the household door, which reads the paper through
+  // the same client-scoped RPCs the house uses. Do not "fix" this guard by
+  // inventing a house for a paper that has none.
   if (projectIds.length === 0) return null;
   // One house cannot disagree with itself, so nothing needs reading for it —
   // EXCEPT an invoice, which may be a studio invoice belonging to no house.

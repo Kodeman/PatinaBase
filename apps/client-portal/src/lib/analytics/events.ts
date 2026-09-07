@@ -127,7 +127,8 @@ export const makingEvents = {
 
   /** A gate's act was taken — the client followed a break in the spine. */
   gateFollowed: (p: {
-    projectId: string;
+    /** Null when the gate is an origin agreement, which names no project yet. */
+    projectId: string | null;
     proposalId: string;
     kind: MakingGateKind;
   }) =>
