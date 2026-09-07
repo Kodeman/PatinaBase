@@ -15,9 +15,10 @@
 //     (public.is_active_studio_member(studio_id)), not the proposal's designer;
 //   · the letter carries the sub's price, because a Trade Agreement states a
 //     number where an RFQ asks for one;
-//   · the state ratchet has one more terminal value: a 'signed' or 'void'
-//     agreement is re-sendable (the sub can lose the email) but its state is
-//     never moved back to 'sent'.
+//   · the send itself is a definer RPC (public.send_trade_agreement) rather
+//     than a direct table write: the state gate, the authorship freeze and the
+//     stamp are one transaction, and a 'signed' or 'void' agreement is simply
+//     not sendable.
 
 import { buildTradeAgreementEmail } from "../_shared/trade-agreement-emails.ts";
 
@@ -171,18 +172,21 @@ export interface SendEmailResult {
   error?: string;
 }
 
-export interface StampSentPatch {
-  /** The email actually used as the recipient — snapshotted at send. */
-  contactEmail: string;
-  /** Only set when this is the first successful send (sentAt not already set). */
-  sentAt?: string;
-  /**
-   * Only set when the row's current state is 'draft' or 'sent' — a resend of a
-   * 'signed' or 'void' agreement never moves it back to 'sent'. Undefined
-   * means "leave state alone".
-   */
-  state?: "sent";
+/** The stamped row `public.send_trade_agreement` hands back. */
+export interface CommittedSend {
+  state: string;
+  sentAt: string | null;
 }
+
+export type CommitSendResult = { row: CommittedSend } | { error: string };
+
+/**
+ * The states `public.send_trade_agreement` accepts. Held here so a doomed send
+ * is refused before a live token is minted or an ask-to-sign letter is mailed
+ * for a page that would resolve to nothing; the RPC remains the authority that
+ * actually writes, and re-checks this itself inside its own transaction.
+ */
+export const SENDABLE_STATES: ReadonlySet<string> = new Set(["draft", "sent"]);
 
 export interface TradeAgreementSendDeps {
   /** Resolve the caller from the request's Authorization header. */
@@ -210,18 +214,19 @@ export interface TradeAgreementSendDeps {
     metadata: Record<string, unknown>;
   }) => Promise<SendEmailResult>;
   /**
-   * Persist the send-time stamp: contact_email always, sentAt if unset, and
-   * state='sent' only when patch.state says so (never a downgrade from
-   * 'signed'/'void').
+   * public.send_trade_agreement(p_agreement_id), evaluated as the CALLER (it
+   * is granted to `authenticated`). It is the only writer on this rail: it
+   * re-authorizes, enforces `state IN ('draft','sent')`, stamps `state='sent'`
+   * and `sent_at` behind the authorship freeze, and returns the row. Nothing
+   * here touches studio_trade_agreements directly — a business table is never
+   * written outside a definer RPC.
    */
-  stampSent: (
+  commitSend: (
+    req: Request,
     agreementId: string,
-    patch: StampSentPatch,
-  ) => Promise<{ error?: string }>;
+  ) => Promise<CommitSendResult>;
   /** CLIENT_PORTAL_URL (no trailing slash), default https://client.patina.cloud. */
   clientPortalUrl: string;
-  /** Injected clock, so 'first send only' is deterministic under test. */
-  now: () => string;
 }
 
 // ─── Handler ───────────────────────────────────────────────────────────────
@@ -238,23 +243,29 @@ export interface TradeAgreementSendDeps {
  *   mode 'preview'                 → 200 { ok, mode, agreementId, recipient,
  *                                           subject, html }; no send, no token
  *                                           minted, no stamp
+ *   mode 'send', state not sendable → 409 { error: 'agreement_not_sendable',
+ *                                           detail, state }
  *   mode 'send', no recipient      → 422 { error: 'no_recipient', detail }
+ *   mode 'send', RPC refuses/fails → 502 { error: 'commit_failed', detail }
  *   mode 'send', mint fails        → 502 { error: 'mint_failed', detail }
  *   mode 'send', email send fails  → 502 { error: 'send_failed', detail }
- *   mode 'send', stamp write fails → 500 { error: 'stamp_failed', detail }
- *     (the email already went out; the write failure is surfaced rather than
- *     claiming a clean send)
  *   mode 'send', ok                → 200 { ok, mode, agreementId, recipient,
  *                                           emailSent, sentAt, state }
  *     (send-mode responses deliberately omit subject/html — the live link
  *     embeds a real bearer token, so it is never echoed into a JSON response
  *     beyond the one email it was sent in)
  *
- *   Resending a signed agreement: the sub loses the email, asks for it again,
- *   and gets it — a fresh token, the same terms, and the letter reads as a
- *   receipt rather than a second ask. What never happens is a state move: a
- *   'signed' agreement is superseded by a new one, never re-opened, and a
- *   'void' one is not quietly revived by an email.
+ *   Order of operations in 'send': commit first, then mint, then email. The
+ *   commit is `public.send_trade_agreement`, the rail's only writer, so the
+ *   state gate and the stamp live inside one transaction that the authorship
+ *   freeze already guards. A failure after it leaves a 'sent' row with no
+ *   letter — recoverable, because 'sent' is still sendable — where the reverse
+ *   order would leave a delivered letter the row denies.
+ *
+ *   A 'signed' or 'void' agreement is not re-sendable: its link is spent or
+ *   revoked, so a fresh token and an ask-to-sign letter would point the sub at
+ *   a page that resolves to nothing. A signed agreement is superseded by a new
+ *   one; a void one is not revived by an email.
  */
 export async function handleTradeAgreementSend(
   req: Request,
@@ -344,7 +355,20 @@ export async function handleTradeAgreementSend(
     });
   }
 
-  // ── Mode: send — mint a link token and email the sub ───────────────────────
+  // ── Mode: send — commit the send, mint a link token, email the sub ─────────
+  if (!SENDABLE_STATES.has(agreement.state)) {
+    return json(
+      {
+        error: "agreement_not_sendable",
+        detail: agreement.state === "signed"
+          ? "This Trade Agreement is already signed — its link is spent. Supersede it with a new one."
+          : "This Trade Agreement has been withdrawn. Draft a new one to send.",
+        state: agreement.state,
+      },
+      409,
+    );
+  }
+
   if (!recipient) {
     console.warn(
       "trade-agreement-send: no recipient email for agreement",
@@ -358,6 +382,15 @@ export async function handleTradeAgreementSend(
       },
       422,
     );
+  }
+
+  const committed = await deps.commitSend(req, agreement.id);
+  if ("error" in committed) {
+    console.error(
+      "trade-agreement-send: send_trade_agreement rpc failed",
+      committed.error,
+    );
+    return json({ error: "commit_failed", detail: committed.error }, 502);
   }
 
   const minted = await deps.mintToken(agreement.id);
@@ -394,35 +427,15 @@ export async function handleTradeAgreementSend(
     return json({ error: "send_failed", detail: sendResult.error }, 502);
   }
 
-  const nowIso = deps.now();
-  // State is a one-way ratchet: a resend of a 'signed' or 'void' agreement
-  // must not flip it back to 'sent' and erase that the sub already signed (or
-  // that the studio withdrew it).
-  const stampState = agreement.state === "draft" || agreement.state === "sent"
-    ? "sent" as const
-    : undefined;
-  const stamp = await deps.stampSent(agreement.id, {
-    contactEmail: recipient,
-    sentAt: agreement.sentAt ? undefined : nowIso,
-    state: stampState,
-  });
-  if (stamp.error) {
-    // The email already went out; surface the write failure rather than
-    // claiming a clean send (the row may still read a stale state).
-    console.error(
-      "trade-agreement-send: failed to stamp sent state",
-      stamp.error,
-    );
-    return json({ error: "stamp_failed", detail: stamp.error }, 500);
-  }
-
+  // The state and the timestamp are the RPC's, read back rather than guessed:
+  // this function has no write of its own to report.
   return json({
     ok: true,
     mode: "send",
     agreementId: agreement.id,
     recipient,
     emailSent: sendResult.success === true,
-    sentAt: agreement.sentAt ?? nowIso,
-    state: stampState ?? agreement.state,
+    sentAt: committed.row.sentAt,
+    state: committed.row.state,
   });
 }

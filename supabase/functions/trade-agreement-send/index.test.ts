@@ -6,8 +6,9 @@
 // helpers (parse, recipient resolution) AND the full request/response contract
 // via handleTradeAgreementSend with injected deps (mocked Supabase-shaped
 // deps, no network) — auth, the not-found/not-a-member 404 collapse, recipient
-// resolution, preview-vs-send, the send-time stamp, and the state ratchet that
-// keeps a signed agreement signed.
+// resolution, preview-vs-send, the send_trade_agreement commit that is the
+// rail's only writer, and the refusal that keeps a spent or revoked link from
+// being re-minted.
 
 import {
   assert,
@@ -150,8 +151,10 @@ const BASE_ROW: TradeAgreementRow = {
 interface DepsCallLog {
   mintTokenCalled: boolean;
   sendEmailCalled: boolean;
-  stampSentCalled: boolean;
-  stampPatch?: { contactEmail: string; sentAt?: string; state?: "sent" };
+  commitSendCalled: boolean;
+  commitSendAgreementId?: string;
+  /** Call order, so "the commit precedes the mint and the letter" is testable. */
+  order: string[];
   sentEmailOpts?: {
     to: string;
     subject: string;
@@ -180,20 +183,26 @@ function makeDeps(
     },
     mintToken: () => {
       (log as DepsCallLog).mintTokenCalled = true;
+      (log as DepsCallLog).order?.push("mint");
       return Promise.resolve({ token: "tok_abc123" });
     },
     sendEmail: (opts) => {
       (log as DepsCallLog).sendEmailCalled = true;
       (log as DepsCallLog).sentEmailOpts = opts;
+      (log as DepsCallLog).order?.push("email");
       return Promise.resolve({ success: true });
     },
-    stampSent: (_id, patch) => {
-      (log as DepsCallLog).stampSentCalled = true;
-      (log as DepsCallLog).stampPatch = patch;
-      return Promise.resolve({});
+    // Stands in for public.send_trade_agreement: the RPC owns the state gate
+    // and the stamp, so the stub simply reports the row it would return.
+    commitSend: (_req, agreementId) => {
+      (log as DepsCallLog).commitSendCalled = true;
+      (log as DepsCallLog).commitSendAgreementId = agreementId;
+      (log as DepsCallLog).order?.push("commit");
+      return Promise.resolve({
+        row: { state: "sent", sentAt: "2026-09-07T12:00:00.000Z" },
+      });
     },
     clientPortalUrl: "https://client.patina.cloud",
-    now: () => "2026-09-07T12:00:00.000Z",
     ...overrides,
   };
 }
@@ -202,7 +211,8 @@ function freshLog(): DepsCallLog {
   return {
     mintTokenCalled: false,
     sendEmailCalled: false,
-    stampSentCalled: false,
+    commitSendCalled: false,
+    order: [],
   };
 }
 
@@ -304,7 +314,7 @@ Deno.test("found but caller is not an active studio member → SAME 404, no leak
   // A foreign caller mints nothing and mails nothing.
   assertFalse(log.mintTokenCalled);
   assertFalse(log.sendEmailCalled);
-  assertFalse(log.stampSentCalled);
+  assertFalse(log.commitSendCalled);
 });
 
 Deno.test("preview mode: composes subject/html, never mints/sends/stamps", async () => {
@@ -328,7 +338,7 @@ Deno.test("preview mode: composes subject/html, never mints/sends/stamps", async
   assert(body.html.includes("https://client.patina.cloud/trade/preview"));
   assertFalse(log.mintTokenCalled);
   assertFalse(log.sendEmailCalled);
-  assertFalse(log.stampSentCalled);
+  assertFalse(log.commitSendCalled);
 });
 
 Deno.test("preview mode: recipient may be null (no contact email, no override)", async () => {
@@ -364,7 +374,7 @@ Deno.test("send mode, no recipient anywhere → 422 no_recipient", async () => {
   assertEquals(res.status, 422);
   assertEquals((await res.json()).error, "no_recipient");
   assertFalse(log.mintTokenCalled);
-  assertFalse(log.stampSentCalled);
+  assertFalse(log.commitSendCalled);
 });
 
 Deno.test("send mode: override recipientEmail wins over the stored contact email", async () => {
@@ -380,10 +390,12 @@ Deno.test("send mode: override recipientEmail wins over the stored contact email
   assertEquals(res.status, 200);
   assertEquals((await res.json()).recipient, "override@hewn.test");
   assertEquals(log.sentEmailOpts?.to, "override@hewn.test");
-  assertEquals(log.stampPatch?.contactEmail, "override@hewn.test");
+  // The override addresses this letter and nothing else: the commit takes the
+  // agreement id alone, so the roster snapshot on the frozen row is untouched.
+  assertEquals(log.commitSendAgreementId, "agreement-1");
 });
 
-Deno.test("send mode: mint failure → 502 mint_failed, never sends or stamps", async () => {
+Deno.test("send mode: mint failure → 502 mint_failed, and no letter goes out", async () => {
   const log = freshLog();
   const res = await handleTradeAgreementSend(
     req("POST", { Authorization: "Bearer abc" }, {
@@ -398,7 +410,10 @@ Deno.test("send mode: mint failure → 502 mint_failed, never sends or stamps", 
   assertEquals(res.status, 502);
   assertEquals((await res.json()).error, "mint_failed");
   assertFalse(log.sendEmailCalled);
-  assertFalse(log.stampSentCalled);
+  // The commit ran first, so the row now reads 'sent' with no letter behind
+  // it. That is the recoverable side of the ordering: 'sent' is still
+  // sendable, and the studio simply sends again.
+  assert(log.commitSendCalled);
 });
 
 Deno.test("send mode: exactly one token is minted, and it is the one in the link", async () => {
@@ -457,7 +472,7 @@ Deno.test("send mode: the letter goes through the injected chokepoint, reply-to 
   });
 });
 
-Deno.test("send mode: email send failure (not suppressed) → 502 send_failed, no stamp", async () => {
+Deno.test("send mode: email send failure (not suppressed) → 502 send_failed", async () => {
   const log = freshLog();
   const res = await handleTradeAgreementSend(
     req("POST", { Authorization: "Bearer abc" }, {
@@ -474,7 +489,7 @@ Deno.test("send mode: email send failure (not suppressed) → 502 send_failed, n
   );
   assertEquals(res.status, 502);
   assertEquals((await res.json()).error, "send_failed");
-  assertFalse(log.stampSentCalled);
+  assert(log.commitSendCalled);
 });
 
 Deno.test("send mode: sendEmail throwing → 502 send_failed", async () => {
@@ -493,7 +508,7 @@ Deno.test("send mode: sendEmail throwing → 502 send_failed", async () => {
   assertEquals((await res.json()).error, "send_failed");
 });
 
-Deno.test("send mode: suppressed send still stamps, but emailSent is false", async () => {
+Deno.test("send mode: suppressed send still commits, but emailSent is false", async () => {
   const log = freshLog();
   const res = await handleTradeAgreementSend(
     req("POST", { Authorization: "Bearer abc" }, {
@@ -507,22 +522,41 @@ Deno.test("send mode: suppressed send still stamps, but emailSent is false", asy
   );
   assertEquals(res.status, 200);
   assertEquals((await res.json()).emailSent, false);
-  assert(log.stampSentCalled);
+  assert(log.commitSendCalled);
 });
 
-Deno.test("send mode: stamp failure → 500 stamp_failed (the email already went)", async () => {
+Deno.test("send mode: commit failure → 502 commit_failed, nothing minted, nothing sent", async () => {
+  const log = freshLog();
   const res = await handleTradeAgreementSend(
     req("POST", { Authorization: "Bearer abc" }, {
       agreementId: "agreement-1",
       mode: "send",
     }),
-    makeDeps({ stampSent: () => Promise.resolve({ error: "db unreachable" }) }),
+    makeDeps(
+      { commitSend: () => Promise.resolve({ error: "db unreachable" }) },
+      log,
+    ),
   );
-  assertEquals(res.status, 500);
-  assertEquals((await res.json()).error, "stamp_failed");
+  assertEquals(res.status, 502);
+  assertEquals((await res.json()).error, "commit_failed");
+  // The commit is first precisely so a refusal costs no token and no letter.
+  assertFalse(log.mintTokenCalled);
+  assertFalse(log.sendEmailCalled);
 });
 
-Deno.test("send mode, first send: stamps sent_at + contact_email and moves draft → sent", async () => {
+Deno.test("send mode: the commit precedes the mint and the letter", async () => {
+  const log = freshLog();
+  await handleTradeAgreementSend(
+    req("POST", { Authorization: "Bearer abc" }, {
+      agreementId: "agreement-1",
+      mode: "send",
+    }),
+    makeDeps({}, log),
+  );
+  assertEquals(log.order, ["commit", "mint", "email"]);
+});
+
+Deno.test("send mode, first send: the RPC commits it and the response echoes the RPC's row", async () => {
   const log = freshLog();
   const res = await handleTradeAgreementSend(
     req("POST", { Authorization: "Bearer abc" }, {
@@ -542,12 +576,11 @@ Deno.test("send mode, first send: stamps sent_at + contact_email and moves draft
   assertEquals(body.emailSent, true);
   assertEquals(body.sentAt, "2026-09-07T12:00:00.000Z");
   assertEquals(body.state, "sent");
-  assertEquals(log.stampPatch?.sentAt, "2026-09-07T12:00:00.000Z");
-  assertEquals(log.stampPatch?.contactEmail, "sub@hewn.test");
-  assertEquals(log.stampPatch?.state, "sent");
+  assertEquals(log.commitSendCalled, true);
+  assertEquals(log.commitSendAgreementId, "agreement-1");
 });
 
-Deno.test("send mode, resend of a 'sent' agreement: sent_at is NOT re-stamped", async () => {
+Deno.test("send mode, resend of a 'sent' agreement: the RPC's sent_at is what comes back", async () => {
   const log = freshLog();
   const res = await handleTradeAgreementSend(
     req("POST", { Authorization: "Bearer abc" }, {
@@ -562,21 +595,26 @@ Deno.test("send mode, resend of a 'sent' agreement: sent_at is NOT re-stamped", 
             state: "sent",
             sentAt: "2026-09-01T00:00:00.000Z",
           }),
+        // send_trade_agreement keeps the original sent_at on a resend.
+        commitSend: () =>
+          Promise.resolve({
+            row: { state: "sent", sentAt: "2026-09-01T00:00:00.000Z" },
+          }),
       },
       log,
     ),
   );
   assertEquals(res.status, 200);
-  assertEquals((await res.json()).sentAt, "2026-09-01T00:00:00.000Z");
-  assertEquals(log.stampPatch?.sentAt, undefined);
-  // contact_email still refreshes — it records where the resend actually went.
-  assertEquals(log.stampPatch?.contactEmail, "sub@hewn.test");
-  assertEquals(log.stampPatch?.state, "sent");
+  const body = await res.json();
+  assertEquals(body.sentAt, "2026-09-01T00:00:00.000Z");
+  assertEquals(body.state, "sent");
+  assert(log.mintTokenCalled);
+  assert(log.sendEmailCalled);
 });
 
-// ─── The state ratchet: a signed agreement stays signed ──────────────────────
+// ─── A spent or revoked link is never re-minted ──────────────────────────────
 
-Deno.test("send mode, resend of a 'signed' agreement: re-mints + re-emails, never downgrades state", async () => {
+Deno.test("send mode, resend of a 'signed' agreement → 409, nothing minted or sent", async () => {
   const log = freshLog();
   const res = await handleTradeAgreementSend(
     req("POST", { Authorization: "Bearer abc" }, {
@@ -595,26 +633,19 @@ Deno.test("send mode, resend of a 'signed' agreement: re-mints + re-emails, neve
       log,
     ),
   );
-  assertEquals(res.status, 200);
+  assertEquals(res.status, 409);
   const body = await res.json();
-  assertEquals(body.ok, true);
-  assertEquals(body.emailSent, true);
-  // The resend still happens in full — the sub lost the email and asked again.
-  assert(log.mintTokenCalled);
-  assert(log.sendEmailCalled);
-  assert(log.stampSentCalled);
-  // ...but the patch omits state entirely — omitted, not 'signed' — because
-  // deps.stampSent's contract is "undefined means leave it alone"; a signed
-  // agreement is superseded by a new one, never re-opened by an email.
-  assertEquals(log.stampPatch?.state, undefined);
-  assertEquals(log.stampPatch?.sentAt, undefined);
+  assertEquals(body.error, "agreement_not_sendable");
   assertEquals(body.state, "signed");
-  // And the letter reads as a receipt, not a second ask.
-  assert(log.sentEmailOpts?.subject.startsWith("Your signed Trade Agreement"));
-  assert(log.sentEmailOpts?.html.includes("Open your agreement"));
+  // Signing spends the link in the same transaction that records the
+  // signature, so a resend would hand out a second live token against a
+  // finished agreement. It is superseded by a new one, never re-sent.
+  assertFalse(log.mintTokenCalled);
+  assertFalse(log.sendEmailCalled);
+  assertFalse(log.commitSendCalled);
 });
 
-Deno.test("send mode, resend of a 'void' agreement: state is not revived to 'sent'", async () => {
+Deno.test("send mode, resend of a 'void' agreement → 409, no live link for a dead page", async () => {
   const log = freshLog();
   const res = await handleTradeAgreementSend(
     req("POST", { Authorization: "Bearer abc" }, {
@@ -633,9 +664,43 @@ Deno.test("send mode, resend of a 'void' agreement: state is not revived to 'sen
       log,
     ),
   );
+  assertEquals(res.status, 409);
+  const body = await res.json();
+  assertEquals(body.error, "agreement_not_sendable");
+  assertEquals(body.state, "void");
+  // Voiding revokes every live token, and resolve_trade_agreement_link returns
+  // nothing for a void agreement — so a fresh token would be an ask-to-sign
+  // letter pointing at a page that cannot open.
+  assertFalse(log.mintTokenCalled);
+  assertFalse(log.sendEmailCalled);
+  assertFalse(log.commitSendCalled);
+});
+
+Deno.test("preview mode still composes for a signed agreement — a receipt, not a second ask", async () => {
+  const log = freshLog();
+  const res = await handleTradeAgreementSend(
+    req("POST", { Authorization: "Bearer abc" }, {
+      agreementId: "agreement-1",
+      mode: "preview",
+    }),
+    makeDeps(
+      {
+        loadAgreement: () =>
+          Promise.resolve({
+            ...BASE_ROW,
+            state: "signed",
+            sentAt: "2026-09-01T00:00:00.000Z",
+          }),
+      },
+      log,
+    ),
+  );
   assertEquals(res.status, 200);
-  assertEquals((await res.json()).state, "void");
-  assertEquals(log.stampPatch?.state, undefined);
+  const body = await res.json();
+  assert(body.subject.startsWith("Your signed Trade Agreement"));
+  assert(body.html.includes("Open your agreement"));
+  assertFalse(log.mintTokenCalled);
+  assertFalse(log.commitSendCalled);
 });
 
 // ─── The sub's letter never carries the client's side (R13) ──────────────────

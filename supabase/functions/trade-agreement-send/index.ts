@@ -5,8 +5,9 @@
 // their login-less signing page on the client portal. Modeled file-for-file on
 // trade-rfq-send: a *-send function that is the single send authority — it
 // loads the row (service role), re-checks authorship as the CALLER, composes
-// the email through the _shared conventions, sends via the sendCompliantEmail
-// chokepoint, and stamps the sent state.
+// the email through the _shared conventions, and sends via the
+// sendCompliantEmail chokepoint. The state change is NOT a table write from
+// here: it is public.send_trade_agreement, the rail's definer RPC.
 //
 // The studio_trade_agreements draft is created separately, via
 // create_trade_agreement — the same two-step shape as the RFQ rail: create the
@@ -29,14 +30,19 @@
 //        'preview' → compose subject/html and return them; no send, no token
 //                    mint, no stamp (the CTA link is a non-functional
 //                    placeholder, since minting is a real, auditable act).
-//        'send'    → mint a fresh studio_trade_agreement_tokens row (service
-//                    role, revoke-then-mint), compose the link as
-//                    CLIENT_PORTAL_URL + '/trade/' + token, email the sub
+//        'send'    → commit through send_trade_agreement (as the caller: the
+//                    state gate, the freeze and the state='sent'/sent_at stamp
+//                    are its transaction, not ours), then mint a fresh
+//                    studio_trade_agreement_tokens row (service role,
+//                    revoke-then-mint), compose the link as
+//                    CLIENT_PORTAL_URL + '/trade/' + token, and email the sub
 //                    (operational, reply-to the studio, no attachment, no
-//                    userId — the sub is not a platform user); on success
-//                    snapshot contact_email (always) and sent_at (on the first
-//                    send only); state moves draft/sent → 'sent' but a resend
-//                    never moves 'signed' or 'void' back to 'sent'.
+//                    userId — the sub is not a platform user). A 'signed' or
+//                    'void' agreement is refused (409): its link is spent or
+//                    revoked, so a fresh one would point at nothing. The
+//                    recipientEmail override addresses this one letter only —
+//                    it is never written back over the roster snapshot, which
+//                    is agreement content and frozen once sent.
 //
 // The sub's own side never calls an edge function: they reach the DB through
 // the client-portal server action on /trade/[token], exactly as /rfq/[token]
@@ -55,6 +61,7 @@ import {
 } from "../_shared/studio-identity.ts";
 import {
   type CallerUser,
+  type CommitSendResult,
   handleTradeAgreementSend,
   type MintTokenResult,
   type SendEmailResult,
@@ -257,25 +264,39 @@ const deps: TradeAgreementSendDeps = {
     };
   },
 
-  stampSent: async (agreementId, patch): Promise<{ error?: string }> => {
-    const dbPatch: Record<string, unknown> = {
-      contact_email: patch.contactEmail,
-    };
-    // Never downgrade: lib.ts only sends state='sent' when the row's current
-    // state was 'draft' or 'sent' — a resend of a 'signed' or 'void'
-    // agreement omits state entirely, so the column is left untouched.
-    if (patch.state) dbPatch.state = patch.state;
-    if (patch.sentAt) dbPatch.sent_at = patch.sentAt;
-    const { error } = await admin()
-      .from("studio_trade_agreements")
-      .update(dbPatch)
-      .eq("id", agreementId);
-    if (error) return { error: error.message };
-    return {};
+  // The one write on this rail, and it is not a write from here:
+  // public.send_trade_agreement is SECURITY DEFINER, granted to
+  // `authenticated`, and does the whole act in one transaction — re-authorize,
+  // require state IN ('draft','sent'), stamp state='sent' and sent_at behind
+  // the guard_trade_agreement_authored freeze, return the row. It must run as
+  // the CALLER (auth.uid() comes from this request's own JWT), so it goes
+  // through an anon-key client carrying the caller's header, exactly like
+  // is_active_studio_member above — never the service-role client.
+  commitSend: async (req, agreementId): Promise<CommitSendResult> => {
+    const auth = req.headers.get("Authorization");
+    if (!auth) return { error: "missing_authorization" };
+    const caller = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: auth } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await caller.rpc("send_trade_agreement", {
+      p_agreement_id: agreementId,
+    });
+    if (error) {
+      console.error(
+        "trade-agreement-send: send_trade_agreement rpc error",
+        error.message,
+      );
+      return { error: error.message };
+    }
+    const row = (Array.isArray(data) ? data[0] : data) as Row | null;
+    if (!row || typeof row.state !== "string") {
+      return { error: "send_trade_agreement returned no row" };
+    }
+    return { row: { state: row.state, sentAt: row.sent_at ?? null } };
   },
 
   clientPortalUrl: CLIENT_PORTAL_URL,
-  now: () => new Date().toISOString(),
 };
 
 Deno.serve((req) => handleTradeAgreementSend(req, deps));
