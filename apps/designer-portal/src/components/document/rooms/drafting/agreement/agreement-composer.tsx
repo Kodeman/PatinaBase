@@ -335,7 +335,8 @@ export function AgreementComposer({
    * A Template, laid into this draft. The RPC replaces the part set wholesale
    * — which is exactly what the sheet warns about before this runs — so the
    * room throws away the composition it was holding and re-reads the one the
-   * database now has.
+   * database now has. Unsaved edits go with it, which is why the sheet is
+   * handed `dirty` and says so in the warning.
    */
   const applyTemplate = async (template: AgreementTemplate) => {
     setTemplateError(null);
@@ -669,6 +670,7 @@ export function AgreementComposer({
             onMaterialize={(template) => void applyTemplate(template)}
             pending={materializeTemplate.isPending}
             error={templateError}
+            unsavedChanges={dirty}
           />
         </>
       )}

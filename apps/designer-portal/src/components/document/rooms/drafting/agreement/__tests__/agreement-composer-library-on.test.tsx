@@ -17,6 +17,10 @@ import {
 } from "@testing-library/react";
 import type { AgreementPart } from "@patina/types";
 import { AgreementComposer } from "../agreement-composer";
+import {
+  REPLACE_WARNING,
+  REPLACE_WARNING_UNSAVED,
+} from "../template-picker-sheet";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 
 const mockMaterializeTemplate = jest.fn();
@@ -334,6 +338,40 @@ describe("the Contract Room with the Library on", () => {
         "The parts of Full-service residential are on this agreement.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("tells the designer a Template takes her unsaved edits with it", async () => {
+    renderRoom();
+
+    // Lay a Library part in without saving — the room is now holding a
+    // composition the table has never seen.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    const libraryRow = screen
+      .getAllByRole("listitem")
+      .find((item) => within(item).queryByText("House rules")) as HTMLElement;
+    fireEvent.click(within(libraryRow).getByRole("button"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add to this agreement" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Save agreement" }),
+      ).toBeEnabled(),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start from a template…" }),
+    );
+    const templateRow = screen
+      .getAllByRole("listitem")
+      .find((item) =>
+        within(item).queryByText("Full-service residential"),
+      ) as HTMLElement;
+    fireEvent.click(within(templateRow).getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
+
+    expect(screen.getByText(REPLACE_WARNING_UNSAVED)).toBeInTheDocument();
+    expect(screen.queryByText(REPLACE_WARNING)).not.toBeInTheDocument();
   });
 
   it("prints the database's refusal when a Template will not open here", async () => {

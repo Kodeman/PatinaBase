@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { AgreementTemplate } from "@patina/types";
 import {
   REPLACE_WARNING,
+  REPLACE_WARNING_UNSAVED,
   TemplatePickerSheet,
   templateClassFor,
 } from "../template-picker-sheet";
@@ -73,10 +74,12 @@ function renderSheet({
   onMaterialize = jest.fn(),
   documentKind = "design_services",
   shelf = SHELF,
+  unsavedChanges = false,
 }: {
   onMaterialize?: jest.Mock;
   documentKind?: string;
   shelf?: AgreementTemplate[];
+  unsavedChanges?: boolean;
 } = {}) {
   mockTemplates.mockReturnValue({ data: shelf, isLoading: false });
   render(
@@ -86,6 +89,7 @@ function renderSheet({
       studioId="studio-1"
       documentKind={documentKind}
       onMaterialize={onMaterialize}
+      unsavedChanges={unsavedChanges}
     />,
   );
   return onMaterialize;
@@ -139,6 +143,15 @@ describe("the template picker", () => {
     fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
     expect(screen.getByText(REPLACE_WARNING)).toBeInTheDocument();
     expect(onMaterialize).not.toHaveBeenCalled();
+  });
+
+  it("names the unsaved edits it is about to take with them", () => {
+    renderSheet({ unsavedChanges: true });
+    chooseTemplate("Design services (Patina standard)");
+    fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
+
+    expect(screen.getByText(REPLACE_WARNING_UNSAVED)).toBeInTheDocument();
+    expect(screen.queryByText(REPLACE_WARNING)).not.toBeInTheDocument();
   });
 
   it("carries the chosen template's key once the warning is confirmed", () => {

@@ -27,6 +27,13 @@ const LABEL =
 export const REPLACE_WARNING =
   "This replaces the parts on this agreement. Nothing else on the draft changes.";
 
+/** The sentence above is true of the saved agreement and false of the room
+ *  the designer is standing in: `materialize_agreement_template` replaces the
+ *  saved set, and the composer throws away the composition it was holding to
+ *  re-read it — so anything typed since the last Save goes too. Say it. */
+export const REPLACE_WARNING_UNSAVED =
+  "This replaces the parts on this agreement, including the changes you have not saved yet. Nothing else on the draft changes.";
+
 /** A `service_addendum` is composed from the design-services shelf — the
  *  addendum amends a design-services agreement, so it draws on its templates
  *  (`save_agreement_as_template` files an addendum's set the same way). */
@@ -42,6 +49,7 @@ export function TemplatePickerSheet({
   onMaterialize,
   pending = false,
   error,
+  unsavedChanges = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -50,6 +58,9 @@ export function TemplatePickerSheet({
   onMaterialize: (template: AgreementTemplate) => void;
   pending?: boolean;
   error?: string | null;
+  /** The room is holding edits that have not been saved. They go with the
+   *  parts, so the warning has to name them. */
+  unsavedChanges?: boolean;
 }) {
   const templates = useAgreementTemplates(studioId);
   const [chosen, setChosen] = useState<AgreementTemplate | null>(null);
@@ -123,7 +134,7 @@ export function TemplatePickerSheet({
             role="alert"
             className="text-[12.5px] leading-relaxed text-[var(--color-charcoal)]"
           >
-            {REPLACE_WARNING}
+            {unsavedChanges ? REPLACE_WARNING_UNSAVED : REPLACE_WARNING}
           </p>
         )}
 
