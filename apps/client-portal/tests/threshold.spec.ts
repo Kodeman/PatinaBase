@@ -68,6 +68,13 @@ const SEEDED_ROOMS = ['Study', 'Hall', 'Stair'];
  * `the-client-page.sql` writes them (R26). Titles, not keys: this is the page
  * the homeowner reads.
  */
+/**
+ * The solo household's composed design-services agreement
+ * (`the-client-page.sql:356`, `v_ds_proposal`). Its keepsake route is read
+ * directly by the Wave 2 touchpoint below.
+ */
+const COMPOSED_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb01';
+
 const SEEDED_AGREEMENT_PART_TITLES = [
   'Services',
   'Deliverables',
@@ -460,7 +467,52 @@ test.describe('The Threshold — the client page', () => {
       expect(
         await shell.getByText(/require a separate named furnishings authorization/i).count(),
       ).toBe(1);
+
+      // Wave 2, M5 — attachments are leaves outside the body's measure, and
+      // this agreement carries none, so the rail is not drawn at all.
+      expect(await shell.getByTestId('agreement-attachments').count()).toBe(0);
     }).toPass({ timeout: 90_000 });
+  });
+
+  /**
+   * "The Agreement, Composed" (Wave 2, R12) — the keepsake half.
+   *
+   * `retired-routes.ts` deliberately leaves `/proposals/<id>/record` standing
+   * while folding its siblings onto `#door`, and the sheet now carries the
+   * frozen agreement a countersignature seals. The seed's composed agreement
+   * was executed before the snapshot existed, which is exactly the case R12
+   * rules on: the page renders as it always has — no snapshot section, no
+   * empty state, nothing said about a snapshot that is not there.
+   *
+   * Unconditional (R26): the fixture this reads is the one
+   * `supabase/seed/the-client-page.sql` lays down for every stack.
+   */
+  test('keeps the record route standing, and claims no snapshot it does not have', async ({
+    page,
+  }) => {
+    await signInAsClient(page);
+
+    const record = await page.request.get(`/proposals/${COMPOSED_AGREEMENT_ID}/record`, {
+      maxRedirects: 0,
+    });
+    expect(record.status(), 'the keepsake is not folded onto the page anchor').toBe(200);
+
+    await page.goto(`/proposals/${COMPOSED_AGREEMENT_ID}/record`, {
+      waitUntil: 'domcontentloaded',
+    });
+
+    await expect(async () => {
+      // Either the sheet or its "nothing to keep" line — the seed writes no
+      // `commercial_document_signatures` row for this agreement, so which one
+      // stands is the fixture's business, not this assertion's.
+      await expect(
+        page.getByTestId('record-sheet').or(page.getByText(/nothing to keep/i)).first(),
+      ).toBeVisible({ timeout: 5_000 });
+
+      // R12's rule for an execution that predates the snapshot.
+      expect(await page.getByTestId('record-executed').count()).toBe(0);
+      expect(await page.getByText('The agreement as executed').count()).toBe(0);
+    }).toPass({ timeout: 60_000 });
   });
 
   /* ── Wave 2: the retired routes ─────────────────────────────────────────── */
