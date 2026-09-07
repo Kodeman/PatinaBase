@@ -74,6 +74,44 @@
 --         RPC, so a direct UPDATE moved the figure the client signs without
 --         moving the figure the authority snapshots — two parties bound to
 --         different numbers, with no refusal anywhere.
+--   (N-5) ONE SOURCE OF TRUTH PER DOCUMENT (R17). The moment a proposal
+--         carries a part, proposal_service_terms and proposal_service_rates
+--         stop being authored and become a PROJECTION, and only
+--         upsert_agreement_parts may move them. Three walls, because each is
+--         bypassable alone: (a) a BEFORE INSERT/UPDATE/DELETE trigger on both
+--         tables that refuses while the proposal has parts unless the
+--         transaction-local GUC `app.agreement_projection` names it — the
+--         same GUC discipline `app.commercial_document_id` already keeps, and
+--         only the projection call inside upsert_agreement_parts sets it;
+--         (b) a typed refusal in upsert_design_services_draft, so the
+--         flag-off seven-facet room says one plain sentence instead of
+--         silently overwriting a composition; (c) INSERT, UPDATE and DELETE
+--         withdrawn from authenticated (and from anon, which this stack's
+--         pre-flip creation defaults had also granted) — no client code
+--         writes either table directly, only reads them
+--         (use-commercial-documents.ts:302-307,
+--         commercial-document-notify/index.ts:363). Without all three, a
+--         flag-off co-member saving the seven-facet room over a composed
+--         agreement bound the studio to a ceiling and a cadence the client's
+--         page never showed: signed at 2,400,000 biweekly, billed at 500,000
+--         monthly, and the fingerprint could not catch it because it hashes
+--         both halves.
+--   (N-6) MONEY IS TYPED AT THE DOOR, NOT CAST PAST IT. _agreement_floor_unmet
+--         asks jsonb_typeof(...) = 'number' before it counts a figure; the
+--         projection cast with ->> and asked nothing. So a rate card whose
+--         hourlyRateCents arrived as the STRING "22500" billed real hours
+--         against a ceiling the floor could not see and SENT, and a ceiling
+--         stated as a string earned "an agreement that bills time needs a
+--         ceiling" — a red for the wrong reason. Every money figure is now
+--         asserted to be a whole, non-negative, in-range JSON number before
+--         anything is written, so the floor and the projection read one
+--         payload one way.
+--   (N-7) NO DATABASE IDENTIFIER REACHES THE ROOM (R7). The composer prints
+--         the RPC's error text as its save note. A duplicate part, a blank
+--         role, a role with no rate, an unknown cadence, a negative ceiling
+--         and an out-of-range deposit each used to answer with the name of a
+--         constraint, a column or a table. Every one of them is asked and
+--         worded here now, in the designer's words, BEFORE the rows land.
 --
 -- Every new SECURITY DEFINER here pins `search_path = public, pg_temp` — the
 -- posture of the surrounding commercial family (00412 / 00422 / 00423), and
@@ -1994,6 +2032,21 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- 00575 (R17, N-5). This door authors the terms row. Once the agreement
+  -- carries parts, that row is a PROJECTION of them, and authoring it here
+  -- would bind the studio to a number the client's page does not show. The
+  -- refusal is typed twice over: the MESSAGE is the sentence the flag-off
+  -- seven-facet room prints beside a disabled Save, and the DETAIL is the
+  -- token a caller branches on. It stands AFTER the access and kind checks,
+  -- so a stranger still learns nothing but 'access denied'.
+  IF EXISTS (
+    SELECT 1 FROM public.proposal_agreement_parts ap
+    WHERE ap.proposal_id = p_proposal_id
+  ) THEN
+    RAISE EXCEPTION 'This agreement is composed from parts. Open it in the Contract Room with parts on to change it.'
+      USING ERRCODE = 'check_violation', DETAIL = 'agreement_composed';
+  END IF;
+
   PERFORM set_config('app.commercial_document_id', p_proposal_id::text, true);
   UPDATE public.proposals
   SET document_kind = CASE WHEN document_kind = 'legacy' THEN 'design_services' ELSE document_kind END,
@@ -2085,6 +2138,140 @@ GRANT SELECT, INSERT, UPDATE ON TABLE public.studio_agreement_defaults TO authen
 GRANT ALL ON TABLE public.studio_agreement_defaults TO service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- PART 5b — One source of truth per document (R17, N-5), and money read by
+--           type at the door (N-6)
+--
+-- Two objects, one rule: while a proposal has parts, the money row is a
+-- projection and only the projection may write it; and every figure that
+-- reaches that row is a JSON number before it is a cast.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- A money figure, asked the way _agreement_floor_unmet asks it: jsonb_typeof
+-- BEFORE any cast, so a payload the floor cannot count is a payload the
+-- projection cannot write either. Absent or JSON null is "not stated yet" and
+-- returns NULL — R21's "Not yet set" is a legal state of a draft, and the R4
+-- floor, not this function, decides whether it may leave one.
+--
+-- p_noun is the designer's word for the figure ('ceiling', 'retainer',
+-- 'hourly rate'), never a column: the composer prints these sentences.
+CREATE OR REPLACE FUNCTION public._agreement_assert_cents(
+  p_payload jsonb,
+  p_field   text,
+  p_noun    text
+)
+RETURNS integer
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_raw jsonb := p_payload -> p_field;
+  v_num numeric;
+BEGIN
+  IF v_raw IS NULL OR jsonb_typeof(v_raw) = 'null' THEN
+    RETURN NULL;
+  END IF;
+  IF jsonb_typeof(v_raw) <> 'number' THEN
+    RAISE EXCEPTION 'the % needs an amount in dollars and cents', p_noun
+      USING ERRCODE = 'check_violation';
+  END IF;
+  v_num := (v_raw #>> '{}')::numeric;
+  IF v_num <> trunc(v_num) THEN
+    RAISE EXCEPTION 'the % needs an amount in dollars and cents', p_noun
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_num < 0 THEN
+    RAISE EXCEPTION 'a % cannot be less than zero', p_noun
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_num > 2147483647 THEN
+    RAISE EXCEPTION 'that % is larger than an agreement can carry', p_noun
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN v_num::integer;
+END;
+$$;
+REVOKE ALL ON FUNCTION public._agreement_assert_cents(jsonb, text, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- R17(a). The wall that does not depend on which door was used. A composed
+-- agreement's terms row and rate rows may be written only from inside the
+-- projection, which announces itself by setting the transaction-local GUC
+-- `app.agreement_projection` to the proposal it is projecting — the same
+-- pattern `app.commercial_document_id` uses for the authored-child guard.
+-- A parts-less proposal is untouched by this: the legacy contract stands.
+--
+-- SECURITY DEFINER on purpose. The question "does this document have parts"
+-- must be total; asked as the caller, an RLS-invisible part would answer
+-- "no" and the wall would open exactly where it is needed.
+--
+-- Fires AFTER guard_*_authored (trigger order is alphabetical, and
+-- 'authored' < 'projection'), so a frozen document still refuses in the
+-- freeze's own words.
+CREATE OR REPLACE FUNCTION public.guard_agreement_projection_write()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal_id uuid;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_proposal_id := OLD.proposal_id;
+  ELSE
+    v_proposal_id := NEW.proposal_id;
+  END IF;
+
+  IF v_proposal_id IS NOT NULL
+     AND NULLIF(current_setting('app.agreement_projection', true), '')
+         IS DISTINCT FROM v_proposal_id::text
+     AND EXISTS (
+       SELECT 1 FROM public.proposal_agreement_parts ap
+       WHERE ap.proposal_id = v_proposal_id
+     )
+  THEN
+    RAISE EXCEPTION 'This agreement is composed from parts. Open it in the Contract Room with parts on to change it.'
+      USING ERRCODE = 'check_violation', DETAIL = 'agreement_composed';
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.guard_agreement_projection_write()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS guard_proposal_service_terms_projection
+  ON public.proposal_service_terms;
+CREATE TRIGGER guard_proposal_service_terms_projection
+  BEFORE INSERT OR UPDATE OR DELETE ON public.proposal_service_terms
+  FOR EACH ROW EXECUTE FUNCTION public.guard_agreement_projection_write();
+
+DROP TRIGGER IF EXISTS guard_proposal_service_rates_projection
+  ON public.proposal_service_rates;
+CREATE TRIGGER guard_proposal_service_rates_projection
+  BEFORE INSERT OR UPDATE OR DELETE ON public.proposal_service_rates
+  FOR EACH ROW EXECUTE FUNCTION public.guard_agreement_projection_write();
+
+-- R17(c). The grant that made the trigger's job possible in the first place.
+-- 00412:399-400 handed authenticated the full write set on both tables when
+-- the seven-facet room was the only author; nothing in apps/, packages/ or
+-- supabase/functions/ writes either table today — the portal reads them
+-- (use-commercial-documents.ts:302-307) and the notify function reads two
+-- columns (commercial-document-notify/index.ts:363). SELECT stays. anon's
+-- write set, which this stack's pre-flip creation defaults granted and no
+-- migration ever asked for, goes with it.
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_service_terms
+  FROM authenticated, anon;
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_service_rates
+  FROM authenticated, anon;
+GRANT SELECT ON TABLE public.proposal_service_terms TO authenticated;
+GRANT SELECT ON TABLE public.proposal_service_rates TO authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- PART 6 — Writing the parts, and projecting the money ones
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -2117,7 +2304,19 @@ DECLARE
   v_rates jsonb;
   v_version integer;
   v_duplicate text;
+  v_part jsonb;
+  v_payload jsonb;
+  v_kind text;
+  v_variant text;
+  v_key text;
+  v_title text;
+  v_keys text[] := ARRAY[]::text[];
+  v_role jsonb;
+  v_role_name text;
+  v_role_names text[];
+  v_percent numeric;
   v_previous_commercial text := current_setting('app.commercial_document_id', true);
+  v_previous_projection text := current_setting('app.agreement_projection', true);
 BEGIN
   IF auth.uid() IS NULL
      OR jsonb_typeof(COALESCE(p_parts, 'null'::jsonb)) <> 'array'
@@ -2138,6 +2337,136 @@ BEGIN
     RAISE EXCEPTION 'proposal % is not a design-services draft', p_proposal_id
       USING ERRCODE = 'check_violation';
   END IF;
+
+  -- ─────────────────────────────────────────────────────────────────────────
+  -- R7 (N-7) and R2 (N-6): every refusal a composition can earn is worded
+  -- HERE, in the designer's words, and asked BEFORE anything is written.
+  --
+  -- Everything below this loop lands rows whose CHECK constraints, unique
+  -- indexes and NOT NULLs would otherwise answer for us — and Postgres
+  -- answers with the name of a constraint, a column or a table, which the
+  -- composer prints verbatim as its save note. A designer must never read
+  -- one.
+  --
+  -- The money halves are asked with jsonb_typeof BEFORE any cast, exactly as
+  -- _agreement_floor_unmet asks them, so the floor and the projection can
+  -- never read one payload two ways: a rate stated as the string "22500" is
+  -- refused here rather than billing hours against a cap the floor is blind
+  -- to, and a ceiling stated as a string earns its own sentence rather than
+  -- the floor's.
+  --
+  -- Nothing here is a UI courtesy duplicated in SQL: upsert_agreement_parts
+  -- is GRANTed to authenticated, so this loop is the only thing standing
+  -- between a hand-made payload and the money row the authority snapshots.
+  -- ─────────────────────────────────────────────────────────────────────────
+  FOR v_part IN SELECT value FROM jsonb_array_elements(p_parts)
+  LOOP
+    IF jsonb_typeof(v_part) <> 'object' THEN
+      RAISE EXCEPTION 'this agreement could not be read as a list of parts'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    v_kind    := btrim(COALESCE(v_part->>'kind', ''));
+    v_variant := NULLIF(btrim(COALESCE(v_part->>'variant', '')), '');
+    v_key     := btrim(COALESCE(v_part->>'partKey', ''));
+    v_title   := btrim(COALESCE(v_part->>'title', ''));
+    v_payload := COALESCE(v_part->'payload', '{}'::jsonb);
+
+    IF v_kind = '' OR v_key = '' THEN
+      RAISE EXCEPTION 'every part of an agreement needs a name and a type'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_title = '' THEN
+      RAISE EXCEPTION 'every part of an agreement needs a title'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF jsonb_typeof(v_payload) <> 'object' THEN
+      RAISE EXCEPTION 'the part titled "%" could not be read', v_title
+        USING ERRCODE = 'check_violation';
+    END IF;
+    -- The uniqueness the table states as uniq_agreement_part_key, asked in
+    -- the words of the rail rather than in the words of the index.
+    IF v_key = ANY (v_keys) THEN
+      RAISE EXCEPTION 'this agreement lists the part titled "%" twice', v_title
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_keys := v_keys || v_key;
+
+    IF v_kind = 'schedule' AND v_variant = 'rate_card' THEN
+      IF v_payload ? 'roles' AND jsonb_typeof(v_payload->'roles') <> 'array' THEN
+        RAISE EXCEPTION 'a rate card is a list of roles and their hourly rates'
+          USING ERRCODE = 'check_violation';
+      END IF;
+      v_role_names := ARRAY[]::text[];
+      FOR v_role IN
+        SELECT value FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(v_payload->'roles') = 'array'
+               THEN v_payload->'roles' ELSE '[]'::jsonb END)
+      LOOP
+        IF jsonb_typeof(v_role) <> 'object' THEN
+          RAISE EXCEPTION 'a rate card is a list of roles and their hourly rates'
+            USING ERRCODE = 'check_violation';
+        END IF;
+        v_role_name := btrim(COALESCE(v_role->>'roleName', ''));
+        IF v_role_name = '' THEN
+          RAISE EXCEPTION 'every role on the rate card needs a name'
+            USING ERRCODE = 'check_violation';
+        END IF;
+        -- The rates table is unique on (proposal, version, role name), and
+        -- the projection btrims the name exactly as this does.
+        IF v_role_name = ANY (v_role_names) THEN
+          RAISE EXCEPTION 'the rate card names % twice', v_role_name
+            USING ERRCODE = 'check_violation';
+        END IF;
+        v_role_names := v_role_names || v_role_name;
+        IF v_role->'hourlyRateCents' IS NULL
+           OR jsonb_typeof(v_role->'hourlyRateCents') = 'null' THEN
+          RAISE EXCEPTION 'every role on the rate card needs an hourly rate'
+            USING ERRCODE = 'check_violation';
+        END IF;
+        PERFORM public._agreement_assert_cents(v_role, 'hourlyRateCents', 'hourly rate');
+      END LOOP;
+    END IF;
+
+    IF v_kind = 'schedule' AND v_variant = 'ceiling' THEN
+      PERFORM public._agreement_assert_cents(v_payload, 'cents', 'ceiling');
+    END IF;
+
+    IF v_kind = 'schedule' AND v_variant = 'retainer' THEN
+      PERFORM public._agreement_assert_cents(v_payload, 'cents', 'retainer');
+      IF NULLIF(btrim(COALESCE(v_payload->>'activationPolicy', '')), '') IS NOT NULL
+         AND v_payload->>'activationPolicy' NOT IN ('immediate', 'retainer_paid') THEN
+        RAISE EXCEPTION 'a retainer starts either right away or once it is paid'
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+
+    -- 'per_draw' is type-legal in the contract and not yet legal in the
+    -- money row — the cadence CHECK widens in Wave 3. Until then it is
+    -- refused in words a designer can act on, not in the words of a CHECK.
+    IF v_kind = 'schedule' AND v_variant = 'cadence' THEN
+      IF NULLIF(btrim(COALESCE(v_payload->>'cadence', '')), '') IS NOT NULL
+         AND v_payload->>'cadence' NOT IN ('monthly', 'biweekly', 'milestone') THEN
+        RAISE EXCEPTION 'billing runs monthly, every two weeks, or at milestones'
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+
+    IF v_kind = 'schedule' AND v_variant = 'procurement' THEN
+      IF v_payload->'depositPercent' IS NOT NULL
+         AND jsonb_typeof(v_payload->'depositPercent') <> 'null' THEN
+        IF jsonb_typeof(v_payload->'depositPercent') <> 'number' THEN
+          RAISE EXCEPTION 'a furnishings deposit is a percentage between 0 and 100'
+            USING ERRCODE = 'check_violation';
+        END IF;
+        v_percent := (v_payload->'depositPercent' #>> '{}')::numeric;
+        IF v_percent < 0 OR v_percent > 100 THEN
+          RAISE EXCEPTION 'a furnishings deposit is a percentage between 0 and 100'
+            USING ERRCODE = 'check_violation';
+        END IF;
+      END IF;
+    END IF;
+  END LOOP;
 
   PERFORM set_config('app.commercial_document_id', p_proposal_id::text, true);
   UPDATE public.proposals
@@ -2309,7 +2638,14 @@ BEGIN
 
   -- true = the parts door, and only the parts door, may leave the ceiling
   -- NULL: a removed ceiling part is uncapped, not zero-capped.
+  --
+  -- R17(a): the GUC is set for exactly the width of the projection and put
+  -- back after, so guard_agreement_projection_write refuses every other
+  -- writer of the money row while this document has parts. Transaction-local
+  -- (set_config's third argument), so it cannot leak past this statement.
+  PERFORM set_config('app.agreement_projection', p_proposal_id::text, true);
   PERFORM public._project_agreement_terms(p_proposal_id, v_terms, v_rates, true);
+  PERFORM set_config('app.agreement_projection', COALESCE(v_previous_projection, ''), true);
 
   PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
   RETURN jsonb_build_object(
@@ -2321,6 +2657,7 @@ BEGIN
     'documentFingerprint', public._commercial_document_fingerprint(p_proposal_id)
   );
 EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('app.agreement_projection', COALESCE(v_previous_projection, ''), true);
   PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
   RAISE;
 END;
