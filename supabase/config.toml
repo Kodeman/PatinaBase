@@ -633,6 +633,17 @@ verify_jwt = true
 [functions.trade-rfq-send]
 verify_jwt = true
 
+# Trade Agreement send (Wave 3, P14/R16). Same posture as trade-rfq-send above:
+# the gateway verifies the caller's JWT, and the function re-derives the caller
+# with auth.getUser and re-checks membership of THIS agreement's studio via
+# public.is_active_studio_member (evaluated as the caller) before it will load,
+# mint a token for, or send a studio_trade_agreements row. The subcontractor
+# never calls this function — they reach their agreement through the minted
+# token on the client portal's /trade/[token] page, so no verify_jwt exemption
+# is needed for their side.
+[functions.trade-agreement-send]
+verify_jwt = true
+
 # Invoice "mail a check" intent (00428). Client-facing and browser-called, so
 # the gateway must verify the caller's JWT; the function then re-derives the
 # caller with auth.getUser and requires them to be THAT invoice's client
