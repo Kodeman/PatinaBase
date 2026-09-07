@@ -58,7 +58,10 @@ describe('signTradeAgreement', () => {
     expect(rpc.mock.calls[0][1].p_signed_ip).toBeNull();
   });
 
-  it('reports saved on a fresh signature and revalidates the guest page', async () => {
+  it('reports saved on a fresh signature and NEVER revalidates the guest page', async () => {
+    // S3: the token is revoked in the same transaction as the signature, so a
+    // revalidate on the way back would re-render the route against a spent
+    // token and replace the just-inked receipt with the not-found page.
     mockAdmin({
       data: { status: 'signed', signedName: 'Dana Hall', signedAt: '2026-09-07T15:04:00Z' },
       error: null,
@@ -69,7 +72,7 @@ describe('signTradeAgreement', () => {
       signedName: 'Dana Hall',
       signedAt: '2026-09-07T15:04:00Z',
     });
-    expect(revalidatePath).toHaveBeenCalledWith(`/trade/${validToken}`);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('reports already_signed with the ORIGINAL receipt on a replay, never an error', async () => {
@@ -134,5 +137,53 @@ describe('signTradeAgreement', () => {
     mockAdmin({ data: [{ status: 'signed' }], error: null });
     const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
     expect(result).toEqual({ status: 'saved', signedName: 'Dana Hall', signedAt: null });
+  });
+
+  // S5. The build sheet freezes resolve's DTO but no success shape for this
+  // RPC — only the three failure classifications. So the answer is read
+  // failure-first: an unrecognised receipt is a committed signature, never
+  // "This link is no longer active." shown over real ink.
+  it('reads a snake_case receipt as the signature it is', async () => {
+    mockAdmin({
+      data: { status: 'signed', signed_name: 'Dana Hall', signed_at: '2026-09-07T15:04:00Z' },
+      error: null,
+    });
+    const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
+    expect(result).toEqual({
+      status: 'saved',
+      signedName: 'Dana Hall',
+      signedAt: '2026-09-07T15:04:00Z',
+    });
+  });
+
+  it('reads an ok-shaped answer carrying no classification as a committed signature', async () => {
+    mockAdmin({ data: { ok: true, signed_at: '2026-09-07T15:04:00Z' }, error: null });
+    const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
+    expect(result).toEqual({
+      status: 'saved',
+      signedName: 'Dana Hall',
+      signedAt: '2026-09-07T15:04:00Z',
+    });
+  });
+
+  it('reads an outcome-keyed answer, not just a status-keyed one', async () => {
+    mockAdmin({ data: { outcome: 'already_signed', signedName: 'Dana Hall', signedAt: null }, error: null });
+    const result = await signTradeAgreement(validToken, { signedName: 'Someone Else' });
+    expect(result).toEqual({ status: 'already_signed', signedName: 'Dana Hall', signedAt: null });
+  });
+
+  it('still reads every recognised failure word as its own sentence', async () => {
+    for (const word of ['invalid_link', 'not_found', 'expired', 'revoked']) {
+      mockAdmin({ data: { status: word }, error: null });
+      // eslint-disable-next-line no-await-in-loop
+      const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
+      expect(result).toEqual({ status: 'invalid' });
+    }
+    for (const word of ['agreement_void', 'void', 'voided']) {
+      mockAdmin({ data: { status: word }, error: null });
+      // eslint-disable-next-line no-await-in-loop
+      const result = await signTradeAgreement(validToken, { signedName: 'Dana Hall' });
+      expect(result).toEqual({ status: 'agreement_void' });
+    }
   });
 });

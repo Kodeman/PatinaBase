@@ -18,12 +18,22 @@
  * backend that raises and a backend that returns produce the same sentence on
  * the page and neither can fall through to a raw DB message.
  *
+ * READING THE ANSWER (S5). The build sheet freezes resolve's DTO (I-4) but
+ * freezes no success shape for this RPC — it names only the three failure
+ * classifications. So the answer is read FAILURE-FIRST: a recognised failure
+ * word, or an empty answer, is a failure; anything else the RPC handed back
+ * without raising is a committed signature, whatever it chose to call the
+ * keys. Reading it success-first would mean an unrecognised receipt shape
+ * ({ ok: true }, snake_case names) printed "This link is no longer active."
+ * to a sub whose signature had just committed — the one sentence that must
+ * never appear over a real signature. Both key spellings are read for the
+ * same reason rfq/[token]/actions.ts reads amountCents and amount_cents.
+ *
  * sign_trade_agreement_by_token is service_role ONLY — this file is the only
  * caller a login-less guest surface has.
  */
 
 import { headers } from 'next/headers';
-import { revalidatePath } from 'next/cache';
 import { createServiceClient } from '@patina/supabase/server';
 import { resolveClientIp } from '@/lib/utils/client-ip';
 import { isLikelyTradeAgreementToken } from './types';
@@ -42,6 +52,39 @@ function classifyMessage(message: string): 'agreement_void' | 'invalid' {
   // unrecognized failure read alike, so a dead link never confirms it once
   // existed and a raw DB message never reaches the sub.
   return message.includes('agreement_void') ? 'agreement_void' : 'invalid';
+}
+
+/** The withdrawn classification, on whichever word the RPC chose. */
+const VOID_OUTCOMES = new Set(['agreement_void', 'void', 'voided']);
+
+/** The dead-link classifications — every one reads as the same sentence. */
+const INVALID_OUTCOMES = new Set(['invalid_link', 'invalid', 'not_found', 'expired', 'revoked']);
+
+/**
+ * The outcome word, wherever the RPC put it: a classification string, or a
+ * `status`/`outcome`/`result` key on the returned object. NULL means the
+ * answer carried no classification at all — which, per the failure-first
+ * reading above, is a committed signature rather than a failure.
+ */
+function readOutcome(row: unknown): string | null {
+  if (typeof row === 'string') return row;
+  if (!row || typeof row !== 'object') return null;
+  const record = row as Record<string, unknown>;
+  for (const key of ['status', 'outcome', 'result']) {
+    const value = record[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
+}
+
+function readString(row: unknown, keys: string[]): string | null {
+  if (!row || typeof row !== 'object') return null;
+  const record = row as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
 }
 
 export async function signTradeAgreement(
@@ -73,19 +116,25 @@ export async function signTradeAgreement(
   }
 
   const row = Array.isArray(data) ? data[0] : data;
-  const outcome = typeof row?.status === 'string' ? row.status : null;
 
-  if (outcome === 'agreement_void') return { status: 'agreement_void' };
-  if (outcome !== 'signed' && outcome !== 'already_signed') return { status: 'invalid' };
+  // An empty answer is the only shape that is a failure without saying so:
+  // there is no receipt in it to show.
+  if (row === null || row === undefined) return { status: 'invalid' };
 
-  // The page reads the agreement and any existing signature fresh on every
-  // request (force-dynamic) — revalidate so a reload after signing shows the
-  // settled receipt rather than a cached pre-signature read.
-  revalidatePath(`/trade/${token}`);
+  const outcome = readOutcome(row);
 
+  if (outcome && VOID_OUTCOMES.has(outcome)) return { status: 'agreement_void' };
+  if (outcome && INVALID_OUTCOMES.has(outcome)) return { status: 'invalid' };
+
+  // No revalidatePath here (S3). The token is revoked in the same transaction
+  // as the signature, so re-rendering this route on the way back would resolve
+  // the now-spent token to NULL and replace the just-inked receipt with the
+  // not-found page. The receipt is rendered from the component's own state and
+  // the route is force-dynamic, so the call bought nothing even when it was
+  // harmless.
   return {
     status: outcome === 'already_signed' ? 'already_signed' : 'saved',
-    signedName: typeof row?.signedName === 'string' ? row.signedName : signedName,
-    signedAt: typeof row?.signedAt === 'string' ? row.signedAt : null,
+    signedName: readString(row, ['signedName', 'signed_name']) ?? signedName,
+    signedAt: readString(row, ['signedAt', 'signed_at']),
   };
 }
