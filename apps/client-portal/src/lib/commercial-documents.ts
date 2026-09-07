@@ -254,6 +254,15 @@ export interface CommercialDocumentBundle {
    * that is not a services agreement.
    */
   consentSentence: string | null;
+  /**
+   * R34 — the one line the designer wrote about WHY this addendum exists,
+   * lifted out of the studio's change history because the composer promises
+   * her the homeowner reads it beside the change.
+   *
+   * Null on every other kind of paper, on an addendum whose author wrote
+   * nothing, and on every bundle that predates the key.
+   */
+  why: string | null;
   /** R12 — the frozen agreement, written at countersign. Null before it. */
   executionSnapshot: AgreementExecutionSnapshot | null;
   furnishings: FurnishingsAuthorization | null;
@@ -595,6 +604,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
     first(source, 'consentSentence', 'consent_sentence');
   const executionSnapshotRaw = first(raw, 'executionSnapshot', 'execution_snapshot') ??
     first(source, 'executionSnapshot', 'execution_snapshot');
+  const whyRaw = first(raw, 'why') ?? first(source, 'why');
   const depositRequiredValue = first(
     furnishingRaw,
     'depositRequiredCents',
@@ -672,6 +682,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
     // part row is read the same way.
     composed: composedRaw === true ? true : composedRaw === false ? false : null,
     consentSentence: nullableText(consentSentenceRaw),
+    why: nullableText(whyRaw),
     executionSnapshot: adaptExecutionSnapshot(executionSnapshotRaw),
     signatures: Array.isArray(signatureRows) ? signatureRows.flatMap((item) => {
       const row = record(item);

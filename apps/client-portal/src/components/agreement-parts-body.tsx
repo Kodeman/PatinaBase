@@ -418,9 +418,15 @@ function AttachmentLeaf({ part, letter }: { part: CommercialAgreementPart; lette
 export function AgreementPartsBody({
   parts,
   currency,
+  why = null,
 }: {
   parts: CommercialAgreementPart[];
   currency: string;
+  /** R34 — the one line the designer wrote about why an addendum exists. It
+   *  sits above the change, because that is the order she reads it in: what
+   *  changed, and why. Null on an agreement, and on an addendum whose author
+   *  wrote nothing. */
+  why?: string | null;
 }) {
   const ordered = [...parts].sort((a, b) => a.position - b.position);
   const sections = ordered.filter(
@@ -431,6 +437,15 @@ export function AgreementPartsBody({
   return (
     <>
       <div className="mt-8 space-y-8" data-testid="agreement-parts-body">
+        {why && why.trim().length > 0 ? (
+          <p
+            data-testid="agreement-why"
+            className="type-body whitespace-pre-wrap border-l-2 border-patina-dusty-blue pl-4"
+          >
+            {why.trim()}
+          </p>
+        ) : null}
+
         {sections.map((part) => (
           <PartSection key={part.id} part={part} currency={currency} />
         ))}

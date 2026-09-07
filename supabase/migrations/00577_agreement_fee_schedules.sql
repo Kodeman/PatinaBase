@@ -419,6 +419,45 @@ $$;
 REVOKE ALL ON FUNCTION public._agreement_money(numeric)
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- R34 — THE ADDENDUM'S WHY IS THE HOMEOWNER'S TO READ.
+--
+-- The `why` is the one line the designer writes when she composes an addendum,
+-- and the sheet she writes it in has always told her the client reads it
+-- beside the change. It did not: the events table was studio-only, and the
+-- bundle projected no such key — a promise made in the one place W2 asks her
+-- to write something for the homeowner, and not kept.
+--
+-- One line per addendum, not one per part: copy_agreement_parts_from_authority
+-- writes the same why onto every event it logs, so printing it per part would
+-- repeat one sentence down the page. The FIRST why the addendum recorded is
+-- the one it was created with; a later save's why is a studio note about a
+-- studio edit, and the homeowner is reading the paper, not the log.
+--
+-- Nothing else about agreement_part_events crosses the edge — not the actor,
+-- not the before/after payloads, not the action. R8 still holds for the log
+-- itself; this is one sentence, lifted out deliberately.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public._agreement_addendum_why(p_proposal_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT NULLIF(btrim(event.why), '')
+  FROM public.agreement_part_events AS event
+  JOIN public.proposals AS proposal ON proposal.id = event.proposal_id
+  WHERE event.proposal_id = p_proposal_id
+    AND proposal.document_kind = 'service_addendum'
+    AND NULLIF(btrim(COALESCE(event.why, '')), '') IS NOT NULL
+  ORDER BY event.at, event.id
+  LIMIT 1;
+$$;
+REVOKE ALL ON FUNCTION public._agreement_addendum_why(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public._render_agreement_snapshot_html(p_proposal_id uuid)
 RETURNS text
 LANGUAGE plpgsql
@@ -448,7 +487,15 @@ DECLARE
   v_notes text;
   v_cents numeric;
   v_text text;
+  v_why text;
 BEGIN
+  -- R34 — the change, and why it was made, in that order, exactly as the door
+  -- prints them.
+  v_why := public._agreement_addendum_why(p_proposal_id);
+  IF v_why IS NOT NULL THEN
+    v_html := '<p class="why">' || public._agreement_html_escape(v_why) || '</p>';
+  END IF;
+
   FOR v_part IN
     SELECT ap.* FROM public.proposal_agreement_parts ap
     WHERE ap.proposal_id = p_proposal_id AND ap.client_visible
@@ -2567,6 +2614,10 @@ BEGIN
       SELECT 1 FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id
     ),
+    -- 00577 (R34): the one line the designer wrote about WHY this addendum
+    -- exists. NULL on every other kind of document and on an addendum whose
+    -- author wrote nothing; the whole of the change history stays behind (R8).
+    'why', public._agreement_addendum_why(p_proposal_id),
     -- 00577 (P6): the sentence under the checkbox, composed by the database.
     -- The sign route reads it from HERE and never from the browser: a client
     -- that could post its own consent sentence could choose what it consented
@@ -2848,9 +2899,12 @@ COMMENT ON COLUMN public.proposal_service_terms.retainer_credit_rule IS
 COMMENT ON TABLE public.agreement_part_events IS
   'The change history of one agreement''s parts: what was added, edited, '
   'removed or reordered, by whom, and the one line the designer wrote about '
-  'why. Studio-only — it never reaches the client bundle (R8) — and '
-  'append-only through guard_commercial_immutable_row. Written only by '
-  'upsert_agreement_parts.';
+  'why. The LOG is studio-only (R8) and append-only through '
+  'guard_commercial_immutable_row; written only by upsert_agreement_parts. '
+  'The one exception is R34: on a service_addendum, the first `why` recorded '
+  'reaches the homeowner, through _agreement_addendum_why — she reads why the '
+  'change was made beside the change, which is what the composer promised '
+  'the designer it would.';
 
 COMMENT ON TABLE public.agreement_execution_snapshots IS
   'The copy the homeowner keeps (R12): frozen HTML composed at COUNTERSIGN '

@@ -1109,6 +1109,46 @@ describe('CommercialDocumentShell', () => {
       expect(screen.getByText('Concept and design development')).toBeInTheDocument();
     });
 
+    /* R34 — the addendum's why. The composer promises the designer her client
+       reads it beside the change; until the ruling it went into the studio's
+       change log and nowhere else. */
+    it('prints the designer’s why above the change on a composed addendum', () => {
+      render(
+        <CommercialDocumentShell
+          bundle={bundle({
+            composed: true,
+            parts: NINE_PARTS,
+            why: 'Added the study to the scope',
+          })}
+        />,
+      );
+
+      const why = screen.getByTestId('agreement-why');
+      expect(why).toHaveTextContent('Added the study to the scope');
+      const body = screen.getByTestId('agreement-parts-body');
+      const firstPart = screen.getAllByTestId('agreement-part')[0];
+      expect(body).toContainElement(why);
+      expect(why.compareDocumentPosition(firstPart)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+
+    it('says nothing where there is no why — which is every agreement', () => {
+      render(
+        <CommercialDocumentShell bundle={bundle({ composed: true, parts: NINE_PARTS })} />,
+      );
+      expect(screen.queryByTestId('agreement-why')).not.toBeInTheDocument();
+    });
+
+    it('treats a blank why as no why at all', () => {
+      render(
+        <CommercialDocumentShell
+          bundle={bundle({ composed: true, parts: NINE_PARTS, why: '   ' })}
+        />,
+      );
+      expect(screen.queryByTestId('agreement-why')).not.toBeInTheDocument();
+    });
+
     it('leaves the choice to the part count when the bundle says nothing, which is every document today', () => {
       const { unmount } = render(
         <CommercialDocumentShell bundle={bundle({ composed: null, parts: NINE_PARTS })} />,

@@ -203,7 +203,13 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   // projects a terms row, and the thing to revisit when W2 adds the
   // consultation / furnishings_services classes.
   if (bundle.composed ?? bundle.parts.length > 0) {
-    return <AgreementPartsBody parts={bundle.parts} currency={terms.currency} />;
+    return (
+      <AgreementPartsBody
+        parts={bundle.parts}
+        currency={terms.currency}
+        why={bundle.why}
+      />
+    );
   }
 
   // A brand-new agreement defaults both of these to 0 and nothing blocks a

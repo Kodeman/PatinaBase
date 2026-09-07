@@ -1157,4 +1157,68 @@ BEGIN
   RAISE NOTICE 'PASS 16: R33 — only a fee she can read reaches the money row, and a hidden one cannot send';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (17) R34 — THE ADDENDUM'S WHY REACHES THE HOMEOWNER. The composer tells the
+--      designer "your client reads it beside the change", and until this
+--      ruling that was not true of any surface: the line went into the
+--      studio's change log and stopped there. It now reaches the door and the
+--      copy she keeps, and nothing else about the log goes with it.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_project_id uuid;
+  v_created jsonb;
+  v_addendum uuid;
+  v_copied integer;
+  v_bundle jsonb;
+  v_html text;
+  v_why CONSTANT text := 'Added the study to the scope';
+BEGIN
+  SELECT project_id INTO v_project_id FROM public.proposals
+  WHERE id = 'a7300000-0000-4000-8000-000000000002';
+  ASSERT v_project_id IS NOT NULL,
+    'case (6-8) must have countersigned the per-phase agreement into a project';
+
+  PERFORM pg_temp.assume_role('a7000000-0000-4000-8000-000000000001');
+  v_created := public.create_service_addendum(v_project_id, 'Addendum No. 1');
+  v_addendum := (v_created->>'proposalId')::uuid;
+  ASSERT v_addendum IS NOT NULL,
+    format('the addendum must be created, got %s', v_created);
+
+  v_copied := public.copy_agreement_parts_from_authority(v_addendum, v_why);
+  ASSERT v_copied > 0,
+    format('the addendum must carry the authority''s parts, got %s', v_copied);
+
+  -- The client's bundle opens at send, so the addendum has to leave draft
+  -- before she has anything to read.
+  PERFORM pg_temp.send_agreement(v_addendum);
+  PERFORM pg_temp.reset_role();
+
+  -- The homeowner's edge.
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle(v_addendum);
+  ASSERT v_bundle->>'why' = v_why,
+    format('the addendum''s why must reach the client bundle, got %L', v_bundle->>'why');
+
+  -- And nothing else of the log crosses with it (R8).
+  ASSERT NOT (v_bundle::text ~* 'agreement_part_events|partEvents|"history"|"actor"|"before"|"after"'),
+    'the change history itself stays studio-side';
+
+  -- An agreement is not an addendum, and carries no why at all.
+  v_bundle := public.get_client_commercial_document_bundle('a7300000-0000-4000-8000-000000000002');
+  ASSERT v_bundle ? 'why', 'the key is present on every document, so the client never branches on absence';
+  ASSERT jsonb_typeof(v_bundle->'why') = 'null',
+    format('only an addendum carries a why, got %s', v_bundle->'why');
+
+  -- The copy she keeps opens with it, in the designer's own words.
+  v_html := public._render_agreement_snapshot_html(v_addendum);
+  ASSERT position(v_why IN v_html) > 0,
+    'the keepsake prints the why beside the change';
+  ASSERT position(v_why IN v_html) < position('<h2>' IN v_html),
+    'the why sits above the change, which is the order she reads it in';
+
+  RAISE NOTICE 'PASS 17: R34 — the addendum''s why reaches the door and the keepsake, and the log does not';
+END $$;
+
 ROLLBACK;
