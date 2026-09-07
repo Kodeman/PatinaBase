@@ -580,3 +580,175 @@ The stack was reset (00575 changed) — recorded in `stack-notice.md`.
   `.agents/`, hooks, settings or any `.env` file.
 - Did not act on F3, F4, F5 or F7 — the rulings send them to the main backlog as
   advisories, and they are untouched here.
+
+
+---
+
+## 12 · Walk fixes — round 1, 2026-09-07
+
+From head `6ecc99968` on `agreement/w1-integration` in
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration`
+(`git … rev-parse --show-toplevel` →
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration`).
+Head now **`5e96a7270`**. Two commits, **8 product files**, nothing else touched.
+
+The web walk (`walk-web-r1.md`) returned one blocker and four majors. All five
+are closed. Nothing is carried.
+
+| Item | Commit | What moved |
+|---|---|---|
+| **B1** | `e93bdfdb9` | `upsert_agreement_parts` no longer asks R4's floor. |
+| **M3** | `e93bdfdb9` | The cadence part carries what its editor shows. |
+| **M4** | `e93bdfdb9` | The fourth paper door learned the rate-card predicate. |
+| **M2** | `5e96a7270` | The room prints the sentence the database refused with. |
+| **M6** | `5e96a7270` | A role left unnamed is named, and holds Save. |
+
+### 12.1 · B1 · a draft is allowed to be unfinished
+
+R22 places R4's floor at the doors a document **leaves draft** by. Wave 1 also
+asked it at the door a draft is merely **written** by, and §10.2 recorded that
+as a deliberate deviation ("four places, not three"). The walk showed what the
+fourth one costs.
+
+A freshly opened composition is materialized from whatever the studio already
+has. A studio using the new Agreement defaults card seeds a rate card with no
+ceiling beside it and no fee typed yet — the exact shape the migration's own
+comment anticipates. Writing the Services clause and pressing Save then earned
+`23514 This agreement names no fee…`; adding a role rate and pressing Save
+again earned `23514 an agreement that bills time needs a ceiling`. There is no
+order of work that reaches a saved draft: the ceiling has to be typed into a
+draft that must be saveable first. The composer's own comment already said the
+rule — *"Every other blocker still saves — a draft is allowed to be
+unfinished."*
+
+Both predicate calls leave `upsert_agreement_parts`, with the reasoning in
+place of the code. Nothing is lost:
+
+- `send_commercial_document`, `_sign_design_services_agreement_authorized` and
+  `_issue_design_services_agreement_on_paper` each still ask **both** halves;
+- parts freeze when the document leaves draft (R6), so no composition below the
+  floor can reach a homeowner;
+- the readiness panel names both blockers the moment the rail renders, which is
+  where the designer needs to read them.
+
+The **duplicate money refusal stays at the save door**: it is not a floor, it is
+the projection's precondition — two ceilings leave the money row picking between
+them, and there is no half-composed state that wants that. It is also the one
+refusal the room holds Save on (R18/R29), so the click never earns it.
+
+The banner's N-3 and R22 blocks, the `materialize_standard_parts` tail comment
+and the two `COMMENT ON FUNCTION` strings all say three doors now, not four.
+
+### 12.2 · M3 · the cadence part says what the editor shows
+
+R28-amended reasoned from a draft that HAS a terms row, where `billing_cadence`
+is `NOT NULL DEFAULT 'monthly'`. The fresh-draft path `walk-env.md` prescribes
+was not in view: with no terms row and no studio default, `patina.cadence`
+seeded `{"cadence": null}` while `CadenceEditor` rendered Monthly preselected
+from a local fallback that never writes. The rail said NEEDS ATTENTION, the send
+sheet said "Choose a billing cadence." and held Send, and Save said "Saved"
+because nothing was dirty — and re-selecting the already-selected option fires
+no change event, so **there was no visible act that cleared it**.
+
+The seed's last COALESCE arm is now `'monthly'` — which is what the seven-facet
+room writes onto exactly that draft (`emptyTerms`), so flag-on and flag-off
+agree. The retainer is untouched: an amount nobody wrote stays unwritten (R28);
+a cadence is not an amount.
+
+### 12.3 · M4 · the paper door that could not open
+
+Three of the four doors learned `_agreement_requires_rate_card` in 00575.
+`_record_paper_client_signature_impl` did not — it is defined at 00425:416 under
+the pre-rename name `record_paper_client_signature` (00462:1797 renamed it;
+00477:361 rebuilt only the wrapper above it), so a `grep` for the head body by
+its current name finds nothing and the lane missed it. A composed **flat-fee**
+agreement — legal, sendable, signable in the portal — could therefore be sent
+and never recorded on paper: `design services agreement requires terms and at
+least one role rate`, for an agreement that correctly carries none. The walk
+could not complete step 12's flat-fee half at all.
+
+The head body is grafted verbatim into 00575 as PART 4's door **D**, with the
+one predicate swapped and the refusal reworded to the sentence the other three
+now use. R4's floor is deliberately **not** added there: that door is reached
+only at `sent`, which means send already asked both halves, and a refusal there
+could only strand a homeowner's real signature on a real piece of paper.
+
+### 12.4 · M2 · the room prints the database's sentence
+
+`persist()`'s catch read `error instanceof Error ? error.message : …`. PostgREST
+hands react-query a plain `{ message, code, details, hint }`, so the branch never
+fired and every sentence 00575 was written to say arrived as "The agreement could
+not be saved." `refusalMessage(error, fallback)` reads the message off whatever
+shape carries one, and is used at all four of the room's error paths (save,
+materialize, return-to-facets, attach-client). Two jest cases pin both ends: the
+PostgREST-shaped refusal prints verbatim, a refusal carrying no message falls
+back to the room's own line.
+
+### 12.5 · M6 · a role left unnamed
+
+Readiness asked only whether **some** role on the rate card was named — which a
+named neighbour answers — so a second role added and left blank read "0 OF 9
+PARTS NEED ATTENTION", offered Save, and earned
+`23514 every role on the rate card needs a name`. It is now a blocker on the
+part (so the rail marks the row), printed in the readiness panel, and — exactly
+as the duplicate money part is handled, and only as it is — it holds **Save** and
+**Review & send**. Every other blocker still saves.
+
+`BLANK_ROLE_BLOCKER` lives in `readiness.ts` beside `duplicateMoneyBlocker`;
+`unnamedRateCardRoles` lives in `part-kinds.ts` beside `duplicateMoneyVariants`.
+
+### 12.6 · Files
+
+```
+supabase/migrations/00575_agreement_parts.sql
+supabase/seed/00-legacy-grants.sql
+supabase/tests/commercial/agreement_parts_test.sql
+apps/designer-portal/src/components/document/rooms/drafting/agreement/agreement-composer.tsx
+apps/designer-portal/src/components/document/rooms/drafting/agreement/part-kinds.ts
+apps/designer-portal/src/components/document/rooms/drafting/agreement/readiness.ts
+apps/designer-portal/src/components/document/rooms/drafting/agreement/__tests__/agreement-composer.test.tsx
+apps/designer-portal/src/components/document/rooms/drafting/agreement/__tests__/readiness.test.ts
+```
+
+`agreement_parts_test.sql` moved with the code rather than around it: cases 9,
+22a, 24 and 26/C1 now prove the unfinished draft **saves** and the door out of
+draft refuses it; case 36's three R22 probes (R3, the lone ceiling, Q5) each
+save and then refuse at send; case 37 reads the cadence the editor shows; and
+case 39 is new — a composed flat-fee agreement records its printed signature,
+and the catalog says all four doors carry one predicate (it was three of four).
+
+### 12.7 · Gates, all re-run at `5e96a7270`
+
+| Gate | Command | Result |
+|---|---|---|
+| Stack | `supabase db reset --workdir <worktree>` (unsandboxed) | applied clean through `00575`; 33 seed files replayed. See `stack-notice.md`. |
+| ACL seed | `python3 scripts/generate-legacy-grants.py` | baseline + **2234** replayed statements (was 2233); one added REVOKE, committed. Re-run after the reset: no further diff. |
+| SQL — parts | `psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_parts_test.sql` | **rc=0** — PASS 1–39 |
+| SQL — projection | `… commercial/agreement_parts_projection_test.sql` | **rc=0** |
+| SQL — paper issue | `… commercial/design_services_paper_issue_test.sql` | **rc=0** (its two `pg_get_functiondef` falsification probes still find the impl's state guard — the grafted body keeps that line verbatim) |
+| SQL — hardening contract | `… edge_api/public_sd_hardening_contract_test.sql` | **rc=0** — `_record_paper_client_signature_impl` is not in the pinned set, so no hash was re-pinned |
+| SQL suite | `./scripts/run-sql-tests.sh` (unsandboxed) | **total 162 · green 141 · expected-fail 21 · unexpected-fail 0 · effective-green 162/162** — identical to the re-gate baseline |
+| Types regen | `SUPABASE_DB_URL=…54322/postgres pnpm db:generate` | 1,135,292 bytes |
+| Types diff | `git diff --exit-code packages/supabase/src/database.types.ts` | **rc=0 — in sync** (function bodies only, no schema change) |
+| `@patina/types` | `type-check` | clean |
+| `@patina/supabase` | `type-check` | clean |
+| designer-portal | `type-check` — the real gate | clean |
+| designer-portal | touched tests — `npx jest src/components/document/rooms/drafting/agreement` | **3 suites · 83 tests passed** |
+| designer-portal | **full** `test` (jest) | **523 suites · 6338 tests · 2 snapshots — all passed** (the close-out's 6332, +6 from this lane) |
+| client-portal | `type-check` | clean |
+
+### 12.8 · What this lane did NOT do
+
+- No production anything: no `db push`, no `functions deploy`, no `wrangler`,
+  no Strata read or write. `00575` remains unapplied on Strata (head `00574`),
+  so editing it in place is still the correct remediation.
+- Did not touch `apps/client-portal` — no file under it changed, so its jest and
+  Playwright suites were not re-run; its `type-check` was run anyway because the
+  migration is shared.
+- Did not run Playwright (client or designer), the admin-portal build, or lint.
+  The two designer-portal lint errors ruled pre-existing in R21 sit in files this
+  lane did not touch.
+- Did not push, did not create or remove a worktree, did not touch `.claude/`,
+  `.agents/`, hooks, settings or any `.env` file.
+- Did not re-walk the browser. Every claim above is a gate result or a source
+  read, not a re-observation of the room.

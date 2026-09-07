@@ -146,8 +146,34 @@ and the ACL seed regenerated.
 - The R28-amended edit is a comment on the cadence seed line only — no body
   changed, no behaviour moved.
 
+---
+
+## Reset — walk fixes, round 1 (2026-09-07)
+
+**The walk-fix lane reset the shared stack, and says so here because it had to:**
+B1, M3 and M4 all change `supabase/migrations/00575_agreement_parts.sql`, and M4
+adds a `REVOKE` (the new `_record_paper_client_signature_impl` body), so the
+migration was edited in place — still unapplied on Strata, whose head is
+`00574` — and the ACL seed regenerated.
+
+- `python3 scripts/generate-legacy-grants.py` — regenerated
+  `supabase/seed/00-legacy-grants.sql`, baseline + **2234** replayed statements;
+  the only diff against the re-gate-2 seed is the one added `REVOKE ALL ON
+  FUNCTION public._record_paper_client_signature_impl(uuid, text, date, uuid)`.
+  Re-run after the reset: byte-identical, no further diff.
+- `supabase db reset --workdir /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration`
+  (unsandboxed) → "Finished supabase db reset on branch main."; 33 seed files
+  replayed.
+- Probed rather than inferred: `agreement_parts_test.sql` PASS 39 asserts from
+  the catalog that all four doors carry `_agreement_requires_rate_card`
+  (`_issue_design_services_agreement_on_paper`,
+  `_record_paper_client_signature_impl`,
+  `_sign_design_services_agreement_authorized`, `send_commercial_document`) —
+  it was three of four before this reset. The composed client-page fixture is
+  back and unmoved (the e2e's seven parts still stand).
+
 **No other agent may reset, seed, stop, or start the shared stack.** It is left
-running at head `00575`, carrying the re-gate-2 fix bodies.
+running at head `00575`, carrying the walk-fix bodies.
 
 ---
 
