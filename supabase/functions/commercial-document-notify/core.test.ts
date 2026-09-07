@@ -370,3 +370,116 @@ Deno.test('agreement draw ready copy names the retainage held back, and never a 
   // The notice points at the paper; the amount lives on the invoice.
   assert(!email.html.includes('$'));
 });
+
+Deno.test('agreement draw ready prints no figure even when the authority carries one', () => {
+  // The schedule parts of a turnkey agreement project into the same
+  // proposal_service_terms columns the loader reads for the authority block,
+  // so the fixture that would have leaked a "Design-services ceiling" onto a
+  // turnkey letter is exactly the one worth pinning.
+  const email = renderCommercialEmail({
+    transition: 'agreement_draw_ready',
+    audience: 'client',
+    documentTitle: 'Halvorsen kitchen and mudroom',
+    documentKind: 'design_build',
+    portalUrl: 'https://client.patina.cloud/projects/project-1#letterbox',
+    ceilingCents: 8_413_400,
+    retainerCents: 1_200_000,
+  });
+
+  assert(!email.html.includes('$'));
+  assert(!email.html.includes('Design-services ceiling'));
+  assert(!email.html.includes('Retainer'));
+  assert(!email.html.includes('84,134'));
+});
+
+Deno.test('turnkey execution copy never claims a design engagement or tracked time', () => {
+  const email = renderCommercialEmail({
+    transition: 'executed',
+    audience: 'client',
+    documentTitle: 'Halvorsen kitchen and mudroom',
+    documentKind: 'design_build',
+    recipientName: 'Jamie Client',
+    counterpartyName: 'Halvorsen Studio',
+    portalUrl: 'https://client.patina.cloud/projects/project-1',
+    ceilingCents: 8_413_400,
+  });
+
+  assertStringIncludes(email.subject, 'Agreement executed: Halvorsen kitchen and mudroom');
+  assertStringIncludes(email.html, 'Your agreement is executed');
+  assertStringIncludes(email.html, 'schedule of values');
+  assertStringIncludes(email.html, 'retainage is held back until the end');
+  assertStringIncludes(email.message, 'the draw schedule is live');
+  assert(!email.html.includes('Design services authorized'));
+  assert(!email.html.includes('Design time'));
+  assert(!email.html.includes('design engagement'));
+  assert(!email.html.includes('$'));
+});
+
+Deno.test('turnkey execution recorded on paper keeps the turnkey sentences', () => {
+  const email = renderCommercialEmail({
+    transition: 'executed',
+    audience: 'client',
+    documentTitle: 'Halvorsen kitchen and mudroom',
+    documentKind: 'design_build',
+    recipientName: 'Jamie Client',
+    counterpartyName: 'Halvorsen Studio',
+    portalUrl: 'https://client.patina.cloud/projects/project-1',
+    channel: 'paper',
+    hasScan: true,
+  });
+
+  assertStringIncludes(email.html, 'Signed on paper');
+  assertStringIncludes(email.html, 'Your agreement is executed');
+  assertStringIncludes(email.html, 'schedule of values');
+  assertStringIncludes(email.html, 'scanned copy of the signed paper original');
+  assert(!email.html.includes('design engagement'));
+});
+
+Deno.test('turnkey signature receipt speaks of work beginning, not design work being active', () => {
+  const clientCopy = renderCommercialEmail({
+    transition: 'client_signed',
+    audience: 'client',
+    documentTitle: 'Halvorsen kitchen and mudroom',
+    documentKind: 'design_build',
+    recipientName: 'Jamie Client',
+    counterpartyName: 'Halvorsen Studio',
+    portalUrl: 'https://client.patina.cloud/projects/project-1',
+  });
+
+  assertStringIncludes(clientCopy.html, 'not executed');
+  assertStringIncludes(clientCopy.html, 'no work begins until Halvorsen Studio countersigns');
+  assert(!clientCopy.html.includes('design work is not active'));
+
+  const studioCopy = renderCommercialEmail({
+    transition: 'client_signed',
+    audience: 'studio',
+    documentTitle: 'Halvorsen kitchen and mudroom',
+    documentKind: 'design_build',
+    signerName: 'Jamie Client',
+    recipientName: 'Morgan Designer',
+    portalUrl: 'https://app.patina.cloud/doc/agreement-1',
+  });
+
+  assertStringIncludes(studioCopy.html, 'no work begins until the studio countersigns');
+  assert(!studioCopy.html.includes('no project has been created'));
+});
+
+Deno.test('design-services letters keep their own sentences and authority block', () => {
+  const email = renderCommercialEmail({
+    transition: 'executed',
+    audience: 'client',
+    documentTitle: 'Lake House Design Services',
+    documentKind: 'design_services',
+    recipientName: 'Jamie Client',
+    counterpartyName: 'Morgan Studio',
+    portalUrl: 'https://client.patina.cloud/projects/project-1',
+    ceilingCents: 2_500_000,
+    retainerCents: 500_000,
+  });
+
+  assertStringIncludes(email.html, 'Design services authorized');
+  assertStringIncludes(email.html, 'Design time can now be tracked');
+  assertStringIncludes(email.html, 'Design-services ceiling');
+  assertStringIncludes(email.html, '$25,000');
+  assertStringIncludes(email.html, '$5,000');
+});

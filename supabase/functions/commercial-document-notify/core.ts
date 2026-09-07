@@ -72,6 +72,11 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
   const scanNote = input.hasScan
     ? ' A scanned copy of the signed paper original is available on the document.'
     : '';
+  // A turnkey agreement rides the same services transitions as a design-
+  // services one, but its authority is a schedule of values with draws and
+  // retainage — not tracked design time — so those two transitions take their
+  // own arm rather than inheriting the design-services sentences.
+  const isDesignBuild = input.documentKind === 'design_build';
 
   let subject: string;
   let eyebrow: string;
@@ -86,21 +91,37 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
         subject = `Signature received: ${input.documentTitle}`;
         eyebrow = 'Your signature is recorded';
         headline = 'Studio countersignature is next';
-        body = `We recorded your signature on &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and design work is not active until ${counterparty} countersigns.`;
+        body = isDesignBuild
+          ? `We recorded your signature on &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and no work begins until ${counterparty} countersigns.`
+          : `We recorded your signature on &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and design work is not active until ${counterparty} countersigns.`;
         cta = 'View signed agreement';
         message = `Your signature on ${input.documentTitle} is recorded; studio countersignature is still required.`;
       } else {
         subject = `Client signed: ${input.documentTitle}`;
         eyebrow = 'Client signature received';
         headline = 'Ready for studio countersignature';
-        body = `${signer} signed &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and no project has been created until the studio countersigns.`;
+        body = isDesignBuild
+          ? `${signer} signed &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and no work begins until the studio countersigns.`
+          : `${signer} signed &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and no project has been created until the studio countersigns.`;
         cta = 'Review and countersign';
         message = `${input.signerName || 'The client'} signed ${input.documentTitle}; studio countersignature is required.`;
       }
       break;
     case 'executed':
       subject = `Agreement executed: ${input.documentTitle}`;
-      if (input.channel === 'paper') {
+      if (isDesignBuild) {
+        headline = 'Your agreement is executed';
+        cta = 'View your project';
+        if (input.channel === 'paper') {
+          eyebrow = 'Signed on paper';
+          body = `You signed a printed copy of &ldquo;<strong>${title}</strong>&rdquo;; ${counterparty} recorded it and has countersigned. Work proceeds against the schedule of values, each draw is invoiced as its portion is earned, and retainage is held back until the end.${scanNote}`;
+          message = `You signed a printed copy of ${input.documentTitle}; ${input.counterpartyName || 'your studio'} recorded it and has countersigned. The agreement is executed.`;
+        } else {
+          eyebrow = 'Agreement executed';
+          body = `Both you and ${counterparty} have signed &ldquo;<strong>${title}</strong>&rdquo;. Work proceeds against the schedule of values, each draw is invoiced as its portion is earned, and retainage is held back until the end.`;
+          message = `${input.documentTitle} is fully executed and the draw schedule is live.`;
+        }
+      } else if (input.channel === 'paper') {
         eyebrow = 'Signed on paper';
         headline = 'Your design engagement is active';
         body = `You signed a printed copy of &ldquo;<strong>${title}</strong>&rdquo;; ${counterparty} recorded it and has countersigned. The agreement is executed.${scanNote}`;
@@ -220,7 +241,14 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
       break;
   }
 
-  const authority = [
+  // The authority block projects the design-services instruments. A turnkey
+  // agreement has neither a design-services ceiling nor a retainer, yet its
+  // schedule parts do project into proposal_service_terms (R5/R9) — so the
+  // loader fills the same two fields with turnkey figures. Printing them under
+  // design-services labels would put a wrong number on a turnkey letter, so
+  // this class prints no figure at all: its money is the schedule of values
+  // and the draws, which the letter names and the invoice prices.
+  const authority = isDesignBuild ? '' : [
     ceiling ? paragraph(`<strong>Design-services ceiling:</strong> ${ceiling}`) : '',
     retainer ? paragraph(`<strong>Retainer:</strong> ${retainer}`) : '',
   ].join('');
