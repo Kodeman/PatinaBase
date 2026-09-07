@@ -79,6 +79,10 @@ export function duplicateMoneyBlocker(label: string): string {
  *  with it and the readiness panel prints it. */
 export const BLANK_ROLE_BLOCKER = "Every role on the rate card needs a name.";
 
+/** R33 — a fee the homeowner never sees never reaches the money row. */
+export const HIDDEN_FEE_BLOCKER =
+  "This fee is hidden from your client, so it cannot bill.";
+
 /** The blocker that is about the client account rather than the agreement.
  *  Excluded from the attention count, exactly as the seven-facet room
  *  excludes it today. */
@@ -256,6 +260,24 @@ export function assessAgreementReadiness({
   // the client never sees still bills her time, so it still needs a ceiling
   // she can see.
   const clientFacing = parts.filter((part) => part.clientVisible !== false);
+
+  // R33 — a hidden fee bills nobody. `upsert_agreement_parts` projects only
+  // client-visible fee parts into the money row, so a studio-only flat fee
+  // that carries a figure is a figure that goes nowhere: it is not what the
+  // homeowner consents to, it is not on the copy she keeps, and it is not what
+  // the executed authority charges. Say so where she typed it, rather than
+  // letting her believe the number is doing something.
+  for (const part of parts) {
+    if (
+      part.clientVisible === false &&
+      part.kind === "schedule" &&
+      part.variant !== null &&
+      (FEE_VARIANTS as readonly string[]).includes(part.variant) &&
+      scheduleValueIsSet(part)
+    ) {
+      add(part.id, HIDDEN_FEE_BLOCKER);
+    }
+  }
 
   // R-5 — the class floor. An agreement that bills has to name a fee
   // somewhere typed; prose never carries money (R5).

@@ -182,6 +182,8 @@ SELECT pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
 SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-000000000001', 'The nine standard parts');
 SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-000000000002', 'The per-phase agreement');
 SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-000000000003', 'The variant bench');
+SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-00000000000a', 'The hidden fee');
+SELECT pg_temp.mint_agreement('a7300000-0000-4000-8000-00000000000b', 'The hidden fee, alone');
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (1) (2) THE CONSENT SENTENCE — four part sets, byte for byte, plus the
@@ -346,10 +348,12 @@ BEGIN
   v_got := public.compose_agreement_consent('a7300000-0000-4000-8000-000000000003');
   ASSERT v_got = (SELECT sentence FROM _fs_consent WHERE label = 'legacy'),
     format('a hidden money part is not consented to — expected the legacy literal, got %L', v_got);
-  -- but it still reaches the authority, because it still bills her.
+  -- R33 — and it reaches the money row not at all. A fee she never read is
+  -- not a fee she agreed to, and the row this projects into is the row that
+  -- bills her. Case (16) walks the whole rail on it.
   ASSERT (SELECT fee_basis FROM public.proposal_service_terms
-          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') = 'flat',
-    'a studio-only fee still projects — the authority draws on it either way';
+          WHERE proposal_id = 'a7300000-0000-4000-8000-000000000003') IS NULL,
+    'a studio-only fee projects nothing — the authority cannot charge what she never saw';
 
   RAISE NOTICE 'PASS 1-3,5: the consent sentence is byte-exact for six part sets, and R9 projects nothing it should not';
 END $$;
@@ -1026,6 +1030,131 @@ BEGIN
            v_executed);
 
   RAISE NOTICE 'PASS 15: the fingerprint is unmoved by four unwritten columns, and moves the moment one is written';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (16) R33 — A FEE THE HOMEOWNER NEVER SAW NEVER BILLS HER.
+--      A studio-only flat fee beside a client-visible rate card used to send
+--      `flat / $8,000` to the money row and onto the executed authority, while
+--      the sentence she ticked named the rates and the keepsake she keeps
+--      never mentioned eight thousand dollars. Three surfaces of one agreement
+--      disagreeing, and the one that disagreed was the one that charged.
+--
+--      And its other half: hide the ONLY fee and the agreement names no fee at
+--      all, so R22's floor refuses the send rather than letting a paper leave
+--      the studio with a price nobody can read.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_terms public.proposal_service_terms%ROWTYPE;
+  v_signed jsonb;
+  v_executed jsonb;
+  v_authority public.project_billing_authorities%ROWTYPE;
+  v_sentence text;
+  v_snapshot public.agreement_execution_snapshots%ROWTYPE;
+  v_rates integer;
+  v_refused boolean;
+BEGIN
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-00000000000a',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+                         'payload', jsonb_build_object('body', 'Whole-home design.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+                         'partKey', 'patina.role_rates', 'title', 'Role rates',
+                         'payload', jsonb_build_object('roles', jsonb_build_array(
+                           jsonb_build_object('roleName', 'Principal designer',
+                                              'hourlyRateCents', 22500, 'sortOrder', 0)))),
+      jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+                         'partKey', 'patina.ceiling', 'title', 'Ceiling',
+                         'payload', jsonb_build_object('cents', 2400000)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+                         'partKey', 'custom.studio_only_fee', 'title', 'Flat fee',
+                         'clientVisible', false,
+                         'payload', jsonb_build_object('cents', 800000))),
+    'A fee the studio kept to itself');
+
+  SELECT * INTO v_terms FROM public.proposal_service_terms
+  WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000a';
+  ASSERT v_terms.fee_basis = 'hourly',
+    format('the visible rate card is the fee basis, got %L', v_terms.fee_basis);
+  ASSERT v_terms.fee_amount_cents IS NULL,
+    format('a hidden flat fee sends nothing to terms, got %s', v_terms.fee_amount_cents);
+  ASSERT v_terms.fee_schedule IS NULL,
+    'a hidden fee writes no schedule either';
+
+  -- The sentence she reads never named it, and neither does the keepsake.
+  v_sentence := public.compose_agreement_consent('a7300000-0000-4000-8000-00000000000a');
+  ASSERT v_sentence NOT LIKE '%flat design fee%',
+    format('the consent sentence must not name a hidden fee, got %L', v_sentence);
+
+  PERFORM pg_temp.send_agreement('a7300000-0000-4000-8000-00000000000a');
+
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000004', 'service_role');
+  EXECUTE 'SET LOCAL ROLE service_role';
+  v_signed := public.sign_design_services_agreement_with_trusted_ip(
+    'a7300000-0000-4000-8000-00000000000a', 'Fee Client',
+    'a7000000-0000-4000-8000-000000000004', '203.0.113.9',
+    jsonb_build_object('consentSentence', v_sentence,
+                       'attachmentsAcknowledged', '[]'::jsonb));
+  PERFORM pg_temp.reset_role();
+  ASSERT (v_signed->>'newlyClientSigned')::boolean,
+    format('the agreement must be signable: %s', v_signed);
+
+  PERFORM pg_temp.assume_role('a7000000-0000-4000-8000-000000000001');
+  v_executed := public.countersign_design_services_agreement(
+    'a7300000-0000-4000-8000-00000000000a', 'Marguerite Vaudrey');
+  PERFORM pg_temp.reset_role();
+
+  SELECT * INTO v_authority FROM public.project_billing_authorities
+  WHERE id = (v_executed->>'billingAuthorityId')::uuid;
+  ASSERT v_authority.fee_basis = 'hourly',
+    format('the executed authority bills the rates she signed, got %L', v_authority.fee_basis);
+  ASSERT v_authority.fee_amount_cents IS NULL,
+    format('the executed authority carries no hidden fee, got %s', v_authority.fee_amount_cents);
+
+  SELECT * INTO v_snapshot FROM public.agreement_execution_snapshots
+  WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000a';
+  ASSERT v_snapshot.html NOT LIKE '%8,000.00%',
+    'the copy she keeps never mentions the fee she was never shown';
+
+  -- The rate card she CAN see still projects its rates.
+  SELECT count(*) INTO v_rates FROM public.proposal_service_rates
+  WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000a';
+  ASSERT v_rates = 1,
+    format('a visible rate card still projects its roles, got %s', v_rates);
+
+  -- ── The other half: hide the only fee and the paper names none.
+  PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
+  PERFORM public.upsert_agreement_parts(
+    'a7300000-0000-4000-8000-00000000000b',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services', 'title', 'Services',
+                         'payload', jsonb_build_object('body', 'Whole-home design.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+                         'partKey', 'custom.studio_only_fee', 'title', 'Flat fee',
+                         'clientVisible', false,
+                         'payload', jsonb_build_object('cents', 800000))),
+    'The only fee, hidden');
+
+  SELECT * INTO v_terms FROM public.proposal_service_terms
+  WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000b';
+  ASSERT v_terms.fee_basis IS NULL,
+    format('a hidden fee alone leaves the basis unwritten, got %L', v_terms.fee_basis);
+
+  v_refused := false;
+  BEGIN
+    PERFORM pg_temp.send_agreement('a7300000-0000-4000-8000-00000000000b');
+  EXCEPTION WHEN OTHERS THEN
+    v_refused := true;
+    ASSERT SQLERRM LIKE '%names no fee%',
+      format('the floor must refuse in its own words, got %L', SQLERRM);
+  END;
+  ASSERT v_refused, 'an agreement whose only fee is hidden must not send';
+
+  RAISE NOTICE 'PASS 16: R33 — only a fee she can read reaches the money row, and a hidden one cannot send';
 END $$;
 
 ROLLBACK;

@@ -195,12 +195,19 @@ export const SINGLE_INSTANCE_VARIANTS: Record<string, string> = {
  */
 export const FEE_BASIS_VARIANTS: readonly string[] = ["flat", "per_phase"];
 
-/** The fee-basis parts this composition carries, in rail order. */
+/** The fee-basis parts this composition carries, in rail order.
+ *
+ *  R33 — client-visible ones only, because those are the only ones
+ *  `upsert_agreement_parts` projects. A studio-only flat fee is not a second
+ *  answer to "what does the work cost"; it reaches the money row not at all,
+ *  so it neither earns the RPC's refusal nor holds a visible fee out of the
+ *  Add menu. */
 export function feeBasisParts(parts: AgreementPart[]): AgreementPart[] {
   return parts.filter(
     (part) =>
       part.kind === "schedule" &&
       part.variant !== null &&
+      part.clientVisible !== false &&
       FEE_BASIS_VARIANTS.includes(part.variant),
   );
 }

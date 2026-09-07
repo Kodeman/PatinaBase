@@ -1246,6 +1246,7 @@ BEGIN
   IF (SELECT count(*) FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id
         AND ap.kind = 'schedule'
+        AND ap.client_visible
         AND ap.variant IN ('flat', 'per_phase')) > 1 THEN
     RAISE EXCEPTION 'an agreement carries one fee basis'
       USING ERRCODE = 'check_violation';
@@ -1403,6 +1404,24 @@ BEGIN
   -- room, because this RPC is GRANTed to authenticated: a hand-crafted
   -- cost_plus part sent straight through it must still leave fee_basis NULL.
   -- Read by SHAPE, like every other money figure in this body.
+  --
+  -- R33 — AND ONLY WHAT SHE CAN SEE. Every fee read here is client_visible,
+  -- because the fee set is what CHARGES her: a studio-only flat fee beside a
+  -- visible rate card used to send `flat / $8,000` to the money row and onto
+  -- the executed authority, while the sentence she ticked named the rates and
+  -- the keepsake she keeps never mentioned the eight thousand. Three surfaces
+  -- of one agreement disagreeing, and the one that disagreed was the one that
+  -- billed. compose_agreement_consent, _render_agreement_snapshot_html and
+  -- R22's floor all read client_visible already; this was the only reader that
+  -- did not. A hidden fee is recorded on the agreement and reaches the money
+  -- row not at all — the same answer R9 gives a cost_plus.
+  --
+  -- proposal_service_rates is NOT filtered that way, and deliberately: R33
+  -- names proposal_service_terms and the authority, and the rate rows are a
+  -- third thing — the send door refuses a rate card with no rate rows behind
+  -- it, in words about role rates rather than about a fee. A hidden rate card
+  -- still cannot bill: it writes no fee_basis here, and R22's floor refuses
+  -- the send while it is the only fee on the paper.
   SELECT ap.variant,
          CASE WHEN ap.variant = 'flat'
               THEN CASE WHEN jsonb_typeof(ap.payload->'cents') = 'number'
@@ -1419,14 +1438,16 @@ BEGIN
     INTO v_fee_basis, v_fee_amount_cents, v_fee_schedule
   FROM public.proposal_agreement_parts ap
   WHERE ap.proposal_id = p_proposal_id
-    AND ap.kind = 'schedule' AND ap.variant IN ('flat', 'per_phase');
+    AND ap.kind = 'schedule' AND ap.variant IN ('flat', 'per_phase')
+    AND ap.client_visible;
 
   IF v_fee_basis IS NULL THEN
     v_fee_amount_cents := NULL;
     v_fee_schedule := NULL;
     IF EXISTS (SELECT 1 FROM public.proposal_agreement_parts ap
                WHERE ap.proposal_id = p_proposal_id
-                 AND ap.kind = 'schedule' AND ap.variant = 'rate_card') THEN
+                 AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
+                 AND ap.client_visible) THEN
       v_fee_basis := 'hourly';
     END IF;
   END IF;

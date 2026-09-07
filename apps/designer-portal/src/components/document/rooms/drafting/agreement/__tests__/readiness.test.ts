@@ -1,6 +1,11 @@
 import type { AgreementPart } from "@patina/types";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
-import { assessAgreementReadiness, partsNeedingAttention } from "../readiness";
+import {
+  assessAgreementReadiness,
+  partsNeedingAttention,
+  HIDDEN_FEE_BLOCKER,
+} from "../readiness";
+import { FEE_BASIS_BLOCKER } from "../part-kinds";
 
 const document: CommercialDocument = {
   id: "agreement-1",
@@ -870,5 +875,70 @@ describe("assessAgreementReadiness — required Wave 2 fee schedules", () => {
       }),
     ]);
     expect(readiness.ready).toBe(true);
+  });
+});
+
+// ── R33. A fee the studio kept to itself never reaches the money row, so the
+// room says so where she typed it rather than letting the figure look live.
+
+describe("R33 — a hidden fee", () => {
+  it("blocks, in the sentence the ruling wrote", () => {
+    const hidden = part({
+      partKey: "custom.hidden-flat",
+      kind: "schedule",
+      variant: "flat",
+      title: "Flat fee",
+      clientVisible: false,
+      payload: { cents: 800_000 },
+    });
+    const readiness = assess([services(), terms(), roleRates(), ceiling(), hidden]);
+    expect(readiness.blockers.map((blocker) => blocker.message)).toContain(
+      HIDDEN_FEE_BLOCKER,
+    );
+    expect(
+      readiness.blockers.find(
+        (blocker) => blocker.message === HIDDEN_FEE_BLOCKER,
+      )?.partId,
+    ).toBe(hidden.id);
+    expect(readiness.ready).toBe(false);
+  });
+
+  it("says nothing about a hidden fee nobody has typed a figure into", () => {
+    const readiness = assess([
+      services(),
+      terms(),
+      roleRates(),
+      ceiling(),
+      part({
+        partKey: "custom.hidden-empty",
+        kind: "schedule",
+        variant: "flat",
+        title: "Flat fee",
+        clientVisible: false,
+        payload: {},
+      }),
+    ]);
+    expect(readiness.blockers.map((blocker) => blocker.message)).not.toContain(
+      HIDDEN_FEE_BLOCKER,
+    );
+  });
+
+  it("does not count a hidden fee as the second fee basis — the database does not either", () => {
+    const readiness = assess([
+      services(),
+      terms(),
+      flatFee(),
+      part({
+        partKey: "custom.hidden-phases",
+        kind: "schedule",
+        variant: "per_phase",
+        title: "Fee by phase",
+        clientVisible: false,
+        payload: {},
+      }),
+    ]);
+    expect(readiness.blockers.map((blocker) => blocker.message)).not.toContain(
+      FEE_BASIS_BLOCKER,
+    );
   });
 });
