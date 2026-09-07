@@ -172,3 +172,20 @@ result in `wave-report.md` under "Walk fixes (round 2)".
 
 **Nobody else may write this stack until this notice is superseded.** No dev server was
 started; ports 3000 and 3002 were not used.
+
+## 2026-09-07 — the MERGE + DEPLOY steward TAKES THE STACK (R31 grants-seed replay proof)
+
+The Wave 2 **merge + deploy steward** is now the sole writer of the shared local stack
+at `postgresql://postgres:postgres@127.0.0.1:54322/postgres`, from the same worktree
+(`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-integration`, branch
+`agreement/w2-integration`), after merging `origin/main` (R30) into it.
+
+**No migration, no seed, and no SQL changed by this agent.** The only code change is the
+R38 one-line copy fix in `apps/designer-portal` and one docs line in the build sheet.
+
+One `supabase db reset --workdir <this worktree>` (unsandboxed) is run here as the R31
+grants-seed replay proof the walker left to the merge — every migration through `00577`
+plus the regenerated `seed/00-legacy-grants.sql` — followed by `./scripts/run-sql-tests.sh`.
+Results are recorded in `deploy-report.md`.
+
+No dev server was started; ports 3000 and 3002 were not used.
