@@ -137,6 +137,16 @@ export default function ProposalRecordPage({
       signedName={block.name}
       signedOn={block.dateLine}
       consentSentence={block.sentence}
+      /* WHAT she ticked, from her own signature's metadata — never
+         `compose_agreement_consent` at read time. The parts can move under an
+         addendum; the sentence she agreed to cannot (Wave 2, P6). */
+      agreedSentence={signature.consentSentence}
+      /* R12. Present only once the studio has countersigned a composed
+         agreement. A pre-Wave-2 execution, or an agreement with no parts,
+         carries none — and the sheet then reads exactly as it does today,
+         with no empty state and nothing said about a snapshot. */
+      executedHtml={paper.executionSnapshot?.html ?? null}
+      executedChecksum={checksumMark(paper.executionSnapshot?.documentHash)}
       releaseSentence={release}
       checksum={checksumMark(signature.documentFingerprint)}
       backHref={back}

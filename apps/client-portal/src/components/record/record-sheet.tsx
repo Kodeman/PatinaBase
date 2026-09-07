@@ -71,6 +71,24 @@ export interface RecordSheetProps {
   signedOn?: string | null;
   /** How she agreed, as a sentence. */
   consentSentence?: string | null;
+  /**
+   * WHAT she agreed to — the consent line she actually ticked, as her
+   * signature's own metadata recorded it on the day (Wave 2, P6).
+   *
+   * Never re-composed from the agreement's parts at read time: the parts can
+   * be superseded by an addendum, and a record that quietly restates today's
+   * terms is a record of a signature nobody gave. Null on every signature
+   * written before the composer, which prints nothing here.
+   */
+  agreedSentence?: string | null;
+  /**
+   * R12 — the agreement as it stood when the studio countersigned, frozen at
+   * execution and never re-rendered. Server-composed HTML from the
+   * client-visible parts; the keepsake styles it and adds nothing to it.
+   */
+  executedHtml?: string | null;
+  /** Twelve characters of the frozen agreement's own checksum. */
+  executedChecksum?: string | null;
   /** What the answer let go, in words. */
   releaseSentence?: string | null;
   /** Twelve characters of the artifact's checksum. */
@@ -97,6 +115,9 @@ export function RecordSheet({
   signedName = null,
   signedOn = null,
   consentSentence = null,
+  agreedSentence = null,
+  executedHtml = null,
+  executedChecksum = null,
   releaseSentence = null,
   checksum = null,
   backHref,
@@ -321,7 +342,45 @@ export function RecordSheet({
               {consentSentence}
             </p>
           )}
+          {agreedSentence && (
+            <p
+              data-testid="record-agreed"
+              style={{
+                fontSize: '0.9rem',
+                lineHeight: 1.6,
+                marginTop: '0.5rem',
+                maxWidth: '52ch',
+              }}
+            >
+              {agreedSentence}
+            </p>
+          )}
         </section>
+
+        {/* R12. THE AGREEMENT AS IT WAS EXECUTED, not as it reads today. The
+            markup is composed by the database at countersign and stored
+            whole; nothing here re-renders it from the parts, and the mark
+            below is the frozen document's own, which is what makes the sheet
+            checkable years later. No PDF: this is the copy she keeps. */}
+        {executedHtml && (
+          <section className="mb-10 border-t pt-4" style={{ borderColor: '#E5E2DD' }}>
+            <p className={LABEL_CLASS}>The agreement as executed</p>
+            <div
+              data-testid="record-executed"
+              style={{ fontSize: '0.95rem', lineHeight: 1.6, marginTop: '0.75rem' }}
+              // The snapshot is server-composed by
+              // `_render_agreement_snapshot_html`, which escapes every
+              // interpolated string and emits no script or style. The client
+              // never composes it and never edits it.
+              dangerouslySetInnerHTML={{ __html: executedHtml }}
+            />
+            {executedChecksum && (
+              <p className={`${LABEL_CLASS} mt-4`} data-testid="record-executed-checksum">
+                {`Mark ${executedChecksum}`}
+              </p>
+            )}
+          </section>
+        )}
       </main>
 
       {/* The maker's mark, at the plate's edge. Provenance, not a string she
