@@ -234,6 +234,36 @@ describe("PartsRail", () => {
     expect(onAdd).toHaveBeenCalledWith({ kind: "schedule", variant: "flat" });
   });
 
+  // R18 — an agreement carries only one of each money part, so the menu does
+  // not offer a second one. `four()` already holds a Ceiling.
+  it("does not offer a money part the agreement already carries", () => {
+    render(<Host initial={four()} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    expect(
+      screen.queryByRole("button", { name: "Ceiling" }),
+    ).not.toBeInTheDocument();
+    // The other four money parts are still on offer, and so are the two the
+    // rule does not cover.
+    for (const label of [
+      "Role rates",
+      "Retainer",
+      "Billing cadence",
+      "Furnishings deposit",
+      "Flat fee",
+      "Fee by phase",
+    ]) {
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("offers a money part again once it is removed", () => {
+    render(
+      <Host initial={four().filter((p) => p.partKey !== "patina.ceiling")} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    expect(screen.getByRole("button", { name: "Ceiling" })).toBeInTheDocument();
+  });
+
   it("says so when an agreement has no parts at all", () => {
     render(<Host initial={[]} />);
     expect(
