@@ -51,6 +51,15 @@ export interface PartEditorProps {
    *  this file is Wave 1's editor exactly — no chip, no record-only help
    *  line, and the eight record-only variants stay in `UnsupportedPartCard`. */
   libraryOn?: boolean;
+  /**
+   * What readiness is holding THIS part on, in readiness' own sentences.
+   *
+   * The right rail prints only the document-wide blockers and the rail row
+   * says nothing but "needs attention", so without this a part-scoped refusal
+   * — R33's hidden fee above all — was written and never read. Empty renders
+   * nothing.
+   */
+  blockers?: string[];
 }
 
 export function PartEditor({
@@ -58,6 +67,7 @@ export function PartEditor({
   onChange,
   readOnly,
   libraryOn = false,
+  blockers = [],
 }: PartEditorProps) {
   const chipped = libraryOn && part.kind === "schedule";
   return (
@@ -75,6 +85,19 @@ export function PartEditor({
         <h2 className="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
           {part.title}
         </h2>
+        {blockers.length > 0 && (
+          <div className="mt-2 border-l-2 border-[var(--color-clay-ink)] pl-3">
+            {blockers.map((message) => (
+              <p
+                key={message}
+                role="status"
+                className="text-[11.5px] leading-relaxed text-[var(--color-mocha)]"
+              >
+                {message}
+              </p>
+            ))}
+          </div>
+        )}
       </header>
       <PartEditorBody
         part={part}

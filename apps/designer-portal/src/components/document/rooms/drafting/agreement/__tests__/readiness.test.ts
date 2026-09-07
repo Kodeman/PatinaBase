@@ -2,6 +2,7 @@ import type { AgreementPart } from "@patina/types";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import {
   assessAgreementReadiness,
+  blockersForPart,
   partsNeedingAttention,
   HIDDEN_FEE_BLOCKER,
 } from "../readiness";
@@ -689,11 +690,20 @@ describe("assessAgreementReadiness — the floor is client-facing", () => {
     });
     const readiness = assess([services(), terms(), hiddenFee]);
     expect(readiness.ready).toBe(false);
+    // The floor is unmoved — a fee she cannot read is not a fee she agreed
+    // to. What changed is which sentence says so: "This agreement names no
+    // fee. Add a rate card, a flat fee, or a per-phase fee." over a Flat fee
+    // row the designer is looking at reads as the room losing her work, so
+    // R33's own sentence stands in its place, on the part that earned it.
     expect(
       readiness.blockers.some((blocker) =>
         blocker.message.startsWith("This agreement names no fee."),
       ),
-    ).toBe(true);
+    ).toBe(false);
+    expect(readiness.blockers).toContainEqual({
+      partId: hiddenFee.id,
+      message: HIDDEN_FEE_BLOCKER,
+    });
   });
 
   it("still needs a ceiling the client can read beside a rate card she can read", () => {
@@ -891,7 +901,13 @@ describe("R33 — a hidden fee", () => {
       clientVisible: false,
       payload: { cents: 800_000 },
     });
-    const readiness = assess([services(), terms(), roleRates(), ceiling(), hidden]);
+    const readiness = assess([
+      services(),
+      terms(),
+      roleRates(),
+      ceiling(),
+      hidden,
+    ]);
     expect(readiness.blockers.map((blocker) => blocker.message)).toContain(
       HIDDEN_FEE_BLOCKER,
     );
@@ -940,5 +956,47 @@ describe("R33 — a hidden fee", () => {
     expect(readiness.blockers.map((blocker) => blocker.message)).not.toContain(
       FEE_BASIS_BLOCKER,
     );
+  });
+
+  // The walk found the panel saying "This agreement names no fee. Add a rate
+  // card, a flat fee, or a per-phase fee." over a visible Flat fee row, while
+  // the sentence that explained why — the ruling's own — was attached to the
+  // part and printed nowhere.
+  it("does not also say the agreement names no fee when the only fee is the hidden one", () => {
+    const hidden = part({
+      partKey: "custom.hidden-flat",
+      kind: "schedule",
+      variant: "flat",
+      title: "Flat fee",
+      clientVisible: false,
+      payload: { cents: 1_500_100 },
+    });
+    const readiness = assess([services(), terms(), hidden]);
+    const messages = readiness.blockers.map((blocker) => blocker.message);
+    expect(messages).toContain(HIDDEN_FEE_BLOCKER);
+    expect(messages).not.toContain(
+      "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
+    );
+  });
+
+  it("still says the agreement names no fee when there is no fee at all", () => {
+    const readiness = assess([services(), terms()]);
+    expect(readiness.blockers.map((blocker) => blocker.message)).toContain(
+      "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
+    );
+  });
+
+  it("hands the hidden-fee sentence back for the part that earned it", () => {
+    const hidden = part({
+      partKey: "custom.hidden-flat",
+      kind: "schedule",
+      variant: "flat",
+      title: "Flat fee",
+      clientVisible: false,
+      payload: { cents: 1_500_100 },
+    });
+    const readiness = assess([services(), terms(), hidden]);
+    expect(blockersForPart(readiness, hidden.id)).toEqual([HIDDEN_FEE_BLOCKER]);
+    expect(blockersForPart(readiness, null)).toEqual([]);
   });
 });

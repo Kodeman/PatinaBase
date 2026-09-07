@@ -421,3 +421,46 @@ describe("the part editor · a percent with a decimal in it", () => {
     expect(field).toHaveValue("12");
   });
 });
+
+/**
+ * The sentence that holds THIS part, printed where the designer typed the
+ * thing being refused. The readiness panel prints only the document-wide
+ * blockers and the rail row says nothing but "needs attention", so a
+ * part-scoped refusal — R33's hidden fee above all — was authored, attached,
+ * and rendered nowhere at all.
+ */
+describe("the part editor · what is holding this part", () => {
+  it("prints every sentence it is handed, under the part's own name", () => {
+    render(
+      <PartEditor
+        part={part({
+          partKey: "custom.flat",
+          kind: "schedule",
+          variant: "flat",
+          title: "Flat fee",
+          payload: { cents: 1_500_100 },
+        })}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        blockers={[
+          "This fee is hidden from your client, so it cannot bill.",
+          "An agreement carries only one flat fee.",
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "This fee is hidden from your client, so it cannot bill.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("An agreement carries only one flat fee."),
+    ).toBeInTheDocument();
+  });
+
+  it("draws nothing when the part is holding nothing", () => {
+    renderEditor(part({ partKey: "patina.services", title: "Services" }), true);
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
+  });
+});

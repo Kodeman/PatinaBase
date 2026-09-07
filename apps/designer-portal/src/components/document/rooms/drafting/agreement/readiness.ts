@@ -267,16 +267,16 @@ export function assessAgreementReadiness({
   // homeowner consents to, it is not on the copy she keeps, and it is not what
   // the executed authority charges. Say so where she typed it, rather than
   // letting her believe the number is doing something.
-  for (const part of parts) {
-    if (
+  const hiddenFees = parts.filter(
+    (part) =>
       part.clientVisible === false &&
       part.kind === "schedule" &&
       part.variant !== null &&
       (FEE_VARIANTS as readonly string[]).includes(part.variant) &&
-      scheduleValueIsSet(part)
-    ) {
-      add(part.id, HIDDEN_FEE_BLOCKER);
-    }
+      scheduleValueIsSet(part),
+  );
+  for (const part of hiddenFees) {
+    add(part.id, HIDDEN_FEE_BLOCKER);
   }
 
   // R-5 — the class floor. An agreement that bills has to name a fee
@@ -288,7 +288,12 @@ export function assessAgreementReadiness({
       (FEE_VARIANTS as readonly string[]).includes(part.variant) &&
       scheduleValueIsSet(part),
   );
-  if (!namesAFee) {
+  // A hidden fee IS a fee the designer typed, so telling her the agreement
+  // "names no fee. Add a rate card, a flat fee, or a per-phase fee." over a
+  // Flat fee row she is looking at reads as the room losing her work. The
+  // hidden-fee sentence above already says the true thing — the fee is there
+  // and cannot bill — so it stands alone and this one steps aside.
+  if (!namesAFee && hiddenFees.length === 0) {
     add(
       null,
       "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
@@ -355,6 +360,28 @@ export function partsNeedingAttention(readiness: AgreementReadiness): number {
     if (blocker.partId) ids.add(blocker.partId);
   }
   return ids.size;
+}
+
+/**
+ * What one part is being held on, in the readiness panel's own words.
+ *
+ * The panel prints only the blockers that belong to NO part, and the rail
+ * marks a held row with the bare words "needs attention" — so a part-scoped
+ * sentence (R33's hidden fee, a blank rate-card role, a duplicate money part)
+ * was authored, attached, and then rendered nowhere at all. The editor is
+ * where the designer typed the thing being refused, so the editor is where it
+ * says so.
+ */
+export function blockersForPart(
+  readiness: AgreementReadiness,
+  partId: string | null,
+): string[] {
+  if (!partId) return [];
+  const seen = new Set<string>();
+  for (const blocker of readiness.blockers) {
+    if (blocker.partId === partId) seen.add(blocker.message);
+  }
+  return [...seen];
 }
 
 /** The blockers that belong to no part — rendered as their own lines under
