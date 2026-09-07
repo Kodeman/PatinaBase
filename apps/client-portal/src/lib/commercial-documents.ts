@@ -85,6 +85,7 @@ export type DesignServicesTerms = Omit<
     | 'currency'
     | 'terms'
     | 'currentRateVersion'
+    | 'furnishingsDepositPercent'
   >,
   'scope' | 'terms'
 > & {
@@ -278,6 +279,16 @@ function number(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
+/**
+ * For the two money columns 00575 made nullable, where NULL is a stated value
+ * ("uncapped", "unset") and not a missing one. Collapsing them onto 0 would
+ * make an uncapped ceiling indistinguishable from a zero one, which is exactly
+ * the comparison agreementPartsMatchTerms has to get right.
+ */
+function nullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
@@ -395,6 +406,99 @@ function adaptAgreementParts(value: unknown): CommercialAgreementPart[] {
       }];
     })
     .sort((a, b) => a.position - b.position);
+}
+
+/* ── THE COMPOSED AGREEMENT'S MONEY MUST BE THE AUTHORIZED MONEY ─────────────
+   `proposal_service_terms` is the projection of the money parts (build-sheet
+   §3.7) and it is the row the countersignature snapshots into
+   `project_billing_authorities`. Only `upsert_agreement_parts` writes both
+   sides; `upsert_design_services_draft` — the seven-facet, flag-OFF writer —
+   writes the terms row alone and never touches `proposal_agreement_parts`.
+
+   So the two can be made to disagree: compose under the flag, turn the flag
+   off (the documented fail-closed lever), raise the ceiling in the seven-facet
+   room, send. The parts rows are still there and still say the old figure. A
+   client body that branched on `parts.length > 0` alone would then show the
+   homeowner money that the countersignature will not authorize.
+
+   The client cannot read the studio's flag — a PostHog flag resolves against
+   whoever is looking, and a homeowner is not the studio, so gating on it would
+   also hide composed clauses from the person signing them. It reads the
+   divergence itself instead: the parts body renders only while the parts still
+   project to the terms row in front of it. When they do not, the agreement
+   falls back to the terms-driven body — the same body a flag-off document has
+   always rendered, fed from the row that will actually be authorized.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** The five standard keys that carry money into the terms row (§3.7). */
+const CEILING_PART_KEY = 'patina.ceiling';
+const RETAINER_PART_KEY = 'patina.retainer';
+const CADENCE_PART_KEY = 'patina.cadence';
+const DEPOSIT_PART_KEY = 'patina.deposit';
+const RATE_CARD_PART_KEY = 'patina.role_rates';
+
+function rateFingerprint(roleName: string, hourlyRateCents: number): string {
+  return `${roleName} ${hourlyRateCents}`;
+}
+
+export function agreementPartsMatchTerms(
+  parts: CommercialAgreementPart[],
+  terms: DesignServicesTerms,
+  rates: CommercialRate[],
+): boolean {
+  const byKey = new Map(parts.map((part) => [part.partKey, part]));
+
+  // Absent ⇒ NULL = uncapped. Present with no figure ⇒ the same stated absence.
+  const ceilingPart = byKey.get(CEILING_PART_KEY);
+  const composedCeiling = ceilingPart ? nullableNumber(ceilingPart.payload.cents) : null;
+  if (composedCeiling !== terms.billingCeilingCents) return false;
+
+  // Absent ⇒ 0 / 'immediate'.
+  const retainerPart = byKey.get(RETAINER_PART_KEY);
+  const composedRetainer = retainerPart ? number(retainerPart.payload.cents) : 0;
+  if (composedRetainer !== terms.retainerAmountCents) return false;
+  const composedPolicy = retainerPart
+    ? oneOf(retainerPart.payload.activationPolicy, ['immediate', 'retainer_paid'] as const, 'immediate')
+    : 'immediate';
+  if (composedPolicy !== terms.retainerActivationPolicy) return false;
+
+  // Absent ⇒ 'monthly'.
+  const cadencePart = byKey.get(CADENCE_PART_KEY);
+  const composedCadence = cadencePart
+    ? oneOf(cadencePart.payload.cadence, ['monthly', 'biweekly', 'milestone'] as const, 'monthly')
+    : 'monthly';
+  if (composedCadence !== terms.billingCadence) return false;
+
+  // Absent ⇒ NULL.
+  const depositPart = byKey.get(DEPOSIT_PART_KEY);
+  const composedDeposit = depositPart ? nullableNumber(depositPart.payload.depositPercent) : null;
+  if (composedDeposit !== terms.furnishingsDepositPercent) return false;
+
+  // The rate card is held against the rows at the CURRENT version only — the
+  // bundle projects every version a proposal has ever carried. It is compared
+  // only when the part is present: a removed rate card leaves the historical
+  // rows behind it, and reading their survival as a divergence would strand
+  // every flat-fee agreement on the fallback body.
+  const rateCardPart = byKey.get(RATE_CARD_PART_KEY);
+  if (rateCardPart) {
+    const composedRoles = (Array.isArray(rateCardPart.payload.roles) ? rateCardPart.payload.roles : [])
+      .map((role) => record(role))
+      .map((role) => ({
+        roleName: text(first(role, 'roleName', 'role_name')),
+        hourlyRateCents: number(first(role, 'hourlyRateCents', 'hourly_rate_cents')),
+      }))
+      .filter((role) => role.roleName.length > 0)
+      .map((role) => rateFingerprint(role.roleName, role.hourlyRateCents))
+      .sort();
+    const authorizedRoles = rates
+      .filter((rate) => rate.version === terms.currentRateVersion)
+      .map((rate) => rateFingerprint(rate.roleName, rate.hourlyRateCents))
+      .sort();
+    if (composedRoles.length !== authorizedRoles.length) return false;
+    if (composedRoles.some((role, index) => role !== authorizedRoles[index])) return false;
+  }
+
+  return true;
 }
 
 /**
@@ -578,13 +682,19 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       scope: nullableText(first(serviceRaw, 'scope')),
       deliverables: strings(first(serviceRaw, 'deliverables')),
       exclusions: strings(first(serviceRaw, 'exclusions')),
-      billingCeilingCents: number(first(serviceRaw, 'billingCeilingCents', 'billing_ceiling_cents')),
+      billingCeilingCents: nullableNumber(first(serviceRaw, 'billingCeilingCents', 'billing_ceiling_cents')),
       retainerAmountCents: number(first(serviceRaw, 'retainerAmountCents', 'retainer_amount_cents')),
       retainerActivationPolicy: oneOf(first(serviceRaw, 'retainerActivationPolicy', 'retainer_activation_policy'), ['immediate', 'retainer_paid'] as const, 'immediate'),
       billingCadence: oneOf(first(serviceRaw, 'billingCadence', 'billing_cadence'), ['monthly', 'biweekly', 'milestone'] as const, 'monthly'),
       currency: text(first(serviceRaw, 'currency'), 'USD'),
       terms: nullableText(first(serviceRaw, 'terms')),
       currentRateVersion: number(first(serviceRaw, 'currentRateVersion', 'current_rate_version'), 1),
+      // Nullable by design — the studio may leave it unset. Read here only so
+      // agreementPartsMatchTerms can hold the composed deposit against the
+      // authoritative one; nothing on this surface prints it from the row.
+      furnishingsDepositPercent: nullableNumber(
+        first(serviceRaw, 'furnishingsDepositPercent', 'furnishings_deposit_percent'),
+      ),
     },
     rates: adaptRates(rateRows),
     parts: adaptAgreementParts(partRows),

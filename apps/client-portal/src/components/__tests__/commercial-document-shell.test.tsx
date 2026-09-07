@@ -13,7 +13,7 @@ jest.mock('@/hooks/use-commercial-client', () => ({
 
 const mockUseDeclineCommercialDocument = useDeclineCommercialDocument as jest.Mock;
 
-function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDocumentBundle {
+function baseBundle(): CommercialDocumentBundle {
   return {
     document: {
       id: 'ds-1', projectId: null, kind: 'design_services', state: 'sent',
@@ -27,11 +27,83 @@ function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDo
       exclusions: ['Furnishings'], billingCeilingCents: 1_800_000,
       retainerAmountCents: 300_000, retainerActivationPolicy: 'retainer_paid',
       billingCadence: 'monthly', currency: 'USD', terms: 'Actual time billed monthly.',
-      currentRateVersion: 1,
+      currentRateVersion: 1, furnishingsDepositPercent: null,
     },
     rates: [{ id: 'r1', version: 1, roleName: 'Principal designer', hourlyRateCents: 22_500, effectiveAt: '2026-08-01' }],
     parts: [],
-    signatures: [], furnishings: null, tradeScope: null, ...overrides,
+    signatures: [], furnishings: null, tradeScope: null,
+  };
+}
+
+const finiteCents = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+/**
+ * The terms row and rate rows a part list projects into (build-sheet §3.7's
+ * map, keyed on partKey). `upsert_agreement_parts` writes both sides at once,
+ * so this is the only relationship a composed agreement can be in — and the
+ * client body renders parts only while it holds (`agreementPartsMatchTerms`),
+ * because the flag-off writer can move the terms row and leave the parts where
+ * they were. A fixture that bolted parts onto an unrelated terms row would be
+ * a state the database cannot produce, and would prove nothing about either.
+ */
+function projectionOf(
+  parts: CommercialAgreementPart[],
+  base: CommercialDocumentBundle,
+): Pick<CommercialDocumentBundle, 'serviceTerms' | 'rates'> {
+  const byKey = new Map(parts.map((item) => [item.partKey, item]));
+  const ceiling = byKey.get('patina.ceiling');
+  const retainer = byKey.get('patina.retainer');
+  const cadence = byKey.get('patina.cadence');
+  const deposit = byKey.get('patina.deposit');
+  const rateCard = byKey.get('patina.role_rates');
+
+  const roles = rateCard && Array.isArray(rateCard.payload.roles)
+    ? (rateCard.payload.roles as Record<string, unknown>[])
+      .map((role, index) => ({
+        id: `projected-${index}`,
+        version: 1,
+        roleName: typeof role.roleName === 'string' ? role.roleName : '',
+        hourlyRateCents: finiteCents(role.hourlyRateCents) ?? 0,
+        effectiveAt: null,
+      }))
+      .filter((role) => role.roleName.length > 0)
+    : null;
+
+  return {
+    serviceTerms: {
+      ...base.serviceTerms!,
+      billingCeilingCents: ceiling ? finiteCents(ceiling.payload.cents) : null,
+      retainerAmountCents: retainer ? finiteCents(retainer.payload.cents) ?? 0 : 0,
+      retainerActivationPolicy:
+        retainer && retainer.payload.activationPolicy === 'retainer_paid'
+          ? 'retainer_paid'
+          : 'immediate',
+      billingCadence:
+        cadence && (cadence.payload.cadence === 'biweekly' || cadence.payload.cadence === 'milestone')
+          ? cadence.payload.cadence
+          : 'monthly',
+      furnishingsDepositPercent: deposit ? finiteCents(deposit.payload.depositPercent) : null,
+      currentRateVersion: 1,
+    },
+    rates: roles ?? base.rates,
+  };
+}
+
+/**
+ * The seven-facet fixture when no parts are given — byte-for-byte the shape the
+ * committed snapshot was written from. When `parts` are given, the terms row
+ * and rates come with them as their projection; an explicit `serviceTerms` or
+ * `rates` override still wins, which is how the divergence cases break the
+ * projection on purpose.
+ */
+function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDocumentBundle {
+  const base = baseBundle();
+  const parts = overrides.parts ?? [];
+  return {
+    ...base,
+    ...(parts.length > 0 ? projectionOf(parts, base) : {}),
+    ...overrides,
   };
 }
 
@@ -888,6 +960,77 @@ describe('CommercialDocumentShell', () => {
       })} />);
       expect(screen.getByTestId('commercial-document-executed')).toBeInTheDocument();
       expect(screen.getByText('Sarah Whitfield')).toBeInTheDocument();
+    });
+
+    /* ── When the composed money is no longer the authorized money ─────────── */
+
+    /**
+     * The kill switch has to reach the homeowner. `agreement-parts` gates the
+     * studio's composer; turning it off puts the studio back in the seven-facet
+     * room, whose writer (`upsert_design_services_draft`) moves the terms row
+     * and never touches `proposal_agreement_parts`. The parts rows survive,
+     * still saying the old figure, and the terms row is what the
+     * countersignature snapshots into `project_billing_authorities`. So the
+     * client reads the terms row's body whenever the two disagree — a stale
+     * part is never allowed to state money on a page someone signs.
+     */
+    it('reads the terms row, not the composed parts, when the studio moved the ceiling after composing', () => {
+      const composedBundle = bundle({ parts: NINE_PARTS });
+      render(<CommercialDocumentShell bundle={{
+        ...composedBundle,
+        serviceTerms: { ...composedBundle.serviceTerms!, billingCeilingCents: 2_400_000 },
+      }} />);
+
+      expect(screen.queryByTestId('agreement-parts-body')).not.toBeInTheDocument();
+      expect(screen.getByText('Design authorization ceiling')).toBeInTheDocument();
+      // The authorized figure, not the composed one.
+      expect(screen.getByText('$24,000')).toBeInTheDocument();
+      expect(screen.queryByText('$18,000')).not.toBeInTheDocument();
+    });
+
+    it('reads the terms row when the retainer, its policy, or the cadence moved', () => {
+      const composedBundle = bundle({ parts: NINE_PARTS });
+      for (const drift of [
+        { retainerAmountCents: 900_000 },
+        { retainerActivationPolicy: 'immediate' as const },
+        { billingCadence: 'biweekly' as const },
+        { furnishingsDepositPercent: 25 },
+      ]) {
+        const { unmount } = render(<CommercialDocumentShell bundle={{
+          ...composedBundle,
+          serviceTerms: { ...composedBundle.serviceTerms!, ...drift },
+        }} />);
+        expect(screen.queryByTestId('agreement-parts-body')).not.toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it('reads the terms row when a signed rate no longer matches the composed rate card', () => {
+      const composedBundle = bundle({ parts: NINE_PARTS });
+      render(<CommercialDocumentShell bundle={{
+        ...composedBundle,
+        rates: composedBundle.rates.map((rate, index) =>
+          index === 0 ? { ...rate, hourlyRateCents: 40_000 } : rate),
+      }} />);
+      expect(screen.queryByTestId('agreement-parts-body')).not.toBeInTheDocument();
+      expect(screen.getByText('Rates & design authorization')).toBeInTheDocument();
+    });
+
+    /**
+     * A rate card the studio removed leaves its historical rate rows behind it,
+     * and the bundle projects every version a proposal ever carried. Reading
+     * their survival as a divergence would strand every flat-fee agreement on
+     * the fallback body, so the rate card is compared only when the part is
+     * there.
+     */
+    it('still reads the composed parts when a removed rate card leaves old rate rows behind', () => {
+      const withoutRateCard = NINE_PARTS.filter((item) => item.partKey !== 'patina.role_rates');
+      const composedBundle = bundle({ parts: withoutRateCard });
+      render(<CommercialDocumentShell bundle={{
+        ...composedBundle,
+        rates: [{ id: 'old', version: 1, roleName: 'Principal designer', hourlyRateCents: 22_500, effectiveAt: null }],
+      }} />);
+      expect(screen.getByTestId('agreement-parts-body')).toBeInTheDocument();
     });
   });
 });
