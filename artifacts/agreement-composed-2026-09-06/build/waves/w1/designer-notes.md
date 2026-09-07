@@ -363,3 +363,219 @@ npx playwright test --list --config playwright.agreement.config.ts --project=chr
   change is a new additive module, and `pnpm turbo build --filter=@patina/types`
   (tsc --build) is green; the integration steward should still run it once
   before merge.
+
+---
+
+# Round 2 — the three findings from `designer-review-r2.md`
+
+Three findings, all major: DR1 (an uncapped agreement printing `$0`), DR2 (the
+`packages/**` deviation and its cross-lane conflicts), DR3 (the composer
+remounting on every Save). All three are fixed; nothing was deferred.
+
+## DR1 — `authorizedCents` is the ceiling, and the ceiling can be NULL
+
+`get_project_authority_summary` returns `v_authority.billing_ceiling_cents`
+for **both** `ceilingCents` and `authorizedCents` (backend
+`00575_agreement_parts.sql:1492-1493`), so F-2's nullable ceiling makes
+`authorizedCents` null on exactly the same agreements. Round 1 widened
+`ceilingCents` and `remainingCents` and missed this one.
+
+`finiteCents(null)` is `Math.round(Number(null))` = `0`, so a flat-fee
+agreement printed a budget that had been spent, on three surfaces.
+
+Fixed:
+
+- `hooks/use-commercial-documents.ts:833` — `nullableFiniteCents` for
+  `authorizedCents`, alongside `ceilingCents` and `remainingCents`.
+- `lib/document/commercial-documents.ts:88` — the app-local
+  `ProjectBillingAuthority.authorizedCents` widens to `number | null`, with
+  the same F-2 comment the `packages/types` copy carries.
+- `commercial/project-authority-band.tsx:76` — the `authorized` figure reads
+  `No ceiling`, matching the `remaining` figure beside it.
+- `commercial/money-region.tsx:211-214` — one `budgetFigure` binding drives
+  both seam branches: `$X authorized · no ceiling` (table seam) and
+  `no ceiling · $X authorized` (the other), never `$0 budget`.
+- `lib/document/money-ladder.ts` needed **no** edit: `deriveBudget` already
+  answers `nothing approved yet` for a null `authorizedCents`
+  (`money-ladder.ts:90`), and `use-money-ladder.ts:90` passes the field
+  straight through — the coercion in the adapter was the only thing turning
+  that null into `$0 approved`.
+
+## DR2 — the `packages/**` deviation
+
+Two separate problems in the finding; both addressed.
+
+**The semantic divergence is gone.** `packages/types/src/commercial.ts` in
+this worktree is now byte-identical to the backend lane's file
+(`diff -q` → no output). The backend's version is the correct one: it matches
+the RPC, and it carries the same `authorizedCents: number | null` DR1 needed.
+
+**The merge conflicts are gone, on the pairs this lane can affect.** Verified
+with `git merge-tree --write-tree` from the parent checkout, after these
+changes were committed:
+
+```
+designer × backend  → exit 0, no conflict   (was: commercial.ts AND index.ts)
+designer × client   → CONFLICT commercial.ts
+backend  × client   → CONFLICT commercial.ts   ← the same conflict, without
+                                                 this lane in it at all
+```
+
+The designer × client conflict is now **identical to the backend × client
+conflict**: the client lane still declares `authorizedCents: number`. This
+lane no longer contributes a divergence — resolving backend × client in the
+backend's favour resolves the designer pair with it. **Steward: the client
+lane's `packages/types/src/commercial.ts` is the one file still to reconcile,
+and the backend's text is the right answer for it too (DR1's evidence applies
+to the client portal's readers unchanged).**
+
+`index.ts` merges clean because the `export * from "./agreement";` line is now
+in exactly the position all three lanes put it — an identical addition, which
+git merges without a conflict — and `export * from "./agreement-copy";` moved
+to the end of the file, a distant hunk, with a comment saying why it sits
+there.
+
+**The deviation itself is declared, not hidden.** `packages/types/src/agreement-copy.ts`
+remains this lane's one file outside its `§2.2` boundary. It is kept rather
+than moved because it is the shared source the build sheet's §4.5 / §5.2 ask
+for — the client lane hard-codes the same four sentences today
+(`apps/client-portal/src/components/agreement-parts-body.tsx:69,153,191` and
+`commercial-document-shell.tsx:269` all match it verbatim), so the module is
+the collapse point for that duplication, not a designer-only convenience. It
+is additive (a new file, no conflict) and its export line now merges clean.
+**Steward: either accept it under the backend lane's ownership of
+`packages/types` at merge, or rule it out and the lane will fold it into
+`apps/designer-portal/src/lib/document/` — one import path changes
+(`agreement-parts-body.tsx`, `agreement-parts-body.test.tsx`) and nothing
+else.**
+
+## DR3 — Save threw her back to part one, twice over
+
+Two independent causes, as the finding says, and both are fixed.
+
+**The remount.** The room keyed the composer on
+`` `${terms?.updatedAt ?? 'new'}-${parts.length}` ``. `upsert_agreement_parts`
+projects through `_project_agreement_terms`, whose upsert ends
+`updated_at = now()`, so **every** save changed the key — the composer
+unmounted and `saveNote` ("All agreement changes saved.") and `selectedId`
+were rebuilt from the bundle. `service-agreement-drafting-room.tsx:107` now
+keys on `proposalId`. The composer holds the composition after mount and
+re-reads the bundle only through props (`document.state` → `readOnly` still
+flips on a send, because that is a prop and not a key), so one mount per
+agreement is the right identity. The flag-off `ServiceAgreementEditor` key is
+**untouched** — the byte-identity snapshot still passes.
+
+**The re-selection.** `upsert_agreement_parts` is
+`DELETE … ; INSERT …` with no `id` in the insert column list (backend
+`00575:2037-2039`), so every part comes back with a fresh uuid;
+`saved.some(part => part.id === current)` was never true. `part_key` **is** in
+the insert list, so it is the identity that survives a save.
+`agreement-composer.tsx:193-205` captures the selected part's `partKey` before
+the round-trip and re-selects by it, falling back to the first part only when
+the selected part is genuinely gone (removed before the save).
+
+### Both were proved to fail before the fix
+
+The two new cases were run against the reverted implementation:
+
+```
+pnpm --filter @patina/designer-portal test -- \
+  .../agreement/__tests__/agreement-composer.test.tsx \
+  .../drafting/service-agreement-drafting-room-composer-key.test.tsx
+  → Tests: 2 failed, 15 passed, 17 total
+    "Expected: 1 / Received: 2"   (the mount counter)
+```
+
+They are evidence, not tautologies.
+
+## Files changed this round (12 modified, 1 added)
+
+```
+ .../document/commercial/money-region.test.tsx      | 28 ++++++++++++
+ .../document/commercial/money-region.tsx           | 14 +++++-
+ .../commercial/project-authority-band.test.tsx     | 21 +++++++++
+ .../document/commercial/project-authority-band.tsx |  6 ++-
+ .../__tests__/agreement-composer.test.tsx          | 52 ++++++++++++++++++++++
+ .../drafting/agreement/agreement-composer.tsx      | 17 ++++---
+ .../drafting/service-agreement-drafting-room.tsx   |  9 +++-
+ .../use-commercial-documents-authority.test.tsx    | 32 +++++++++++++
+ .../src/hooks/use-commercial-documents.ts          |  7 ++-
+ .../src/lib/document/commercial-documents.ts       |  7 ++-
+ packages/types/src/commercial.ts                   |  4 +-
+ packages/types/src/index.ts                        | 10 ++++-
+ 12 files changed, 194 insertions(+), 13 deletions(-)
++ apps/designer-portal/src/components/document/rooms/drafting/
+    service-agreement-drafting-room-composer-key.test.tsx   (new, 162 lines)
+```
+
+The new suite exists because `jest.mock` is module-scoped and every other case
+in that directory mocks `agreement-parts` **off** — the flag-on remount key
+needs its own file to be asserted at all.
+
+## Tests added this round (+6 cases, +1 suite)
+
+- `commercial/project-authority-band.test.tsx` (+1) — a null ceiling **and** a
+  null authorized figure render `No ceiling` twice, and the band prints no
+  `$0` anywhere.
+- `commercial/money-region.test.tsx` (+2) — the budget rung reads
+  `Budget · nothing approved yet` and the head opens `no ceiling · …`; the
+  folded seam reads `no ceiling · $0 authorized`.
+- `hooks/__tests__/use-commercial-documents-authority.test.tsx` (+1) — the
+  adapter keeps `ceilingCents`, `authorizedCents` and `remainingCents` null on
+  an uncapped envelope while `accruedCents` still lands as a number.
+- `drafting/agreement/__tests__/agreement-composer.test.tsx` (+1, plus a
+  `selectPart` helper) — Save hands back server-minted ids and she stays in
+  the Exclusions editor.
+- `drafting/service-agreement-drafting-room-composer-key.test.tsx` (new, 1
+  case) — the composer mounts **once** across two saves' worth of bundle
+  churn (a fresh `terms.updatedAt` and a changed part count).
+
+## Round-2 gates
+
+Run from a bare `cd` into the worktree.
+
+```
+pnpm turbo build --filter=@patina/types
+  → 1 successful, 1 total (the widened commercial.ts compiles)
+
+pnpm --filter @patina/designer-portal type-check
+  → tsc --noEmit, no output, exit 0
+    (this is the gate that would have caught a missed authorizedCents reader —
+     it found none beyond the two render sites)
+
+pnpm --filter @patina/designer-portal lint
+  → 205 problems (2 errors, 203 warnings) — IDENTICAL to both earlier rounds.
+    The same two pre-existing `main` errors:
+      piece-room-save-gate.test.tsx:159   (import/first rule not found)
+      use-commercial-documents.test.ts:930 (rules-of-hooks in a test helper)
+  Scoped to the 11 files this round changed:
+    npx eslint <those 11 files>  → no output, exit 0
+
+pnpm --filter @patina/designer-portal test -- <the 6 touched test files>
+  → Test Suites: 6 passed, 6 total
+    Tests:       64 passed, 64 total
+    Snapshots:   1 passed, 1 total   ← the flag-off byte-identity snapshot
+
+pnpm --filter @patina/designer-portal test          # THE merge gate
+  → Test Suites: 523 passed, 523 total
+    Tests:       6304 passed, 6304 total
+    Snapshots:   2 passed, 2 total
+    Time:        28.523 s
+```
+
+## Still open after round 2 (advisories, not blockers)
+
+- **The client lane's `commercial.ts` still says `authorizedCents: number`**,
+  and its own readers of that field have not been checked against DR1. The
+  backend × client conflict is the steward's to resolve; the designer lane is
+  already on the backend's text.
+- The two carried-over advisories from round 1 stand unchanged: the client
+  lane should import `AGREEMENT_PART_COPY` rather than repeat the sentences,
+  and `per_phase` with a NULL phase amount prints `$0` on the designer side
+  where the client prints `—`.
+- `pnpm --filter @patina/admin-portal build` still NOT run in this worktree.
+  It is the repo's strictest shared-package gate and `packages/types` changed
+  again this round (a widened field, which admin's build **would** catch if a
+  reader there is unguarded). The steward should run it once before merge.
+- Nothing in this round was driven in a browser. Every claim above is
+  type-check, lint, or jest.
