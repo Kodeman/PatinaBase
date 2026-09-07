@@ -33,6 +33,7 @@ import {
   signLabelFor,
   type ConsentPart,
 } from './consent-copy';
+import { DepositOffer, type DepositOfferModel } from './deposit-offer';
 import { DoorActs } from './door-acts';
 
 /* ── THE DOOR ────────────────────────────────────────────────────────────────
@@ -159,6 +160,13 @@ export function DoorGate({
   const [declined, setDeclined] = useState(false);
   const [deliveryPending, setDeliveryPending] = useState(false);
   const [replay, setReplay] = useState<string | null>(null);
+  /**
+   * P13 — what the sign route offered once the signature was already
+   * recorded. Null until then, null when the route could not mint the
+   * invoice, and null on every kind of paper but a turnkey prime. It takes no
+   * part in `ready`, in the act's `disabled`, or in any preflight.
+   */
+  const [depositOffer, setDepositOffer] = useState<DepositOfferModel | null>(null);
   const [doorState, setDoorState] = useState<DoorState>('shut');
   const [swingHeight, setSwingHeight] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -275,6 +283,7 @@ export function DoorGate({
         error?: string;
         projectId?: string | null;
         notificationDelivery?: { state?: string };
+        depositOffer?: DepositOfferModel | null;
       };
       if (!response.ok) throw new Error(refusalSentence(body.error));
 
@@ -309,6 +318,14 @@ export function DoorGate({
       }
       window.requestAnimationFrame(() => setReceiptInked(true));
       onSigned?.();
+
+      // P13 / R15 — THE MONEY IS MENTIONED LAST, AND ONLY AFTER THE SIGNATURE
+      // IS COMPLETE AND VISIBLE. The receipt has inked and the Threshold has
+      // been told to keep this door standing before the offer exists at all.
+      // The route already returns `null` here whenever it could not mint the
+      // invoice, and `DepositOffer` renders nothing for a null — so a billing
+      // failure is silence on a page that otherwise reads exactly the same.
+      setDepositOffer(body.depositOffer ?? null);
 
       // W2-01. THE INVALIDATION GOES LAST, AND IT WAITS FOR THE LEAF.
       //
@@ -479,6 +496,17 @@ export function DoorGate({
             Keep a copy
           </ScoredAction>
         </div>
+      )}
+
+      {/* P13 — the offer stands in the post-signature region, under the
+          receipt and the copy she keeps: the signature is finished and said so
+          before any money is named. Null renders nothing at all. */}
+      {signedAt && (
+        <DepositOffer
+          offer={depositOffer}
+          drawCount={bundle.data?.designBuild?.draws.length ?? null}
+          currency={bundle.data?.serviceTerms?.currency ?? 'USD'}
+        />
       )}
 
       {deliveryPending && (

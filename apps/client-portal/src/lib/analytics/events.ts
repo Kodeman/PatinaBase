@@ -108,6 +108,10 @@ export type MakingGateKind =
   | 'furnishings_authorization'
   | 'service_addendum'
   | 'trade_scope'
+  // Wave 3 — the turnkey class. A gate this union does not carry cannot be
+  // reported at all, so a new commercial kind belongs here in the same change
+  // that lets a door render it.
+  | 'design_build'
   | 'trade_acceptance';
 
 export const makingEvents = {
