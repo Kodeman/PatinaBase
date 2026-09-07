@@ -280,12 +280,16 @@ describe('composeConsentLine — the sentence she ticks', () => {
    retainer, because every pre-Wave-2 design-services agreement carried them.
    Composed, an agreement carries whatever parts it was given — so on a
    flat-fee or per-phase paper the frozen sentence asserts terms the paper does
-   not contain, directly above the line she ticks. It reduces to the half that
-   is true of every agreement; an agreement with no parts is untouched.
+   not contain, directly above the line she ticks.
+
+   The list is therefore composed from the SAME parts the consent line reads:
+   it names every money term the paper carries and no term it does not. Where
+   the old four facets are all present it is byte-identical to the frozen
+   sentence, and an agreement with no parts is untouched.
    ────────────────────────────────────────────────────────────────────────── */
 
-const REDUCED_SUMMARY =
-  'By signing, you accept the terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.';
+const FLAT_SUMMARY =
+  'By signing, you accept the services, flat design fee, and terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.';
 
 describe('composeSummaryLine — what signing does', () => {
   it('is byte-identical to today’s sentence for an agreement with no parts', () => {
@@ -300,23 +304,95 @@ describe('composeSummaryLine — what signing does', () => {
     ).toBe(summaryLineFor('design_services', 'Cedar Lane — Design Services'));
   });
 
+  /* The reason this composes rather than reduces: an agreement that carries
+     the old four facets said all four before Wave 2 and still says all four
+     after it, character for character. Nothing is taken off the signing
+     surface of the commonest composed agreement. */
+  it('is byte-identical to today’s sentence when the paper carries the old facets', () => {
+    expect(
+      composeSummaryLine('design_services', 'Cedar Lane — Design Services', [
+        schedule('rate_card', { roles: [{ roleName: 'Principal', hourlyRateCents: 27500 }] }),
+        schedule('ceiling', { cents: 2400000 }),
+        schedule('retainer', { cents: 500000, creditRule: 'credited' }),
+      ]),
+    ).toBe(summaryLineFor('design_services', 'Cedar Lane — Design Services'));
+  });
+
+  it('names every term the nine standard parts carry, in the canonical order', () => {
+    expect(
+      composeSummaryLine('design_services', 'Cedar Lane — Design Services', NINE_STANDARD_PARTS),
+    ).toBe(
+      'By signing, you accept the services, signed role rates, design authorization ceiling, retainer, furnishings deposit, and terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
+    );
+    expect(
+      composeSummaryLine(
+        'design_services',
+        'Cedar Lane — Design Services',
+        [...NINE_STANDARD_PARTS].reverse(),
+      ),
+    ).toBe(
+      composeSummaryLine('design_services', 'Cedar Lane — Design Services', NINE_STANDARD_PARTS),
+    );
+  });
+
   it('stops naming terms a composed agreement does not carry', () => {
     const line = composeSummaryLine('design_services', 'Cedar Lane — Design Services', [
       schedule('flat', { cents: 800000 }),
     ]);
 
-    expect(line).toBe(REDUCED_SUMMARY);
+    expect(line).toBe(FLAT_SUMMARY);
     expect(line).not.toContain('signed role rates');
     expect(line).not.toContain('design authorization ceiling');
     expect(line).not.toContain('retainer');
   });
 
-  it('reduces on any composed agreement, money parts or not', () => {
+  it('says the term the paper does carry, in the summary’s own words', () => {
+    expect(
+      composeSummaryLine('design_services', 'Cedar Lane — Design Services', [
+        schedule('per_phase', {
+          phases: [{ key: 'concept', label: 'Concept', cents: 350000 }],
+        }),
+        schedule('retainer', { cents: 500000, creditRule: 'non_refundable' }),
+      ]),
+    ).toBe(
+      'By signing, you accept the services, per-phase fee schedule, retainer, and terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
+    );
+  });
+
+  it('names no money at all on a composed agreement that carries none', () => {
     expect(
       composeSummaryLine('design_services', 'Cedar Lane — Design Services', [
         { kind: 'clause', variant: null, clientVisible: true, payload: { body: 'Services.' } },
       ]),
-    ).toBe(REDUCED_SUMMARY);
+    ).toBe(
+      'By signing, you accept the services and terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
+    );
+  });
+
+  /* The summary cannot name a term the consent line below it does not: both
+     read the same parts through the same presence rule. */
+  it('names nothing the consent line beneath it leaves out', () => {
+    const unset: ConsentPart[] = [
+      schedule('rate_card', { roles: [] }),
+      schedule('ceiling', { cents: 0 }),
+      schedule('retainer', { cents: 0, creditRule: 'credited' }),
+      schedule('procurement', { depositPercent: 0 }),
+      schedule('cadence', { cadence: 'monthly' }),
+      schedule('cost_plus', { markupPercent: 20 }),
+    ];
+    expect(composeSummaryLine('design_services', 'Cedar Lane — Design Services', unset)).toBe(
+      'By signing, you accept the services and terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
+    );
+    expect(composeConsentLine('design_services', unset)).toBe(LEGACY_SERVICES_LINE);
+  });
+
+  it('names nothing the homeowner cannot see', () => {
+    const hidden = NINE_STANDARD_PARTS.map((part) =>
+      part.kind === 'schedule' ? { ...part, clientVisible: false } : part,
+    );
+    expect(composeSummaryLine('design_services', 'Cedar Lane — Design Services', hidden)).toBe(
+      'By signing, you accept the services and terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
+    );
   });
 
   it('keeps the countersignature sentence, which is true of every agreement', () => {
@@ -325,12 +401,12 @@ describe('composeSummaryLine — what signing does', () => {
     ).toContain('The agreement becomes effective only after the studio countersigns.');
   });
 
-  it('reduces an addendum exactly as it reduces an agreement', () => {
+  it('composes an addendum exactly as it composes an agreement', () => {
     expect(
       composeSummaryLine('service_addendum', 'Cedar Lane — Design Services', [
         schedule('flat', { cents: 800000 }),
       ]),
-    ).toBe(REDUCED_SUMMARY);
+    ).toBe(FLAT_SUMMARY);
   });
 
   it('leaves every other kind of paper its own summary', () => {

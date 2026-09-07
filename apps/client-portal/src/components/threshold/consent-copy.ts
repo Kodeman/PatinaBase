@@ -251,6 +251,30 @@ export function composeConsentLine(
 }
 
 /**
+ * The noun the SUMMARY uses for each term the consent line names. The consent
+ * sentence says a term in full and in its own words ("the retainer, which is
+ * not refundable"); the summary lists it the way `summaryLineFor` has always
+ * listed one — bare and article-less, inside a single long list. Every
+ * retainer, whatever its credit rule, is "retainer" up there; the rule itself
+ * belongs to the sentence she ticks.
+ *
+ * Presence is decided in exactly one place — `consentFragment` — so a term the
+ * consent line does not name cannot appear in the summary above it. A consent
+ * fragment with no entry here contributes nothing, which is what a later
+ * wave's new variant should do until somebody writes its noun.
+ */
+const SUMMARY_FRAGMENT: Record<string, string> = {
+  'the signed role rates': 'signed role rates',
+  'the design authorization ceiling': 'design authorization ceiling',
+  'the flat design fee': 'flat design fee',
+  'the per-phase fee schedule': 'per-phase fee schedule',
+  'the retainer credited against fees': 'retainer',
+  'the retainer, which is not refundable': 'retainer',
+  'the replenishing retainer': 'retainer',
+  'the furnishings deposit': 'furnishings deposit',
+};
+
+/**
  * WHAT SIGNING DOES, FOR AN AGREEMENT COMPOSED FROM PARTS.
  *
  * `summaryLineFor`'s services sentence names the services, the signed role
@@ -259,18 +283,20 @@ export function composeConsentLine(
  * the sentence was true of all of them. A COMPOSED agreement carries whatever
  * parts the studio put in it: a flat-fee engagement has no role rates and no
  * ceiling; a per-phase one has no retainer unless a retainer part was added.
- * Printed unchanged over a composed agreement, that sentence tells the
- * homeowner — on the signing surface, directly above the consent she ticks —
- * that she accepts terms the paper she is signing does not contain.
+ * Printed unchanged over such a paper, that sentence tells the homeowner — on
+ * the signing surface, directly above the consent she ticks — that she accepts
+ * terms the paper she is signing does not contain.
  *
- * So a composed agreement keeps only the half of the sentence that is true of
- * every agreement: the terms in the paper it names, and the countersignature
- * that makes it effective. What money it carries is named beneath it, once, by
- * `composeConsentLine` — which reads the same parts.
+ * So the list is composed from the SAME parts the consent line reads, in the
+ * same canonical order: it names every money term the paper carries and no
+ * term it does not. An agreement carrying role rates, a ceiling and a retainer
+ * therefore reads byte-for-byte as `summaryLineFor` has always read it — the
+ * commonest composed agreement loses nothing — while a per-phase paper says
+ * "per-phase fee schedule" where it used to claim role rates.
  *
- * An agreement with no parts — flag off, legacy, or pre-Wave-2 — returns
- * `summaryLineFor` verbatim, so the deployed door is byte-identical to what it
- * has always shown.
+ * An agreement with no parts at all — flag off, legacy, or pre-Wave-2 —
+ * returns `summaryLineFor` verbatim, so the deployed door is byte-identical to
+ * what it has always shown.
  */
 export function composeSummaryLine(
   kind: CommercialDocumentKind,
@@ -283,6 +309,26 @@ export function composeSummaryLine(
   if (kind !== 'design_services' && kind !== 'service_addendum') {
     return summaryLineFor(kind, title);
   }
-  if (!parts || parts.length === 0) return summaryLineFor(kind, title);
-  return `By signing, you accept the terms in “${title}”. The agreement becomes effective only after the studio countersigns.`;
+
+  const all = parts ?? [];
+  if (all.length === 0) return summaryLineFor(kind, title);
+
+  const money = all.filter(
+    (part) => part.kind === 'schedule' && part.clientVisible === true,
+  );
+
+  const fragments: string[] = [];
+  for (const variant of CONSENT_VARIANT_ORDER) {
+    const part = money.find((candidate) => candidate.variant === variant);
+    if (!part) continue;
+    const consented = consentFragment(part);
+    const noun = consented ? SUMMARY_FRAGMENT[consented] : undefined;
+    if (noun) fragments.push(noun);
+  }
+
+  return `By signing, you accept ${oxford([
+    'the services',
+    ...fragments,
+    `terms in “${title}”`,
+  ])}. The agreement becomes effective only after the studio countersigns.`;
 }
