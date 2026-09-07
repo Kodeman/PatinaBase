@@ -388,3 +388,49 @@ describe('resolveHouseForInstrument — the letter names its house', () => {
     expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
 });
+
+/* ── R30 · the origin agreement names no house ───────────────────────────────
+   A design-services agreement is bound to no project until the studio
+   countersigns it (00331, 00566), so `/proposals/<id>` can fold here for a
+   household with no house at all. There is no house to name and this answers
+   so — WITHOUT inventing one, and without a database read it has no id to
+   scope. The `?proposal=` param is the DOOR's; `page.tsx` carries it to the
+   household door, which reads the paper through the same client-scoped RPCs
+   the house uses. ───────────────────────────────────────────────────────── */
+
+describe('resolveHouseForInstrument — the origin agreement', () => {
+  it('names no house for a household that has none, and reads nothing to find that out', async () => {
+    await expect(
+      resolveHouseForInstrument([], { proposalId: 'prop-origin' }),
+    ).resolves.toBeNull();
+    expect(mockCreateServerClient).not.toHaveBeenCalled();
+  });
+
+  it('never invents a house for a paper bound to none', async () => {
+    // `list_client_proposals` strips a null project_id from the payload
+    // (jsonb_strip_nulls), so the row simply has no key — and `owns` must
+    // refuse it rather than fall through to some house of hers.
+    const rpc = jest.fn(async () => ({
+      data: [{ id: 'prop-origin', title: 'Design services agreement' }],
+      error: null,
+    }));
+    mockCreateServerClient.mockResolvedValue({ rpc });
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { proposalId: 'prop-origin' }),
+    ).resolves.toBeNull();
+    expect(rpc).toHaveBeenCalledWith('list_client_proposals');
+  });
+
+  it('still names the house a countersigned agreement was bound to', async () => {
+    const rpc = jest.fn(async () => ({
+      data: [{ id: 'prop-origin', project_id: 'p2' }],
+      error: null,
+    }));
+    mockCreateServerClient.mockResolvedValue({ rpc });
+
+    await expect(
+      resolveHouseForInstrument(['p1', 'p2'], { proposalId: 'prop-origin' }),
+    ).resolves.toBe('p2');
+  });
+});

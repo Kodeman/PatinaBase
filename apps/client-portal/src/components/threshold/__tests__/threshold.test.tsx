@@ -2194,3 +2194,238 @@ describe('LetterboxDoor — the letterbox IS the front door', () => {
     expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
   });
 });
+
+/* ── R30 · The origin agreement reaches the homeowner ────────────────────────
+   A design-services agreement is `proposals.project_id NULL` until the studio
+   countersigns it — countersigning is what CREATES the project (00331, 00566).
+   So the first paper a household is ever sent arrives before it has a house,
+   and the front door was project-scoped: she met "no active projects yet" over
+   a signature the studio was waiting on. The door reads it through the same
+   client-scoped reads the house uses, and hangs the SAME DoorGate. ───────── */
+
+describe('LetterboxDoor — the origin agreement, before there is a house', () => {
+  const originalLocation = window.location;
+
+  /** Sent, pending, and bound to no project — `list_client_proposals` strips
+   *  the key entirely (jsonb_strip_nulls), so the fixture omits it too. */
+  const ORIGIN_AGREEMENT = {
+    id: 'prop-origin',
+    title: 'Design services agreement',
+    designer_id: 'designer-nora',
+    document_kind: 'design_services',
+    commercial_state: 'sent',
+    status: 'sent',
+    total_amount: 1_200_000,
+    sent_at: '2026-09-04',
+    updated_at: '2026-09-04',
+    version: 1,
+  } as unknown as Proposal;
+
+  const SECOND_ORIGIN = {
+    ...ORIGIN_AGREEMENT,
+    id: 'prop-origin-2',
+    title: 'Consultation agreement',
+  } as unknown as Proposal;
+
+  /** The same paper the moment the studio countersigns: the project now
+   *  exists, and `list_client_proposals` coalesces its binding into project_id. */
+  const COUNTERSIGNED = {
+    ...ORIGIN_AGREEMENT,
+    project_id: PROJECT_ID,
+    commercial_state: 'executed',
+    status: 'accepted',
+  } as unknown as Proposal;
+
+  const theDoor = () =>
+    document.querySelector('[data-threshold-unit="door"]') as HTMLElement;
+
+  function renderDoor(namedProposalId: string | null = null) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const tree = () => (
+      <QueryClientProvider client={client}>
+        <LetterboxDoor namedProposalId={namedProposalId} />
+      </QueryClientProvider>
+    );
+    const view = render(tree());
+    return { redraw: () => view.rerender(tree()) };
+  }
+
+  beforeEach(() => {
+    resetCheckoutReturn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { search: '', href: 'https://client.test/', pathname: '/', hash: '' },
+    });
+    jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
+    identityMock.mockReturnValue(settled({ name: 'Middle West Studio', source: 'studio' }));
+    clientInvoicesMock.mockReturnValue(settled([]));
+    proposalsMock.mockReturnValue(settled([ORIGIN_AGREEMENT]));
+    bundles = { 'prop-origin': { document: { kind: 'design_services' } } };
+    bundles['prop-origin-2'] = { document: { kind: 'design_services' } };
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })) as unknown as typeof window.matchMedia;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ projectId: null, notificationDelivery: { state: 'delivered' } }),
+    }) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  it('stands the agreement at #door, with the plate off its own studio', () => {
+    renderDoor();
+
+    expect(identityMock).toHaveBeenCalledWith({
+      studioId: null,
+      designerId: 'designer-nora',
+    });
+    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
+    expect(screen.getByText('One agreement is waiting for you.')).toBeInTheDocument();
+    expect(theDoor()).toHaveAttribute('id', 'door');
+    expect(
+      within(theDoor()).getByRole('heading', { name: 'Design services agreement' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  // The signature line and the consent are the whole point: a door that draws
+  // the paper but cannot take her name is the same dead end by another route.
+  it('offers the same signature line and consent a project-bound agreement gets', () => {
+    renderDoor();
+
+    expect(within(theDoor()).getByLabelText('Type your full name')).toBeInTheDocument();
+    const consent = within(theDoor()).getByRole('checkbox');
+    expect(consent).toBeInTheDocument();
+    expect(
+      within(theDoor()).getByText(
+        'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(theDoor()).getByRole('button', { name: /^Sign and accept/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('signs end to end and keeps the receipt after the paper leaves the list', async () => {
+    const { redraw } = renderDoor();
+
+    fireEvent.change(within(theDoor()).getByLabelText('Type your full name'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(within(theDoor()).getByRole('checkbox'));
+    const held = within(theDoor()).getByRole('button', { name: /^Sign/ });
+    jest.useFakeTimers();
+    fireEvent.pointerDown(held, { clientX: 4, clientY: 4 });
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS);
+    });
+    jest.useRealTimers();
+    await act(async () => {
+      fireEvent.pointerUp(held);
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/proposals/prop-origin/sign',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(within(theDoor()).getByTestId('door-receipt')).toHaveTextContent(
+      'Middle West Studio has your signature.',
+    );
+
+    // The invalidation refetches this very list, and a client-signed paper is
+    // no longer pending. The door has to survive its own success.
+    proposalsMock.mockReturnValue(
+      settled([{ ...ORIGIN_AGREEMENT, commercial_state: 'client_signed' } as unknown as Proposal]),
+    );
+    redraw();
+
+    expect(theDoor()).not.toBeNull();
+    expect(within(theDoor()).getByTestId('door-receipt')).toHaveTextContent(
+      'has your signature',
+    );
+    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
+  });
+
+  // Countersigning creates the project, so `/` opens the house from that point
+  // on. What this door must never do is keep drawing the paper the house has
+  // taken over — the same agreement, twice, on two surfaces.
+  it('drops the agreement the moment countersigning binds it to a house', () => {
+    proposalsMock.mockReturnValue(settled([COUNTERSIGNED]));
+
+    renderDoor();
+
+    expect(document.querySelector('[data-threshold-unit="door"]')).toBeNull();
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+
+  it('gives #door to the agreement the address named, not the first in the list', () => {
+    proposalsMock.mockReturnValue(settled([ORIGIN_AGREEMENT, SECOND_ORIGIN]));
+
+    renderDoor('prop-origin-2');
+
+    expect(screen.getByText('Two agreements are waiting for you.')).toBeInTheDocument();
+    const anchored = document.querySelector('#door') as HTMLElement;
+    expect(
+      within(anchored).getByRole('heading', { name: 'Consultation agreement' }),
+    ).toBeInTheDocument();
+  });
+
+  it('stands the letter and the agreement together, under one plate', () => {
+    clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
+
+    renderDoor();
+
+    expect(screen.getAllByTestId('doorplate-title')).toHaveLength(1);
+    expect(
+      screen.getByText('One agreement is waiting for you. One letter is waiting for you.'),
+    ).toBeInTheDocument();
+    expect(theDoor()).not.toBeNull();
+    expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
+  });
+
+  // An addendum amends a standing engagement, so it always has a house to be
+  // read in; it is out of R30's scope by ruling and must not surface here.
+  it('never opens on an addendum, or on a paper still in draft', () => {
+    proposalsMock.mockReturnValue(
+      settled([
+        { ...ORIGIN_AGREEMENT, id: 'prop-add', document_kind: 'service_addendum' } as unknown as Proposal,
+        { ...ORIGIN_AGREEMENT, id: 'prop-draft', commercial_state: 'draft', status: 'draft' } as unknown as Proposal,
+      ]),
+    );
+
+    renderDoor();
+
+    expect(document.querySelector('[data-threshold-unit="door"]')).toBeNull();
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+
+  it('holds rather than saying nothing is waiting while the papers are coming', () => {
+    proposalsMock.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isLoading: true,
+      isError: false,
+      refetch: jest.fn(),
+    });
+
+    renderDoor();
+
+    expect(screen.getByTestId('letterbox-door-hold')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+});
