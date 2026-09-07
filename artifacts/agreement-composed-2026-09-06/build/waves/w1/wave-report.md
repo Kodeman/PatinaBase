@@ -470,3 +470,113 @@ prod, so R26's fixture is local-only.
   `threshold.spec.ts:221` seed accumulation, `:158` timezone fragility, the two
   designer-portal lint errors, `pnpm db:generate`'s destructive redirect (F5,
   hit again in this lane and recovered with `git checkout --`).
+
+---
+
+## 11 · Re-gate 2 fixes — 2026-09-07
+
+From head `66649d189`, on `agreement/w1-integration` in
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration`.
+Three items, exactly the ones the rulings name: F2, F6, and R28's amendment.
+Nothing else was touched.
+
+| Item | Commit | What changed |
+|---|---|---|
+| F2 | `5d770687b` | An unset furnishings deposit renders **nothing** on the homeowner's composed page — no heading, no "Recorded with your agreement." |
+| F6 | `8d9e49870` | `TRUNCATE` joins the R17(c) revoke on both projection tables; ACL seed regenerated; PASS 25 asserts the refusal |
+| R28 amended | `dcedc6756` | Comment only — the cadence seed line names the ruling that made it deliberate |
+
+### 11.1 · F2 · the deposit nobody set is not a term
+
+`ProcurementLeaf` (`apps/client-portal/src/components/agreement-parts-body.tsx`)
+returns `null` when the deposit is unwritten and no markup / freight / terms-of-
+sale note stands beside it, and `ScheduleLeaf` now **calls** it rather than
+mounting it, so that `null` reaches `PartSection` and the whole `<section>` goes
+with it — the same road an empty clause already took. The designer twin
+(`apps/designer-portal/src/components/document/commercial/agreement-parts-body.tsx`,
+`case "procurement"`) returns `null` in the same condition, so the preview and
+the page still print one paper.
+
+R21 asked for this ("empty parts render nothing, not a naked heading") and R28's
+amendment settles what "unset" prints: nothing, not a sentence asserting that
+something was recorded. A deposit that names only a term of sale keeps its
+heading and that term — the fix is scoped to the part that says nothing at all.
+
+Jest, both surfaces:
+
+- client — `draws nothing at all for a deposit part written as zero with nothing
+  beside it` (no heading, no recorded line, **no `agreement-part` section**),
+  `drops a deposit part that names neither a percent nor a term, and keeps its
+  neighbours` (1 section, not 2), and the fresh-composition case now asserts
+  2 sections rather than 3.
+- designer — `draws nothing at all for a deposit of zero percent`, plus a new
+  `keeps a deposit part that names only a term of sale` so the drop is a filter,
+  not a deletion.
+
+The client e2e is unaffected: the seeded composed agreement carries seven parts
+and none of them is a deposit (probed on the stack — Services · Deliverables ·
+Exclusions · Role rates · Ceiling · Billing cadence · Terms).
+
+### 11.2 · F6 · TRUNCATE goes with the write set
+
+`supabase/migrations/00575_agreement_parts.sql`, beside the R17(c) revoke:
+
+```sql
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.proposal_service_terms
+  FROM authenticated, anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.proposal_service_rates
+  FROM authenticated, anon;
+```
+
+TRUNCATE is the one write the projection trigger cannot see — it fires no row
+trigger and observes no RLS — so the ACL was the only wall in front of it, and
+it was open. `anon` is on the same line for the same reason the rest of the
+write set is. `python3 scripts/generate-legacy-grants.py` re-run; the seed's only
+diff is those two statements.
+
+`agreement_parts_test.sql` PASS 25 now proves it four ways: `has_table_privilege`
+is false for `authenticated` and `anon` on both tables, an actual
+`TRUNCATE public.proposal_service_terms` and `… _rates` as `authenticated`
+each raise `insufficient_privilege`, and both projections still hold their rows
+afterwards. Probed on the reset stack outside the suite as well:
+`has_table_privilege('authenticated','public.proposal_service_terms','TRUNCATE')`
+→ `f`, `SELECT` → `t`.
+
+### 11.3 · R28 amended · no code
+
+The banner comment on the cadence seed line now carries the ruling: a cadence
+saved from the seven-facet room counts as chosen — the room shows the select
+with Monthly preselected and the designer saves it — so seeding
+`patina.cadence` from the terms row is deliberate, not the oversight re-gate 2's
+F1 read it as. No SQL body moved; the migration's behaviour is byte-identical.
+
+### 11.4 · Gates
+
+The stack was reset (00575 changed) — recorded in `stack-notice.md`.
+
+| Gate | Command | Result |
+|---|---|---|
+| Reset | `supabase db reset --workdir …/agent-agr-w1-integration` (unsandboxed) | "Finished supabase db reset on branch main"; head `00575 / 00574 / 00573` |
+| SQL — parts | `psql -v ON_ERROR_STOP=1 -f supabase/tests/commercial/agreement_parts_test.sql` | **rc=0** — PASS 1–38, including the extended `PASS 25: … the flag-off door, the direct hand, the grant and TRUNCATE all refuse (R17)` |
+| SQL — projection | `… commercial/agreement_parts_projection_test.sql` | **rc=0** |
+| SQL — hardening contract | `… edge_api/public_sd_hardening_contract_test.sql` | **rc=0** — no pinned body touched |
+| SQL — paper issue | `… commercial/design_services_paper_issue_test.sql` | **rc=0** |
+| SQL suite | `./scripts/run-sql-tests.sh` (unsandboxed) | **total 162 · green 141 · expected-fail 21 · unexpected-fail 0** — identical to the re-gate baseline |
+| Types regen | `SUPABASE_DB_URL=…54322/postgres pnpm db:generate` | 1,135,292 bytes |
+| Types diff | `git diff --exit-code packages/supabase/src/database.types.ts` | **no diff** |
+| client-portal | `type-check` | clean |
+| client-portal | `test:coverage` | **129 suites, 1995 tests passed**; coverage floor met |
+| designer-portal | `type-check` | clean |
+| designer-portal | touched tests — `test -- src/components/document/commercial src/components/document/rooms/drafting` | **30 suites, 341 tests passed** |
+| `@patina/supabase` | `type-check` | clean |
+
+### 11.5 · What this lane did NOT do
+
+- No production anything: no `db push`, no `functions deploy`, no `wrangler`,
+  no Strata read or write. `00575` remains unapplied on Strata (head `00574`).
+- Did not run Playwright (client or designer), the full designer jest sweep, the
+  admin-portal build, or lint — the gate list for this pass was the one above.
+- Did not push, did not create or remove a worktree, did not touch `.claude/`,
+  `.agents/`, hooks, settings or any `.env` file.
+- Did not act on F3, F4, F5 or F7 — the rulings send them to the main backlog as
+  advisories, and they are untouched here.

@@ -122,6 +122,35 @@ The stack is left exactly as found: running, head `00575`, close-out bodies.
 
 ---
 
+## Re-gate 2 fixes — 2026-09-07 · RESET, because 00575 changed
+
+The re-gate-2 fix lane (from head `66649d189`) **did reset the shared stack**,
+and says so here because it had to: F6 adds `TRUNCATE` to the R17(c) revoke in
+`supabase/migrations/00575_agreement_parts.sql`, which is a grant change, so the
+migration was edited in place (still unapplied on Strata, whose head is `00574`)
+and the ACL seed regenerated.
+
+- `python3 scripts/generate-legacy-grants.py` — the regenerated
+  `supabase/seed/00-legacy-grants.sql` replays 2233 statements; the only diff is
+  the two projection-table REVOKEs now carrying `TRUNCATE`.
+- `supabase db reset --workdir /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration`
+  (unsandboxed) → "Finished supabase db reset on branch main"; head afterwards
+  `00575 / 00574 / 00573`.
+- Probed rather than inferred:
+  `has_table_privilege('authenticated','public.proposal_service_terms','TRUNCATE')`
+  → `f` (and `f` for `proposal_service_rates`), `SELECT` still `t`. The composed
+  seed fixture is back — `proposal_agreement_parts` holds the same seven parts
+  in position order (Services · Deliverables · Exclusions · Role rates ·
+  Ceiling · Billing cadence · Terms), none of them a deposit, so the client e2e
+  assertion is unmoved by F2.
+- The R28-amended edit is a comment on the cadence seed line only — no body
+  changed, no behaviour moved.
+
+**No other agent may reset, seed, stop, or start the shared stack.** It is left
+running at head `00575`, carrying the re-gate-2 fix bodies.
+
+---
+
 This notice exists per the parallel-work discipline in
 `.claude/skills/patina-parallel-work` and the shared-stack lesson in project
 memory (`feedback_shared_local_supabase_stack_last_reset_wins.md`): concurrent
