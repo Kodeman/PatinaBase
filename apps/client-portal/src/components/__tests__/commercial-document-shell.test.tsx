@@ -968,9 +968,41 @@ describe('CommercialDocumentShell', () => {
       ).toEqual(['clause', 'attachment', 'attachment']);
       expect(screen.getByText(/ATTACHMENT A · Wisconsin notice/)).toBeInTheDocument();
       expect(screen.getByText(/ATTACHMENT B · Photography release/)).toBeInTheDocument();
-      // Display only in Wave 1 — a sentence, never a control.
+      // The paper states the requirement; the ACT is the door's (Wave 2, P6 —
+      // door-gate.tsx asks for the tick and the signature records it).
       expect(screen.getByText('I received this')).toBeInTheDocument();
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    /**
+     * M5. An attachment is a leaf, not a paragraph of the agreement: it sits
+     * outside the body's own measure, below the boundary sentence that closes
+     * what the agreement says.
+     */
+    it('sets the attachment leaves outside the body, below its closing boundary', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [
+          part({ id: 'clause-z', position: 1, kind: 'clause', title: 'Terms', payload: { body: 'Terms body.' } }),
+          part({ id: 'att-b', position: 2, kind: 'attachment', title: 'Wisconsin notice', payload: { body: 'Notice body.', acknowledgeRequired: true } }),
+        ],
+      })} />);
+
+      const body = screen.getByTestId('agreement-parts-body');
+      const leaves = screen.getByTestId('agreement-attachments');
+      expect(body).not.toContainElement(leaves);
+      expect(
+        body.compareDocumentPosition(leaves) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(body).toHaveTextContent(/require a separate named furnishings authorization/i);
+      expect(leaves).toHaveTextContent('ATTACHMENT A · Wisconsin notice');
+    });
+
+    it('draws no attachment rail at all when the agreement carries none', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        parts: [part({ id: 'clause-z', position: 1, kind: 'clause', title: 'Terms', payload: { body: 'Terms body.' } })],
+      })} />);
+
+      expect(screen.queryByTestId('agreement-attachments')).not.toBeInTheDocument();
     });
 
     it('never draws an attestation part', () => {

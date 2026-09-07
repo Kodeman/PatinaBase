@@ -429,20 +429,33 @@ export function AgreementPartsBody({
   const attachments = ordered.filter((part) => part.kind === 'attachment');
 
   return (
-    <div className="mt-8 space-y-8" data-testid="agreement-parts-body">
-      {sections.map((part) => (
-        <PartSection key={part.id} part={part} currency={currency} />
-      ))}
-      {attachments.map((part, index) => (
-        <AttachmentLeaf key={part.id} part={part} letter={attachmentLetter(index)} />
-      ))}
+    <>
+      <div className="mt-8 space-y-8" data-testid="agreement-parts-body">
+        {sections.map((part) => (
+          <PartSection key={part.id} part={part} currency={currency} />
+        ))}
 
-      {/* The same closing boundary today's body carries, so the sentence
-          appears exactly once on either path. */}
-      <p className="border-l-2 border-patina-dusty-blue bg-patina-dusty-blue/5 px-4 py-3 type-body-small">
-        This agreement authorizes design services only. Furnishings, freight, tax, installation,
-        and purchasing require a separate named furnishings authorization.
-      </p>
-    </div>
+        {/* The same closing boundary today's body carries, so the sentence
+            appears exactly once on either path. */}
+        <p className="border-l-2 border-patina-dusty-blue bg-patina-dusty-blue/5 px-4 py-3 type-body-small">
+          This agreement authorizes design services only. Furnishings, freight, tax, installation,
+          and purchasing require a separate named furnishings authorization.
+        </p>
+      </div>
+
+      {/* M5 — attachments are LEAVES, not paragraphs: they sit outside the
+          body's own measure, below everything the agreement itself says and
+          below the boundary that closes it. Wave 2 makes the acknowledgment
+          real — the door asks for it by `part_key` and the signature records
+          it — so the sentence here is the paper stating the requirement, not
+          a control. */}
+      {attachments.length > 0 && (
+        <div className="mt-8 space-y-8" data-testid="agreement-attachments">
+          {attachments.map((part, index) => (
+            <AttachmentLeaf key={part.id} part={part} letter={attachmentLetter(index)} />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
