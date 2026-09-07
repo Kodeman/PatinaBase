@@ -4,6 +4,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+import { COMMERCIAL_DOCUMENT_KINDS } from '@patina/types';
+
 import {
   KIND_LABEL,
   REFUSAL_TOKENS,
@@ -39,6 +41,40 @@ describe('the API can still answer every refusal the door reads', () => {
   // person signing. The sibling accept route is held to the same bar.
   it('never answers with the database’s own sentence', () => {
     expect(SIGN_ROUTE).not.toMatch(/NextResponse\.json\(\{\s*error:[^}]*\.message/);
+  });
+
+  /* ── WAVE 3 · THE ROUTE ROUTES THE KIND THIS FILE SPEAKS FOR ─────────────
+     The route's allowlist is derived from `COMMERCIAL_DOCUMENT_KINDS`, so a
+     kind added to that array is ADMITTED the moment it lands. Until this
+     wave the branch below it was `furnishings → trade_scope → else`, and a
+     design-build signature fell into the `else` — signed as a plain
+     design-services agreement, answered 200, and no copy on this side would
+     have shown it.
+
+     So the route names its signing kinds positively, and this pins that: the
+     source must carry `design_build` inside a set of signing kinds, and must
+     not have gone back to deciding by exclusion. ────────────────────────── */
+  it('routes the turnkey prime by name, not by falling through', () => {
+    expect(SIGN_ROUTE).toMatch(/SERVICES_SIGNING_KINDS[\s\S]{0,200}'design_build'/);
+    expect(SIGN_ROUTE).toContain("SERVICES_SIGNING_KINDS.has(documentKind)");
+    // The double negative this replaced. It admitted the new kind by accident.
+    expect(SIGN_ROUTE).not.toContain(
+      "documentKind !== 'furnishings_authorization' &&\n      documentKind !== 'trade_scope'",
+    );
+  });
+
+  /* The offer is a SECOND call, made after the signature RPC returned, and its
+     failure is a null offer rather than a refused signature (R15, D-W3-2). */
+  it('offers the deposit only after the signature, never as a gate on it', () => {
+    const signIndex = SIGN_ROUTE.indexOf("'sign_design_services_agreement_with_trusted_ip'");
+    const offerIndex = SIGN_ROUTE.indexOf('offerDepositDraw(commercialService');
+    expect(signIndex).toBeGreaterThan(-1);
+    expect(offerIndex).toBeGreaterThan(signIndex);
+    // Nothing about the offer may reach the signature's own arguments.
+    expect(SIGN_ROUTE).not.toMatch(/signArgs[\s\S]{0,120}deposit/i);
+    // Wave 3 writes no Stripe code: the offer is a link to the shipped payer.
+    expect(SIGN_ROUTE).not.toContain('create-checkout-session');
+    expect(SIGN_ROUTE).not.toContain('stripe');
   });
 });
 
@@ -88,6 +124,45 @@ describe('the branch structure mirrors the route', () => {
     expect(consentLineFor('legacy')).toBe(
       'I agree to the scope and investment in this proposal.',
     );
+  });
+
+  /* ── WAVE 3 · THE TURNKEY PRIME ──────────────────────────────────────────
+     A design-build agreement is countersigned, so it takes 'Sign and accept'
+     rather than the trade scope's 'Sign and authorize', and its own consent
+     rather than the design-services one — which would name "design-services
+     terms" over a paper that carries none. ─────────────────────────────── */
+  it('gives a design-build prime its own consent, label and summary', () => {
+    const line = consentLineFor('design_build');
+
+    expect(line).toContain('design-build terms');
+    expect(line).toContain('my signature alone does not authorize work');
+    expect(line).not.toBe(consentLineFor('design_services'));
+    expect(signLabelFor('design_build')).toBe('Sign and accept');
+    expect(summaryLineFor('design_build', 'Halvorsen kitchen')).toBe(
+      'By signing, you accept the pricing basis, schedule of values, draw schedule, and retainage in “Halvorsen kitchen”. The agreement becomes effective only after the studio countersigns.',
+    );
+  });
+
+  /**
+   * THE ASSERTION THAT CATCHES A SILENTLY-SWALLOWED KIND.
+   *
+   * The generic sentence exists for `legacy` and for nothing else. A kind
+   * appended to `COMMERCIAL_DOCUMENT_KINDS` whose branch nobody wrote lands
+   * on it — and on the signing surface that reads as a real consent line, so
+   * nothing looks broken. This is the whole failure mode Wave 3's sign route
+   * had, said in copy: `design_build` was admitted by the allowlist and had
+   * no branch here.
+   */
+  it('gives every live kind a sentence of its own, never the fallback', () => {
+    const fallback = 'I agree to the scope and investment in this proposal.';
+    for (const kind of COMMERCIAL_DOCUMENT_KINDS) {
+      if (kind === 'legacy') continue;
+      expect([kind, consentLineFor(kind)]).not.toEqual([kind, fallback]);
+    }
+  });
+
+  it('names the turnkey kind in the portal’s own words', () => {
+    expect(KIND_LABEL.design_build).toBe('Design-build agreement');
   });
 
   it('never asserts a countersignature on a furnishings authorization', () => {
@@ -439,5 +514,175 @@ describe('composeSummaryLine — what signing does', () => {
     expect(
       composeSummaryLine('trade_scope', 'TS-2', [schedule('flat', { cents: 800000 })]),
     ).toBe(summaryLineFor('trade_scope', 'TS-2'));
+  });
+});
+
+/* ── THE TURNKEY CONSENT (Wave 3, P9) ────────────────────────────────────────
+   The Halvorsen kitchen and mudroom, from `source/fixtures.json`: a cost-plus
+   agreement with a guaranteed maximum price, seven cost lines behind a
+   schedule of values, four draws at 5% retainage, and three allowances. The
+   sentence she ticks names every one of those and no term the paper does not
+   carry — the walk's step 12 asserts exactly this, because the generic
+   fallback is what a missed branch looks like on the signing surface.
+
+   These sentences are the client half of a pair: the SQL half is
+   `public.compose_agreement_consent(uuid)`, which the backend lane widens for
+   this class in the same wave. Two implementations of one function; a change
+   here that is not made there is drift, and it reaches a homeowner as one
+   sentence read and a different sentence filed.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const HALVORSEN_PRICING_BASIS = schedule('pricing_basis', {
+  basis: 'cost_plus_gmp',
+  feeBps: 1800,
+  gmpCents: 8413400,
+  nteCents: null,
+  fixedCents: null,
+  subDisclosure: 'closed_book',
+  costLines: [
+    { id: 'cabinetryAndMillwork', label: 'Cabinetry & millwork', category: 'sub', basisCents: 3800000 },
+    { id: 'electrical', label: 'Electrical', category: 'sub', basisCents: 950000 },
+    { id: 'plumbing', label: 'Plumbing', category: 'sub', basisCents: 720000 },
+    { id: 'generalConditions', label: 'General conditions / site', category: 'general_conditions', basisCents: 630000 },
+    { id: 'tile', label: 'Tile allowance', category: 'allowance', basisCents: 400000 },
+    { id: 'plumbingFixtures', label: 'Plumbing fixtures allowance', category: 'allowance', basisCents: 350000 },
+    { id: 'lighting', label: 'Lighting allowance', category: 'allowance', basisCents: 280000 },
+  ],
+});
+
+const HALVORSEN_DRAWS = schedule('draws', {
+  retainageBps: 500,
+  draws: [
+    { key: 'deposit', label: 'Deposit at signing', sortOrder: 0, pct: 10, retainageApplies: false },
+    { key: 'roughIn', label: 'Rough-in', sortOrder: 1, pct: 30, retainageApplies: true },
+    { key: 'cabinetsSet', label: 'Cabinets set', sortOrder: 2, pct: 40, retainageApplies: true },
+    { key: 'substantialCompletion', label: 'Substantial completion', sortOrder: 3, pct: 20, retainageApplies: true },
+  ],
+});
+
+const HALVORSEN_ALLOWANCES = schedule('allowances', {
+  allowances: [
+    { id: 'tile', label: 'Tile', amountCents: 400000, overageRule: 'change_order', underageRule: 'credit' },
+    { id: 'plumbingFixtures', label: 'Plumbing fixtures', amountCents: 350000, overageRule: 'change_order', underageRule: 'credit' },
+    { id: 'lighting', label: 'Lighting', amountCents: 280000, overageRule: 'change_order', underageRule: 'credit' },
+  ],
+});
+
+const HALVORSEN_PARTS: ConsentPart[] = [
+  HALVORSEN_PRICING_BASIS,
+  HALVORSEN_DRAWS,
+  HALVORSEN_ALLOWANCES,
+  { kind: 'clause', variant: null, clientVisible: true, payload: { body: 'Closed book.' } },
+];
+
+const HALVORSEN_CONSENT =
+  'I agree to these design-build terms, the guaranteed maximum price, the schedule of values, the draw schedule, the retainage withheld from each draw, and the allowances, and understand my signature alone does not authorize work until the studio countersigns.';
+
+describe('composeConsentLine — the turnkey prime', () => {
+  it('names the price, the schedule of values, the draws, the retainage and the allowances', () => {
+    expect(composeConsentLine('design_build', HALVORSEN_PARTS)).toBe(HALVORSEN_CONSENT);
+  });
+
+  it('never says the generic sentence over a turnkey paper', () => {
+    expect(composeConsentLine('design_build', HALVORSEN_PARTS)).not.toBe(
+      'I agree to the scope and investment in this proposal.',
+    );
+    expect(composeConsentLine('design_build', [])).not.toBe(
+      'I agree to the scope and investment in this proposal.',
+    );
+  });
+
+  it('says the fragments in canonical order, whatever order the parts arrive in', () => {
+    expect(composeConsentLine('design_build', [...HALVORSEN_PARTS].reverse())).toBe(
+      HALVORSEN_CONSENT,
+    );
+  });
+
+  it('says the turnkey line for a paper with no money parts at all', () => {
+    expect(composeConsentLine('design_build', [])).toBe(consentLineFor('design_build'));
+    expect(composeConsentLine('design_build', null)).toBe(consentLineFor('design_build'));
+  });
+
+  it('names each pricing basis in its own words', () => {
+    const said = (basis: string, extra: Record<string, unknown> = {}) =>
+      composeConsentLine('design_build', [
+        schedule('pricing_basis', { basis, costLines: [], ...extra }),
+      ]);
+
+    expect(said('tm_nte')).toContain('the not-to-exceed price');
+    expect(said('fixed')).toContain('the fixed contract price');
+    expect(said('cost_plus')).toContain('the cost-plus pricing basis');
+    // A basis a later wave adds contributes nothing rather than throwing.
+    expect(said('unit_price')).toBe(consentLineFor('design_build'));
+  });
+
+  it('says nothing about retainage when none is withheld', () => {
+    const line = composeConsentLine('design_build', [
+      schedule('draws', { retainageBps: 0, draws: [{ key: 'a', label: 'One', pct: 100 }] }),
+    ]);
+    expect(line).toContain('the draw schedule');
+    expect(line).not.toContain('retainage');
+  });
+
+  it('says nothing about a schedule of values a paper has no cost lines for', () => {
+    const line = composeConsentLine('design_build', [
+      schedule('pricing_basis', { basis: 'fixed', fixedCents: 8413400, costLines: [] }),
+    ]);
+    expect(line).toContain('the fixed contract price');
+    expect(line).not.toContain('schedule of values');
+  });
+
+  it('consents to nothing the homeowner cannot see', () => {
+    const hidden = HALVORSEN_PARTS.map((part) =>
+      part.kind === 'schedule' ? { ...part, clientVisible: false } : part,
+    );
+    expect(composeConsentLine('design_build', hidden)).toBe(consentLineFor('design_build'));
+  });
+
+  it('consents to a retainer the studio added, in the retainer’s own words', () => {
+    expect(
+      composeConsentLine('design_build', [
+        HALVORSEN_DRAWS,
+        schedule('retainer', { cents: 500000, creditRule: 'non_refundable' }),
+      ]),
+    ).toBe(
+      'I agree to these design-build terms, the draw schedule, the retainage withheld from each draw, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.',
+    );
+  });
+
+  it('leaves the services classes untouched by the turnkey composer', () => {
+    expect(composeConsentLine('design_services', HALVORSEN_PARTS)).toBe(LEGACY_SERVICES_LINE);
+  });
+});
+
+describe('composeSummaryLine — the turnkey prime', () => {
+  it('names every term the consent line beneath it names, in the summary’s words', () => {
+    expect(composeSummaryLine('design_build', 'Halvorsen kitchen', HALVORSEN_PARTS)).toBe(
+      'By signing, you accept the work described, guaranteed maximum price, schedule of values, draw schedule, retainage, allowances, and terms in “Halvorsen kitchen”. The agreement becomes effective only after the studio countersigns.',
+    );
+  });
+
+  it('is the frozen sentence for a turnkey paper with no parts', () => {
+    expect(composeSummaryLine('design_build', 'Halvorsen kitchen', [])).toBe(
+      summaryLineFor('design_build', 'Halvorsen kitchen'),
+    );
+  });
+
+  it('names nothing the consent line beneath it leaves out', () => {
+    const unset: ConsentPart[] = [
+      schedule('pricing_basis', { basis: 'unit_price', costLines: [] }),
+      schedule('draws', { retainageBps: 0, draws: [] }),
+      schedule('allowances', { allowances: [] }),
+    ];
+    expect(composeSummaryLine('design_build', 'Halvorsen kitchen', unset)).toBe(
+      'By signing, you accept the work described and terms in “Halvorsen kitchen”. The agreement becomes effective only after the studio countersigns.',
+    );
+    expect(composeConsentLine('design_build', unset)).toBe(consentLineFor('design_build'));
+  });
+
+  it('keeps the countersignature sentence, which is true of every turnkey prime', () => {
+    expect(
+      composeSummaryLine('design_build', 'Halvorsen kitchen', HALVORSEN_PARTS),
+    ).toContain('The agreement becomes effective only after the studio countersigns.');
   });
 });

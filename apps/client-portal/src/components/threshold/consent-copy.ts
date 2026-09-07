@@ -33,10 +33,25 @@ export function consentLineFor(kind: CommercialDocumentKind): string {
   if (kind === 'design_services' || kind === 'service_addendum') {
     return 'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.';
   }
+  // Wave 3, P9. A turnkey prime is its own class and must not fall through to
+  // the sentence above (which says "design-services terms" over a paper that
+  // carries none) or to the generic fallback below — the generic sentence is
+  // exactly what a missed branch looks like on the signing surface, and the
+  // walk's step 12 asserts against it by name.
+  if (kind === 'design_build') {
+    return 'I agree to these design-build terms and understand my signature alone does not authorize work until the studio countersigns.';
+  }
   return 'I agree to the scope and investment in this proposal.';
 }
 
-/** The word on the act itself. */
+/**
+ * The word on the act itself.
+ *
+ * `design_build` takes 'Sign and accept', deliberately and not by accident: a
+ * turnkey prime is COUNTERSIGNED, so the client's signature does not itself
+ * authorize anyone to begin — which is the whole difference between this word
+ * and the trade scope's 'Sign and authorize'. Pinned in the drift test.
+ */
 export function signLabelFor(kind: CommercialDocumentKind): string {
   if (kind === 'furnishings_authorization') return 'Sign authorization';
   if (kind === 'trade_scope') return 'Sign and authorize';
@@ -56,6 +71,9 @@ export function summaryLineFor(kind: CommercialDocumentKind, title: string): str
   if (kind === 'trade_scope') {
     return `By signing, you authorize the scope of work, price, and draw schedule in “${title}”.`;
   }
+  if (kind === 'design_build') {
+    return `By signing, you accept the pricing basis, schedule of values, draw schedule, and retainage in “${title}”. The agreement becomes effective only after the studio countersigns.`;
+  }
   return `By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in “${title}”. The agreement becomes effective only after the studio countersigns.`;
 }
 
@@ -70,6 +88,7 @@ export const KIND_LABEL: Partial<Record<CommercialDocumentKind, string>> = {
   furnishings_authorization: 'Furnishings authorization',
   service_addendum: 'Design services addendum',
   trade_scope: 'Trade scope',
+  design_build: 'Design-build agreement',
 };
 
 /**
@@ -205,6 +224,75 @@ function consentFragment(part: ConsentPart): string | null {
   }
 }
 
+/* ── THE TURNKEY CLASS'S OWN MONEY PARTS (Wave 3, P9) ────────────────────────
+   A design-build agreement carries none of the six variants above: no rate
+   card, no ceiling by default, no furnishings deposit. What it carries is a
+   PRICING BASIS (which the schedule of values is derived from), a DRAW
+   SCHEDULE with retainage, and ALLOWANCES — R9 makes all three record-only for
+   billing purposes, but they are precisely what the homeowner is consenting
+   to, and a sentence that named none of them would be the generic fallback in
+   disguise.
+
+   Two parts each say two things, so this returns a LIST rather than the single
+   fragment `consentFragment` returns: the pricing basis names both the price
+   it sets and the schedule of values built from its cost lines; the draw
+   schedule names both the draws and the retainage withheld from them.
+
+   The same parity rule the services composer lives under applies here: this is
+   `public.compose_agreement_consent(uuid)` written a second time, in a second
+   language, and the two may not drift. Canonical order, never the designer's
+   part order; zero fragments returns `consentLineFor('design_build')`
+   byte-for-byte.
+   ────────────────────────────────────────────────────────────────────────── */
+const DESIGN_BUILD_VARIANT_ORDER: readonly string[] = [
+  'pricing_basis',
+  'draws',
+  'allowances',
+  'retainer',
+  'ceiling',
+];
+
+/** The price a pricing basis sets, in the basis's own words. */
+const PRICING_BASIS_FRAGMENT: Record<string, string> = {
+  cost_plus_gmp: 'the guaranteed maximum price',
+  tm_nte: 'the not-to-exceed price',
+  fixed: 'the fixed contract price',
+  cost_plus: 'the cost-plus pricing basis',
+};
+
+function designBuildFragments(part: ConsentPart): string[] {
+  switch (part.variant) {
+    case 'pricing_basis': {
+      const basis = part.payload.basis;
+      const priced = typeof basis === 'string' ? PRICING_BASIS_FRAGMENT[basis] : undefined;
+      const hasCostLines = consentRows(part.payload.costLines).length > 0;
+      return [
+        ...(priced ? [priced] : []),
+        ...(hasCostLines ? ['the schedule of values'] : []),
+      ];
+    }
+    case 'draws': {
+      if (consentRows(part.payload.draws).length === 0) return [];
+      const retainageBps = consentCents(part.payload.retainageBps);
+      return [
+        'the draw schedule',
+        ...(retainageBps !== null && retainageBps > 0
+          ? ['the retainage withheld from each draw']
+          : []),
+      ];
+    }
+    case 'allowances':
+      return consentRows(part.payload.allowances).length > 0 ? ['the allowances'] : [];
+    default: {
+      // A retainer or a ceiling the studio chose to add to a turnkey prime
+      // consents to exactly what it consents to on a services agreement —
+      // one implementation of that rule, not two.
+      const shared = consentFragment(part);
+      return shared ? [shared] : [];
+    }
+  }
+}
+
 /** A, "A and B", "A, B, and C" — the door's own list grammar. */
 function oxford(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? '';
@@ -221,16 +309,31 @@ export function composeConsentLine(
   kind: CommercialDocumentKind,
   parts: readonly ConsentPart[] | null | undefined,
 ): string {
-  // Wave 2 composes for the two services kinds only. A furnishings
-  // authorization or a trade scope keeps its own consent, whatever parts a
-  // later wave hangs on it.
-  if (kind !== 'design_services' && kind !== 'service_addendum') {
+  // A furnishings authorization or a trade scope keeps its own consent,
+  // whatever parts a later wave hangs on it.
+  if (
+    kind !== 'design_services' &&
+    kind !== 'service_addendum' &&
+    kind !== 'design_build'
+  ) {
     return consentLineFor(kind);
   }
 
   const money = (parts ?? []).filter(
     (part) => part.kind === 'schedule' && part.clientVisible === true,
   );
+
+  if (kind === 'design_build') {
+    const turnkey = DESIGN_BUILD_VARIANT_ORDER.flatMap((variant) => {
+      const part = money.find((candidate) => candidate.variant === variant);
+      return part ? designBuildFragments(part) : [];
+    });
+    if (turnkey.length === 0) return consentLineFor(kind);
+    return `I agree to ${oxford([
+      'these design-build terms',
+      ...turnkey,
+    ])}, and understand my signature alone does not authorize work until the studio countersigns.`;
+  }
 
   const fragments: string[] = [];
   for (const variant of CONSENT_VARIANT_ORDER) {
@@ -274,6 +377,17 @@ const SUMMARY_FRAGMENT: Record<string, string> = {
   'the retainer, which is not refundable': 'retainer',
   'the replenishing retainer': 'retainer',
   'the furnishings deposit': 'furnishings deposit',
+  // Wave 3 — the turnkey class's own terms, under the same rule: presence is
+  // decided once, in the fragment functions, so the summary can never name a
+  // term the consent line beneath it leaves out.
+  'the guaranteed maximum price': 'guaranteed maximum price',
+  'the not-to-exceed price': 'not-to-exceed price',
+  'the fixed contract price': 'fixed contract price',
+  'the cost-plus pricing basis': 'cost-plus pricing basis',
+  'the schedule of values': 'schedule of values',
+  'the draw schedule': 'draw schedule',
+  'the retainage withheld from each draw': 'retainage',
+  'the allowances': 'allowances',
 };
 
 /**
@@ -305,10 +419,13 @@ export function composeSummaryLine(
   title: string,
   parts: readonly ConsentPart[] | null | undefined,
 ): string {
-  // Wave 2 composes for the two services kinds only; a furnishings
-  // authorization and a trade scope keep their own summary whatever parts a
-  // later wave hangs on them.
-  if (kind !== 'design_services' && kind !== 'service_addendum') {
+  // A furnishings authorization and a trade scope keep their own summary
+  // whatever parts a later wave hangs on them.
+  if (
+    kind !== 'design_services' &&
+    kind !== 'service_addendum' &&
+    kind !== 'design_build'
+  ) {
     return summaryLineFor(kind, title);
   }
 
@@ -318,6 +435,22 @@ export function composeSummaryLine(
   const money = all.filter(
     (part) => part.kind === 'schedule' && part.clientVisible === true,
   );
+
+  if (kind === 'design_build') {
+    const nouns = DESIGN_BUILD_VARIANT_ORDER.flatMap((variant) => {
+      const part = money.find((candidate) => candidate.variant === variant);
+      if (!part) return [];
+      return designBuildFragments(part).flatMap((consented) => {
+        const noun = SUMMARY_FRAGMENT[consented];
+        return noun ? [noun] : [];
+      });
+    });
+    return `By signing, you accept ${oxford([
+      'the work described',
+      ...nouns,
+      `terms in “${title}”`,
+    ])}. The agreement becomes effective only after the studio countersigns.`;
+  }
 
   const fragments: string[] = [];
   for (const variant of CONSENT_VARIANT_ORDER) {
