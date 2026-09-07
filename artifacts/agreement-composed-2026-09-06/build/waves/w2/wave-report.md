@@ -888,3 +888,113 @@ Re-run at 18:18 — green, exit 0. The second full suite run is the one reported
 above. Nothing in this fix touches billing, invoices or `job_runs`; the test races
 a live hourly cron on any local stack.
 
+---
+
+## Walk fixes
+
+Round 1, from head `f45845816` / walk head `f7aab20c8`, on
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-integration`
+(branch `agreement/w2-integration`). Four findings, four commits, head
+`e7cda41add629fe312bbab292d04886d7eb3ec7e`. No migration, no seed, no package
+changed — **the shared local stack was NOT reset and still stands at `00577`.**
+
+| # | What it was | What it is now | Commit |
+|---|---|---|---|
+| W-01 | A newly created agreement's Contract Room said "This agreement has no parts yet." forever, over nine rows `materialize_standard_parts` had already written | The seeding is `await`ed in the composer's own effect | `002189292` |
+| W-02 | R33's sentence was authored, attached, and rendered nowhere; the panel said "This agreement names no fee." over a visible Flat fee row | The editor prints what is holding THIS part; the "names no fee" line steps aside when the only fee is the hidden one | `cfed41765` |
+| W-03 | The Library's PARTS shelf promised an act no surface performed | "Keep in the Library" in the row menu, owner/admin only (R3), into the agreement's own studio (R32) | `580807c71` |
+| W-04 | A household with a house never saw a pending origin agreement — R30's carried leaf did not exist | Every house's doorstep carries it, says which paper it is, and leaves its figure out of that house's ledger | `e7cda41ad` |
+
+### W-01 — the cause, since the walk could only see the symptom
+
+`apps/designer-portal/src/components/document/rooms/drafting/agreement/agreement-composer.tsx:195`
+called `materialize.mutate(undefined, { onSuccess, onError })`. React Query v5
+**drops the callbacks passed to `mutate()` when the observer unmounts before the
+mutation settles**, and `apps/designer-portal/next.config.js:5` sets
+`reactStrictMode: true`, which unmounts every component once on mount. So on
+every first open: the RPC ran, nine rows landed, the hook-level `onSuccess`
+invalidated `agreementPartsKeys` — and the call-site `onSuccess` that was to put
+the rows in the room never fired. A reload repainted from `bundle.parts`, which
+is exactly what the walk observed.
+
+The old test passed because it invoked `callbacks.onSuccess(...)`
+**synchronously**, which no real RPC does. It now resolves a tick later, which is
+the walk's own timing, and a second case pins the empty-state sentence going
+away.
+
+### W-02 — both halves
+
+- `readiness.ts` gained `blockersForPart(readiness, partId)`; `part-editor.tsx`
+  gained a `blockers` prop and prints them under the part's name. The rail's
+  bare "needs attention" now has a sentence beneath it wherever the designer is
+  standing.
+- The R4 floor is unmoved — a fee she cannot read is still not a fee she agreed
+  to — but when the ONLY fee present is a hidden one, `HIDDEN_FEE_BLOCKER`
+  stands alone and the generic "This agreement names no fee. Add a rate card, a
+  flat fee, or a per-phase fee." is suppressed. One existing readiness case
+  pinned the contradictory sentence and was rewritten to pin the accurate one.
+
+### W-03 — which of the two fixes was taken
+
+The finding offered either the act or a copy retreat. The act was built: it is
+what makes build-sheet SS9 step 3 walkable and it is the only road by which a
+part can reach an agreement with `client_visible = false`, which is what made
+W-02 unreachable in practice. `save_agreement_part` already existed with the
+right shape (`00576:373`), `useSaveAgreementPart` already existed in
+`@patina/supabase`, and `canManage` / `studioId` were already resolved in the
+room by `useAgreementStudioContext` — so the change is a row-menu item, a
+handler, and two specs. The Library takes a DETACHED copy (the RPC mints its own
+`studio.<uuid>`), the composed part is untouched and the agreement is not
+re-saved. Offered once per part per visit, because a second keep would mint a
+second Library entry for the same part.
+
+### W-04 — scope, and the one thing it deliberately does not do
+
+`design_services` only, exactly as R30 scopes it: an addendum always binds to a
+project, and a furnishings authorization is minted from the schedule of one.
+`ThresholdProposal` / `DoorProposal` gained `houseless`, and `derive.ts` leaves a
+houseless paper out of `ledger.awaitingCents` — the paper stands on the doorstep
+of EVERY house, so counting its figure per house would count the same money
+twice. `heaviestRoom` already answers null for a paper no selection files under,
+so it lands on the doorstep rather than inside a band, with no change to the
+banding rules.
+
+Not done, and not asked for: the PAPERS sheet and the correspondence `houseIds`
+set still scope to the house's own project id, so a houseless paper is reachable
+from the door but is not listed among "the papers filed here". The door is what
+R30's amendment names.
+
+### Gates
+
+Run from the integration worktree; every command's real output, not a paraphrase.
+
+```
+pnpm --dir apps/designer-portal type-check                clean, no output
+pnpm --dir apps/designer-portal test                      534 suites / 6513 tests, all pass
+pnpm --dir apps/client-portal  exec tsc --noEmit          clean, no output
+pnpm --dir apps/client-portal  test                       129 suites / 2063 tests, all pass
+   (the client coverage floor — lines 70 / branches 60 / functions 70 /
+    statements 70 — is enforced by that command and was met)
+pnpm --dir apps/designer-portal lint                      2 errors, 203 warnings
+```
+
+The two lint errors are the pair the Wave 1 integration rulings already recorded
+as pre-existing on `origin/main` — `piece-room-save-gate.test.tsx:159`
+(`Definition for rule 'import/first' was not found`) and
+`use-commercial-documents.test.ts:930` (`rules-of-hooks`). Neither is in a file
+this round touched.
+
+NOT run, and why: `supabase db reset` and the five SQL suites (no migration and
+no seed changed — the stack is untouched at `00577`); `pnpm db:generate` (no
+schema change); `@patina/supabase` type-check (no package changed); Playwright,
+either portal (no e2e spec touched, and this round's four fixes are unit-covered);
+nothing against production.
+
+### Advisory
+
+Every file the client lane touches is authored single-quoted while the repo has
+no `.prettierrc` at that level, so root Prettier defaults report drift on them —
+`prettier --check` warns on untouched neighbours (`letterbox.tsx`, `mat.tsx`)
+identically. The new code matches its surroundings rather than reformatting five
+files by ~2 200 lines; the pre-commit check is advisory locally and said so.
+

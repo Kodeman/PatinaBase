@@ -127,3 +127,18 @@ replayed, the fixed composer live.
 
 Anyone taking the stack next inherits this branch's `00575`/`00576`/`00577` and the
 regenerated grants seed. No dev server was started; port 3002 was not used.
+
+## 2026-09-07 — the WALK-FIX agent (round 1) — THE STACK WAS NOT TOUCHED
+
+The walk-fix agent worked from the same worktree
+(`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-integration`, branch
+`agreement/w2-integration`), fixing W-01 through W-04, and changed **no migration, no
+seed, and no SQL of any kind** — the four fixes are TypeScript in
+`apps/designer-portal` and `apps/client-portal` only.
+
+**No `supabase db reset` was run. No SQL suite was run. No query was issued against
+the stack at all.** It still stands exactly as the re-gate-2 fix agent left it:
+`schema_migrations` head `00577`, the regenerated grants seed replayed, this branch's
+`00575`/`00576`/`00577` applied.
+
+No dev server was started; ports 3000 and 3002 were not used.
