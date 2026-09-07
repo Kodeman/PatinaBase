@@ -157,17 +157,28 @@ describe('useAgreementParts', () => {
 
 describe('useSaveAgreementParts', () => {
   interface Config {
+    mutationKey: unknown[];
     mutationFn: (input: unknown) => Promise<unknown>;
-    onSuccess: (data: unknown, input: unknown) => void;
+    onSuccess: () => void;
   }
 
+  // The domain shape the composer holds, not the RPC's payload shape — the
+  // hook maps between them so no caller has to.
   const parts = [
     {
-      kind: 'clause',
+      id: 'part-1',
+      proposalId: 'prop-1',
+      position: 1,
+      kind: 'clause' as const,
+      variant: null,
       partKey: 'patina.services',
-      title: 'Services',
+      title: '  Services  ',
       payload: { body: 'Design services.' },
       required: true,
+      clientVisible: true,
+      sourceTemplateKey: null,
+      sourcePartId: null,
+      updatedAt: null,
     },
   ];
 
@@ -182,34 +193,64 @@ describe('useSaveAgreementParts', () => {
       },
       error: null,
     });
-    const config = useSaveAgreementParts() as unknown as Config;
-    const result = (await config.mutationFn({ proposalId: 'prop-1', parts })) as any;
+    const config = useSaveAgreementParts('prop-1') as unknown as Config;
+    const result = (await config.mutationFn(parts)) as any;
 
+    // Titles are trimmed and only the RPC's own keys are sent — the row's
+    // id, position and timestamps are the server's business.
     expect(supabaseClient.rpc).toHaveBeenCalledWith('upsert_agreement_parts', {
       p_proposal_id: 'prop-1',
-      p_parts: parts,
+      p_parts: [
+        {
+          kind: 'clause',
+          variant: null,
+          partKey: 'patina.services',
+          title: 'Services',
+          payload: { body: 'Design services.' },
+          required: true,
+          clientVisible: true,
+        },
+      ],
     });
     expect(result.partCount).toBe(1);
     expect(result.documentFingerprint).toBe('abc');
   });
 
-  it('throws the RPC error', async () => {
+  it('throws the RPC error, and does not run onSaved', async () => {
+    const onSaved = vi.fn();
     supabaseClient.rpc.mockResolvedValue({
       data: null,
       error: { message: 'an agreement that bills time needs a ceiling' },
     });
-    const config = useSaveAgreementParts() as unknown as Config;
-    await expect(config.mutationFn({ proposalId: 'prop-1', parts })).rejects.toEqual({
+    const config = useSaveAgreementParts('prop-1', { onSaved }) as unknown as Config;
+    await expect(config.mutationFn(parts)).rejects.toEqual({
       message: 'an agreement that bills time needs a ceiling',
     });
+    expect(onSaved).not.toHaveBeenCalled();
   });
 
-  it('invalidates the parts, commercial-document and proposal keys', () => {
-    const config = useSaveAgreementParts() as unknown as Config;
-    config.onSuccess(null, { proposalId: 'prop-1', parts });
+  it('awaits onSaved before it resolves, so an app bundle refetch is not a race', async () => {
+    const seen: string[] = [];
+    supabaseClient.rpc.mockImplementation(async () => {
+      seen.push('rpc');
+      return { data: { partCount: 1 }, error: null };
+    });
+    const onSaved = vi.fn(async () => {
+      seen.push('onSaved');
+    });
+    const config = useSaveAgreementParts('prop-1', { onSaved }) as unknown as Config;
+    await config.mutationFn(parts);
+    expect(seen).toEqual(['rpc', 'onSaved']);
+    expect(onSaved).toHaveBeenCalledWith('prop-1');
+  });
+
+  it('binds the proposal into its mutation key and invalidates the three families', () => {
+    const config = useSaveAgreementParts('prop-1') as unknown as Config;
+    expect(config.mutationKey).toEqual(['save-agreement-parts', 'prop-1']);
+    config.onSuccess();
     expect(invalidatedKeys()).toEqual([
       ['agreement-parts', 'prop-1'],
-      ['commercial-documents', 'prop-1'],
+      ['commercial-documents'],
       ['proposal', 'prop-1'],
     ]);
   });
@@ -221,8 +262,9 @@ describe('useSaveAgreementParts', () => {
 
 describe('useMaterializeStandardParts', () => {
   interface Config {
-    mutationFn: (input: unknown) => Promise<unknown>;
-    onSuccess: (data: unknown, input: unknown) => void;
+    mutationKey: unknown[];
+    mutationFn: () => Promise<unknown>;
+    onSuccess: () => void;
   }
 
   it('calls materialize_standard_parts and maps the returned rows', async () => {
@@ -230,8 +272,8 @@ describe('useMaterializeStandardParts', () => {
       data: { proposalId: 'prop-1', materialized: true, partCount: 1, parts: [row()] },
       error: null,
     });
-    const config = useMaterializeStandardParts() as unknown as Config;
-    const result = (await config.mutationFn({ proposalId: 'prop-1' })) as any;
+    const config = useMaterializeStandardParts('prop-1') as unknown as Config;
+    const result = (await config.mutationFn()) as any;
 
     expect(supabaseClient.rpc).toHaveBeenCalledWith('materialize_standard_parts', {
       p_proposal_id: 'prop-1',
@@ -246,19 +288,31 @@ describe('useMaterializeStandardParts', () => {
       data: { proposalId: 'prop-1', materialized: false, partCount: 9, parts: null },
       error: null,
     });
-    const config = useMaterializeStandardParts() as unknown as Config;
-    const result = (await config.mutationFn({ proposalId: 'prop-1' })) as any;
+    const config = useMaterializeStandardParts('prop-1') as unknown as Config;
+    const result = (await config.mutationFn()) as any;
     expect(result.materialized).toBe(false);
     expect(result.partCount).toBe(9);
     expect(result.parts).toEqual([]);
   });
 
-  it('invalidates the same three keys the save does', () => {
-    const config = useMaterializeStandardParts() as unknown as Config;
-    config.onSuccess(null, { proposalId: 'prop-1' });
+  it('runs onSaved after the seeding, so the room opens on the seeded set', async () => {
+    const onSaved = vi.fn();
+    supabaseClient.rpc.mockResolvedValue({
+      data: { proposalId: 'prop-1', materialized: true, partCount: 9, parts: null },
+      error: null,
+    });
+    const config = useMaterializeStandardParts('prop-1', { onSaved }) as unknown as Config;
+    await config.mutationFn();
+    expect(onSaved).toHaveBeenCalledWith('prop-1');
+  });
+
+  it('binds the proposal into its mutation key and invalidates the same three families', () => {
+    const config = useMaterializeStandardParts('prop-1') as unknown as Config;
+    expect(config.mutationKey).toEqual(['materialize-standard-parts', 'prop-1']);
+    config.onSuccess();
     expect(invalidatedKeys()).toEqual([
       ['agreement-parts', 'prop-1'],
-      ['commercial-documents', 'prop-1'],
+      ['commercial-documents'],
       ['proposal', 'prop-1'],
     ]);
   });

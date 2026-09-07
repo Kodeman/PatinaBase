@@ -567,7 +567,9 @@ export { commercialKeys } from "./use-commercial-documents";
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   agreementPartsKeys,
+  agreementPartsKey,
   mapAgreementPart,
+  toAgreementPartPayload,
   useAgreementParts,
   useSaveAgreementParts,
   useMaterializeStandardParts,
@@ -575,7 +577,7 @@ export {
 export type {
   AgreementPartRow,
   AgreementPartInput,
-  SaveAgreementPartsInput,
+  AgreementPartsMutationOptions,
   SaveAgreementPartsResult,
   MaterializeStandardPartsResult,
 } from "./use-agreement-parts";

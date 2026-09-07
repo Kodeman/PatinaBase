@@ -17,7 +17,17 @@ const getSupabase = () => createBrowserClient();
 //
 // Writes go through the definer RPCs, never through the table: the money
 // parts have to project into `proposal_service_terms` in the same act, and
-// only `upsert_agreement_parts` does that.
+// only `upsert_agreement_parts` does that (00575, R17 — the table's write
+// grant is withheld and a trigger refuses every other writer).
+//
+// THIS IS THE ONE IMPLEMENTATION. The designer portal carried an app-local
+// copy of these three hooks while this package and the composer were built in
+// parallel worktrees (its own comment says so). The mutation signatures below
+// are that copy's signatures — proposalId bound at construction, the whole
+// ordered `AgreementPart[]` in, the same query keys and mutation keys — so
+// adopting this module is an import swap. `onSaved` is where an app that keeps
+// its own document bundle refetches it; the hook awaits it before it
+// invalidates, so the room never paints a stale composition.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** The snake_case row shape as `proposal_agreement_parts` stores it. */
@@ -42,6 +52,11 @@ export const agreementPartsKeys = {
   all: ['agreement-parts'] as const,
   list: (proposalId: string) => ['agreement-parts', proposalId] as const,
 };
+
+/** The frozen-interface alias the designer portal's composer imports. Same
+ *  key string as `agreementPartsKeys.list`, so both spellings hit one cache. */
+export const agreementPartsKey = (proposalId: string) =>
+  agreementPartsKeys.list(proposalId);
 
 /** DB row → the camelCase domain shape in `@patina/types`. */
 export function mapAgreementPart(row: AgreementPartRow): AgreementPart {
@@ -75,9 +90,26 @@ export interface AgreementPartInput {
   sourcePartId?: string | null;
 }
 
-export interface SaveAgreementPartsInput {
-  proposalId: string;
-  parts: AgreementPartInput[];
+/** Where an app that keeps its own document bundle refreshes it. Awaited
+ *  after the RPC and before the cache is invalidated. */
+export interface AgreementPartsMutationOptions {
+  onSaved?: (proposalId: string) => void | Promise<void>;
+}
+
+/** `upsert_agreement_parts` takes the WHOLE ordered array, every time, so a
+ *  removed part is absent rather than blank. Domain parts in, RPC keys out. */
+export function toAgreementPartPayload(
+  parts: readonly AgreementPart[]
+): AgreementPartInput[] {
+  return parts.map((part) => ({
+    kind: part.kind,
+    variant: part.variant ?? null,
+    partKey: part.partKey,
+    title: part.title.trim(),
+    payload: part.payload ?? {},
+    required: part.required,
+    clientVisible: part.clientVisible,
+  }));
 }
 
 export interface SaveAgreementPartsResult {
@@ -125,24 +157,29 @@ export function useAgreementParts(proposalId: string | null | undefined) {
  * Invalidates the parts key plus the commercial-document and proposal keys,
  * because the same call moves the terms row and the document fingerprint.
  */
-export function useSaveAgreementParts() {
+export function useSaveAgreementParts(
+  proposalId: string,
+  options: AgreementPartsMutationOptions = {}
+) {
   const queryClient = useQueryClient();
+  const { onSaved } = options;
   return useMutation({
-    mutationFn: async ({
-      proposalId,
-      parts,
-    }: SaveAgreementPartsInput): Promise<SaveAgreementPartsResult> => {
+    mutationKey: ['save-agreement-parts', proposalId],
+    mutationFn: async (
+      parts: readonly AgreementPart[]
+    ): Promise<SaveAgreementPartsResult> => {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.rpc('upsert_agreement_parts', {
         p_proposal_id: proposalId,
-        p_parts: parts,
+        p_parts: toAgreementPartPayload(parts),
       });
       if (error) throw error;
+      await onSaved?.(proposalId);
       return data as SaveAgreementPartsResult;
     },
-    onSuccess: (_data, { proposalId }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: agreementPartsKeys.list(proposalId) });
-      queryClient.invalidateQueries({ queryKey: commercialKeys.document(proposalId) });
+      queryClient.invalidateQueries({ queryKey: commercialKeys.all });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
     },
   });
@@ -154,14 +191,15 @@ export function useSaveAgreementParts() {
  * literals. Idempotent: an agreement that already has parts comes back
  * unchanged with `materialized: false`.
  */
-export function useMaterializeStandardParts() {
+export function useMaterializeStandardParts(
+  proposalId: string,
+  options: AgreementPartsMutationOptions = {}
+) {
   const queryClient = useQueryClient();
+  const { onSaved } = options;
   return useMutation({
-    mutationFn: async ({
-      proposalId,
-    }: {
-      proposalId: string;
-    }): Promise<MaterializeStandardPartsResult> => {
+    mutationKey: ['materialize-standard-parts', proposalId],
+    mutationFn: async (): Promise<MaterializeStandardPartsResult> => {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.rpc('materialize_standard_parts', {
         p_proposal_id: proposalId,
@@ -173,6 +211,7 @@ export function useMaterializeStandardParts() {
         partCount: number;
         parts: AgreementPartRow[] | null;
       };
+      await onSaved?.(proposalId);
       return {
         proposalId: result.proposalId,
         materialized: result.materialized,
@@ -180,9 +219,9 @@ export function useMaterializeStandardParts() {
         parts: (result.parts ?? []).map(mapAgreementPart),
       };
     },
-    onSuccess: (_data, { proposalId }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: agreementPartsKeys.list(proposalId) });
-      queryClient.invalidateQueries({ queryKey: commercialKeys.document(proposalId) });
+      queryClient.invalidateQueries({ queryKey: commercialKeys.all });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
     },
   });
