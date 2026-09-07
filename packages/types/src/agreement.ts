@@ -39,7 +39,19 @@ export interface ClausePayload { body: string }
 export interface ListItem { id: string; text: string; note?: string; optional?: boolean }
 export interface ListPayload { items: ListItem[] }
 export interface PhasesPayload { phases: { key: string; label: string; on: boolean; feeCents?: number }[] }
-export interface RateCardPayload { roles: { roleName: string; hourlyRateCents: number; sortOrder: number }[] }
+/** B-9 — `effectiveAt` is the date a rate started applying, carried beside the
+ *  rate through the parts door. `classify_project_time_entry_authority` filters
+ *  authority rates on `effective_at <= started_at`, so a rate that loses its
+ *  date stops applying to the hours it was written for. Absent means "today",
+ *  which is what a rate written today means. */
+export interface RateCardPayload {
+  roles: {
+    roleName: string;
+    hourlyRateCents: number;
+    sortOrder: number;
+    effectiveAt?: string | null;
+  }[];
+}
 export interface CeilingPayload { cents: number | null }
 export interface RetainerPayload {
   cents: number;

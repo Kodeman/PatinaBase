@@ -252,13 +252,8 @@ describe("AgreementComposer · materialize", () => {
 });
 
 describe("AgreementComposer · composing", () => {
-  const renderComposer = () =>
-    render(
-      <AgreementComposer
-        proposal={proposal}
-        bundle={bundleWith(threeParts())}
-      />,
-    );
+  const renderComposer = (bundle = bundleWith(threeParts())) =>
+    render(<AgreementComposer proposal={proposal} bundle={bundle} />);
 
   it("opens clean and enables Save only once something changes", () => {
     renderComposer();
@@ -374,6 +369,56 @@ describe("AgreementComposer · composing", () => {
       await screen.findByText("All agreement changes saved."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Saved" })).toBeDisabled();
+  });
+
+  // B-9 — `classify_project_time_entry_authority` filters authority rates on
+  // `effective_at <= started_at`, and the projection falls to now() for a role
+  // that arrives with no date. A rate card the designer never touched must
+  // therefore hand the date back exactly as it was seeded, or a rate written
+  // for January stops applying to January's hours the moment the room is
+  // opened and saved.
+  it("hands a rate's effective date back untouched when the designer edits another part", async () => {
+    renderComposer(
+      bundleWith([
+        part({
+          partKey: "patina.role_rates",
+          position: 1,
+          kind: "schedule",
+          variant: "rate_card",
+          title: "Role rates",
+          payload: {
+            roles: [
+              {
+                roleName: "Lead Designer",
+                hourlyRateCents: 15_000,
+                sortOrder: 0,
+                effectiveAt: "2026-01-01T00:00:00.000Z",
+              },
+            ],
+          },
+        }),
+        part({
+          partKey: "patina.terms",
+          position: 2,
+          title: "Terms",
+          required: true,
+          payload: { body: "Ownership and cancellation." },
+        }),
+      ]),
+    );
+
+    selectPart("Role rates");
+    fireEvent.change(screen.getByLabelText("Lead Designer hourly rate"), {
+      target: { value: "170" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+    const written = mockSaveParts.mock.calls[0][0] as AgreementPart[];
+    const roles = (written[0].payload as { roles: Record<string, unknown>[] })
+      .roles;
+    expect(roles[0].hourlyRateCents).toBe(17_000);
+    expect(roles[0].effectiveAt).toBe("2026-01-01T00:00:00.000Z");
   });
 
   it("keeps her on the part she was writing when Save hands back new ids", async () => {
