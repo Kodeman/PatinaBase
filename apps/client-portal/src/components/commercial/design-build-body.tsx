@@ -22,7 +22,20 @@ import type {
      `open_book`; the bid ledger never, in either mode, at any state. The DTO
      carries no bid, and this file withholds a price a `closed_book` paper's
      DTO carried anyway — belt and braces, because the number that must never
-     appear is the one you can back a competitor's quote out of.
+     appear is a LOSING bid: the one a competitor's quote is read off.
+
+     SAY WHAT CLOSED BOOK IS, AND WHAT IT IS NOT (RC-4, ruled round 1). It
+     withholds the per-trade price row and spreads the fee across the schedule
+     so no line is labelled as anyone's price. It is not an information
+     barrier, and this file does not pretend to be one: on a `cost_plus_gmp`
+     prime the fee is a term of the agreement, and the allowance parts state
+     their amounts AT COST because a change-order threshold she is not shown
+     is not a threshold — so the multiplier, and with it a trade's cost, is
+     recoverable by arithmetic from figures the homeowner is entitled to. A
+     schedule that could not be inverted would have to be authored rather than
+     derived from the cost lines, which is a backend change and not this
+     wave's. The absolute rule that survives in both modes is the bid ledger's
+     absence.
 
    · R5 / R21 — PROSE NEVER CARRIES MONEY, AND A FIGURE NOBODY WROTE IS SAID
      TO BE UNWRITTEN. Only the typed money leaves print figures, and an unset
@@ -164,8 +177,10 @@ export function readPricingBasis(part: CommercialAgreementPart): PricingBasisRea
 /**
  * THE SCHEDULE OF VALUES IS DERIVED, NEVER SEPARATELY AUTHORED.
  *
- * `closed_book` — the studio's fee is spread across every line, so no line
- * discloses what any one trade was paid. Each line is `cost × sum / basis`,
+ * `closed_book` — the studio's fee is spread across every line, so no line is
+ * printed as what any one trade was paid. (Not: so that no line CAN be read
+ * that way — see the R13 note at the head of this file.) Each line is
+ * `cost × sum / basis`,
  * computed as one integer expression (never `cost × (1 + fee)` in floating
  * point), and the LAST line takes whatever the rounding left over so the
  * column sums to the contract price exactly.
@@ -469,8 +484,8 @@ function AllowancesLeaf({
  * WHO IS DOING THE WORK (R13). Identities always; a price only under
  * `open_book`, and even then only the AWARDED price — the bid ledger reaches
  * no client surface in any mode. The `closed_book` guard here is a second
- * lock on the RPC's own: the number a homeowner must never be handed is the
- * one a competitor's quote can be backed out of.
+ * lock on the RPC's own: a price the clause did not elect to disclose is not
+ * printed beside a name, whatever the DTO carried.
  */
 function SubsLeaf({
   subs,

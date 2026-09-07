@@ -360,11 +360,23 @@ describe('the turnkey paper, as the homeowner reads it', () => {
     expect(screen.getByTestId('design-build-sov-total')).toHaveTextContent('$84,134');
   });
 
-  /* R13. Under closed book, no per-trade figure appears anywhere on the page:
-     not as a schedule-of-values line at cost, not beside a name. The line the
-     homeowner reads is $44,840 — the cabinetry line WITH the fee spread into
-     it — and $38,000, the price Ridgeline was actually paid, is nowhere. */
-  it('discloses no trade’s own price under closed book', () => {
+  /* R13, STATED EXACTLY (RC-4, ruled round 1 — see client-notes.md §11).
+     Under closed book no trade's price is PRINTED: not as a schedule-of-values
+     line at cost, not beside a name. The line the homeowner reads is $44,840,
+     the cabinetry line with the fee spread into it.
+
+     What this test does NOT claim — and an earlier comment here wrongly did —
+     is that $38,000 is unrecoverable. It is recoverable by arithmetic, and
+     necessarily so: this is a cost-plus-GMP prime, the fee is one of its
+     terms, and the allowance parts state their amounts AT COST because a
+     homeowner cannot be asked to respect a change-order threshold she is not
+     shown ($4,000 tile, printed, against its $4,720 schedule line — the
+     multiplier, from two numbers she must have). Closed book on this page is
+     therefore a presentation rule, not an information barrier: it withholds
+     the per-trade price ROW and every bid, in both modes, at every state. A
+     genuinely non-invertible schedule would have to be authored rather than
+     derived from the cost lines, which is a backend change and not Wave 3's. */
+  it('prints no trade’s own price under closed book, and no bid in either mode', () => {
     render(<CommercialDocumentShell bundle={bundle('closed_book')} />);
 
     expect(screen.queryAllByTestId('design-build-sub-price')).toHaveLength(0);
@@ -374,6 +386,20 @@ describe('the turnkey paper, as the homeowner reads it', () => {
     // meet their bids.
     expect(screen.getByTestId('design-build-subs')).toHaveTextContent('Ridgeline Cabinetry');
     expect(screen.getByTestId('design-build-subs')).toHaveTextContent('Vance Electric');
+  });
+
+  /* The other half of the same ruling, pinned so a later reader cannot mistake
+     the page for a sealed one: the cost basis and the fee are on it, on
+     purpose, because they are terms of a cost-plus agreement. If the ruling
+     ever flips, this test is the one that fails first. */
+  it('states the cost basis and the fee of a cost-plus prime, in both modes', () => {
+    for (const mode of ['closed_book', 'open_book'] as const) {
+      const view = render(<CommercialDocumentShell bundle={bundle(mode)} />);
+      expect(screen.getByText('Cost basis')).toBeInTheDocument();
+      expect(screen.getByText('$71,300')).toBeInTheDocument();
+      expect(screen.getByText('Fee 18%')).toBeInTheDocument();
+      view.unmount();
+    }
   });
 
   it('discloses the awarded prices under open book, and only those', () => {
