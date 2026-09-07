@@ -336,7 +336,10 @@ const MISSING_RELATION_CODES = new Set(["42P01", "PGRST205"]);
 
 function isMissingRelation(error: any): boolean {
   if (!error) return false;
-  if (typeof error.code === "string" && MISSING_RELATION_CODES.has(error.code)) {
+  if (
+    typeof error.code === "string" &&
+    MISSING_RELATION_CODES.has(error.code)
+  ) {
     return true;
   }
   return (
