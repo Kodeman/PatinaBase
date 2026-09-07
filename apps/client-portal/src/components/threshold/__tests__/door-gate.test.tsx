@@ -846,6 +846,28 @@ describe('DoorGate — the composed agreement', () => {
     );
   });
 
+  it('stops the summary above it naming terms this paper does not carry', () => {
+    renderComposed(MONEY_PARTS);
+
+    const summary = screen.getByTestId('door-summary');
+    // The frozen sentence told her she was accepting role rates, a ceiling and
+    // a retainer. This agreement is per-phase: it has none of the first two,
+    // and the consent line below names the retainer it does have.
+    expect(summary).not.toHaveTextContent('signed role rates');
+    expect(summary).not.toHaveTextContent('design authorization ceiling');
+    expect(summary).toHaveTextContent(
+      'The agreement becomes effective only after the studio countersigns.',
+    );
+  });
+
+  it('leaves the summary untouched on an agreement with no parts', () => {
+    renderComposed([]);
+
+    expect(screen.getByTestId('door-summary')).toHaveTextContent(
+      'By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in',
+    );
+  });
+
   it('asks about the attachments it must, and only those', () => {
     renderComposed([...MONEY_PARTS, ...ATTACHMENT_PARTS]);
 

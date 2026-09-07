@@ -249,3 +249,40 @@ export function composeConsentLine(
     ...fragments,
   ])}, and understand my signature alone does not authorize work until the studio countersigns.`;
 }
+
+/**
+ * WHAT SIGNING DOES, FOR AN AGREEMENT COMPOSED FROM PARTS.
+ *
+ * `summaryLineFor`'s services sentence names the services, the signed role
+ * rates, the design authorization ceiling and the retainer, because before
+ * Wave 2 every design-services agreement carried exactly those four facets and
+ * the sentence was true of all of them. A COMPOSED agreement carries whatever
+ * parts the studio put in it: a flat-fee engagement has no role rates and no
+ * ceiling; a per-phase one has no retainer unless a retainer part was added.
+ * Printed unchanged over a composed agreement, that sentence tells the
+ * homeowner — on the signing surface, directly above the consent she ticks —
+ * that she accepts terms the paper she is signing does not contain.
+ *
+ * So a composed agreement keeps only the half of the sentence that is true of
+ * every agreement: the terms in the paper it names, and the countersignature
+ * that makes it effective. What money it carries is named beneath it, once, by
+ * `composeConsentLine` — which reads the same parts.
+ *
+ * An agreement with no parts — flag off, legacy, or pre-Wave-2 — returns
+ * `summaryLineFor` verbatim, so the deployed door is byte-identical to what it
+ * has always shown.
+ */
+export function composeSummaryLine(
+  kind: CommercialDocumentKind,
+  title: string,
+  parts: readonly ConsentPart[] | null | undefined,
+): string {
+  // Wave 2 composes for the two services kinds only; a furnishings
+  // authorization and a trade scope keep their own summary whatever parts a
+  // later wave hangs on them.
+  if (kind !== 'design_services' && kind !== 'service_addendum') {
+    return summaryLineFor(kind, title);
+  }
+  if (!parts || parts.length === 0) return summaryLineFor(kind, title);
+  return `By signing, you accept the terms in “${title}”. The agreement becomes effective only after the studio countersigns.`;
+}

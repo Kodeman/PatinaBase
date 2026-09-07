@@ -5,7 +5,11 @@ import { Loader2 } from 'lucide-react';
 import { useStudioIdentity } from '@patina/supabase';
 
 import { RecordSheet } from '@/components/record/record-sheet';
-import { KIND_LABEL, summaryLineFor } from '@/components/threshold/consent-copy';
+import {
+  KIND_LABEL,
+  composeSummaryLine,
+  type ConsentPart,
+} from '@/components/threshold/consent-copy';
 import { useClientCommercialDocument } from '@/hooks/use-commercial-client';
 import {
   checksumMark,
@@ -100,6 +104,15 @@ export default function ProposalRecordPage({
   const signedOn =
     parseSourceDate(signature.paperSignedOn) ?? parseSourceDate(signature.signedAt);
   const sent = parseSourceDate(paper.document.sentAt);
+  // Only presence matters to `composeSummaryLine` — it names no money — so
+  // this carries the shape and nothing more. Every part the bundle sends is
+  // one the studio left client-visible.
+  const summaryParts: ConsentPart[] = (paper.parts ?? []).map((part) => ({
+    kind: part.kind,
+    variant: part.variant,
+    clientVisible: true,
+    payload: part.payload,
+  }));
   const kindLabel = KIND_LABEL[paper.document.kind] ?? 'Paper';
 
   // What the signature let go, when the paper names it. A furnishings
@@ -129,7 +142,15 @@ export default function ProposalRecordPage({
       editionLine={`${kindLabel} · Edition ${paper.document.version}${
         sent ? ` · Issued ${LONG_DATE.format(sent)}` : ''
       }`}
-      question={summaryLineFor(paper.document.kind, paper.document.title)}
+      /* The same reduction the door makes, and for the same reason: a
+         composed agreement's four-facet summary named role rates, a ceiling
+         and a retainer this paper may never have carried. What she agreed to
+         is the line below, off her own signature. */
+      question={composeSummaryLine(
+        paper.document.kind,
+        paper.document.title,
+        summaryParts,
+      )}
       stampState={signature.signedOnPaper ? 'signed_on_paper' : 'signed'}
       stampDateLabel={signedOn ? DAY_MONTH.format(signedOn) : null}
       stampSubject={`${paper.document.title} · Edition ${paper.document.version}`}

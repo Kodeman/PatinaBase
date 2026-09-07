@@ -28,9 +28,9 @@ import { noteInBrief } from '@/lib/threshold/standing';
 import {
   KIND_LABEL,
   composeConsentLine,
+  composeSummaryLine,
   refusalSentence,
   signLabelFor,
-  summaryLineFor,
   type ConsentPart,
 } from './consent-copy';
 import { DoorActs } from './door-acts';
@@ -517,7 +517,12 @@ export function DoorGate({
               data-testid="door-summary"
               className="max-w-[56ch] text-[15px] leading-relaxed text-[var(--text-body)]"
             >
-              {summaryLineFor(kind, proposal.title)}
+              {/* A composed agreement drops the four-facet half of this
+                  sentence: it named role rates, a ceiling and a retainer that
+                  a flat-fee or per-phase agreement does not carry, and the
+                  consent line below names what this paper actually holds. An
+                  agreement with no parts reads exactly as it always has. */}
+              {composeSummaryLine(kind, proposal.title, consentParts)}
             </p>
 
             {note && (

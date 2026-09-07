@@ -9,6 +9,7 @@ import {
   REFUSAL_TOKENS,
   SIGNATURE_NOTICE,
   composeConsentLine,
+  composeSummaryLine,
   consentLineFor,
   refusalSentence,
   signLabelFor,
@@ -271,5 +272,75 @@ describe('composeConsentLine — the sentence she ticks', () => {
 
   it('composes for an addendum exactly as it composes for an agreement', () => {
     expect(composeConsentLine('service_addendum', NINE_STANDARD_PARTS)).toBe(NINE_STANDARD_LINE);
+  });
+});
+
+/* ── THE SUMMARY OVER THE CONSENT (Wave 2, P6) ───────────────────────────────
+   `summaryLineFor`'s services sentence names role rates, a ceiling and a
+   retainer, because every pre-Wave-2 design-services agreement carried them.
+   Composed, an agreement carries whatever parts it was given — so on a
+   flat-fee or per-phase paper the frozen sentence asserts terms the paper does
+   not contain, directly above the line she ticks. It reduces to the half that
+   is true of every agreement; an agreement with no parts is untouched.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const REDUCED_SUMMARY =
+  'By signing, you accept the terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.';
+
+describe('composeSummaryLine — what signing does', () => {
+  it('is byte-identical to today’s sentence for an agreement with no parts', () => {
+    expect(composeSummaryLine('design_services', 'Cedar Lane — Design Services', [])).toBe(
+      summaryLineFor('design_services', 'Cedar Lane — Design Services'),
+    );
+    expect(composeSummaryLine('design_services', 'Cedar Lane — Design Services', null)).toBe(
+      summaryLineFor('design_services', 'Cedar Lane — Design Services'),
+    );
+    expect(
+      composeSummaryLine('design_services', 'Cedar Lane — Design Services', undefined),
+    ).toBe(summaryLineFor('design_services', 'Cedar Lane — Design Services'));
+  });
+
+  it('stops naming terms a composed agreement does not carry', () => {
+    const line = composeSummaryLine('design_services', 'Cedar Lane — Design Services', [
+      schedule('flat', { cents: 800000 }),
+    ]);
+
+    expect(line).toBe(REDUCED_SUMMARY);
+    expect(line).not.toContain('signed role rates');
+    expect(line).not.toContain('design authorization ceiling');
+    expect(line).not.toContain('retainer');
+  });
+
+  it('reduces on any composed agreement, money parts or not', () => {
+    expect(
+      composeSummaryLine('design_services', 'Cedar Lane — Design Services', [
+        { kind: 'clause', variant: null, clientVisible: true, payload: { body: 'Services.' } },
+      ]),
+    ).toBe(REDUCED_SUMMARY);
+  });
+
+  it('keeps the countersignature sentence, which is true of every agreement', () => {
+    expect(
+      composeSummaryLine('design_services', 'Cedar Lane — Design Services', NINE_STANDARD_PARTS),
+    ).toContain('The agreement becomes effective only after the studio countersigns.');
+  });
+
+  it('reduces an addendum exactly as it reduces an agreement', () => {
+    expect(
+      composeSummaryLine('service_addendum', 'Cedar Lane — Design Services', [
+        schedule('flat', { cents: 800000 }),
+      ]),
+    ).toBe(REDUCED_SUMMARY);
+  });
+
+  it('leaves every other kind of paper its own summary', () => {
+    expect(
+      composeSummaryLine('furnishings_authorization', 'No. 7', [
+        schedule('flat', { cents: 800000 }),
+      ]),
+    ).toBe(summaryLineFor('furnishings_authorization', 'No. 7'));
+    expect(
+      composeSummaryLine('trade_scope', 'TS-2', [schedule('flat', { cents: 800000 })]),
+    ).toBe(summaryLineFor('trade_scope', 'TS-2'));
   });
 });
