@@ -65,6 +65,16 @@ export interface PartsRailProps {
   /** Wave 2 footer — `save-as-template-action.tsx`, which the composer mounts
    *  because only it knows the studio and the acting member's role (R3). */
   saveAsTemplate?: React.ReactNode;
+  /**
+   * Keeps ONE part in the studio's Library — the act the Library's own PARTS
+   * shelf promises ("Compose an agreement, and what you write there can be
+   * kept here") and that nothing in the room performed. The composer owns it
+   * because only it knows the studio (R32) and the acting member's role (R3);
+   * absent, the row menu offers Wave 1's four acts and nothing more.
+   */
+  onKeepInLibrary?: (part: AgreementPart) => void;
+  /** Part ids already kept this session, so the act is offered once. */
+  keptPartIds?: ReadonlySet<string>;
 }
 
 export function PartsRail({
@@ -81,6 +91,8 @@ export function PartsRail({
   onOpenLibrary,
   onOpenTemplatePicker,
   saveAsTemplate,
+  onKeepInLibrary,
+  keptPartIds,
 }: PartsRailProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -124,6 +136,8 @@ export function PartsRail({
                 onReorder={onReorder}
                 onRename={onRename}
                 onRemove={onRemove}
+                onKeepInLibrary={onKeepInLibrary}
+                kept={keptPartIds?.has(part.id) === true}
               />
             ))}
           </ul>
@@ -166,6 +180,8 @@ function PartRow({
   onReorder,
   onRename,
   onRemove,
+  onKeepInLibrary,
+  kept,
 }: {
   part: AgreementPart;
   index: number;
@@ -178,6 +194,8 @@ function PartRow({
   onReorder: (fromIndex: number, toIndex: number) => void;
   onRename: (id: string, title: string) => void;
   onRemove: (id: string) => void;
+  onKeepInLibrary?: (part: AgreementPart) => void;
+  kept: boolean;
 }) {
   const {
     attributes,
@@ -328,6 +346,14 @@ function PartRow({
                 >
                   Move down
                 </RowMenuItem>
+                {onKeepInLibrary && (
+                  <RowMenuItem
+                    disabled={kept}
+                    onClick={() => act(() => onKeepInLibrary(part))}
+                  >
+                    {kept ? "Kept in the Library" : "Keep in the Library"}
+                  </RowMenuItem>
+                )}
                 {/* R4: every part is removable, including a required one and
                     including Exclusions. Readiness is what refuses a send,
                     not the rail. */}

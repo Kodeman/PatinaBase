@@ -26,6 +26,7 @@ import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents"
 const mockMaterializeTemplate = jest.fn();
 const mockRefetch = jest.fn();
 const mockStudioContext = jest.fn();
+const mockSavePart = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -98,7 +99,10 @@ jest.mock("@/hooks/use-feature-flag", () => ({
 
 jest.mock("@patina/supabase", () => ({
   useSaveAgreementParts: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useMaterializeStandardParts: () => ({ mutate: jest.fn(), isPending: false }),
+  useMaterializeStandardParts: () => ({
+    mutateAsync: jest.fn().mockResolvedValue({ parts: [] }),
+    isPending: false,
+  }),
   useDiscardAgreementParts: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -148,6 +152,10 @@ jest.mock("@patina/supabase", () => ({
   }),
   useSaveAgreementAsTemplate: () => ({
     mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useSaveAgreementPart: () => ({
+    mutateAsync: mockSavePart,
     isPending: false,
   }),
   useAgreementPartEvents: () => ({ data: [], isLoading: false }),
@@ -238,6 +246,8 @@ beforeEach(() => {
   seq = 0;
   mockMaterializeTemplate.mockReset();
   mockRefetch.mockReset();
+  mockSavePart.mockReset();
+  mockSavePart.mockResolvedValue({ id: "studio-part-2" });
   // R32 — the room asks the database which studio this AGREEMENT sits in, and
   // whether this reader may edit that studio's Library.
   mockStudioContext.mockReturnValue({
@@ -428,5 +438,64 @@ describe("the Contract Room with the Library on", () => {
     expect(
       screen.queryByRole("button", { name: "Start from a template…" }),
     ).not.toBeInTheDocument();
+  });
+
+  // The Library's PARTS shelf has always said "Compose an agreement, and what
+  // you write there can be kept here" while nothing in the room could keep
+  // anything: `save_agreement_part`'s only caller in the portal was the
+  // Library card's own rename.
+  describe("keeping one part in the Library", () => {
+    const openRowMenu = (title: string) =>
+      fireEvent.click(
+        screen.getByRole("button", { name: `Part options for ${title}` }),
+      );
+
+    it("keeps the part the designer chose, with its own defaults", async () => {
+      renderRoom([
+        part({
+          partKey: "custom.house-rules",
+          position: 1,
+          title: "House rules",
+          required: true,
+          clientVisible: false,
+          payload: { body: "The studio's own." },
+        }),
+      ]);
+
+      openRowMenu("House rules");
+      fireEvent.click(
+        screen.getByRole("button", { name: "Keep in the Library" }),
+      );
+
+      await waitFor(() => expect(mockSavePart).toHaveBeenCalledTimes(1));
+      expect(mockSavePart).toHaveBeenCalledWith({
+        studioId: "studio-1",
+        kind: "clause",
+        variant: null,
+        title: "House rules",
+        payload: { body: "The studio's own." },
+        requiredDefault: true,
+        clientVisibleDefault: false,
+      });
+      await screen.findByText("House rules is in your Library.");
+
+      // Offered once: a second keep would mint a second Library entry for the
+      // same part, since `save_agreement_part` mints its own studio key.
+      openRowMenu("House rules");
+      expect(
+        screen.getByRole("button", { name: "Kept in the Library" }),
+      ).toBeDisabled();
+    });
+
+    it("offers the act to nobody but an owner or admin (R3)", () => {
+      mockStudioContext.mockReturnValue({
+        data: { studioId: "studio-1", canManage: false },
+      });
+      renderRoom();
+      openRowMenu("Services");
+      expect(
+        screen.queryByRole("button", { name: "Keep in the Library" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });
