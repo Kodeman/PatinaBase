@@ -26,6 +26,12 @@
 --   (10) The three seeded templates exist, patina.design_services carries the
 --        nine standard keys in PATINA_STANDARD_AGREEMENT_PARTS order, and
 --        patina.design_build does NOT exist (Wave 3).
+--   (11) A Template from the other studio is refused for a member of both.
+--   (12) R32 — the two-studio designer on her OWN paper reaches her own
+--        studio's Library, and files back into it. The auto-provision trigger
+--        is ON throughout: every designer here has a personal studio too.
+--   (13) R32 — the local seed's own two-studio designer, on her bound
+--        agreement, resolves the PROJECT's studio.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -77,10 +83,13 @@ INSERT INTO auth.users (
   ('a6000000-0000-4000-8000-000000000005', 'al-client@test.invalid', '', now(), now(), now(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
--- is_designer = true auto-provisions a personal studio (00295), which would
--- give the lead one more studio than this fixture states and make
--- save_agreement_as_template's two-membership resolution ambiguous.
-SET LOCAL session_replication_role = replica;
+-- R32 — THE AUTO-PROVISION TRIGGER RUNS. is_designer = true gives every
+-- designer here a personal design studio of her own (00295), which is the
+-- shape every real account has and the shape the first body of 00576 could not
+-- read: it counted studios and refused anything but one. The resolution is
+-- ordered now, not counted, so the fixture states the order it expects —
+-- every membership below is joined days ago, and the personal studio the
+-- trigger mints joins `now()`, so it never wins a tie by accident.
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
 VALUES
   ('a6000000-0000-4000-8000-000000000001', 'al-owner@test.invalid', 'Library Owner', true, now(), now()),
@@ -88,8 +97,8 @@ VALUES
   ('a6000000-0000-4000-8000-000000000003', 'al-member@test.invalid', 'Library Member', true, now(), now()),
   ('a6000000-0000-4000-8000-000000000004', 'al-outsider@test.invalid', 'Library Outsider', true, now(), now()),
   ('a6000000-0000-4000-8000-000000000005', 'al-client@test.invalid', 'Library Client', false, now(), now())
-ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name;
-SET LOCAL session_replication_role = origin;
+ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name,
+  is_designer = EXCLUDED.is_designer;
 
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
@@ -106,7 +115,7 @@ VALUES
   ('a6110000-0000-4000-8000-000000000003', 'a6000000-0000-4000-8000-000000000003',
    'a6100000-0000-4000-8000-000000000001', 'member', 'active', now() - interval '1 day'),
   ('a6110000-0000-4000-8000-000000000004', 'a6000000-0000-4000-8000-000000000004',
-   'a6100000-0000-4000-8000-000000000002', 'owner', 'active', now());
+   'a6100000-0000-4000-8000-000000000002', 'owner', 'active', now() - interval '3 days');
 
 INSERT INTO public.user_roles (user_id, role_id, granted_by)
 SELECT designer.id, role.id, designer.id
@@ -625,20 +634,25 @@ INSERT INTO auth.users (
   ('a6000000-0000-4000-8000-000000000006', 'al-both@test.invalid', '', now(), now(), now(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
-SET LOCAL session_replication_role = replica;
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
 VALUES ('a6000000-0000-4000-8000-000000000006', 'al-both@test.invalid',
         'Library Both', true, now(), now())
-ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name;
-SET LOCAL session_replication_role = origin;
+ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name,
+  is_designer = EXCLUDED.is_designer;
 
+-- 00484's owner-insert guard asks the ACTOR to already own the studio, so each
+-- studio's own owner adds her.
 SELECT pg_temp.assume_user('a6000000-0000-4000-8000-000000000001', 'service_role');
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
   ('a6110000-0000-4000-8000-000000000005', 'a6000000-0000-4000-8000-000000000006',
-   'a6100000-0000-4000-8000-000000000001', 'admin', 'active', now()),
+   'a6100000-0000-4000-8000-000000000001', 'owner', 'active', now() - interval '5 days');
+
+SELECT pg_temp.assume_user('a6000000-0000-4000-8000-000000000004', 'service_role');
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
   ('a6110000-0000-4000-8000-000000000006', 'a6000000-0000-4000-8000-000000000006',
-   'a6100000-0000-4000-8000-000000000002', 'admin', 'active', now());
+   'a6100000-0000-4000-8000-000000000002', 'owner', 'active', now() - interval '4 days');
 
 INSERT INTO public.agreement_templates (
   template_key, kind, studio_id, class, title, parts, created_by
@@ -699,14 +713,18 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- (12) THE TWO-STUDIO DESIGNER ON HER OWN PAPER. Case (11) sets her on an
---      agreement whose lead belongs to studio A alone, so the studio that
---      agreement sits in is never in doubt and the refusal there could fire
---      for the wrong reason. Here she is the lead herself, and both studios
---      answer for both people: the agreement's studio cannot be settled, and
---      R2 makes that a refusal rather than a guess — for studio B's Template
---      and, honestly, for studio A's too. A seeded Template is nobody's
---      Library and still composes.
+-- (12) THE TWO-STUDIO DESIGNER ON HER OWN PAPER — R32. Case (11) sets her on
+--      an agreement whose lead belongs to studio A alone, so the studio that
+--      paper sits in is never in doubt. Here she is the lead herself, an owner
+--      of BOTH studios and of the personal studio 00295 minted for her — the
+--      exact shape of the account the walk script designates, and the shape
+--      that made the first body of this file refuse her every studio Template,
+--      her own studio's included, because it counted rather than resolved.
+--
+--      The answer is ordered, not counted: her paper sits in the studio 00566
+--      would bind it to — owner first, then earliest joined — which is studio
+--      A. So studio A's Library opens, studio B's Template is refused as
+--      another studio's, and the mirror act files this agreement into A.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, status, source)
@@ -724,6 +742,8 @@ DECLARE
   v_studio_a_key text;
   v_landed integer;
   v_refused boolean;
+  v_context jsonb;
+  v_template public.agreement_templates%ROWTYPE;
 BEGIN
   SELECT template_key INTO v_studio_a_key FROM public.agreement_templates
   WHERE kind = 'studio' AND studio_id = 'a6100000-0000-4000-8000-000000000001'
@@ -732,6 +752,25 @@ BEGIN
 
   PERFORM pg_temp.assume_user('a6000000-0000-4000-8000-000000000006');
 
+  -- She belongs to three active design studios, and the answer is still one
+  -- studio rather than a refusal.
+  ASSERT (
+    SELECT count(*) FROM public.organizations AS studio
+    JOIN public.organization_members AS membership
+      ON membership.organization_id = studio.id
+     AND membership.user_id = 'a6000000-0000-4000-8000-000000000006'
+     AND membership.status = 'active'
+     AND membership.role <> 'guest'
+    WHERE studio.type = 'design_studio' AND studio.status = 'active'
+  ) >= 3, 'the fixture must leave her in more than one active design studio';
+
+  v_context := public.agreement_studio_context('a6300000-0000-4000-8000-000000000005');
+  ASSERT (v_context->>'studioId')::uuid = 'a6100000-0000-4000-8000-000000000001',
+    'her paper must sit in the studio she owns and joined first';
+  ASSERT (v_context->>'canManage')::boolean,
+    'an owner of that studio may edit its Library';
+
+  -- Studio B is a different studio, and the Template stays there.
   v_refused := false;
   BEGIN
     PERFORM public.materialize_agreement_template(
@@ -748,30 +787,72 @@ BEGIN
       AND title = 'Studio B scope'),
     'studio B''s words must not be on the agreement she leads';
 
-  -- Studio A's own Template is refused for the same reason: with both the
-  -- author and the lead in two studios there is no single studio this paper
-  -- sits in, and save_agreement_as_template already refuses the mirror act.
-  v_refused := false;
-  BEGIN
-    PERFORM public.materialize_agreement_template(
-      'a6300000-0000-4000-8000-000000000005', v_studio_a_key);
-  EXCEPTION WHEN insufficient_privilege THEN v_refused := true;
-  END;
-  ASSERT v_refused,
-    'an unsettled studio is a refusal, not a guess';
-
-  ASSERT NOT EXISTS (
+  -- R32's whole point: her own studio's Template composes.
+  v_landed := public.materialize_agreement_template(
+    'a6300000-0000-4000-8000-000000000005', v_studio_a_key);
+  ASSERT v_landed > 0, 'her own studio''s Template must compose onto her paper';
+  ASSERT EXISTS (
     SELECT 1 FROM public.proposal_agreement_parts
     WHERE proposal_id = 'a6300000-0000-4000-8000-000000000005'
-      AND source_template_key LIKE 'studio.%'),
-    'no studio Template may have landed on the unsettled agreement';
+      AND source_template_key = v_studio_a_key),
+    'the parts must be stamped with studio A''s template key';
 
   -- A seeded Template belongs to no Library, so it still composes.
   v_landed := public.materialize_agreement_template(
     'a6300000-0000-4000-8000-000000000005', 'patina.design_services');
   ASSERT v_landed > 0, 'a seeded template must still compose onto her agreement';
 
-  RAISE NOTICE 'PASS 12: R2 — the two-studio LEAD gets a refusal, not another studio''s paper';
+  -- And the mirror act files into the same studio the composition came from.
+  v_template := public.save_agreement_as_template(
+    'a6300000-0000-4000-8000-000000000005', 'Her own shelf');
+  ASSERT v_template.studio_id = 'a6100000-0000-4000-8000-000000000001',
+    'the Template must be filed in the studio the agreement sits in';
+
+  RAISE NOTICE 'PASS 12: R32 — the two-studio LEAD reaches her own studio''s Library, and only hers';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (13) THE WALK'S OWN DESIGNER, on the walk's own paper — R32. Everything
+--      above is a fixture; this is the local seed. `designer@patina.dev` owns
+--      TWO active design studios (the personal one 00295 minted for her, and
+--      Local Dev Studio), which is the account that could not use the Library
+--      at all under a count. Her seeded design-services agreement hangs on
+--      Cedar Lane Study, and a bound agreement sits in its PROJECT's studio —
+--      not in whichever of her studios sorts first, which here is the other
+--      one.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_context jsonb;
+  v_studios integer;
+BEGIN
+  ASSERT EXISTS (
+    SELECT 1 FROM public.proposals
+    WHERE id = 'b0000000-0000-0000-0000-00000000cb01'
+      AND designer_id = 'a0000000-0000-0000-0000-000000000004'),
+    'this case reads supabase/seed/the-client-page.sql — run it on a reset stack';
+
+  SELECT count(*) INTO v_studios
+  FROM public.organizations AS studio
+  JOIN public.organization_members AS membership
+    ON membership.organization_id = studio.id
+   AND membership.user_id = 'a0000000-0000-0000-0000-000000000004'
+   AND membership.status = 'active'
+   AND membership.role <> 'guest'
+  WHERE studio.type = 'design_studio' AND studio.status = 'active';
+  ASSERT v_studios > 1,
+    'the seeded designer must still belong to more than one active design studio';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_context := public.agreement_studio_context('b0000000-0000-0000-0000-00000000cb01');
+
+  ASSERT (v_context->>'studioId')::uuid = 'b0000000-0000-0000-0000-000000000001',
+    'a bound agreement sits in its project''s studio, not in the lead''s first';
+  ASSERT (v_context->>'canManage')::boolean,
+    'the owner of that studio may edit its Library';
+
+  RAISE NOTICE 'PASS 13: R32 — the seed''s two-studio designer resolves one studio, and it is her project''s';
 END $$;
 
 ROLLBACK;

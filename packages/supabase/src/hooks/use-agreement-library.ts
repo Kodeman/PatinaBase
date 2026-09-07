@@ -68,7 +68,45 @@ export interface StudioAgreementPartRow {
 export const agreementLibraryKeys = {
   templates: (studioId: string) => ['agreement-templates', studioId] as const,
   parts: (studioId: string) => ['studio-agreement-parts', studioId] as const,
+  studioContext: (proposalId: string) => ['agreement-studio-context', proposalId] as const,
 };
+
+/** What `agreement_studio_context` answers: the studio THIS agreement sits in,
+ *  and whether the reader may edit that studio's Library. */
+export interface AgreementStudioContext {
+  studioId: string | null;
+  canManage: boolean;
+}
+
+/**
+ * R32 — which Library this agreement opens.
+ *
+ * Never the actor's own organizations: a designer in two studios has two
+ * answers there and neither is about this paper. The database resolves it the
+ * way 00566 resolves the authority studio at countersign — the project's
+ * studio once the agreement is bound, else the lead designer's studios in
+ * 00563's order — and asserts the reader's own standing in the answer. A
+ * `studioId` of null means there is no studio this reader composes in, and the
+ * room offers no Library act.
+ */
+export function useAgreementStudioContext(proposalId: string | null | undefined) {
+  return useQuery({
+    queryKey: agreementLibraryKeys.studioContext(proposalId as string),
+    queryFn: async (): Promise<AgreementStudioContext> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('agreement_studio_context', {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+      const row = (data ?? {}) as { studioId?: string | null; canManage?: boolean };
+      return {
+        studioId: row.studioId ?? null,
+        canManage: row.canManage === true,
+      };
+    },
+    enabled: !!proposalId,
+  });
+}
 
 /** DB row → the camelCase domain shape in `@patina/types`. */
 export function mapAgreementTemplate(row: AgreementTemplateRow): AgreementTemplate {

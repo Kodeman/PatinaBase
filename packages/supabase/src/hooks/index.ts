@@ -594,6 +594,7 @@ export {
   mapAgreementTemplate,
   mapStudioAgreementPart,
   useAgreementTemplates,
+  useAgreementStudioContext,
   useStudioAgreementParts,
   useSaveAgreementPart,
   useSaveAgreementAsTemplate,
@@ -607,6 +608,7 @@ export type {
   AgreementTemplateRow,
   StudioAgreementPartRow,
   SaveAgreementPartInput,
+  AgreementStudioContext,
 } from "./use-agreement-library";
 
 export {

@@ -106,7 +106,7 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
-  useOrganizations: () => ({ data: [] }),
+  useAgreementStudioContext: () => ({ data: null }),
   useAgreementParts: () => ({ data: [], refetch: jest.fn() }),
   useAgreementTemplates: () => ({ data: [], isLoading: false }),
   useStudioAgreementParts: () => ({ data: [], isLoading: false }),

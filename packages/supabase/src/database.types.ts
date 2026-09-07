@@ -28612,6 +28612,10 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      _agreement_studio_id: {
+        Args: { p_actor: string; p_proposal_id: string }
+        Returns: string
+      }
       _apply_board_room_state_00444_impl: {
         Args: {
           p_board_id: string
@@ -30312,6 +30316,10 @@ export type Database = {
       aggregate_user_style_signals: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      agreement_studio_context: {
+        Args: { p_proposal_id: string }
+        Returns: Json
       }
       app_setting: { Args: { p_name: string }; Returns: string }
       apply_board_room_state: {

@@ -98,7 +98,7 @@ jest.mock("@patina/supabase", () => ({
   // composition after a Template is laid in, and to mount the Library sheets.
   // With `agreement-library` off (this suite's flag mock) none of them is
   // called, but the module still has to answer.
-  useOrganizations: () => ({ data: [] }),
+  useAgreementStudioContext: () => ({ data: null }),
   useAgreementParts: () => ({ data: [], refetch: jest.fn() }),
   useMaterializeAgreementTemplate: () => ({
     mutateAsync: jest.fn(),

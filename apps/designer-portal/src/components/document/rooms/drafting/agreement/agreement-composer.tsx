@@ -25,7 +25,7 @@ import {
   useDiscardAgreementParts,
   useMaterializeAgreementTemplate,
   useMaterializeStandardParts,
-  useOrganizations,
+  useAgreementStudioContext,
   useSaveAgreementParts,
 } from "@patina/supabase";
 import {
@@ -135,21 +135,17 @@ export function AgreementComposer({
     useFeatureFlag("agreement-library");
   const libraryOn = libraryFlag && !libraryLoading;
 
-  // R3 — owners and admins edit the Library; every active member composes
-  // from it. Resolved the way the nameplate and Account → Studio resolve it:
-  // prefer a design_studio membership, else the first org.
-  const { data: orgs } = useOrganizations();
-  const studio = useMemo(
-    () =>
-      (orgs ?? []).find((org) => org.type === "design_studio") ??
-      (orgs ?? [])[0] ??
-      null,
-    [orgs],
-  );
-  const studioId = studio?.id ?? null;
-  const canManage =
-    studio?.membership?.role === "owner" ||
-    studio?.membership?.role === "admin";
+  // R32 — WHICH LIBRARY THIS AGREEMENT OPENS. Not the actor's own
+  // organizations: `useOrganizations` returns them in no order at all, so for
+  // a designer who belongs to two design studios it hands back an arbitrary
+  // one, and an arbitrary studio's private parts are not this agreement's
+  // Library. The database resolves the studio the AGREEMENT sits in — the
+  // project's once it is bound, else the lead designer's in 00566's order —
+  // and answers with the reader's own standing in it, which is R3's half:
+  // owners and admins edit the Library, every active member composes from it.
+  const studioContext = useAgreementStudioContext(proposalId);
+  const studioId = studioContext.data?.studioId ?? null;
+  const canManage = studioContext.data?.canManage === true;
 
   // The re-read after a Template is laid in. `materialize_agreement_template`
   // replaces the part set on the server and answers with a count; the room

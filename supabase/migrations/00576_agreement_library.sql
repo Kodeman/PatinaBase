@@ -465,11 +465,153 @@ GRANT EXECUTE ON FUNCTION public.save_agreement_part(uuid, jsonb)
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PART 7 — save_agreement_as_template
 --
--- The whole composition, detached. The studio it lands in is resolved the way
--- 00408:315-341 resolves a board template's: the ONE active design_studio in
--- which both the caller and the agreement's lead designer are active non-guest
--- members. Zero or several is a refusal, not a guess.
+-- The whole composition, detached. The studio it lands in is the studio the
+-- AGREEMENT sits in (R32, _agreement_studio_id below) — 00408:315-341's
+-- argument-plus-EXISTS shape, with the argument resolved rather than passed.
 -- ═══════════════════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- R32 — THE STUDIO AN AGREEMENT SITS IN, resolved once, the way 00566 resolves
+-- the authority studio at countersign.
+--
+-- The first body of this file counted the studios the actor and the lead
+-- designer share and refused anything but exactly one. That arithmetic breaks
+-- on the ordinary designer: 00295 auto-provisions a personal design studio the
+-- moment `profiles.is_designer` flips true, so a designer who signed up alone
+-- and later joined a studio has two — and when she is herself the lead, both
+-- studios answer for both people, the count is two, and EVERY studio Template
+-- is refused, her own studio's included.
+--
+-- A count was never the question. 00566 asks it properly and this is the same
+-- question: the studio a bound agreement sits in is its PROJECT's studio, and
+-- an origin agreement — project_id NULL until countersign — sits in the
+-- LEAD's studio, taken in 00563's order (a studio already hosting a project
+-- for this designer-client pair first, then owner-first, earliest-joined,
+-- organization id last for a total order). The actor's own standing in that
+-- answer is then asserted with an EXISTS rather than folded into the search,
+-- exactly as 00566 asserts the countersigner's — the same shape
+-- save_board_as_template has carried since 00408.
+--
+-- NULL means "no studio this actor may act in", which every caller turns into
+-- its own refusal.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public._agreement_studio_id(
+  p_proposal_id uuid,
+  p_actor uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals%ROWTYPE;
+  v_studio_id uuid;
+BEGIN
+  IF p_actor IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT * INTO v_proposal FROM public.proposals WHERE id = p_proposal_id;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  IF v_proposal.project_id IS NOT NULL THEN
+    SELECT project.studio_id INTO v_studio_id
+    FROM public.projects AS project
+    WHERE project.id = v_proposal.project_id;
+  END IF;
+
+  IF v_studio_id IS NULL THEN
+    SELECT studio.id
+    INTO v_studio_id
+    FROM public.organizations AS studio
+    JOIN public.organization_members AS lead_membership
+      ON lead_membership.organization_id = studio.id
+     AND lead_membership.user_id = v_proposal.designer_id
+    WHERE studio.type = 'design_studio'
+      AND studio.status = 'active'
+      AND lead_membership.status = 'active'
+      AND lead_membership.role <> 'guest'
+    ORDER BY
+      EXISTS (
+        SELECT 1
+        FROM public.projects AS sibling
+        WHERE sibling.studio_id = studio.id
+          AND sibling.designer_id = v_proposal.designer_id
+          AND sibling.client_id = v_proposal.client_id
+      ) DESC,
+      (lead_membership.role = 'owner') DESC,
+      lead_membership.joined_at NULLS LAST,
+      lead_membership.created_at,
+      studio.id
+    LIMIT 1;
+  END IF;
+
+  IF v_studio_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.organization_members AS actor_membership
+    WHERE actor_membership.organization_id = v_studio_id
+      AND actor_membership.user_id = p_actor
+      AND actor_membership.status = 'active'
+      AND actor_membership.role <> 'guest'
+  ) THEN
+    RETURN NULL;
+  END IF;
+
+  RETURN v_studio_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public._agreement_studio_id(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- The same answer, for the room. The Contract Room has to ask which Library to
+-- open BEFORE the designer clicks anything, and the client bundle carries no
+-- studio id — so it asks here rather than guessing from the actor's own
+-- organizations, which for a two-studio designer is an arbitrary one of them
+-- and has nothing to do with the studio the agreement sits in.
+CREATE OR REPLACE FUNCTION public.agreement_studio_context(p_proposal_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals%ROWTYPE;
+  v_studio_id uuid;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'reading an agreement requires an authenticated member'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal FROM public.proposals WHERE id = p_proposal_id;
+  IF NOT FOUND OR NOT public.is_studio_comember(v_proposal.designer_id) THEN
+    RAISE EXCEPTION 'agreement % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  v_studio_id := public._agreement_studio_id(p_proposal_id, auth.uid());
+
+  RETURN jsonb_build_object(
+    'studioId', v_studio_id,
+    'canManage', v_studio_id IS NOT NULL
+                 AND public.is_org_admin_or_owner(v_studio_id, auth.uid())
+  );
+END;
+$$;
+REVOKE ALL ON FUNCTION public.agreement_studio_context(uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.agreement_studio_context(uuid)
+  TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.save_agreement_as_template(
   p_proposal_id uuid,
@@ -483,7 +625,6 @@ AS $$
 DECLARE
   v_proposal public.proposals%ROWTYPE;
   v_studio_id uuid;
-  v_studio_ids uuid[];
   v_parts jsonb;
   v_class text;
   v_template public.agreement_templates%ROWTYPE;
@@ -503,29 +644,12 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  -- array_agg, not min(): there is no min(uuid) aggregate in Postgres, and
-  -- the question here is "exactly one" rather than "the smallest".
-  SELECT array_agg(studio.id)
-  INTO v_studio_ids
-  FROM public.organizations AS studio
-  JOIN public.organization_members AS actor_membership
-    ON actor_membership.organization_id = studio.id
-   AND actor_membership.user_id = auth.uid()
-   AND actor_membership.status = 'active'
-   AND actor_membership.role <> 'guest'
-  JOIN public.organization_members AS lead_membership
-    ON lead_membership.organization_id = studio.id
-   AND lead_membership.user_id = v_proposal.designer_id
-   AND lead_membership.status = 'active'
-   AND lead_membership.role <> 'guest'
-  WHERE studio.type = 'design_studio'
-    AND studio.status = 'active';
-
-  IF COALESCE(array_length(v_studio_ids, 1), 0) <> 1 THEN
+  -- R32 — the studio the AGREEMENT sits in, not a count of the author's.
+  v_studio_id := public._agreement_studio_id(p_proposal_id, auth.uid());
+  IF v_studio_id IS NULL THEN
     RAISE EXCEPTION 'template studio is not an authorized design workspace'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
-  v_studio_id := v_studio_ids[1];
 
   IF NOT public.is_org_admin_or_owner(v_studio_id, auth.uid()) THEN
     RAISE EXCEPTION 'only a studio owner or admin may edit the Library'
@@ -598,12 +722,12 @@ AS $$
 DECLARE
   v_proposal public.proposals%ROWTYPE;
   v_template public.agreement_templates%ROWTYPE;
-  v_studio_ids uuid[];
   v_entry jsonb;
   v_library public.studio_agreement_parts%ROWTYPE;
   v_parts jsonb := '[]'::jsonb;
   v_key text;
   v_payload jsonb;
+  v_studio_id uuid;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'composing from a template requires an authenticated author'
@@ -649,37 +773,23 @@ BEGIN
   -- materialize studio B's private Template into studio A's paper, and the
   -- part rows would carry B's template key into A's Library forever.
   --
-  -- The studio is resolved EXACTLY the way save_agreement_as_template resolves
-  -- it, ambiguity included: the active, non-guest design studios in which both
-  -- the actor and the agreement's lead designer are members, and zero or
-  -- several is a refusal rather than a guess. Accepting "any one of them" is
-  -- what leaked — when the two-studio designer is herself the lead, both
-  -- studios answer for both people and studio B's paper passed. The mirror act
-  -- refuses on the same arithmetic: she cannot save this agreement AS a
-  -- Template either, so she cannot compose one into it.
+  -- R32 — the studio is resolved EXACTLY the way save_agreement_as_template
+  -- resolves it, through _agreement_studio_id: the project's studio once the
+  -- agreement is bound, else the lead designer's studios in 00563's order,
+  -- with the actor's own standing asserted afterwards. Counting the studios
+  -- the actor and the lead SHARE is what broke — a designer in two studios who
+  -- is herself the lead answers "two" for both people and was refused every
+  -- studio Template, her own included — and accepting any one of them is what
+  -- leaked studio B's private paper onto studio A's agreement before that.
   IF v_template.studio_id IS NOT NULL THEN
-    SELECT array_agg(studio.id)
-    INTO v_studio_ids
-    FROM public.organizations AS studio
-    JOIN public.organization_members AS actor_membership
-      ON actor_membership.organization_id = studio.id
-     AND actor_membership.user_id = auth.uid()
-     AND actor_membership.status = 'active'
-     AND actor_membership.role <> 'guest'
-    JOIN public.organization_members AS lead_membership
-      ON lead_membership.organization_id = studio.id
-     AND lead_membership.user_id = v_proposal.designer_id
-     AND lead_membership.status = 'active'
-     AND lead_membership.role <> 'guest'
-    WHERE studio.type = 'design_studio'
-      AND studio.status = 'active';
+    v_studio_id := public._agreement_studio_id(p_proposal_id, auth.uid());
 
-    IF COALESCE(array_length(v_studio_ids, 1), 0) <> 1 THEN
-      RAISE EXCEPTION 'this agreement does not sit in a single studio, so a studio Template cannot be composed into it'
+    IF v_studio_id IS NULL THEN
+      RAISE EXCEPTION 'this agreement does not sit in a studio you compose in, so a studio Template cannot be composed into it'
         USING ERRCODE = 'insufficient_privilege';
     END IF;
 
-    IF v_template.studio_id <> v_studio_ids[1] THEN
+    IF v_template.studio_id <> v_studio_id THEN
       RAISE EXCEPTION 'template belongs to another studio'
         USING ERRCODE = 'insufficient_privilege';
     END IF;

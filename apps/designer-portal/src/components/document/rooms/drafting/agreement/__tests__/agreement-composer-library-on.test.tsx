@@ -25,7 +25,7 @@ import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents"
 
 const mockMaterializeTemplate = jest.fn();
 const mockRefetch = jest.fn();
-const mockOrganizations = jest.fn();
+const mockStudioContext = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -103,7 +103,7 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
-  useOrganizations: () => mockOrganizations(),
+  useAgreementStudioContext: () => mockStudioContext(),
   useAgreementParts: () => ({ data: [], refetch: mockRefetch }),
   useMaterializeAgreementTemplate: () => ({
     mutateAsync: mockMaterializeTemplate,
@@ -238,14 +238,10 @@ beforeEach(() => {
   seq = 0;
   mockMaterializeTemplate.mockReset();
   mockRefetch.mockReset();
-  mockOrganizations.mockReturnValue({
-    data: [
-      {
-        id: "studio-1",
-        type: "design_studio",
-        membership: { role: "admin" },
-      },
-    ],
+  // R32 — the room asks the database which studio this AGREEMENT sits in, and
+  // whether this reader may edit that studio's Library.
+  mockStudioContext.mockReturnValue({
+    data: { studioId: "studio-1", canManage: true },
   });
 });
 
@@ -264,14 +260,8 @@ describe("the Contract Room with the Library on", () => {
   });
 
   it("withholds Save as template… from a plain member (R3)", () => {
-    mockOrganizations.mockReturnValue({
-      data: [
-        {
-          id: "studio-1",
-          type: "design_studio",
-          membership: { role: "member" },
-        },
-      ],
+    mockStudioContext.mockReturnValue({
+      data: { studioId: "studio-1", canManage: false },
     });
     renderRoom();
     expect(
