@@ -21,13 +21,25 @@ const getSupabase = () => createBrowserClient();
 // grant is withheld and a trigger refuses every other writer).
 //
 // THIS IS THE ONE IMPLEMENTATION. The designer portal carried an app-local
-// copy of these three hooks while this package and the composer were built in
-// parallel worktrees (its own comment says so). The mutation signatures below
-// are that copy's signatures — proposalId bound at construction, the whole
-// ordered `AgreementPart[]` in, the same query keys and mutation keys — so
-// adopting this module is an import swap. `onSaved` is where an app that keeps
-// its own document bundle refetches it; the hook awaits it before it
-// invalidates, so the room never paints a stale composition.
+// copy of these hooks while this package and the composer were built in
+// parallel worktrees (its own comment says so). Shipping both leaves two
+// bodies to drift, and the repo rule is that Supabase data comes from this
+// package — so the app-local copy is the one that goes.
+//
+// The swap is an import swap. Every signature here is that copy's signature:
+// proposalId bound at construction, the whole ordered `AgreementPart[]` in,
+// the same query keys and mutation keys. The one shape that had to be earned
+// rather than declared is the RESULT: the composer reads `next.parts` off
+// both mutations, and the app-local copy produced it by refetching its own
+// document bundle. So `upsert_agreement_parts` now returns the saved rows the
+// way `materialize_standard_parts` already did, and both mutations here
+// resolve to `{ ..., parts }` — no bundle, no second round trip, and the ids
+// are the ones the table actually holds (the RPC is DELETE-then-INSERT and
+// re-keys every part).
+//
+// `onSaved` is where an app that keeps its own document bundle refetches it;
+// the hook awaits it before it invalidates, so the room never paints a stale
+// composition.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** The snake_case row shape as `proposal_agreement_parts` stores it. */
@@ -118,6 +130,10 @@ export interface SaveAgreementPartsResult {
   commercialState: string;
   partCount: number;
   documentFingerprint: string;
+  /** The saved rows, in order, with the ids the table now holds. The RPC is
+   *  DELETE-then-INSERT, so every part comes back re-keyed — a room that kept
+   *  the array it sent would be holding ids that no longer exist. */
+  parts: AgreementPart[];
 }
 
 export interface MaterializeStandardPartsResult {
@@ -125,6 +141,13 @@ export interface MaterializeStandardPartsResult {
   materialized: boolean;
   partCount: number;
   parts: AgreementPart[];
+}
+
+export interface DiscardAgreementPartsResult {
+  proposalId: string;
+  discarded: number;
+  partCount: number;
+  documentFingerprint: string;
 }
 
 /**
@@ -174,8 +197,51 @@ export function useSaveAgreementParts(
         p_parts: toAgreementPartPayload(parts),
       });
       if (error) throw error;
+      const result = data as Omit<SaveAgreementPartsResult, 'parts'> & {
+        parts: AgreementPartRow[] | null;
+      };
       await onSaved?.(proposalId);
-      return data as SaveAgreementPartsResult;
+      return {
+        ...result,
+        parts: (result.parts ?? []).map(mapAgreementPart),
+      };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: agreementPartsKeys.list(proposalId) });
+      queryClient.invalidateQueries({ queryKey: commercialKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+    },
+  });
+}
+
+/**
+ * Leaves the parts behind. Removes every part of a draft agreement and
+ * touches nothing else: the terms row and the rate rows stay exactly as the
+ * last projection left them, which is the state the seven-facet room reads
+ * and edits, so the document returns to the paper it was on.
+ *
+ * This is the handle on the inside of the composing door. Seeding the nine
+ * standard parts is what makes `proposal_service_terms` a projection, and
+ * from that instant only the Contract Room can move the document — and
+ * `agreement-parts` is a per-person rollout, so without this a co-member the
+ * flag has not reached could never save that agreement again.
+ */
+export function useDiscardAgreementParts(
+  proposalId: string,
+  options: AgreementPartsMutationOptions = {}
+) {
+  const queryClient = useQueryClient();
+  const { onSaved } = options;
+  return useMutation({
+    mutationKey: ['discard-agreement-parts', proposalId],
+    mutationFn: async (): Promise<DiscardAgreementPartsResult> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('discard_agreement_parts', {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+      await onSaved?.(proposalId);
+      return data as DiscardAgreementPartsResult;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: agreementPartsKeys.list(proposalId) });

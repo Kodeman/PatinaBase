@@ -573,6 +573,7 @@ export {
   useAgreementParts,
   useSaveAgreementParts,
   useMaterializeStandardParts,
+  useDiscardAgreementParts,
 } from "./use-agreement-parts";
 export type {
   AgreementPartRow,
@@ -580,6 +581,7 @@ export type {
   AgreementPartsMutationOptions,
   SaveAgreementPartsResult,
   MaterializeStandardPartsResult,
+  DiscardAgreementPartsResult,
 } from "./use-agreement-parts";
 
 export type {
