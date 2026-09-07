@@ -432,7 +432,15 @@ BEGIN
       jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
         'title', 'Terms', 'required', true,
         'payload', jsonb_build_object(
-          'body', 'Billed at actual hours against the signed ceiling.'))
+          'body', 'Billed at actual hours against the signed ceiling.')),
+      -- The one REAL money part. Every other money-ish part above is prose
+      -- wearing a money key, and R22's floor asks a composition to name a fee
+      -- the homeowner can read before it may be saved at all. A flat fee has
+      -- no column in Wave 1, so it projects nothing and moves none of the
+      -- assertions below.
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+        'partKey', 'custom.the-fee', 'title', 'Flat fee',
+        'payload', jsonb_build_object('cents', 1800000))
     )
   );
 
@@ -457,7 +465,7 @@ BEGIN
   -- The prose parts ARE recorded; refusing to read them as money is not
   -- refusing to keep them.
   ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
-          WHERE proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 7,
+          WHERE proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 8,
     'every part is still stored on the document';
   -- The one part that DID keep its shape still projects.
   ASSERT (SELECT t.scope FROM public.proposal_service_terms t

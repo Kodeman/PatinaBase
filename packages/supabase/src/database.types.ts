@@ -28343,6 +28343,10 @@ export type Database = {
         Args: { p_field: string; p_noun: string; p_payload: Json }
         Returns: number
       }
+      _agreement_fee_unnamed: {
+        Args: { p_proposal_id: string }
+        Returns: boolean
+      }
       _agreement_floor_unmet: {
         Args: { p_proposal_id: string }
         Returns: boolean

@@ -43,6 +43,10 @@
 --        the room.
 --   (14) R3-5. A furnishings deposit nobody set is not seeded as a term of
 --        the agreement the homeowner signs.
+--   (15) R22. R4's OTHER half: an agreement that bills has to name a fee on
+--        the page the homeowner reads. Reviewer probes R3 (prose only) and Q5
+--        (a rate card and a ceiling both kept from the client) refuse at the
+--        save door, the send door and the paper door; a ceiling is not a fee.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -1538,10 +1542,15 @@ BEGIN
   ASSERT v_err = 'the retainer needs an amount in dollars and cents',
     format('R2: half a cent is not a retainer: %L', v_err);
 
-  -- And the legal shapes still save: a real number, and "not yet set".
+  -- And the legal shapes still save: a real number, and "not yet set". The
+  -- flat fee is here because R22's floor asks every saved composition to name
+  -- a fee; it is not what this case is about.
   PERFORM public.upsert_agreement_parts(
     'a5300000-0000-4000-8000-00000000000c',
     jsonb_build_array(
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+        'partKey', 'patina.flat', 'title', 'Flat fee',
+        'payload', jsonb_build_object('cents', 1800000)),
       jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
         'partKey', 'patina.ceiling', 'title', 'Ceiling',
         'payload', jsonb_build_object('cents', NULL)),
@@ -2220,6 +2229,165 @@ BEGIN
     format('R3-5: a percent the studio DID set still seeds, got %s', v_stored);
 
   RAISE NOTICE 'PASS 35: a furnishings deposit nobody set is not seeded as a term (R3-5)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (36) R22 — THE FEE HALF OF R4'S FLOOR.
+--
+-- R4 is "one typed money part for a class that bills; a ceiling part is
+-- required whenever a rate card is present". 00575 implemented the ceiling
+-- clause at every door and the fee clause nowhere, so the reviewer's two
+-- probes both went out:
+--
+--   R3 · a composition of two clause parts and NO money part at all
+--        → saved, and SENT.
+--   Q5 · a rate card AND a ceiling, both client_visible = false
+--        → saved, and SENT: the homeowner signed a page with no money on it
+--          while countersign snapshotted an hourly authority behind it.
+--
+-- Both are pinned here, at the save door and the send door, in the readiness
+-- panel's own sentence. A ceiling is a cap on a fee and not a fee, so it does
+-- not answer the question on its own; a flat fee does.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000016', 'The agreement that names no fee');
+
+DO $$
+DECLARE v_err text;
+BEGIN
+  -- R3 · prose only.
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a5300000-0000-4000-8000-000000000016',
+      jsonb_build_array(
+        jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+          'title', 'Services', 'required', true,
+          'payload', jsonb_build_object('body', 'Full-service interior design.')),
+        jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+          'title', 'Terms', 'required', true,
+          'payload', jsonb_build_object('body', 'Billed as agreed.'))));
+    ASSERT false, 'R3: a composition with no money part must not save';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.',
+    format('R22: the save door asks the fee floor in the room''s words: %L', v_err);
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000016') = 0,
+    'R22: the refused composition left nothing behind';
+
+  -- A ceiling is a cap on a fee, not a fee. Alone it answers nothing.
+  v_err := NULL;
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a5300000-0000-4000-8000-000000000016',
+      jsonb_build_array(
+        jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+          'title', 'Services', 'required', true,
+          'payload', jsonb_build_object('body', 'Full-service interior design.')),
+        jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+          'partKey', 'patina.ceiling', 'title', 'Ceiling',
+          'payload', jsonb_build_object('cents', 2400000))));
+    ASSERT false, 'R22: a lone ceiling must not satisfy the fee floor';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.',
+    format('R22: a ceiling is not a fee: %L', v_err);
+
+  -- Q5 · a rate card and a ceiling the studio kept to itself. The ceiling half
+  -- of the floor is satisfied (both parts exist, and both are hidden together),
+  -- so this is the fee half or nothing.
+  v_err := NULL;
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a5300000-0000-4000-8000-000000000016',
+      jsonb_build_array(
+        jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+          'title', 'Services', 'required', true,
+          'payload', jsonb_build_object('body', 'Full-service interior design.')),
+        jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+          'partKey', 'patina.role_rates', 'title', 'Role rates',
+          'clientVisible', false,
+          'payload', jsonb_build_object('roles', jsonb_build_array(
+            jsonb_build_object('roleName', 'Lead Designer', 'hourlyRateCents', 22500, 'sortOrder', 0)))),
+        jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+          'partKey', 'patina.ceiling', 'title', 'Ceiling',
+          'clientVisible', false,
+          'payload', jsonb_build_object('cents', 2400000))));
+    ASSERT false, 'Q5: money the homeowner never reads is not a fee she agreed to';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.',
+    format('R22: the client-visible scope is what the fee floor reads: %L', v_err);
+  ASSERT NOT public._agreement_floor_unmet('a5300000-0000-4000-8000-000000000016'),
+    'R22: the ceiling half is quiet here — this refusal is the fee half''s alone';
+
+  -- A flat fee answers it, and the agreement leaves draft.
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-000000000016',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+        'title', 'Services', 'required', true,
+        'payload', jsonb_build_object('body', 'Full-service interior design.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+        'partKey', 'patina.flat', 'title', 'Flat fee',
+        'payload', jsonb_build_object('cents', 1800000))));
+  ASSERT NOT public._agreement_fee_unnamed('a5300000-0000-4000-8000-000000000016'),
+    'R22: a flat fee names the fee';
+  PERFORM pg_temp.send_agreement('a5300000-0000-4000-8000-000000000016');
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = 'a5300000-0000-4000-8000-000000000016') = 'sent',
+    'R22: an agreement that names its fee still sends';
+END $$;
+
+-- And the send door asks it too, for a composition that reached draft naming a
+-- fee and then had that fee taken off the homeowner's page.
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000017', 'The agreement whose fee went quiet');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000018', 'The seven-facet agreement');
+
+DO $$
+DECLARE v_err text;
+BEGIN
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-000000000017', pg_temp.base_parts());
+
+  -- Hidden on the parts themselves, as the owner of the table — the only hand
+  -- left once R17(c) took the write set, standing in for a writer a later wave
+  -- may grant.
+  UPDATE public.proposal_agreement_parts SET client_visible = false
+  WHERE proposal_id = 'a5300000-0000-4000-8000-000000000017'
+    AND kind = 'schedule' AND variant IN ('rate_card', 'ceiling');
+
+  ASSERT public._agreement_fee_unnamed('a5300000-0000-4000-8000-000000000017'),
+    'R22: the predicate sees a page with no money on it';
+  BEGIN
+    PERFORM pg_temp.send_agreement('a5300000-0000-4000-8000-000000000017');
+    ASSERT false, 'R22: an agreement naming no fee must not send';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.',
+    format('R22: the send door asks the fee floor: %L', v_err);
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = 'a5300000-0000-4000-8000-000000000017') = 'draft',
+    'R22: the refused document stays a draft';
+
+  -- The paper door is the same issuance by another route.
+  v_err := NULL;
+  BEGIN
+    PERFORM public._issue_design_services_agreement_on_paper(
+      'a5300000-0000-4000-8000-000000000017');
+    ASSERT false, 'R22: the paper door refuses on the same ground';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.',
+    format('R22: the paper door asks the fee floor: %L', v_err);
+
+  -- And a document with NO parts is never asked: the flag-off contract is
+  -- exactly what it was.
+  ASSERT NOT public._agreement_fee_unnamed('a5300000-0000-4000-8000-000000000018'),
+    'R22: a parts-less document is not asked the fee question';
+
+  RAISE NOTICE 'PASS 36: R4''s fee floor stands at the save, send and paper doors (R22)';
 END $$;
 
 ROLLBACK;

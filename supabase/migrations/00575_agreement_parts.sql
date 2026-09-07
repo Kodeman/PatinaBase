@@ -149,6 +149,17 @@
 --         term of THIS agreement, and seeded here it printed "50% deposit" on
 --         the page the homeowner signs, three paragraphs above the sentence
 --         saying furnishings require a separate named authorization.
+--   (R22) R4's floor has TWO halves and the file implemented one. The ceiling
+--         half (_agreement_floor_unmet) is joined by the fee half
+--         (_agreement_fee_unnamed): a composed design_services /
+--         service_addendum document must carry at least one CLIENT-VISIBLE
+--         schedule part in the fee set — rate_card, flat, per_phase, each with
+--         a value actually set — before it may be saved, sent, signed or
+--         issued on paper. A ceiling is a cap on a fee, not a fee. Without it
+--         a composition of two clause parts, or one whose rate card and
+--         ceiling were both marked studio-only, saved and SENT and
+--         countersigned into an hourly authority behind a page naming no
+--         money at all. The refusal is the readiness panel's own sentence.
 --
 -- Every new SECURITY DEFINER here pins `search_path = public, pg_temp` — the
 -- posture of the surrounding commercial family (00412 / 00422 / 00423), and
@@ -395,6 +406,76 @@ $$;
 REVOKE ALL ON FUNCTION public._agreement_floor_unmet(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- R22 — the OTHER half of R4's floor: "one typed money part for a class that
+-- bills". _agreement_floor_unmet asks the ceiling question; this asks the fee
+-- question, and both are asked at the same four places.
+--
+-- TRUE means the floor is UNMET: this agreement is composed and names no fee
+-- on the page the homeowner reads.
+--
+-- The fee set is rate_card, flat and per_phase. A CEILING IS NOT A FEE — it is
+-- a cap on one — and neither is a retainer (money held against a fee) or a
+-- cadence (when invoices go out); an agreement carrying only those still never
+-- says what the work costs. That is exactly the room's own list
+-- (agreement/readiness.ts FEE_VARIANTS), so the panel and the database ask one
+-- question.
+--
+-- CLIENT-VISIBLE ONLY (R21/R3-3). A fee the studio kept to itself is not a fee
+-- the agreement names to the person signing it: the composed client body
+-- renders parts and never the terms row, so a rate card marked studio-only
+-- leaves her signing a page with no money on it while countersign snapshots an
+-- hourly authority behind it.
+--
+-- A document with NO parts is not asked — the seven-facet room's contract is
+-- unchanged, and every pre-00575 agreement passes here byte-identically.
+--
+-- "A set value" is scheduleValueIsSet's answer for each variant, read the way
+-- _agreement_floor_unmet reads figures: jsonb_typeof BEFORE any cast, so a
+-- malformed payload fails the test instead of raising in the middle of a send.
+CREATE OR REPLACE FUNCTION public._agreement_fee_unnamed(p_proposal_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT EXISTS (
+           SELECT 1 FROM public.proposal_agreement_parts ap
+           WHERE ap.proposal_id = p_proposal_id
+         )
+     AND NOT EXISTS (
+           SELECT 1
+           FROM public.proposal_agreement_parts ap
+           WHERE ap.proposal_id = p_proposal_id
+             AND ap.client_visible
+             AND ap.kind = 'schedule'
+             AND (
+               (ap.variant = 'rate_card' AND EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(
+                    CASE WHEN jsonb_typeof(ap.payload->'roles') = 'array'
+                         THEN ap.payload->'roles' ELSE '[]'::jsonb END
+                  ) AS e(role)
+                  WHERE btrim(COALESCE(e.role->>'roleName', '')) <> ''
+                    AND jsonb_typeof(e.role->'hourlyRateCents') = 'number'
+                    AND (e.role->>'hourlyRateCents')::numeric > 0
+                ))
+               OR (ap.variant = 'flat'
+                   AND jsonb_typeof(ap.payload->'cents') = 'number'
+                   AND (ap.payload->>'cents')::numeric > 0)
+               OR (ap.variant = 'per_phase' AND EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(
+                    CASE WHEN jsonb_typeof(ap.payload->'phases') = 'array'
+                         THEN ap.payload->'phases' ELSE '[]'::jsonb END
+                  ) AS e(phase)
+                  WHERE jsonb_typeof(e.phase->'cents') = 'number'
+                    AND (e.phase->>'cents')::numeric > 0
+                ))
+             )
+         );
+$$;
+REVOKE ALL ON FUNCTION public._agreement_fee_unnamed(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PART 3b — The fingerprint folds the parts in, conditionally (F-1)
 --
@@ -580,6 +661,12 @@ BEGIN
   IF v_proposal.document_kind IN ('design_services', 'service_addendum')
      AND public._agreement_floor_unmet(p_proposal_id) THEN
     RAISE EXCEPTION 'an agreement that bills time needs a ceiling'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- R22: and the fee half of the same floor, in the room's own sentence.
+  IF v_proposal.document_kind IN ('design_services', 'service_addendum')
+     AND public._agreement_fee_unnamed(p_proposal_id) THEN
+    RAISE EXCEPTION 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.'
       USING ERRCODE = 'check_violation';
   END IF;
   IF v_proposal.document_kind = 'furnishings_authorization' AND NOT EXISTS (
@@ -869,6 +956,11 @@ BEGIN
     RAISE EXCEPTION 'an agreement that bills time needs a ceiling'
       USING ERRCODE = 'check_violation';
   END IF;
+  -- R22: the fee half, asked wherever the ceiling half is asked.
+  IF public._agreement_fee_unnamed(p_proposal_id) THEN
+    RAISE EXCEPTION 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.'
+      USING ERRCODE = 'check_violation';
+  END IF;
 
   v_fingerprint := public._commercial_document_fingerprint(p_proposal_id);
   IF v_fingerprint IS NULL THEN
@@ -990,6 +1082,11 @@ BEGIN
   -- refuses on the same ground.
   IF public._agreement_floor_unmet(p_proposal_id) THEN
     RAISE EXCEPTION 'an agreement that bills time needs a ceiling'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- R22: and the fee half, on the same ground for the same reason.
+  IF public._agreement_fee_unnamed(p_proposal_id) THEN
+    RAISE EXCEPTION 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.'
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -2628,6 +2725,14 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- R22, the fee half of the same floor, asked here as at the three doors: an
+  -- agreement that bills has to name what it charges, on the page the
+  -- homeowner reads. Same sentence the readiness panel says first.
+  IF public._agreement_fee_unnamed(p_proposal_id) THEN
+    RAISE EXCEPTION 'This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   SELECT * INTO v_existing FROM public.proposal_service_terms
   WHERE proposal_id = p_proposal_id;
   v_version := COALESCE(v_existing.current_rate_version, 1);
@@ -3437,6 +3542,19 @@ COMMENT ON FUNCTION public._agreement_floor_unmet(uuid) IS
   '_issue_design_services_agreement_on_paper, so the floor is the same height '
   'at every door — and it reads the same shapes the readiness panel in the '
   'room reads, so panel and database cannot drift.';
+
+COMMENT ON FUNCTION public._agreement_fee_unnamed(uuid) IS
+  '00575 (R22): the other half of R4''s floor — TRUE when a COMPOSED agreement '
+  'names no fee on the page the homeowner reads. The fee set is rate_card, '
+  'flat and per_phase, each with a value actually set; a ceiling is a cap on a '
+  'fee and not a fee, a retainer is money held against one, and a cadence is '
+  'when invoices go out. Client-visible parts only (R21): the composed body '
+  'renders parts and never the terms row, so a rate card the studio kept to '
+  'itself leaves her signing a page with no money on it. A document with no '
+  'parts is not asked. Asked by upsert_agreement_parts, '
+  'send_commercial_document, _sign_design_services_agreement_authorized and '
+  '_issue_design_services_agreement_on_paper — the same doors '
+  '_agreement_floor_unmet is asked at — in the readiness panel''s own sentence.';
 
 COMMENT ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) IS
   '00575: the terms/rates projection, lifted verbatim out of '

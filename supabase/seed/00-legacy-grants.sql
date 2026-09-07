@@ -13282,6 +13282,12 @@ END $g$;
 
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_fee_unnamed(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._commercial_document_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
