@@ -68,3 +68,36 @@ below as it is run.
 - Reset 1 — after R31 (the restored arities, the per-function grants generator).
 - Reset 2 — after R32/R33/R34/R36 (00576 + 00577 edits and the new `the-client-page.sql` fixture).
 - Reset 3 — after R37 (the `patina.deposit` key/kind fix in 00576 and the keepsake renderer in 00577). This is the reset every gate below was measured on.
+
+---
+
+## 2026-09-07 — the RE-GATE reviewer takes the stack (re-gate 2 of Wave 2)
+
+The Wave 2 **re-gate reviewer** now holds the shared local stack at
+`postgresql://postgres:postgres@127.0.0.1:54322/postgres`, from the same worktree
+(`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-integration`, branch
+`agreement/w2-integration`, head `dc8ecf9a0`).
+
+**No migration and no seed file was changed by this reviewer.** `scripts/generate-legacy-grants.py`
+was run once, purely to test whether the committed `supabase/seed/00-legacy-grants.sql`
+is current (it is not — see finding W2RG-01 in `integration-regate-2.md`), and the
+regenerated file was immediately reverted with `git checkout --`. The working tree is clean.
+
+Every reset below is `supabase db reset --workdir <this worktree>`, replaying every migration
+through `00577` and all 36 seed files, clean, no errors:
+
+- Reset A — the baseline the ruling/object probes were measured on (`schema_migrations` head
+  `00577`; 24/24 function bodies in 00576/00577 matched `pg_proc`; the 00511 ACL manifest probe
+  and the eight-surviving-tuple probe were run here).
+- Reset B — before `scripts/run-sql-tests.sh`, so the order-sensitive `rls/project_notes_test.sql`
+  was measured on a first run. Result: 164 total, 143 green, 21 expected-fail, **0 unexpected**.
+- Reset C — before the full client Playwright run (`npx playwright test --workers=1`).
+- Reset D — before the targeted composed-agreement e2e re-run (the signing touchpoint mutates
+  the seeded fixture, so it needs a fresh stack to run twice).
+- Reset E — final, after all gates, so the stack is left clean at head `00577` for whoever
+  reads next. `select max(version) from supabase_migrations.schema_migrations` → `00577`.
+
+The client dev server this reviewer started on `:3002` (with
+`NEXT_PUBLIC_FLAG_OVERRIDES=agreement-parts:true,agreement-library:true`, the local anon key
+and the local service-role key from `supabase status -o env`) has been stopped; port 3002
+is free.
