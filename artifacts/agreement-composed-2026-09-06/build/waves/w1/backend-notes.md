@@ -700,3 +700,203 @@ Scratch DBs `patina_w1fix` and `patina_w1base` dropped at the end of the round.
 Shared stack never reset, never written, still `00574`. No `db push`, no
 `functions deploy`, no `wrangler`. Strata untouched. Nothing pushed.
 
+# Round 3 — the four findings after the R17–R21 rulings (2026-09-06)
+
+`R1` blocker, `R2` `R3` `R4` major. All four addressed. One sentence on what
+each of them actually was:
+
+## R1 · blocker — R17 was ruled and never built
+
+The ruling said three walls; the file had none of them, and the divergence it
+forbids ran end to end. A flag-off co-member could call
+`upsert_design_services_draft` on a composed draft and the whole ceremony
+completed: the page the client signed said ceiling 2,400,000 / biweekly /
+22500 an hour, and the authority the studio bills against said 500,000 /
+monthly / 9900. The fingerprint cannot catch it — it hashes both halves, so
+both halves moved together and the digest agreed with itself.
+
+All three walls are now in the migration, in a new **PART 5b**:
+
+- **(a) the trigger.** `guard_agreement_projection_write` fires
+  `BEFORE INSERT OR UPDATE OR DELETE` on `proposal_service_terms` and on
+  `proposal_service_rates` and refuses while the proposal has parts, unless
+  the transaction-local GUC `app.agreement_projection` names that proposal.
+  `upsert_agreement_parts` sets it for exactly the width of the
+  `_project_agreement_terms` call and restores it after — and again in the
+  `EXCEPTION` handler, beside the existing `app.commercial_document_id`
+  restore. It is `SECURITY DEFINER` on purpose: "does this document have
+  parts" has to be total, and asked as the caller an RLS-invisible part would
+  answer "no" exactly where the wall is needed. Trigger firing order is
+  alphabetical, and `guard_…_authored` < `guard_…_projection`, so a frozen
+  document still refuses in the freeze's own words.
+- **(b) the typed refusal.** `upsert_design_services_draft` raises
+  `'This agreement is composed from parts. Open it in the Contract Room with
+  parts on to change it.'` with `DETAIL = 'agreement_composed'`. Both halves
+  are load-bearing: the flag-off seven-facet room prints the MESSAGE as one
+  plain sentence beside a disabled Save (R17 gives that sentence verbatim),
+  and a caller that wants to branch reads the DETAIL token. The refusal
+  stands after the access and kind checks, so a stranger still learns nothing
+  but `access denied`. The trigger raises the identical pair, so the room
+  reads one sentence whichever wall stopped it.
+- **(c) the grant.** `REVOKE INSERT, UPDATE, DELETE ON proposal_service_terms,
+  proposal_service_rates FROM authenticated, anon` (00412:399-400 granted the
+  full write set when the seven-facet room was the only author). Nothing in
+  `apps/`, `packages/` or `supabase/functions/` writes either table — the
+  portal reads them (`use-commercial-documents.ts:302-307`) and the notify
+  function reads two columns (`commercial-document-notify/index.ts:363`); the
+  grep is in the migration comment. `anon`'s write set went with it: this
+  stack's pre-flip creation defaults granted it and no migration ever asked
+  for it. `SELECT` re-granted explicitly. ACL seed regenerated.
+
+Three test fixtures wrote those tables by hand as `authenticated` and had to
+move, because they were exercising a door that no longer exists:
+`agreement_parts_test.sql` cases 23 and 24 (the Q3 route began with a
+co-member clearing the ceiling — that step is now itself a refusal, asserted,
+and the state is stood up owner-side) and
+`public_sd_hardening_contract_test.sql`'s canonical addendum fixture (split so
+the terms edit happens with `RESET ROLE` between two `authenticated` blocks;
+the send it was setting up is still the authenticated act being tested).
+
+## R2 · major — money was typed on one side of the wall only
+
+`_agreement_floor_unmet` asks `jsonb_typeof(...) = 'number'` before it counts
+a figure. The projection cast with `->>` and asked nothing. So a rate card
+whose `hourlyRateCents` arrived as the STRING `"22500"` billed real hours
+against a ceiling the floor could not see and SENT (probe P17), and the mirror
+— a ceiling stated as `"2400000"` beside a numeric rate card — earned "an
+agreement that bills time needs a ceiling", a red for the wrong reason (P18).
+
+Taken the second way the finding offers: refuse at the door. Every money
+figure now passes `_agreement_assert_cents(payload, field, noun)` before
+anything is written — a whole, non-negative, in-range JSON number, asked with
+`jsonb_typeof` exactly as the floor asks it, `noun` being the designer's word
+for the figure. Absent or JSON null still returns NULL: R21's "Not yet set" is
+a legal state of a draft, and the R4 floor, not this function, decides whether
+it may leave one. Both probes are pinned as cases; P18 now earns its own
+sentence ("the ceiling needs an amount in dollars and cents") instead of the
+floor's.
+
+## R3 · major — six database identifiers were reaching the designer
+
+The composer prints the RPC's error text as its save note. A pre-write
+validation loop over `p_parts` now answers all of them in the designer's
+words, before any row lands — the six the review named plus two of the same
+class it did not: a rate card naming one role twice (which the rates table's
+unique index would have answered with its own name) and a retainer activation
+policy outside the two the money row can hold. `per_draw` is refused here in
+words a designer can act on: the contract's `CadencePayload` admits it and the
+`billing_cadence` CHECK does not widen until Wave 3.
+
+The test does not only pin the eight sentences — it also asserts that not one
+of them matches `(violates|constraint|column|relation|proposal_service|
+proposal_agreement|uniq_agreement)`, which is the assertion that survives a
+reworded refusal.
+
+## R4 · major — two implementations of the same three hooks
+
+The designer lane's own comment says why its copy exists: it "cannot touch
+`packages/**` while the backend lane is building the matching table and its
+package hook concurrently", and it froze the query keys so "the integration
+step is a one-line import swap".
+
+**Decision recorded for the integration steward: the `@patina/supabase` hooks
+are the survivor** (CLAUDE.md — `@patina/supabase` hooks for Supabase data;
+contract §3 names these two module paths). What this round did is remove the
+divergence that would have made that swap a rewrite:
+
+- `useSaveAgreementParts(proposalId, { onSaved })` and
+  `useMaterializeStandardParts(proposalId, { onSaved })` now bind the proposal
+  at construction and take the domain `AgreementPart[]`, exactly as the app's
+  copies do; `toAgreementPartPayload` is the same mapping the app's private
+  `toPartPayload` performs. Mutation keys (`save-agreement-parts` /
+  `materialize-standard-parts`) and the invalidated families
+  (`agreement-parts` / `commercial-documents` / `proposal`) now match too, and
+  `agreementPartsKey(id)` is exported as the app's spelling of the same key.
+- `onSaved` is awaited between the RPC and the invalidation, which is where an
+  app that keeps its own document bundle refetches and seeds it — the one
+  thing a package hook cannot do for it (the bundle fetcher is app-local).
+- `useStudioAgreementDefaults` now reads a FAILED lookup as the Patina
+  standard, not as a throw — the designer lane's reason, adopted: 00575 lands
+  on Strata on its own schedule and the Worker deploys on another, and the
+  Account page must render in the window between.
+
+**What integration still has to do**, and it is two mechanical edits, not a
+judgement: delete
+`apps/designer-portal/src/hooks/use-studio-agreement-defaults.ts` and the two
+part hooks in `use-commercial-documents.ts:561,584`, import from
+`@patina/supabase` instead, and pass the app's bundle refetch as `onSaved`.
+One shape difference remains and is deliberate: the package returns the
+camelCase `StudioAgreementDefaults` (`@patina/types` — camelCase domain types,
+never DB rows) where the app's copy returned the snake_case row. The card
+needs an ~8-line read-site rename, not a behaviour change. Do NOT ship both
+sets.
+
+## Gates — round 3
+
+Scratch DB `patina_w1` = `pg_dump --no-owner --exclude-schema=cron` of the
+shared stack (head `00575`, the steward has reset it since round 2) restored
+into a fresh database, then the migration applied over it. The `cron` schema
+is excluded because pg_dump 18's `\restrict` stream desyncs on the `cron.job`
+COPY and takes the rest of the file with it; four FK constraints
+(`engagement_events_user_id`, `invoice_links_created_by`,
+`invoice_links_invoice_id`, `organization_members_user_id`,
+`user_roles_user_id`) fail to validate on restore for want of seed rows. Both
+are restore artifacts and both are visible in the type diff below.
+
+```
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/00575_agreement_parts.sql
+  → exit 0, zero errors, over a database that already carried 00575
+    (every statement is CREATE OR REPLACE / IF NOT EXISTS / DROP+ADD)
+
+scripts/run-sql-tests.sh -k supabase/tests/KNOWN_FAILURES.md
+  commercial   12 total ·  6 green ·  6 expected-fail ·  0 unexpected
+  edge_api      8 total ·  3 green ·  3 expected-fail ·  2 unexpected
+  rls          21 total · 17 green ·  2 expected-fail ·  2 unexpected
+  document     14 total · 12 green ·  2 expected-fail ·  0 unexpected
+
+  The four unexpected are IDENTICAL on `patina_w1_base` — the same dump
+  restored WITHOUT this round's migration: edge_api/public_acl_residual_census
+  and catalog_roles_remote_conformance_negative (both `relation "cron.job"
+  does not exist`), rls/00563_proposal_signing_multi_studio and
+  rls/project_notes_test. Not this round's, and not this wave's.
+
+  Before this round's test edits, `public_sd_hardening_contract_test.sql` was
+  a THIRD unexpected failure under the new grants; after the fixture split it
+  is green (exit 0).
+
+per-file:
+  commercial/agreement_parts_test.sql             exit 0 · 19 PASS blocks
+                                                  (28 numbered cases, 25-28 new)
+  commercial/agreement_parts_projection_test.sql  exit 0 ·  5 PASS blocks
+  edge_api/public_sd_hardening_contract_test.sql  exit 0 ·  0 errors
+
+python3 scripts/generate-legacy-grants.py
+  → baseline + 2230 replayed statements; +36/-0
+  → the two projection-table REVOKE/GRANT pairs and the two new function REVOKEs
+
+supabase gen types typescript --db-url …/patina_w1
+  → one real delta, applied: `_agreement_assert_cents`'s Args/Returns block.
+    `guard_agreement_projection_write` returns `trigger` and is not generated.
+    The remaining 83 diff lines are the four FK Relationships blocks the
+    scratch restore could not build; the committed file keeps them, so the
+    generated file was NOT copied over wholesale.
+
+pnpm --filter @patina/types    type-check → clean (tsc --noEmit, no output)
+pnpm --filter @patina/supabase type-check → clean (tsc --noEmit, no output)
+pnpm --filter @patina/supabase test       → 87 files, 1062 passed | 12 skipped
+                                            (use-agreement-parts 16,
+                                             use-studio-agreement-defaults 10)
+```
+
+Scratch DBs `patina_w1` and `patina_w1_base` dropped at the end of the round.
+The shared stack was READ (one `pg_dump`) and never written, never reset. No
+`db push`, no `functions deploy`, no `wrangler`. Strata untouched. Nothing
+pushed.
+
+### Still owed to the integration steward
+
+- `pnpm supabase:reset` is the only run that proves the six commercial
+  expected-fails and the four scratch-artifact reds; unchanged from round 1.
+- The R4 import swap above, in the designer worktree.
+- Re-check the migration tip before merge; `00575` is still provisional.
+
