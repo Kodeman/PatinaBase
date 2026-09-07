@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo, useState } from 'react';
 
+import { useQueries } from '@tanstack/react-query';
+
 import { invoiceBalanceCents } from '@patina/shared';
 import type { Invoice } from '@patina/supabase';
 import { useClientInvoices, useStudioIdentity } from '@patina/supabase';
@@ -14,9 +16,13 @@ import {
   monthAndYear,
 } from '@/components/threshold/instruments/standing-sentence';
 import { useAuth } from '@/hooks/use-auth';
+import { clientCommercialDocumentQueryOptions } from '@/hooks/use-commercial-client';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
-import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
+import {
+  commercialSummaryFromProposal,
+  type CommercialDocumentBundle,
+} from '@/lib/commercial-documents';
 import { useNamedInvoice } from '@/lib/threshold/checkout-return';
 import {
   parseSourceDate,
@@ -90,8 +96,38 @@ interface SealedDoor {
 
 /** A signed origin agreement, and the studio whose name is on it. */
 interface KeptRecord {
-  entry: PreviouslyEntry;
+  proposalId: string;
+  label: string;
+  /** What the LIST row can date the record with, until the bundle answers. */
+  listedDate: Date | null;
   designerId: string | null;
+}
+
+/* ── THE DATE HER SIGNATURE PUT ON IT ────────────────────────────────────────
+   R30's round-2 amendment: the kept record is dated by the client's OWN
+   signature row — `commercial_document_signatures.signed_at`, party `client` —
+   and never by `proposals.signed_at`, which `_countersign_design_services_
+   agreement_impl` alone writes and which is therefore NULL through the whole
+   window this record exists for.
+
+   That row reaches the portal in one place: the bundle. `list_client_proposals`
+   projects no signature at all (checked against the live definition), so the
+   list can only offer `proposals.updated_at` — her signature's timestamp today,
+   but only because `update_proposals_updated_at` is an unqualified BEFORE
+   UPDATE trigger and no writer currently touches the row in between. That is a
+   coincidence the record should not be dated by. So the bundle is read here,
+   through the SAME query options the unfold uses (`useQueries`, exactly as
+   `threshold.tsx` reads its held instruments) — one cache entry per paper, so
+   the line and the reading it unfolds into cannot disagree, and unfolding pays
+   nothing.
+
+   The read never holds the page. A record is not an ask, the bundle is one RPC
+   behind the list, and a line that blanked its date until a second read landed
+   would be worse than the list's own answer — so `listedDate` stands until the
+   signature row arrives. ──────────────────────────────────────────────────── */
+function clientSignedAt(bundle: CommercialDocumentBundle | null | undefined): Date | null {
+  const signature = (bundle?.signatures ?? []).find((row) => row.party === 'client');
+  return parseSourceDate(signature?.signedAt);
 }
 
 function capitalize(text: string): string {
@@ -230,31 +266,32 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
         }
         return [
           {
-            entry: {
-              id: `instrument:${proposal.id}`,
-              kind: 'instrument',
-              label: `${KIND_LABEL.design_services ?? 'Document'} · ${proposal.title}`,
-              // `executedAt` is the COUNTERSIGNATURE's date, and a
-              // countersigned paper has already left this door — so on every
-              // record this door can draw it is null, and the line would be
-              // permanently undated. `list_client_proposals` projects
-              // `proposals.signed_at` into it, and
-              // `_countersign_design_services_agreement_impl` is the only
-              // writer of that column; through the whole window this record
-              // exists for it is NULL. What the client's own act does write is
-              // `updated_at = now()`, stamped by
-              // `_sign_design_services_agreement_authorized` when it records
-              // her name — so the record is dated by the signature that made
-              // it, which is the date it is a record of.
-              date: parseSourceDate(commercial.executedAt ?? proposal.updated_at),
-              state: 'signed',
-            },
+            proposalId: proposal.id,
+            label: `${KIND_LABEL.design_services ?? 'Document'} · ${proposal.title}`,
+            // `executedAt` is the COUNTERSIGNATURE's date, and a countersigned
+            // paper has already left this door — so on every record this door
+            // can draw it is null, and the line would be permanently undated.
+            // `updated_at` is what the client's own act wrote:
+            // `_sign_design_services_agreement_authorized` stamps it in the
+            // statement that moves the row to `client_signed`. It is what the
+            // LIST can say; `clientSignedAt` says what her signature said.
+            listedDate: parseSourceDate(commercial.executedAt ?? proposal.updated_at),
             designerId: proposal.designer_id ?? null,
           },
         ];
       }),
     [acceptedProposals],
   );
+  const keptBundles = useQueries({
+    queries: kept.map((record) => clientCommercialDocumentQueryOptions(record.proposalId)),
+  });
+  const keptEntries: PreviouslyEntry[] = kept.map((record, index) => ({
+    id: `instrument:${record.proposalId}`,
+    kind: 'instrument',
+    label: record.label,
+    date: clientSignedAt(keptBundles[index]?.data) ?? record.listedDate,
+    state: 'signed',
+  }));
 
   const [sealed, setSealed] = useState<SealedDoor[]>([]);
   // Sticky across the signature: signing empties `origins`, and a plate that
@@ -325,9 +362,21 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   // A signed agreement asks nothing of her, but it is still hers to find: the
   // door stands for the record as readily as for the ask.
   const anythingHere = anyoneWaiting || kept.length > 0;
+  /* THE PAPERS MAY NOT HOLD THE MONEY (R30 round-2 amendment: the studio
+     invoice "renders beside the origin agreement, never blank behind it").
+     The letters read first — a household with one standing is already
+     drawable, and holding it for a second read that cannot take the letter
+     away is a blank page over a money surface for as long as
+     `list_client_proposals` takes, which on a failure is three tries and
+     their backoff (`useClientSafeProposals` sets no retry, so it inherits the
+     app's `retry: 2`). The hold is only for the case it exists for: with no
+     letter standing, the page's whole answer is the papers', and rendering
+     "no projects yet" before they arrive is the one reversal this surface may
+     not perform. An agreement arriving BESIDE a letter adds a sentence; it
+     never contradicts one. */
   if (
     invoicesQuery.isPending ||
-    proposalsQuery.isPending ||
+    (standing.length === 0 && proposalsQuery.isPending) ||
     (anythingHere && plateAsked && identityQuery.isPending)
   ) {
     return (
@@ -338,22 +387,6 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   if (!anythingHere) return <ProjectsEmptyState />;
 
   const studioName = identityQuery.data?.name?.trim() || 'Your studio';
-  // Two standings, one voice. The agreement is named first because it is what
-  // the relationship turns on; the letters keep the sentence they had.
-  const standings = [
-    origins.length > 0
-      ? `${capitalize(countInWords(origins.length))} ${
-          origins.length === 1 ? 'agreement is' : 'agreements are'
-        } waiting for you.`
-      : null,
-    open.length > 0
-      ? `${capitalize(countInWords(open.length))} ${
-          open.length === 1 ? 'letter is' : 'letters are'
-        } waiting for you.`
-      : null,
-  ].filter((line): line is string => line !== null);
-  const waiting =
-    standings.length > 0 ? standings.join(' ') : 'Nothing is waiting for you.';
 
   // A sealed door's paper has already left `origins`; the door is still drawn
   // from it, so the lookup keeps it and a live paper always wins.
@@ -385,6 +418,33 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
     doors[0]?.mark.id ??
     null;
 
+  // Two standings, one voice. The agreement is named first because it is what
+  // the relationship turns on; the letters keep the sentence they had.
+  const standings = [
+    origins.length > 0
+      ? `${capitalize(countInWords(origins.length))} ${
+          origins.length === 1 ? 'agreement is' : 'agreements are'
+        } waiting for you.`
+      : null,
+    open.length > 0
+      ? `${capitalize(countInWords(open.length))} ${
+          open.length === 1 ? 'letter is' : 'letters are'
+        } waiting for you.`
+      : null,
+  ].filter((line): line is string => line !== null);
+  // A door she has just signed is still standing on the page, carrying her
+  // name and the studio's receipt for it — and "Nothing is waiting for you."
+  // printed directly over that reads as though the ceremony had not happened.
+  // Nothing IS waiting; the sentence simply has nothing to add above a door
+  // that already says so, so it steps aside until the door does. A page with
+  // no door at all (the record alone, on the next visit) keeps it.
+  const waiting =
+    standings.length > 0
+      ? standings.join(' ')
+      : doors.length > 0
+        ? null
+        : 'Nothing is waiting for you.';
+
   return (
     <div className="min-w-0" data-testid="letterbox-door">
       <Doorplate
@@ -393,9 +453,11 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
         monthLabel={today ? monthAndYear(today) : null}
       />
 
-      <p className="mt-6 max-w-[52ch] text-[17px] leading-[1.62] text-[var(--text-primary)]">
-        {waiting}
-      </p>
+      {waiting !== null && (
+        <p className="mt-6 max-w-[52ch] text-[17px] leading-[1.62] text-[var(--text-primary)]">
+          {waiting}
+        </p>
+      )}
 
       {doors.map((door) => (
         <OriginDoor
@@ -419,7 +481,7 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
       )}
 
       {/* Renders nothing until something has closed — the house's own rule. */}
-      <Previously entries={kept.map(({ entry }) => entry)} />
+      <Previously entries={keptEntries} />
 
       <EmptyStateActs />
     </div>

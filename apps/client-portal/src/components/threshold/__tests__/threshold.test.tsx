@@ -2359,6 +2359,18 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
       'has your signature',
     );
     expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
+    // R30-11. Nothing IS waiting — but the sentence may not be printed
+    // directly over a door that carries her signature and the studio's
+    // receipt for it; there it reads as though the ceremony had not happened.
+    // It steps aside while the sealed door stands.
+    expect(screen.queryByText('Nothing is waiting for you.')).not.toBeInTheDocument();
+    // R30-10, recorded rather than removed: on this one render the paper
+    // stands twice — the sealed door with its receipt, and the record it has
+    // just become. `threshold.tsx` keeps `sealedDoors` alongside the receipts
+    // it derives from `accepted` in exactly this way, so this is the house's
+    // own idiom and not a double render. The next visit settles to the line
+    // alone (the test below).
+    expect(screen.getByTestId('previously-line')).toBeInTheDocument();
   });
 
   // Countersigning creates the project, so `/` opens the house from that point
@@ -2397,6 +2409,31 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
       screen.getByText('One agreement is waiting for you. One letter is waiting for you.'),
     ).toBeInTheDocument();
     expect(theDoor()).not.toBeNull();
+    expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
+  });
+
+  /* R30 round-2 amendment: the studio invoice "renders beside the origin
+     agreement, never blank behind it". The papers are a SECOND read, and
+     holding an already-drawable letter for it puts a blank page over a money
+     surface for as long as `list_client_proposals` takes —
+     `useClientSafeProposals` sets no retry, so a failing read is three tries
+     and their backoff. An agreement arriving beside a letter only adds a
+     sentence; it can never take the letter away. */
+  it('draws the letter while the papers are still coming, never blank behind them', () => {
+    clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
+    proposalsMock.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isLoading: true,
+      isError: false,
+      refetch: jest.fn(),
+    });
+
+    renderDoor();
+
+    expect(screen.queryByTestId('letterbox-door-hold')).not.toBeInTheDocument();
+    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
+    expect(screen.getByText('One letter is waiting for you.')).toBeInTheDocument();
     expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
   });
 
@@ -2463,10 +2500,61 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     const line = screen.getByTestId('previously-line');
     expect(line).toHaveTextContent('Design services agreement · Design services agreement');
     expect(within(line).getByTestId('previously-state')).toHaveTextContent('SIGNED');
-    // Dated, not an em dash: the record says when she signed it.
+    // Dated, not an em dash: the record says when she signed it. The bundle
+    // fixture for this paper carries no signatures, so this is the LIST's own
+    // answer — the fallback the test below reaches past.
     expect(within(line).getByTestId('previously-date')).toHaveTextContent('6 September');
-    // It is a record, not an ask: nothing is waiting for her hand any more.
+    // It is a record, not an ask: nothing is waiting for her hand any more,
+    // and with no door on the page the sentence that says so is printed.
     expect(document.querySelector('[data-threshold-unit="door"]')).toBeNull();
+    expect(screen.getByText('Nothing is waiting for you.')).toBeInTheDocument();
+  });
+
+  /* R30 round-2 amendment: the kept record's date reads from the CLIENT'S OWN
+     signature row — `commercial_document_signatures.signed_at`, party
+     `client` — never from `proposals.signed_at`, which only
+     `_countersign_design_services_agreement_impl` writes. The list row cannot
+     carry that signature (`list_client_proposals` projects none), so the
+     bundle is read for it through the same query options the unfold uses.
+     Here the list's own `updated_at` is a DIFFERENT day from the signature, so
+     the assertion can only pass off the signature row: `update_proposals_
+     updated_at` is an unqualified BEFORE UPDATE trigger, and any future writer
+     of the row would silently re-date her signature if the line still read it. */
+  it('dates the kept record from her signature row, not the row’s last touch', () => {
+    proposalsMock.mockReturnValue(
+      settled([
+        {
+          ...ORIGIN_AGREEMENT,
+          commercial_state: 'client_signed',
+          status: 'accepted',
+          updated_at: '2026-09-11',
+        } as unknown as Proposal,
+      ]),
+    );
+    // What the bundle RPC actually returns in this window: one signature, the
+    // client's. The studio's does not exist yet — countersigning is what would
+    // write it, and it creates the project, which takes the paper off this
+    // door altogether.
+    bundles['prop-origin'] = {
+      document: { kind: 'design_services' },
+      signatures: [
+        {
+          party: 'client',
+          signerName: 'Harper Vale',
+          signedAt: '2026-09-06T16:02:04.054052+00:00',
+          consentVersion: 'v1',
+          documentFingerprint: 'f'.repeat(64),
+          signedOnPaper: false,
+          paperSignedOn: null,
+          paperScanDocumentId: null,
+        },
+      ],
+    };
+
+    renderDoor();
+
+    const line = screen.getByTestId('previously-line');
+    expect(within(line).getByTestId('previously-date')).toHaveTextContent('6 September');
   });
 
   /* Two studios reach one household — here, two origin agreements from two of

@@ -237,6 +237,13 @@ async function mintOriginAgreement(title: string): Promise<Household> {
 
 let sent: Household;
 let signed: Household;
+/** The day the CLIENT's own signature row carries, in the house's own idiom
+ *  ("6 September") — read back from `commercial_document_signatures` so the
+ *  kept line is checked against the row R30's amendment names, not against a
+ *  regex that any date would satisfy. */
+let signedDay: string;
+
+const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 test.beforeAll(async () => {
   test.skip(
@@ -273,6 +280,18 @@ test.beforeAll(async () => {
   expect(paper?.project_id).toBeNull();
   const { data: houses } = await admin.from('projects').select('id').eq('client_id', signed.id);
   expect(houses ?? []).toHaveLength(0);
+
+  // The date the record is a record of. `proposals.signed_at` is still NULL
+  // here (only the countersignature writes it), and the row's `updated_at` is
+  // a trigger's, not an act's — her signature's own timestamp lives here.
+  const { data: signature, error: signatureError } = await admin
+    .from('commercial_document_signatures')
+    .select('signed_at')
+    .eq('proposal_id', signed.agreementId)
+    .eq('party_role', 'client')
+    .single();
+  if (signatureError) throw new Error(`signature row: ${signatureError.message}`);
+  signedDay = DAY_MONTH.format(new Date(signature.signed_at as string));
 });
 
 test.describe('R30 — the household door with no house', () => {
@@ -323,13 +342,16 @@ test.describe('R30 — the household door with no house', () => {
     await expect(line).toBeVisible({ timeout: 20_000 });
     await expect(line).toContainText(`Design services agreement · ${SIGNED_TITLE}`);
     await expect(line.getByTestId('previously-state')).toHaveText('SIGNED');
-    /* And it is DATED. `proposals.signed_at` is written only by the
-       countersignature, so a line dated off that column alone reads as an em
-       dash for the whole window this record exists for — the state this test
-       is standing in right now. */
-    await expect(line.getByTestId('previously-date')).toHaveText(
-      /^\d{1,2} [A-Za-z]+$/,
-    );
+    /* And it is DATED, off HER SIGNATURE ROW. `proposals.signed_at` is written
+       only by the countersignature, so a line dated off that column alone
+       reads as an em dash for the whole window this record exists for — the
+       state this test is standing in right now. R30's round-2 amendment names
+       `commercial_document_signatures.signed_at`, party client, as the source;
+       this asserts the rendered day equals that row's, read back above.
+       (On this stack the row's `updated_at` is the same instant, so what this
+       pins is the VALUE; the unit suite pins the SOURCE, with the two days
+       deliberately different.) */
+    await expect(line.getByTestId('previously-date')).toHaveText(signedDay);
     await expect(page.getByTestId('empty-state')).toHaveCount(0);
     // A record, not a second ask: the paper is not still waiting for her hand.
     await expect(page.locator('[data-threshold-unit="door"]')).toHaveCount(0);

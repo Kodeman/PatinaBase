@@ -363,3 +363,168 @@ The e2e ran against a dev server started by hand on :3002 with
 carries no `.env.local`, so nothing could reach Strata. `plans-link.spec.ts` and
 `share-link.spec.ts` were not run. No migration was needed and none was minted;
 no production mutation of any kind was run.
+
+---
+
+## Round 3 — the amendment's other half, the date's real source, and the sentence over a sealed door
+
+Review round 3 returned one major, one minor and three nits. All five are
+addressed below; nothing from this round shipped unfixed.
+
+### Carried findings and their disposition
+
+| # | Sev | What | Disposition |
+|---|-----|------|-------------|
+| R30-1 | blocker | The door vanished the moment she signed | **Fixed**, round 1 (§8) |
+| R30-2 | blocker | One plate's studio name on every signature receipt | **Fixed**, round 1 (§8) |
+| R30-9 | major | The kept record was permanently undated | **Fixed**, round 2 |
+| R30-3 | major | The studio-invoice door held blank behind the new proposals read | **Fixed**, round 3 (below) |
+| R30-13 | minor | The kept record's date came from `proposals.updated_at`, a third source the ruling did not name | **Fixed**, round 3 (below) — now the client's own signature row |
+| R30-11 | nit | "Nothing is waiting for you." printed over a door carrying her fresh signature | **Fixed**, round 3 (below) |
+| R30-10 | nit | Immediately after signing the paper stands twice — sealed door and new record | **No change, by design** (below); now asserted so it cannot be mistaken for a regression |
+| R30-14 | nit | The ship note did not record what shipped unfixed | **Fixed** — this table |
+| R30-4 … R30-8, R30-12 | — | Raised in rounds 1–2 and answered there (§8, §Round 2) | Closed in their own sections |
+
+Two items the ruling itself carried OUT of this hotfix and INTO Wave 2 (client
+lane), and which are therefore correctly absent from this branch:
+
+- the "papers without a house" leaf on every house's door, so a project-less
+  paper is reachable from a household that already has a house;
+- a dedicated test for the `plateAsked` hold-gate.
+
+One item the ruling sent to the main backlog: the e2e harness leaves throwaway
+households behind on the local stack (recorded in §7).
+
+### R30-3 — the letter may not be held behind the papers
+
+`letterbox-door.tsx` held the whole page on `proposalsQuery.isPending`
+unconditionally, so a household with a standing studio invoice — a money
+surface that was already drawable off a settled `useClientInvoices` — got the
+blank `letterbox-door-hold` div until `list_client_proposals` answered.
+`useClientSafeProposals` (`packages/supabase/src/hooks/use-proposals.ts:402`)
+sets no `retry`, so it inherits `retry: 2` from `app/providers.tsx:26`: a slow
+or failing papers read blanked the letterbox across three attempts and their
+backoff. The R30 round-2 amendment is explicit — the studio-invoice door
+"renders beside the origin agreement, never blank behind it."
+
+The hold is now `standing.length === 0 && proposalsQuery.isPending`. It keeps
+the case it exists for: with no letter standing, the page's whole answer is the
+papers', and printing the empty state before they arrive is the reversal this
+surface may not perform. With a letter standing, an agreement can only ADD a
+sentence — it can never take the letter away — so there is nothing to reverse.
+
+Covered by `draws the letter while the papers are still coming, never blank
+behind them` (settled invoices + pending proposals: no hold, plate, letter
+sentence and `letterbox-regarding` all present), standing beside the existing
+`holds rather than saying nothing is waiting while the papers are coming` (no
+invoices + pending proposals: still holds). Proved it gates: with the guard
+reverted to the unconditional read the new test fails and the old one still
+passes.
+
+### R30-13 — the record is dated by her signature, not by the row's last touch
+
+The round-2 fix read `proposal.updated_at`, which is a third source the ruling
+did not name. It is correct today only by coincidence:
+`update_proposals_updated_at` is `BEFORE UPDATE ON public.proposals FOR EACH
+ROW` with **no column list**, so any future writer of the row silently re-dates
+her signature. (Round 3's reviewer walked every public function whose body
+updates `public.proposals` and found none reachable between `client_signed` and
+countersign — `_mark_proposal_viewed_impl` requires `status='sent'`,
+`nudge_proposal` and `expire_proposals` require `sent|viewed` — so the coupling
+was latent, not live. Latent is still the wrong source.)
+
+The ruling names `commercial_document_signatures.signed_at`, party `client`.
+That row does not reach the list: `list_client_proposals`, read live off
+`pg_get_functiondef` on the local stack, projects `sent_at`, `signed_at`,
+`created_at` and `updated_at` and no signature of any kind. It reaches the
+portal in exactly one place — `get_client_commercial_document_bundle`.
+
+So the door now reads that bundle for its kept records, through
+`clientCommercialDocumentQueryOptions` in a `useQueries` — the same options
+`InstrumentReading` uses on unfold and the same pattern `threshold.tsx` uses
+for its held trade instruments. One cache entry per paper: the line and the
+reading it unfolds into cannot disagree about the date, and unfolding pays
+nothing. The read never holds the page (a record is not an ask); the list's own
+answer stands as `listedDate` until the signature row arrives, and a bundle
+that errors or is refused leaves that answer in place.
+
+No migration: the ruling's condition for one was the bundle refusing
+project-less reads, and round 1 proved it does not (§"No migration").
+
+Two proofs, doing different work:
+
+- **Unit** — `dates the kept record from her signature row, not the row's last
+  touch` puts `updated_at: '2026-09-11'` on the list row and a client signature
+  at `2026-09-06T16:02:04Z` in the bundle, so only the signature row can
+  produce `6 September`. The fixture carries exactly one signature, the
+  client's, because that is what the RPC returns in this window — the studio's
+  does not exist yet, and writing it creates the project that takes the paper
+  off this door. Proved it gates: with the date reverted to `record.listedDate`
+  the test fails.
+- **E2E** — `origin-door.spec.ts` now reads `commercial_document_signatures`
+  (`party_role='client'`) back through the service client and asserts
+  `previously-date` equals that row's day, instead of a `/^\d{1,2} [A-Za-z]+$/`
+  regex any date would satisfy. On a real stack `updated_at` and `signed_at`
+  are the same instant, so this pins the VALUE, not the source. What pins the
+  source against real data: with `?? record.listedDate` deleted outright, so the
+  bundle is the ONLY thing that can date the line, the spec still passed —
+  `get_client_commercial_document_bundle` genuinely serves the client's
+  signature row for a `project_id NULL`, `client_signed` document.
+
+The existing round-2 test (bundle carrying no signatures → `6 September` off
+the list) now stands as the fallback's own coverage.
+
+### R30-11 — the sentence steps aside for a door that carries her name
+
+With only a sealed door on the page — the state right after she signs and the
+list refetches — the page printed "Nothing is waiting for you." directly above
+a door showing "… signed 7 September · <studio> has your signature." Literally
+true (`origins` and `open` are both empty), and no forbidden vocabulary, but it
+reads as though the ceremony had not happened.
+
+`doors` is now computed before the standing sentence, and the sentence is
+`null` — the paragraph is not rendered at all — when there are no standings and
+a door is on the page. Nothing else changes: a page with no door keeps the
+sentence (the record alone, on the next visit), and any page with a real
+standing keeps the sentence it had. Asserted in both directions, in the
+end-to-end signing test and in the next-visit test. Proved it gates: with the
+suppression removed the signing test fails.
+
+### R30-10 — the paper standing twice, recorded rather than removed
+
+On the one render right after signing, the same agreement is on the page twice:
+the sealed door with its receipt, and the `Previously` line it has just become.
+`threshold.tsx` keeps `sealedDoors` alongside the `instrumentReceipts` it
+derives from `accepted` in exactly the same way, so this is the house's own
+idiom and not a double render introduced here — and the receipt is the reason
+the sealed door is sticky at all (R30-1). The next visit settles to the line
+alone. No change; the signing test now asserts both are present, so a future
+reader meets it as a decision rather than as a regression against
+deliverable (4).
+
+### Gates (round 3, from the worktree)
+
+```
+pnpm --dir apps/client-portal type-check                          → clean (tsc --noEmit, no output)
+pnpm --dir apps/client-portal test:coverage                       → 129 suites / 2012 tests passed
+playwright --workers=1 tests/origin-door.spec.ts                  → 3 passed (24.6s)
+playwright --workers=1 tests/threshold.spec.ts                    → 14 passed (1.8m)
+```
+
+`threshold.spec.ts` is fully green this round — the `MULTI_OTHER_HOUSE_COUNT`
+drift rounds 1 and 2 recorded is gone, because the shared local stack has been
+reset since (`client@patina.dev` now holds exactly the seed's three houses,
+all created 2026-09-07 16:24Z, confirmed by SQL). Its first run in this round
+did report two reds — `names the other houses…` and `answers the retired
+routes…` — both inside `signIn`'s 60s `waitForURL` against a cold dev server
+compiling routes on demand; each passed alone and the whole file passed on the
+next run. Recorded as flakes, not as findings.
+
+The e2e ran against a dev server this lane started itself on :3002 with
+`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`, the CLI demo anon key, and
+`SUPABASE_SERVICE_ROLE_KEY` read out of the running `supabase_storage_supabase`
+container's env — the worktree carries no `.env.local`, so nothing could reach
+Strata. The local stack was used read-only apart from the rows the e2e mints
+for itself; it was never reset. No migration was needed and none was minted; no
+production mutation of any kind was run. `plans-link.spec.ts` and
+`share-link.spec.ts` were not run.
