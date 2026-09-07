@@ -244,7 +244,7 @@ describe("the Add-a-part picker", () => {
     expect(
       within(menu).getAllByText("creates authority · deposit only"),
     ).toHaveLength(1);
-    expect(within(menu).getAllByText("record only (R9)")).toHaveLength(8);
+    expect(within(menu).getAllByText("record only")).toHaveLength(8);
   });
 
   it("adds a blank clause under a custom key", () => {

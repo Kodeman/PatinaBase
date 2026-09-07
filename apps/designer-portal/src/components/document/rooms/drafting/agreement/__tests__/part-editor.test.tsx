@@ -83,7 +83,7 @@ describe("the part editor · the authority chip", () => {
   it("chips nothing on a clause, whatever the flag says", () => {
     renderEditor(part({ partKey: "patina.services", title: "Services" }), true);
     expect(screen.queryByText(/creates authority/)).not.toBeInTheDocument();
-    expect(screen.queryByText("record only (R9)")).not.toBeInTheDocument();
+    expect(screen.queryByText("record only")).not.toBeInTheDocument();
   });
 
   it("puts one sentence of help under a record-only editor, and only there", () => {
@@ -100,7 +100,7 @@ describe("the part editor · the authority chip", () => {
         libraryOn
       />,
     );
-    expect(screen.getByText("record only (R9)")).toBeInTheDocument();
+    expect(screen.getByText("record only")).toBeInTheDocument();
     expect(screen.getByText(RECORD_ONLY_HELP)).toBeInTheDocument();
     unmount();
 
@@ -177,7 +177,7 @@ describe("the part editor · the record-only variants", () => {
       expect(
         screen.getByText(/This part opens in a later release/),
       ).toBeInTheDocument();
-      expect(screen.getByText("record only (R9)")).toBeInTheDocument();
+      expect(screen.getByText("record only")).toBeInTheDocument();
       unmount();
     }
   });

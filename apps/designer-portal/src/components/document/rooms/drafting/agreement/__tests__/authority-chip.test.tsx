@@ -41,11 +41,11 @@ describe("the authority chip", () => {
     ).toBeInTheDocument();
   });
 
-  it("says `record only (R9)` for each of the eight", () => {
+  it("says `record only` for each of the eight", () => {
     expect(RECORD_ONLY).toHaveLength(8);
     for (const variant of RECORD_ONLY) {
       const { unmount } = render(<AuthorityChip variant={variant} />);
-      expect(screen.getByText("record only (R9)")).toBeInTheDocument();
+      expect(screen.getByText("record only")).toBeInTheDocument();
       unmount();
     }
   });

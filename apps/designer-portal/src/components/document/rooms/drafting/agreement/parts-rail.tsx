@@ -275,7 +275,7 @@ function PartRow({
               {/* Wave 1 chipped only what created authority in Wave 1 (DR5:
                   `flat` and `per_phase` did not, and their editors said so).
                   Wave 2 gives every schedule part its R9 standing, including
-                  `record only (R9)` — the chip and the editor still agree,
+                  `record only` — the chip and the editor still agree,
                   because in Wave 2 the fee schedules project. */}
               {libraryOn && part.kind === "schedule" ? (
                 <>

@@ -68,7 +68,7 @@ export function authorityStanding(
 export const AUTHORITY_STANDING_LABEL: Record<AuthorityStanding, string> = {
   authority: "creates authority",
   "deposit-only": "creates authority · deposit only",
-  "record-only": "record only (R9)",
+  "record-only": "record only",
 };
 
 /** The one line of help under a record-only editor. No tooltip, no info icon,
@@ -83,7 +83,7 @@ export const RECORD_ONLY_HELP =
  * switch, so neither list has to know about the other.
  *
  * `pricing_basis`, `draws` and `allowances` are Wave 3. They are in the
- * vocabulary, they chip `record only (R9)`, and they open in Wave 1's
+ * vocabulary, they chip `record only`, and they open in Wave 1's
  * read-only card until the wave that authors them lands.
  */
 const SCHEDULE_EDITORS: Partial<

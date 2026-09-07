@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * `creates authority` · `creates authority · deposit only` · `record only (R9)`
+ * `creates authority` · `creates authority · deposit only` · `record only`
  *
  * The micro-label a schedule part wears in the editor's header, on its row in
  * the rail, and on its card in the Library picker. It says one thing: whether

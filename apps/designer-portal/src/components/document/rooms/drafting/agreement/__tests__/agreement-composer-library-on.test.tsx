@@ -411,9 +411,7 @@ describe("the Contract Room with the Library on", () => {
         payload: { markupPercent: 18 },
       }),
     ]);
-    expect(
-      within(railRows()[0]).getByText("record only (R9)"),
-    ).toBeInTheDocument();
+    expect(within(railRows()[0]).getByText("record only")).toBeInTheDocument();
     // And the editor beneath says the same thing in a sentence.
     expect(
       screen.getByText(
