@@ -900,3 +900,224 @@ pushed.
 - The R4 import swap above, in the designer worktree.
 - Re-check the migration tip before merge; `00575` is still provisional.
 
+---
+
+# Round 4 — the client-visible floor, the way back out, one hook set
+
+Three majors, all addressed in this worktree. No blockers were raised.
+
+## M1 · The floor read every part; R21 binds it to the client's copy
+
+`_agreement_floor_unmet` asked its question once, over every part. That let
+probe **C1** through: a rate card marked `clientVisible: true` beside a
+ceiling marked `clientVisible: false`. The floor said met, the send went, and
+the composed client body renders parts and never the terms row — so the
+homeowner signed a page naming an hourly rate with no cap anywhere on it,
+while the studio's authority was capped at 2,400,000.
+
+The predicate now asks the question over **two scopes and refuses on either**:
+
+| scope | why it stays |
+|---|---|
+| client-visible parts | R21. A cap on no page she signs caps nothing. |
+| every part | R4. A rate card she never reads still projects role rates into `proposal_service_rates`, and countersign snapshots those into the billing authority — rates with no ceiling are uncapped time whatever the page says. |
+
+That is exactly `uncappedForTheClient || uncappedForTheDatabase`, the pair the
+designer lane's readiness panel already asks (`readiness.ts:255-277`), in the
+same order — so panel and database agree case for case and the room can never
+call a composition ready and then meet a refusal. The refusal **message is
+unchanged** (`an agreement that bills time needs a ceiling`), so nothing
+downstream that branches on it moves.
+
+Written as one `WITH bills_time / capped` pair using `bool_or(true)` and
+`bool_or(ap.client_visible)`; aggregates over zero rows are NULL, so both
+halves are `COALESCE(..., false)` and a parts-less document still answers
+`false` — flag-off is byte-identical.
+
+**Pinned as SQL, PASS 29** (`agreement_parts_test.sql`):
+
+- C1 at the save door → `an agreement that bills time needs a ceiling`, and
+  no parts written.
+- C1 rebuilt by hand → `_agreement_floor_unmet` true, `send_commercial_document`
+  refuses, document stays `draft`.
+- the same document with the cap made client-visible → floor clear, sends.
+- C2 (rate card `clientVisible: false`, no ceiling) → still refused, because
+  the all-parts bar is deliberately kept; adding a studio-only ceiling beside
+  it clears the floor. Not a false red: the room reds on it too.
+
+`_agreement_requires_rate_card` is untouched — a hidden rate card still owes
+role rates.
+
+## M2 · Two hook sets — the package set is now genuinely the survivor
+
+I cannot edit the designer worktree, so the swap itself is the orchestrator's.
+What round 3 called "an import swap" was **not one yet**, and this round fixed
+the reason:
+
+- the composer reads `next.parts` off **both** mutations
+  (`agreement-composer.tsx`, after `save.mutateAsync` and after
+  `materialize.mutate`);
+- the app-local `useSaveAgreementParts` produced that by refetching a whole
+  `CommercialDocumentBundle`;
+- the package's returned `SaveAgreementPartsResult` had **no `parts` field**.
+  Swapping the import as it stood would have broken the room.
+
+So `upsert_agreement_parts` now returns the saved rows in order —
+`'parts', jsonb_agg(to_jsonb(ap) ORDER BY ap.position, ap.id)` — the way
+`materialize_standard_parts` already did, and the package hook maps them
+through `mapAgreementPart`. The RPC is DELETE-then-INSERT, so those are the
+**re-keyed** ids the table actually holds, which is precisely what the
+composer's own comment says it needs. One round trip, no bundle refetch.
+
+**The swap is now mechanical**, and it is the repo rule (`@patina/supabase`
+hooks for Supabase data):
+
+| delete from `apps/designer-portal/src/hooks/` | import instead from `@patina/supabase` |
+|---|---|
+| `use-commercial-documents.ts:561` `useSaveAgreementParts` | `useSaveAgreementParts(proposalId, { onSaved })` |
+| `use-commercial-documents.ts:584` `useMaterializeStandardParts` | `useMaterializeStandardParts(proposalId, { onSaved })` |
+| `use-studio-agreement-defaults.ts:135` `useStudioAgreementDefaults` | `useStudioAgreementDefaults` |
+
+`onSaved` is where the composer keeps its `fetchCommercialDocumentBundle` call
+— the hook awaits it before invalidating, so the room never paints stale. Same
+query keys, same mutation keys, same `agreementPartsKey` spelling.
+
+Pinned: **PASS 31** (SQL — the save hands back the rows it wrote, ids equal to
+the table's, in the composition's order) and two new vitest cases (the mapped
+`parts`, and a null `parts` read as `[]`).
+
+## M3 · The composing door had no handle on the inside
+
+`materialize_standard_parts` fires from a mount effect with no user act, and
+from the first part R17's three walls stand: the seven-facet Save refuses
+`agreement_composed`, the projection trigger refuses, the grant is gone. Since
+`agreement-parts` is a **per-person** PostHog rollout, a co-member the flag had
+not reached could never save that agreement again, in any room, ever.
+
+Backend half delivered: **`discard_agreement_parts(uuid)`** — definer,
+`search_path = public, pg_temp`, `REVOKE ALL FROM PUBLIC, anon, service_role`
++ `GRANT EXECUTE TO authenticated`, draft-only (`proposals.status = 'draft'`),
+author-only (`_can_author_proposal`), kinds `legacy | design_services |
+service_addendum`. It deletes the parts and **touches nothing else**: the terms
+row and the rate rows stay exactly as the last projection left them, which is
+the state the seven-facet room reads and edits. Because the fingerprint's
+`parts` key is conditional (F-1), the document goes back to hashing what it
+hashed before the room was opened.
+
+Returns `{ proposalId, discarded, partCount: 0, documentFingerprint }`;
+`useDiscardAgreementParts` added to the package hooks with the family's
+signature and the same three invalidations.
+
+**Pinned as SQL, PASS 30**: open the room with no act → 9 parts; the flag-off
+door then refuses with R17(b)'s exact sentence; discard → 9 removed, terms row
+and rate rows **byte-identical** (`to_jsonb` equality), fingerprint back to the
+pre-open value, and `upsert_design_services_draft` authors again. Plus: an
+outsider gets `insufficient_privilege`, and a **sent** agreement's parts are
+not discardable (R6 — parts freeze at send).
+
+**This is half the fix, and the orchestrator owns the other half.** The DB is
+no longer a one-way door, but nothing calls the RPC yet. Two ways to finish,
+both cross-lane:
+
+1. **Wire the handle** (recommended, no new risk): the composer gets an action
+   that calls `useDiscardAgreementParts` while the document is draft — one
+   person with the flag can free a studio the flag has trapped. Vocabulary:
+   *leave the parts behind* / *return to the plain agreement*; never "discard
+   parts" as a database act, never "un-compose".
+2. **Defer the write** — make `materialize_standard_parts` compute and return
+   the nine parts without inserting them, so the first Save persists. I did
+   **not** do this, and the reason is a real divergence I checked: the composer
+   never re-queries after materialize, so nothing would break in the room —
+   but a designer who opens the room and sends **without saving** would send a
+   document the DB sees as parts-less, so the client's page would render the
+   legacy body while the room's preview showed parts. Same underlying figures,
+   two different renderings of them. If the orchestrator wants this route, the
+   send path has to refuse or auto-save first.
+
+## Gates — round 4
+
+Scratch DB `patina_w1r` = `pg_dump --no-owner --exclude-schema=cron` of the
+shared stack restored into a fresh database, then this file applied over it.
+⚠ The shared stack now reports head **`00575`** and the steward's applied body
+is an **earlier** version of this branch's file — the apply logged
+`trigger "guard_proposal_service_terms_projection" ... does not exist,
+skipping` and `function public._project_agreement_terms(uuid,jsonb,jsonb)
+does not exist, skipping`, i.e. it predates R17. So this round's "applies
+clean" is proven as an **idempotent re-apply over a partial prior body**, not
+over a bare 00574 baseline. `pnpm supabase:reset` at integration is still the
+only run that proves a from-scratch replay.
+
+```
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/00575_agreement_parts.sql
+  → exit 0, zero ERRORs, six NOTICEs (all "already exists / does not exist,
+    skipping" — every statement is CREATE OR REPLACE / IF NOT EXISTS / DROP+ADD)
+
+per-file, on patina_w1r:
+  commercial/agreement_parts_test.sql             exit 0 · 22 PASS blocks
+                                                  (31 numbered cases; 29-31 new)
+  commercial/agreement_parts_projection_test.sql  exit 0 ·  5 PASS blocks
+  edge_api/public_sd_hardening_contract_test.sql  exit 0 ·  0 errors
+    (no hash re-pin needed: the only pinned body this wave moved is
+     _countersign_design_services_agreement_impl, re-pinned in round 1 and
+     untouched this round. _agreement_floor_unmet, upsert_agreement_parts and
+     discard_agreement_parts are 00575's own and are not in the pin table.)
+
+scripts/run-sql-tests.sh -k supabase/tests/KNOWN_FAILURES.md
+  commercial   12 total ·  6 green ·  6 expected-fail ·  0 unexpected
+  edge_api      8 total ·  3 green ·  3 expected-fail ·  2 unexpected
+  rls          21 total · 17 green ·  2 expected-fail ·  2 unexpected
+  document     14 total · 12 green ·  2 expected-fail ·  0 unexpected
+
+  The four unexpected were re-run file-by-file against `patina_w1r_base` —
+  the same dump WITHOUT this round's migration — and fail with the IDENTICAL
+  error text and exit code 3 on both:
+    edge_api/catalog_roles_remote_conformance_negative  "division by zero"
+    edge_api/public_acl_residual_census                 "relation cron.job does not exist"
+    rls/00563_proposal_signing_multi_studio             "FIXTURE: … got 5"
+    rls/project_notes_test                              "the client saw 3 reading marks"
+  Scratch-restore artifacts, not this round's and not this wave's.
+
+ACL probe, straight out of pg_proc on the applied scratch DB:
+  discard_agreement_parts | secdef t | search_path=public, pg_temp
+                          | postgres=X/postgres | authenticated=X/postgres
+  _agreement_floor_unmet  | secdef t | search_path=public, pg_temp
+                          | postgres=X/postgres          (no caller ACL)
+
+python3 scripts/generate-legacy-grants.py
+  → baseline + 2232 replayed statements; +12/-0
+  → the discard_agreement_parts REVOKE/GRANT pair and its lineage lines
+
+supabase gen types typescript --db-url …/patina_w1r
+  → one real delta, applied by hand: the discard_agreement_parts Args/Returns
+    block. The other 88 diff lines are the four FK Relationships blocks the
+    scratch restore cannot build (engagement_events_user_id,
+    invoice_links_created_by/invoice_id, organization_members_user_id,
+    user_roles_user_id) — the committed file keeps them, so the generated file
+    was NOT copied over wholesale.
+
+pnpm --filter @patina/types    type-check → clean (tsc --noEmit, no output)
+pnpm --filter @patina/supabase type-check → clean (tsc --noEmit, no output)
+pnpm --filter @patina/supabase test       → 87 files, 1068 passed | 12 skipped
+                                            (was 1062; +6 — use-agreement-parts
+                                             16 → 22)
+```
+
+Scratch DBs `patina_w1r` and `patina_w1r_base` dropped at the end of the round.
+The shared stack was READ (one `pg_dump`) and never written, never reset. No
+`db push`, no `functions deploy`, no `wrangler`. Strata untouched. Nothing
+pushed. No `.env`, no `.claude/`, no hooks or settings touched.
+
+### Still owed to the integration steward — round 4
+
+- **M2's swap**, in the designer worktree: delete the three app-local hooks
+  and import the package's. The blocker that made it non-mechanical is gone.
+- **M3's other half**: wire `useDiscardAgreementParts` into the composer, or
+  take the deferred-materialize route with the send-path caveat above.
+- The designer lane's `readiness.ts:245-247` comment now reads stale — it says
+  `_agreement_floor_unmet` "reads EVERY part, visible or not". It reads both
+  scopes as of this round. One line, designer worktree.
+- `pnpm supabase:reset` is still the only run that proves the six commercial
+  expected-fails and the four scratch-artifact reds.
+- Re-check the migration tip before merge; `00575` is still provisional — and
+  the shared stack already carries an OLDER body under that number.
+
