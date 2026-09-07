@@ -25,7 +25,8 @@
 --   (9)  R6. A template composes only into a DRAFT.
 --   (10) The three seeded templates exist, patina.design_services carries the
 --        nine standard keys in PATINA_STANDARD_AGREEMENT_PARTS order, and
---        patina.design_build does NOT exist (Wave 3).
+--        patina.design_build is seeded from 00578 and carries the
+--        design_build class (Wave 3).
 --   (11) A Template from the other studio is refused for a member of both.
 --   (12) R32 — the two-studio designer on her OWN paper reaches her own
 --        studio's Library, and files back into it. The auto-provision trigger
@@ -197,13 +198,18 @@ DECLARE
 BEGIN
   SELECT array_agg(t.template_key ORDER BY t.template_key) INTO v_keys
   FROM public.agreement_templates t WHERE t.kind = 'seeded';
+  -- 00578 (Wave 3): patina.design_build joined the set. It is seeded and
+  -- selectable ONLY behind a live licensing attestation (R10), which
+  -- materialize_agreement_template asks about and the design-build suite
+  -- proves; being present in the Library is not being usable.
   ASSERT v_keys = ARRAY[
-    'patina.consultation', 'patina.design_services', 'patina.furnishings_services'
+    'patina.consultation', 'patina.design_build', 'patina.design_services',
+    'patina.furnishings_services'
   ], format('the seeded template set drifted: %s', v_keys);
 
-  ASSERT NOT EXISTS (
-    SELECT 1 FROM public.agreement_templates WHERE template_key = 'patina.design_build'
-  ), 'patina.design_build is Wave 3 and must not be seeded here';
+  ASSERT (SELECT class FROM public.agreement_templates
+          WHERE template_key = 'patina.design_build') = 'design_build',
+    'patina.design_build must carry the design_build class';
 
   SELECT array_agg(e.part->>'partKey' ORDER BY e.ord) INTO v_keys
   FROM public.agreement_templates t
@@ -223,7 +229,7 @@ BEGIN
                                       e.part->'payload'->'cents')) = 'null') = 2,
     'R28: no money the designer did not type is seeded into the standard template';
 
-  RAISE NOTICE 'PASS 10: three seeded templates, nine standard keys in order, no design_build, no invented money';
+  RAISE NOTICE 'PASS 10: four seeded templates, nine standard keys in order, design_build classed, no invented money';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -393,9 +399,12 @@ BEGIN
 
   PERFORM pg_temp.assume_role('a6000000-0000-4000-8000-000000000003');
 
+  -- 00578 seeded a fourth: patina.design_build. Every seeded row is readable
+  -- by every active member (R3); whether it can be COMPOSED is the attestation
+  -- gate's question, asked in materialize_agreement_template, not RLS's.
   SELECT count(*) INTO v_seen FROM public.agreement_templates;
-  ASSERT v_seen = 4,
-    format('a plain member reads three seeded templates and their studio''s one, got %s', v_seen);
+  ASSERT v_seen = 5,
+    format('a plain member reads four seeded templates and their studio''s one, got %s', v_seen);
   SELECT count(*) INTO v_seen FROM public.studio_agreement_parts;
   ASSERT v_seen = 2,
     format('a plain member reads their studio''s Library parts, got %s', v_seen);
