@@ -21,6 +21,7 @@
 import type { AgreementPart } from "@patina/types";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import {
+  duplicateMoneyVariants,
   readBody,
   readCents,
   readItems,
@@ -104,6 +105,17 @@ export function assessAgreementReadiness({
     seenKeys.add(part.partKey);
   }
 
+  // R18 — one part per money variant. A second ceiling keyed `custom.<uuid>`
+  // slips past the key check above but not past the RPC, which raises
+  // `an agreement carries only one ceiling` (check_violation) at Save. The
+  // Add menu no longer offers the duplicate; this is what catches one that
+  // arrives any other way, in the RPC's own words.
+  for (const duplicate of duplicateMoneyVariants(parts)) {
+    for (const partId of duplicate.partIds.slice(1)) {
+      add(partId, `An agreement carries only one ${duplicate.label}.`);
+    }
+  }
+
   for (const part of parts) {
     const payload = part.payload ?? {};
 
@@ -169,6 +181,20 @@ export function assessAgreementReadiness({
       }
     }
 
+    // R21 — a money part with no figure in it. A blank Flat fee or Fee by
+    // phase opens with NO amount (part-kinds' `blankPayload`), so the client
+    // copy prints nothing rather than "$0"; this is the sentence that says
+    // the studio still has to write one. Zero is writable and means zero —
+    // it is an unwritten amount, not a zero one, that holds the send.
+    if (
+      part.kind === "schedule" &&
+      !part.required && // a required one already said "Complete {title}." above
+      (part.variant === "flat" || part.variant === "per_phase") &&
+      !scheduleValueIsSet(part)
+    ) {
+      add(part.id, `Set the amount for ${part.title.trim() || "this part"}.`);
+    }
+
     // R-10 keeps the soft behavior the seven-facet room has today: an unset
     // deposit is a decision the studio has not made, and the release RPC
     // falls back to 50% on its own. Only an out-of-bounds value blocks.
@@ -187,9 +213,17 @@ export function assessAgreementReadiness({
     }
   }
 
+  // R21/R3-3 — the R4 floor reads only the parts the homeowner reads. A fee
+  // the studio kept to itself (`client_visible = false`) is a fee the
+  // agreement does not name to the person signing it, so it cannot be what
+  // satisfies "one typed money part for a class that bills"; and a rate card
+  // the client never sees still bills her time, so it still needs a ceiling
+  // she can see.
+  const clientFacing = parts.filter((part) => part.clientVisible !== false);
+
   // R-5 — the class floor. An agreement that bills has to name a fee
   // somewhere typed; prose never carries money (R5).
-  const namesAFee = parts.some(
+  const namesAFee = clientFacing.some(
     (part) =>
       part.kind === "schedule" &&
       part.variant !== null &&
@@ -204,29 +238,42 @@ export function assessAgreementReadiness({
   }
 
   // R-6 — the ceiling is required exactly when a rate card is present and
-  // real. This is the DB floor too (00575's `upsert_agreement_parts` raises
-  // `an agreement that bills time needs a ceiling`), so the two cannot drift.
-  const billsTime = parts.some(
-    (part) =>
-      part.kind === "schedule" &&
-      part.variant === "rate_card" &&
-      readRoles(part.payload ?? {}).some(
-        (role) => role.roleName.trim().length > 0 && role.hourlyRateCents > 0,
-      ),
-  );
-  if (billsTime) {
+  // real. Asked twice, because two different floors are in play and the room
+  // must hold on either one:
+  //
+  //   · R21's — the homeowner's copy. A rate card she reads needs a ceiling
+  //     she reads, or she has signed uncapped time.
+  //   · the database's — `_agreement_floor_unmet` (00575) reads EVERY part,
+  //     visible or not, and refuses the send. A room that answered only the
+  //     first question would call a hidden rate card ready and then watch the
+  //     send fail with `an agreement that bills time needs a ceiling`.
+  const billsTime = (scope: AgreementPart[]) =>
+    scope.some(
+      (part) =>
+        part.kind === "schedule" &&
+        part.variant === "rate_card" &&
+        readRoles(part.payload ?? {}).some(
+          (role) => role.roleName.trim().length > 0 && role.hourlyRateCents > 0,
+        ),
+    );
+  const cappedBy = (scope: AgreementPart[]) =>
+    scope.find((part) => {
+      if (part.kind !== "schedule" || part.variant !== "ceiling") return false;
+      const cents = readCents((part.payload ?? {}).cents);
+      return cents !== null && cents > 0;
+    }) ?? null;
+
+  const uncappedForTheClient =
+    billsTime(clientFacing) && !cappedBy(clientFacing);
+  const uncappedForTheDatabase = billsTime(parts) && !cappedBy(parts);
+  if (uncappedForTheClient || uncappedForTheDatabase) {
     const ceilingPart = parts.find(
       (part) => part.kind === "schedule" && part.variant === "ceiling",
     );
-    const ceilingCents = ceilingPart
-      ? readCents((ceilingPart.payload ?? {}).cents)
-      : null;
-    if (ceilingCents === null || ceilingCents <= 0) {
-      add(
-        ceilingPart?.id ?? null,
-        "An agreement that bills hourly needs a ceiling. Add a Ceiling part, or remove the role rates.",
-      );
-    }
+    add(
+      ceilingPart?.id ?? null,
+      "An agreement that bills hourly needs a ceiling. Add a Ceiling part, or remove the role rates.",
+    );
   }
 
   // R-3 — last, as it is today.

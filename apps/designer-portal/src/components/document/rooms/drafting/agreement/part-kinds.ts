@@ -106,8 +106,13 @@ export function blankPayload(
     case "ceiling":
       return { cents: null };
     case "retainer":
+      // R21 — a figure nobody typed is not a figure. A blank money part opens
+      // with NO amount, so the client copy prints nothing rather than "$0"
+      // and readiness holds the send until the studio writes one. A retainer
+      // of zero is still writable, and still means zero — it just has to be
+      // written (R-8's "including zero when none is due").
       return {
-        cents: 0,
+        cents: null,
         creditRule: "credited",
         activationPolicy: "immediate",
       };
@@ -116,7 +121,7 @@ export function blankPayload(
     case "procurement":
       return { depositPercent: null };
     case "flat":
-      return { cents: 0 };
+      return { cents: null };
     case "per_phase":
       return { phases: [] };
     default:
@@ -124,13 +129,15 @@ export function blankPayload(
   }
 }
 
-/** The menu the rail's `+ Add a part` opens. W1 offers blank kinds only — the
- *  Library picker is Wave 2. */
-export const ADD_PART_OPTIONS: {
+export interface AddPartOption {
   kind: AgreementPartKind;
   variant: AgreementScheduleVariant | null;
   label: string;
-}[] = [
+}
+
+/** The menu the rail's `+ Add a part` opens. W1 offers blank kinds only — the
+ *  Library picker is Wave 2. */
+export const ADD_PART_OPTIONS: AddPartOption[] = [
   { kind: "clause", variant: null, label: "Clause" },
   { kind: "list", variant: null, label: "List" },
   ...W1_SCHEDULE_VARIANTS.map((variant) => ({
@@ -139,6 +146,77 @@ export const ADD_PART_OPTIONS: {
     label: VARIANT_LABELS[variant],
   })),
 ];
+
+/**
+ * R18 — an agreement carries only one of each money part.
+ *
+ * `upsert_agreement_parts` refuses a second one with a `check_violation`
+ * ("an agreement carries only one ceiling"), because the projection reads a
+ * money part by its SHAPE: two ceilings leave the terms row choosing between
+ * them. The words below are the RPC's own words for each part, so the room's
+ * sentence and the database's sentence are the same sentence.
+ *
+ * `flat` and `per_phase` are deliberately absent: they are record-only in W1,
+ * nothing projects from them, and an agreement may legitimately state more
+ * than one of either.
+ */
+export const SINGLE_INSTANCE_VARIANTS: Record<string, string> = {
+  rate_card: "rate card",
+  ceiling: "ceiling",
+  retainer: "retainer",
+  cadence: "billing cadence",
+  procurement: "furnishings deposit",
+};
+
+function takenSingleInstanceVariants(parts: AgreementPart[]): Set<string> {
+  const taken = new Set<string>();
+  for (const part of parts) {
+    if (part.kind !== "schedule" || !part.variant) continue;
+    if (part.variant in SINGLE_INSTANCE_VARIANTS) taken.add(part.variant);
+  }
+  return taken;
+}
+
+/**
+ * What `+ Add a part` may offer against this composition. A money part the
+ * agreement already carries is not offered a second time — the menu does not
+ * hand a designer an act the save is going to refuse (R18).
+ */
+export function addPartOptions(parts: AgreementPart[]): AddPartOption[] {
+  const taken = takenSingleInstanceVariants(parts);
+  return ADD_PART_OPTIONS.filter(
+    (option) => !(option.variant && taken.has(option.variant)),
+  );
+}
+
+/**
+ * The money parts this composition carries more than one of, named the way
+ * the RPC names them. Readiness reports these so Save can never reach 23514
+ * from the room.
+ */
+export function duplicateMoneyVariants(parts: AgreementPart[]): {
+  variant: string;
+  label: string;
+  partIds: string[];
+}[] {
+  const byVariant = new Map<string, string[]>();
+  for (const part of parts) {
+    if (part.kind !== "schedule" || !part.variant) continue;
+    if (!(part.variant in SINGLE_INSTANCE_VARIANTS)) continue;
+    byVariant.set(part.variant, [
+      ...(byVariant.get(part.variant) ?? []),
+      part.id,
+    ]);
+  }
+  return [...byVariant.entries()]
+    .filter(([, ids]) => ids.length > 1)
+    .map(([variant, partIds]) => ({
+      variant,
+      label: SINGLE_INSTANCE_VARIANTS[variant],
+      partIds,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
 
 let blankCounter = 0;
 

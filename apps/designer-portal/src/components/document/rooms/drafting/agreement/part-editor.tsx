@@ -41,6 +41,12 @@ const toCents = (value: string): number => {
   return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100)) : 0;
 };
 
+/** R21 — an empty field is an amount nobody has written, and it has to stay
+ *  that way: `Number("")` is 0, and a 0 written back here is what put "$0" in
+ *  a homeowner's copy. A zero the designer types is still a zero. */
+const toCentsOrNull = (value: string): number | null =>
+  value.trim() === "" ? null : toCents(value);
+
 export interface PartEditorProps {
   part: AgreementPart;
   onChange: (payload: Record<string, unknown>) => void;
@@ -346,7 +352,7 @@ function CeilingEditor({ payload, onChange, readOnly }: EditorProps) {
 }
 
 function RetainerEditor({ payload, onChange, readOnly }: EditorProps) {
-  const cents = readCents(payload.cents) ?? 0;
+  const cents = readCents(payload.cents);
   const creditRule =
     typeof payload.creditRule === "string" ? payload.creditRule : "credited";
   const activationPolicy =
@@ -364,7 +370,7 @@ function RetainerEditor({ payload, onChange, readOnly }: EditorProps) {
           disabled={readOnly}
           value={dollars(cents)}
           onChange={(event) =>
-            onChange({ ...payload, cents: toCents(event.target.value) })
+            onChange({ ...payload, cents: toCentsOrNull(event.target.value) })
           }
         />
       </label>
@@ -501,9 +507,9 @@ function FlatEditor({ payload, onChange, readOnly }: EditorProps) {
         className="mt-2 max-w-[220px]"
         inputMode="decimal"
         disabled={readOnly}
-        value={dollars(readCents(payload.cents) ?? 0)}
+        value={dollars(readCents(payload.cents))}
         onChange={(event) =>
-          onChange({ ...payload, cents: toCents(event.target.value) })
+          onChange({ ...payload, cents: toCentsOrNull(event.target.value) })
         }
       />
       <p className="mt-1.5 text-[11px] normal-case tracking-normal text-[var(--text-muted)]">

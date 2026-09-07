@@ -35,7 +35,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { AgreementPart } from "@patina/types";
 import { Input } from "@/components/ui/controls";
 import { AddPartMenu } from "./add-part-menu";
-import { createsAuthority, partKindLabel } from "./part-kinds";
+import { addPartOptions, createsAuthority, partKindLabel } from "./part-kinds";
 
 export interface PartsRailProps {
   parts: AgreementPart[];
@@ -115,7 +115,9 @@ export function PartsRail({
         </p>
       )}
 
-      {!readOnly && <AddPartMenu onAdd={onAdd} />}
+      {!readOnly && (
+        <AddPartMenu options={addPartOptions(parts)} onAdd={onAdd} />
+      )}
     </nav>
   );
 }

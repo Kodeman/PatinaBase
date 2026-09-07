@@ -483,3 +483,193 @@ describe("assessAgreementReadiness — unknown kinds", () => {
     expect(readiness.ready).toBe(true);
   });
 });
+
+// ── R18 · one part per money variant. The Add menu no longer offers a second
+// one; this is what catches a duplicate that arrives any other way, before
+// `upsert_agreement_parts` raises 23514 from the room.
+
+describe("assessAgreementReadiness — R18, one part per money variant", () => {
+  it("blocks a second ceiling in the RPC's own words", () => {
+    const second = part({
+      partKey: "custom.second-ceiling",
+      kind: "schedule",
+      variant: "ceiling",
+      title: "Second ceiling",
+      payload: { cents: 100_000 },
+    });
+    const readiness = assess([...nine(), second]);
+    expect(readiness.ready).toBe(false);
+    expect(readiness.blockers).toContainEqual({
+      partId: second.id,
+      message: "An agreement carries only one ceiling.",
+    });
+  });
+
+  it("blames the later part, not the one already in the agreement", () => {
+    const second = retainer();
+    second.id = "part-second-retainer";
+    second.partKey = "custom.second-retainer";
+    const readiness = assess([...nine(), second]);
+    const messages = readiness.blockers
+      .filter((blocker) => blocker.message.startsWith("An agreement carries"))
+      .map((blocker) => blocker.partId);
+    expect(messages).toEqual(["part-second-retainer"]);
+  });
+
+  it("lets an agreement state more than one flat fee — nothing projects", () => {
+    const first = part({
+      partKey: "custom.flat-a",
+      kind: "schedule",
+      variant: "flat",
+      title: "Design fee",
+      payload: { cents: 900_000 },
+    });
+    const second = part({
+      partKey: "custom.flat-b",
+      kind: "schedule",
+      variant: "flat",
+      title: "Styling fee",
+      payload: { cents: 250_000 },
+    });
+    const readiness = assess([...nine(), first, second]);
+    expect(readiness.ready).toBe(true);
+  });
+});
+
+// ── R21 · a money part with no figure in it. `blankPayload` seeds these as
+// null now, so the client copy prints nothing; readiness is what stops the
+// send while the amount is unwritten.
+
+describe("assessAgreementReadiness — R21, an unwritten amount", () => {
+  it("blocks a flat fee with no amount", () => {
+    const blank = part({
+      partKey: "custom.flat",
+      kind: "schedule",
+      variant: "flat",
+      title: "Flat fee",
+      payload: { cents: null },
+    });
+    const readiness = assess([...nine(), blank]);
+    expect(readiness.ready).toBe(false);
+    expect(readiness.blockers).toContainEqual({
+      partId: blank.id,
+      message: "Set the amount for Flat fee.",
+    });
+  });
+
+  it("blocks a fee-by-phase with no phase carrying an amount", () => {
+    const blank = part({
+      partKey: "custom.per-phase",
+      kind: "schedule",
+      variant: "per_phase",
+      title: "Fee by phase",
+      payload: { phases: [] },
+    });
+    const readiness = assess([...nine(), blank]);
+    expect(readiness.blockers).toContainEqual({
+      partId: blank.id,
+      message: "Set the amount for Fee by phase.",
+    });
+  });
+
+  it("blocks a blank retainer, which now opens with no amount at all", () => {
+    const blank = retainer({
+      cents: null,
+      creditRule: "credited",
+      activationPolicy: "immediate",
+    });
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.retainer"),
+      blank,
+    ];
+    const readiness = assess(parts);
+    expect(readiness.ready).toBe(false);
+    expect(readiness.blockers).toContainEqual({
+      partId: blank.id,
+      message: "Set a valid retainer amount, including zero when none is due.",
+    });
+  });
+
+  it("takes a written zero as an answer", () => {
+    const zero = retainer({
+      cents: 0,
+      creditRule: "credited",
+      activationPolicy: "immediate",
+    });
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.retainer"),
+      zero,
+    ];
+    expect(assess(parts).ready).toBe(true);
+  });
+});
+
+// ── R21/R3-3 · the R4 floor reads only the parts the homeowner reads.
+
+describe("assessAgreementReadiness — the floor is client-facing", () => {
+  it("does not let a studio-only fee satisfy an agreement that names none", () => {
+    const hiddenFee = part({
+      partKey: "custom.internal-fee",
+      kind: "schedule",
+      variant: "flat",
+      title: "Internal fee",
+      clientVisible: false,
+      payload: { cents: 900_000 },
+    });
+    const readiness = assess([services(), terms(), hiddenFee]);
+    expect(readiness.ready).toBe(false);
+    expect(
+      readiness.blockers.some((blocker) =>
+        blocker.message.startsWith("This agreement names no fee."),
+      ),
+    ).toBe(true);
+  });
+
+  it("still needs a ceiling the client can read beside a rate card she can read", () => {
+    const hiddenCeiling = part({
+      partKey: "patina.ceiling",
+      kind: "schedule",
+      variant: "ceiling",
+      title: "Ceiling",
+      clientVisible: false,
+      payload: { cents: 2_400_000 },
+    });
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.ceiling"),
+      hiddenCeiling,
+    ];
+    const readiness = assess(parts);
+    expect(
+      readiness.blockers.some((blocker) =>
+        blocker.message.startsWith("An agreement that bills hourly"),
+      ),
+    ).toBe(true);
+  });
+
+  it("still asks the DATABASE's question of a rate card the client never sees", () => {
+    // `_agreement_floor_unmet` (00575) reads every part, visible or not. A
+    // room that only asked R21's question would call this ready and then
+    // watch the send refuse.
+    const hiddenRates = roleRates();
+    hiddenRates.clientVisible = false;
+    const parts = [
+      services(),
+      terms(),
+      hiddenRates,
+      part({
+        partKey: "custom.flat",
+        kind: "schedule",
+        variant: "flat",
+        title: "Flat fee",
+        payload: { cents: 900_000 },
+      }),
+    ];
+    const readiness = assess(parts);
+    expect(readiness.ready).toBe(false);
+    expect(
+      readiness.blockers.some((blocker) =>
+        blocker.message.startsWith("An agreement that bills hourly"),
+      ),
+    ).toBe(true);
+  });
+});
