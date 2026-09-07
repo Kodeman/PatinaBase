@@ -104,6 +104,24 @@ round-2 entry above warns about.
 
 ---
 
+## Re-gate 2 — 2026-09-07 · read only, NO RESET
+
+The close-out re-gate (head `fb811e603`) **did not reset, seed, stop or start
+the stack.** It did not need to: every one of the 19 `CREATE OR REPLACE
+FUNCTION` bodies in `00575_agreement_parts.sql` was compared against
+`pg_proc.prosrc` and all 19 matched, and the R22/R25/R28 markers were read out
+of the catalog rather than the file. The composed seed fixture is present
+(`select count(*) from proposal_agreement_parts` → 7).
+
+Everything the re-gate wrote to the database ran inside a transaction that ended
+`ROLLBACK` — the probe file, the no-terms-row probe, the R28 seeding probe and
+the TRUNCATE reachability probe. No scratch database was created. A client dev
+server was run on `:3002` for the e2e and stopped afterwards.
+
+The stack is left exactly as found: running, head `00575`, close-out bodies.
+
+---
+
 This notice exists per the parallel-work discipline in
 `.claude/skills/patina-parallel-work` and the shared-stack lesson in project
 memory (`feedback_shared_local_supabase_stack_last_reset_wins.md`): concurrent
