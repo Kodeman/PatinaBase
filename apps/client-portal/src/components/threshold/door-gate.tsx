@@ -88,6 +88,13 @@ export interface DoorProposal extends ThresholdProposal {
    * acts on the leaf keep that gate.
    */
   validUntil?: string | null;
+  /**
+   * R30 — a paper that comes before a house. An agreement is bound to no
+   * project until it is countersigned, so it stands on the doorstep of every
+   * house she has rather than belonging to one of them; the leaf says so, and
+   * the house ledger leaves its figure out.
+   */
+  houseless?: boolean;
 }
 
 export interface DoorGateProps {
@@ -425,6 +432,20 @@ export function DoorGate({
                 : 'Shut · it opens on your name'}
         </p>
       </div>
+
+      {/* R30 — the paper that comes before a house. It is addressed to her,
+          not to this house, so it stands on every door she has and says which
+          it is; without the line the same paper on three doorsteps reads as
+          three papers. */}
+      {proposal.houseless && !signedAt && (
+        <p
+          data-testid="door-houseless"
+          className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]"
+        >
+          This one comes before a house. It is addressed to you, so it waits on
+          every door until you sign it.
+        </p>
+      )}
 
       {receipt && (
         <p

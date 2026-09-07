@@ -1049,6 +1049,52 @@ describe('Threshold — the doorstep’s own asks', () => {
     expect(roomlessDoor).not.toBeNull();
     expect(roomlessDoor?.closest('section[id^="room-"]')).toBeNull();
   });
+
+  // R30, carried to Wave 2 — THE PAPERS WITHOUT A HOUSE. A design services
+  // agreement is bound to no project until it is countersigned, so a household
+  // that already has a house and is sent a second origin agreement had it
+  // filtered off every door she owns.
+  describe('a paper that comes before a house', () => {
+    const ORIGIN_AGREEMENT = {
+      ...AUTHORIZATION,
+      id: 'prop-origin',
+      title: 'Design services agreement',
+      project_id: null,
+      document_kind: 'design_services',
+      total_amount: 0,
+    } as unknown as Proposal;
+
+    it('stands on this house’s doorstep and says which paper it is', () => {
+      proposalsMock.mockReturnValue(
+        settled([AUTHORIZATION, ORIGIN_AGREEMENT, SIGNED_AGREEMENT]),
+      );
+
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door-door-prop-origin')).not.toBeNull();
+      expect(screen.getByTestId('door-houseless')).toHaveTextContent(
+        'This one comes before a house. It is addressed to you, so it waits on every door until you sign it.',
+      );
+    });
+
+    it('leaves an addendum with no project off this house’s doors', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          {
+            ...ORIGIN_AGREEMENT,
+            id: 'prop-addendum',
+            document_kind: 'service_addendum',
+          } as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door-door-prop-addendum')).toBeNull();
+      expect(container.querySelector('#door')).toBeNull();
+    });
+  });
 });
 
 describe('Threshold — the acts the house owes', () => {

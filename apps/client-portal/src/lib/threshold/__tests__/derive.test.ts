@@ -548,6 +548,25 @@ describe('deriveThreshold — the ledger and the letterbox', () => {
     expect(model.ledger.awaitingCents).toBe(1_000_000);
     expect(deriveThreshold(input()).ledger.awaitingCents).toBe(0);
   });
+
+  // R30 — an origin agreement stands on the doorstep of every house she has,
+  // so counting its figure here would count the same money once per house.
+  it('leaves a paper that belongs to no house out of this house’s ledger', () => {
+    const model = deriveThreshold(
+      input({
+        proposals: {
+          signatureGates: [
+            proposal({ id: 'p-1', totalAmountCents: 689_000 }),
+            proposal({ id: 'p-origin', totalAmountCents: 311_000, houseless: true }),
+          ],
+          instrumentReceipts: [],
+        },
+      }),
+    );
+    expect(model.ledger.awaitingCents).toBe(689_000);
+    // It is still a door, and it still stands where she can reach it.
+    expect(model.marks.some((mark) => mark.proposalId === 'p-origin')).toBe(true);
+  });
 });
 
 describe('deriveThreshold — the note and what came before', () => {
