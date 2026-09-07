@@ -122,6 +122,21 @@ function PartEditorBody({
     );
   }
 
+  // An Attachment is a leaf, not a paragraph: it sits below the agreement on
+  // the client's page with its own rule, and — when the studio asks — an "I
+  // received this" line she ticks before she can sign. The picker can add one
+  // from Wave 2 on, so Wave 2 is where it gets an editor; flag off it stays in
+  // Wave 1's read-only card.
+  if (part.kind === "attachment" && libraryOn) {
+    return (
+      <AttachmentEditor
+        payload={payload}
+        onChange={onChange}
+        readOnly={readOnly}
+      />
+    );
+  }
+
   if (part.kind !== "schedule") {
     return <UnsupportedPartCard part={part} />;
   }
@@ -149,6 +164,7 @@ function PartEditorBody({
           payload={payload}
           onChange={onChange}
           readOnly={readOnly}
+          libraryOn={libraryOn}
         />
       );
     case "cadence":
@@ -385,7 +401,12 @@ function CeilingEditor({ payload, onChange, readOnly }: EditorProps) {
   );
 }
 
-function RetainerEditor({ payload, onChange, readOnly }: EditorProps) {
+function RetainerEditor({
+  payload,
+  onChange,
+  readOnly,
+  libraryOn = false,
+}: EditorProps & { libraryOn?: boolean }) {
   const cents = readCents(payload.cents);
   const creditRule =
     typeof payload.creditRule === "string" ? payload.creditRule : "credited";
@@ -442,9 +463,17 @@ function RetainerEditor({ payload, onChange, readOnly }: EditorProps) {
             </button>
           ))}
         </div>
-        <p className="mt-1.5 text-[11px] normal-case tracking-normal text-[var(--text-muted)]">
-          Stored now; it starts appearing on new agreements in a later release.
-        </p>
+        {/* Wave 1 stored the credit rule and nothing read it. Wave 2 projects
+            it into `retainer_credit_rule` on the terms row and snapshots it
+            into the authority at countersign, and the client's consent
+            sentence says which rule she agreed to — so the sentence goes when
+            the flag is on, because it is no longer true. */}
+        {!libraryOn && (
+          <p className="mt-1.5 text-[11px] normal-case tracking-normal text-[var(--text-muted)]">
+            Stored now; it starts appearing on new agreements in a later
+            release.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -471,6 +500,45 @@ function CadenceEditor({ payload, onChange, readOnly }: EditorProps) {
         ))}
       </Select>
     </label>
+  );
+}
+
+/**
+ * An Attachment — the paper that travels with the agreement.
+ *
+ * The title is the part's own (renamed on the rail, like every other part), so
+ * this asks only for the body and whether the client has to say she received
+ * it. `acknowledgeRequired` is what puts an "I received this" line above her
+ * signature and records the acknowledgment in the signature's metadata.
+ */
+function AttachmentEditor({ payload, onChange, readOnly }: EditorProps) {
+  const acknowledgeRequired = payload.acknowledgeRequired === true;
+  return (
+    <div className="space-y-4">
+      <label className={labelClass}>
+        Body
+        <Textarea
+          className="mt-2 min-h-40 normal-case tracking-normal"
+          disabled={readOnly}
+          value={typeof payload.body === "string" ? payload.body : ""}
+          onChange={(event) =>
+            onChange({ ...payload, body: event.target.value })
+          }
+          placeholder="What this attachment says. It reads below the agreement, on its own leaf."
+        />
+      </label>
+      <label className="flex items-center gap-2 text-[12px] text-[var(--color-charcoal)]">
+        <input
+          type="checkbox"
+          disabled={readOnly}
+          checked={acknowledgeRequired}
+          onChange={(event) =>
+            onChange({ ...payload, acknowledgeRequired: event.target.checked })
+          }
+        />
+        Ask the client to confirm she received this before she signs
+      </label>
+    </div>
   );
 }
 
