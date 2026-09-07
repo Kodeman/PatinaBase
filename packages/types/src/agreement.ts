@@ -251,3 +251,119 @@ export interface AgreementExecutionSnapshot {
   documentHash: string;
   createdAt: string | null;
 }
+
+/**
+ * Wave 3 additions — "The Agreement, Composed": the turnkey class (P9),
+ * licensing attestation (P10), jurisdiction attachments (P11), lien waivers
+ * (P12). Frozen cross-lane interface: build/waves/w3/build-sheet.md §2.6 I-1.
+ * Every export above this point is Wave 1/2 and stays byte-identical.
+ *
+ * `PricingBasisPayload` / `DrawsPayload` / `AllowancesPayload` (declared
+ * above, Wave 1) are untouched — they keep serving every class that carries
+ * those variants record-only. The design-build class needs richer, more
+ * specific shapes for the same three variants (research 02 §9 item 5, §3);
+ * rather than widen a shared shape three other classes also use, Wave 3
+ * declares the design-build-specific shapes below, grouped as
+ * `DesignBuildPayloads`.
+ */
+
+/** Self-attested credential vocabulary — free text at the DB (no CHECK, the
+ *  `studio_contacts.contact_kind` doctrine), code-resident here. Never
+ *  verified (R10). */
+export const LICENSE_CREDENTIAL_TYPES = [
+  'WI Dwelling Contractor',
+  'MN Residential Building Contractor',
+  'CA CSLB',
+  'Other',
+] as const;
+export type LicenseCredentialType = (typeof LICENSE_CREDENTIAL_TYPES)[number];
+
+/** Lien waiver exchange vocabulary (P12) — free text at the DB, code-resident
+ *  here (the same doctrine). */
+export const LIEN_WAIVER_TYPES = [
+  'conditional_progress',
+  'unconditional_progress',
+  'conditional_final',
+  'unconditional_final',
+] as const;
+export type LienWaiverType = (typeof LIEN_WAIVER_TYPES)[number];
+
+/** The four pricing bases a design-build agreement may carry (research 02 §2
+ *  rows 1, 2, 4, 5 — unit price and cost-plus-fixed-fee are out this wave). */
+export const PRICING_BASIS_KINDS = [
+  'fixed', 'cost_plus', 'cost_plus_gmp', 'tm_nte',
+] as const;
+export type PricingBasisKind = (typeof PRICING_BASIS_KINDS)[number];
+
+/** Whether the schedule of values shows the sub markup as its own line
+ *  (open) or pro-rated across every line (closed) — one per contract
+ *  (research 02 §9 item 5). */
+export const SUB_DISCLOSURE_MODES = ['open_book', 'closed_book'] as const;
+export type SubDisclosureMode = (typeof SUB_DISCLOSURE_MODES)[number];
+
+/** One line of the cost breakdown behind a design-build pricing basis. The
+ *  schedule of values is *derived* from these, never separately authored. */
+export interface DesignBuildCostLine {
+  id: string;
+  label: string;
+  category: 'sub' | 'general_conditions' | 'allowance';
+  basisCents: number;
+}
+
+/** `pricing_basis` schedule payload, design-build shape (record-only, R9). */
+export interface DesignBuildPricingBasisPayload {
+  basis: PricingBasisKind;
+  costLines: DesignBuildCostLine[];
+  /** Present for `cost_plus` and `cost_plus_gmp`; absent for `fixed`. */
+  feeBps: number | null;
+  /** Present only for `cost_plus_gmp`. */
+  gmpCents: number | null;
+  /** Present only for `tm_nte`. */
+  nteCents: number | null;
+  /** Present only for `fixed`. */
+  fixedCents: number | null;
+  subDisclosure: SubDisclosureMode;
+}
+
+/** One draw of a design-build draw schedule. `key` is stable and studio-set;
+ *  the first draw by `sortOrder` is the deposit and never carries retainage. */
+export interface DesignBuildDraw {
+  key: string;
+  label: string;
+  sortOrder: number;
+  /** Integer percent of the contract sum, 0–100; the schedule sums to 100. */
+  pct: number;
+  retainageApplies: boolean;
+  isRetainageRelease?: boolean;
+}
+
+/** `draws` schedule payload, design-build shape (record-only, R9). */
+export interface DesignBuildDrawsPayload {
+  draws: DesignBuildDraw[];
+  /** 0–1000 basis points (research 02 §3: 5–10%, trending 5%). */
+  retainageBps: number;
+}
+
+/** One allowance; `id` also names a `costLines` entry with
+ *  `category: 'allowance'` carrying the same `basisCents` (the allowance and
+ *  its schedule-of-values line are one number said twice). */
+export interface DesignBuildAllowance {
+  id: string;
+  label: string;
+  amountCents: number;
+  overageRule: 'change_order' | 'client_credit';
+  underageRule: 'credit' | 'retain';
+}
+
+/** `allowances` schedule payload, design-build shape (record-only, R9). */
+export interface DesignBuildAllowancesPayload {
+  allowances: DesignBuildAllowance[];
+}
+
+/** The design-build-specific payload shapes, grouped for the T0 cross-lane
+ *  handshake (build-sheet §2.6 I-1). */
+export interface DesignBuildPayloads {
+  pricingBasis: DesignBuildPricingBasisPayload;
+  draws: DesignBuildDrawsPayload;
+  allowances: DesignBuildAllowancesPayload;
+}
