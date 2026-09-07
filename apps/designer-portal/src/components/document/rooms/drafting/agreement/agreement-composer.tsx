@@ -39,11 +39,16 @@ import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import { ServiceAgreementPreview } from "../../../commercial/service-agreement-preview";
 import { ServiceAgreementSendSheet } from "../../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
-import { createBlankPart, duplicateMoneyVariants } from "./part-kinds";
+import {
+  createBlankPart,
+  duplicateMoneyVariants,
+  unnamedRateCardRoles,
+} from "./part-kinds";
 import { PartEditor } from "./part-editor";
 import { PartsRail } from "./parts-rail";
 import {
   assessAgreementReadiness,
+  BLANK_ROLE_BLOCKER,
   documentBlockers,
   duplicateMoneyBlocker,
   partsNeedingAttention,
@@ -54,6 +59,25 @@ const labelClass =
 
 function renumber(parts: AgreementPart[]): AgreementPart[] {
   return parts.map((part, index) => ({ ...part, position: index + 1 }));
+}
+
+/**
+ * The sentence the database refused with — or, failing that, the room's own.
+ *
+ * PostgREST hands react-query a plain `{ message, code, details, hint }`, not
+ * an `Error`, so gating on `instanceof Error` threw away every sentence 00575
+ * was written to say ("An agreement carries only one ceiling", "every role on
+ * the rate card needs a name") and printed the generic line in its place. The
+ * refusal and the room say the same words because they are the same words.
+ */
+function refusalMessage(error: unknown, fallback: string): string {
+  const message =
+    error !== null && typeof error === "object" && "message" in error
+      ? (error as { message?: unknown }).message
+      : null;
+  return typeof message === "string" && message.trim().length > 0
+    ? message
+    : fallback;
 }
 
 export function AgreementComposer({
@@ -130,9 +154,7 @@ export function AgreementComposer({
       },
       onError: (error) =>
         setSaveNote(
-          error instanceof Error
-            ? error.message
-            : "The standard parts could not be opened.",
+          refusalMessage(error, "The standard parts could not be opened."),
         ),
     });
     // The agreement id is the remount key upstream; re-running this on a
@@ -160,11 +182,14 @@ export function AgreementComposer({
 
   // R18 / R29 — a save the server cannot accept is not offered. The database
   // refuses a second part of any money shape ("an agreement carries only one
-  // ceiling", 23514), and readiness says the same sentence first; holding the
-  // act as well is what keeps the room from ever earning that refusal. Every
-  // other blocker still saves — a draft is allowed to be unfinished.
+  // ceiling", 23514) and a rate card carrying a role with no name ("every role
+  // on the rate card needs a name"), and readiness says both sentences first;
+  // holding the act as well is what keeps the room from ever earning those
+  // refusals. Every other blocker still saves — a draft is allowed to be
+  // unfinished, and the R4 floor is asked at the doors out of draft.
   const duplicates = useMemo(() => duplicateMoneyVariants(parts), [parts]);
-  const carriesADuplicate = duplicates.length > 0;
+  const unnamedRoles = useMemo(() => unnamedRateCardRoles(parts), [parts]);
+  const refusedAtSave = duplicates.length > 0 || unnamedRoles.length > 0;
 
   const selected = parts.find((part) => part.id === selectedId) ?? null;
 
@@ -209,7 +234,7 @@ export function AgreementComposer({
   };
 
   const persist = async () => {
-    if (carriesADuplicate) return false;
+    if (refusedAtSave) return false;
     // `upsert_agreement_parts` is DELETE-then-INSERT and does not carry `id`
     // through, so every part comes back with a new uuid. `part_key` is the
     // identity that survives a save — matching on `id` re-selected nothing
@@ -232,11 +257,7 @@ export function AgreementComposer({
       setSaveNote("All agreement changes saved.");
       return true;
     } catch (error) {
-      setSaveNote(
-        error instanceof Error
-          ? error.message
-          : "The agreement could not be saved.",
-      );
+      setSaveNote(refusalMessage(error, "The agreement could not be saved."));
       return false;
     }
   };
@@ -256,9 +277,10 @@ export function AgreementComposer({
       onReturnToFacets?.();
     } catch (error) {
       setSaveNote(
-        error instanceof Error
-          ? error.message
-          : "The agreement could not be returned to the seven facets.",
+        refusalMessage(
+          error,
+          "The agreement could not be returned to the seven facets.",
+        ),
       );
     }
   };
@@ -290,9 +312,7 @@ export function AgreementComposer({
         onError: (error) => {
           setClientError(true);
           setClientNote(
-            error instanceof Error
-              ? error.message
-              : "The client account could not be attached.",
+            refusalMessage(error, "The client account could not be attached."),
           );
         },
       },
@@ -317,7 +337,7 @@ export function AgreementComposer({
           actionKey="review-design-agreement"
           variant="primary"
           trailing="→"
-          disabled={carriesADuplicate}
+          disabled={refusedAtSave}
           onClick={() => void reviewAndSend()}
         >
           Review &amp; send
@@ -355,7 +375,7 @@ export function AgreementComposer({
               <Button
                 onClick={() => void persist()}
                 loading={save.isPending}
-                disabled={!dirty || readOnly || carriesADuplicate}
+                disabled={!dirty || readOnly || refusedAtSave}
               >
                 {dirty ? "Save agreement" : "Saved"}
               </Button>
@@ -443,12 +463,13 @@ export function AgreementComposer({
               needAttention={needAttention}
               total={parts.length}
               documentBlockers={[
-                // The duplicate is a blocker ON a part, so the rail marks the
-                // row; it is also the one blocker that holds Save, so the
+                // Both of these are blockers ON a part, so the rail marks the
+                // row; they are also the only blockers that hold Save, so the
                 // panel says why in the same sentence.
                 ...duplicates.map((duplicate) =>
                   duplicateMoneyBlocker(duplicate.label),
                 ),
+                ...(unnamedRoles.length > 0 ? [BLANK_ROLE_BLOCKER] : []),
                 ...documentBlockers(readiness).map(
                   (blocker) => blocker.message,
                 ),

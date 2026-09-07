@@ -342,6 +342,45 @@ describe("assessAgreementReadiness — the conditional facet rules", () => {
     );
   });
 
+  // M4 of the web walk: a second role added and left blank read
+  // "0 OF 9 PARTS NEED ATTENTION", offered Save, and earned
+  // `every role on the rate card needs a name` (23514) from the RPC — shown as
+  // the generic "The agreement could not be saved." The check above asks only
+  // whether SOME role is named, which a named neighbour answers.
+  it("R-7: blocks a rate card carrying one named role and one blank one", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 22_500,
+          sortOrder: 0,
+        },
+        { roleName: "  ", hourlyRateCents: 15_000, sortOrder: 1 },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Every role on the rate card needs a name.",
+    );
+  });
+
+  it("R-7: says nothing about names when every role has one", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 22_500,
+          sortOrder: 0,
+        },
+        { roleName: "Junior designer", hourlyRateCents: 15_000, sortOrder: 1 },
+      ]),
+    ];
+    expect(messages(parts)).not.toContain(
+      "Every role on the rate card needs a name.",
+    );
+  });
+
   it("R-8: blocks a negative retainer", () => {
     const parts = [
       ...nine().filter((p) => p.partKey !== "patina.retainer"),

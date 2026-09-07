@@ -594,6 +594,99 @@ describe("AgreementComposer · one part per money variant (R18/R29)", () => {
   });
 });
 
+/* ── The walk's M2 and M6 ───────────────────────────────────────────────────
+   M6: a rate card carrying one named role and one blank one read green, the
+   Save was offered, and `every role on the rate card needs a name` (23514)
+   came back. M2: whatever the database refused with, the room printed "The
+   agreement could not be saved." — PostgREST hands react-query a plain object,
+   not an `Error`, so the branch that read `.message` never fired.
+   ────────────────────────────────────────────────────────────────────────── */
+
+describe("AgreementComposer · the refusals the room says first", () => {
+  const renderComposer = (bundle = bundleWith(threeParts())) =>
+    render(<AgreementComposer proposal={proposal} bundle={bundle} />);
+  const rateCard = (roles: Record<string, unknown>[]) =>
+    part({
+      partKey: "patina.role_rates",
+      position: 4,
+      kind: "schedule",
+      variant: "rate_card",
+      title: "Role rates",
+      payload: { roles },
+    });
+
+  it("reports a role left unnamed and holds the save (M6)", () => {
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith([
+          ...threeParts(),
+          rateCard([
+            {
+              roleName: "Lead Designer",
+              hourlyRateCents: 22_500,
+              sortOrder: 0,
+            },
+            { roleName: "", hourlyRateCents: 15_000, sortOrder: 1 },
+          ]),
+        ])}
+      />,
+    );
+
+    expect(
+      screen.getByText("Every role on the rate card needs a name."),
+    ).toBeInTheDocument();
+
+    // Dirty, so nothing but the blank role can be what holds the act.
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "Interior design services, revised." },
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Save agreement" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Review/ })).toBeDisabled();
+    expect(mockSaveParts).not.toHaveBeenCalled();
+  });
+
+  it("prints the sentence the database refused with, not its own (M2)", async () => {
+    // Exactly the shape PostgREST returns: a plain object, never an Error.
+    mockSaveParts.mockRejectedValue({
+      code: "23514",
+      message: "an agreement that bills time needs a ceiling",
+      details: null,
+      hint: null,
+    });
+    renderComposer();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "Interior design services, revised." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+
+    expect(
+      await screen.findByText("an agreement that bills time needs a ceiling"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("The agreement could not be saved."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to the room's own sentence when the refusal carries none", async () => {
+    mockSaveParts.mockRejectedValue({ code: "PGRST301" });
+    renderComposer();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "Interior design services, revised." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+
+    expect(
+      await screen.findByText("The agreement could not be saved."),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("AgreementComposer · resilience", () => {
   it("opens an unknown kind read-only rather than throwing", () => {
     const wormhole = {

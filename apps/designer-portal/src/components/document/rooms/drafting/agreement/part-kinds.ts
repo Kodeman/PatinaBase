@@ -229,6 +229,26 @@ export function duplicateMoneyVariants(parts: AgreementPart[]): {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/**
+ * The rate-card parts carrying a role with no name.
+ *
+ * `upsert_agreement_parts` refuses one — "every role on the rate card needs a
+ * name" (23514) — and readiness only ever asked whether SOME role was named,
+ * so a second role added and left blank read green, offered Save, and earned
+ * the refusal. Same discipline as `duplicateMoneyVariants`: the room names it
+ * and holds the act rather than sending a save the server cannot accept.
+ */
+export function unnamedRateCardRoles(parts: AgreementPart[]): AgreementPart[] {
+  return parts.filter(
+    (part) =>
+      part.kind === "schedule" &&
+      part.variant === "rate_card" &&
+      readRoles(part.payload ?? {}).some(
+        (role) => role.roleName.trim().length === 0,
+      ),
+  );
+}
+
 let blankCounter = 0;
 
 /** A part that exists only in the composer's local state until Save. The key

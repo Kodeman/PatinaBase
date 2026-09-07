@@ -69,6 +69,14 @@ export function duplicateMoneyBlocker(label: string): string {
   return `An agreement carries only one ${label}.`;
 }
 
+/** The same discipline for the other refusal a rate card can earn at Save:
+ *  "every role on the rate card needs a name" (00575, 23514). A second role
+ *  added and left blank passed readiness — the check below asks only whether
+ *  SOME role is named — so the room offered a save the server refused, and
+ *  showed none of the reason. Named here once because the rail marks the row
+ *  with it and the readiness panel prints it. */
+export const BLANK_ROLE_BLOCKER = "Every role on the rate card needs a name.";
+
 /** The blocker that is about the client account rather than the agreement.
  *  Excluded from the attention count, exactly as the seven-facet room
  *  excludes it today. */
@@ -167,6 +175,12 @@ export function assessAgreementReadiness({
         )
       ) {
         add(part.id, "Add at least one role with an hourly rate.");
+      }
+      // Every role, not just one of them: the RPC walks the whole array and
+      // refuses on the first blank name, so a named role standing beside a
+      // blank one is a save the server will not take.
+      if (roles.some((role) => role.roleName.trim().length === 0)) {
+        add(part.id, BLANK_ROLE_BLOCKER);
       }
     }
 
