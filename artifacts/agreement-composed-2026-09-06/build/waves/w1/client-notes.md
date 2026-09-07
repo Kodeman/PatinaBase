@@ -755,3 +755,197 @@ five, plus that the two prose titles are absent.
   no parts body — an answer no render change can move. Booting :3002 against
   the shared stack for an untouched file was not worth the collision risk.
 - Everything in the earlier "Not verified" lists still stands.
+
+---
+
+# Round 5 review — fixes
+
+Findings handed to this round: **C-3**, **C-4**, **C-5** (majors, client) and
+**N-1** (major, designer lane). Two of the three client findings were reported
+as "not fixable inside `apps/client-portal/**` at the frozen interface"; what
+follows is the half of each that *is* the client's, plus exactly what is still
+owed to whom.
+
+## C-3 + C-4 — the bundle says whether an agreement is composed
+
+Both findings are the same missing sentence. `parts.length` was being asked a
+question it cannot answer, and it is wrong in **both** directions:
+
+| the studio does | rows in the table | `parts` on the bundle | counting says | truth |
+|---|---|---|---|---|
+| hides every part (`client_visible = false`) | nine | `[]` (the RPC filters) | today's body — prints the scope, rates, ceiling, retainer, cadence just hidden | composed |
+| un-composes (the `agreement-parts` kill switch) | nine | nine | the composed body | not composed |
+
+So the bundle now carries the answer itself:
+
+```ts
+// apps/client-portal/src/lib/commercial-documents.ts
+composed: boolean | null;   // true · false · "the bundle did not say"
+```
+
+read defensively beside `parts` —
+`first(raw, 'composed', 'agreementComposed', 'agreement_composed')`, then
+`=== true ? true : === false ? false : null`. Only the two booleans are
+answers; a string, a number, an absent key or an explicit `null` all read as
+`null`, never as a coerced no.
+
+`DesignServicesBody` (`commercial-document-shell.tsx:180`) branches on it:
+
+```tsx
+if (bundle.composed ?? bundle.parts.length > 0) {
+  return <AgreementPartsBody parts={bundle.parts} currency={terms.currency} />;
+}
+```
+
+- `composed === true` → the composed body **however few parts survived the
+  visibility filter**. Hiding every part now shows the homeowner an agreement
+  with nothing in it (`AgreementPartsBody` with `parts: []` draws only the
+  separate-purchase boundary) instead of reverting to the full legacy body.
+  C-4's inversion — the more the studio hides, the more the homeowner sees —
+  cannot happen.
+- `composed === false` → today's body, whatever rows remain in
+  `proposal_agreement_parts`. This is the shape of the kill switch reaching a
+  homeowner who has no flag of her own to read (C-3).
+- `composed === null` → **the frozen §5.2 test decides, unchanged**. That is
+  every document today and every flag-off document tomorrow, because no RPC
+  shipped to date emits the key. The flag-off snapshot
+  (`commercial-document-shell.test.tsx.snap`, written against the pre-branch
+  component and never regenerated) still passes untouched.
+
+**Why this, and not the round-1 attempt.** `708489b50` inferred composedness by
+reconciling the parts against the terms row and was correctly reverted in
+`b7a5c0946` — a heuristic that changed behavior on *today's* data. This is the
+opposite: one optional key, read defensively, inert until the backend emits it,
+with today's rendering decided by the frozen expression. It is additive to
+§2.4, not a deviation from it: the client reads a key the bundle may or may not
+carry, exactly as it already reads `paperSignedOn` / `paperScanDocumentId`
+(`00425`) — keys the RPC omits on rows that have no answer.
+
+**⚠ STILL OWED — orchestrator + backend, and this lane cannot close it.** The
+key is inert until `get_client_commercial_document_bundle` emits it. Per the
+reviewer's own instruction, the program must rule ONE of:
+
+1. the bundle carries `composed` (a boolean beside `parts`) — the client half
+   is now built and needs nothing further; or
+2. the program records that composition is one-way per proposal, in which case
+   only C-4's half survives and the backend still owes a `composed` (or the
+   equivalent) key so hiding every part cannot invert into disclosure.
+
+Either way **R17 is still not on the backend branch**, re-verified this round:
+
+```
+grep -c "agreement_projection\|agreement_composed" \
+  .codex/worktrees/agent-agr-w1-backend/supabase/migrations/00575_agreement_parts.sql
+  → 0
+```
+
+Until it lands, C-3 and C-4 are open at the *system* level even though the
+client can now honor the answer the moment it is given.
+
+## C-5 — the named e2e assertion, as a live branch instead of a `test.fixme`
+
+The sheet's §6.6 assertion ("the part titles appear in `position` order") could
+not be delivered because the fixture does not exist: it needs `00575` applied to
+the local stack **and** a seed laying down both a `proposal_service_terms` row
+and parts, and this lane may neither reset nor seed the shared stack. That
+owner is unchanged — the integration steward.
+
+What changed is the shape. The two half-tests (the runnable negative at `:392`
+and the `test.fixme` at `:449`) are now **one test**, `threshold.spec.ts:417`,
+which reads the same instrument and asserts whichever half the stack makes true:
+
+- a stack carrying a composed agreement → part count > 0, `data-position`
+  ascending, every title non-empty, boundary sentence exactly once (the
+  sheet's assertion, verbatim from the fixme);
+- a stack carrying none → no parts body and no stray `agreement-part` (today's
+  flag-off assertion, kept — the reviewer called it worth keeping).
+
+This matters for two reasons. The first branch lights up with **no edit to this
+file** once the steward lands the fixture, so nothing is owed but the fixture
+itself. And the two halves can no longer contradict each other: seeding a
+composed agreement onto the solo client's executed agreement would have made the
+old negative test (`expect(agreement-parts-body).toBe(0)`) fail, so landing the
+fixture would have broken a passing spec.
+
+`test.fixme` is now absent from the file:
+
+```
+grep -n "test.fixme" apps/client-portal/tests/threshold.spec.ts
+  → 410:   * as a live branch rather than a `test.fixme` so that landing…   (prose only)
+
+npx playwright test tests/threshold.spec.ts --list
+  → [chromium] › threshold.spec.ts:417:7 › … › reads the agreement in full —
+      its parts in position order where the stack carries a composed one
+  → Total: 14 tests in 1 file          (14, none skipped; was 13 + 1 fixme)
+```
+
+**⚠ STILL OWED — integration steward.** Apply `00575`, seed one composed
+agreement (terms row **and** parts), then run the spec and confirm the first
+branch is the one that executes. Do not sign §2.3's `threshold.spec.ts` item off
+as fully delivered until a run has actually taken that branch — a conditional
+assertion that has only ever taken its else is not coverage of the renderer.
+
+## N-1 — designer lane, nothing to change here
+
+R21 landed on the client only; the designer's live client-preview still prints
+`$0` for a seeded `patina.ceiling` / `patina.retainer` and a naked heading for
+an empty clause. The reviewer's own verdict is that the client side is correct
+(`agreement-parts-body.tsx:60-62` `isWritten()`, and `PartSection` returning
+`null` at `:352` so the whole `<section>` goes with the empty leaf) and that the
+fix belongs in
+`apps/designer-portal/src/components/document/commercial/agreement-parts-body.tsx`
+— a different worktree this lane may not touch. Recorded, not actioned.
+
+## Gates, this round
+
+```
+cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-client
+
+pnpm --filter @patina/client-portal type-check
+  → > tsc --noEmit     (clean, no diagnostics)
+
+pnpm --filter @patina/client-portal test
+  → Test Suites: 129 passed, 129 total
+    Tests:       1995 passed, 1995 total
+    Snapshots:   1 passed, 1 total    ← flag-off byte-identity, still unregenerated
+
+pnpm --filter @patina/client-portal test -- --coverage
+  → All files  73.96 stmts / 69.30 branches / 74.01 funcs / 76.28 lines
+    (floor 70/60/70/70 — clears on every axis)
+  → agreement-parts-body.tsx     100 / 91.66 / 100 / 100
+  → commercial-documents.ts    92.77 / 86.93 / 100 / 95.39
+  → commercial-document-shell.tsx 75.49 / 78.99 / 89.65 / 78.49
+
+npx playwright test tests/threshold.spec.ts --list
+  → Total: 14 tests in 1 file (the spec parses and the merged test is collected)
+
+git diff --stat -- apps/client-portal
+  7 files changed, 185 insertions(+), 70 deletions(-)
+```
+
+Eight new jest cases: five on the adapter (absent key → `null`; `true` with an
+empty array; `false` with rows still present; the snake_case and prefixed
+spellings; a string / number / explicit-null never coerced) and three on the
+shell (composed-with-everything-hidden prints no hidden figure and says the
+boundary once; `composed: false` with nine parts returns today's body;
+`composed: null` leaves the choice to the count, in both directions).
+
+## Not verified this round
+
+- **The e2e was not executed.** Booting :3002 in this worktree produced a dev
+  server that listens but never finishes compiling: the log is a wall of
+  `Watchpack Error (watcher): Error: EMFILE: too many open files, watch` and it
+  sat on `○ Compiling /_not-found ...` through ~10 minutes of `curl`
+  (`/sign-in` and `/auth/signin` both `000` at `-m 180`). System-wide fd
+  exhaustion on this box, not the spec — `ulimit -n` is 1048576 in-shell, so the
+  ceiling is elsewhere. The server was killed and :3002 left free. `--list`
+  above is the only proof offered that the merged spec compiles and collects.
+- `*.spec.ts` is **excluded** from `apps/client-portal/tsconfig.json`
+  (`"exclude": [… "**/*.spec.ts" …]`), so `type-check` does **not** cover
+  `tests/threshold.spec.ts`. Playwright's own transpile at `--list` time is what
+  proves it parses.
+- No parts row has still ever rendered against a real database; the bundle
+  RPC's `parts` projection — and now its `composed` key, which does not exist
+  yet — remain unexercised end to end.
+- `pnpm lint` still not run for client-portal, and would still mean nothing
+  (legacy `.eslintrc.json` under ESLint 9).
