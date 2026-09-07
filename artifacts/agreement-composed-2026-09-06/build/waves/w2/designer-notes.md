@@ -213,3 +213,169 @@ Supabase stack. No production command of any kind ran; Strata was not contacted.
   a source read — the 14-step walk in build-sheet §9 is still owed, and steps
   1–8 and 14 are this lane's surfaces.
 - Did not resolve the fee-basis advisory in §5.
+
+---
+
+# Fix round 1 — 2026-09-07
+
+Everything above is the build round and is left as written. This section is
+what the round-1 adversarial review (D-1 … D-8) changed, and what is now true.
+
+Commits (oldest first), `a6584dbc5` base:
+
+| sha | subject |
+|---|---|
+| `89404cbfe` | fix(document): the Library card takes the package's hook shapes, and asks before it removes |
+| `e101885fd` | fix(document): materialize a template through the package hook's own signature |
+| `7ecd75b8a` | fix(document): an addendum retries onto the draft it already made, through the package hook |
+| `32c71728c` | fix(document): the room holds one fee basis, and an unwritten fee schedule (R18) |
+| `6a28247ec` | fix(agreements): a part's Library origin survives the next Save |
+| `b943a05fa` | style(document): prettier the Library card's new studio-binding assertion |
+
+17 files, +894 / −217.
+
+## F1 · D-1 and D-2 — the gate, and the six invented signatures
+
+The review was right about both, and they are one fault: the build round wrote
+six call sites against a hook shape it had guessed at, then proved the gate
+green against a reference implementation it had written for itself. **That
+reference file is gone and nothing replaced it.** The call sites now match the
+backend lane's real exports, read off `agreement/w2-backend`:
+
+| call site | was | now |
+|---|---|---|
+| `agreement-library-card.tsx:81` | `useRenameAgreementTemplate()` | `useRenameAgreementTemplate(studioId)` |
+| `:82` | `useDeleteAgreementTemplate()` | `useDeleteAgreementTemplate(studioId)` |
+| `:84` | `useDeleteStudioAgreementPart()` | `useDeleteStudioAgreementPart(studioId)` |
+| rename commit | `mutateAsync({ templateKey, title })` | `mutateAsync({ id, title })` |
+| part rename | `mutateAsync({ studioId, part: {…} })` | flat `SaveAgreementPartInput` |
+| template delete | `mutateAsync({ templateKey })` | `mutateAsync(template.id)` |
+| part delete | `mutateAsync({ studioId, partId })` | `mutateAsync(part.id)` |
+| `agreement-composer.tsx:160` | `useMaterializeAgreementTemplate()` | `useMaterializeAgreementTemplate(proposalId)` |
+| `:343` | `mutateAsync({ proposalId, templateKey })` | `mutateAsync(template.templateKey)` |
+
+**How the gate was run, exactly, and why it cannot be run any other way.** The
+hooks live on the backend branch; this branch alone cannot compile against
+them, and it says so loudly — 12 `TS2724`/`TS2305` "has no exported member"
+errors, one per import, and nothing else. So the gate is an INTEGRATION PROBE:
+the backend worktree's four package files (`hooks/use-agreement-library.ts`,
+`hooks/use-agreement-part-events.ts`, `hooks/index.ts`, `database.types.ts`)
+are copied into this working tree **uncommitted**, the gates run, and the files
+are then restored with `git checkout --` / `rm` so the branch carries none of
+the backend's code. The final run was against backend HEAD `c9b0529c6`.
+
+`git status --porcelain -- packages/` is clean of probe residue at the point
+this note was written; the only `packages/**` change this branch commits is F5
+below.
+
+This is a genuine cross-lane dependency, not something the designer lane can
+close on its own. **Integration owes a merged-tree type-check** before either
+branch is called done.
+
+## F2 · D-3 and D-5 — one data layer, and one addendum
+
+The app-local `useCopyAgreementPartsFromAuthority` is deleted (45 lines out of
+`hooks/use-commercial-documents.ts`); `project-services-addendum-action.tsx`
+imports the package's hook. The build round's claim that "the frozen interface
+assigns no package hook to this RPC" was simply wrong.
+
+The package hook binds `proposalId` at construction, and the addendum's id does
+not exist until `create_service_addendum` has resolved — so the act is now a
+two-phase state machine rather than two awaits in one function:
+
+1. `compose()` mints the draft **once** and holds its id in `draftId`.
+2. An effect keyed on `[draftId, carrying]` runs the copy against the bound
+   hook, then fires the analytics event and pushes to the room.
+
+That shape is what fixes D-5. A refused copy keeps `draftId`, so pressing
+"Create the addendum" again carries the parts across **onto the draft that
+already exists** — `create_service_addendum` is never called a second time. The
+title field goes disabled at that point with "The draft is made. Rename it in
+the Contract Room.", because a retry cannot rename what is already minted.
+
+Pinned by a new test: *"retries onto the draft it already made — never a second
+addendum"* — one `createAddendum` call, two `copyParts` calls, one push.
+
+## F3 · D-6 — one fee basis (R18, 00577)
+
+`flat` beside `per_phase` is one of each, so the per-variant rule could not see
+it, and 00577 raises `an agreement carries one fee basis` at Save. Three places
+now hold it, in the RPC's own sentence:
+
+- `part-kinds.ts` — `FEE_BASIS_VARIANTS`, `feeBasisParts()`, `FEE_BASIS_BLOCKER`;
+  `addPartOptions()` drops both fee bases once the agreement carries one.
+- `add-part-sheet.tsx` — `refusalFor()` returns `this agreement carries one fee
+  basis` (not "already on this agreement", which would be a lie about a
+  different variant).
+- `readiness.ts` — every fee-basis part after the first is a blocker on its own
+  row, so Save can never reach the 23514 from the room.
+
+One Wave 1 test asserted the opposite — *"lets an agreement state more than one
+flat fee — nothing projects"*. Its premise ("nothing projects") is what Wave 2's
+`fee_basis` column ends. It is rewritten to assert the refusal, with a comment
+saying why it turned over.
+
+## F4 · D-7 — a required fee schedule that is empty
+
+`scheduleValueIsSet` ended `default: return true`, so a required `cost_plus`,
+`percent_of_cost`, `percent_of_spend`, `day_rate` or `package` carrying `{}`
+read complete. All five now answer from their own payload (build-sheet §4.2:
+record-only is a statement about the projection, not about whether the part is
+written). The `default: return true` stays, and stays correct, for the three
+variants the room opens no editor for (`pricing_basis`, `draws`, `allowances`).
+
+## F5 · D-4 — provenance, across the seam
+
+`toAgreementPartPayload` (`packages/supabase/src/hooks/use-agreement-parts.ts`)
+dropped `sourceTemplateKey` / `sourcePartId`, so the first Save after
+materializing a template blanked the columns the RPC had just written. Fixed at
+the mapper, which is where the fault is — **this is the one file this branch
+commits outside `apps/designer-portal/`**.
+
+It is safe to take here: it is a Wave 1 file, and `git diff a6584dbc5..HEAD --
+packages/supabase/src/hooks/use-agreement-parts.ts` on `agreement/w2-backend`
+is **empty** — the backend lane never opened it, so there is no conflict to
+make. `upsert_agreement_parts` has read both keys since 00575:2849-2862, so the
+change is correct with or without Wave 2 applied.
+
+One existing package test pinned the old payload exactly and was updated;
+`to-agreement-part-payload.test.ts` is new and pins the provenance directly.
+
+## F6 · D-8 — Delete asks twice
+
+Both Library deletes were one-click and irreversible while the far gentler
+template materialize had a two-step warning. `Delete` now becomes `Remove it` /
+`Keep it` with a line beneath it — `REMOVE_TEMPLATE_WARNING` /
+`REMOVE_PART_WARNING`, both saying that agreements already composed from the
+entry are untouched (true: `source_part_id` is a soft pointer). One row asks at
+a time. Three new tests, including *"asks about one row at a time"*.
+
+## Gates — fix round, on the committed tree
+
+Probe applied (F1), backend HEAD `c9b0529c6`:
+
+| gate | result |
+|---|---|
+| `pnpm --filter @patina/designer-portal type-check` | **clean, exit 0** |
+| `pnpm --filter @patina/designer-portal type-check`, probe removed | 12 errors, all `has no exported member` — the cross-lane dependency, unchanged |
+| `pnpm --filter @patina/designer-portal lint` | **2 errors / 203 warnings — the recorded baseline**; both errors pre-existing in files this lane never opened (`piece-room-save-gate.test.tsx:159`, `use-commercial-documents.test.ts:930`, both byte-identical to base) |
+| `npx eslint` on the 15 touched files only | **0 errors**, 6 warnings (pre-existing `no-img-element` disables in untouched `account/*` files) |
+| `pnpm --filter @patina/designer-portal test` (full) | **534 suites · 6495 tests · 7 snapshots — all passed** |
+| `pnpm --filter @patina/supabase test` (full) | **88 files · 1071 passed / 12 skipped** |
+| `pnpm --filter @patina/client-portal type-check` | clean (after `pnpm turbo build --filter=@patina/client-portal^...`) |
+| `pnpm --filter @patina/admin-portal build` | **succeeded** — the repo's strictest gate, run because F5 edits a shared package |
+
+**One flake, recorded rather than hidden.** On one of four full-suite runs,
+`src/hooks/__tests__/use-lens-state.test.tsx` failed under parallel load; it
+passes in isolation (17/17) and the file, `use-lens-state.ts` and
+`use-lens-density.ts` are untouched by this lane
+(`git log a6584dbc5..HEAD -- <those paths>` is empty). It is an rAF/`flushSync`
+timing suite, not an agreement one.
+
+## Still owed after this round
+
+- **Integration must run the designer type-check on the MERGED tree.** Nothing
+  on this branch alone can prove it, and this round's green is a probe.
+- The 14-step walk (build-sheet §9), steps 1–8 and 14. No browser was opened.
+- Nothing here touched the SQL suites, `db:generate`, Playwright, the shared
+  Supabase stack, or production.
