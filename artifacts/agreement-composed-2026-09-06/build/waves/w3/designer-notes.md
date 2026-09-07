@@ -149,3 +149,113 @@ worktree; unrelated to this wave.)
   strip can say "Held for counsel review" — the SELECT policy admits enabled rows only, so a
   disabled row is invisible to a studio read and the room would otherwise say nothing at all.
   Keep that list in step with migration 1 PART 4's seed.
+
+---
+
+# Round 1 — adversarial review, five findings answered
+
+Date 2026-09-07. Five findings (one blocker, four majors); all five addressed, no minors deferred.
+
+## D1 (blocker) — two sibling writes in one act collided
+
+`agreement-composer.tsx`. `mutate(next)` took a plain array derived from the render's `parts`, and
+`changePayload` / `writePart` both closed over that same array. Every turnkey editor that writes a
+sibling calls both in one handler (the allowances editor lays down its cost line; the
+sub-disclosure clause stores its mode on the pricing basis), so the second setter discarded the
+first: the allowance never reached its payload, and the clause's own `mode` never moved while the
+pricing basis' copy did — R13's two halves disagreeing, the schedule of values rendering in one
+mode while the payload the client reads says the other.
+
+**Fix**: `mutate` now takes `AgreementPart[] | ((current) => AgreementPart[])` and every act that
+derives from the current list — `changePayload`, `writePart`, `setClientVisible`, `renamePart` —
+passes the updater form, so each write is applied to what the one before it produced. The
+whole-array acts (`addPart`, `removePart`, `reorderPart`, `attachNotice`, `addFromLibrary`) still
+pass a value, which is correct: each is one write.
+
+**Proof the test bites**: with `changePayload` alone reverted to the plain form the new cases still
+passed — React applies value-then-updater in order, so the *last* write survives. Reverting BOTH
+reproduced the reported failure exactly (2 failed / 3 passed), and restoring the fix returned 5/5.
+The lane's own `turnkey-editors.test.tsx` could never have caught this: it hands the editor two
+independent `jest.fn()`s and never puts them back into one state container.
+
+## D2 (major) — flag-off readiness failed OPEN, and §4.1's read-only prose was missing
+
+`readiness.ts` gated the turnkey block on `isTurnkey && turnkey` but exempted the R-5 class fee
+floor on `isTurnkey` ALONE. With `design-build` off the composer supplies no `turnkey`, so a
+`design_build` document carrying no money at all passed clean — where the same document raised
+"This agreement names no fee." before Wave 3 touched the file. A fail-closed flag's rollback path
+must be the stricter side.
+
+**Fix**: one `turnkeyFloor` binding (`isTurnkey && turnkey ? turnkey : null`) is now the whole
+gate, read by the turnkey block AND by the fee-floor exemption. `agreement-composer.tsx` also
+implements §4.1: `readOnly` now includes `document.kind === "design_build" && !designBuildOn`, so a
+flag-off turnkey agreement lists its parts as prose with no rename, reorder, remove, add, template
+or Save act, and no turnkey editor mounted.
+
+## D3 (major) — draw keys could collide with no way to clear the refusal
+
+The add button minted `draw_${length + 1}`. Remove a middle draw and add one and the key repeats;
+`validateDrawSet` then refuses with "Two draws share a key. Rename one." — and the key is minted
+only when falsy, so no control in the editor could rename it. The draw key is the identity the
+ledger row and the invoice are stamped with (I-3 takes `p_draw_key`), so this was not only a dead
+end in the room.
+
+**Fix**: `mintDrawKey(others, position, label)` reads the keys actually in use — `retainage_release`
+and `deposit` included — and counts past every one. `position === 0` always answers `deposit`,
+which is what `validateDrawSet` requires of the first row. `drawKeyFrom` is gone. A duplicate that
+arrives from a payload this editor did not author still refuses; Remove is the escape hatch and it
+is always offered.
+
+## D4 (major) — the allowance rebuild deleted lines and reordered the schedule
+
+`write()` dropped every `category:'allowance'` cost line and re-appended the matched ones. Two
+consequences: an allowance-category line authored on the pricing basis (its category select offers
+"Allowance") was destroyed — changing the contract sum — the moment any allowance field was
+touched; and re-appending moved which SOV row absorbs the "last row takes the remainder" rounding.
+
+**Fix**: the rebuild walks `costLines` in place. A line whose id is in the new allowance list is
+rewritten where it stands; a line whose id WAS an allowance and is not one now is dropped (the
+designer removed it); any other allowance-category line is left exactly where it was. Only a
+genuinely new allowance appends.
+
+The line → allowance direction is named rather than refused: `unbackedAllowanceLine()` in
+`lib/document/design-build.ts` returns a sentence, rendered as a quiet line in the allowances
+editor and pushed to `readiness.notes` — **advisory, never a blocker**. `_validate_allowances_payload`
+asks allowance → line only, so a blocker here would refuse a send the server accepts, and this room
+does not get to be stricter than the database.
+
+## D5 (major) — the licensing attestation would have rendered as an ordinary rail row
+
+Build sheet PART 13's eleventh entry, `patina.licensing_attestation` (kind `attestation`), is the
+gate: materialized at compose, never editable in the rail, never read by the client. Nothing
+filtered it, so it would have listed as a renameable, draggable, removable row with the generic
+fall-through editor.
+
+**Fix**: `parts-rail.tsx` filters `kind === "attestation"` out of the rows it lists, the sortable
+set, and the "no parts yet" test. Reorder is translated from rail indices to composition indices
+(`moveRow`), so moving a visible row past a hidden one still swaps the two rows the designer sees —
+`PartRow` now takes `onMove` (rail indices) rather than `onReorder`. The composer's
+`firstRailPartId()` is what every selection default now reads, so the room never opens on a row
+that is not in the rail. The part is NOT dropped from the composition: it rides along and one
+`upsert_agreement_parts` writes it back.
+
+Still contingent on the backend lane actually seeding PART 13's eleventh entry — the filter is
+correct whether or not the row exists.
+
+## Round-1 gates
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @patina/designer-portal type-check` | **clean** (`tsc --noEmit`, no output) |
+| `pnpm --filter @patina/designer-portal test -- <the four touched/new test files>` | parts-rail **18/18**, turnkey-editors **22/22**, readiness-turnkey **17/17**, agreement-composer-turnkey **5/5** |
+| `pnpm --filter @patina/designer-portal test` (full) | **544 suites / 6642 tests / 12 snapshots — all passed**, 29.0s |
+| `pnpm --filter @patina/designer-portal lint` | 2 errors, 203 warnings — **both errors pre-existing and unchanged**: `git diff 112e6f838 -- <both files> apps/designer-portal/eslint.config.mjs` is empty, so they are byte-identical to base |
+
+The flag-off snapshot file `agreement-composer-design-build-off.test.tsx.snap` is **unchanged** — no
+`-u`, 12 snapshots passed. That is the pin that says the flag-off room is still the paper Wave 2
+shipped.
+
+## Round-1 diff
+
+9 files changed, 669 insertions(+), 55 deletions(-), plus one new 440-line test file
+(`__tests__/agreement-composer-turnkey.test.tsx`).
