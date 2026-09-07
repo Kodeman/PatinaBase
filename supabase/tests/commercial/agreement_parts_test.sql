@@ -1020,12 +1020,26 @@ SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000008', 'The clear
 DO $$
 DECLARE v_err text; v_touched integer; v_seeded jsonb;
 BEGIN
+  -- R17(c). Q3's route began with a co-member clearing the ceiling by hand on
+  -- the terms row. 00575 takes the write set away, so that first step no
+  -- longer exists — and the fixture stands in as the table owner for the
+  -- state a pre-00575 co-member could already have left behind.
   PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000001');
+  BEGIN
+    UPDATE public.proposal_service_terms SET billing_ceiling_cents = NULL
+    WHERE proposal_id = 'a5300000-0000-4000-8000-000000000008';
+    ASSERT false, 'the studio must not hold the write set on the money row';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_err LIKE 'permission denied%',
+    format('R17(c): the money row is not writable by hand: %L', v_err);
+  v_err := NULL;
+
   UPDATE public.proposal_service_terms SET billing_ceiling_cents = NULL
   WHERE proposal_id = 'a5300000-0000-4000-8000-000000000008';
   GET DIAGNOSTICS v_touched = ROW_COUNT;
-  PERFORM pg_temp.reset_role();
-  ASSERT v_touched = 1, 'the studio may clear the ceiling on its own draft';
+  ASSERT v_touched = 1, 'the fixture stands up the cleared ceiling';
   ASSERT (SELECT count(*) FROM public.proposal_service_rates
           WHERE proposal_id = 'a5300000-0000-4000-8000-000000000008') = 1,
     'the fixture still bills time';
@@ -1141,12 +1155,13 @@ SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000007', 'The uncap
 DO $$
 DECLARE v_touched integer;
 BEGIN
-  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000001');
+  -- Owner-side, for the same reason as case 24: R17(c) took the money row's
+  -- write set away from authenticated, and this fixture is standing up a
+  -- state, not exercising a door.
   UPDATE public.proposal_service_terms SET billing_ceiling_cents = NULL
   WHERE proposal_id = 'a5300000-0000-4000-8000-000000000007';
   GET DIAGNOSTICS v_touched = ROW_COUNT;
-  PERFORM pg_temp.reset_role();
-  ASSERT v_touched = 1, 'the studio may clear the ceiling on its own draft';
+  ASSERT v_touched = 1, 'the fixture stands up the uncapped agreement';
   ASSERT (SELECT count(*) FROM public.proposal_service_rates
           WHERE proposal_id = 'a5300000-0000-4000-8000-000000000007') = 1,
     'the uncapped agreement still carries its role rate';
@@ -1232,6 +1247,424 @@ BEGIN
     'a real ceiling still parks the hour that exceeds it, got %L', v_state);
 
   RAISE NOTICE 'PASS 23: an uncapped authority authorizes its hours; a cap still caps';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (25) R17 — ONE SOURCE OF TRUTH PER DOCUMENT. Reviewer probes P16 and P3b.
+--      A composed agreement's money row is a PROJECTION. The flag-off
+--      seven-facet room may not author over it, and no hand may move it —
+--      not even a hand that still holds the grant. Before 00575's R17 block,
+--      a flag-off co-member saved 500,000/monthly over a composition the
+--      client signed at 2,400,000/biweekly, the document sent, was signed and
+--      countersigned, and the two parties ended up bound to different money
+--      with no refusal anywhere. The fingerprint cannot catch it: it hashes
+--      both halves.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION pg_temp.base_parts() RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_array(
+    jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+      'title', 'Services', 'required', true,
+      'payload', jsonb_build_object('body', 'Full-service interior design.')),
+    jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+      'partKey', 'patina.role_rates', 'title', 'Role rates',
+      'payload', jsonb_build_object('roles', jsonb_build_array(
+        jsonb_build_object('roleName', 'Lead Designer', 'hourlyRateCents', 22500, 'sortOrder', 0)))),
+    jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+      'partKey', 'patina.ceiling', 'title', 'Ceiling',
+      'payload', jsonb_build_object('cents', 2400000)),
+    jsonb_build_object('kind', 'schedule', 'variant', 'cadence',
+      'partKey', 'patina.cadence', 'title', 'Billing cadence',
+      'payload', jsonb_build_object('cadence', 'biweekly')),
+    jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+      'title', 'Terms', 'required', true,
+      'payload', jsonb_build_object('body', 'Billed at actual hours.'))
+  );
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.base_parts() TO PUBLIC;
+
+-- Saves a composition and hands back the refusal's own words, so a case can
+-- assert the sentence a designer would read rather than an error class.
+CREATE OR REPLACE FUNCTION pg_temp.save_parts_err(p_id uuid, p_parts jsonb)
+RETURNS text LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM public.upsert_agreement_parts(p_id, p_parts);
+  RETURN NULL;
+EXCEPTION WHEN check_violation THEN RETURN SQLERRM;
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.save_parts_err(uuid, jsonb) TO PUBLIC;
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-00000000000a', 'The one-source agreement');
+
+DO $$
+DECLARE
+  v_err text;
+  v_detail text;
+  v_terms public.proposal_service_terms%ROWTYPE;
+BEGIN
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-00000000000a', pg_temp.base_parts());
+
+  SELECT * INTO v_terms FROM public.proposal_service_terms
+  WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a';
+  ASSERT v_terms.billing_ceiling_cents = 2400000
+     AND v_terms.billing_cadence = 'biweekly',
+    'the composition must have projected before the probes mean anything';
+  ASSERT (SELECT hourly_rate_cents FROM public.proposal_service_rates
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a') = 22500,
+    'the composed rate card must have projected';
+
+  -- P16. The flag-off door, over a composed draft, by a co-member with every
+  -- right to author a seven-facet agreement of their own.
+  PERFORM pg_temp.assume_user('a5000000-0000-4000-8000-000000000002');
+  BEGIN
+    PERFORM public.upsert_design_services_draft(
+      'a5300000-0000-4000-8000-00000000000a',
+      jsonb_build_object(
+        'scope', 'Whole-home interior design services.',
+        'deliverables', jsonb_build_array('Concept'),
+        'exclusions', jsonb_build_array(),
+        'billingCeilingCents', 500000,
+        'retainerAmountCents', 0,
+        'billingCadence', 'monthly', 'currency', 'USD',
+        'currentRateVersion', 1),
+      jsonb_build_array(jsonb_build_object(
+        'roleName', 'Lead Designer', 'hourlyRateCents', 9900, 'sortOrder', 0)));
+    ASSERT false, 'the flag-off room must not author over a composition';
+  EXCEPTION WHEN check_violation THEN
+    v_err := SQLERRM;
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+  END;
+  PERFORM pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+  ASSERT v_err = 'This agreement is composed from parts. Open it in the Contract Room with parts on to change it.',
+    format('R17(b): the flag-off room reads one plain sentence: %L', v_err);
+  ASSERT v_detail = 'agreement_composed',
+    format('R17(b): the refusal is typed for the caller too: %L', v_detail);
+
+  -- Nothing moved. The page the client would sign and the row the authority
+  -- snapshots are still the same money.
+  SELECT * INTO v_terms FROM public.proposal_service_terms
+  WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a';
+  ASSERT v_terms.billing_ceiling_cents = 2400000, 'the refused save moved the ceiling';
+  ASSERT v_terms.billing_cadence = 'biweekly', 'the refused save moved the cadence';
+  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a'
+            AND hourly_rate_cents = 22500) = 1,
+    'the refused save moved the rate card';
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a') = 5,
+    'the refused save touched the parts';
+END $$;
+
+DO $$
+DECLARE v_err text; v_detail text;
+BEGIN
+  -- P3b. A hand on the money row directly, standing as the TABLE OWNER —
+  -- past RLS, past the grant, the strongest writer this database has short
+  -- of disabling triggers. The wall is the trigger, not the ACL.
+  BEGIN
+    UPDATE public.proposal_service_terms SET billing_ceiling_cents = NULL
+    WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a';
+    ASSERT false, 'a composed money row must not be updatable by hand';
+  EXCEPTION WHEN check_violation THEN
+    v_err := SQLERRM;
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+  END;
+  ASSERT v_err = 'This agreement is composed from parts. Open it in the Contract Room with parts on to change it.',
+    format('R17(a): the trigger refuses in the same sentence: %L', v_err);
+  ASSERT v_detail = 'agreement_composed',
+    format('R17(a): and with the same token: %L', v_detail);
+
+  v_err := NULL;
+  BEGIN
+    DELETE FROM public.proposal_service_rates
+    WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a';
+    ASSERT false, 'a composed rate row must not be deletable by hand';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err IS NOT NULL, 'the rates half of the wall is missing';
+
+  v_err := NULL;
+  BEGIN
+    INSERT INTO public.proposal_service_rates (
+      proposal_id, version, role_name, hourly_rate_cents, sort_order
+    ) VALUES ('a5300000-0000-4000-8000-00000000000a', 1, 'Smuggled Role', 100, 9);
+    ASSERT false, 'a rate must not be insertable into a composed agreement';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err IS NOT NULL, 'the rates INSERT half of the wall is missing';
+
+  -- The GUC is the only key, and it is transaction-local: naming a DIFFERENT
+  -- proposal does not open this one.
+  v_err := NULL;
+  PERFORM set_config('app.agreement_projection',
+    'a5300000-0000-4000-8000-000000000001', true);
+  BEGIN
+    UPDATE public.proposal_service_terms SET billing_ceiling_cents = 1
+    WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a';
+    ASSERT false, 'another document''s projection must not open this one';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  PERFORM set_config('app.agreement_projection', '', true);
+  ASSERT v_err IS NOT NULL, 'the guard compares the GUC to THIS proposal';
+
+  -- R17(c). And the grant that made all of this reachable from a browser is
+  -- gone: the studio reads the money row and writes it nowhere.
+  ASSERT has_table_privilege('authenticated'::name,
+    'public.proposal_service_terms'::regclass, 'SELECT'),
+    'the studio still reads its own terms row';
+  ASSERT has_table_privilege('authenticated'::name,
+    'public.proposal_service_rates'::regclass, 'SELECT'),
+    'the studio still reads its own rate rows';
+  ASSERT NOT (
+    has_table_privilege('authenticated'::name, 'public.proposal_service_terms'::regclass, 'INSERT')
+    OR has_table_privilege('authenticated'::name, 'public.proposal_service_terms'::regclass, 'UPDATE')
+    OR has_table_privilege('authenticated'::name, 'public.proposal_service_terms'::regclass, 'DELETE')
+    OR has_table_privilege('authenticated'::name, 'public.proposal_service_rates'::regclass, 'INSERT')
+    OR has_table_privilege('authenticated'::name, 'public.proposal_service_rates'::regclass, 'UPDATE')
+    OR has_table_privilege('authenticated'::name, 'public.proposal_service_rates'::regclass, 'DELETE')
+  ), 'R17(c): authenticated must hold no write on either projection table';
+  ASSERT NOT (
+    has_table_privilege('anon'::name, 'public.proposal_service_terms'::regclass, 'UPDATE')
+    OR has_table_privilege('anon'::name, 'public.proposal_service_rates'::regclass, 'UPDATE')
+  ), 'R17(c): anon must hold no write on either projection table';
+
+  RAISE NOTICE 'PASS 25: one source of truth — the flag-off door, the direct hand and the grant all refuse (R17)';
+END $$;
+
+-- The legacy contract is unmoved by all three walls: a document with NO parts
+-- is still authored by the seven-facet room, and its money row still moves.
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-00000000000b', 'The uncomposed agreement');
+
+DO $$
+DECLARE v_result jsonb;
+BEGIN
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000b') = 0,
+    'the control must carry no parts';
+  v_result := public.upsert_design_services_draft(
+    'a5300000-0000-4000-8000-00000000000b',
+    jsonb_build_object(
+      'scope', 'Whole-home interior design services.',
+      'deliverables', jsonb_build_array('Concept'),
+      'exclusions', jsonb_build_array(),
+      'billingCeilingCents', 500000,
+      'retainerAmountCents', 0,
+      'billingCadence', 'monthly', 'currency', 'USD',
+      'currentRateVersion', 1),
+    jsonb_build_array(jsonb_build_object(
+      'roleName', 'Lead Designer', 'hourlyRateCents', 9900, 'sortOrder', 0)));
+  ASSERT v_result->>'commercialState' = 'draft',
+    'the seven-facet room still authors a document that has no parts';
+  ASSERT (SELECT billing_ceiling_cents FROM public.proposal_service_terms
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000b') = 500000,
+    'the flag-off write still lands when nothing is composed';
+
+  RAISE NOTICE 'PASS 26: the flag-off contract is byte-for-byte unmoved on a parts-less document';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (27) R2 — MONEY IS TYPED AT THE DOOR. The floor asks jsonb_typeof before it
+--      counts a figure; the projection used to cast with ->> and ask nothing.
+--      A rate card whose rate arrived as the STRING "22500" therefore billed
+--      real hours against a ceiling the floor could not see and SENT, and a
+--      ceiling stated as a string earned the floor's sentence — a red for the
+--      wrong reason. Both halves now read one payload one way.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-00000000000c', 'The stringly-typed agreement');
+
+DO $$
+DECLARE v_err text;
+BEGIN
+  -- P17: a string rate and no ceiling at all. This used to save, report the
+  -- floor as met, write hourly_rate_cents = 22500 beside a NULL ceiling, and
+  -- send.
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000c',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+        'partKey', 'patina.role_rates', 'title', 'Role rates',
+        'payload', jsonb_build_object('roles', jsonb_build_array(
+          jsonb_build_object('roleName', 'Lead Designer',
+                             'hourlyRateCents', '22500', 'sortOrder', 0))))));
+  ASSERT v_err = 'the hourly rate needs an amount in dollars and cents',
+    format('R2: a rate that is not a number is not a rate: %L', v_err);
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000c') = 0,
+    'nothing may be written before the money is legible';
+
+  -- P18, the mirror: a ceiling stated as a string beside a real rate card.
+  -- It must earn its OWN sentence, not "an agreement that bills time needs a
+  -- ceiling" — the cap is stated, it is only unreadable.
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000c',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+        'partKey', 'patina.role_rates', 'title', 'Role rates',
+        'payload', jsonb_build_object('roles', jsonb_build_array(
+          jsonb_build_object('roleName', 'Lead Designer',
+                             'hourlyRateCents', 22500, 'sortOrder', 0)))),
+      jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+        'partKey', 'patina.ceiling', 'title', 'Ceiling',
+        'payload', jsonb_build_object('cents', '2400000'))));
+  ASSERT v_err = 'the ceiling needs an amount in dollars and cents',
+    format('R2: an unreadable cap is not a missing cap: %L', v_err);
+
+  -- A fractional figure is not cents either, and a negative one is not money.
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000c',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+      'partKey', 'patina.retainer', 'title', 'Retainer',
+      'payload', jsonb_build_object('cents', 1500.5))));
+  ASSERT v_err = 'the retainer needs an amount in dollars and cents',
+    format('R2: half a cent is not a retainer: %L', v_err);
+
+  -- And the legal shapes still save: a real number, and "not yet set".
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-00000000000c',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+        'partKey', 'patina.ceiling', 'title', 'Ceiling',
+        'payload', jsonb_build_object('cents', NULL)),
+      jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+        'partKey', 'patina.retainer', 'title', 'Retainer',
+        'payload', jsonb_build_object('cents', 500000))));
+  ASSERT (SELECT billing_ceiling_cents FROM public.proposal_service_terms
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000c') IS NULL,
+    'R21: an unset ceiling is still a legal state of a draft';
+  ASSERT (SELECT retainer_amount_cents FROM public.proposal_service_terms
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000c') = 500000,
+    'a real figure still projects';
+
+  RAISE NOTICE 'PASS 27: money is typed at the door — the floor and the projection read one payload one way (R2)';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (28) R7 — NO DATABASE IDENTIFIER REACHES THE ROOM. The composer prints the
+--      RPC's error text as its save note. Each of these six used to answer
+--      with the name of a constraint, a column or a table.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-00000000000d', 'The ill-formed agreement');
+
+DO $$
+DECLARE
+  v_err text;
+  v_errs text[] := ARRAY[]::text[];
+  v_one text;
+BEGIN
+  -- (a) two parts under one name — was: duplicate key value violates unique
+  --     constraint "uniq_agreement_part_key".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+        'title', 'Terms', 'payload', jsonb_build_object('body', 'One.')),
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+        'title', 'Terms', 'payload', jsonb_build_object('body', 'Two.'))));
+  ASSERT v_err = 'this agreement lists the part titled "Terms" twice',
+    format('R7(a): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (b) a role with no name — was: violates check constraint
+  --     "proposal_service_rates_role_name_check".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+      'partKey', 'patina.role_rates', 'title', 'Role rates',
+      'payload', jsonb_build_object('roles', jsonb_build_array(
+        jsonb_build_object('roleName', '   ', 'hourlyRateCents', 22500))))));
+  ASSERT v_err = 'every role on the rate card needs a name', format('R7(b): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (c) a role with no rate — was: null value in column "hourly_rate_cents"
+  --     of relation "proposal_service_rates".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+      'partKey', 'patina.role_rates', 'title', 'Role rates',
+      'payload', jsonb_build_object('roles', jsonb_build_array(
+        jsonb_build_object('roleName', 'Lead Designer'))))));
+  ASSERT v_err = 'every role on the rate card needs an hourly rate', format('R7(c): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (d) a cadence the money row has no column state for — was: violates check
+  --     constraint "proposal_service_terms_billing_cadence_check". 'per_draw'
+  --     is type-legal in the contract and does not become legal here until
+  --     Wave 3 widens the CHECK.
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'cadence',
+      'partKey', 'patina.cadence', 'title', 'Billing cadence',
+      'payload', jsonb_build_object('cadence', 'per_draw'))));
+  ASSERT v_err = 'billing runs monthly, every two weeks, or at milestones',
+    format('R7(d): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (e) a negative ceiling — was: violates check constraint
+  --     "proposal_service_terms_billing_ceiling_cents_check".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+      'partKey', 'patina.ceiling', 'title', 'Ceiling',
+      'payload', jsonb_build_object('cents', -1))));
+  ASSERT v_err = 'a ceiling cannot be less than zero', format('R7(e): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (f) a deposit of 150% — was: violates check constraint
+  --     "proposal_service_terms_furnishings_deposit_check".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'procurement',
+      'partKey', 'patina.deposit', 'title', 'Furnishings deposit',
+      'payload', jsonb_build_object('depositPercent', 150))));
+  ASSERT v_err = 'a furnishings deposit is a percentage between 0 and 100',
+    format('R7(f): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (g) two rows for one role on the rate card — was: duplicate key value
+  --     violates unique constraint
+  --     "proposal_service_rates_proposal_id_version_role_name_key".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+      'partKey', 'patina.role_rates', 'title', 'Role rates',
+      'payload', jsonb_build_object('roles', jsonb_build_array(
+        jsonb_build_object('roleName', 'Lead Designer', 'hourlyRateCents', 22500),
+        jsonb_build_object('roleName', 'Lead Designer', 'hourlyRateCents', 19500))))));
+  ASSERT v_err = 'the rate card names Lead Designer twice', format('R7(g): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (h) a retainer that starts on a policy the money row cannot hold — was:
+  --     violates check constraint
+  --     "proposal_service_terms_retainer_activation_policy_check".
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+      'partKey', 'patina.retainer', 'title', 'Retainer',
+      'payload', jsonb_build_object('cents', 500000, 'activationPolicy', 'on_handshake'))));
+  ASSERT v_err = 'a retainer starts either right away or once it is paid',
+    format('R7(h): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- And not one of the eight names a constraint, a column or a table. This is
+  -- the assertion that survives a reworded refusal.
+  FOREACH v_one IN ARRAY v_errs LOOP
+    ASSERT v_one !~* '(violates|constraint|column|relation|proposal_service|proposal_agreement|uniq_agreement)',
+      format('R7: a database identifier reached the room: %L', v_one);
+  END LOOP;
+
+  -- Nothing was written by any of them.
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000d') = 0,
+    'a refused composition writes no parts';
+
+  RAISE NOTICE 'PASS 28: every refusal is worded for the designer — no identifier reaches the room (R7)';
 END $$;
 
 ROLLBACK;

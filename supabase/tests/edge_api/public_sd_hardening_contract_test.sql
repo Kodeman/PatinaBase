@@ -4519,19 +4519,6 @@ BEGIN
   );
   addendum_id := (addendum_result->>'proposalId')::uuid;
 
-  UPDATE public.proposal_service_terms
-  SET retainer_amount_cents = 1200,
-      billing_ceiling_cents = 12000
-  WHERE proposal_id = addendum_id;
-
-  -- _commercial_document_fingerprint is postgres-only; the authorized path for
-  -- an authenticated sender to learn the expected fingerprint is the snapshot RPC.
-  PERFORM public.send_commercial_document(
-    addendum_id,
-    public.get_commercial_document_send_snapshot(addendum_id) ->> 'documentFingerprint',
-    'Reviewed canonical post-handoff addendum', NULL
-  );
-
   INSERT INTO _00511_addendum_fixture(project_id, proposal_id, document_id)
   VALUES (
     (origin_result->>'projectId')::uuid,
@@ -4540,6 +4527,38 @@ BEGIN
   );
 END
 $canonical_addendum_fixture$;
+
+-- 00575 (R17(c)) withdrew INSERT/UPDATE/DELETE on proposal_service_terms and
+-- proposal_service_rates from authenticated: once an agreement can be composed
+-- from parts, the money row is a projection and only its RPC may move it. No
+-- portal or edge code ever wrote either table (they read them), so nothing in
+-- the product changed — but this fixture did write one by hand. It is a
+-- fixture and not a door, so it stands as the table owner and the send below
+-- goes back to being the authenticated act it was testing.
+RESET ROLE;
+UPDATE public.proposal_service_terms
+SET retainer_amount_cents = 1200,
+    billing_ceiling_cents = 12000
+WHERE proposal_id = (SELECT proposal_id FROM _00511_addendum_fixture);
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+DO $canonical_addendum_send$
+DECLARE
+  addendum_id uuid := (SELECT proposal_id FROM _00511_addendum_fixture);
+BEGIN
+  -- _commercial_document_fingerprint is postgres-only; the authorized path for
+  -- an authenticated sender to learn the expected fingerprint is the snapshot RPC.
+  PERFORM public.send_commercial_document(
+    addendum_id,
+    public.get_commercial_document_send_snapshot(addendum_id) ->> 'documentFingerprint',
+    'Reviewed canonical post-handoff addendum', NULL
+  );
+END
+$canonical_addendum_send$;
 
 RESET ROLE;
 
