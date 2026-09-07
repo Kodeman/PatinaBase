@@ -166,8 +166,21 @@ describe("assessAgreementReadiness — the happy floor", () => {
     expect(assess(parts).ready).toBe(true);
   });
 
-  it("stays ready on a ceiling with no rate card — the uncapped case", () => {
-    expect(assess([services(), ceiling(2_400_000), terms()]).ready).toBe(true);
+  // R22 — a ceiling is a cap on a fee and not a fee, so it no longer answers
+  // the class floor on its own (`_agreement_fee_unnamed`, 00575, refuses the
+  // same composition). What this case protects is the OTHER half: a ceiling
+  // with no rate card beside it asks for no rate card.
+  it("stays ready on a fee and a ceiling with no rate card", () => {
+    const flat = part({
+      partKey: "custom.flat",
+      kind: "schedule",
+      variant: "flat",
+      title: "Flat fee",
+      payload: { cents: 1_100_000 },
+    });
+    expect(assess([services(), flat, ceiling(2_400_000), terms()]).ready).toBe(
+      true,
+    );
   });
 
   it("stays ready on a flat fee alone", () => {
@@ -266,6 +279,12 @@ describe("assessAgreementReadiness — R-5, the class floor", () => {
 
   it("is not satisfied by a retainer and a cadence alone", () => {
     expect(messages([services(), retainer(), cadence(), terms()])).toContain(
+      noFeeBlocker,
+    );
+  });
+
+  it("is not satisfied by a ceiling alone — a cap is not a fee (R22)", () => {
+    expect(messages([services(), ceiling(2_400_000), terms()])).toContain(
       noFeeBlocker,
     );
   });

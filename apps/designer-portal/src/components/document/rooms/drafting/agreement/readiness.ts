@@ -52,11 +52,15 @@ export interface AgreementReadiness {
  * creates billing authority and includes `retainer` and `cadence`. A retainer
  * is money held against a fee and a cadence is when invoices go out; neither
  * one states what the work costs, so an agreement carrying only those still
- * names no fee. This list is exactly the blocker sentence below: a rate card,
- * a flat fee, a per-phase fee — plus a ceiling, which is itself a stated
- * amount the studio may not exceed.
+ * names no fee.
+ *
+ * R22 — and NOT `ceiling` either. A ceiling is a cap on a fee, not a fee: an
+ * agreement whose only money part is "we will not exceed $24,000" never says
+ * what the work costs. This list is exactly the blocker sentence below, and
+ * exactly what `_agreement_fee_unnamed` (00575) reads, so the panel and the
+ * database ask one question.
  */
-const FEE_VARIANTS = ["rate_card", "flat", "per_phase", "ceiling"] as const;
+const FEE_VARIANTS = ["rate_card", "flat", "per_phase"] as const;
 
 /** The blocker that is about the client account rather than the agreement.
  *  Excluded from the attention count, exactly as the seven-facet room
