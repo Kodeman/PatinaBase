@@ -1737,10 +1737,24 @@ VALUES
     ARRAY[]::text[]
   ),
   (
-    'public.sign_design_services_agreement_with_trusted_ip(uuid,text,uuid,text)',
-    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_signed_ip text DEFAULT NULL::text',
+    -- 00577 widened this function with a trailing `p_consent jsonb DEFAULT
+    -- NULL` and passes it through to
+    -- _sign_design_services_agreement_authorized, so the consent sentence the
+    -- homeowner ticked is frozen in the signature row's metadata at INSERT
+    -- (00511's signature was
+    -- public.sign_design_services_agreement_with_trusted_ip(uuid,text,uuid,text)
+    -- and its hash was
+    -- 6c615ca417d594865e1f0772ee862c312e7a398d037c141366c8a1b97fd6f17d).
+    -- The four-argument arity was DROPped in the same file rather than left
+    -- standing beside the wider one, so PostgREST still resolves exactly one
+    -- candidate; a four-argument call reaches this body through the default.
+    -- Everything else this file pins is unchanged: still SECURITY DEFINER,
+    -- same search_path, same result type, and the ACL is re-issued to
+    -- service_role alone after the DROP took it.
+    'public.sign_design_services_agreement_with_trusted_ip(uuid,text,uuid,text,jsonb)',
+    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_signed_ip text DEFAULT NULL::text, p_consent jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '6c615ca417d594865e1f0772ee862c312e7a398d037c141366c8a1b97fd6f17d',
+    '8539825f7dc69971ae5ab3ec81c7e86d7b663f7beea5133fb4cbe010fd7f0288',
     ARRAY['service_role']::text[]
   ),
   (
@@ -1900,10 +1914,20 @@ VALUES
     -- type, same proconfig, still SECURITY DEFINER, no new lock — so the ACL
     -- contract, the caller contract and the authority-lock-order contract in
     -- this file all still hold unchanged.
+    --
+    -- 00577 added the four Wave-2 fee columns to the authority INSERT and the
+    -- R12 execution-snapshot INSERT beside it (00575's hash was
+    -- 8995735d7c966a6bd4db4a1669ee043b12398b9d64fe676c2281ece2536bc0b3).
+    -- Both deltas sit inside the client_signed branch, after every lock this
+    -- function takes, so the authority-lock-order contract below is untouched;
+    -- the app_private.issue_invoice_for_actor call and the
+    -- 'commercialDocumentId' anchor keep their exact text, so the caller
+    -- contract holds too; and the signature, arguments, result type,
+    -- proconfig, SECURITY DEFINER flag and ACL are all unchanged.
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '8995735d7c966a6bd4db4a1669ee043b12398b9d64fe676c2281ece2536bc0b3'
+    'a5c8dfec6d6798dc7bc8c2ab0f0ac71f97b715536a33be466f65ab0840e9221b'
   ),
   (
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
@@ -2337,8 +2361,12 @@ BEGIN
       to_regprocedure(
         'public._accept_trade_scope_authorized(uuid,text,uuid)'
       ),
+      -- 00577 widened this with a trailing `p_consent jsonb DEFAULT NULL` and
+      -- DROPped the four-argument arity. to_regprocedure on a stale signature
+      -- returns NULL, and this assertion would then silently stop covering the
+      -- function rather than fail — so the literal moves with the function.
       to_regprocedure(
-        'public._sign_design_services_agreement_authorized(uuid,text,uuid,text)'
+        'public._sign_design_services_agreement_authorized(uuid,text,uuid,text,jsonb)'
       )
     )
       AND (
