@@ -1,476 +1,435 @@
-# Wave 1 · lane `backend` · adversarial review, round 1
+# Wave 1 · lane `backend` — adversarial review (re-review after the R17–R21 rulings)
 
-**Reviewer** separate context, did not write this code · **Date** 2026-09-06
-**Branch** `agreement/w1-backend` @ `2f2dad942` (7 commits on `main`)
-**Worktree** `/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-backend`
-**Verdict** `fix` — one blocker, four majors. Everything else is green, and the
-migration itself applies clean, is idempotent, and passes the F-1 regression at
-full strength.
+Reviewer: separate context, did not write this code. Worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-backend`
+(`git rev-parse --show-toplevel` confirmed), branch `agreement/w1-backend`,
+17 commits ahead of `main`, 20 files, +7803 / −15.
+
+> **Note on this file.** The lane already carries `backend-review-r1.md`,
+> `-r2.md` and `-r3.md` from three earlier rounds; this dispatch was labelled
+> "round 1" and named this path, so this file is rewritten. The three earlier
+> reviews remain in git history (`42fdaa35a`, `469d1814d`, `b04a686ef`) and
+> the r2/r3 files are untouched on disk. Nothing below is copied from them —
+> every claim is from a run on a scratch database in this session.
 
 ---
 
-## 0 · What I ran
+## Verdict
 
-Scratch database `patina_w1r`, built per `env.md` but with **ACLs preserved**
-(`pg_dump --no-owner -Fc` + `pg_restore`, **not** `--no-acl`: `--no-acl` strips
-every table GRANT and the RLS suites then fail spuriously with
-`permission denied for table proposals`). Baseline database `patina_w1base` from
-the same dump, migration **not** applied, used to separate pre-existing failures
-from regressions. Both dropped at the end.
+**block.** One blocker and three majors.
 
-`pg_dump`/`psql` 18 write a `\restrict` directive that psql then refuses inside
-COPY blocks — plain-SQL dump/restore is unusable here; custom format works.
+The blocker is not new code — it is the orchestrator's own **R17**
+("One source of truth per document"), ruled after round 3 and binding on this
+wave, which this branch does not implement in any of its three prescribed
+forms. The lane's last commit is round 3's review; no fix commit follows it.
 
-| Gate | Result |
-|---|---|
-| `psql -v ON_ERROR_STOP=1 -f supabase/migrations/00575_agreement_parts.sql` | **rc=0**, ends `COMMIT` |
-| Same file applied a **second** time (idempotency, criterion Q) | **rc=0**, no errors |
-| **F-1**: `_commercial_document_fingerprint` over all 11 seeded proposals, before vs after apply | **byte-identical, 11/11** (`diff` empty) |
-| `commercial/agreement_parts_test.sql` | **rc=0**, 12 PASS groups / 21 assertions |
-| `commercial/agreement_parts_projection_test.sql` | **rc=0**, 3 PASS groups / 7 assertions |
-| `commercial/multi_studio_signature_test.sql` | **rc=0**, 7 PASS |
-| `commercial/design_services_paper_issue_test.sql` | **rc=0**, 13 PASS |
-| `schedule/ceremony_hardening_test.sql` | **rc=0**, 15 PASS |
-| `edge_api/public_sd_hardening_contract_test.sql` | **rc=0** |
-| `commercial/{design_services_authority, design_services_gap_hardening, authorized_schedule, executed_on_paper, trade_scope}_test.sql` | rc=3 — **identical failure line and message on `patina_w1base` without 00575**; all five listed in `supabase/tests/KNOWN_FAILURES.md` Group 3 |
-| Re-pinned hash, recomputed from the applied function | `8995735d7c966a6bd4db4a1669ee043b12398b9d64fe676c2281ece2536bc0b3` — **matches the value committed to the contract test exactly** |
-| `python3 scripts/generate-legacy-grants.py` then `git status --porcelain` | **clean** — the committed seed is the generated one, 2221 replayed statements |
-| `supabase gen types typescript --db-url …/patina_w1r` vs the committed `database.types.ts` | **no agreement-related difference**; the only diff is two FK `Relationships` blocks (`engagement_events`, `invoice_links`) that my restore could not reproduce — an artifact of my scratch DB, not of the lane |
-| `pnpm --filter @patina/types type-check` | pass |
-| `pnpm turbo build --filter=@patina/types` | pass, `dist/agreement.{js,d.ts}` present |
-| `pnpm --filter @patina/supabase type-check` | pass |
-| `pnpm --filter @patina/supabase test` | **87 files, 1060 passed / 12 skipped**, incl. `use-agreement-parts.test.ts` (14) and `use-studio-agreement-defaults.test.ts` (10) |
+The first major is new and was not found by any earlier round: the R4 floor
+asks `jsonb_typeof(...) = 'number'` before it counts a figure, and the
+projection casts without asking, so **a rate card whose `hourlyRateCents`
+arrives as a JSON string bills at $225/hr against a NULL ceiling and sends** —
+the exact state R4 exists to refuse.
 
-**Head-body grafting (criterion P).** I extracted each redefined function from
-00575 and from its `grep \| sort \| tail -1` winner and diffed them
-mechanically. All nine grafts are faithful; every delta is exactly the one §3
-names, and nothing else moved:
+Everything the earlier rounds fixed is genuinely fixed: F-1 holds across all
+11 seeded proposals, the fingerprint covers all ten columns and no timestamp,
+the guard freezes parts at send, RLS admits co-members only, the parts table's
+write grant is withheld, the projection is not forked, the pinned hash moved
+exactly one hex string, the generated seed and the generated types both
+regenerate byte-identically, and both package gates are green.
 
-| Function | Head grafted from | Delta |
+---
+
+## Gates run (all in this session)
+
+Shared local stack read-only. **It now reads head `00575`** — the integration
+steward has already reset it with this migration applied, so the earlier
+rounds' "restore artifact" caveat is partly retired: these suites now run
+against a stack that was actually reset with 00575 in the ledger.
+
+Scratch DB `patina_w1r`: `pg_dump --no-owner -Fc --exclude-schema=cron` of the
+shared stack → `pg_restore` (env.md's plain `pg_dump | psql` form is still
+unusable on the local pg 18 client). Control DB `patina_w1ctl`: same dump with
+`_countersign_design_services_agreement_impl` reverted to its `00566:304-874`
+body. Both dropped at the end; `pg_database` shows no `patina_*` left.
+
+```
+shared stack head                                      00575  (read only; never reset, never written)
+psql -v ON_ERROR_STOP=1 -f 00575_agreement_parts.sql   APPLY  rc=0   (0 ERROR lines)
+   re-applied a second time on the same DB             APPLY2 rc=0   (idempotent — criterion Q)
+
+commercial/agreement_parts_test.sql                    rc=0  15 PASS notices  (134 ASSERTs)
+commercial/agreement_parts_projection_test.sql         rc=0   5 PASS notices  ( 29 ASSERTs)
+commercial/design_services_paper_issue_test.sql        rc=0  13 PASS
+commercial/multi_studio_signature_test.sql             rc=0   7 PASS
+commercial/direct_order_attribution_test.sql           rc=0
+commercial/fulfillment_intake_ledger_balance_test.sql  rc=0
+schedule/ceremony_hardening_test.sql                   rc=0  15 PASS
+edge_api/public_sd_hardening_contract_test.sql         rc=0
+edge_api/public_rpc_authorization_contract_test.sql    rc=0
+
+supabase gen types --db-url <shared stack>             diff vs committed file = 0 lines
+python3 scripts/generate-legacy-grants.py              regenerates byte-identically (no git drift)
+pnpm --filter @patina/types    type-check              clean
+pnpm --filter @patina/supabase type-check              clean
+pnpm --filter @patina/supabase test                    87 files, 1060 passed | 12 skipped
+```
+
+Six suites are red, and **every one is red for a reason older than this
+wave**. On the control DB — same dump, `_countersign_design_services_agreement_impl`
+put back to its 00566 body — each fails at the identical line with the
+identical message:
+
+```
+authorized_schedule_test           :308  design services agreement d73…001 not found or access denied
+design_services_authority_test     :177  design services agreement d53…001 not found or access denied
+design_services_gap_hardening_test :128  proposal d63…001 failed canonical project provenance
+executed_on_paper_test             :214  design services agreement ea3…001 not found or access denied
+trade_rfq_test                     :154  design services agreement d93…001 not found or access denied
+trade_scope_test                   :196  design services agreement d83…001 not found or access denied
+```
+
+All six are in `supabase/tests/KNOWN_FAILURES.md` Group 3, recorded there as
+dying later (at the `designDisposition` readiness gate); the earlier death
+point is 00563/00566 drift, not 00575. The countersign graft is exonerated by
+the control.
+
+---
+
+## Criteria that pass, with the evidence
+
+| # | Criterion | Evidence from this session |
 |---|---|---|
-| `guard_commercial_authored_child` | 00423 | one `WHEN` arm + comment |
-| `_commercial_document_fingerprint` | 00423 | one conditional `parts` block, alias `ap` |
-| `send_commercial_document` | 00423 | refusal A predicate + message |
-| `_sign_design_services_agreement_authorized` | 00412 | refusal B predicate + message |
-| `_issue_design_services_agreement_on_paper` | 00477 | refusal C predicate + message |
-| `_countersign_design_services_agreement_impl` | **00566** (not the 00475/00511 traps) | one `IS NULL` disjunct |
-| `get_project_authority_summary` | 00422 | exhaustion test + `remainingCents` |
-| `upsert_design_services_draft` | 00422 | projection block → `PERFORM _project_agreement_terms` |
-| `get_client_commercial_document_bundle` | **00425** | one `parts` key |
-
-`sign_design_services_agreement_with_trusted_ip` is **not** redefined anywhere in
-the diff, so its pin survives untouched (criterion O). The contract-test diff
-moves **exactly one hex string**; `arguments`, `result_type`, `final_config`,
-`security_definer`, the ACL contract, the caller contract and the lock-order
-contract are all unchanged.
-
-**Delivery.** Every item in the lane brief is present: the single migration
-(banner with lineage, table, RLS, grants, guard dispatch, fingerprint fold,
-ceiling nullability with all three refusals relaxed through one helper, the
-extracted projection called by both writers, `upsert_agreement_parts`,
-`materialize_standard_parts`, `studio_agreement_defaults`, the bundle
-extension, 14 `COMMENT ON`s), `packages/types/src/agreement.ts` **verbatim to
-§2.4**, both hooks with the specified query keys, both SQL tests, the
-regenerated grants seed, the regenerated types. Nothing under `apps/`. No
-Wave 2 / Wave 3 object appears in the diff (criterion U clean). No
-"clause library" / "contract builder" (criterion V clean — "seven-facet room"
-appears only in SQL and TS comments, never in a string a designer reads).
-Commits are Conventional, pathspec-scoped, trailer-free.
+| **A** | F-1 fingerprint identity | The 00423 fingerprint body was installed side-by-side as `public._fp_pre00575`. `count(*) filter (where _commercial_document_fingerprint(id) is not distinct from _fp_pre00575(id))` → **11 of 11**. A parts-less document hashes exactly what it hashed before 00575. |
+| **B** | Fingerprint coverage | One column at a time on a materialized part: `position=t kind=t variant=t part_key=t title=t payload=t required=t client_visible=t source_template_key=t source_part_id=t` — and `created_at`/`updated_at` moved together → `f`. 10/10 and blind to timestamps. |
+| **C** | Client-visibility | `client_visible` moves the digest (above); the bundle omits the row — P7b: nine parts, one hidden, bundle returns **8**. |
+| **D** | Guard freezes at send | After `send_commercial_document`: direct `UPDATE`, `DELETE` and `INSERT` all `23514 proposal_agreement_parts is immutable after its proposal leaves draft`; `upsert_agreement_parts` itself `42501`. |
+| **F** | RLS to a non-member | Outsider `SELECT` → 0 rows; outsider `upsert_agreement_parts` and `materialize_standard_parts` → `42501`. Client `SELECT` on the raw table → 0 rows. |
+| **G** | RLS on studio defaults | Plain member `INSERT` → `42501 new row violates row-level security policy`; plain member `UPDATE` → 0 rows; plain member `SELECT` → 1 row; outsider `SELECT` → 0 rows; owner `INSERT` accepted. R3 exactly. |
+| **H** | Projection not forked | `_project_agreement_terms` diffed line-by-line against `00422:1749-1793`: the only deltas are the opt-in `p_allow_null_ceiling` CASE around the ceiling read and `COALESCE(p_rates,'[]')`. `upsert_design_services_draft` diffed against `00422:1707-1812`: the only delta is the block → `PERFORM public._project_agreement_terms(…, false)`. |
+| **M** | Readiness false-red | A flat-fee agreement (services + `flat` + terms, no rate card, no ceiling) saves with `billing_ceiling_cents IS NULL`, 0 rate rows, and **sends**. |
+| **O** | Pinned-hash honesty | `git diff` on `public_sd_hardening_contract_test.sql`: exactly one hex string moved (`430d3a…` → `899573…`) plus a lineage comment. `arguments`, `result_type`, `proconfig`, `security_definer` untouched; `sign_design_services_agreement_with_trusted_ip`'s entry not touched. The file passes rc=0 against the applied DB. |
+| **R** | Grants / definer hygiene | `pg_proc`: every new and every redefined function pins `search_path` (`public, pg_temp`, or `public, extensions, pg_temp` for the fingerprint, or `pg_catalog, public, pg_temp` for countersign — its 00566 value); `guard_commercial_authored_child` is the only `SECURITY INVOKER`; ACLs are `postgres=X` plus `authenticated=X` on exactly the five public doors. No bare extension function anywhere in the file. `information_schema.role_table_grants` for `proposal_agreement_parts`: `authenticated SELECT` and nothing else. |
+| **Q** | Idempotency | Applied twice on the same DB, rc=0 both times, only "already exists, skipping" notices. |
+| **T** | Unknown kind | `kind='wormhole' variant='quantum'` saves and moves the digest (covered inside criterion B's loop). |
+| **U** | Wave leakage | The only W2/W3 identifier in the whole diff is the `source_part_id` comment §3.9 requires. |
+| **V** | Vocabulary | No "clause library", no "contract builder", no "AI" anywhere in `supabase/**` or `packages/**`. The five new refusal sentences read in the designer's words ("an agreement carries only one ceiling", "an agreement that bills time needs a ceiling"). |
+| — | Contract §2.4 types | `packages/types/src/agreement.ts` matches the frozen text: 6 kinds, **15** schedule variants, 4 template classes, 6 authority variants, **9** standard parts, every payload interface present. |
+| — | Scope | 20 files, all on §2.1's list except `design_services_paper_issue_test.sql` (documented, necessary — the sheet reworded the two strings it pins). No `apps/**`. Conventional Commits, explicit pathspecs, no trailers, no `merge(...)` subject, not pushed. |
 
 ---
 
-## 1 · Findings
+## R1 · **blocker** · R17 is not implemented, and the divergence it forbids executes
 
-### B1 · blocker · confidence 0.9 — the fourth NULL-ceiling reader was missed: an uncapped agreement never authorizes an hour
+`rulings-2026-09-06.md` R17 (ruled after round 3, binding on this wave)
+prescribes three mechanisms, "belt and braces":
 
-`supabase/migrations/00575_agreement_parts.sql` (omission) ·
-`supabase/migrations/00412_design_services_commercial_authority.sql:2610`
+- (a) a BEFORE INSERT/UPDATE/DELETE trigger on `proposal_service_terms` and
+  `proposal_service_rates` refusing when the proposal has parts unless
+  `app.agreement_projection` is set;
+- (b) `upsert_design_services_draft` raising a typed refusal
+  `agreement_composed` when parts exist;
+- (c) `REVOKE INSERT, UPDATE, DELETE ON proposal_service_terms,
+  proposal_service_rates FROM authenticated` if no client code writes them
+  directly.
 
-F-2 made three readers NULL-safe. There is a **fourth**, and it is the one that
-decides whether a logged hour is billable:
-`public.classify_project_time_entry_authority()` — 00412 is its sole and current
-head (`grep | sort | tail -1`), and it is a live `BEFORE INSERT OR UPDATE`
-trigger on `project_time_entries`:
+None is present. `grep -n 'agreement_projection\|agreement_composed'
+supabase/migrations/00575_agreement_parts.sql` → no match. On the applied DB,
+`information_schema.role_table_grants` still shows `authenticated` holding
+`INSERT, UPDATE, DELETE` on both tables. R17's required SQL test ("reviewer
+probe P16 and P3b must now refuse") does not exist in either new suite.
 
-```sql
-  IF v_prior_cents + NEW.rated_amount_cents
-     <= COALESCE(v_project_ceiling_cents, v_authority.billing_ceiling_cents) THEN
-    NEW.billing_state := 'authorized';
-  ELSE
-    NEW.billing_state := 'pending_authorization';
-  END IF;
-```
-
-Both operands of the `COALESCE` are `project_billing_authorities.billing_ceiling_cents`,
-which 00575 makes nullable. NULL → the comparison is NULL → the `ELSE` branch →
-**every billable hour on an uncapped agreement lands `pending_authorization`,
-permanently.** This is the exact failure mode the build sheet's F-2 row
-describes ("evaluates NULL → false → nothing is ever authorized") at a site its
-enumeration did not list, and contract §2 states the requirement plainly:
-"time authorization treats NULL as uncapped."
-
-Reproduced end to end on `patina_w1r` (probe C4): draft → `upsert_design_services_draft`
-with `billingCeilingCents` omitted → send → sign → countersign →
+The divergence is reachable and I walked it to execution.
 
 ```
-PROBE C4: uncapped authority with 1 rate(s), ceiling=NULL
-PROBE C4: billable hour on an UNCAPPED authority -> billing_state=pending_authorization  (expected authorized)
-PROBE C4: summary state=active remaining=null pendingAuthorization=15000
+P14  flag-on member composes:  ceiling 2,400,000 · cadence biweekly · Lead Designer @ 22500
+     flag-off co-member saves the seven-facet room over the same draft
+        → upsert_design_services_draft ACCEPTED (no agreement_composed refusal)
+        → the 5 parts are untouched
+     send → SENT · client signs · studio countersigns → EXECUTED
+
+     the page the client signed says   ceiling=2400000  cadence=biweekly  rate=22500
+     the authority the studio bills    ceiling=500000   cadence=monthly   rate=9900
 ```
 
-and isolated (probe N(b)) by flipping one authority's ceiling with nothing else
-changed:
+Two parties bound to different numbers, and the fingerprint cannot catch it —
+it hashes both halves, so the contradictory pair is precisely what the
+signature attests to.
+
+The second road needs no second member:
 
 ```
-PROBE N(b): capped ceiling -> billing_state=authorized
-PROBE N(b): NULL ceiling   -> billing_state=pending_authorization
+P2   compose ceiling 2,400,000 + a rate card; then, as any co-member,
+     UPDATE proposal_service_terms SET billing_ceiling_cents = NULL   → ACCEPTED
+     _agreement_floor_unmet = false   (it reads the parts, which still say 2,400,000)
+     send → SENT  with the money row uncapped and the signed page capped
 ```
 
-The countersign promotion loop **was** fixed, so the two now disagree: the
-promotion loop would authorize the entry the classifier refuses to authorize.
-`get_project_authority_summary` reports `state=active, remainingCents=null`
-while `pendingAuthorizationCents` climbs and nothing is invoiceable — the
-uncapped agreement looks healthy and quietly bills nothing.
+And a third, which the current refusals *do* catch, showing the wall is only
+half-built: `DELETE FROM proposal_service_rates` on a composed draft is
+accepted, and the send then refuses (P13) — because the send refusal happens
+to read the rate rows. Nothing reads the ceiling, the cadence, the retainer or
+the deposit that way.
 
-**Fix**: graft `classify_project_time_entry_authority` from 00412 verbatim and
-make the one comparison NULL-safe, e.g.
-`IF COALESCE(v_project_ceiling_cents, v_authority.billing_ceiling_cents) IS NULL
- OR v_prior_cents + NEW.rated_amount_cents <= COALESCE(…) THEN`.
-Add the reader to the banner's F-2 paragraph, and add an assertion to
-`agreement_parts_test.sql` (§6.1 has no time-entry case; criterion N asked for
-"log billable time" and it was not exercised).
+Before 00575 this class of state was unreachable: the column was `NOT NULL`
+and the terms row was the only source. 00575 creates a second source of truth
+for the same five figures and guards one of them.
+
+**Fix:** implement R17 (a)+(b)+(c) as ruled, and add the SQL test R17 names —
+one case per road: the flag-off RPC over a composed draft, and a direct
+`UPDATE` of the money row on a composed draft. Both must refuse.
 
 ---
 
-### B2 · major · confidence 1.0 — R5 breached: a `clause` part keyed `patina.ceiling` writes the money row
+## R2 · **major** · The R4 floor is type-strict; the projection is not — an uncapped hourly agreement sends
 
-`supabase/migrations/00575_agreement_parts.sql:1817-1878` (`upsert_agreement_parts`, the `v_terms` build)
+`_agreement_floor_unmet` asks `jsonb_typeof(e.role->'hourlyRateCents') =
+'number'` before it counts a role as "bills time" (migration `:282`), and
+`jsonb_typeof(ap.payload->'cents') = 'number'` before it counts a ceiling
+(`:290`). The projection immediately below asks nothing — it casts
+`(e.rate->>'hourlyRateCents')::integer` (`:2298`) and
+`(ap.payload->>'cents')::integer` (`:2266`), and `->>` renders a JSON string
+just as happily as a JSON number.
 
-The projection is derived **only** by `part_key`; `kind` and `variant` are never
-consulted. The build sheet's §3.7 table lists a kind/variant for each key, and
-R5 is categorical — "only `schedule` variants project into terms/authority" —
-but nothing enforces it. Probe I saved a part list in which the *ceiling* and
-*cadence* keys were `clause` parts carrying money in their payload:
+The two halves therefore disagree about the same payload, in **both**
+directions:
 
 ```
-PROBE I: ceiling=7777777 cadence=milestone deposit=<NULL>
+P17  rate card with "hourlyRateCents": "22500"   (a JSON string), no ceiling part
+       upsert_agreement_parts            ACCEPTED
+       _agreement_floor_unmet            false          ← the floor does not see a rate
+       proposal_service_rates            22500          ← the projection does
+       proposal_service_terms.ceiling    <NULL>         ← uncapped
+       send_commercial_document          SENT
+
+P18  ceiling with "cents": "2400000"     (a JSON string), beside a numeric rate card
+       upsert_agreement_parts            23514 / an agreement that bills time needs a ceiling
+                                                        ← the floor does not see a cap the
+                                                          projection would have written
 ```
 
-Prose became money. Build-sheet review criterion I ("Make a `clause` or `list`
-part carry `cents`, `cadence`, `depositPercent` in its payload … Terms row
-unmoved. Prose never becomes money.") fails for exactly this shape.
+P17 is the state R4 exists to refuse — an agreement that bills real hours
+against no cap, sent to a homeowner — and it passes every one of the four
+doors, because all four ask the same type-strict predicate. P18 is the mirror:
+a legitimate composition refused with a sentence about a ceiling the designer
+did in fact state.
 
-The complementary case is correct: a `schedule/ceiling` part under
-`custom.second_ceiling` projects nothing (probe I(b) PASS), and a clause under
-`patina.services` carrying `cents` projects nothing.
+`upsert_agreement_parts` is `GRANT EXECUTE … TO authenticated`, so the payload
+shape is whatever the caller sends; the build sheet's own criterion L says the
+floor "is the real gate" precisely for callers that bypass the room.
 
-Not reachable from the W1 composer (custom parts get `custom.<uuid>` keys), but
-`upsert_agreement_parts` is `GRANT EXECUTE … TO authenticated`, so any studio
-member can post this shape, and the resulting money row is then frozen into the
-fingerprint and the countersign snapshot.
-
-**Fix**: add `AND ap.kind = 'clause' | 'list' | 'schedule'` (and, for the
-schedule keys, `AND ap.variant = '<the key's variant>'`) to each of the nine
-projection subqueries — a part that does not have the shape its key promises
-projects nothing.
+**Fix:** make the two halves read the same way. Either coerce in one place
+(`(x #>> '{}')::numeric` guarded by `jsonb_typeof IN ('number','string')`), or
+refuse a non-numeric money payload in `upsert_agreement_parts` with a
+designer-worded sentence before anything projects. Add both probes as cases.
 
 ---
 
-### B3 · major · confidence 1.0 — the refusal predicate and the projection disagree about what "a rate card" is
+## R3 · **major** · Six raw database identifiers reach the studio through the save door
 
-`supabase/migrations/00575_agreement_parts.sql:177-193` (`_agreement_requires_rate_card`) vs `:1878-1893` (the `v_rates` build)
-
-`_agreement_requires_rate_card` keys on `kind='schedule' AND variant='rate_card'`
-— **any** part. The rate projection keys on `part_key='patina.role_rates'` —
-**one** part. A rate card composed under any other key therefore demands role
-rates that nothing will ever project. Probe P5:
+`upsert_agreement_parts` lets the storage layer's own errors out. Every one of
+these came back from the RPC as `SQLERRM` on the applied DB:
 
 ```
-PROBE P5: custom-key rate card -> projected rates=0, requiresRateCard=t,
-          send=design-services send requires terms, and role rates whenever a rate card is present
+P8  second ceiling            23514  an agreement carries only one ceiling            ← good
+P8  duplicate partKey         23505  duplicate key value violates unique constraint "uniq_agreement_part_key"
+P8  blank role name           23514  … violates check constraint "proposal_service_rates_role_name_check"
+P8  role with no rate         23502  null value in column "hourly_rate_cents" of relation "proposal_service_rates"
+P8  cadence "per_draw"        23514  … violates check constraint "proposal_service_terms_billing_cadence_check"
+P8  negative ceiling          23514  … violates check constraint "proposal_service_terms_billing_ceiling_cents_check"
+P8  deposit 150%              23514  … violates check constraint "proposal_service_terms_furnishings_deposit_check"
 ```
 
-The parts save succeeds, the R4 floor is satisfied (a ceiling is present), and
-then the document is **permanently unsendable** with a message that names a
-thing the designer can see is right there on the page. Whether a designer can
-reach it depends on the designer lane's add-part menu (a `schedule` part added
-blank and set to `rate_card` would do it); the RPC reaches it unconditionally.
+R7 is binding on "every string a designer reads", and the designer lane
+surfaces the RPC's error text verbatim as the composer's `saveNote`
+(`agreement-composer.tsx:210-216`). Six of the seven rows above put a table
+name, a column name or a constraint name on a designer's screen. The lane
+already knows the right shape — the first row is the sentence it wrote by hand
+for the duplicate-money case; the rest were left to Postgres.
 
-**Fix**: make the two agree — either key `_agreement_requires_rate_card` on
-`part_key = 'patina.role_rates'`, or project rates from every
-`schedule/rate_card` part. The first is smaller and matches the projection's own
-"by `part_key`, never by variant" doctrine.
+Note `cadence: "per_draw"` is *type-legal* today: contract §2.4's
+`CadencePayload` admits `'per_draw'`, and the DB CHECK does not widen for it
+until W3. A part whose payload the shared types call valid raises a raw
+constraint name.
 
----
-
-### B4 · major · confidence 0.95 — `authorizedCents` is still typed `number`, but the RPC now returns null for it
-
-`packages/types/src/commercial.ts:113` · `supabase/migrations/00575_agreement_parts.sql:1477-1478`
-
-`get_project_authority_summary` returns the **same nullable column** three times:
-
-```sql
-    'ceilingCents',    v_authority.billing_ceiling_cents,
-    'authorizedCents', v_authority.billing_ceiling_cents,
-    'remainingCents',  CASE WHEN … IS NULL THEN NULL ELSE greatest(…) END,
-```
-
-The lane widened `ceilingCents` and `remainingCents` to `number | null` and left
-`authorizedCents: number`. §3.6 only named the first two, so the sheet led the
-lane here — but the type is now a lie at runtime, and TypeScript will not catch
-the readers: `money(authority.authorizedCents)`
-(`money-region.tsx:205,208`, `project-authority-band.tsx:71`) renders the
-uncapped case as `$0`, which is criterion N's named failure ("no UI prints `$0`
-where it means uncapped").
-
-**Fix**: `authorizedCents: number | null` with the same comment as its two
-siblings. (The app-local mirrors — `apps/designer-portal/src/lib/document/commercial-documents.ts:107,112`
-and `apps/client-portal/src/lib/commercial-documents.ts:703` — are the designer
-and client lanes' problem, but `finiteCents(...)`/`number(...)` coercing null to
-`0` there is the same `$0`-means-uncapped hazard and should be checked in those
-reviews.)
+**Fix:** validate the five money payloads and the part keys inside
+`upsert_agreement_parts` and refuse in the designer's words — the way the
+duplicate refusal already does — rather than letting the constraint speak.
 
 ---
 
-### B5 · major · confidence 1.0 — the flag-off write path changed: an omitted ceiling now lands NULL, not 0
+## R4 · **major** · The `@patina/supabase` hooks this lane shipped are dead code; the portal wrote its own
 
-`supabase/migrations/00575_agreement_parts.sql:1550` (`_project_agreement_terms`)
-
-`00422:1756` read `COALESCE((p_terms->>'billingCeilingCents')::integer, 0)`.
-The extracted helper reads `(NULLIF(p_terms->>'billingCeilingCents',''))::integer`
-— NULL-preserving — and `upsert_design_services_draft`, the **flag-off** RPC,
-now goes through it. Probes C2/C3:
+`packages/supabase/src/hooks/use-agreement-parts.ts` (189 lines) and
+`use-studio-agreement-defaults.ts` (147 lines), plus 475 lines of tests, are on
+this lane's §2.1 pathspec, are correctly written, and are exported from the
+barrel. **Nothing imports them.** Grep across both portal worktrees:
 
 ```
-PROBE C2: ceiling omitted by the caller -> billing_ceiling_cents = NULL (00422 wrote 0)
-PROBE C3: explicit JSON null            -> billing_ceiling_cents = NULL
+.../agent-agr-w1-designer/apps/designer-portal/src/hooks/use-commercial-documents.ts:561
+    export function useSaveAgreementParts(proposalId: string)
+.../agent-agr-w1-designer/apps/designer-portal/src/hooks/use-commercial-documents.ts:584
+    export function useMaterializeStandardParts(proposalId: string)
+.../agent-agr-w1-designer/apps/designer-portal/src/hooks/use-studio-agreement-defaults.ts:103
+    export function useStudioAgreementDefaults(...)
 ```
 
-The migration comment defends this as unreachable ("the seven-facet room never
-sends null — its hook always writes `Math.round(terms.billingCeilingCents)`").
-Two things weaken that:
+Two implementations of one data path, already diverging: the app-local
+`useSaveAgreementParts` takes `proposalId` at hook construction, and the
+package one takes it per call and returns the RPC's object. `CLAUDE.md`'s rule
+is `@patina/supabase` hooks for Supabase data. This is an integration
+decision, not a backend bug — but it must be made before merge, or the repo
+ships 336 lines of unreachable code plus a second contract for the same RPC.
 
-1. `Math.round(null) === 0` holds, but `Math.round(undefined)` is `NaN` and
-   `JSON.stringify(NaN)` is `null` — and this same wave widens
-   `DesignServiceTerms.billingCeilingCents` to `number | null`, so the DTO the
-   hook reads can now legitimately be absent.
-2. The RPC is `GRANT EXECUTE … TO authenticated`; the guarantee lives in one
-   caller, not in the function.
-
-Combined with B1 this is the live route to a project that looks fine and bills
-nothing. Flag-off byte-identity is asserted for the two portals; this is the one
-place where the flag-off **database** behavior is not identical to today.
-
-**Fix**: either keep `COALESCE(…, 0)` in the helper and have
-`upsert_agreement_parts` pass an explicit sentinel for "uncapped", or add a
-third argument (`p_allow_null_ceiling boolean DEFAULT false`) so only the parts
-door can write NULL. Whichever, the flag-off door must write what it wrote
-before, byte for byte.
+**Fix (orchestrator):** delete one set at integration and point the composer
+at the survivor.
 
 ---
 
-### B6 · minor · confidence 1.0 — the DB floor accepts `ceiling = 0` beside a rate card
+## R5 · minor · The bundle's `parts` key is *not* "always present"
 
-`supabase/migrations/00575_agreement_parts.sql:1793-1811`
-
-The R4 floor tests `ap.payload->>'cents' IS NOT NULL`, so a ceiling of **zero**
-satisfies it. Probe L:
+Contract §2.4 freezes `parts` as "a new top-level key, **always present**, `[]`
+when the document has none", and the migration's own comment at `:2643` repeats
+it ("the key is present and `[]` on every document, so the client adapter never
+branches on absence"). The `'legacy'` early-return does not carry it:
 
 ```
-PROBE L (ceiling 0 + rate card): err=<accepted> ceiling=0
+P7  legacy document → bundle keys = [document]   has_parts = false
 ```
 
-Criterion L lists "rate card + ceiling `0`" among the combinations that must be
-blocked. It is blocked only in the designer lane's readiness panel, and the
-sheet's own §3.7 step 5 specifies exactly the predicate that was written — so
-this is the sheet's gap as much as the lane's. Today's flag-off path also
-defaults the ceiling to 0, so it is not a new hazard; but a zero-cap agreement
-sends and then authorizes no hour, which reads to a studio exactly like B1.
-Worth a `> 0` in the floor, or an explicit ruling that zero is a legal cap.
+The client lane's adapter must therefore branch on absence after all, or read
+`undefined` where the frozen interface promised an array.
+
+**Fix:** add `'parts', '[]'::jsonb` to the legacy early-return, or amend §2.4.
 
 ---
 
-### B7 · minor · confidence 0.9 — `materialize_standard_parts` does not widen `document_kind`, so a legacy draft can hold nine invisible parts
-
-`supabase/migrations/00575_agreement_parts.sql:1920-2101`
-
-`upsert_agreement_parts` runs the `document_kind = CASE WHEN 'legacy' THEN
-'design_services'` widen (`:1767`); `materialize_standard_parts` accepts a
-`legacy` document and does **not**. Probe L2:
+## R6 · minor · `materialize_standard_parts` seeds a `legacy` document without widening its kind
 
 ```
-PROBE L2: kind before materialize = legacy
-PROBE L2: materialized=true, parts=9, kind after = legacy
+P6  legacy draft → materialize_standard_parts: materialized=true partCount=9
+                   proposals.document_kind AFTER = legacy
 ```
 
-`get_client_commercial_document_bundle`'s legacy early-return (00425, correctly
-untouched) then returns no `parts` key at all, while
-`_commercial_document_fingerprint` **does** hash those nine parts. If the
-composer materializes on open — the sheet's stated flow — a legacy draft ends up
-with a composed agreement the client can never see. No in-flight document is
-harmed (materialize requires `status = 'draft'`), but the two RPCs should agree.
+`upsert_agreement_parts` performs the `legacy → design_services` widen
+(`:2143-2146`); `materialize_standard_parts` does not. The result is a document
+that carries nine parts, hashes them into its fingerprint, and still routes
+through every `document_kind = 'legacy'` branch — including the bundle's early
+return (R5 above), which hides those parts from the client entirely.
+
+**Fix:** either widen in `materialize_standard_parts` too, or refuse to seed a
+document whose kind is not in `('legacy'…)` — but do one of them.
 
 ---
 
-### B8 · minor · confidence 1.0 — the bundle's `parts` key is not "always present"
+## R7 · minor · `useUpdateStudioAgreementDefaults`'s doc comment states the opposite of the DB
 
-`supabase/migrations/00575_agreement_parts.sql:2157-2178` (legacy early-return above it)
-
-§2.4 freezes the interface as "a new top-level `parts` key, **always present**,
-`[]` when the document has none, so the client adapter never branches on
-absence." For `document_kind = 'legacy'` the early-return object has no `parts`
-key. §3.10 acknowledges the early-return is untouched, so the two halves of the
-sheet disagree; the client lane needs to know which one binds.
-
----
-
-### B9 · minor · confidence 0.85 — the parts door cannot carry a rate's `effectiveAt`; every save re-stamps `now()`
-
-`supabase/migrations/00575_agreement_parts.sql:1878-1893`
-
-`upsert_agreement_parts` builds `v_rates` with `version`, `roleName`,
-`hourlyRateCents`, `sortOrder` and no `effectiveAt`, so
-`_project_agreement_terms` defaults each row to `now()`. The seven-facet door
-passes the client's value through. `classify_project_time_entry_authority`
-filters authority rates on `source.effective_at <= NEW.started_at`, so a rate
-stamped at save time does not cover hours logged before that save. Harmless
-while the document is a draft; the projection-parity test excludes
-`effective_at` and its comment records the divergence, so this is a known,
-undocumented-in-the-sheet asymmetry rather than an accident. Flag it for W2 when
-`RateCardPayload` grows.
-
----
-
-### B10 · minor · confidence 0.95 — `useUpdateStudioAgreementDefaults`'s comment contradicts its code
-
-`packages/supabase/src/hooks/use-studio-agreement-defaults.ts:104-107`
-
-> "a plain member's write reaches no rows rather than erroring, so the caller
-> checks the returned row"
-
-The mutation ends `.select().single()`. An INSERT blocked by
-`studio_agreement_defaults_admin_insert` raises `42501`; an UPDATE filtered to
-zero rows makes `.single()` raise `PGRST116`. Either way it throws, and the
-caller cannot "check the returned row". The Account → Studio card (designer
-lane) will be written against this comment.
-
----
-
-### B11 · minor · confidence 1.0 — a duplicate `partKey` surfaces a raw constraint name to the client
-
-`supabase/migrations/00575_agreement_parts.sql:1777-1791`
+`use-studio-agreement-defaults.ts:104-107`: *"a plain member's write reaches no
+rows rather than erroring, so the caller checks the returned row."* The
+mutation is an `.upsert(...).select().single()`. Probed:
 
 ```
-PROBE dup partKey -> 23505 duplicate key value violates unique constraint "uniq_agreement_part_key"
+P12  plain member INSERT → 42501 new row violates row-level security policy for
+                                 table "studio_agreement_defaults"
+P12  plain member UPDATE → 0 rows
 ```
 
-Every other refusal in this function is a typed `check_violation` /
-`insufficient_privilege` with a sentence. This one leaks a database identifier
-into whatever the portal renders — and R7 forbids a database column name in
-studio-facing text, which a naive error toast would print verbatim.
+For a studio with no defaults row yet — the common first-write case — the hook
+throws. A caller written to the comment will not catch it.
+
+**Fix:** correct the comment (and say which of the two shapes the caller must
+handle).
 
 ---
 
-### B12 · nit · confidence 0.9 — `SET CONSTRAINTS uniq_agreement_part_position DEFERRED` is a no-op that leaks
+## R8 · minor · The parts door re-stamps `effective_at`
 
-`supabase/migrations/00575_agreement_parts.sql:1773`
-
-The constraint is already `DEFERRABLE INITIALLY DEFERRED`, so the statement
-changes nothing — and `SET CONSTRAINTS` is transaction-scoped, so it stays set
-for the rest of the caller's transaction. Harmless; remove it or comment why it
-is defensive.
-
----
-
-### B13 · nit · confidence 1.0 — `v_rate` is now an unused declaration
-
-`supabase/migrations/00575_agreement_parts.sql:1596-1610` (`upsert_design_services_draft` DECLARE)
-
-The loop that used it moved into `_project_agreement_terms`. Keeping the DECLARE
-makes the "body VERBATIM" claim literally true, which is defensible; say so in a
-comment or drop it.
+`v_rates` (`:2294-2300`) carries `roleName` / `hourlyRateCents` / `sortOrder`
+only, so `_project_agreement_terms` falls to
+`COALESCE((v_rate->>'effectiveAt')::timestamptz, now())` and every parts save
+stamps `now()`. `classify_project_time_entry_authority` selects authority rates
+with `effective_at <= NEW.started_at` (`:1728`, `:1746`, `:1769`, `:1779`,
+`:1792`, `:1799`). Parts freeze at send, so a composed agreement cannot be
+re-stamped after execution and the practical exposure is small — but a document
+that carried a back-dated rate through the seven-facet room loses that
+back-date the first time it is composed, silently.
 
 ---
 
-### B14 · nit · confidence 1.0 — `design_services_paper_issue_test.sql` is modified but is not on the lane's pathspec list
+## R9 · nit · `SET CONSTRAINTS uniq_agreement_part_position DEFERRED` is a no-op
 
-`supabase/tests/commercial/design_services_paper_issue_test.sql:840-858`
+`pg_constraint` on the applied DB: `uniq_agreement_part_position |
+condeferrable = t | condeferred = t`. The constraint is already INITIALLY
+DEFERRED, so the statement at `:2148` changes nothing. Harmless; either drop it
+or comment it as belt-and-braces.
 
-§2.1 lists only `public_sd_hardening_contract_test.sql` as a modified test. The
-edit is correct and necessary (00575 reworded two refusal sentences and this
-file pins both strings), and it is explained in the lane notes — but the sheet's
-file list should have named it, and the reviewer should confirm nothing else
-matches those strings. I grepped: the only other occurrence anywhere in
-`apps/`, `packages/`, `services/`, `supabase/functions/` is a **comment** at
-`apps/designer-portal/src/components/document/commercial/service-agreement-instruments.tsx:145`.
-No code branches on the message text.
+## R10 · nit · `v_rate jsonb` is declared and unused in `upsert_design_services_draft`
 
----
+`:1973`. The loop that used it moved to `_project_agreement_terms`.
 
-### B15 · nit · confidence 0.8 — new definer RPCs revoke from a narrower set than the 00422 family
+## R11 · nit · The new definer RPCs' REVOKE lists omit `authenticated`
 
-`supabase/migrations/00575_agreement_parts.sql:1910-1913`, `:2103-2106`
+`upsert_agreement_parts` (`:2328`) and `materialize_standard_parts` (`:2533`)
+revoke `FROM PUBLIC, anon, service_role` then grant to `authenticated`; the
+00422 family names `authenticated` in the REVOKE first. The applied `proacl` is
+identical either way (verified in `pg_proc`), so this is style, not exposure.
 
-```sql
-REVOKE ALL ON FUNCTION public.upsert_agreement_parts(uuid, jsonb) FROM PUBLIC, anon, service_role;
-GRANT  EXECUTE ON FUNCTION public.upsert_agreement_parts(uuid, jsonb) TO authenticated;
+## R12 · nit · The freeze guard prints a raw table name
+
+`:189` — `RAISE EXCEPTION '% is immutable after its proposal leaves draft',
+TG_TABLE_NAME` yields *"proposal_agreement_parts is immutable…"*. Inherited
+verbatim from 00423 and only reachable by direct SQL (the write grant is
+withheld), so no designer sees it today; recorded because the sentence is now
+attached to a table the composer's own surface is named after.
+
+## R13 · nit · Build-sheet criterion E is wrong about today's behaviour
+
+Deleting a **draft** proposal raises `23514 … is immutable after its proposal
+leaves draft` — the cascade removes the parent before the child guard runs.
+Identical with parts (`proposal_agreement_parts`) and without
+(`proposal_service_rates`), so 00575 does not cause it; the criterion simply
+does not describe the repo.
+
+## R14 · advisory · F-5 stands, as ruled
+
+`record_paper_client_signature` (`00425:485-490`) is a fourth rate-card refusal
+the sheet's §3.6 does not list, left unrelaxed. The rulings file already
+accepts this ("Backend F-5 … is accepted as the build sheet's omission — keep
+it"). Consequence, flag-on: a composed flat-fee agreement can be sent, signed,
+issued on paper and countersigned, but its client signature cannot be recorded
+from a printed copy. Dark behind the flag.
+
+## R15 · advisory · R20's paperwork is still owed
+
+R20 rules the shape-keyed money projection accepted, but build sheet §3.7
+step 6 and §6.2 cases 6-7 still instruct the opposite ("derive the projection
+by `part_key`, not by variant"). A later reader diffing sheet against code will
+read a lane that went off-brief. Amend the sheet at integration; §2.4 also
+never declares the `an agreement carries only one …` refusal that the ruling
+forced.
+
+## R16 · advisory · R19's prose asymmetry has a consequence nobody has recorded
+
+R19 ratifies prose-by-key, and the code matches it. The consequence measured:
+
+```
+P9  an agreement whose Services, Deliverables and Terms were all ADDED from the
+    rail (custom.<uuid> keys) writes  scope=''  terms=<NULL>  deliverables=[]
 ```
 
-00422's shape is `REVOKE … FROM PUBLIC, anon, authenticated, service_role;` then
-`GRANT … TO authenticated;`. On a post-flip stack the outcome is identical, and
-Strata predates the flip only for objects that already exist — a brand-new
-function has no legacy grant — so this is cosmetic. Matching the family's shape
-costs one word and removes the question.
+`create_service_addendum` (`00422:1816`, deliberately not redefined in W1)
+copies those four columns into the addendum, which W1's non-goals say renders
+on the legacy path. An addendum minted from such an agreement is a document
+with no scope, no deliverables, no exclusions and no terms. R19 makes this the
+composer's problem (it must re-use the standard keys), so it is not a backend
+defect — but nothing in either suite pins it, and W2's P7 will inherit it.
 
 ---
 
-## 2 · Advisories (not blocking, not the lane's doing)
+## What I could not verify here
 
-- **Criterion E does not hold, and did not hold before.** Deleting a *draft*
-  proposal raises `23514 proposal_service_rates is immutable after its proposal
-  leaves draft` — the cascade fires the guard after the parent row is gone.
-  Reproduced identically on `patina_w1base` **without** 00575. Pre-existing;
-  00575 adds `proposal_agreement_parts` to the same class without changing which
-  error you get.
-- **Five commercial suites are red** on the scratch DB; each fails at the same
-  line with the same message at baseline, and all five are in
-  `KNOWN_FAILURES.md` Group 3 (`designDisposition` readiness-gate drift). The
-  lane's notes report this accurately and my independent run reproduces its
-  table row for row.
-- **`env.md`'s scratch recipe should drop `--no-acl`.** With ACLs stripped the
-  RLS assertions die on `permission denied for table proposals` and a reviewer
-  could easily misread that as an RLS defect.
-- **Criteria J, K, S, T (portal-side), and U'** (the `commercial-document-notify`
-  Deno render of a NULL ceiling) belong to the designer/client lanes and the
-  integration steward; not assessed here. `money()` at
-  `commercial-document-notify/core.ts:54-55` should be confirmed against a real
-  render before deploy.
-
-## 3 · What passed under attack
-
-- **A (F-1)** byte-identical digests, 11/11, before vs after apply.
-- **B** every column of a part is inside the hash — I mutated `kind`,
-  `variant`, `part_key`, `required`, `source_template_key`, `source_part_id`
-  (the six the lane's own file does not cover) and each moved the digest, and
-  reverting all six restored it exactly. `created_at`/`updated_at` do not move it.
-- **C** a `client_visible = false` part moves the digest **and** is absent from
-  the bundle.
-- **D** direct `INSERT`/`UPDATE`/`DELETE` as a studio co-member is refused with
-  `23514 proposal_agreement_parts is immutable after its proposal leaves draft`
-  on `sent` (`proposals.status='sent'`) **and** on executed
-  (`proposals.status='accepted'`); the trigger binding exists in `pg_trigger`.
-- **F** an outsider sees 0 rows, `INSERT` → `42501`, `UPDATE`/`DELETE` → 0 rows,
-  and both RPCs → `42501`. A client sees 0 rows on the raw table.
-- **G** a plain active member's `UPDATE` on `studio_agreement_defaults` reaches
-  0 rows; an outsider reads 0.
-- **H** projection parity: `agreement_parts_projection_test.sql` green, and
-  `_project_agreement_terms` read line by line against `00422:1749-1793` differs
-  in exactly two places — the NULL-preserving ceiling (B5) and
-  `COALESCE(p_rates, '[]'::jsonb)` guarding the loop against a NULL array.
-- **O** exactly one hex string moved in the pinned-hash test, and it matches the
-  applied function.
-- **Q** clean twice.
-- **R** the grants seed regenerates to a byte-identical file.
-- **T** `kind='wormhole'`, `variant='quantum'`, `payload='{}'` stores without a
-  refusal.
-- **U** no W2/W3 object anywhere in the diff.
+- `pnpm supabase:reset` from zero. The shared stack now reads `00575`, which
+  means a reset with this migration has already succeeded — but I did not run
+  it, and the six red suites above remain unproven against a fully seeded
+  database. The integration steward's reset must stay an explicit merge gate.
+- Anything under `apps/**` — out of lane. R3's studio-facing consequence and
+  R4's duplicate hooks are stated from grep of the sibling worktrees, not from
+  a portal run.
