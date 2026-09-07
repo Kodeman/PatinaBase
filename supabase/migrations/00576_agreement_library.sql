@@ -598,6 +598,7 @@ AS $$
 DECLARE
   v_proposal public.proposals%ROWTYPE;
   v_template public.agreement_templates%ROWTYPE;
+  v_studio_ids uuid[];
   v_entry jsonb;
   v_library public.studio_agreement_parts%ROWTYPE;
   v_parts jsonb := '[]'::jsonb;
@@ -639,6 +640,39 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'template not found or not accessible'
       USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- R2 — a Template belongs to ONE studio, and so does the agreement it lands
+  -- in. The visibility predicate above answers "may this member see it", which
+  -- for a designer who belongs to two studios is a different question from
+  -- "does it belong to THIS agreement's studio": without this block she could
+  -- materialize studio B's private Template into studio A's paper, and the
+  -- part rows would carry B's template key into A's Library forever. The
+  -- studio is resolved the way save_agreement_as_template resolves it — the
+  -- active, non-guest design studios that both the actor and the agreement's
+  -- lead designer belong to — except that membership in more than one is not
+  -- itself a refusal here; the Template merely has to be one of them.
+  IF v_template.studio_id IS NOT NULL THEN
+    SELECT array_agg(studio.id)
+    INTO v_studio_ids
+    FROM public.organizations AS studio
+    JOIN public.organization_members AS actor_membership
+      ON actor_membership.organization_id = studio.id
+     AND actor_membership.user_id = auth.uid()
+     AND actor_membership.status = 'active'
+     AND actor_membership.role <> 'guest'
+    JOIN public.organization_members AS lead_membership
+      ON lead_membership.organization_id = studio.id
+     AND lead_membership.user_id = v_proposal.designer_id
+     AND lead_membership.status = 'active'
+     AND lead_membership.role <> 'guest'
+    WHERE studio.type = 'design_studio'
+      AND studio.status = 'active';
+
+    IF NOT (v_template.studio_id = ANY(COALESCE(v_studio_ids, ARRAY[]::uuid[]))) THEN
+      RAISE EXCEPTION 'template belongs to another studio'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
   END IF;
 
   FOR v_entry IN

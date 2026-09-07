@@ -119,12 +119,17 @@ export interface SaveAgreementPartInput {
 }
 
 /**
- * Every Template this member may compose from: their studio's own, plus
- * every Patina seeded one. RLS decides which — a studio never sees another's.
+ * Every Template THIS studio may compose from: its own, plus every Patina
+ * seeded one (`studio_id IS NULL`). One query, so the picker renders in one
+ * paint.
  *
- * `studioId` is the cache key rather than a filter on the seeded rows: the
- * seeded set is the same for everyone, and splitting it into a second query
- * would make the picker render in two paints.
+ * The `studio_id` filter is not decoration on top of RLS. RLS answers "may
+ * this member see it", and for a designer who belongs to two studios the
+ * answer is yes to both studios' Libraries — so an unfiltered read puts the
+ * other studio's private Templates in this studio's picker, and
+ * `materialize_agreement_template` would then have to be the only thing
+ * standing between her and studio B's paper on studio A's agreement (R2).
+ * It refuses that write, and this filter means she is never offered it.
  */
 export function useAgreementTemplates(studioId: string | null | undefined) {
   return useQuery({
@@ -134,6 +139,7 @@ export function useAgreementTemplates(studioId: string | null | undefined) {
       const { data, error } = await supabase
         .from('agreement_templates')
         .select('*')
+        .or(`studio_id.is.null,studio_id.eq.${studioId}`)
         .order('kind', { ascending: true })
         .order('title', { ascending: true });
       if (error) throw error;
