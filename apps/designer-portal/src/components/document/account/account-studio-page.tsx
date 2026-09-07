@@ -157,6 +157,9 @@ export function AccountStudioPage() {
   // disabled, "coming with the rolodex" — studio-setup-checklist.tsx's
   // default when onSkipSeed/onOpenSeedReview are omitted).
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  // "The Agreement, Composed" W1 (P3). Fail-closed: the defaults card, and the
+  // read behind it, exist only for a studio the flag has reached.
+  const { value: agreementPartsOn } = useFeatureFlag('agreement-parts');
   const [seedReviewOpen, setSeedReviewOpen] = useState(false);
   const [skipSeedError, setSkipSeedError] = useState<string | null>(null);
 
@@ -172,7 +175,9 @@ export function AccountStudioPage() {
   const { data: projects } = useProjects();
   const { data: contacts } = useStudioContacts(callSheetOn ? (studio?.id ?? null) : null);
   const { data: billingSettings } = useStudioBillingSettings(studio?.id);
-  const { data: agreementDefaults } = useStudioAgreementDefaults(studio?.id);
+  const { data: agreementDefaults } = useStudioAgreementDefaults(
+    agreementPartsOn ? studio?.id : null,
+  );
 
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
@@ -1057,318 +1062,325 @@ export function AccountStudioPage() {
 
       {/* Agreement defaults (00575) — placed after Billing, which is
           untouched. What a new agreement starts from; every member composes
-          from these, owners and admins change them (R3). */}
-      <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
-        <h3 className={`${LABEL} mb-3`}>Agreement defaults</h3>
-        <p className={`${HELP} mb-4 mt-0`}>
-          What a new agreement starts from. Every member composes from these;
-          owners and admins change them.
-        </p>
+          from these, owners and admins change them (R3).
 
-        {canManage ? (
-          <div className="max-w-md">
-            <div className="mb-4">
-              <span className={LABEL}>Rate card</span>
-              <div className="space-y-2">
-                {agreementForm.rateCard.map((role, index) => (
-                  <div
-                    key={index}
-                    className="grid grid-cols-[minmax(0,1fr)_120px_auto] items-center gap-2"
-                  >
-                    <input
-                      aria-label={`Default role ${index + 1}`}
-                      value={role.roleName}
-                      onChange={(e) =>
-                        setAgreementForm((form) => ({
-                          ...form,
-                          rateCard: form.rateCard.map((row, rowIndex) =>
-                            rowIndex === index
-                              ? { ...row, roleName: e.target.value }
-                              : row,
-                          ),
-                        }))
-                      }
-                      placeholder="Principal designer"
-                      className={FIELD}
-                    />
-                    <input
-                      aria-label={`Default role ${index + 1} hourly rate`}
-                      inputMode="decimal"
-                      value={agreementDollars(role.hourlyRateCents)}
-                      onChange={(e) =>
-                        setAgreementForm((form) => ({
-                          ...form,
-                          rateCard: form.rateCard.map((row, rowIndex) =>
-                            rowIndex === index
-                              ? {
-                                  ...row,
-                                  hourlyRateCents: agreementCents(
-                                    e.target.value,
-                                  ),
-                                }
-                              : row,
-                          ),
-                        }))
-                      }
-                      placeholder="$ / hour"
-                      className={FIELD}
-                    />
+          Behind `agreement-parts`, fail-closed like every other surface in
+          this wave: `useFeatureFlag` reads false while it is loading, so a
+          non-pilot studio never sees the card flash, and a studio the flag
+          never reaches sees the Account page it has today, byte for byte. */}
+      {agreementPartsOn && (
+        <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
+          <h3 className={`${LABEL} mb-3`}>Agreement defaults</h3>
+          <p className={`${HELP} mb-4 mt-0`}>
+            What a new agreement starts from. Every member composes from these;
+            owners and admins change them.
+          </p>
+
+          {canManage ? (
+            <div className="max-w-md">
+              <div className="mb-4">
+                <span className={LABEL}>Rate card</span>
+                <div className="space-y-2">
+                  {agreementForm.rateCard.map((role, index) => (
+                    <div
+                      key={index}
+                      className="grid grid-cols-[minmax(0,1fr)_120px_auto] items-center gap-2"
+                    >
+                      <input
+                        aria-label={`Default role ${index + 1}`}
+                        value={role.roleName}
+                        onChange={(e) =>
+                          setAgreementForm((form) => ({
+                            ...form,
+                            rateCard: form.rateCard.map((row, rowIndex) =>
+                              rowIndex === index
+                                ? { ...row, roleName: e.target.value }
+                                : row,
+                            ),
+                          }))
+                        }
+                        placeholder="Principal designer"
+                        className={FIELD}
+                      />
+                      <input
+                        aria-label={`Default role ${index + 1} hourly rate`}
+                        inputMode="decimal"
+                        value={agreementDollars(role.hourlyRateCents)}
+                        onChange={(e) =>
+                          setAgreementForm((form) => ({
+                            ...form,
+                            rateCard: form.rateCard.map((row, rowIndex) =>
+                              rowIndex === index
+                                ? {
+                                    ...row,
+                                    hourlyRateCents: agreementCents(
+                                      e.target.value,
+                                    ),
+                                  }
+                                : row,
+                            ),
+                          }))
+                        }
+                        placeholder="$ / hour"
+                        className={FIELD}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAgreementForm((form) => ({
+                            ...form,
+                            rateCard: form.rateCard.filter(
+                              (_, rowIndex) => rowIndex !== index,
+                            ),
+                          }))
+                        }
+                        className="text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAgreementForm((form) => ({
+                      ...form,
+                      rateCard: [
+                        ...form.rateCard,
+                        {
+                          roleName: '',
+                          hourlyRateCents: 0,
+                          sortOrder: form.rateCard.length,
+                        },
+                      ],
+                    }))
+                  }
+                  className="mt-2 text-[12px] text-[var(--color-clay-ink)]"
+                >
+                  + Add a role
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <span className={LABEL}>Furnishings deposit</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {AGREEMENT_DEPOSIT_CHIPS.map((chip) => (
                     <button
+                      key={chip}
                       type="button"
+                      aria-pressed={agreementDepositPercent === chip}
                       onClick={() =>
                         setAgreementForm((form) => ({
                           ...form,
-                          rateCard: form.rateCard.filter(
-                            (_, rowIndex) => rowIndex !== index,
-                          ),
+                          depositPercent: String(chip),
                         }))
                       }
-                      className="text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+                      className={`rounded-[3px] border px-3 py-1.5 text-[12px] transition-colors ${
+                        agreementDepositPercent === chip
+                          ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
+                          : 'border-[var(--color-pearl)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
+                      }`}
                     >
-                      Remove
+                      {chip}%
                     </button>
-                  </div>
-                ))}
+                  ))}
+                  <label className="flex items-center gap-1.5 text-[12px] text-[var(--color-charcoal)]">
+                    <span>Other</span>
+                    <input
+                      aria-label="Other default furnishings deposit percent"
+                      inputMode="numeric"
+                      value={
+                        agreementDepositPercent === null ||
+                        (AGREEMENT_DEPOSIT_CHIPS as readonly number[]).includes(
+                          agreementDepositPercent,
+                        )
+                          ? ''
+                          : String(agreementDepositPercent)
+                      }
+                      onChange={(e) =>
+                        setAgreementForm((form) => ({
+                          ...form,
+                          depositPercent: e.target.value,
+                        }))
+                      }
+                      placeholder="Unset"
+                      className={`${FIELD} w-24`}
+                    />
+                  </label>
+                </div>
+                {agreementDepositPercent === null && (
+                  <p className={HELP}>
+                    No deposit set — a new agreement leaves it open, and
+                    authorizations fall back to 50%.
+                  </p>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setAgreementForm((form) => ({
-                    ...form,
-                    rateCard: [
-                      ...form.rateCard,
-                      {
-                        roleName: '',
-                        hourlyRateCents: 0,
-                        sortOrder: form.rateCard.length,
-                      },
-                    ],
-                  }))
-                }
-                className="mt-2 text-[12px] text-[var(--color-clay-ink)]"
-              >
-                + Add a role
-              </button>
-            </div>
 
-            <div className="mb-4">
-              <span className={LABEL}>Furnishings deposit</span>
-              <div className="flex flex-wrap items-center gap-2">
-                {AGREEMENT_DEPOSIT_CHIPS.map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    aria-pressed={agreementDepositPercent === chip}
-                    onClick={() =>
-                      setAgreementForm((form) => ({
-                        ...form,
-                        depositPercent: String(chip),
-                      }))
-                    }
-                    className={`rounded-[3px] border px-3 py-1.5 text-[12px] transition-colors ${
-                      agreementDepositPercent === chip
-                        ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
-                        : 'border-[var(--color-pearl)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
-                    }`}
-                  >
-                    {chip}%
-                  </button>
-                ))}
-                <label className="flex items-center gap-1.5 text-[12px] text-[var(--color-charcoal)]">
-                  <span>Other</span>
-                  <input
-                    aria-label="Other default furnishings deposit percent"
-                    inputMode="numeric"
-                    value={
-                      agreementDepositPercent === null ||
-                      (AGREEMENT_DEPOSIT_CHIPS as readonly number[]).includes(
-                        agreementDepositPercent,
-                      )
-                        ? ''
-                        : String(agreementDepositPercent)
-                    }
-                    onChange={(e) =>
-                      setAgreementForm((form) => ({
-                        ...form,
-                        depositPercent: e.target.value,
-                      }))
-                    }
-                    placeholder="Unset"
-                    className={`${FIELD} w-24`}
-                  />
+              <div className="mb-4">
+                <label htmlFor="studio-agreement-cadence" className={LABEL}>
+                  Billing cadence
                 </label>
+                <Select
+                  id="studio-agreement-cadence"
+                  value={agreementForm.cadence}
+                  onChange={(e) =>
+                    setAgreementForm((form) => ({
+                      ...form,
+                      cadence: e.target
+                        .value as AgreementDefaultsForm['cadence'],
+                    }))
+                  }
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="biweekly">Every two weeks</option>
+                  <option value="milestone">At named milestones</option>
+                </Select>
               </div>
-              {agreementDepositPercent === null && (
+
+              <div className="mb-4">
+                <span className={LABEL}>Retainer credit rule</span>
+                <div className="flex flex-wrap gap-2">
+                  {AGREEMENT_CREDIT_RULES.map((rule) => (
+                    <button
+                      key={rule.value}
+                      type="button"
+                      aria-pressed={
+                        agreementForm.retainerCreditRule === rule.value
+                      }
+                      onClick={() =>
+                        setAgreementForm((form) => ({
+                          ...form,
+                          retainerCreditRule: rule.value,
+                        }))
+                      }
+                      className={`rounded-[3px] border px-3 py-1.5 text-[12px] transition-colors ${
+                        agreementForm.retainerCreditRule === rule.value
+                          ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
+                          : 'border-[var(--color-pearl)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
+                      }`}
+                    >
+                      {rule.label}
+                    </button>
+                  ))}
+                </div>
                 <p className={HELP}>
-                  No deposit set — a new agreement leaves it open, and
-                  authorizations fall back to 50%.
+                  Stored now; it starts appearing on new agreements in a later
+                  release.
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="studio-agreement-exclusions" className={LABEL}>
+                  Default exclusions
+                </label>
+                <textarea
+                  id="studio-agreement-exclusions"
+                  rows={3}
+                  value={agreementForm.defaultExclusions}
+                  onChange={(e) =>
+                    setAgreementForm((form) => ({
+                      ...form,
+                      defaultExclusions: e.target.value,
+                    }))
+                  }
+                  placeholder={'Construction labor\nFurnishings, freight, tax, and installation'}
+                  className={`${FIELD} resize-none`}
+                />
+                <p className={HELP}>One per line.</p>
+              </div>
+
+              <DocumentActionGroup
+                surfaceKey="account"
+                regionKey="studio-agreement-defaults"
+                className="mt-4 items-center"
+              >
+                <DocumentAction
+                  actionKey="save-studio-agreement-defaults"
+                  variant="primary"
+                  onClick={handleSaveAgreementDefaults}
+                  disabled={
+                    !agreementDefaultsDirty || updateAgreementDefaults.isPending
+                  }
+                  loading={updateAgreementDefaults.isPending}
+                  loadingLabel="Saving…"
+                >
+                  Save agreement defaults
+                </DocumentAction>
+                {!agreementDefaultsDirty &&
+                  !updateAgreementDefaults.isPending && (
+                    <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                      Saved
+                    </span>
+                  )}
+              </DocumentActionGroup>
+              {updateAgreementDefaults.isError && (
+                <p
+                  role="alert"
+                  className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]"
+                >
+                  {friendlyStudioError(
+                    updateAgreementDefaults.error,
+                    'Failed to save agreement defaults.',
+                  )}
                 </p>
               )}
             </div>
-
-            <div className="mb-4">
-              <label htmlFor="studio-agreement-cadence" className={LABEL}>
-                Billing cadence
-              </label>
-              <Select
-                id="studio-agreement-cadence"
-                value={agreementForm.cadence}
-                onChange={(e) =>
-                  setAgreementForm((form) => ({
-                    ...form,
-                    cadence: e.target
-                      .value as AgreementDefaultsForm['cadence'],
-                  }))
-                }
-              >
-                <option value="monthly">Monthly</option>
-                <option value="biweekly">Every two weeks</option>
-                <option value="milestone">At named milestones</option>
-              </Select>
-            </div>
-
-            <div className="mb-4">
-              <span className={LABEL}>Retainer credit rule</span>
-              <div className="flex flex-wrap gap-2">
-                {AGREEMENT_CREDIT_RULES.map((rule) => (
-                  <button
-                    key={rule.value}
-                    type="button"
-                    aria-pressed={
-                      agreementForm.retainerCreditRule === rule.value
-                    }
-                    onClick={() =>
-                      setAgreementForm((form) => ({
-                        ...form,
-                        retainerCreditRule: rule.value,
-                      }))
-                    }
-                    className={`rounded-[3px] border px-3 py-1.5 text-[12px] transition-colors ${
-                      agreementForm.retainerCreditRule === rule.value
-                        ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
-                        : 'border-[var(--color-pearl)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
-                    }`}
-                  >
-                    {rule.label}
-                  </button>
-                ))}
+          ) : (
+            <dl className="max-w-md space-y-3">
+              <div>
+                <dt className={LABEL}>Rate card</dt>
+                <dd className="text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults && agreementDefaults.rate_card.length > 0 ? (
+                    agreementDefaults.rate_card.map((role) => (
+                      <div key={role.roleName}>
+                        {role.roleName} · ${agreementDollars(role.hourlyRateCents)}
+                        /hr
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-[var(--color-aged-oak)]">Not set</span>
+                  )}
+                </dd>
               </div>
-              <p className={HELP}>
-                Stored now; it starts appearing on new agreements in a later
-                release.
-              </p>
-            </div>
-
-            <div className="mb-4">
-              <label htmlFor="studio-agreement-exclusions" className={LABEL}>
-                Default exclusions
-              </label>
-              <textarea
-                id="studio-agreement-exclusions"
-                rows={3}
-                value={agreementForm.defaultExclusions}
-                onChange={(e) =>
-                  setAgreementForm((form) => ({
-                    ...form,
-                    defaultExclusions: e.target.value,
-                  }))
-                }
-                placeholder={'Construction labor\nFurnishings, freight, tax, and installation'}
-                className={`${FIELD} resize-none`}
-              />
-              <p className={HELP}>One per line.</p>
-            </div>
-
-            <DocumentActionGroup
-              surfaceKey="account"
-              regionKey="studio-agreement-defaults"
-              className="mt-4 items-center"
-            >
-              <DocumentAction
-                actionKey="save-studio-agreement-defaults"
-                variant="primary"
-                onClick={handleSaveAgreementDefaults}
-                disabled={
-                  !agreementDefaultsDirty || updateAgreementDefaults.isPending
-                }
-                loading={updateAgreementDefaults.isPending}
-                loadingLabel="Saving…"
-              >
-                Save agreement defaults
-              </DocumentAction>
-              {!agreementDefaultsDirty &&
-                !updateAgreementDefaults.isPending && (
-                  <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-                    Saved
-                  </span>
-                )}
-            </DocumentActionGroup>
-            {updateAgreementDefaults.isError && (
-              <p
-                role="alert"
-                className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]"
-              >
-                {friendlyStudioError(
-                  updateAgreementDefaults.error,
-                  'Failed to save agreement defaults.',
-                )}
-              </p>
-            )}
-          </div>
-        ) : (
-          <dl className="max-w-md space-y-3">
-            <div>
-              <dt className={LABEL}>Rate card</dt>
-              <dd className="text-[13px] text-[var(--color-charcoal)]">
-                {agreementDefaults && agreementDefaults.rate_card.length > 0 ? (
-                  agreementDefaults.rate_card.map((role) => (
-                    <div key={role.roleName}>
-                      {role.roleName} · ${agreementDollars(role.hourlyRateCents)}
-                      /hr
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-[var(--color-aged-oak)]">Not set</span>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className={LABEL}>Furnishings deposit</dt>
-              <dd className="text-[13px] text-[var(--color-charcoal)]">
-                {agreementDefaults?.deposit_percent === null ||
-                agreementDefaults === undefined ? (
-                  <span className="text-[var(--color-aged-oak)]">Not set</span>
-                ) : (
-                  `${agreementDefaults.deposit_percent}%`
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className={LABEL}>Billing cadence</dt>
-              <dd className="text-[13px] text-[var(--color-charcoal)]">
-                {agreementDefaults?.cadence ?? '—'}
-              </dd>
-            </div>
-            <div>
-              <dt className={LABEL}>Retainer credit rule</dt>
-              <dd className="text-[13px] text-[var(--color-charcoal)]">
-                {agreementDefaults?.retainer_credit_rule ?? '—'}
-              </dd>
-            </div>
-            <div>
-              <dt className={LABEL}>Default exclusions</dt>
-              <dd className="whitespace-pre-line text-[13px] text-[var(--color-charcoal)]">
-                {agreementDefaults &&
-                agreementDefaults.default_exclusions.length > 0 ? (
-                  agreementDefaults.default_exclusions.join('\n')
-                ) : (
-                  <span className="text-[var(--color-aged-oak)]">Not set</span>
-                )}
-              </dd>
-            </div>
-          </dl>
-        )}
-      </div>
+              <div>
+                <dt className={LABEL}>Furnishings deposit</dt>
+                <dd className="text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults?.deposit_percent === null ||
+                  agreementDefaults === undefined ? (
+                    <span className="text-[var(--color-aged-oak)]">Not set</span>
+                  ) : (
+                    `${agreementDefaults.deposit_percent}%`
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className={LABEL}>Billing cadence</dt>
+                <dd className="text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults?.cadence ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className={LABEL}>Retainer credit rule</dt>
+                <dd className="text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults?.retainer_credit_rule ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className={LABEL}>Default exclusions</dt>
+                <dd className="whitespace-pre-line text-[13px] text-[var(--color-charcoal)]">
+                  {agreementDefaults &&
+                  agreementDefaults.default_exclusions.length > 0 ? (
+                    agreementDefaults.default_exclusions.join('\n')
+                  ) : (
+                    <span className="text-[var(--color-aged-oak)]">Not set</span>
+                  )}
+                </dd>
+              </div>
+            </dl>
+          )}
+        </div>
+      )}
 
       {/* Members */}
       <div className="mb-2 flex items-center justify-between">

@@ -19,8 +19,14 @@ jest.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ user: { id: "designer-1" } }),
 }));
 
+// The card is P3 behind `agreement-parts`; every OTHER flag on this page
+// stays off, exactly as the seven-facet suite next door has it.
+let agreementPartsOn = true;
 jest.mock("@/hooks/use-feature-flag", () => ({
-  useFeatureFlag: () => ({ value: false, isLoading: false }),
+  useFeatureFlag: (flag: string) => ({
+    value: flag === "agreement-parts" ? agreementPartsOn : false,
+    isLoading: false,
+  }),
 }));
 
 jest.mock("@/hooks/use-studio-agreement-defaults", () => ({
@@ -117,6 +123,7 @@ const saveButton = () =>
 beforeEach(() => {
   jest.clearAllMocks();
   memberRole = "owner";
+  agreementPartsOn = true;
   agreementDefaultsRow = {
     studio_id: "studio-1",
     rate_card: [
@@ -265,6 +272,18 @@ describe("Account · Studio · Agreement defaults", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Default role 1")).not.toBeInTheDocument();
     expect(screen.getByText(/Principal designer/)).toBeInTheDocument();
+  });
+
+  it("is not on the page at all with the flag off", () => {
+    agreementPartsOn = false;
+    render(<AccountStudioPage />);
+    expect(screen.queryByText("Agreement defaults")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save agreement defaults" }),
+    ).not.toBeInTheDocument();
+    // Billing, one block above it, is untouched either way.
+    expect(screen.getByText("Billing")).toBeInTheDocument();
+    expect(screen.getByLabelText("Card fee (%)")).toBeInTheDocument();
   });
 
   it("leaves the Billing card exactly where it was, above it", () => {
