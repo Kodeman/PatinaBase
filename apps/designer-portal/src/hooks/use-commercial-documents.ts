@@ -217,7 +217,11 @@ function mapTerms(
     scope: String(row.scope ?? ""),
     deliverables: stringList(row.deliverables),
     exclusions: stringList(row.exclusions),
-    billingCeilingCents: finiteCents(row.billing_ceiling_cents),
+    // F-2: NULL means uncapped, and it has to survive the read to say so —
+    // coercing it to 0 here is what made a flat-fee agreement print "Not yet
+    // set" on a document that was already sent. `?? 0` at the seven-facet
+    // room's own input keeps the flag-off editor on integers.
+    billingCeilingCents: nullableFiniteCents(row.billing_ceiling_cents),
     retainerAmountCents: finiteCents(row.retainer_amount_cents),
     retainerActivationPolicy:
       row.retainer_activation_policy === "retainer_paid"
@@ -326,14 +330,35 @@ function mapAgreementPart(row: any): AgreementPart {
   };
 }
 
+/** The two ways PostgREST reports a table that is not there yet: Postgres's
+ *  own undefined_table, and PostgREST's schema-cache miss. */
+const MISSING_RELATION_CODES = new Set(["42P01", "PGRST205"]);
+
+function isMissingRelation(error: any): boolean {
+  if (!error) return false;
+  if (typeof error.code === "string" && MISSING_RELATION_CODES.has(error.code)) {
+    return true;
+  }
+  return (
+    typeof error.message === "string" &&
+    /relation .* does not exist|could not find the table/i.test(error.message)
+  );
+}
+
 /**
- * The parts read, isolated so it can FAIL SOFT.
+ * The parts read, isolated so it can fail soft for exactly one reason.
  *
  * 00575 lands on Strata separately from this Worker, and the flag is
  * fail-closed on top of that. A portal that reaches a database without
  * `proposal_agreement_parts` must render exactly what it rendered before — so
- * a missing relation resolves to "this document has no parts", not to a
- * broken Contract Room. Every other read in the bundle still throws.
+ * a MISSING RELATION resolves to "this document has no parts".
+ *
+ * Nothing else does. An RLS denial or a dropped connection also returns rows
+ * this reader cannot see, and answering `[]` to those would hand the composer
+ * an empty rail over a stored composition — where one added part and a Save
+ * would replace the whole array (`upsert_agreement_parts` writes wholesale)
+ * and destroy it. A read that failed throws, the bundle query errors, and the
+ * room says so instead of quietly offering to overwrite.
  */
 async function fetchAgreementParts(
   supabase: any,
@@ -344,7 +369,10 @@ async function fetchAgreementParts(
     .select("*")
     .eq("proposal_id", proposalId)
     .order("position", { ascending: true });
-  if (error) return [];
+  if (error) {
+    if (isMissingRelation(error)) return [];
+    throw error;
+  }
   return (data ?? []).map(mapAgreementPart);
 }
 
