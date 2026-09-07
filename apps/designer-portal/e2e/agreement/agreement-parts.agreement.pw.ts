@@ -14,8 +14,11 @@
  * and every assertion below fails. Run this spec as:
  *
  *   pnpm --filter @patina/designer-portal test:e2e -- \
- *     --config playwright.agreement.config.ts \
- *     e2e/agreement/agreement-parts.spec.ts --project=chromium
+ *     --config playwright.agreement.config.ts --project=chromium
+ *
+ * The `.agreement.pw.ts` suffix is deliberate: the base config collects
+ * `e2e/**\/*.spec.ts` with the flag OFF, where this spec could only fail.
+ * Only `playwright.agreement.config.ts` matches this name.
  *
  * Requires migration 00575 (`proposal_agreement_parts`,
  * `materialize_standard_parts`, `upsert_agreement_parts`) on the local stack.

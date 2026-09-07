@@ -16,16 +16,22 @@ import base from "./playwright.config";
  *
  * That pinned value beats `.env.local` and reaches only the server Playwright
  * boots. A REUSED dev server started without it serves the seven-facet room
- * and every assertion in `e2e/agreement/agreement-parts.spec.ts` fails; kill
- * the dev server and let this config boot its own.
+ * and every assertion in `e2e/agreement/agreement-parts.agreement.pw.ts`
+ * fails; kill the dev server and let this config boot its own.
+ *
+ * The spec's `.agreement.pw.ts` suffix is what keeps it OUT of the default
+ * designer e2e run: the base config's `testDir: './e2e'` has no testMatch, so
+ * Playwright's default (`**\/*.@(spec|test).?(c|m)[jt]s?(x)`) would otherwise
+ * collect a spec whose flag is off in that run and which therefore cannot
+ * pass. `playwright.mood-board-visual.config.ts` scopes itself the same way.
  *
  * Run:
  *   pnpm --filter @patina/designer-portal test:e2e -- \
- *     --config playwright.agreement.config.ts \
- *     e2e/agreement/agreement-parts.spec.ts --project=chromium
+ *     --config playwright.agreement.config.ts --project=chromium
  */
 export default defineConfig({
   ...base,
+  testMatch: "**/*.agreement.pw.ts",
   webServer: base.webServer
     ? {
         ...base.webServer,
