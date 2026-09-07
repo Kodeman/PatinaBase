@@ -38,6 +38,21 @@ export const AGREEMENT_PART_COPY = {
   notYetSet: "Not yet set",
   /** Attachment acknowledgment — display only in Wave 1. */
   attachmentAcknowledgment: "I received this",
+  /**
+   * R24 — the act that takes a composed draft back to the seven facets. It is
+   * the studio's own word for un-composing, and it is offered only inside the
+   * Contract Room, only on a draft.
+   */
+  returnToFacets: "Return to the seven facets",
+  /**
+   * R17(b) / R24 — what the seven-facet room says to a co-member the
+   * `agreement-parts` flag has not reached, standing over an agreement someone
+   * else composed. Her Save cannot land (00575 refuses it, and the write grant
+   * on the money row is gone), so the room says so BEFORE she retypes seven
+   * facets, and names the way back.
+   */
+  composedElsewhere:
+    "This agreement is composed from parts. It is edited in the Contract Room with parts on, where it can also be returned to the seven facets.",
 } as const;
 
 /** The retainer's activation sentence, by policy. */

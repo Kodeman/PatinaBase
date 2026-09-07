@@ -16,6 +16,7 @@ import {
   useCommercialDocument,
   useSaveServiceAgreement,
 } from "@/hooks/use-commercial-documents";
+import { AGREEMENT_PART_COPY } from "@patina/types";
 import {
   assessServiceAgreementReadiness,
   type CommercialDocument,
@@ -100,6 +101,10 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
   // isLoading: true }, so the composer can never flash to a non-pilot user.
   const { value: partsOn, isLoading: flagLoading } =
     useFeatureFlag("agreement-parts");
+  // R24 — the composer can hand the draft back. Held here, above every early
+  // return, because it decides WHICH room renders and a conditional hook
+  // would reorder the rest.
+  const [returnedToFacets, setReturnedToFacets] = useState(false);
 
   if (bundle.isLoading || flagLoading) {
     // The same component and the same sentence the room has always shown. The
@@ -120,7 +125,7 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
     );
   }
 
-  if (partsOn) {
+  if (partsOn && !returnedToFacets) {
     return (
       // Keyed on the agreement itself, and on nothing that a save changes.
       // `upsert_agreement_parts` projects through `_project_agreement_terms`,
@@ -133,6 +138,7 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
         key={proposalId}
         proposal={proposal}
         bundle={bundle.data}
+        onReturnToFacets={() => setReturnedToFacets(true)}
       />
     );
   }
@@ -151,6 +157,14 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
             Math.max(1, ...bundle.data.rates.map((item) => item.version))),
       )}
       signatures={bundle.data.signatures}
+      // R17(b) / R24 — once a proposal carries a part, this room's Save is
+      // refused by the database (00575) and the write grant on the money row
+      // is gone. `agreement-parts` is a per-person rollout, so a co-member the
+      // flag has not reached can stand here over an agreement someone else
+      // composed. She is told before she retypes seven facets, not after.
+      // A document with no parts is every document today: `false`, and this
+      // room renders exactly as it always has.
+      composed={!returnedToFacets && (bundle.data.parts?.length ?? 0) > 0}
     />
   );
 }
@@ -177,6 +191,7 @@ function ServiceAgreementEditor({
   initialRates,
   initiallyDirty,
   signatures,
+  composed = false,
 }: {
   proposal: any;
   document: CommercialDocument;
@@ -184,6 +199,7 @@ function ServiceAgreementEditor({
   initialRates: ServiceRate[];
   initiallyDirty: boolean;
   signatures: Parameters<typeof ServiceAgreementPreview>[0]["signatures"];
+  composed?: boolean;
 }) {
   const router = useRouter();
   const save = useSaveServiceAgreement(document.id);
@@ -270,6 +286,7 @@ function ServiceAgreementEditor({
     }
   };
   const reviewAndSend = async () => {
+    if (composed) return;
     if (dirty && !(await persist())) return;
     setSendOpen(true);
   };
@@ -317,6 +334,7 @@ function ServiceAgreementEditor({
           actionKey="review-design-agreement"
           variant="primary"
           trailing="→"
+          disabled={composed}
           onClick={() => void reviewAndSend()}
         >
           Review & send
@@ -345,7 +363,7 @@ function ServiceAgreementEditor({
               <Button
                 onClick={() => void persist()}
                 loading={save.isPending}
-                disabled={!dirty}
+                disabled={!dirty || composed}
               >
                 {dirty ? "Save agreement" : "Saved"}
               </Button>
@@ -385,6 +403,14 @@ function ServiceAgreementEditor({
               </p>
             )}
           </div>
+          {composed && (
+            <p
+              role="status"
+              className="mt-2 text-[11px] italic text-[var(--text-muted)]"
+            >
+              {AGREEMENT_PART_COPY.composedElsewhere}
+            </p>
+          )}
           {saveNote && (
             <p
               role="status"

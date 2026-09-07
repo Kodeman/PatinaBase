@@ -12,6 +12,7 @@ import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents"
 
 const mockSaveParts = jest.fn();
 const mockMaterialize = jest.fn();
+const mockDiscard = jest.fn();
 const mockAttachClient = jest.fn();
 
 jest.mock("next/navigation", () => ({
@@ -87,6 +88,10 @@ jest.mock("@patina/supabase", () => ({
   }),
   useMaterializeStandardParts: () => ({
     mutate: mockMaterialize,
+    isPending: false,
+  }),
+  useDiscardAgreementParts: () => ({
+    mutateAsync: mockDiscard,
     isPending: false,
   }),
 }));

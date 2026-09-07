@@ -21,10 +21,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  useDiscardAgreementParts,
   useMaterializeStandardParts,
   useSaveAgreementParts,
 } from "@patina/supabase";
-import type { AgreementPart } from "@patina/types";
+import { AGREEMENT_PART_COPY, type AgreementPart } from "@patina/types";
 import { RoomShell } from "../../room-shell";
 import { DocSheet } from "../../../overlays/doc-sheet";
 import { DocumentAction } from "../../../document-action";
@@ -57,9 +58,13 @@ function renumber(parts: AgreementPart[]): AgreementPart[] {
 export function AgreementComposer({
   proposal,
   bundle,
+  onReturnToFacets,
 }: {
   proposal: any;
   bundle: CommercialDocumentBundle;
+  /** R24 — composing is a door, and this is the handle on the inside. The
+   *  room above swaps back to the seven facets once the parts are gone. */
+  onReturnToFacets?: () => void;
 }) {
   const router = useRouter();
   const document: CommercialDocument = bundle.document;
@@ -75,6 +80,7 @@ export function AgreementComposer({
   // this room asking it to.
   const save = useSaveAgreementParts(proposalId);
   const materialize = useMaterializeStandardParts(proposalId);
+  const discard = useDiscardAgreementParts(proposalId);
   const attachClient = useAttachDocumentClient();
   const { user, status: authStatus } = useAuth();
   const clients = useClients();
@@ -225,6 +231,28 @@ export function AgreementComposer({
     }
   };
 
+  // R24 — the way back out. Merely OPENING this room composes the draft, and
+  // `agreement-parts` is a per-person rollout: without a handle on the inside,
+  // a co-member the flag has not reached could never save this agreement
+  // again, in any room. `discard_agreement_parts` removes the parts and moves
+  // no money — the terms row stays exactly as the last projection left it,
+  // which is the state the seven-facet room reads and edits — so the document
+  // returns to the paper it would have been on had this room never opened.
+  // Draft only: a sent agreement's parts are what bind (R6).
+  const returnToFacets = async () => {
+    setSaveNote(null);
+    try {
+      await discard.mutateAsync();
+      onReturnToFacets?.();
+    } catch (error) {
+      setSaveNote(
+        error instanceof Error
+          ? error.message
+          : "The agreement could not be returned to the seven facets.",
+      );
+    }
+  };
+
   const reviewAndSend = async () => {
     if (dirty && !(await persist())) return;
     setSendOpen(true);
@@ -304,6 +332,15 @@ export function AgreementComposer({
               <Button variant="secondary" onClick={() => setPreviewOpen(true)}>
                 Preview client copy
               </Button>
+              {!readOnly && (
+                <Button
+                  variant="secondary"
+                  onClick={() => void returnToFacets()}
+                  loading={discard.isPending}
+                >
+                  {AGREEMENT_PART_COPY.returnToFacets}
+                </Button>
+              )}
               <Button
                 onClick={() => void persist()}
                 loading={save.isPending}

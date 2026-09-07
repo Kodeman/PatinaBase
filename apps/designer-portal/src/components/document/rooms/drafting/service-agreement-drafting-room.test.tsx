@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { AGREEMENT_PART_COPY } from "@patina/types";
 import { ServiceAgreementDraftingRoom } from "./service-agreement-drafting-room";
 
 const mockAttachClient = jest.fn();
@@ -92,6 +93,10 @@ jest.mock("@/hooks/use-clients", () => ({
   useInviteAndLinkClient: () => ({ mutateAsync: mockInviteAndLinkClient }),
 }));
 
+// R17(b)/R24 — what the bundle says this agreement is made of. Empty is every
+// document today and every flag-off document tomorrow.
+let mockCommercialParts: unknown[] = [];
+
 jest.mock("@/hooks/use-commercial-documents", () => ({
   useCommercialDocument: () => ({
     isLoading: false,
@@ -107,6 +112,7 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
       terms: null,
       rates: [],
       signatures: [],
+      parts: mockCommercialParts,
     },
   }),
   useSaveServiceAgreement: () => ({
@@ -303,7 +309,9 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
     expect(mockInviteAndLinkClient).not.toHaveBeenCalled();
 
     fireEvent.click(
-      screen.getByTestId("client-picker-invite-cancel-manual-lead-relationship"),
+      screen.getByTestId(
+        "client-picker-invite-cancel-manual-lead-relationship",
+      ),
     );
 
     expect(
@@ -345,7 +353,9 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
     expect(row).toHaveAttribute("aria-expanded", "true");
     expect(row).toHaveAttribute(
       "aria-controls",
-      screen.getByTestId("client-picker-invite-confirm-manual-lead-relationship").id,
+      screen.getByTestId(
+        "client-picker-invite-confirm-manual-lead-relationship",
+      ).id,
     );
     expect(screen.getByText("Confirm below")).toBeInTheDocument();
     // And it is announced rather than only shown.
@@ -457,5 +467,59 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
     expect(
       screen.queryByTestId("client-picker-invite-confirm-linked-relationship"),
     ).not.toBeInTheDocument();
+  });
+});
+
+/* ── R17(b) / R24 · the co-member the flag has not reached ───────────────────
+   `agreement-parts` is a per-person rollout, so a studio holds one member
+   inside it and one outside. The one outside opens an agreement someone else
+   composed, sees the seven facets filled from the projection, and — before
+   this — could retype all of them, press Save, and have the work thrown away
+   by a database refusal printed as one line of muted 11px text. The room reads
+   the composition now and says so first, naming the way back.
+   ────────────────────────────────────────────────────────────────────────── */
+
+describe("ServiceAgreementDraftingRoom · an agreement composed elsewhere", () => {
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = jest.fn();
+  });
+
+  afterEach(() => {
+    mockCommercialParts = [];
+  });
+
+  const renderRoom = () =>
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          description: "Seeded from Discovery · budget 60,000–80,000",
+          client: null,
+        }}
+      />,
+    );
+
+  it("says so and holds both acts when the agreement carries parts", () => {
+    mockCommercialParts = [{ id: "part-1", partKey: "patina.services" }];
+    renderRoom();
+
+    expect(
+      screen.getByText(AGREEMENT_PART_COPY.composedElsewhere),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Save agreement|Saved/ }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Review/ })).toBeDisabled();
+  });
+
+  it("says nothing and holds nothing on a document with no parts", () => {
+    renderRoom();
+
+    expect(
+      screen.queryByText(AGREEMENT_PART_COPY.composedElsewhere),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Review/ })).toBeEnabled();
   });
 });
