@@ -77,13 +77,23 @@ const SEEDED_ROOMS = ['Study', 'Hall', 'Stair'];
 const COMPOSED_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb01';
 
 /* ── THE DOOR THE COMPOSED AGREEMENT STANDS AT (Wave 2, P6 · R26) ────────────
-   The fixture below is the ONE agreement the seed leaves `sent` — every other
-   commercial paper in `the-client-page.sql` is laid down executed, and an
-   executed paper has no door to drive. Its shape is fixed here because the
-   sentence, the tick and the recorded metadata are all asserted against it
-   character for character:
+   ⚠ THIS FIXTURE IS OWED. `supabase/seed/the-client-page.sql` today lays every
+   commercial paper down EXECUTED (`:255`, `:552`, `:671`) and writes no
+   `commercial_document_signatures` row at all, so no seeded client's page has
+   a door to drive. `supabase/seed/**` is the backend lane's pathspec; this
+   test is written unconditionally (R26) against the fixture below, and it goes
+   green when that fixture and the Wave 2 migrations are on the stack. Until
+   then it is a red that names its own cause in the first assertion.
 
-     proposals            id `b0000000-0000-0000-0000-00000000cb02`
+   Note the id: `…cb02` is ALREADY TAKEN — it is the solo household's seeded
+   furnishings authorization (`the-client-page.sql:358`, `v_fa_proposal`).
+   `…cb01` is the composed agreement and `…cb03` the trade scope; `…cb04` is
+   the first free one and is what the seed must use.
+
+   The shape is fixed here because the sentence, the tick and the recorded
+   metadata are all asserted against it character for character:
+
+     proposals            id `b0000000-0000-0000-0000-00000000cb04`
                           Cedar Lane — Phase Work, design_services,
                           status 'sent', commercial_state 'sent',
                           client uid_solo, on the Cedar Lane Study project
@@ -104,7 +114,7 @@ const COMPOSED_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb01';
    assumes. Run twice against one stack without a reset and the second run
    finds a door already open — that is the fixture's nature, not a flake.
    ────────────────────────────────────────────────────────────────────────── */
-const PER_PHASE_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb02';
+const PER_PHASE_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb04';
 const PER_PHASE_AGREEMENT_TITLE = 'Cedar Lane — Phase Work';
 const PER_PHASE_ACK_PART_KEY = 'patina.lead_paint_notice';
 const PER_PHASE_ACK_LINE = 'I received the lead-paint notice.';
@@ -617,8 +627,11 @@ test.describe('The Threshold — the client page', () => {
    * No `page.waitForTimeout` anywhere — the hold is driven by pressing and
    * then waiting on a state the app itself publishes.
    *
-   * Unconditional (R26): the fixture is named at the head of this file and the
-   * seed lays it down on every stack.
+   * Unconditional (R26): the fixture is named at the head of this file, and it
+   * is OWED — the seed does not lay it down yet, and `supabase/seed/**` is the
+   * backend lane's pathspec. Until that fixture and the Wave 2 migrations are
+   * on the stack this test is red at its first assertion, which says so in its
+   * own message. It is not made conditional to hide that.
    */
   test('signs a composed agreement at its door, and files what she agreed to', async ({
     page,
