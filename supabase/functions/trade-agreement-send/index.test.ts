@@ -18,6 +18,8 @@ import {
 import {
   type CallerUser,
   handleTradeAgreementSend,
+  mapCommitSendResult,
+  mapMintTokenResult,
   parseTradeAgreementSendBody,
   resolveContactRecipient,
   type TradeAgreementRow,
@@ -122,6 +124,80 @@ Deno.test("resolveContactRecipient returns null when nothing is usable", () => {
   assertEquals(resolveContactRecipient(undefined), null);
   assertEquals(resolveContactRecipient("   "), null);
   assertEquals(resolveContactRecipient("   ", "  "), null);
+});
+
+// ─── RPC payload shapes, pinned to the applied SQL ───────────────────────────
+//
+// These two mappers are the seam where the DI harness stops and the real
+// database starts, so they are pinned to 00579_trade_agreements.sql rather than
+// to the build sheet's prose. Getting a key name wrong here does not throw: it
+// reports a null timestamp or a missing token on a send that otherwise looks
+// like it worked.
+
+Deno.test("mapCommitSendResult reads send_trade_agreement's camelCase jsonb", () => {
+  // The exact object 00579:545-558 builds.
+  const payload = {
+    agreementId: "agreement-1",
+    projectId: "project-1",
+    studioId: "studio-1",
+    title: "Cabinetry and millwork",
+    contactId: "contact-1",
+    contactDisplayName: "Hewn Woodwork",
+    contactCompanyName: "Hewn Woodwork LLC",
+    contactEmail: "sub@hewn.test",
+    priceCents: 3_800_000,
+    currency: "USD",
+    state: "sent",
+    sentAt: "2026-09-07T12:00:00.000Z",
+  };
+  const mapped = mapCommitSendResult(payload);
+  assert("row" in mapped);
+  if ("row" in mapped) {
+    assertEquals(mapped.row.state, "sent");
+    assertEquals(mapped.row.sentAt, "2026-09-07T12:00:00.000Z");
+  }
+});
+
+Deno.test("mapCommitSendResult does not read the table's snake_case columns", () => {
+  // The regression this pins: `sent_at` is a column name, never a key of the
+  // RPC's jsonb, so a mapper that reads it reports sentAt: null on every send.
+  const mapped = mapCommitSendResult({
+    state: "sent",
+    sent_at: "2026-09-07T12:00:00.000Z",
+  });
+  assert("row" in mapped);
+  if ("row" in mapped) assertEquals(mapped.row.sentAt, null);
+});
+
+Deno.test("mapCommitSendResult reports an error rather than a bare state", () => {
+  for (const bad of [null, undefined, 42, "sent", {}, { state: "" }]) {
+    const mapped = mapCommitSendResult(bad);
+    assert("error" in mapped, `expected an error for ${JSON.stringify(bad)}`);
+  }
+});
+
+Deno.test("mapCommitSendResult unwraps a single-row array defensively", () => {
+  const mapped = mapCommitSendResult([{ state: "sent", sentAt: null }]);
+  assert("row" in mapped);
+  if ("row" in mapped) {
+    assertEquals(mapped.row.state, "sent");
+    assertEquals(mapped.row.sentAt, null);
+  }
+});
+
+Deno.test("mapMintTokenResult unwraps the RETURNS TABLE row set", () => {
+  // 00579:577 — RETURNS TABLE (id uuid, token text): PostgREST yields an array.
+  const mapped = mapMintTokenResult([{ id: "token-row-1", token: "abc123" }]);
+  assert("token" in mapped);
+  if ("token" in mapped) assertEquals(mapped.token, "abc123");
+});
+
+Deno.test("mapMintTokenResult errors when no token comes back", () => {
+  for (const bad of [null, undefined, [], [{ id: "t1" }], {}, { token: "" }]) {
+    const mapped = mapMintTokenResult(bad);
+    assert("error" in mapped, `expected an error for ${JSON.stringify(bad)}`);
+    if ("error" in mapped) assertEquals(mapped.error, "no_token");
+  }
 });
 
 // ─── handleTradeAgreementSend — full contract (mocked deps) ──────────────────

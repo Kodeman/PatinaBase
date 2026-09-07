@@ -63,6 +63,8 @@ import {
   type CallerUser,
   type CommitSendResult,
   handleTradeAgreementSend,
+  mapCommitSendResult,
+  mapMintTokenResult,
   type MintTokenResult,
   type SendEmailResult,
   type StudioIdentity,
@@ -232,15 +234,13 @@ const deps: TradeAgreementSendDeps = {
       return { error: error.message };
     }
     // RETURNS TABLE(id, token) → PostgREST yields an array of rows.
-    const row = (Array.isArray(data) ? data[0] : data) as Row | null;
-    const token = row?.token;
-    if (!token) {
+    const mapped = mapMintTokenResult(data);
+    if ("error" in mapped) {
       console.error(
         "trade-agreement-send: mint_trade_agreement_token returned no token",
       );
-      return { error: "no_token" };
     }
-    return { token };
+    return mapped;
   },
 
   sendEmail: async (opts): Promise<SendEmailResult> => {
@@ -289,11 +289,7 @@ const deps: TradeAgreementSendDeps = {
       );
       return { error: error.message };
     }
-    const row = (Array.isArray(data) ? data[0] : data) as Row | null;
-    if (!row || typeof row.state !== "string") {
-      return { error: "send_trade_agreement returned no row" };
-    }
-    return { row: { state: row.state, sentAt: row.sent_at ?? null } };
+    return mapCommitSendResult(data);
   },
 
   clientPortalUrl: CLIENT_PORTAL_URL,

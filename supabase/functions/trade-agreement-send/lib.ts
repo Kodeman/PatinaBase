@@ -181,6 +181,56 @@ export interface CommittedSend {
 export type CommitSendResult = { row: CommittedSend } | { error: string };
 
 /**
+ * Shape the payload `public.send_trade_agreement` actually returns.
+ *
+ * Pinned to the applied SQL, not to prose: `00579_trade_agreements.sql:513`
+ * declares `RETURNS jsonb` and `:545-558` builds a single OBJECT whose keys are
+ * **camelCase** — `state`, `sentAt` — never the table's snake_case column
+ * names. PostgREST hands a scalar jsonb return back as that object, so there is
+ * no row array to unwrap; the array branch is kept only so a future
+ * `RETURNS TABLE` would degrade to a readable error instead of a silent null.
+ *
+ * This mapper exists so the shape is asserted by a test rather than assumed:
+ * reading `sent_at` here compiles, runs, and silently reports `sentAt: null` on
+ * every send.
+ */
+export function mapCommitSendResult(data: unknown): CommitSendResult {
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  if (!row || typeof row !== "object") {
+    return { error: "send_trade_agreement returned no row" };
+  }
+  const state = row.state;
+  if (typeof state !== "string" || !state) {
+    return { error: "send_trade_agreement returned no state" };
+  }
+  const sentAt = row.sentAt;
+  return {
+    row: { state, sentAt: typeof sentAt === "string" ? sentAt : null },
+  };
+}
+
+/**
+ * Shape the payload `public.mint_trade_agreement_token` returns.
+ *
+ * `00579_trade_agreements.sql:577` declares `RETURNS TABLE (id uuid, token
+ * text)`, so PostgREST hands back an ARRAY of rows — `data[0].token` is the raw
+ * token, emitted exactly once and never readable again (only its sha256 is
+ * stored, `:611`).
+ */
+export function mapMintTokenResult(data: unknown): MintTokenResult {
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const token = row && typeof row === "object" ? row.token : undefined;
+  if (typeof token !== "string" || !token) return { error: "no_token" };
+  return { token };
+}
+
+/**
  * The states `public.send_trade_agreement` accepts. Held here so a doomed send
  * is refused before a live token is minted or an ask-to-sign letter is mailed
  * for a page that would resolve to nothing; the RPC remains the authority that
