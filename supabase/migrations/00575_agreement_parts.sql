@@ -3104,6 +3104,14 @@ BEGIN
        'creditRule', COALESCE(v_defaults.retainer_credit_rule, 'credited'),
        'activationPolicy', COALESCE(v_terms.retainer_activation_policy, 'immediate')),
      false, true),
+    -- (R28 amended — re-gate 2, F1, rulings-2026-09-06.md.) billing_cadence is
+    -- NOT NULL DEFAULT 'monthly', so on any document that HAS a terms row this
+    -- part is seeded 'monthly' whatever the COALESCE says. Ruled deliberate: a
+    -- cadence saved from the seven-facet room counts as chosen — the room shows
+    -- the select with Monthly preselected and the designer saves it, exactly as
+    -- today's shipped agreement does, and the composed room shows the cadence
+    -- part the same way. The cadence is seeded from the terms row by ruling, not
+    -- by oversight.
     (p_proposal_id, 8, 'schedule', 'cadence', 'patina.cadence', 'Billing cadence',
      jsonb_build_object('cadence',
        COALESCE(v_terms.billing_cadence, v_defaults.cadence)),
