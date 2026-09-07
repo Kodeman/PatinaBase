@@ -415,6 +415,166 @@ export type Database = {
           },
         ]
       }
+      agreement_execution_snapshots: {
+        Row: {
+          created_at: string
+          document_hash: string
+          html: string
+          part_set: Json
+          proposal_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_hash: string
+          html: string
+          part_set: Json
+          proposal_id: string
+        }
+        Update: {
+          created_at?: string
+          document_hash?: string
+          html?: string
+          part_set?: Json
+          proposal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_execution_snapshots_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_part_events: {
+        Row: {
+          action: string
+          actor: string | null
+          actor_name: string | null
+          after: Json | null
+          at: string
+          before: Json | null
+          id: string
+          part_id: string | null
+          part_key: string
+          proposal_id: string
+          why: string | null
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          actor_name?: string | null
+          after?: Json | null
+          at?: string
+          before?: Json | null
+          id?: string
+          part_id?: string | null
+          part_key: string
+          proposal_id: string
+          why?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          actor_name?: string | null
+          after?: Json | null
+          at?: string
+          before?: Json | null
+          id?: string
+          part_id?: string | null
+          part_key?: string
+          proposal_id?: string
+          why?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_part_events_actor_fkey"
+            columns: ["actor"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_part_events_actor_fkey"
+            columns: ["actor"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_part_events_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_templates: {
+        Row: {
+          class: string
+          consent_key: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          parts: Json
+          studio_id: string | null
+          template_key: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          class: string
+          consent_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          parts?: Json
+          studio_id?: string | null
+          template_key: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          class?: string
+          consent_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          parts?: Json
+          studio_id?: string | null
+          template_key?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           created_at: string
@@ -13522,10 +13682,14 @@ export type Database = {
           created_at: string
           effective_at: string
           ended_at: string | null
+          fee_amount_cents: number | null
+          fee_basis: string | null
+          fee_schedule: Json | null
           id: string
           project_id: string
           retainer_activation_policy: string
           retainer_amount_cents: number
+          retainer_credit_rule: string
           retainer_invoice_id: string | null
           source_proposal_id: string
           status: string
@@ -13537,10 +13701,14 @@ export type Database = {
           created_at?: string
           effective_at?: string
           ended_at?: string | null
+          fee_amount_cents?: number | null
+          fee_basis?: string | null
+          fee_schedule?: Json | null
           id?: string
           project_id: string
           retainer_activation_policy: string
           retainer_amount_cents?: number
+          retainer_credit_rule?: string
           retainer_invoice_id?: string | null
           source_proposal_id: string
           status?: string
@@ -13552,10 +13720,14 @@ export type Database = {
           created_at?: string
           effective_at?: string
           ended_at?: string | null
+          fee_amount_cents?: number | null
+          fee_basis?: string | null
+          fee_schedule?: Json | null
           id?: string
           project_id?: string
           retainer_activation_policy?: string
           retainer_amount_cents?: number
+          retainer_credit_rule?: string
           retainer_invoice_id?: string | null
           source_proposal_id?: string
           status?: string
@@ -18978,10 +19150,14 @@ export type Database = {
           current_rate_version: number
           deliverables: Json
           exclusions: Json
+          fee_amount_cents: number | null
+          fee_basis: string | null
+          fee_schedule: Json | null
           furnishings_deposit_percent: number | null
           proposal_id: string
           retainer_activation_policy: string
           retainer_amount_cents: number
+          retainer_credit_rule: string
           scope: string
           terms: string | null
           updated_at: string
@@ -18994,10 +19170,14 @@ export type Database = {
           current_rate_version?: number
           deliverables?: Json
           exclusions?: Json
+          fee_amount_cents?: number | null
+          fee_basis?: string | null
+          fee_schedule?: Json | null
           furnishings_deposit_percent?: number | null
           proposal_id: string
           retainer_activation_policy?: string
           retainer_amount_cents?: number
+          retainer_credit_rule?: string
           scope?: string
           terms?: string | null
           updated_at?: string
@@ -19010,10 +19190,14 @@ export type Database = {
           current_rate_version?: number
           deliverables?: Json
           exclusions?: Json
+          fee_amount_cents?: number | null
+          fee_basis?: string | null
+          fee_schedule?: Json | null
           furnishings_deposit_percent?: number | null
           proposal_id?: string
           retainer_activation_policy?: string
           retainer_amount_cents?: number
+          retainer_credit_rule?: string
           scope?: string
           terms?: string | null
           updated_at?: string
@@ -23689,6 +23873,73 @@ export type Database = {
           },
         ]
       }
+      studio_agreement_parts: {
+        Row: {
+          client_visible_default: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          part_key: string
+          payload: Json
+          required_default: boolean
+          studio_id: string
+          title: string
+          updated_at: string
+          variant: string | null
+        }
+        Insert: {
+          client_visible_default?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          part_key: string
+          payload?: Json
+          required_default?: boolean
+          studio_id: string
+          title: string
+          updated_at?: string
+          variant?: string | null
+        }
+        Update: {
+          client_visible_default?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          part_key?: string
+          payload?: Json
+          required_default?: boolean
+          studio_id?: string
+          title?: string
+          updated_at?: string
+          variant?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_agreement_parts_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_agreement_parts_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_agreement_parts_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_billing_settings: {
         Row: {
           card_surcharge_bps: number
@@ -28351,9 +28602,15 @@ export type Database = {
         Args: { p_proposal_id: string }
         Returns: boolean
       }
+      _agreement_html_escape: { Args: { p_value: string }; Returns: string }
+      _agreement_money: { Args: { p_cents: number }; Returns: string }
       _agreement_requires_rate_card: {
         Args: { p_proposal_id: string }
         Returns: boolean
+      }
+      _agreement_restore_list_item_ids: {
+        Args: { p_payload: Json }
+        Returns: Json
       }
       _apply_board_room_state_00444_impl: {
         Args: {
@@ -29156,6 +29413,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _log_agreement_part_events: {
+        Args: {
+          p_after: Json
+          p_before: Json
+          p_proposal_id: string
+          p_why: string
+        }
+        Returns: undefined
+      }
       _mark_project_review_delivery_sent_00442_impl: {
         Args: {
           p_actor_id: string
@@ -29439,6 +29705,10 @@ export type Database = {
         }
         Returns: Json
       }
+      _render_agreement_snapshot_html: {
+        Args: { p_proposal_id: string }
+        Returns: string
+      }
       _repair_legacy_proposal_phase_topology: {
         Args: { p_proposal_id: string }
         Returns: boolean
@@ -29614,6 +29884,7 @@ export type Database = {
       _sign_design_services_agreement_authorized: {
         Args: {
           p_client_id: string
+          p_consent?: Json
           p_proposal_id: string
           p_signed_name: string
           p_trusted_signed_ip?: string
@@ -30844,6 +31115,10 @@ export type Database = {
         }
         Returns: Json
       }
+      compose_agreement_consent: {
+        Args: { p_proposal_id: string }
+        Returns: string
+      }
       compute_house_taste_draft: { Args: never; Returns: string }
       concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
       concierge_damage_photo_checklist: { Args: never; Returns: Json }
@@ -30896,6 +31171,10 @@ export type Database = {
       continue_board_in_project: {
         Args: { p_project_board_id: string }
         Returns: string
+      }
+      copy_agreement_parts_from_authority: {
+        Args: { p_proposal_id: string; p_why?: string }
+        Returns: number
       }
       copy_schedule_as_built: {
         Args: {
@@ -32934,6 +33213,10 @@ export type Database = {
           similarity: number
         }[]
       }
+      materialize_agreement_template: {
+        Args: { p_proposal_id: string; p_template_key: string }
+        Returns: number
+      }
       materialize_board_template: {
         Args: {
           p_name?: string
@@ -34050,7 +34333,56 @@ export type Database = {
           passed: boolean
         }[]
       }
+      sanitize_agreement_part_payload: {
+        Args: { p_value: Json }
+        Returns: Json
+      }
       sanitize_board_template_json: { Args: { p_value: Json }; Returns: Json }
+      save_agreement_as_template: {
+        Args: { p_proposal_id: string; p_title: string }
+        Returns: {
+          class: string
+          consent_key: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          parts: Json
+          studio_id: string | null
+          template_key: string
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agreement_templates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_agreement_part: {
+        Args: { p_part: Json; p_studio_id: string }
+        Returns: {
+          client_visible_default: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          part_key: string
+          payload: Json
+          required_default: boolean
+          studio_id: string
+          title: string
+          updated_at: string
+          variant: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_agreement_parts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       save_board_as_template: {
         Args: {
           p_board_id: string
@@ -34518,6 +34850,7 @@ export type Database = {
       sign_design_services_agreement_with_trusted_ip: {
         Args: {
           p_client_id: string
+          p_consent?: Json
           p_proposal_id: string
           p_signed_ip?: string
           p_signed_name: string
@@ -35236,7 +35569,7 @@ export type Database = {
         }
       }
       upsert_agreement_parts: {
-        Args: { p_parts: Json; p_proposal_id: string }
+        Args: { p_parts: Json; p_proposal_id: string; p_why?: string }
         Returns: Json
       }
       upsert_design_services_draft: {
