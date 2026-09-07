@@ -278,6 +278,17 @@ countersign. It sits on the multi-house `<Threshold>` path, which this change
 does not touch. The two households this lane's e2e minted own zero projects and
 appear nowhere in that list.
 
+### No migration — the bundle does not refuse a project-less signed read
+
+The ruling allowed one minimal widening "if the existing bundle refuses
+project-less reads". It does not, and that is proved rather than assumed: the
+third e2e unfolds the kept line and asserts the paper reads in full —
+`previously-body` carries the agreement's own scope prose, with neither
+`instrument-reading-absent` nor `instrument-reading-refused` present. So
+`get_client_commercial_document_bundle` serves a `client_signed`,
+`project_id NULL` design-services document to the homeowner it is addressed to,
+and no migration was minted.
+
 The e2e ran against a dev server Playwright started itself on :3002 with the
 config's pinned `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321` and the CLI
 demo anon key; `SUPABASE_SERVICE_ROLE_KEY` was read out of the running
