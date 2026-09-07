@@ -204,3 +204,187 @@ mid-assertion, which is what made the first two drafts of this test flap. No
 - `pnpm --filter @patina/admin-portal build` (the repo's strictest gate) was not
   run — no `packages/**` file was touched by this lane, so there is nothing here
   for it to catch that this portal's own `tsc --noEmit` did not.
+
+---
+
+# Round 1 review — fixes
+
+Adversarial review (`client-review-r1.md`) returned two majors. Both are
+addressed below. No blocker was raised.
+
+## C2 (major, 0.6) — the kill switch did not reach the homeowner
+
+**The finding.** The client branched on data alone (`bundle.parts.length > 0`).
+`materialize_standard_parts` writes nine rows on first flag-on open and they
+never go away; `upsert_design_services_draft` — the seven-facet, flag-OFF
+writer — touches only the terms row (00575:1638-1641 calls
+`_project_agreement_terms` and never `proposal_agreement_parts`). Sequence:
+compose under the flag, turn the flag off, raise the ceiling in the seven-facet
+room, send. The homeowner reads the stale parts figure; countersign snapshots
+authority from the terms row. The money shown at signature is not the money
+authorized.
+
+**Why not "the client reads the flag too"** (the reviewer's containment (c),
+the only one of the three that lives in this lane). Two reasons, and the second
+is the disqualifying one:
+
+1. A PostHog flag resolves against *whoever is looking*. `agreement-parts` is
+   rolled out to studios; a homeowner is a different person entity, so the flag
+   would evaluate false for essentially every client and the composed body
+   would never render at all.
+2. Worse than useless — actively unsafe. Under a fail-closed client gate with
+   the flag ON for the studio, the studio composes a custom clause, the
+   homeowner's own evaluation comes back false, and the homeowner signs a
+   document whose fingerprint hashes a clause the page never showed them.
+
+Containments (a) and (b) are `supabase/**` — the backend lane's pathspec, not
+this one's. So this lane implemented (a)'s semantics on the side of the edge it
+owns.
+
+**What shipped instead — `agreementPartsMatchTerms(parts, terms, rates)`**
+(`apps/client-portal/src/lib/commercial-documents.ts`). The composed body
+renders only while the parts are still the projection of the terms row in front
+of them. When they are not, the agreement falls through to today's
+terms-driven body — the same body a flag-off document has always rendered, fed
+from the row the countersignature will actually snapshot. The invariant is one
+sentence: **the homeowner never reads a figure the countersignature will not
+authorize.**
+
+The comparison is build-sheet §3.7's projection map, keyed on `part_key`, for
+the five keys that carry money, with the absent-part defaults the map names:
+
+| `part_key` | held against | absent ⇒ |
+|---|---|---|
+| `patina.ceiling` | `serviceTerms.billingCeilingCents` | `NULL` (uncapped) |
+| `patina.retainer` | `retainerAmountCents` + `retainerActivationPolicy` | `0` / `immediate` |
+| `patina.cadence` | `billingCadence` | `monthly` |
+| `patina.deposit` | `furnishingsDepositPercent` | `NULL` |
+| `patina.role_rates` | the rate rows at `currentRateVersion` | *not compared* |
+
+Three deliberate details:
+
+- **The rate card is compared only when the part is present.** The bundle RPC
+  projects *every* rate version a proposal ever carried (`00425:1302-1307`, no
+  version filter, `ORDER BY r.version DESC`), so a removed rate card leaves its
+  historical rows behind; reading their survival as a divergence would strand
+  every flat-fee agreement on the fallback body. When the part IS present, its
+  roles are held as a multiset against the rows at `currentRateVersion` only.
+- **A custom part carrying money cannot cause a divergence** — R5 and §3.7:
+  only the nine standard keys project, so `custom.*` is ignored on both sides.
+- **`billingCeilingCents` is now adapted faithfully as `number | null`**
+  (`nullableNumber`), not collapsed onto `0`. 00575 makes NULL mean *uncapped*,
+  and collapsing it would make an uncapped ceiling indistinguishable from a
+  zero one — exactly the comparison this predicate has to get right. Display is
+  unmoved: `ceilingIsSet` is false for both `0` and `null`, so the flag-off body
+  still prints `Not yet set`, and **the committed snapshot still passes
+  unregenerated**.
+- `DesignServicesTerms` gains `furnishingsDepositPercent` (the RPC has always
+  projected it, `00425:1300`); nothing on this surface prints it from the row —
+  it exists so the deposit part has an authority to be held against.
+
+**What this does NOT fix, and is still owed to the orchestrator.** The
+fingerprint still hashes the stale parts (F-1/§3.4 hash *all* parts), so the
+signed evidence of a diverged agreement records parts the homeowner was not
+shown. Closing that is backend containment (b) — `upsert_design_services_draft`
+refusing while parts rows exist — or (a) at the RPC. This lane cannot write
+`supabase/**`. **Recommendation to the orchestrator: adopt (b) in the backend
+lane as well.** The client guard makes the *displayed* money safe; only (b)
+makes the *hashed* instrument coherent.
+
+Tests: 14 cases on the predicate in `commercial-documents.test.ts`, and four
+render cases in `commercial-document-shell.test.tsx` — ceiling moved, retainer /
+policy / cadence / deposit moved, a signed rate moved, and the removed-rate-card
+case that must *still* render parts.
+
+Fixture change worth knowing: the shell test's `bundle()` now derives
+`serviceTerms`/`rates` from `parts` when parts are given (`projectionOf`), so
+every parts case is a state the database can actually produce. With no parts it
+returns the same literal as before — which is why the snapshot did not move. An
+explicit `serviceTerms`/`rates` override still wins; that is how the divergence
+cases break the projection on purpose.
+
+## C1 (major, 0.85) — the e2e touchpoint was vacuous
+
+**The finding.** Every parts assertion sat behind `if (positions.length > 0)`, a
+branch the fixture provably cannot reach (the seed lays the agreement down with
+no `proposal_service_terms` row, and `DesignServicesBody` returns null before
+the parts branch), so only `expect(count('agreement-parts-body')).toBe(0)` ever
+ran — trivially true for a body that renders nothing at all.
+
+**Fixed** by splitting the one conditional test into its two honest halves,
+exactly as the reviewer proposed:
+
+1. `reads the agreement in full, and carries no parts body on a stack with
+   nothing composed` — unconditional, and it pins something real: the agreement
+   opens in full from its Previously fold, it is the agreement and not a
+   neighbouring paper, and there is **no** parts body and **no** part. That is
+   the flag-off shape, and it is the shape every agreement in production takes
+   today. A parts body appearing here means parts leaked onto a document that
+   has none.
+2. `test.fixme('reads a composed agreement's part titles in position order —
+   needs 00575 + a seeded composed agreement')` — the build sheet's §6.6
+   assertion, written out in full and marked as un-runnable, naming both halves
+   of the missing fixture: (a) `00575_agreement_parts.sql` applied locally, and
+   (b) a seed beside the solo client's agreement laying down a
+   `proposal_service_terms` row **and** the parts that project into it. Note
+   (b) is now a stronger requirement than it was before C2's fix: parts alone
+   would not light the branch up, because `agreementPartsMatchTerms` also has
+   to hold. The integration steward owns both.
+
+No conditional remains in the spec.
+
+## Gates re-run after the fixes (worktree `agent-agr-w1-client`)
+
+`cd` does not persist between this agent's Bash calls, so the gates were run as
+`pnpm --dir <worktree> --filter @patina/client-portal <task>` — the banner line
+in each confirms the worktree path, not the main checkout. (The first attempt
+without `--dir` ran against `/Users/kody/Code/patina-merged/apps/client-portal`
+and failed on an unrelated pre-existing `.next/types` error there; noted so the
+next agent does not repeat it.)
+
+```
+pnpm --dir <wt> --filter @patina/client-portal type-check
+  → > tsc --noEmit   (clean, no diagnostics)
+
+pnpm --dir <wt> --filter @patina/client-portal test -- --ci --coverage
+  → Test Suites: 129 passed, 129 total
+    Tests:       1995 passed, 1995 total
+    Snapshots:   1 passed, 1 total     ← the flag-off byte-identity proof, unregenerated
+  → All files 74.07 stmts / 69.35 branches / 74.12 funcs / 76.37 lines
+    (floor 70/60/70/70 — clears on every axis)
+  → agreement-parts-body.tsx  100 / 91.30 / 100 / 100
+  → commercial-documents.ts    94.25 / 87.36 / 100 / 96.23
+
+npx playwright test tests/threshold.spec.ts --workers=1 --grep agreement
+  → 1 passed, 1 skipped (the fixme)
+
+npx playwright test tests/threshold.spec.ts --workers=1        (whole file)
+  → 13 passed, 1 skipped, 1 failed
+```
+
+The one failure is the same pre-existing one this lane reported before the
+review: `names the other houses on the mat for a client who keeps several`
+expects `MULTI_OTHER_HOUSE_COUNT` (2) and finds 12, because the shared local
+stack has accumulated projects from other suites' seeds. This lane touches
+nothing on the mat. It should clear on the integration steward's
+`pnpm supabase:reset`.
+
+Playwright needed `dangerouslyDisableSandbox` here: the sandboxed launch dies at
+`bootstrap_check_in … Permission denied (1100)` before the browser opens. It
+also needs a **warm** dev server — a cold `pnpm dev` does not finish compiling
+`/auth/signin` inside the 120 s `webServer` timeout, and the run fails in
+`signIn` rather than anywhere near the test. Boot `pnpm dev` on :3002 first,
+curl `/sign-in` until it answers, then run with `reuseExistingServer: true`.
+
+## Still not verified after the fixes
+
+- Everything in the "Not verified" list above still stands: **no parts row has
+  ever rendered against a real database**, and the bundle RPC's `parts`
+  projection has not been exercised. `agreementPartsMatchTerms` is coded
+  against the frozen §2.4 interface and §3.7's projection map, and its
+  agreement with the *actual* `_project_agreement_terms` is the first thing the
+  integration steward should check once 00575 is on the stack — a projection
+  this predicate models wrongly shows up as a composed agreement that silently
+  renders today's body.
+- `pnpm lint` still not run for client-portal, and still would not mean
+  anything (legacy `.eslintrc.json` under ESLint 9).
