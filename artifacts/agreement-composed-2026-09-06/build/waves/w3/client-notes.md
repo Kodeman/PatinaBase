@@ -268,3 +268,193 @@ Every commit stages explicit pathspecs and touches only
 `apps/client-portal/**` (plus this file, force-added under the gitignored
 `build/` tree). No `.claude/`, `.agents/`, hooks, settings or `.env` file was
 touched. No worktree was created or removed. Nothing was pushed.
+
+---
+
+# 11 · Round 1 fixes (2026-09-07) — F1, F2, F3, F4
+
+Written against `client-review-r1.md`. Fix agent, not the implementer of round
+0's code. Gates re-run at the bottom.
+
+## 11.1 · F1 — closed-book pro-rating, RULED (a), with new evidence for it
+
+**Ruling: accept, and say so in the code.** The reviewer's option (b) —
+withhold `Cost basis` and `Fee 18%` from the client's page under
+`closed_book` — was written, tested against the fixture, and **rejected on
+evidence the review did not have**: it does not achieve the protection, and it
+costs the homeowner terms she is entitled to.
+
+The multiplier survives (b) through the **allowances**. `AllowancesLeaf` prints
+each allowance AT COST — `Tile allowance $4,000` — because an allowance whose
+threshold she is not shown is not a threshold ("anything over this amount needs
+a change order first"). Its schedule-of-values twin is the pro-rated `$4,720`.
+`4720 ÷ 4000 = 1.18` exactly, from two figures that must both be on the page,
+and every trade's cost follows. Withholding the cost basis and the fee would
+therefore have hidden two terms of a cost-plus agreement from the party who is
+paying them while leaving the inversion open — the worst of both.
+
+So the honest statement, now written into `design-build-body.tsx`'s head, into
+`scheduleOfValues`' docstring, and into the test that used to claim otherwise:
+
+> Closed book withholds the per-trade price ROW and spreads the fee across the
+> schedule so no line is labelled as anyone's price. It is a presentation rule,
+> not an information barrier. The absolute rule, in both modes and at every
+> state, is the **bid ledger's** absence — every losing bid, which is the
+> number a competitor's quote is actually read off (R13).
+
+**RC-4 should be corrected in the sheet's terms:** its second half asks a
+question whose "yes" is unreachable while the SOV is DERIVED from the cost
+lines. A non-invertible schedule has to be **authored** — a backend change, not
+in Wave 3's scope as sheeted. Flagged for the orchestrator: if the answer is
+"author it", that is a PART-12/PART-13 item for a later wave, not a client edit.
+
+Tests: the false comment at
+`commercial-document-shell-design-build.test.tsx` is replaced by the ruling in
+full; the case is renamed `prints no trade's own price under closed book, and
+no bid in either mode`; a new case, `states the cost basis and the fee of a
+cost-plus prime, in both modes`, pins the other half so a silent flip fails.
+
+## 11.2 · F2 — the offer after a reload, and the defect underneath it
+
+The reviewer is right that `depositOffer` is per-visit state. Two things came
+out of chasing where it should live instead.
+
+**(1) The real defect, found while answering it — and it is bigger than F2.**
+A design-build prime is an ORIGIN agreement: `proposals.project_id` is NULL
+through her signature (walk step 12 asserts exactly that; the project is minted
+at countersignature, step 15). Both surfaces that draw papers admitted origin
+agreements by hard-coded kind — `letterbox-door.tsx`'s `origins`/`kept` and
+`threshold.tsx`'s `houseless`, each spelling `kind !== 'design_services'`. So a
+project-less turnkey prime was drawn by **no door at all**: the household's
+first paper, priced at $84,134, addressed to her and reachable from nowhere.
+That is the R30 defect repeated on the largest paper in the program, and it is
+why **E2E-2 could never have passed** — its household has no project and its
+first act is `goto('/#door')`.
+
+Fixed with one list rather than a fourth spelling:
+`ORIGIN_DOCUMENT_KINDS = ['design_services', 'design_build']` +
+`isOriginKind()` in `lib/commercial-documents.ts`, read by both surfaces.
+`service_addendum`, `furnishings_authorization` and `trade_scope` stay out, for
+the reasons already written there. `kept`'s label now reads
+`KIND_LABEL[kind]`, so the record says *Design-build agreement · Halvorsen
+kitchen and mudroom* rather than mislabelling itself.
+
+Three jest cases: the turnkey prime stands at the origin door **in its own
+consent sentence**; the signed record is kept with the deposit letter beside
+it; and on a house that already exists the turnkey prime stands on the doorstep
+(`door-houseless`), exactly as a second origin agreement does.
+
+**(2) Walk step 13, amended by ruling.** "The offer is still there" after a
+reload is now honoured by the **money surface**, not by re-printing the
+sentence: the deposit invoice is project-less exactly as the prime is, so it
+stands in that same door's letterbox with its own `/pay/<token>` act
+(`letterbox.tsx` → `useInvoiceLink` → `invoiceLinkPath`). Nothing is blocked,
+and the deposit is payable on every later visit. The post-signature sentence
+stays what P13 made it — the moment of signing.
+
+Why not re-mint the sentence on the door: it cannot be derived honestly here.
+The bundle's draw ledger (PART 12) carries `invoiceStatus` but **no invoice
+id**, and `Invoice` carries no `proposal_id`, so the only client-side link
+between the deposit draw and its invoice would be a title-and-amount match —
+a guess, on a money surface. And a permanent "Your deposit is ready" printed
+over a signed paper is the same ask repeated at her, which this program does
+not do.
+
+**If the orchestrator prefers the literal step 13**, the change is one field:
+add `invoiceId` (and the invoice's `payToken`) to the PART 12 draw-ledger
+projection, and the door can re-mint the offer from the bundle on mount. That
+is a backend edit, named here rather than assumed. Recorded as an open
+question, not a blocker.
+
+E2E-2's second test now asserts the amended step 13 from the browser: the
+letterbox is visible after the reload and its act's `href` matches
+`/^\/pay\/[0-9a-f]{64}$/`.
+
+## 11.3 · F3 — the SQL half of the consent, made a gate
+
+Unchanged in substance (the client lane cannot graft a Postgres function) but
+promoted from a note to something the steward can pin:
+`DESIGN_BUILD_VARIANT_ORDER` is now **exported** from `consent-copy.ts` and
+pinned byte-for-byte by its own test.
+
+> **INTEGRATION GATE — blocks the wave.** The backend lane's migration 1 must
+> graft `public.compose_agreement_consent(uuid)` with a `design_build` arm
+> whose canonical variant order is `pricing_basis · draws · allowances ·
+> retainer · ceiling` and whose fragments match this file's. The sign route
+> files the DATABASE's sentence (`sign/route.ts:412-425`) while the door
+> renders the TypeScript one, so until both halves exist a homeowner ticks one
+> sentence and signs another. Head resolved with the sheet's enumerator at the
+> time of writing: `00577_agreement_fee_schedules.sql`, which has no such arm.
+
+## 11.4 · F4 — the named e2e, and how it stops self-skipping
+
+The spec still cannot run in this lane: no Wave 3 migration exists on any
+branch (`git diff main...agreement/w3-backend --name-only` → one notes file and
+the two shared types files), and this lane may not reset the shared stack.
+What changed:
+
+- **The root cause that would have failed it is fixed** (§11.2 (1)). Without
+  `isOriginKind`, test 1 could not have found a door to press.
+- **The skip can be closed by the steward.** `beforeAll` now throws the same
+  sentence instead of skipping when `PATINA_W3_TURNKEY_GATE=1` is exported, so
+  a gate run cannot be satisfied by a quiet skip.
+
+> **INTEGRATION GATE.** After the backend migration is on a reset local stack:
+> ```
+> export SUPABASE_SERVICE_ROLE_KEY="$(supabase status -o json | jq -r .SERVICE_ROLE_KEY)"
+> export PATINA_W3_TURNKEY_GATE=1
+> env -u CI pnpm --dir <integration-wt>/apps/client-portal test:e2e -- \
+>   --workers=1 tests/design-build-door.spec.ts
+> ```
+> Start the dev server **from the integration worktree**: `playwright.config.ts`
+> pins `:3002` with `reuseExistingServer: true` (the R30 N5 trap), so a run
+> against another lane's server silently exercises another branch.
+
+## 11.5 · Minors and nits in this round
+
+- **F13 (nit) fixed** — the drift guard's exact-whitespace pin of the removed
+  double negative is now a whitespace-tolerant regex.
+- **F5 (minor) deliberately not taken.** Refusing the offer when `netCents` is
+  absent trades a wrong-by-retainage figure for **no offer at all**, and the
+  deposit draw carries zero retainage by construction
+  (`retainageApplies = false` on the first row), so the two numbers are equal
+  on the only draw this path mints. If the backend's payload ever omits
+  `netCents`, the refusal is right — but the switch should be made when the
+  payload is real, not against I-3's permission.
+- **F6, F7, F8, F9, F10, F11, F12, F15, F16, F17, F18** — left as the review
+  filed them. F10's ship note still stands: the client portal is **not** a
+  no-op with `design-build` off, because §6's R30 carries and §11.2's origin
+  list are unflagged by design; their rollback lever is a revert.
+
+## 11.6 · Gates, re-run in this worktree after the fixes
+
+Run with `pnpm --dir <wt>/apps/client-portal` — a bare `cd` does not persist
+between an agent's Bash calls, and `--filter` from a non-persisted cwd runs
+against the main checkout.
+
+```
+pnpm --dir …/agent-agr-w3-client/apps/client-portal type-check
+  → tsc --noEmit, no output (clean)
+
+pnpm --dir …/agent-agr-w3-client/apps/client-portal test
+  → Test Suites: 131 passed, 131 total
+    Tests:       2161 passed, 2161 total   (2156 before this round: +5)
+    Snapshots:   1 passed
+
+pnpm --dir …/agent-agr-w3-client/apps/client-portal test:coverage
+  → exit 0; floors (70/60/70/70) met
+    All files               74.78 / 70.25 / 74.96 / 77.12
+    design-build-body.tsx   90.00 / 76.15 / 88.23 / 94.33
+    consent-copy.ts         97.70 / 88.88 /100.00 / 99.06
+    deposit-offer.tsx      100.00 /100.00 /100.00 /100.00
+    door-gate.tsx           95.48 / 88.96 / 88.00 / 98.33
+    letterbox-door.tsx      96.96 / 86.72 / 90.90 / 97.80
+    threshold.tsx           95.46 / 81.42 / 93.10 / 97.56
+    commercial-documents.ts 87.93 / 86.01 / 95.74 / 92.17
+
+npx playwright test --list tests/design-build-door.spec.ts → 2 tests collected
+```
+
+Not run here, and named rather than assumed: the e2e itself (§11.4), and every
+other lane's gates. No deploy, no production mutation, no write to the shared
+local stack, nothing pushed.
