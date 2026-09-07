@@ -199,7 +199,10 @@ describe('useSaveAgreementParts', () => {
     const result = (await config.mutationFn(parts)) as any;
 
     // Titles are trimmed and only the RPC's own keys are sent — the row's
-    // id, position and timestamps are the server's business.
+    // id, position and timestamps are the server's business. Provenance IS
+    // the RPC's own key: `upsert_agreement_parts` reads sourceTemplateKey and
+    // sourcePartId back out (00575), so a save that omitted them would blank
+    // what materializing a template had just written.
     expect(supabaseClient.rpc).toHaveBeenCalledWith('upsert_agreement_parts', {
       p_proposal_id: 'prop-1',
       p_parts: [
@@ -211,6 +214,8 @@ describe('useSaveAgreementParts', () => {
           payload: { body: 'Design services.' },
           required: true,
           clientVisible: true,
+          sourceTemplateKey: null,
+          sourcePartId: null,
         },
       ],
     });
