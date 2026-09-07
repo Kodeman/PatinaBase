@@ -423,8 +423,13 @@ LANGUAGE sql
 IMMUTABLE
 SET search_path = pg_catalog, pg_temp
 AS $$
+  -- R37 — the keepsake is the paper she signed. `money()` in
+  -- agreement-parts-body.tsx is Intl.NumberFormat('en-US', currency,
+  -- maximumFractionDigits: 0), so the live body prints $24,000, never
+  -- $24,000.00. round() here is Postgres' half-away-from-zero, which is
+  -- Intl's half-expand — the same figure on both surfaces.
   SELECT CASE WHEN p_cents IS NULL THEN 'Not yet set'
-              ELSE '$' || to_char(p_cents / 100.0, 'FM999,999,990.00') END;
+              ELSE '$' || to_char(round(p_cents / 100.0), 'FM999,999,990') END;
 $$;
 REVOKE ALL ON FUNCTION public._agreement_money(numeric)
   FROM PUBLIC, anon, authenticated, service_role;
@@ -555,7 +560,8 @@ BEGIN
                  || CASE WHEN jsonb_typeof(e.role->'hourlyRateCents') = 'number'
                          THEN public._agreement_money((e.role->>'hourlyRateCents')::numeric)
                          ELSE c_not_yet_set END
-                 || ' per hour</td></tr>', ''
+                 -- RateCardLeaf prints "{money} / hr" (R37).
+                 || ' / hr</td></tr>', ''
                  ORDER BY CASE WHEN jsonb_typeof(e.role->'sortOrder') = 'number'
                                THEN (e.role->>'sortOrder')::numeric
                                ELSE e.ord END, e.ord), '')
@@ -625,8 +631,12 @@ BEGIN
       ELSIF v_part.variant = 'cadence' THEN
         v_text := NULLIF(btrim(COALESCE(v_part.payload->>'cadence', '')), '');
         IF v_text IS NOT NULL THEN
-          -- agreementCadenceText: the stored value, underscore opened up.
-          v_body := '<p>' || public._agreement_html_escape(replace(v_text, '_', ' ')) || '</p>';
+          -- agreementCadenceText: the stored value, underscore opened up —
+          -- and initcap for the `capitalize` treatment CadenceLeaf gives it,
+          -- because the keepsake carries no stylesheet to do it (R37). The
+          -- live body prints Monthly; so does this.
+          v_body := '<p>' || public._agreement_html_escape(
+                      initcap(replace(v_text, '_', ' '))) || '</p>';
         END IF;
         v_body := v_body || '<p>' || c_cadence_note || '</p>';
 
@@ -899,8 +909,9 @@ GRANT EXECUTE ON FUNCTION public.compose_agreement_consent(uuid)
 -- The attribution rule is 00569:432-452's, verbatim in effect: the first
 -- whitespace-separated token of the profile's full_name, else display_name,
 -- truncated at 120 rather than raised on — a person's name is not a reason to
--- refuse a save. actor_name is NULL whenever why is NULL, because an
--- attribution with nothing attributed to it is noise.
+-- refuse a save. It is written for every event, with or without a why: the
+-- strip's "A teammate" is the sentence for an actor who cannot be named, and
+-- the designer's own add — which carries no why — is not that.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public._log_agreement_part_events(
@@ -919,22 +930,25 @@ DECLARE
   v_why text := NULLIF(btrim(COALESCE(p_why, '')), '');
   v_actor_name text;
 BEGIN
-  IF v_why IS NOT NULL THEN
-    SELECT COALESCE(
-             NULLIF(
-               split_part(
-                 regexp_replace(btrim(COALESCE(author.full_name, '')),
-                                '\s+', ' ', 'g'),
-                 ' ', 1
-               ), ''
-             ),
-             NULLIF(btrim(COALESCE(author.display_name, '')), '')
-           )
-    INTO v_actor_name
-    FROM public.profiles AS author
-    WHERE author.id = v_actor;
-    v_actor_name := NULLIF(btrim(left(COALESCE(v_actor_name, ''), 120)), '');
-  END IF;
+  -- The name is resolved for EVERY event, not only for the ones that carry a
+  -- why. Withholding it made the strip tell the designer "Added · A teammate ·
+  -- today" about the part she had added herself seconds earlier, because the
+  -- add path writes no why — the fallback is for an actor who cannot be named,
+  -- not for a change nobody explained.
+  SELECT COALESCE(
+           NULLIF(
+             split_part(
+               regexp_replace(btrim(COALESCE(author.full_name, '')),
+                              '\s+', ' ', 'g'),
+               ' ', 1
+             ), ''
+           ),
+           NULLIF(btrim(COALESCE(author.display_name, '')), '')
+         )
+  INTO v_actor_name
+  FROM public.profiles AS author
+  WHERE author.id = v_actor;
+  v_actor_name := NULLIF(btrim(left(COALESCE(v_actor_name, ''), 120)), '');
 
   INSERT INTO public.agreement_part_events (
     proposal_id, part_id, part_key, action, actor, actor_name, why, before, after

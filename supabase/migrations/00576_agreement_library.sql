@@ -346,7 +346,12 @@ SET search_path = public, extensions, pg_temp
 AS $$
   SELECT CASE
     WHEN jsonb_typeof(COALESCE(p_payload, 'null'::jsonb)) <> 'object' THEN p_payload
-    WHEN jsonb_typeof(p_payload->'items') <> 'array' THEN p_payload
+    -- IS DISTINCT FROM, not <>: a payload with no `items` key answers NULL
+    -- here, the WHEN is never true, and the ELSE branch wrote a spurious
+    -- "items": [] into every clause and money payload this touched. Nothing
+    -- renders it, but the fingerprint hashes payloads — so two identical
+    -- papers hashed differently by how they happened to be composed.
+    WHEN jsonb_typeof(p_payload->'items') IS DISTINCT FROM 'array' THEN p_payload
     ELSE jsonb_set(p_payload, '{items}', COALESCE((
       SELECT jsonb_agg(
         CASE WHEN jsonb_typeof(e.item) = 'object'

@@ -448,7 +448,9 @@ BEGIN
   ASSERT v_event.before IS NULL AND v_event.after IS NOT NULL,
     'an addition has an after and no before';
 
-  -- an edit with no why carries no attribution either
+  -- an edit with no why still carries the hand that made it: "A teammate" is
+  -- the strip's sentence for an actor who cannot be named, not for a change
+  -- nobody explained (walk round 2, W2R2-08)
   PERFORM public.upsert_agreement_parts(
     'a7300000-0000-4000-8000-000000000002',
     jsonb_build_array(jsonb_build_object(
@@ -459,8 +461,10 @@ BEGIN
   WHERE proposal_id = 'a7300000-0000-4000-8000-000000000002'
     AND action = 'edited';
   ASSERT v_event.id IS NOT NULL, 'a payload change is an edit';
-  ASSERT v_event.why IS NULL AND v_event.actor_name IS NULL,
-    'no why means no attribution — an attribution with nothing attributed to it is noise';
+  ASSERT v_event.why IS NULL,
+    'an edit saved with no why keeps no why';
+  ASSERT v_event.actor_name = 'Marguerite',
+    format('every event names the hand that made it, got %L', v_event.actor_name);
   ASSERT v_event.before->>'part_key' = 'patina.services'
      AND v_event.after->>'part_key' = 'patina.services',
     'an edit carries both sides';
@@ -786,8 +790,12 @@ BEGIN
     'a record-only variant keeps its title';
   ASSERT position('I received this' IN v_html) > 0,
     'an attachment that asks to be acknowledged says so';
-  ASSERT position('$5,000.00' IN v_html) > 0 AND position('$225.00 per hour' IN v_html) > 0,
-    'every figure is money, formatted';
+  -- R37 — the keepsake prints the figure the way the page she signed printed
+  -- it: agreement-parts-body.tsx formats to whole dollars and writes "/ hr".
+  ASSERT position('$5,000' IN v_html) > 0 AND position('$225 / hr' IN v_html) > 0,
+    'every figure is money, formatted as the live body formats it';
+  ASSERT position('$5,000.00' IN v_html) = 0 AND position('$225.00' IN v_html) = 0,
+    format('no figure may carry cents the live body does not print: %L', v_html);
 
   -- The refusals.
   ASSERT position('dayRateCents' IN v_html) = 0
