@@ -456,3 +456,256 @@ authority with a value nobody snapshotted at countersign.
   designer-portal owns the only ESLint config that resolves in this repo.
 - **The two-studio Library refusal end to end through the UI**: confirmed from
   the migration body and the seeded membership rows, not by clicking it.
+
+---
+
+# Close-out fixes (R31–R37)
+
+Date 2026-09-07. Close-out fix agent, same worktree
+(`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-integration`),
+branch `agreement/w2-integration`, starting from `0593ba3fb` (this report's own
+commit). **Head after the fixes: `65372d1e8`.** Nothing was pushed, nothing
+reached Strata, no Worker was deployed.
+
+Eight commits, one per ruling plus one test follow-up:
+
+| sha | ruling |
+|---|---|
+| `ae33cb5cf` | R31 — never drop a hardened arity, and one guarded grant per function |
+| `a8731cb00` | R32 — the Library belongs to the agreement's studio |
+| `ba7e047ba` | R33 — only a fee the client can read reaches the money row |
+| `6a00828c2` | R34 — the addendum's why reaches the homeowner |
+| `e771410f8` | R35 — the picker filters by kind, not class |
+| `a84c6b9bc` | R36 — the record's consent sentence, and the seeded door |
+| `1fff402af` | R37 — the keepsake, the deposit key, the escaped filter, the owed tests |
+| `65372d1e8` | R36 follow-up — the signature DTO pin carries the projected key |
+
+## What each ruling changed
+
+### R31 — the legacy-grants regression, closed at both ends
+
+**The generator, first.** `scripts/generate-legacy-grants.py` now splits a
+GRANT/REVOKE that names several functions into ONE guarded `DO $g$` block per
+function, and applies the dropped-signature pruning per target rather than to
+the first name in the list. 00511's seventeen-function REVOKE was one statement
+whose guard swallowed `undefined_function`; the day Wave 2 dropped one of the
+seventeen, the other sixteen went un-hardened on every fresh reset. Regenerated:
+`baseline + 2459 replayed statements` (was 2263), `git diff` shows the split.
+
+**The arity, second.** `00577` no longer leaves a hardened arity dropped. Three
+old arities come back as thin plpgsql wrappers that delegate with the new
+argument NULL, each with the ACL its own migration wrote:
+
+- `sign_design_services_agreement_with_trusted_ip(uuid,text,uuid,text)` — 00511's, service_role only
+- `_sign_design_services_agreement_authorized(uuid,text,uuid,text)` — owner only; five live plpgsql callers still hold it
+- `upsert_agreement_parts(uuid,jsonb)` — 00575's, `authenticated`; the Wave 1 hook still calls it with two named arguments
+
+Because both arities stand, the WIDE bodies now carry **no defaults** — a
+default beside a narrow body of the same name is the ambiguity the DROPs were
+written to avoid. Every call resolves to exactly one candidate.
+
+**The contract test.** `_00511_expected_public` gains an 18th row for the
+restored four-argument sign function (body hash
+`29e3d31ef4de9a31002a3ad58794eb30ac03e7ffb7aa412b4fb92673f673bc6f`), the count
+assertion moves 17 → 18, and the five-argument row's `arguments` re-pins without
+the `DEFAULT` clauses. Its body hash is unchanged (`8539825f…`), because the
+body is unchanged.
+
+Proved on a reset stack, in the ACL the steward's §5 read as broken:
+
+```
+consume_board_unfurl_quota(uuid)  | service_role   (was: + authenticated)
+notify_decision_required(uuid)    | service_role   (was: + authenticated)
+set_project_studio_id()           | (owner only)   (was: + authenticated)
+```
+
+### R32 — the studio the agreement sits in
+
+`00576` gains `public._agreement_studio_id(proposal_id, actor)`: the project's
+studio once the agreement is bound, else the LEAD designer's active non-guest
+design studios in 00563's order (a studio already hosting a project for this
+designer-client pair first, then owner-first, earliest-joined, org id last),
+then an `EXISTS` check of the actor's own standing — 00566's shape exactly.
+`save_agreement_as_template` and `materialize_agreement_template` both resolve
+through it; the "exactly one shared studio, or refuse" arithmetic is gone.
+
+A second, `authenticated`-granted `public.agreement_studio_context(uuid)`
+answers `{studioId, canManage}` for the room, and the Contract Room reads it
+(`useAgreementStudioContext`) instead of picking an arbitrary `useOrganizations`
+row.
+
+The suite now runs **with the auto-provision trigger ON** (the
+`session_replication_role = replica` suppression is deleted, and every fixture
+membership carries a deliberate `joined_at` so the personal studio 00295 mints
+never wins a tie by accident). Case 12 is rewritten — the two-studio LEAD now
+reaches her own studio's Library and files back into it — and a new case 13 runs
+as the local seed's own `designer@patina.dev`, an owner of two active studios,
+on her seeded bound agreement.
+
+### R33 — a hidden fee bills nobody
+
+`upsert_agreement_parts` adds `AND ap.client_visible` to the fee selection, to
+the one-fee-basis count, and to the rate-card `EXISTS` that sets
+`fee_basis='hourly'`. `proposal_service_rates` is deliberately NOT filtered: R33
+names `proposal_service_terms` and the authority, and the send door refuses a
+rate card with no rate rows behind it in words about role rates. The room gains
+`HIDDEN_FEE_BLOCKER` — *"This fee is hidden from your client, so it cannot
+bill."* — and `feeBasisParts` counts only visible parts, so the Add menu and the
+RPC agree.
+
+SQL case (16) walks it: a studio-only $8,000 flat fee beside a visible rate card
+leaves `fee_basis='hourly'`, `fee_amount_cents` NULL, the executed authority
+hourly, and `8,000.00` absent from the keepsake; hide the only fee and R22's
+floor refuses the send.
+
+### R34 — the addendum's why
+
+`00577` adds `_agreement_addendum_why(uuid)` — the FIRST `why` recorded on a
+`service_addendum`, one line per addendum rather than one per part. The client
+bundle projects it as `why`; `_render_agreement_snapshot_html` opens the
+keepsake with it; `AgreementPartsBody` renders it above the first change. The
+table comment now states the exception rather than claiming the log never
+crosses. Nothing else of the change history crosses — asserted.
+
+### R35 — kind, not class
+
+`documentKindForTemplateClass` maps `design_services` / `consultation` /
+`furnishings_services` onto `design_services` and leaves `design_build` out
+until Wave 3. All three seeded Templates are now reachable on a services paper;
+P4 ships three usable seeded Templates instead of one.
+
+### R36 — the record, and the door
+
+The bundle's signature projection gains `consentSentence`
+(`s.metadata->>'consentSentence'`, one scalar — 00425's discipline unchanged),
+the client DTO carries it, and the record prints
+`signature.consentSentence ?? block.sentence`.
+
+`supabase/seed/the-client-page.sql` now lays down
+`b0000000-0000-0000-0000-00000000cb04` — *Cedar Lane — Phase Work*, `sent`, five
+parts (Services · per-phase fee · non-refundable retainer · the lead-paint
+notice with `acknowledgeRequired` · Terms), no signature row. C3-2 closed.
+Probed on the reset stack as the seeded client:
+
+```
+compose_agreement_consent(cb04) =
+  "I agree to these design-services terms, the per-phase fee schedule, and the
+   retainer, which is not refundable, and understand my signature alone does not
+   authorize work until the studio countersigns."
+```
+
+— byte-identical to `PER_PHASE_CONSENT_LINE` in `threshold.spec.ts`.
+
+### R37
+
+- The 00577 banner names the `retainer_credit_rule NOT NULL DEFAULT 'credited'`
+  backfill as a claim about the past.
+- `patina.deposit` is schedule/procurement in BOTH seeded templates; the
+  furnishings template's prose moves to `patina.deposit_terms`.
+- `copy_agreement_parts_from_authority` gets its SQL test (case 17): the kind
+  guard, four parts in the executed paper's order, the projection
+  (`per_phase / 1100000 / 3 phases / non_refundable`), four `added` events
+  carrying the why and "Marguerite", and the frozen-after-send refusal.
+- The keepsake renderer matches `agreement-parts-body.tsx`: sections, then the
+  closing boundary sentence, then attachments as trailing lettered leaves
+  (`ATTACHMENT A · …`), an empty attachment drawn like `AttachmentLeaf` draws
+  it. Pinned in case 13.
+- `AgreementExecutionSnapshot` is `{html, documentHash, createdAt}` — what the
+  bundle emits, and no more.
+- `useAgreementTemplates` quotes its `or`-filter value.
+- Both new hook modules have specs: `use-agreement-library.test.ts` (29 cases)
+  and `use-agreement-part-events.test.ts` (8).
+
+## Gates — all green
+
+Measured on the tree at `65372d1e8`, on a stack reset from this worktree
+(`stack-notice.md`, reset 3).
+
+```
+supabase db reset --workdir <this worktree>        → Finished, no errors
+
+./scripts/run-sql-tests.sh
+  total:             164
+  green:             143
+  expected-fail:      21   (KNOWN_FAILURES.md)
+  unexpected-fail:     0
+  effective-green:   164 / 164
+```
+
+All four of the steward's unexpected failures are green, including
+`rls/project_notes_test.sql` (run once after the reset, which is its documented
+condition).
+
+```
+psql -v ON_ERROR_STOP=1 -f  (rc=0 each)
+  commercial/agreement_library_test.sql            PASS
+  commercial/agreement_fee_schedules_test.sql      PASS
+  commercial/agreement_parts_test.sql              PASS
+  commercial/agreement_parts_projection_test.sql   PASS
+  edge_api/public_sd_hardening_contract_test.sql   PASS
+
+SUPABASE_DB_URL=… pnpm db:generate
+git diff --exit-code packages/supabase/src/database.types.ts   → exit 0, no output
+
+pnpm exec turbo build --filter=@patina/types --force            → 1 successful
+pnpm --filter @patina/types    type-check                       → clean
+pnpm --filter @patina/supabase type-check                       → clean
+pnpm --filter @patina/supabase test
+  Test Files  90 passed (90)
+  Tests       1108 passed | 12 skipped (1120)
+
+pnpm --filter @patina/designer-portal type-check                → clean
+pnpm --filter @patina/designer-portal test          (FULL jest)
+  Test Suites: 534 passed, 534 total
+  Tests:       6505 passed, 6505 total
+  Snapshots:   7 passed, 7 total
+
+pnpm --filter @patina/client-portal type-check                  → clean
+pnpm --filter @patina/client-portal test:coverage
+  Test Suites: 129 passed, 129 total
+  Tests:       2059 passed, 2059 total
+  All files    74.25 stmts / 69.65 branch / 74.31 funcs / 76.55 lines
+  (floor 70 / 60 / 70 / 70 — met)
+
+rm -rf apps/admin-portal/.next/types
+pnpm --filter @patina/admin-portal build                        → succeeded, full route table
+```
+
+The seven flag-off snapshots passed rather than being written, so flag-off
+byte-identity still holds on the designer surface.
+
+## What the close-out did NOT do
+
+- **Strata**: nothing applied, nothing probed. `00576` and `00577` remain
+  unapplied there and are still edited in place, as their unapplied status
+  allows.
+- **Nothing pushed**, no Worker deployed, no edge function touched
+  (`git diff --name-only 0593ba3fb..HEAD -- supabase/functions` is empty, so no
+  `_shared` importer redeploy is owed).
+- **The client e2e was not re-run.** The fixture it was blocked on now exists
+  and its consent sentence is probed above, but the suite itself needs a server
+  started with `NEXT_PUBLIC_FLAG_OVERRIDES` and was out of this pass's gate
+  list. `threshold.spec.ts:636` should be the first thing re-run.
+- **The 14-step walk** is still owed. R3-B1's blocker is fixed at the database
+  and in the room, but nobody has clicked it.
+- **Lint** was not run outside designer-portal, where it is the only config that
+  resolves; the two pre-existing designer-portal lint errors are untouched.
+
+## Advisories (not blocking, not ruled)
+
+1. `agreement-library-card.tsx` on Account → Studio still resolves its studio
+   from `useOrganizations`. That page IS about the actor's studio rather than an
+   agreement's, so R32 does not reach it — but a two-studio owner still sees an
+   arbitrary one of her shelves there.
+2. `upsert_agreement_parts` still validates `sourcePartId` as a uuid shape only,
+   never as a part of THIS agreement's studio. The picker can no longer offer a
+   foreign one (R32), so the path is closed at the room; the RPC's own check is
+   still owed.
+3. `apps/client-portal/src/lib/commercial-documents.ts` keeps a local
+   `AgreementExecutionSnapshot` beside the `@patina/types` one. R37 narrowed the
+   shared type and the two now agree field for field, so the duplicate is
+   redundant rather than divergent — worth deleting in a later pass (C3-10).
+4. The generator still omits 00511's statements for a signature that a later
+   migration drops, even when a still-later statement in the same file
+   re-creates it. The net ACL is correct (00577 re-issues it, last), but the
+   rule is now approximate rather than exact.

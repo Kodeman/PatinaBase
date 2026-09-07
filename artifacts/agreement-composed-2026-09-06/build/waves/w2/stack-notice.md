@@ -48,3 +48,23 @@ wins" lesson, silently hand a different program's schema to whoever reads next.
 
 Scratch databases created by the lanes (`patina_w1`, `patina_base`, `patina_final`,
 `patina_w2r3`) are reported dropped by their owners; the reset re-creates only `postgres`.
+
+---
+
+## 2026-09-07 — the close-out fix agent takes the stack (R31–R37)
+
+The Wave 2 **close-out fix agent** is now the sole writer of the shared local stack at
+`postgresql://postgres:postgres@127.0.0.1:54322/postgres`, from the same worktree
+(`/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-integration`, branch
+`agreement/w2-integration`).
+
+R31–R37 change `00576`, `00577`, `scripts/generate-legacy-grants.py` and the generated
+`supabase/seed/00-legacy-grants.sql`, so **the stack is reset from this worktree after every
+one of those changes** — `supabase db reset --workdir <this worktree>`. Each reset is logged
+below as it is run.
+
+**Nobody else may write this stack until this notice is superseded.**
+
+- Reset 1 — after R31 (the restored arities, the per-function grants generator).
+- Reset 2 — after R32/R33/R34/R36 (00576 + 00577 edits and the new `the-client-page.sql` fixture).
+- Reset 3 — after R37 (the `patina.deposit` key/kind fix in 00576 and the keepsake renderer in 00577). This is the reset every gate below was measured on.
