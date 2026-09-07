@@ -1,0 +1,31 @@
+RAIL 9
+SAVE P3 composed: DISABLED
+READINESS P3: 1 OF 9 PARTS NEED ATTENTION | Every role on the rate card needs a name.
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r25-p8-composed-1280.png
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByRole('button', { name: /review & send/i }).first()[22m
+[2m    - locator resolved to <button disabled type="button" data-action-variant="primary" data-action-region="unscoped" data-action-key="review-design-agreement" class="da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 da-primary font-medium tracking-[0.12em] ">…</button>[22m
+[2m  - attempting click action[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m    - waiting 20ms[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m      - waiting 100ms[22m
+[2m    58 × waiting for element to be visible, enabled and stable[22m
+[2m       - element is not enabled[22m
+[2m     - retrying click action[22m
+[2m       - waiting 500ms[22m
+
+    at /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk/r10-p8-compose.mjs:64:70 {
+  name: 'TimeoutError'
+}
+
+Node.js v24.12.0

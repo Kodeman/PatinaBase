@@ -1,0 +1,32 @@
+ROLE FIELDS 1
+  role 1 = "Principal designer"
+READINESS: 3 OF 9 PARTS NEED ATTENTION
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r25-p8-composed-1280.png
+SEND ENABLED: false
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByRole('button', { name: /^Send agreement/ })[22m
+[2m    - locator resolved to <button disabled type="button" class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-[var(--accent-primary)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] px-[1.6rem] py-[0.7rem]">Send agreement →</button>[22m
+[2m  - attempting click action[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m    - waiting 20ms[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m      - waiting 100ms[22m
+[2m    58 × waiting for element to be visible, enabled and stable[22m
+[2m       - element is not enabled[22m
+[2m     - retrying click action[22m
+[2m       - waiting 500ms[22m
+
+    at /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk/r11-p8-fix-send.mjs:50:15 {
+  name: 'TimeoutError'
+}
+
+Node.js v24.12.0

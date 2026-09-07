@@ -1,0 +1,15 @@
+import { browser, ctx, shot, HERE } from './lib2.mjs';
+const path = process.argv[2]; const tag = process.argv[3];
+const b = await browser();
+const c = await ctx(b, { storageState: `${HERE}/r2-state-client.json` });
+const page = await c.newPage();
+page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0,250)));
+await page.goto(`http://localhost:3002${path}`, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(15000);
+await page.getByRole('button', { name: /THE PAPERS, IN FULL/i }).first().click();
+await page.waitForTimeout(4000);
+await shot(page, `${tag}-papers-1280`);
+const t = await page.evaluate(() => { const d=[...document.querySelectorAll('[role="dialog"]')].pop(); return (d??document.body).innerText; });
+console.log('--- PAPERS SHEET ---\n' + t.slice(0, 2500));
+console.log('LINKS:', JSON.stringify(await page.evaluate(() => { const d=[...document.querySelectorAll('[role="dialog"]')].pop()??document.body; return [...d.querySelectorAll('button,a')].map(n=>n.innerText.trim().slice(0,60)).filter(Boolean); })));
+await b.close();

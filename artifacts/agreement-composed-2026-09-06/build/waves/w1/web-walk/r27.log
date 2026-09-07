@@ -1,0 +1,8 @@
+SAVE disabled= false
+  RPC upsert_agreement_parts 200 {"parts": [{"id": "cc20c27f-03e5-463b-9121-260df267eb29", "kind": "clause", "title": "Services", "payload": {"body": "In
+READINESS: 0 OF 9 PARTS NEED ATTENTION
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r25-p8-composed-1280.png
+SEND ENABLED: true
+  RPC send_commercial_document 200 {"sentAt": "2026-09-07T13:30:46.601499+00:00", "status": "sent", "updatedAt": "2026-09-07T13:30:46.601499+00:00", "propo
+URL http://localhost:3000/doc/b0000000-0000-0000-0000-0000000000d4
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r25-p8-sent.png

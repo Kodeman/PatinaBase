@@ -1,0 +1,13 @@
+READINESS B1 before save: 2 OF 9 PARTS NEED ATTENTION
+SAVE BUTTON label="Save agreement" disabled=false
+SAVE B1 — prose only, no fee, no ceiling: rpc=["upsert_agreement_parts 200 {\"parts\": [{\"id\": \"8f1a56e8-eb3d-450b-b2c8-49dcec7b96d7\", \"kind\": \"clause\", \"title\": \"Services\", \"payload\": {\"body\": \"Interior design services, including concept development, design documentation, and selections.\"}, \"var"] note=["All agreement changes saved."]
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r38-prod-b1.png
+SAVE one named role: BUTTON DISABLED (held)
+READINESS M6 — second role blank: 3 OF 9 PARTS NEED ATTENTION | Every role on the rate card needs a name.
+M6 SAVE BUTTON label="Save agreement" disabled=true
+M6 REVIEW BUTTON disabled= true
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r38-prod-m6.png
+READINESS M2 — duplicate role name: 3 OF 9 PARTS NEED ATTENTION | Every role on the rate card needs a name.
+M2 SAVE BUTTON label="Save agreement" disabled=true
+SAVE M2 — duplicate role name: BUTTON DISABLED (held)
+  [shot] /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w1/web-walk-shots-r2/r38-prod-m2.png

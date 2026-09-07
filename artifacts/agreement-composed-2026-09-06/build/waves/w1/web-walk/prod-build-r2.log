@@ -1,0 +1,198 @@
+
+> @patina/designer-portal@0.1.0 prebuild /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration/apps/designer-portal
+> pnpm run sync-pdf-worker
+
+
+> @patina/designer-portal@0.1.0 sync-pdf-worker /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration/apps/designer-portal
+> node scripts/sync-pdf-worker.mjs
+
+sync-pdf-worker: /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration/apps/designer-portal/public/vendor/pdfjs/pdf.worker.min.mjs
+
+> @patina/designer-portal@0.1.0 build /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration/apps/designer-portal
+> next build --webpack
+
+▲ Next.js 16.2.10 (webpack)
+- Experiments (use with caution):
+  · optimizePackageImports
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+✓ Compiled successfully in 24.4s
+  Skipping validation of types
+  Finished TypeScript config validation in 8ms ...
+  Collecting page data using 13 workers ...
+Skipping password reset during build-time
+  Generating static pages using 13 workers (0/70) ...
+  Generating static pages using 13 workers (17/70) 
+Skipping password reset during build-time
+  Generating static pages using 13 workers (34/70) 
+  Generating static pages using 13 workers (52/70) 
+✓ Generating static pages using 13 workers (70/70) in 408ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/admin/catalog/categories
+├ ƒ /api/admin/catalog/categories/[id]
+├ ƒ /api/admin/catalog/products
+├ ƒ /api/admin/catalog/products/[id]
+├ ƒ /api/admin/catalog/products/[id]/publish
+├ ƒ /api/admin/catalog/products/[id]/unpublish
+├ ƒ /api/admin/catalog/vendors
+├ ƒ /api/admin/catalog/vendors/[id]
+├ ƒ /api/admin/comms/audiences
+├ ƒ /api/admin/comms/audiences/[id]
+├ ƒ /api/admin/comms/audiences/estimate
+├ ƒ /api/admin/comms/dashboard
+├ ƒ /api/admin/comms/templates
+├ ƒ /api/admin/comms/templates/[id]
+├ ƒ /api/admin/comms/templates/[id]/preview
+├ ƒ /api/admin/orders
+├ ƒ /api/admin/orders/[id]
+├ ƒ /api/admin/orders/[id]/cancel
+├ ƒ /api/admin/orders/[id]/refunds
+├ ƒ /api/admin/orders/[id]/shipments
+├ ƒ /api/admin/permissions
+├ ƒ /api/admin/roles
+├ ƒ /api/admin/roles/[id]
+├ ƒ /api/admin/roles/[id]/clone
+├ ƒ /api/admin/roles/[id]/permissions
+├ ƒ /api/admin/roles/[id]/users
+├ ƒ /api/admin/users
+├ ƒ /api/admin/users/[id]
+├ ƒ /api/admin/users/[id]/activate
+├ ƒ /api/admin/users/[id]/ban
+├ ƒ /api/admin/users/[id]/roles
+├ ƒ /api/admin/users/[id]/sessions
+├ ƒ /api/admin/users/[id]/suspend
+├ ƒ /api/admin/users/me
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/auth/device/exchange
+├ ƒ /api/auth/device/pair
+├ ƒ /api/auth/device/status
+├ ƒ /api/auth/login
+├ ƒ /api/auth/logout
+├ ƒ /api/auth/qr/generate
+├ ƒ /api/auth/qr/status
+├ ƒ /api/auth/qr/verify
+├ ƒ /api/auth/refresh
+├ ƒ /api/auth/register
+├ ƒ /api/auth/reset-password
+├ ƒ /api/auth/verify-email
+├ ƒ /api/campaigns
+├ ƒ /api/campaigns/[id]
+├ ƒ /api/campaigns/[id]/send
+├ ƒ /api/catalog/categories
+├ ƒ /api/catalog/categories/[id]
+├ ƒ /api/catalog/categories/tree
+├ ƒ /api/catalog/collections
+├ ƒ /api/catalog/collections/[id]
+├ ƒ /api/catalog/collections/[id]/evaluate
+├ ƒ /api/catalog/collections/[id]/products
+├ ƒ /api/catalog/collections/[id]/products/[productId]
+├ ƒ /api/catalog/collections/[id]/products/reorder
+├ ƒ /api/catalog/collections/[id]/publish
+├ ƒ /api/catalog/import
+├ ƒ /api/catalog/products
+├ ƒ /api/catalog/products/[id]
+├ ƒ /api/catalog/products/[id]/images
+├ ƒ /api/catalog/vendors
+├ ƒ /api/catalog/vendors/[id]
+├ ƒ /api/clients/[id]/nurture-send
+├ ƒ /api/clients/[id]/reviews/[reviewId]/send
+├ ƒ /api/clients/invite
+├ ƒ /api/commercial/[id]/paper-notify
+├ ƒ /api/comms/v1/threads
+├ ƒ /api/comms/v1/threads/[id]
+├ ƒ /api/comms/v1/threads/[id]/messages
+├ ƒ /api/comms/v1/threads/[id]/read
+├ ƒ /api/inbox/mark-read
+├ ƒ /api/me
+├ ƒ /api/me/avatar
+├ ƒ /api/me/data-export
+├ ƒ /api/me/delete-account
+├ ƒ /api/me/designer-application
+├ ƒ /api/me/password
+├ ƒ /api/me/profile
+├ ƒ /api/me/sessions
+├ ƒ /api/me/sessions/[id]
+├ ƒ /api/media/boards/[boardId]/background-removal-capability
+├ ƒ /api/media/boards/[boardId]/items/[itemId]/remove-background
+├ ƒ /api/media/duplicates
+├ ƒ /api/orders
+├ ƒ /api/orders/[id]
+├ ƒ /api/preferences/apply-token
+├ ƒ /api/projects
+├ ƒ /api/projects/[id]
+├ ƒ /api/projects/[id]/documents
+├ ƒ /api/projects/[id]/documents/[documentId]
+├ ƒ /api/projects/[id]/milestones
+├ ƒ /api/projects/[id]/milestones/[milestoneId]
+├ ƒ /api/projects/[id]/rfis
+├ ƒ /api/projects/[id]/rfis/[rfiId]
+├ ƒ /api/projects/[id]/tasks
+├ ƒ /api/projects/[id]/tasks/[taskId]
+├ ƒ /api/pulse/send-email
+├ ƒ /api/search/search
+├ ƒ /api/search/search/autocomplete
+├ ƒ /api/search/search/facets
+├ ƒ /api/search/search/similar
+├ ƒ /api/style-profile/v1/style-profiles/[id]
+├ ƒ /api/style-profile/v1/style-profiles/[id]/complete-quiz
+├ ƒ /api/style-profile/v1/style-profiles/[id]/signals
+├ ƒ /api/style-profile/v1/style-profiles/[id]/versions
+├ ƒ /api/unsubscribe
+├ ƒ /api/user/data-erase
+├ ƒ /api/user/data-export
+├ ƒ /api/user/preferences
+├ ƒ /api/vendors/[id]/quote-request
+├ ƒ /api/vendors/[id]/save
+├ ƒ /api/version
+├ ○ /auth/accept-invite
+├ ○ /auth/callback
+├ ○ /auth/error
+├ ○ /auth/forgot-password
+├ ○ /auth/mfa-verify
+├ ○ /auth/reset-password
+├ ○ /auth/signin
+├ ○ /auth/signout
+├ ○ /auth/signup
+├ ○ /auth/verify-otp
+├ ƒ /board/[boardId]
+├ ○ /boards
+├ ƒ /ceremony/[leadId]
+├ ○ /compose
+├ ○ /desk
+├ ƒ /doc/[id]
+├ ƒ /doc/[id]/boards
+├ ƒ /doc/[id]/plans
+├ ƒ /doc/[id]/spec-book
+├ ƒ /drafting/[proposalId]
+├ ○ /help
+├ ƒ /help/[surfaceKey]
+├ ○ /help/article/the-keys
+├ ƒ /help/topic/[prefix]
+├ ○ /library
+├ ƒ /library/[id]
+├ ○ /library/judgments
+├ ○ /people
+├ ○ /preferences
+├ ƒ /preferences/unsubscribe
+├ ○ /privacy
+├ ƒ /room/[id]
+├ ƒ /room/[id]/file
+├ ○ /rooms
+├ ○ /terms
+└ ○ /unauthorized
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
