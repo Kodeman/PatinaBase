@@ -418,11 +418,18 @@ write there. The seed today lays every commercial paper down **executed**
 either seeded client's page for any e2e to drive. R26 says a seed file creates
 the fixture; this is the fixture it must create:
 
+⚠ **Use `…cb04`, not `…cb02`.** The first draft of this ask named `…cb02`, which
+is already the solo household's seeded **furnishings authorization**
+(`the-client-page.sql:358`, `v_fa_proposal`) — implemented literally,
+`pnpm supabase:reset` would fail on a duplicate primary key. `…cb01` is the
+composed agreement and `…cb03` the trade scope; `…cb04` and `…cb05` are free.
+The spec's `PER_PHASE_AGREEMENT_ID` now reads `…cb04`.
+
 ```sql
 -- In supabase/seed/the-client-page.sql, beside v_ds_proposal, in the same
 -- draft → terms → parts → promote order the composed agreement above uses.
 -- Left at 'sent': this is the one door the client suite drives.
---   proposals   b0000000-0000-0000-0000-00000000cb02
+--   proposals   b0000000-0000-0000-0000-00000000cb04
 --               'Cedar Lane — Phase Work', design_services,
 --               status 'sent', commercial_state 'sent',
 --               client uid_solo, designer uid_designer, project v_project
@@ -566,3 +573,162 @@ lanes whose files this one does not carry.
   until the bundle projects the key.
 - The `record-sheet` sanitizer is asserted against the four vectors named above,
   not against an exhaustive corpus.
+
+---
+
+# ROUND 2 — the adversarial review's four findings, answered
+
+Four commits, no other file touched:
+
+| Finding | Sev | Commit | What was done |
+|---|---|---|---|
+| R2-5 | major | `8ba20a5bb` | `composeSummaryLine` composes from the parts instead of reducing |
+| R2-3 | major | `8f35d14d2` | the string sanitizer is gone; the frozen snapshot is set as written |
+| R2-2 | major | `bdbeec893` | the dead `agreedSentence` block is cut, DTO field and all |
+| R2-1 | blocker | `55ab07892` | the e2e fixture id moves off `…cb02`; the ask is corrected |
+
+## R2-5 · the summary composes, it does not reduce
+
+The reviewer is right on both counts: §5.3 said nothing else in the gate
+changes, and the round-1 `composeSummaryLine` reduced on **any** composed
+agreement — so the nine standard parts, where the frozen sentence was true and
+complete, lost the services, the role rates, the ceiling and the retainer from
+the signing surface. Reducing a true sentence is not a fix.
+
+Option one, as offered. `composeSummaryLine` now walks the SAME parts through
+the SAME presence rule (`consentFragment`) in the SAME canonical variant order
+as the consent line, and maps each named term to the bare noun `summaryLineFor`
+has always used — every retainer, whatever its credit rule, is "retainer" up
+there; the rule belongs to the sentence she ticks:
+
+```
+By signing, you accept ${oxford(['the services', ...nouns, `terms in “${title}”`])}.
+The agreement becomes effective only after the studio countersigns.
+```
+
+| Part set | Sentence |
+|---|---|
+| no parts at all | `summaryLineFor` **verbatim** (flag off, legacy, pre-W2) |
+| rate_card + ceiling + retainer | `…the services, signed role rates, design authorization ceiling, retainer, and terms in “T”.` — **byte-identical to `summaryLineFor`** |
+| the nine standard parts | the same, plus `furnishings deposit` before "and terms" |
+| flat only | `…the services, flat design fee, and terms in “T”.` |
+| per_phase + retainer | `…the services, per-phase fee schedule, retainer, and terms in “T”.` |
+| composed, no visible money | `…the services and terms in “T”.` |
+
+Two properties are now pinned rather than assumed: the classic set is asserted
+`toBe(summaryLineFor(...))` — the commonest composed agreement says exactly
+what Wave 1 shipped — and the summary can name nothing the consent line beneath
+it leaves out, because both read presence from one function. Order is canonical
+(reversed input, same sentence).
+
+`summaryLineFor` itself is still untouched and still pinned by the drift guard.
+
+## R2-3 · the frozen document is set, not rewritten
+
+Reproduced exactly as reported. The four regexes ran over the whole snapshot
+string, and `=` is not in the renderer's escape chain (`& < > "`), so ordinary
+prose reached them and was edited:
+
+```
+<p>Phase one=Concept, phase two=Documentation.</p>  →  <p>Phase phase two=Documentation.</p>
+<p>Delivery online=yes</p>                          →  <p>Delivery></p>
+```
+
+R12 makes that block the homeowner's copy of the agreement **as executed**, and
+the mark under it is the document's fingerprint, not a hash of the HTML — so
+nothing on the sheet, or years later, could detect the difference. A
+string-level scrub is worse than none here.
+
+`inertSnapshotHtml` is deleted and `executedHtml` is set as the database wrote
+it. The guarantee is `_render_agreement_snapshot_html`'s escaping, held by
+build sheet §6's SQL test 7, and it is deliberately the only one. A DOM-parsed
+scrub was considered and rejected: `RecordSheet` renders through Next's server
+pass, where `DOMParser` does not exist, and a parse/serialize round trip is
+still a rewrite of a document the mark attests.
+
+Two jest cases replace the hostile-payload one:
+
+- **set byte-for-byte** — a benign body carrying `=` in its prose, asserted
+  `expect(executed.innerHTML).toBe(frozen)`;
+- **runs nothing** — a `<script>` inside the snapshot leaves its marker unset,
+  because markup inserted through `innerHTML` never executes.
+
+## R2-2 · the dead block is cut
+
+Confirmed dead: `get_client_commercial_document_bundle`
+(`00577_agreement_fee_schedules.sql:2242-2268`) enumerates a signature's keys —
+`signedOnPaper`, `paperSignedOn`, `paperScanDocumentId` — and projects no
+consent key, keeping 00425's rule. The DTO field was null for every signature,
+the block never rendered, and the jest case fabricated the key on an
+already-adapted bundle, so the suite was green over nothing.
+
+Cut, not escalated a second time: the bundle addition is unruled, and this lane
+may not widen a frozen interface it does not own. Removed — `RecordSheet`'s
+`agreedSentence` prop and its paragraph, the page's wiring, the DTO field, the
+adapter's read, and the two tests that stood on it. Kept — the **top-level**
+`bundle.consentSentence`, which IS in the build sheet's frozen bundle list and
+is what the sign route sends as `p_consent.consentSentence`; the sentence is
+still recorded against the signature at insert.
+
+What replaces the fabricated case is a pin with teeth: the adapter is asserted
+to produce a signature carrying exactly the eight keys the RPC projects, so a
+ninth added without a projection fails here rather than shipping blank.
+
+**Still owed, and now the only thing owed for §5.4's second half:** a ruling on
+one scalar — `'consentSentence', s.metadata->>'consentSentence'` in the bundle's
+signature projection. With it, the prop and its paragraph come back in an hour.
+
+## R2-1 · the fixture's id, and who owes it
+
+`…cb02` is the solo household's seeded **furnishings authorization**
+(`the-client-page.sql:358`, `v_fa_proposal`). The round-1 constant pinned it and
+the round-1 ask named it for a NEW proposal — implemented literally,
+`pnpm supabase:reset` fails on a duplicate primary key. Caught before it was
+written, which is the only reason it cost nothing.
+
+- `PER_PHASE_AGREEMENT_ID` is now `b0000000-0000-0000-0000-00000000cb04`
+  (`…cb01` composed agreement, `…cb02` furnishings authorization, `…cb03` trade
+  scope; `…cb04` and `…cb05` free).
+- The §F2 fixture block above carries the same correction and a ⚠ naming the
+  collision.
+- The spec's fixture note no longer claims the seed lays this door down. It
+  does not: every seeded commercial paper is executed and no
+  `commercial_document_signatures` row is written at all.
+
+The test stays **unconditional** (R26) and is **red until the fixture and the
+Wave 2 migrations are on the stack** — its first assertion carries the reason in
+its own message. It is not skipped, and it is not made conditional to hide the
+gap.
+
+**OWED BY THE BACKEND LANE OR THE INTEGRATION STEWARD, BEFORE THE E2E RUNS:**
+the seeded `sent` per-phase agreement at `…cb04` with one
+`acknowledgeRequired` attachment, exactly as §F2 spells it.
+
+## Gates, round 2
+
+Run from `/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w2-client`
+(bare `cd` first, its own Bash call).
+
+| Gate | Command | Result |
+|---|---|---|
+| Types | `pnpm --filter @patina/client-portal type-check` | **clean** — `tsc --noEmit`, no output |
+| Jest | `pnpm --filter @patina/client-portal test` | **129 suites · 2054 tests · 1 snapshot — all passed** |
+| Coverage floor 70/60/70/70 | `pnpm --filter @patina/client-portal test:coverage` | **74.25 / 69.61 / 74.31 / 76.54 — over floor** |
+| The touched suites | `test -- --testPathPattern "(consent-copy\|door-gate\|record\|commercial-document)"` | **7 suites · 289 tests passed** |
+| The e2e, collected | `npx playwright test tests/threshold.spec.ts --list` | **16 tests in 1 file** |
+| No `waitForTimeout` | `grep -n waitForTimeout tests/threshold.spec.ts` | one hit, the doc line saying there is none |
+
+The first full-suite run reported `129 total · 128 passed · 2035 tests passed`
+with one suite failing to RUN — `A jest worker process (pid=49602) was
+terminated by another process: signal=SIGSEGV`, no assertion failure. Re-run
+immediately: 129/129, 2054 tests. Recorded rather than swept: a SIGSEGV in a
+worker is the machine, not the diff, and the second run is the one that counts.
+
+### Still not verified, plainly
+
+- **The e2e has still not been executed**, and now for a named reason with a
+  named owner (R2-1 above).
+- `lint` still fails on the base with the same 11 errors in files this lane has
+  never touched. Not a build-sheet gate for this portal.
+- The SQL suites, `db:generate` and the other portals' gates belong to lanes
+  whose files this one does not carry.
