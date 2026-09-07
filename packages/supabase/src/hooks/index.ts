@@ -618,6 +618,45 @@ export {
 } from "./use-agreement-part-events";
 export type { AgreementPartEventRow } from "./use-agreement-part-events";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// The turnkey class — the draw ledger, the lien-waiver exchange, the
+// jurisdiction notices (seeded disabled, R11), and the one act that bills a
+// draw. Wave 3, P9 · P11 · P12 · P13. No Stripe code lives here (D-W3-1).
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  designBuildKeys,
+  mapAgreementDraw,
+  mapAgreementDrawLienWaiver,
+  useAgreementDraws,
+  useAgreementJurisdictionNotices,
+  useIssueAgreementDrawInvoice,
+  useRecordAgreementDrawLienWaiver,
+} from "./use-design-build";
+export type {
+  AgreementDrawRow,
+  AgreementDrawLienWaiverRow,
+  IssueAgreementDrawInvoiceResult,
+  RecordAgreementDrawLienWaiverInput,
+} from "./use-design-build";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Trade Agreements — the subcontract, studio ↔ sub, signed by the sub on a
+// token link with no login. Wave 3, P14 / R16.
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  tradeAgreementKeys,
+  mapTradeAgreement,
+  useTradeAgreements,
+  useCreateTradeAgreement,
+  useSendTradeAgreement,
+  useVoidTradeAgreement,
+} from "./use-trade-agreements";
+export type {
+  TradeAgreementRow,
+  CreateTradeAgreementInput,
+  SendTradeAgreementResult,
+} from "./use-trade-agreements";
+
 export type {
   Proposal,
   ProposalItem,
@@ -1663,6 +1702,23 @@ export type {
   StudioAgreementDefaultsRow,
   UpdateStudioAgreementDefaultsInput,
 } from "./use-studio-agreement-defaults";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The studio's licensing attestation — self-attested, stored, never verified
+// (Wave 3, P10 / R10). Gates selection of the design-build template and
+// nothing else.
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  studioLicenseAttestationKeys,
+  licenseAttestationIsLive,
+  mapStudioLicenseAttestation,
+  useStudioLicenseAttestation,
+  useSaveStudioLicenseAttestation,
+} from "./use-studio-license-attestation";
+export type {
+  StudioLicenseAttestationRow,
+  SaveStudioLicenseAttestationInput,
+} from "./use-studio-license-attestation";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Direct orders — client "buy now" on Patina-managed products, the third

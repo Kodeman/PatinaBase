@@ -367,3 +367,179 @@ export interface DesignBuildPayloads {
   draws: DesignBuildDrawsPayload;
   allowances: DesignBuildAllowancesPayload;
 }
+
+/**
+ * The supervision clause's payload. Its two figures are what the
+ * no-double-count rule reads: a studio that bills supervision as a line AND
+ * takes a markup on the trades is paid twice for one oversight (research 02
+ * §3, §9 item 6), and `_validate_no_double_count` refuses that part set at
+ * save and at send.
+ */
+export interface DesignBuildSupervisionPayload {
+  body: string;
+  supervisionFeeCents: number | null;
+  supervisionFeeBps: number | null;
+}
+
+/** The sub-disclosure clause's payload — one mode per contract. The schedule
+ *  of values is rendered in whichever mode this clause elects (R13). */
+export interface DesignBuildSubDisclosurePayload {
+  body: string;
+  mode: SubDisclosureMode;
+}
+
+/**
+ * The sentences the design-build class says in more than one place, declared
+ * once so the composer, the readiness panel and the database cannot drift.
+ * `noDoubleCount` is the message `_validate_no_double_count` returns; the
+ * room prints the database's own sentence rather than a second wording of it.
+ */
+export const DESIGN_BUILD_COPY = {
+  noDoubleCount:
+    'Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.',
+  noDoubleCountAside:
+    'Studios that do both are, in effect, charging twice for the same oversight.',
+  /** R10 — Patina stores the attestation and never checks it. */
+  attestationStored: 'Patina stores this. Patina does not verify it.',
+  /** R10's standing disclaimer, from research 03 §5, verbatim. Never render a
+   *  word count beside it. */
+  legalDisclaimer:
+    'Patina helps you assemble and send agreements from parts you write and own. It is not a law firm and does not give legal advice — have an attorney review your templates before first use.',
+  attestationAffirmation:
+    'I attest this credential is current and covers the work in this agreement.',
+  /** The one line under a design-build template a studio cannot yet use. */
+  templateNeedsAttestation:
+    'Add your licensing attestation in Account → Studio before using this template.',
+  /** R11 — a jurisdiction notice counsel has not cleared. */
+  noticeHeldForCounsel: 'Held for counsel review',
+  /** R39 — the visibility act, and what it means on the paper. */
+  hiddenFromClient: 'Hidden from your client',
+  hiddenFromClientHelp:
+    'This part stays on the agreement and off the copy your client reads.',
+} as const;
+
+/** Where a lien waiver sits in the exchange: conditional on payment or
+ *  unconditional, against progress or against the final draw (P12). */
+export const LIEN_WAIVER_POLICIES = [
+  'conditional_then_unconditional',
+  'unconditional_on_payment',
+  'none',
+] as const;
+export type LienWaiverPolicy = (typeof LIEN_WAIVER_POLICIES)[number];
+
+/**
+ * A studio's self-attested credential (P10, R10). Patina stores it and never
+ * verifies it against any registry — there is no lookup, no expiry cron, and
+ * no "verified" mark anywhere in the product.
+ */
+export interface StudioLicenseAttestation {
+  studioId: string;
+  credentialType: string;
+  credentialNumber: string;
+  state: string;
+  expiresOn: string;
+  attestedBy: string | null;
+  attestedAt: string | null;
+}
+
+/** A seeded jurisdiction notice (P11, R11). Every seeded row ships
+ *  `enabled: false` and no studio surface can flip one. */
+export interface AgreementJurisdictionNotice {
+  state: string;
+  kind: string;
+  title: string;
+  body: string;
+  citation: string;
+  enabled: boolean;
+}
+
+/** One recorded lien-waiver exchange against a draw (P12). `storagePath` null
+ *  means the waiver was recorded but no paper was filed. */
+export interface AgreementDrawLienWaiver {
+  id: string;
+  drawId: string;
+  contactId: string | null;
+  contactDisplayName: string | null;
+  waiverType: LienWaiverType;
+  throughDate: string | null;
+  amountCents: number | null;
+  storagePath: string | null;
+  receivedAt: string | null;
+}
+
+/**
+ * One row of the studio's own draw ledger — machine state, materialized at
+ * send from the frozen `draws` payload and written thereafter only by
+ * `issue_agreement_draw_invoice`. The homeowner reads a narrower projection
+ * ({@link DesignBuildDrawLedgerEntry} in `./commercial`).
+ */
+export interface AgreementDraw {
+  id: string;
+  proposalId: string;
+  drawKey: string;
+  sortOrder: number;
+  label: string;
+  grossCents: number;
+  retainageCents: number;
+  netCents: number;
+  isRetainageRelease: boolean;
+  invoiceId: string | null;
+  invoiceStatus: string | null;
+  issuedAt: string | null;
+  lienWaivers: AgreementDrawLienWaiver[];
+}
+
+export const TRADE_AGREEMENT_STATES = [
+  'draft',
+  'sent',
+  'signed',
+  'void',
+] as const;
+export type TradeAgreementState = (typeof TRADE_AGREEMENT_STATES)[number];
+
+/** How a Trade Agreement's work is sequenced (research 02 §7, "Schedule"). */
+export interface TradeAgreementSchedule {
+  startOn: string | null;
+  durationDays: number | null;
+  sequencing: string | null;
+}
+
+/**
+ * The subcontract (P14, R16) — studio ↔ sub, never the homeowner's paper.
+ * R7: its name in every string a person reads is **Trade Agreement**; the
+ * word "subcontract" is fine in code and in docs and never in the UI.
+ *
+ * Research 02 §7's eight essentials, all present and none optional:
+ * flow-down (`flowDownClauseKey`, NULL this wave — counsel-gated, R16),
+ * scope, price (`priceCents` + `sovLineIds`), schedule, retainage,
+ * pay-when-paid, insurance, lien waivers.
+ */
+export interface TradeAgreement {
+  id: string;
+  projectId: string;
+  studioId: string;
+  sourceProposalId: string | null;
+  contactId: string | null;
+  contactDisplayName: string;
+  contactCompanyName: string | null;
+  contactEmail: string | null;
+  trade: string | null;
+  title: string;
+  scope: string;
+  priceCents: number;
+  currency: string;
+  schedule: TradeAgreementSchedule;
+  retainageBps: number;
+  payWhenPaidDays: number | null;
+  insuranceCertificateRequired: boolean;
+  lienWaiverPolicy: LienWaiverPolicy;
+  flowDownClauseKey: string | null;
+  sovLineIds: string[];
+  state: TradeAgreementState;
+  sentAt: string | null;
+  signedAt: string | null;
+  voidedAt: string | null;
+  createdAt: string | null;
+  /** The sub's receipt, once they have signed on the token link. */
+  subSignature: { signedName: string; signedAt: string } | null;
+}
