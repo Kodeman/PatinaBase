@@ -138,6 +138,13 @@ describe("the Agreement Library card", () => {
     expect(within(seeded).queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("names a part in the designer's words, never the database's", () => {
+    renderCard();
+    const dayRate = rowFor("Site day rate");
+    expect(within(dayRate).getByText("Day rate")).toBeInTheDocument();
+    expect(within(dayRate).queryByText(/day_rate/)).not.toBeInTheDocument();
+  });
+
   it("counts the parts by kind, as a line rather than a chip", () => {
     renderCard();
     expect(

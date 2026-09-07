@@ -33,6 +33,9 @@ import {
   useStudioAgreementParts,
 } from "@patina/supabase";
 import type { AgreementTemplate, StudioAgreementPart } from "@patina/types";
+// One place says what a kind or a variant is called, and it is the room's.
+// Printing `part.variant` here would put a database word on the studio's page.
+import { partKindLabel } from "../rooms/drafting/agreement/part-kinds";
 
 const LABEL =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]";
@@ -307,11 +310,7 @@ export function AgreementLibraryCard({
                     <div className="flex items-center justify-between gap-3">
                       <span>
                         <span className={`block ${LABEL}`}>
-                          {KIND_PLURAL[part.kind]?.replace(/s$/, "") ??
-                            part.kind}
-                          {part.variant
-                            ? ` · ${part.variant.replace(/_/g, " ")}`
-                            : ""}
+                          {partKindLabel(part.kind, part.variant)}
                         </span>
                         <span className="block text-[13px] text-[var(--color-charcoal)]">
                           {part.title}
