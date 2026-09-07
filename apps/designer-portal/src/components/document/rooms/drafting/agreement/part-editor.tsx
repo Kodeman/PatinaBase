@@ -21,53 +21,82 @@ import { Button, Input, Select, Textarea } from "@/components/ui/controls";
 import {
   CADENCE_OPTIONS,
   CREDIT_RULE_OPTIONS,
-  DEPOSIT_CHIPS,
+  dollars,
   partKindLabel,
   readBody,
   readCents,
   readItems,
-  readPhases,
   readRoles,
+  toCents,
+  toCentsOrNull,
 } from "./part-kinds";
+import { AuthorityChip } from "./schedules/authority-chip";
+import {
+  authorityStanding,
+  RECORD_ONLY_HELP,
+  scheduleEditorFor,
+  FlatEditor,
+  PerPhaseEditor,
+  ProcurementEditor,
+} from "./schedules";
 
 const labelClass =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
-
-const dollars = (cents: number | null) =>
-  cents === null ? "" : (cents / 100).toString();
-
-const toCents = (value: string): number => {
-  const amount = Number(value.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100)) : 0;
-};
-
-/** R21 — an empty field is an amount nobody has written, and it has to stay
- *  that way: `Number("")` is 0, and a 0 written back here is what put "$0" in
- *  a homeowner's copy. A zero the designer types is still a zero. */
-const toCentsOrNull = (value: string): number | null =>
-  value.trim() === "" ? null : toCents(value);
 
 export interface PartEditorProps {
   part: AgreementPart;
   onChange: (payload: Record<string, unknown>) => void;
   readOnly: boolean;
+  /** `agreement-parts && agreement-library`, resolved by the composer. Off,
+   *  this file is Wave 1's editor exactly — no chip, no record-only help
+   *  line, and the eight record-only variants stay in `UnsupportedPartCard`. */
+  libraryOn?: boolean;
 }
 
-export function PartEditor({ part, onChange, readOnly }: PartEditorProps) {
+export function PartEditor({
+  part,
+  onChange,
+  readOnly,
+  libraryOn = false,
+}: PartEditorProps) {
+  const chipped = libraryOn && part.kind === "schedule";
   return (
     <section aria-label={`${part.title} editor`} className="space-y-4">
       <header>
-        <p className={labelClass}>{partKindLabel(part.kind, part.variant)}</p>
+        <p className={labelClass}>
+          {partKindLabel(part.kind, part.variant)}
+          {chipped && (
+            <>
+              {" · "}
+              <AuthorityChip variant={part.variant} />
+            </>
+          )}
+        </p>
         <h2 className="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
           {part.title}
         </h2>
       </header>
-      <PartEditorBody part={part} onChange={onChange} readOnly={readOnly} />
+      <PartEditorBody
+        part={part}
+        onChange={onChange}
+        readOnly={readOnly}
+        libraryOn={libraryOn}
+      />
+      {chipped && authorityStanding(part.variant) === "record-only" && (
+        <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+          {RECORD_ONLY_HELP}
+        </p>
+      )}
     </section>
   );
 }
 
-function PartEditorBody({ part, onChange, readOnly }: PartEditorProps) {
+function PartEditorBody({
+  part,
+  onChange,
+  readOnly,
+  libraryOn = false,
+}: PartEditorProps) {
   const payload = part.payload ?? {};
 
   if (part.kind === "clause") {
@@ -130,30 +159,35 @@ function PartEditorBody({ part, onChange, readOnly }: PartEditorProps) {
           readOnly={readOnly}
         />
       );
-    case "procurement":
-      return (
-        <DepositEditor
-          payload={payload}
-          onChange={onChange}
-          readOnly={readOnly}
-        />
-      );
-    case "flat":
-      return (
-        <FlatEditor payload={payload} onChange={onChange} readOnly={readOnly} />
-      );
-    case "per_phase":
-      return (
-        <PerPhaseEditor
-          payload={payload}
-          onChange={onChange}
-          readOnly={readOnly}
-        />
-      );
     default:
-      return <UnsupportedPartCard part={part} />;
+      break;
   }
+
+  // Everything else lives in `schedules/`. Wave 1 opened three of them —
+  // flat, per-phase, the furnishings deposit — and Wave 2 opens five more,
+  // but only behind the Library flag. Flag off, this file offers exactly the
+  // seven variants Wave 1 shipped and every other one stays in the read-only
+  // card, which is what the flag-off snapshot pins.
+  const Editor = libraryOn
+    ? scheduleEditorFor(part.variant)
+    : (W1_SCHEDULE_EDITORS[part.variant ?? ""] ?? null);
+  if (!Editor) return <UnsupportedPartCard part={part} />;
+  return (
+    <Editor
+      payload={payload}
+      onChange={onChange}
+      readOnly={readOnly}
+      libraryOn={libraryOn}
+    />
+  );
 }
+
+/** The three `schedules/` editors Wave 1 already opened. */
+const W1_SCHEDULE_EDITORS: Record<string, typeof FlatEditor | undefined> = {
+  flat: FlatEditor,
+  per_phase: PerPhaseEditor,
+  procurement: ProcurementEditor,
+};
 
 interface EditorProps {
   payload: Record<string, unknown>;
@@ -437,169 +471,6 @@ function CadenceEditor({ payload, onChange, readOnly }: EditorProps) {
         ))}
       </Select>
     </label>
-  );
-}
-
-function DepositEditor({ payload, onChange, readOnly }: EditorProps) {
-  const percent = readCents(payload.depositPercent);
-  const isChip =
-    percent !== null && (DEPOSIT_CHIPS as readonly number[]).includes(percent);
-
-  return (
-    <div className={labelClass}>
-      Furnishings deposit · on each authorization
-      <div className="mt-2 flex flex-wrap items-center gap-2 normal-case tracking-normal">
-        {DEPOSIT_CHIPS.map((chip) => (
-          <button
-            key={chip}
-            type="button"
-            disabled={readOnly}
-            aria-pressed={percent === chip}
-            onClick={() => onChange({ ...payload, depositPercent: chip })}
-            className={`rounded-[3px] border px-3 py-1.5 text-[12px] transition-colors ${
-              percent === chip
-                ? "border-[var(--color-clay)] bg-[var(--color-clay)] text-white"
-                : "border-[var(--doc-ink-border)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]"
-            }`}
-          >
-            {chip}%
-          </button>
-        ))}
-        <label className="flex items-center gap-1.5 text-[12px] text-[var(--color-charcoal)]">
-          <span>Other</span>
-          <Input
-            className="w-20"
-            inputMode="numeric"
-            disabled={readOnly}
-            aria-label="Other furnishings deposit percent"
-            value={percent === null || isChip ? "" : String(percent)}
-            onChange={(event) => {
-              if (event.target.value.trim() === "") {
-                onChange({ ...payload, depositPercent: null });
-                return;
-              }
-              const parsed = Number(event.target.value);
-              onChange({
-                ...payload,
-                depositPercent: Number.isFinite(parsed)
-                  ? Math.min(100, Math.max(0, Math.round(parsed)))
-                  : null,
-              });
-            }}
-            placeholder="Unset · defaults to 50%"
-          />
-        </label>
-      </div>
-      {percent === null && (
-        <p className="mt-1.5 text-[11px] normal-case tracking-normal text-[var(--text-muted)]">
-          No furnishings deposit set — authorizations will default to 50%.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function FlatEditor({ payload, onChange, readOnly }: EditorProps) {
-  return (
-    <label className={labelClass}>
-      Flat fee · dollars
-      <Input
-        className="mt-2 max-w-[220px]"
-        inputMode="decimal"
-        disabled={readOnly}
-        value={dollars(readCents(payload.cents))}
-        onChange={(event) =>
-          onChange({ ...payload, cents: toCentsOrNull(event.target.value) })
-        }
-      />
-      <p className="mt-1.5 text-[11px] normal-case tracking-normal text-[var(--text-muted)]">
-        Recorded on the agreement now; it starts creating billing authority in a
-        later release.
-      </p>
-    </label>
-  );
-}
-
-function PerPhaseEditor({ payload, onChange, readOnly }: EditorProps) {
-  const phases = readPhases(payload);
-  const write = (next: typeof phases) => onChange({ ...payload, phases: next });
-
-  return (
-    <div className="space-y-2">
-      {phases.map((phase, index) => (
-        <div
-          key={phase.key}
-          className="grid grid-cols-[minmax(0,1fr)_140px_auto] gap-3"
-        >
-          <Input
-            aria-label={`Phase ${index + 1}`}
-            disabled={readOnly}
-            value={phase.label}
-            onChange={(event) =>
-              write(
-                phases.map((row, rowIndex) =>
-                  rowIndex === index
-                    ? { ...row, label: event.target.value }
-                    : row,
-                ),
-              )
-            }
-            placeholder="Concept development"
-          />
-          <Input
-            aria-label={`Phase ${index + 1} fee`}
-            inputMode="decimal"
-            disabled={readOnly}
-            value={dollars(phase.cents)}
-            onChange={(event) =>
-              write(
-                phases.map((row, rowIndex) =>
-                  rowIndex === index
-                    ? { ...row, cents: toCents(event.target.value) }
-                    : row,
-                ),
-              )
-            }
-            placeholder="$"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={readOnly}
-            onClick={() =>
-              write(phases.filter((_, rowIndex) => rowIndex !== index))
-            }
-          >
-            Remove
-          </Button>
-        </div>
-      ))}
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={readOnly}
-        onClick={() =>
-          write([
-            ...phases,
-            {
-              key: `phase-${Date.now()}-${phases.length}`,
-              label: "",
-              cents: 0,
-            },
-          ])
-        }
-      >
-        + Add a phase
-      </Button>
-      {/* DR5 — the same sentence FlatEditor carries, for the same reason: a
-          per-phase fee is recorded on the agreement now and creates no
-          billing authority until a later release. The rail chips it
-          accordingly. */}
-      <p className="text-[11px] normal-case tracking-normal text-[var(--text-muted)]">
-        Recorded on the agreement now; it starts creating billing authority in a
-        later release.
-      </p>
-    </div>
   );
 }
 

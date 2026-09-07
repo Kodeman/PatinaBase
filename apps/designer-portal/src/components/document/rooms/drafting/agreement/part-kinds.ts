@@ -282,6 +282,27 @@ export function createBlankPart(input: {
   };
 }
 
+// ── Money, as a field reads and writes it. Lifted verbatim out of
+// `part-editor.tsx` when Wave 2 moved the schedule editors into `schedules/`
+// — both the Wave 1 editors that stayed and the Wave 2 editors that arrived
+// have to round dollars to cents the same way, and this module is the one
+// neither of them imports the other through.
+
+/** Cents as the dollars a field shows. An unwritten amount shows nothing. */
+export const dollars = (cents: number | null) =>
+  cents === null ? "" : (cents / 100).toString();
+
+export const toCents = (value: string): number => {
+  const amount = Number(value.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100)) : 0;
+};
+
+/** R21 — an empty field is an amount nobody has written, and it has to stay
+ *  that way: `Number("")` is 0, and a 0 written back here is what put "$0" in
+ *  a homeowner's copy. A zero the designer types is still a zero. */
+export const toCentsOrNull = (value: string): number | null =>
+  value.trim() === "" ? null : toCents(value);
+
 // ── Payload readers. Defensive by construction: a payload is jsonb, and a
 // part authored by a later wave (or by hand) may carry anything at all.
 
