@@ -136,6 +136,7 @@ jest.mock("@patina/supabase", () => ({
     isPending: false,
   }),
   useStudioLicenseAttestation: () => ({ data: null, isLoading: false }),
+  licenseAttestationIsLive: () => false,
   useSaveStudioLicenseAttestation: () => ({
     mutateAsync: jest.fn(),
     isPending: false,

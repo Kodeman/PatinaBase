@@ -138,7 +138,9 @@ describe("the template picker", () => {
     renderSheet();
     expect(screen.queryByText("Design-build")).not.toBeInTheDocument();
     expect(documentKindForTemplateClass("design_build")).toBe("design_build");
-    expect(documentKindForTemplateClass("consultation")).toBe("design_services");
+    expect(documentKindForTemplateClass("consultation")).toBe(
+      "design_services",
+    );
     expect(documentKindForTemplateClass("furnishings_services")).toBe(
       "design_services",
     );

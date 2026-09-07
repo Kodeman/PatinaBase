@@ -32,6 +32,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { DESIGN_BUILD_COPY } from "@patina/types";
 import type { AgreementPart } from "@patina/types";
 import { Input } from "@/components/ui/controls";
 import { AddPartMenu } from "./add-part-menu";
@@ -75,6 +76,12 @@ export interface PartsRailProps {
   onKeepInLibrary?: (part: AgreementPart) => void;
   /** Part ids already kept this session, so the act is offered once. */
   keptPartIds?: ReadonlySet<string>;
+  /**
+   * R39 — `design-build`, resolved by the composer. On, a row hidden from the
+   * client says so; off, the rail is Wave 2's rail exactly, because the act
+   * that can hide a part does not exist there either.
+   */
+  visibilityOn?: boolean;
 }
 
 export function PartsRail({
@@ -93,6 +100,7 @@ export function PartsRail({
   saveAsTemplate,
   onKeepInLibrary,
   keptPartIds,
+  visibilityOn = false,
 }: PartsRailProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -138,6 +146,7 @@ export function PartsRail({
                 onRemove={onRemove}
                 onKeepInLibrary={onKeepInLibrary}
                 kept={keptPartIds?.has(part.id) === true}
+                visibilityOn={visibilityOn}
               />
             ))}
           </ul>
@@ -182,6 +191,7 @@ function PartRow({
   onRemove,
   onKeepInLibrary,
   kept,
+  visibilityOn,
 }: {
   part: AgreementPart;
   index: number;
@@ -196,6 +206,7 @@ function PartRow({
   onRemove: (id: string) => void;
   onKeepInLibrary?: (part: AgreementPart) => void;
   kept: boolean;
+  visibilityOn: boolean;
 }) {
   const {
     attributes,
@@ -303,6 +314,14 @@ function PartRow({
                 </span>
               )}
             </span>
+            {visibilityOn && part.clientVisible === false && (
+              <span
+                data-client-visible="false"
+                className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+              >
+                {DESIGN_BUILD_COPY.hiddenFromClient}
+              </span>
+            )}
             {blocked && (
               <span className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 needs attention

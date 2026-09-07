@@ -21,6 +21,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  useAgreementDraws,
+  useAgreementJurisdictionNotices,
   useAgreementParts,
   useDiscardAgreementParts,
   useMaterializeAgreementTemplate,
@@ -28,6 +30,8 @@ import {
   useAgreementStudioContext,
   useSaveAgreementPart,
   useSaveAgreementParts,
+  useStudioLicenseAttestation,
+  licenseAttestationIsLive,
 } from "@patina/supabase";
 import {
   AGREEMENT_PART_COPY,
@@ -69,6 +73,13 @@ import {
   duplicateMoneyBlocker,
   partsNeedingAttention,
 } from "./readiness";
+import {
+  JurisdictionAttachments,
+  LienWaiverAttachments,
+  TURNKEY_PART_KEYS,
+  type TurnkeyContext,
+} from "./turnkey";
+import { TradeAgreementsStrip } from "../../../commercial/trade-agreements";
 
 const labelClass =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
@@ -138,6 +149,17 @@ export function AgreementComposer({
     useFeatureFlag("agreement-library");
   const libraryOn = libraryFlag && !libraryLoading;
 
+  // Wave 3 — the turnkey class. A THIRD nested gate, so `design-build` is
+  // independent of the two before it and reaches nobody the earlier two have
+  // not already reached: this component only renders under `agreement-parts`,
+  // `libraryOn` is `agreement-library`, and both must hold before the turnkey
+  // surfaces exist at all. Fail-closed the same way — `useFeatureFlag` reads
+  // { value: false, isLoading: true } until PostHog answers, so nothing Wave 3
+  // draws can flash to a studio the flag has not reached.
+  const { value: designBuildFlag, isLoading: designBuildLoading } =
+    useFeatureFlag("design-build");
+  const designBuildOn = libraryOn && designBuildFlag && !designBuildLoading;
+
   // R32 — WHICH LIBRARY THIS AGREEMENT OPENS. Not the actor's own
   // organizations: `useOrganizations` returns them in no order at all, so for
   // a designer who belongs to two design studios it hands back an arbitrary
@@ -149,6 +171,27 @@ export function AgreementComposer({
   const studioContext = useAgreementStudioContext(proposalId);
   const studioId = studioContext.data?.studioId ?? null;
   const canManage = studioContext.data?.canManage === true;
+
+  // R10 — the studio's self-attested credential, read once and used twice:
+  // the template picker derives its disabled state from it, and readiness
+  // holds the send on it. One read, so the picker and the panel cannot say
+  // different things about the same studio.
+  const attestation = useStudioLicenseAttestation(
+    designBuildOn ? studioId : null,
+  );
+  const attestationLive = licenseAttestationIsLive(attestation.data ?? null);
+  // R11 — what counsel has actually cleared. Empty on a seeded database, and
+  // that is the intended answer.
+  const notices = useAgreementJurisdictionNotices();
+  const enabledJurisdictions = useMemo(
+    () => (notices.data ?? []).map((notice) => notice.state),
+    [notices.data],
+  );
+  // P12 — the draw ledger. Empty until the agreement is sent, because
+  // `send_commercial_document` is what materializes it.
+  const drawLedger = useAgreementDraws(
+    designBuildOn && document.kind === "design_build" ? proposalId : null,
+  );
 
   // The re-read after a Template is laid in. `materialize_agreement_template`
   // replaces the part set on the server and answers with a count; the room
@@ -229,9 +272,26 @@ export function AgreementComposer({
   const recipientName =
     proposal.client?.full_name ?? proposal.client_name ?? undefined;
 
+  const turnkeyOn = designBuildOn && document.kind === "design_build";
+
   const readiness = useMemo(
-    () => assessAgreementReadiness({ document, parts, recipientEmail }),
-    [document, parts, recipientEmail],
+    () =>
+      assessAgreementReadiness({
+        document,
+        parts,
+        recipientEmail,
+        turnkey: turnkeyOn
+          ? { attestationLive, enabledJurisdictions }
+          : undefined,
+      }),
+    [
+      document,
+      parts,
+      recipientEmail,
+      turnkeyOn,
+      attestationLive,
+      enabledJurisdictions,
+    ],
   );
   const blockedIds = useMemo(() => {
     const ids = new Set<string>();
@@ -263,6 +323,33 @@ export function AgreementComposer({
 
   const changePayload = (id: string, payload: Record<string, unknown>) =>
     mutate(parts.map((part) => (part.id === id ? { ...part, payload } : part)));
+
+  /**
+   * One turnkey editor writing a sibling part's payload — an allowance laying
+   * down its cost line, the sub-disclosure clause storing its mode where the
+   * validator reads it. Local, like every other act in this room: nothing
+   * reaches the table until Save. A part key the composition does not carry is
+   * a no-op, because a designer is allowed to remove a part and a sibling
+   * editor must not resurrect it.
+   */
+  const writePart = (partKey: string, payload: Record<string, unknown>) =>
+    mutate(
+      parts.map((part) =>
+        part.partKey === partKey ? { ...part, payload } : part,
+      ),
+    );
+
+  /** R39 — hiding a part from the client. `client_visible` is the column;
+   *  R33 already refuses to project a hidden fee and readiness already says
+   *  so where the designer typed it. This is the act that sets it. */
+  const setClientVisible = (id: string, clientVisible: boolean) =>
+    mutate(
+      parts.map((part) => (part.id === id ? { ...part, clientVisible } : part)),
+    );
+
+  const turnkeyContext: TurnkeyContext | undefined = turnkeyOn
+    ? { parts, writePart, projectId: document.projectId }
+    : undefined;
 
   const renamePart = (id: string, title: string) =>
     mutate(parts.map((part) => (part.id === id ? { ...part, title } : part)));
@@ -301,6 +388,45 @@ export function AgreementComposer({
     });
     mutate([...parts, blank]);
     setSelectedId(blank.id);
+  };
+
+  /**
+   * A jurisdiction notice counsel HAS cleared, laid in as an attachment leaf
+   * (R11). A held notice is never handed to this function — the strip renders
+   * it greyed and non-attachable — and readiness refuses a send carrying one
+   * even if it arrived some other way.
+   */
+  const attachNotice = (notice: {
+    state: string;
+    title: string;
+    body: string;
+  }) => {
+    if (
+      parts.some((part) => (part.payload ?? {}).jurisdiction === notice.state)
+    )
+      return;
+    const added: AgreementPart = {
+      id: localPartId(),
+      proposalId,
+      position: parts.length + 1,
+      kind: "attachment",
+      variant: null,
+      partKey: `${TURNKEY_PART_KEYS.noticeOfCancellation}.${notice.state.toLowerCase()}`,
+      title: notice.title,
+      payload: {
+        title: notice.title,
+        body: notice.body,
+        jurisdiction: notice.state,
+        acknowledgeRequired: true,
+      },
+      required: false,
+      clientVisible: true,
+      sourceTemplateKey: null,
+      sourcePartId: null,
+      updatedAt: null,
+    };
+    mutate([...parts, added]);
+    setSelectedId(added.id);
   };
 
   /**
@@ -645,6 +771,7 @@ export function AgreementComposer({
                 : undefined
             }
             keptPartIds={keptPartIds}
+            visibilityOn={designBuildOn}
           />
 
           {/* The history strip needs a rhythm under the editor; flag off there
@@ -659,6 +786,12 @@ export function AgreementComposer({
                   readOnly={readOnly}
                   libraryOn={libraryOn}
                   blockers={blockersForPart(readiness, selected.id)}
+                  turnkey={turnkeyContext}
+                  onToggleClientVisible={
+                    designBuildOn && !readOnly
+                      ? (hidden) => setClientVisible(selected.id, !hidden)
+                      : undefined
+                  }
                 />
                 {/* P8 — under the open part, and only under a part that has a
                     history. A part nobody has touched draws nothing. */}
@@ -695,6 +828,35 @@ export function AgreementComposer({
               ]}
               notes={readiness.notes}
             />
+            {turnkeyOn && (
+              <>
+                {/* R11 — what counsel has cleared, and what is held. There is
+                    no enable control here or anywhere else in the studio's
+                    face; a held notice is counsel's draft, not a studio's
+                    paper. */}
+                <JurisdictionAttachments
+                  onAttach={readOnly ? undefined : attachNotice}
+                  readOnly={readOnly}
+                />
+                {/* P12 — the exchange, not the form. Empty until the
+                    agreement is sent, because the ledger is materialized at
+                    send from the frozen draws payload. */}
+                <LienWaiverAttachments
+                  proposalId={proposalId}
+                  studioId={studioId}
+                  draws={drawLedger.data ?? []}
+                  recordedBy={user?.id ?? null}
+                />
+                {/* P14 — the subcontract, studio-side. It lives in the room's
+                    right rail rather than in the Money room's ledger, which
+                    is another lane's file. */}
+                <TradeAgreementsStrip
+                  projectId={document.projectId}
+                  studioId={studioId}
+                  sourceProposalId={proposalId}
+                />
+              </>
+            )}
             <div className="hidden min-[1180px]:block">
               <div className="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
                 <p className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
@@ -733,6 +895,8 @@ export function AgreementComposer({
             pending={materializeTemplate.isPending}
             error={templateError}
             unsavedChanges={dirty}
+            designBuildOn={designBuildOn}
+            attestationLive={attestationLive}
           />
         </>
       )}
