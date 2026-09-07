@@ -8,10 +8,12 @@ import {
   KIND_LABEL,
   REFUSAL_TOKENS,
   SIGNATURE_NOTICE,
+  composeConsentLine,
   consentLineFor,
   refusalSentence,
   signLabelFor,
   summaryLineFor,
+  type ConsentPart,
 } from '../consent-copy';
 
 // ── The drift guard ─────────────────────────────────────────────────────────
@@ -120,5 +122,154 @@ describe('refusalSentence', () => {
   it('has something to say when the API says nothing', () => {
     expect(refusalSentence(undefined)).toBe('This paper could not be signed just now.');
     expect(refusalSentence('  ')).toBe('This paper could not be signed just now.');
+  });
+});
+
+/* ── THE COMPOSED CONSENT (Wave 2, P6) ───────────────────────────────────────
+   The drift test for `composeConsentLine`. Every sentence below is reproduced
+   verbatim in `supabase/tests/commercial/agreement_fee_schedules_test.sql`
+   against `public.compose_agreement_consent(uuid)` — two implementations of
+   one function, pinned to the same literals from both sides. A change here
+   that is not made there is the drift this block exists to catch.
+
+   Asserted with `toBe`, never `toContain`: the whole point is the exact
+   sentence, punctuation included. Note the legacy literal carries no comma
+   before "and understand"; the composed form does. That is intended.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const LEGACY_SERVICES_LINE =
+  'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.';
+
+function schedule(
+  variant: string,
+  payload: Record<string, unknown>,
+  clientVisible = true,
+): ConsentPart {
+  return { kind: 'schedule', variant, clientVisible, payload };
+}
+
+/** The nine standard parts, as `materialize_standard_parts` seeds them. */
+const NINE_STANDARD_PARTS: ConsentPart[] = [
+  { kind: 'clause', variant: null, clientVisible: true, payload: { body: 'Interior design services.' } },
+  { kind: 'list', variant: null, clientVisible: true, payload: { items: [{ id: 'd1', text: 'Concept presentation' }] } },
+  { kind: 'list', variant: null, clientVisible: true, payload: { items: [{ id: 'e1', text: 'Construction labor' }] } },
+  schedule('rate_card', { roles: [{ roleName: 'Principal', hourlyRateCents: 27500, sortOrder: 0 }] }),
+  schedule('ceiling', { cents: 2400000 }),
+  schedule('procurement', { depositPercent: 50 }),
+  schedule('retainer', { cents: 500000, creditRule: 'credited', activationPolicy: 'immediate' }),
+  schedule('cadence', { cadence: 'monthly' }),
+  { kind: 'clause', variant: null, clientVisible: true, payload: { body: '' } },
+];
+
+const NINE_STANDARD_LINE =
+  'I agree to these design-services terms, the signed role rates, the design authorization ceiling, the retainer credited against fees, and the furnishings deposit, and understand my signature alone does not authorize work until the studio countersigns.';
+
+describe('composeConsentLine — the sentence she ticks', () => {
+  it('says the legacy line for an empty part set', () => {
+    expect(composeConsentLine('design_services', [])).toBe(consentLineFor('design_services'));
+    expect(composeConsentLine('design_services', [])).toBe(LEGACY_SERVICES_LINE);
+  });
+
+  it('says the legacy line when the bundle carries no parts at all', () => {
+    expect(composeConsentLine('design_services', null)).toBe(consentLineFor('design_services'));
+    expect(composeConsentLine('design_services', undefined)).toBe(
+      consentLineFor('design_services'),
+    );
+  });
+
+  it('names every term the nine standard parts carry', () => {
+    expect(composeConsentLine('design_services', NINE_STANDARD_PARTS)).toBe(NINE_STANDARD_LINE);
+  });
+
+  it('names the two terms a consultation carries', () => {
+    expect(
+      composeConsentLine('design_services', [
+        schedule('rate_card', { roles: [{ roleName: 'Principal', hourlyRateCents: 27500 }] }),
+        schedule('ceiling', { cents: 600000 }),
+      ]),
+    ).toBe(
+      'I agree to these design-services terms, the signed role rates, and the design authorization ceiling, and understand my signature alone does not authorize work until the studio countersigns.',
+    );
+  });
+
+  it('names a flat fee on its own', () => {
+    expect(
+      composeConsentLine('design_services', [schedule('flat', { cents: 800000 })]),
+    ).toBe(
+      'I agree to these design-services terms and the flat design fee, and understand my signature alone does not authorize work until the studio countersigns.',
+    );
+  });
+
+  it('says a non-refundable retainer in the retainer’s own words', () => {
+    expect(
+      composeConsentLine('design_services', [
+        schedule('per_phase', {
+          phases: [
+            { key: 'concept', label: 'Concept', cents: 350000 },
+            { key: 'documentation', label: 'Documentation', cents: 450000 },
+            { key: 'selections', label: 'Selections', cents: 300000 },
+          ],
+        }),
+        schedule('retainer', { cents: 500000, creditRule: 'non_refundable' }),
+      ]),
+    ).toBe(
+      'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.',
+    );
+  });
+
+  it('names the furnishings deposit on a furnishings-only set', () => {
+    expect(
+      composeConsentLine('design_services', [
+        { kind: 'clause', variant: null, clientVisible: true, payload: { body: 'Services.' } },
+        schedule('procurement', { depositPercent: 50, markupBasis: 'net' }),
+      ]),
+    ).toBe(
+      'I agree to these design-services terms and the furnishings deposit, and understand my signature alone does not authorize work until the studio countersigns.',
+    );
+  });
+
+  it('consents to nothing a record-only variant carries (R9)', () => {
+    const withRecordOnly: ConsentPart[] = [
+      schedule('flat', { cents: 800000 }),
+      schedule('percent_of_cost', { percent: 12 }),
+      schedule('cost_plus', { markupPercent: 20 }),
+      schedule('day_rate', { cents: 180000, minimumDays: 2 }),
+      schedule('package', { title: 'Room in a week', cents: 900000 }),
+      schedule('pricing_basis', { basis: 'net' }),
+      schedule('draws', { draws: [{ label: 'First', cents: 100000 }] }),
+      schedule('allowances', { allowances: [{ label: 'Lighting', cents: 400000 }] }),
+    ];
+    expect(composeConsentLine('design_services', withRecordOnly)).toBe(
+      composeConsentLine('design_services', [schedule('flat', { cents: 800000 })]),
+    );
+  });
+
+  it('consents to nothing the homeowner cannot see', () => {
+    const hidden = NINE_STANDARD_PARTS.map((part) =>
+      part.kind === 'schedule' ? { ...part, clientVisible: false } : part,
+    );
+    expect(composeConsentLine('design_services', hidden)).toBe(LEGACY_SERVICES_LINE);
+  });
+
+  it('says the fragments in canonical order, whatever order the parts arrive in', () => {
+    expect(composeConsentLine('design_services', [...NINE_STANDARD_PARTS].reverse())).toBe(
+      NINE_STANDARD_LINE,
+    );
+  });
+
+  it('says nothing about a billing cadence', () => {
+    expect(
+      composeConsentLine('design_services', [schedule('cadence', { cadence: 'monthly' })]),
+    ).toBe(LEGACY_SERVICES_LINE);
+  });
+
+  it('leaves every other kind of paper its own consent', () => {
+    expect(
+      composeConsentLine('furnishings_authorization', [schedule('flat', { cents: 800000 })]),
+    ).toBe(consentLineFor('furnishings_authorization'));
+  });
+
+  it('composes for an addendum exactly as it composes for an agreement', () => {
+    expect(composeConsentLine('service_addendum', NINE_STANDARD_PARTS)).toBe(NINE_STANDARD_LINE);
   });
 });
