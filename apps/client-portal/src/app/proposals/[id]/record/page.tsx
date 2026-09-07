@@ -158,10 +158,16 @@ export default function ProposalRecordPage({
       signedName={block.name}
       signedOn={block.dateLine}
       consentSentence={block.sentence}
-      /* WHAT she ticked, from her own signature's metadata — never
-         `compose_agreement_consent` at read time. The parts can move under an
-         addendum; the sentence she agreed to cannot (Wave 2, P6). */
-      agreedSentence={signature.consentSentence}
+      /* WHAT she ticked is NOT printed here in Wave 2. It lives in
+         `commercial_document_signatures.metadata.consentSentence`, written at
+         insert by the sign route, and 00425's rule holds that raw metadata
+         never crosses the client bundle's edge — the bundle RPC projects the
+         signature's keys one by one and projects no consent key. Re-composing
+         the sentence from today's parts is the one thing a record must never
+         do (the parts move under an addendum; her signature does not), so the
+         sheet says nothing here rather than something untrue. The sentence is
+         recorded, and the keepsake prints it in the wave that rules the
+         bundle key. */
       /* R12. Present only once the studio has countersigned a composed
          agreement. A pre-Wave-2 execution, or an agreement with no parts,
          carries none — and the sheet then reads exactly as it does today,

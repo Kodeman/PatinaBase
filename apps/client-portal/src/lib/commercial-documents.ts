@@ -70,16 +70,6 @@ export type CommercialSignature = Pick<
    *  omits it otherwise, so this is never a pointer to a file the client
    *  isn't allowed to open. */
   paperScanDocumentId: string | null;
-  /**
-   * The sentence this signer actually ticked, as the signature's own metadata
-   * recorded it at INSERT (`metadata.consentSentence`, Wave 2 P6). Null on
-   * every row written before the composer existed, and on the paper rail.
-   *
-   * The keepsake prints THIS and never re-composes: a record of a signature
-   * has to say what she agreed to on the day, not what the parts would say
-   * about the agreement today.
-   */
-  consentSentence: string | null;
 };
 
 /**
@@ -707,15 +697,13 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         signedOnPaper: first(row, 'signedOnPaper', 'signed_on_paper') === true,
         paperSignedOn: nullableText(first(row, 'paperSignedOn', 'paper_signed_on')),
         paperScanDocumentId: nullableText(first(row, 'paperScanDocumentId', 'paper_scan_document_id')),
-        // Projected flat by the bundle RPC, the way `signedOnPaper` and
-        // `paperSignedOn` are — but read out of a nested `metadata` too,
-        // because the row this comes from IS the signature's metadata and a
-        // reader that only knows one shape prints nothing rather than the
-        // sentence she ticked.
-        consentSentence: nullableText(
-          first(row, 'consentSentence', 'consent_sentence') ??
-            first(record(first(row, 'metadata')), 'consentSentence', 'consent_sentence'),
-        ),
+        // NOT read here: the sentence this signer ticked. It is written into
+        // `commercial_document_signatures.metadata` at insert, and the bundle
+        // RPC projects a signature's keys one by one (00425 — raw metadata
+        // never crosses this edge), so there is no consent key on this row to
+        // read. A DTO field that is null for every document is a feature the
+        // keepsake would print nothing from; the wave that rules the bundle
+        // addition adds both halves together.
       }];
     }) : [],
     furnishings: Object.keys(furnishingRaw).length === 0 ? null : {

@@ -930,39 +930,31 @@ describe('signature provenance (paper vs. on-screen)', () => {
     expect(bundle?.signatures[0]).toMatchObject({ signedOnPaper: false, paperSignedOn: null });
   });
 
-  /* ── Wave 2: the sentence she actually ticked ──────────────────────────── */
-
-  it('keeps the consent sentence the signature itself recorded', () => {
-    const composed =
-      'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.';
+  /* Wave 2 note: a signature row carries no consent sentence across this
+     edge. The sentence she ticked is written into the signature's `metadata`
+     at insert, and the bundle RPC projects a signature's keys one by one
+     (00425 — raw metadata never crosses here), so nothing is read for it and
+     nothing is claimed. The pin that matters is the one above: a key the RPC
+     does not project must not appear on the DTO at all. */
+  it('projects only the signature keys the bundle RPC actually sends', () => {
     const bundle = adaptCommercialDocumentBundle({
       document: { id: 'ds-w2-1', documentKind: 'design_services', commercialState: 'client_signed' },
-      signatures: [
-        {
-          party: 'client', signerName: 'Jamie Client', signedAt: '2026-09-07T14:20:00Z',
-          consentVersion: 'v1', documentFingerprint: 'fp-1', consentSentence: composed,
-        },
-        {
-          party: 'studio', signerName: 'Morgan Designer', signedAt: '2026-09-07T15:00:00Z',
-          consentVersion: 'v1', documentFingerprint: 'fp-2',
-          metadata: { consentSentence: 'A studio sentence.' },
-        },
-      ],
-    });
-    expect(bundle?.signatures[0].consentSentence).toBe(composed);
-    // Read out of the nested metadata too — the RPC may project either shape.
-    expect(bundle?.signatures[1].consentSentence).toBe('A studio sentence.');
-  });
-
-  it('carries no consent sentence for a signature written before the composer', () => {
-    const bundle = adaptCommercialDocumentBundle({
-      document: { id: 'ds-w2-2', documentKind: 'design_services', commercialState: 'client_signed' },
       signatures: [{
-        party: 'client', signerName: 'Jamie Client', signedAt: '2026-08-05T14:20:00Z',
+        party: 'client', signerName: 'Jamie Client', signedAt: '2026-09-07T14:20:00Z',
         consentVersion: 'v1', documentFingerprint: 'fp-1',
+        metadata: { consentSentence: 'A sentence nobody projected.' },
       }],
     });
-    expect(bundle?.signatures[0].consentSentence).toBeNull();
+    expect(Object.keys(bundle?.signatures[0] ?? {}).sort()).toEqual([
+      'consentVersion',
+      'documentFingerprint',
+      'paperScanDocumentId',
+      'paperSignedOn',
+      'party',
+      'signedAt',
+      'signedOnPaper',
+      'signerName',
+    ]);
   });
 });
 
