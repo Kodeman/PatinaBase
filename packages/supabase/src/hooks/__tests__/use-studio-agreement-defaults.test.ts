@@ -135,10 +135,23 @@ describe('useStudioAgreementDefaults', () => {
     expect(defaults.defaultExclusions).toEqual([]);
   });
 
-  it('throws the postgrest error rather than swallowing it', async () => {
-    maybeSingle.mockResolvedValue({ data: null, error: { message: 'denied' } });
+  // 00575 lands on Strata on its own schedule and the portals deploy on
+  // theirs. In the window between, this read fails because the relation is
+  // not there yet — and the Account page must still render. A studio that has
+  // never set a default and a studio whose table has not arrived are the same
+  // thing to every reader: the Patina standard.
+  it('reads a failed lookup as the Patina standard, so the card still renders', async () => {
+    maybeSingle.mockResolvedValue({
+      data: null,
+      error: { message: 'relation "studio_agreement_defaults" does not exist' },
+    });
     const config = useStudioAgreementDefaults('studio-1') as unknown as Config;
-    await expect(config.queryFn()).rejects.toEqual({ message: 'denied' });
+    const defaults = (await config.queryFn()) as any;
+    expect(defaults.studioId).toBe('studio-1');
+    expect(defaults.cadence).toBe('monthly');
+    expect(defaults.retainerCreditRule).toBe('credited');
+    expect(defaults.rateCard).toEqual([]);
+    expect(defaults.depositPercent).toBeNull();
   });
 });
 

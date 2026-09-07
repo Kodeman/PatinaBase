@@ -70,6 +70,12 @@ function mapStudioAgreementDefaults(row: StudioAgreementDefaultsRow): StudioAgre
 /**
  * A studio's agreement defaults. No row yet — the common case, before anyone
  * has opened the card — reads as the Patina standard rather than null.
+ *
+ * So does a read that ERRORS. 00575 lands on Strata on its own schedule and
+ * the portals deploy on theirs; in the window between, the relation does not
+ * exist yet and the Account page must still render its other cards. A studio
+ * that has never set a default and a studio whose table is not there yet are
+ * the same thing to every reader of this hook: the Patina standard.
  */
 export function useStudioAgreementDefaults(studioId: string | null | undefined) {
   return useQuery({
@@ -81,7 +87,7 @@ export function useStudioAgreementDefaults(studioId: string | null | undefined) 
         .select('*')
         .eq('studio_id', studioId)
         .maybeSingle();
-      if (error) throw error;
+      if (error) return defaultStudioAgreementDefaults(studioId as string);
       const row = data as StudioAgreementDefaultsRow | null;
       return row
         ? mapStudioAgreementDefaults(row)

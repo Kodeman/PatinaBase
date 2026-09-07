@@ -13366,6 +13366,42 @@ END $g$;
 
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_assert_cents(jsonb, text, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_agreement_projection_write() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_service_terms FROM authenticated, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_service_rates FROM authenticated, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.proposal_service_terms TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.proposal_service_rates TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.upsert_agreement_parts(uuid, jsonb) FROM PUBLIC, anon, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -13385,6 +13421,18 @@ END $g$;
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.materialize_standard_parts(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.discard_agreement_parts(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.discard_agreement_parts(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
