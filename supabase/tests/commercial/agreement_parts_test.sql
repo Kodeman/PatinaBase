@@ -1454,7 +1454,43 @@ BEGIN
     OR has_table_privilege('anon'::name, 'public.proposal_service_rates'::regclass, 'UPDATE')
   ), 'R17(c): anon must hold no write on either projection table';
 
-  RAISE NOTICE 'PASS 25: one source of truth — the flag-off door, the direct hand and the grant all refuse (R17)';
+  -- TRUNCATE is the write the trigger cannot see: it fires no row trigger and
+  -- observes no RLS, so the ACL is the ONLY wall standing in front of it
+  -- (re-gate 2, F6). The grant is gone, and the act itself is refused.
+  ASSERT NOT (
+    has_table_privilege('authenticated'::name, 'public.proposal_service_terms'::regclass, 'TRUNCATE')
+    OR has_table_privilege('authenticated'::name, 'public.proposal_service_rates'::regclass, 'TRUNCATE')
+    OR has_table_privilege('anon'::name, 'public.proposal_service_terms'::regclass, 'TRUNCATE')
+    OR has_table_privilege('anon'::name, 'public.proposal_service_rates'::regclass, 'TRUNCATE')
+  ), 'R17(c): neither authenticated nor anon may TRUNCATE a projection table';
+
+  v_err := NULL;
+  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000001');
+  BEGIN
+    EXECUTE 'TRUNCATE public.proposal_service_terms';
+    ASSERT false, 'authenticated must not be able to empty the terms projection';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err IS NOT NULL, 'R17(c): TRUNCATE on the terms projection was accepted';
+
+  v_err := NULL;
+  BEGIN
+    EXECUTE 'TRUNCATE public.proposal_service_rates';
+    ASSERT false, 'authenticated must not be able to empty the rates projection';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_err IS NOT NULL, 'R17(c): TRUNCATE on the rates projection was accepted';
+
+  -- And the money is still where it was.
+  ASSERT (SELECT count(*) FROM public.proposal_service_terms
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a') = 1,
+    'the refused TRUNCATE emptied the terms projection';
+  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000a') > 0,
+    'the refused TRUNCATE emptied the rates projection';
+
+  RAISE NOTICE 'PASS 25: one source of truth — the flag-off door, the direct hand, the grant and TRUNCATE all refuse (R17)';
 END $$;
 
 -- The legacy contract is unmoved by all three walls: a document with NO parts

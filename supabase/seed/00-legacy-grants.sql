@@ -13384,13 +13384,13 @@ END $g$;
 
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
-  REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_service_terms FROM authenticated, anon;
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.proposal_service_terms FROM authenticated, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
-  REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_service_rates FROM authenticated, anon;
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.proposal_service_rates FROM authenticated, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

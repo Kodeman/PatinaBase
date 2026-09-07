@@ -2434,9 +2434,15 @@ CREATE TRIGGER guard_proposal_service_rates_projection
 -- columns (commercial-document-notify/index.ts:363). SELECT stays. anon's
 -- write set, which this stack's pre-flip creation defaults granted and no
 -- migration ever asked for, goes with it.
-REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_service_terms
+--
+-- TRUNCATE goes with them (re-gate 2, F6). It is the one write that fires no
+-- row trigger and observes no RLS, so the guard above cannot see it: left
+-- granted, it would empty both projections past every brace R17 asked for.
+-- No caller needs it — PostgREST never issues TRUNCATE — so it is withdrawn
+-- on the same line as the rest of the write set.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.proposal_service_terms
   FROM authenticated, anon;
-REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_service_rates
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.proposal_service_rates
   FROM authenticated, anon;
 GRANT SELECT ON TABLE public.proposal_service_terms TO authenticated;
 GRANT SELECT ON TABLE public.proposal_service_rates TO authenticated;
