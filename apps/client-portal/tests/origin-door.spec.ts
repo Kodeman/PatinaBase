@@ -60,6 +60,9 @@ const DESIGNER_EMAIL = 'designer@patina.dev';
 const PASSWORD = 'password123';
 
 const AGREEMENT_TITLE = 'Design services agreement — the origin door';
+// Short on purpose: Previously prints one line and cuts a label past 58
+// characters, and this test reads the label whole.
+const SIGNED_TITLE = 'The origin door, signed';
 const CONSENT_LINE =
   'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.';
 
@@ -109,17 +112,21 @@ async function signIn(page: Page, email: string): Promise<void> {
   });
 }
 
-let householdEmail = '';
-let agreementId = '';
+/** A throwaway household, and the origin agreement it was sent. */
+interface Household {
+  email: string;
+  id: string;
+  agreementId: string;
+}
 
-test.beforeAll(async () => {
-  test.skip(
-    SERVICE_JWT.length === 0,
-    'SUPABASE_SERVICE_ROLE_KEY is not exported — see the header of this file.',
-  );
-
+/**
+ * One household with zero projects and one issued design-services agreement
+ * bound to none. Minted twice — one left standing at `sent`, one signed — so
+ * neither test depends on the other having run first.
+ */
+async function mintOriginAgreement(title: string): Promise<Household> {
   const admin = service();
-  householdEmail = `r30-origin-${randomUUID().slice(0, 8)}@patina.dev`;
+  const householdEmail = `r30-origin-${randomUUID().slice(0, 8)}@patina.dev`;
 
   const { data: created, error: userError } = await admin.auth.admin.createUser({
     email: householdEmail,
@@ -155,7 +162,7 @@ test.beforeAll(async () => {
     throw new Error(`designer relationship: ${relationshipError.message}`);
   }
 
-  agreementId = randomUUID();
+  const agreementId = randomUUID();
   const studio = await designer();
 
   // project_id is deliberately absent — this IS the origin agreement.
@@ -164,7 +171,7 @@ test.beforeAll(async () => {
     designer_id: DESIGNER_ID,
     client_id: householdId,
     designer_client_id: relationshipId,
-    title: AGREEMENT_TITLE,
+    title,
     status: 'draft',
     document_kind: 'design_services',
     commercial_state: 'draft',
@@ -224,13 +231,55 @@ test.beforeAll(async () => {
     .single();
   expect(paper?.project_id).toBeNull();
   expect(paper?.commercial_state).toBe('sent');
+
+  return { email: householdEmail, id: householdId, agreementId };
+}
+
+let sent: Household;
+let signed: Household;
+
+test.beforeAll(async () => {
+  test.skip(
+    SERVICE_JWT.length === 0,
+    'SUPABASE_SERVICE_ROLE_KEY is not exported — see the header of this file.',
+  );
+
+  sent = await mintOriginAgreement(AGREEMENT_TITLE);
+  signed = await mintOriginAgreement(SIGNED_TITLE);
+
+  // Her name goes on the second one through the rail the door itself POSTs to
+  // (`app/api/proposals/[id]/sign/route.ts` calls exactly this, with exactly
+  // these arguments). The RPC records the client's act and nothing else: no
+  // project is created, so the paper stays bound to none — which is the state
+  // this door had no way of showing.
+  const { error: signError } = await service().rpc(
+    'sign_design_services_agreement_with_trusted_ip',
+    {
+      p_proposal_id: signed.agreementId,
+      p_signed_name: 'Ada Vale',
+      p_client_id: signed.id,
+      p_signed_ip: '127.0.0.1',
+    },
+  );
+  if (signError) throw new Error(`agreement signature: ${signError.message}`);
+
+  const admin = service();
+  const { data: paper } = await admin
+    .from('proposals')
+    .select('project_id, commercial_state')
+    .eq('id', signed.agreementId)
+    .single();
+  expect(paper?.commercial_state).toBe('client_signed');
+  expect(paper?.project_id).toBeNull();
+  const { data: houses } = await admin.from('projects').select('id').eq('client_id', signed.id);
+  expect(houses ?? []).toHaveLength(0);
 });
 
 test.describe('R30 — the household door with no house', () => {
   test('stands the origin agreement at #door, not "no active projects yet"', async ({
     page,
   }) => {
-    await signIn(page, householdEmail);
+    await signIn(page, sent.email);
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     const door = page.locator('#door');
@@ -249,12 +298,33 @@ test.describe('R30 — the household door with no house', () => {
   });
 
   test('lands on that door from the retired /proposals/<id> address', async ({ page }) => {
-    await signIn(page, householdEmail);
-    await page.goto(`/proposals/${agreementId}`, { waitUntil: 'domcontentloaded' });
+    await signIn(page, sent.email);
+    await page.goto(`/proposals/${sent.agreementId}`, { waitUntil: 'domcontentloaded' });
 
-    await expect(page).toHaveURL(new RegExp(`\\?proposal=${agreementId}`));
+    await expect(page).toHaveURL(new RegExp(`\\?proposal=${sent.agreementId}`));
     const door = page.locator('#door');
     await expect(door).toBeVisible({ timeout: 20_000 });
     await expect(door.getByRole('heading', { name: AGREEMENT_TITLE })).toBeVisible();
+  });
+
+  /* Her signature does not create the house — the studio's countersignature
+     does, days later. Between the two the agreement is `client_signed` and
+     still bound to no project, and only a pending paper draws a door: she
+     signed, came back, and met "no active projects yet" over the paper she
+     had just put her name to. The house keeps an accepted document as a line
+     in Previously; so does this door now. */
+  test('keeps the signed agreement on the next visit, before the countersignature', async ({
+    page,
+  }) => {
+    await signIn(page, signed.email);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+    const line = page.getByTestId('previously-line');
+    await expect(line).toBeVisible({ timeout: 20_000 });
+    await expect(line).toContainText(`Design services agreement · ${SIGNED_TITLE}`);
+    await expect(line.getByTestId('previously-state')).toHaveText('SIGNED');
+    await expect(page.getByTestId('empty-state')).toHaveCount(0);
+    // A record, not a second ask: the paper is not still waiting for her hand.
+    await expect(page.locator('[data-threshold-unit="door"]')).toHaveCount(0);
   });
 });

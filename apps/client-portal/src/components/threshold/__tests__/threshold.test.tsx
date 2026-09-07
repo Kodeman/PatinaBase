@@ -2370,6 +2370,8 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     renderDoor();
 
     expect(document.querySelector('[data-threshold-unit="door"]')).toBeNull();
+    // The record goes with the paper: the house keeps both from here on.
+    expect(screen.queryByTestId('previously-line')).not.toBeInTheDocument();
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
   });
 
@@ -2427,5 +2429,86 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
 
     expect(screen.getByTestId('letterbox-door-hold')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  /* Her signature does not create the house — the studio's countersignature
+     does, days later. Between the two acts the agreement is `client_signed`
+     and STILL bound to no project, and pending is the only thing a door draws.
+     Without a record kept here she signs, comes back the next morning, and is
+     told she has no projects over the paper she just put her name to. The
+     house never does that: an accepted document is a lasting line in
+     Previously, and this door keeps its own the same way. */
+  it('keeps the signed agreement on the next visit, before the studio countersigns', () => {
+    proposalsMock.mockReturnValue(
+      settled([
+        {
+          ...ORIGIN_AGREEMENT,
+          commercial_state: 'client_signed',
+          status: 'accepted',
+          signed_at: '2026-09-06',
+        } as unknown as Proposal,
+      ]),
+    );
+
+    renderDoor();
+
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
+    const line = screen.getByTestId('previously-line');
+    expect(line).toHaveTextContent('Design services agreement · Design services agreement');
+    expect(within(line).getByTestId('previously-state')).toHaveTextContent('SIGNED');
+    expect(within(line).getByTestId('previously-date')).toHaveTextContent('6 September');
+    // It is a record, not an ask: nothing is waiting for her hand any more.
+    expect(document.querySelector('[data-threshold-unit="door"]')).toBeNull();
+  });
+
+  /* Two studios reach one household — here, two origin agreements from two of
+     them, which the standing sentence already pluralises for. The receipt is
+     the sentence that says who holds her signature, so it is read off the
+     paper's OWN designer; off the page's plate it would tell her the studio
+     she happens to have another paper from now holds her name. */
+  it('names each agreement’s own studio on the receipt for its signature', async () => {
+    identityMock.mockImplementation(({ designerId }: { designerId: string | null }) =>
+      settled({
+        name: designerId === 'designer-ash' ? 'The Ash Studio' : 'Middle West Studio',
+        source: 'studio',
+      }),
+    );
+    proposalsMock.mockReturnValue(
+      settled([
+        ORIGIN_AGREEMENT,
+        { ...SECOND_ORIGIN, designer_id: 'designer-ash' } as unknown as Proposal,
+      ]),
+    );
+
+    // The address names the Ash agreement, so that one carries `#door`.
+    renderDoor('prop-origin-2');
+
+    // The plate reads the first agreement's studio, as it always has.
+    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('Middle West Studio');
+
+    const ashDoor = document.querySelector('#door') as HTMLElement;
+    expect(
+      within(ashDoor).getByRole('heading', { name: 'Consultation agreement' }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(within(ashDoor).getByLabelText('Type your full name'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(within(ashDoor).getByRole('checkbox'));
+    const held = within(ashDoor).getByRole('button', { name: /^Sign/ });
+    jest.useFakeTimers();
+    fireEvent.pointerDown(held, { clientX: 4, clientY: 4 });
+    act(() => {
+      jest.advanceTimersByTime(HOLD_MS);
+    });
+    jest.useRealTimers();
+    await act(async () => {
+      fireEvent.pointerUp(held);
+    });
+
+    expect(within(ashDoor).getByTestId('door-receipt')).toHaveTextContent(
+      'The Ash Studio has your signature.',
+    );
   });
 });
