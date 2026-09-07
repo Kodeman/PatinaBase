@@ -124,3 +124,137 @@ tests learned the new prefix.
   a `status` of `signed` | `already_signed` | `agreement_void` |
   `invalid_link`, with `signedName` and `signedAt` on the first two. Raising
   with those tokens in the message works identically.
+
+---
+
+# Round 1 — adversarial review, fixes applied
+
+Findings S1, S3, S4 and S5 are addressed here. S2 is confirmed and left alone:
+it is not this lane's work.
+
+## S1 (blocker) — the signing token was reaching PostHog raw
+
+`/trade` had been registered in `middleware.ts` and `app-chrome.tsx` but not in
+`HEX_BEARER_IN_URL` in `apps/client-portal/src/lib/analytics/posthog.ts`, which
+is the fourth site a bearer prefix must be declared and the only scrub on the
+send path (`before_send: sanitizePostHogEvent`, autocapture left on). Every
+`$pageview` on the page — and every `client_making_action_*` event from the
+`HoldAction` this page is the first guest surface to mount — carried the raw
+64-hex token. What leaks is not a read capability but a LIVE SIGNING
+CREDENTIAL: anyone with the URL can sign the Trade Agreement as the sub.
+
+Fixed by adding `trade` to the alternation, plus two new cases in
+`posthog-privacy.test.ts` (the seventh prefix case, and a held-action event
+case) — the suite now enumerates all six hex prefixes. This is independent of
+the `design-build` flag and must land before the client-portal deploy.
+
+## S3 (major) — `revalidatePath` could eat the receipt it had just earned
+
+`actions.ts` copied `rfq/[token]/actions.ts`'s `revalidatePath` after a
+successful submit. That is safe for an RFQ, whose token stays live; it is not
+safe here, because §3.2 revokes the token in the same transaction as the
+signature. The Server Action's re-render of the current route would resolve the
+now-spent token to NULL and `notFound()` would replace the just-inked receipt.
+
+Removed. The receipt renders from the component's own state and the route is
+`force-dynamic`, so the call bought nothing even in the benign case.
+`actions.test.ts` now pins the absence (`expect(revalidatePath).not
+.toHaveBeenCalled()`) rather than its presence.
+
+## S5 (major) — the sign RPC's answer is now read failure-first
+
+The build sheet freezes resolve's DTO (I-4) but freezes no success shape for
+`sign_trade_agreement_by_token` — §3.2 names only the three failure
+classifications. The lane had invented a success shape and pinned it against
+itself, so a backend answering `{ ok: true }` or snake_case names would have
+printed "This link is no longer active." to a sub whose signature had just
+committed.
+
+The reading is inverted. A recognised failure word (`invalid_link`,
+`not_found`, `expired`, `revoked` → the dead-link sentence; `agreement_void`,
+`void`, `voided` → the withdrawn sentence), on a `status`, `outcome` or
+`result` key or as a bare string, is a failure. An empty answer is a failure.
+**Anything else the RPC handed back without raising is a committed signature**,
+whatever it named its keys — `signedName`/`signed_name` and
+`signedAt`/`signed_at` are both read, the typed name standing in when the
+receipt carries none. Five new cases in `actions.test.ts` cover snake_case, an
+`ok`-shaped answer, an `outcome`-keyed answer, and every failure word.
+
+This is hardening, not a substitute for the freeze. **Still owed before
+integration:** an I-3-style one-page freeze of this RPC's return shape, with
+either the action or the migration moved onto it.
+
+## S4 (major) — ESCALATED, not decided in-lane
+
+The build sheet contradicts itself and the lane had quietly picked a side:
+
+- §3.2 revokes a signed agreement's token inside the signing transaction, and
+  §687 lists `revoked` among `resolve_trade_agreement_link`'s NULL cases.
+- §4.5 types the DTO with `"state": "sent" | "signed"` and
+  `existingSignature | null`, and says an already-signed agreement shows "the
+  settled receipt: name, date, and nothing to press".
+- §8 step 16 requires that "a fresh load of the same URL still shows the
+  receipt" **and** that "a revoked-token URL 404s".
+
+Under §3.2, resolve can never answer for a signed agreement, so `state:
+'signed'` and `existingSignature` are unreachable in production, the
+`already_signed` classification can never fire (a replay hits a revoked token),
+and a sub who reopens their own signed link reads "Page not found" — which
+reads as if the signature vanished.
+
+**No code change makes both true, and this lane does not own the RPC.** What
+changed:
+
+- The contradiction is written into `page.tsx`'s header comment rather than
+  left as an in-lane assumption.
+- The e2e no longer pins the 404 for the re-open. It now asserts the part both
+  readings agree on — a re-open is never a second signable form — using
+  `getByText(/page not found/i).or(getByTestId('trade-agreement-receipt'))`.
+  Re-pin it to the single ruled horn once the ruling lands.
+- The DTO keys stay (I-4 freezes them) and
+  `trade-agreement-signature.tsx`'s `existingSignature` branch stays: it is
+  already correct for the other horn and needs no edit if the ruling goes that
+  way.
+
+**Ruling needed from the orchestrator, one of:**
+
+1. `resolve_trade_agreement_link` keeps answering read-only for a `signed`
+   agreement through its spent token — which is what makes §4.5's `state` and
+   `existingSignature` keys mean anything, and what step 16's first clause
+   describes; or
+2. §4.5's two keys and step 16's "still shows the receipt" sentence are struck,
+   and the 404 is the ruled behaviour.
+
+## S2 (blocker) — confirmed, and NOT this lane's work
+
+`pnpm --filter @patina/client-portal type-check` exits 2 on this branch with
+exactly two errors, both caused by the shared T0 commit appending
+`design_build` to `COMMERCIAL_DOCUMENT_KINDS`:
+
+```
+src/components/commercial-document-shell.tsx(26,7): error TS2741: Property 'design_build' is missing in type '{ design_services: string; service_addendum: string; furnishings_authorization: string; trade_scope: string; }' but required in type 'Record<"design_services" | "furnishings_authorization" | "service_addendum" | "design_build" | "trade_scope", string>'.
+src/components/threshold/door-gate.tsx(266,7): error TS2322: Type '"design_services" | "furnishings_authorization" | "service_addendum" | "design_build" | "trade_scope"' is not assignable to type 'MakingGateKind'.
+  Type '"design_build"' is not assignable to type 'MakingGateKind'.
+```
+
+Both files are client-lane pathspecs per build-sheet §2.4; neither is touched by
+this branch. Zero errors in `src/app/trade/**`, `middleware.ts`,
+`app-chrome.tsx` or `lib/analytics/posthog.ts`. Editing them here would collide
+with the client lane's own edit, so they are left alone. **The integration
+steward must re-run this gate after the client lane lands, before merging
+either branch.**
+
+## Gates, round 1
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @patina/client-portal type-check` | **FAIL, exit 2** — the two S2 errors above, both cross-lane, 0 in sub-lane files |
+| `pnpm --filter @patina/client-portal test` | **PASS** — 132 suites, 2136 tests (was 2130; +6 from S1 and S5) |
+| `pnpm --filter @patina/client-portal test:coverage` | **PASS** — 74.74 / 70.25 / 74.79 / 77.06 against the 70 / 60 / 70 / 70 floor |
+
+`tests/trade-agreement-link.spec.ts` still cannot run: its fixtures need the
+backend lane's migration, which does not exist yet on any stack.
+
+Advisory: `prettier --check` warns on every file this lane touched, including
+the two it only edited — `posthog.ts` at `main` warns identically, so the drift
+predates the wave and is not the lane's.
