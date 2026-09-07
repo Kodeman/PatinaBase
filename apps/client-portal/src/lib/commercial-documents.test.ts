@@ -930,22 +930,22 @@ describe('signature provenance (paper vs. on-screen)', () => {
     expect(bundle?.signatures[0]).toMatchObject({ signedOnPaper: false, paperSignedOn: null });
   });
 
-  /* Wave 2 note: a signature row carries no consent sentence across this
-     edge. The sentence she ticked is written into the signature's `metadata`
-     at insert, and the bundle RPC projects a signature's keys one by one
-     (00425 — raw metadata never crosses here), so nothing is read for it and
-     nothing is claimed. The pin that matters is the one above: a key the RPC
-     does not project must not appear on the DTO at all. */
+  /* R36 — the sentence she ticked crosses this edge, as its own projected
+     key. 00425's rule is unchanged and this is what keeping it looks like:
+     the RPC lifts `metadata.consentSentence` into a scalar of its own, and the
+     adapter reads THAT. A key the RPC does not project must not appear on the
+     DTO at all. */
   it('projects only the signature keys the bundle RPC actually sends', () => {
     const bundle = adaptCommercialDocumentBundle({
       document: { id: 'ds-w2-1', documentKind: 'design_services', commercialState: 'client_signed' },
       signatures: [{
         party: 'client', signerName: 'Jamie Client', signedAt: '2026-09-07T14:20:00Z',
         consentVersion: 'v1', documentFingerprint: 'fp-1',
-        metadata: { consentSentence: 'A sentence nobody projected.' },
+        consentSentence: 'I agree to these design-services terms.',
       }],
     });
     expect(Object.keys(bundle?.signatures[0] ?? {}).sort()).toEqual([
+      'consentSentence',
       'consentVersion',
       'documentFingerprint',
       'paperScanDocumentId',
@@ -955,6 +955,22 @@ describe('signature provenance (paper vs. on-screen)', () => {
       'signedOnPaper',
       'signerName',
     ]);
+    expect(bundle?.signatures[0].consentSentence).toBe(
+      'I agree to these design-services terms.',
+    );
+  });
+
+  it('reads the sentence off the projected key and never out of raw metadata', () => {
+    const bundle = adaptCommercialDocumentBundle({
+      document: { id: 'ds-w2-2', documentKind: 'design_services', commercialState: 'client_signed' },
+      signatures: [{
+        party: 'client', signerName: 'Jamie Client', signedAt: '2026-09-07T14:20:00Z',
+        consentVersion: 'v1', documentFingerprint: 'fp-1',
+        metadata: { consentSentence: 'A sentence nobody projected.' },
+      }],
+    });
+    expect(bundle?.signatures[0].consentSentence).toBeNull();
+    expect(Object.keys(bundle?.signatures[0] ?? {})).not.toContain('metadata');
   });
 });
 
