@@ -709,3 +709,182 @@ byte-identity still holds on the designer surface.
    migration drops, even when a still-later statement in the same file
    re-creates it. The net ACL is correct (00577 re-issues it, last), but the
    rule is now approximate rather than exact.
+
+## Re-gate 2 fixes
+
+Five findings from `integration-regate-2.md`, on branch `agreement/w2-integration`
+at code head `dc8ecf9a0`. Five commits, one per item, pathspec-staged; nothing
+pushed, nothing on Strata, no Worker deployed.
+
+| Finding | Commit | What changed |
+|---|---|---|
+| W2RG-02 | `10eca16d2` | `scripts/generate-legacy-grants.py` — the terminator is anchored on both edges, and the generator refuses a multi-function block |
+| W2RG-01 | `1285c1053` | `supabase/seed/00-legacy-grants.sql` regenerated |
+| W2RG-03, W2RG-04 | `d2ce940cf` | the two stale comments deleted |
+| W2RG-05 | `bc704a5f6` | `compose_agreement_consent` takes one part per money variant; the twelfth parity scenario added on both sides |
+
+### W2RG-02 · the split now tokenizes by signature
+
+`re.match(r"(?:FROM|TO)\b", …)` carried a trailing word boundary and no leading
+one, so at depth 0 it matched the `to` that ENDS `public.find_products_similar_to`
+immediately before its `(`. The scan truncated, the `all("(" in t …)` guard
+rejected the result, `split_function_targets` returned `None`, and the caller kept
+the whole statement — the silent fallback R31 exists to remove.
+
+The fix requires the character before the keyword to be a non-identifier
+character (`IDENT_CHARS`, which includes `$`), and separates the SCAN from the
+REWRITE: `scan_function_targets` returns `(head, targets, tail)` for any readable
+target list, `split_function_targets` rewrites only when every target carries its
+argument list. That separation is what lets the generator COUNT functions in a
+statement it cannot rewrite — Postgres allows `ON FUNCTION f` with no argument
+list, and 20 such statements exist across six migrations (00008, 00067, 00154,
+00155, 00160, 00161); each names exactly one function.
+
+Proved on 00484's two blocks:
+
+```
+--- REVOKE ALL PRIVILEGES ---   targets: 24   (the review's "25" over-counted by one;
+    public.is_comms_admin(uuid)                the source list holds 24)
+    …
+    public.find_products_similar_to(uuid, integer)      ← the one that broke the scan
+    …
+    public.enqueue_agent_task( text, jsonb, …, text )   ← 17 args, multi-line, split whole
+  tail: FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+        agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
+--- GRANT EXECUTE ---           targets: 13
+```
+
+The assertion is `assert_one_function_per_statement`, called by `main()` before a
+byte is written: every emitted statement matching `ON FUNCTION` must scan to
+exactly one target, else the generator raises and names the offenders. Run
+against the un-anchored terminator it names 00484's two blocks; against the
+fixed one the seed is written and
+
+```bash
+grep -cE '^  (GRANT|REVOKE)[^;]*ON FUNCTION [^;]*\), ' supabase/seed/00-legacy-grants.sql
+0
+```
+
+### W2RG-01 · the seed is current, and the two definer helpers are shut
+
+`python3 scripts/generate-legacy-grants.py` → **2 498 replayed statements** (was
+2 459): 00484's two whole-statement blocks become 37 per-function guarded blocks,
+and the four statements R32 and R34 added after the last regeneration land —
+
+```
++  REVOKE ALL ON FUNCTION public._agreement_studio_id(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
++  REVOKE ALL ON FUNCTION public.agreement_studio_context(uuid) FROM PUBLIC, anon, service_role;
++  GRANT EXECUTE ON FUNCTION public.agreement_studio_context(uuid) TO authenticated;
++  REVOKE ALL ON FUNCTION public._agreement_addendum_why(uuid) FROM PUBLIC, anon, authenticated, service_role;
+```
+
+Then `supabase db reset --workdir <this worktree>` (unsandboxed) — every migration
+through `00577`, all 36 seed files, clean. ACL probe on the reset stack:
+
+```
+_agreement_addendum_why(p_proposal_id uuid)               | postgres
+_agreement_studio_id(p_proposal_id uuid, p_actor uuid)    | postgres
+agreement_studio_context(p_proposal_id uuid)              | authenticated, postgres
+  (compare: _agreement_html_escape(text) | postgres   _agreement_money(numeric) | postgres)
+
+has_function_privilege(role, fn, 'EXECUTE'):
+  public._agreement_addendum_why(uuid)    anon f   authenticated f
+  public._agreement_studio_id(uuid,uuid)  anon f   authenticated f
+  public.agreement_studio_context(uuid)   anon f   authenticated t
+```
+
+The two SECURITY DEFINER helpers the migrations revoke are EXECUTE-able by
+neither `anon` nor `authenticated`; `agreement_studio_context` is
+`authenticated`-only, as 00576 writes it.
+
+### W2RG-03, W2RG-04 · the two stale comments
+
+`commercial-documents.ts` — the comment explaining `consentSentence`'s ABSENCE
+sat directly under the line R36 added to read it. Replaced with what the field
+now is (written at insert, projected as one scalar by the bundle, null on
+anything signed before R36).
+
+`threshold.spec.ts` — the OWED note appeared twice, at the head of the file
+(`⚠ THIS FIXTURE IS OWED`) and at the touchpoint. Both now say what
+`supabase/seed/the-client-page.sql` actually does: `…cb04` is laid down `sent`
+with no signature row (verified in the seed at `:596-666`), the only seeded
+client's page with a door to drive. The unconditional-by-design note is kept.
+
+### W2RG-05 · SQL moves to TS, and the twelfth scenario
+
+**Direction: SQL matches TS.** R18 refuses a second `rate_card`, `ceiling`,
+`retainer`, `cadence` or `procurement` outright, and a second CLIENT-VISIBLE
+fee basis (`flat`/`per_phase`) with it — so at most one part per money variant
+can ever reach either composer, and both directions leave the eleven scenarios
+byte-identical. SQL moves because one part per variant is the rule R18 already
+guarantees, and because the `FOR … LOOP` had no tiebreak between two rows of one
+variant: its output on the divergent set was not merely different from TS, it was
+unordered. `DISTINCT ON (ap.variant) … ORDER BY ap.variant, ap.position, ap.id`
+takes the lowest `position`, which is the part the TS side's position-ordered
+array hands `find()` first. Nothing in `composeConsentLine` changed but a comment.
+
+**The eleven are byte-identical.** The SQL suite pins six part-set literals
+(`nine`, `consultation`, `flat`, `per_phase`, `furnishings`, `legacy`) against the
+same strings the jest drift test pins, plus cases 14, 16 and 17. All pass
+unchanged.
+
+**The twelfth**, on both sides:
+
+- `agreement_fee_schedules_test.sql` case (18) — mints an agreement, saves
+  per-phase + one retainer through the RPC, proves the RPC REFUSES a second
+  retainer (`check_violation`, R18), then builds the unreachable set by INSERT
+  (the authored guard allows it while the proposal is draft), asserts two
+  retainer rows are on the table, and pins the sentence to the one-retainer
+  `per_phase` literal.
+- `consent-copy.test.ts` — "says a money term once when a part set carries two of
+  one variant", same set, same sentence.
+
+Case (18) is load-bearing: run against the pre-fix body extracted from
+`git show HEAD:…00577…`, it fails —
+
+```
+ERROR:  two retainers must say the term once, in the first part's words:
+```
+
+— and passes against the fix.
+
+### Gates, on the stack reset after both SQL edits
+
+```
+./scripts/run-sql-tests.sh            total 164 · green 143 · expected-fail 21 · unexpected 0
+                                      effective-green 164 / 164
+supabase/tests/commercial/agreement_fee_schedules_test.sql   PASS 1-3,5 · 4 · 6-8,11-12 · 9 · 10
+                                                             · 13 · 14 · 15 · 16 · 17 · 18   (18/18)
+supabase/tests/edge_api/public_sd_hardening_contract_test.sql   PASS (exit 0)
+supabase/tests/commercial/agreement_library_test.sql            PASS
+
+export SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+pnpm db:generate ; git diff --exit-code packages/supabase/src/database.types.ts
+                                      exit 0, no output — 36 072 lines, unchanged
+
+pnpm --filter @patina/supabase       type-check    clean, no output
+pnpm --filter @patina/client-portal  type-check    clean, no output
+pnpm --filter @patina/client-portal  test:coverage Test Suites 129 passed / 129
+                                                   Tests 2060 passed / 2060  (was 2059)
+                                                   Snapshots 1 passed
+                                                   the 70/60/70/70 floor did not trip
+pnpm --filter @patina/client-portal  test -- consent-copy.test.ts   52 passed / 52
+pnpm exec turbo build --filter=@patina/designer-portal^...          6/6 successful
+pnpm --filter @patina/designer-portal type-check   clean, no output
+```
+
+designer-portal owns no touched test: nothing under `apps/designer-portal/src`
+references `compose_agreement_consent`, `consentSentence` or `composeConsentLine`.
+
+### One flake seen, and cleared
+
+The FIRST full SQL run reported `unexpected-fail: 1` on
+`supabase/tests/billing/invoice_links_test.sql`, at
+`ASSERT count(*) = 2 FROM job_runs WHERE job_name = 'invoice-checkout-attempts-expire'
+AND status = 'succeeded' AND started_at > now() - interval '1 minute'`. Cause: the
+local pg_cron job of that name is scheduled `17 * * * *` and fired at
+`2026-09-07 18:17:00`, inside the test's own one-minute window, making the count 3.
+Re-run at 18:18 — green, exit 0. The second full suite run is the one reported
+above. Nothing in this fix touches billing, invoices or `job_runs`; the test races
+a live hourly cron on any local stack.
+
