@@ -30,36 +30,27 @@ import { Stamp, type StampState } from '@/components/threshold/instruments/stamp
 const LABEL_CLASS =
   'font-mono text-[10px] uppercase tracking-[0.14em] text-[#6B6259]';
 
-/* ── THE SNAPSHOT IS SOMEBODY ELSE'S MARKUP ──────────────────────────────────
+/* ── THE SNAPSHOT IS THE DOCUMENT, NOT A DRAFT OF IT ─────────────────────────
    The executed agreement is the ONE place this portal sets HTML it did not
-   write, and the strings inside it are part titles and part bodies a designer
-   typed. `public._render_agreement_snapshot_html` escapes every one of them on
-   the way in, and that escaping is the contract — but it is a contract kept in
-   a database function, on the far side of a deploy, and a keepsake rendered
-   inside the homeowner's signed-in session is the wrong place to trust a
-   single layer.
+   write, and the strings inside it are part titles and bodies a designer
+   typed. `public._render_agreement_snapshot_html` escapes every one of them
+   (& < > ") on the way in and emits no script, no style and no attribute a
+   designer's text can reach; the snapshot row is immutable and its hash is the
+   executed document's own fingerprint.
 
-   So the markup is made inert here as well, before it is set: no script or
-   style element, no frame or plugin element, no `on*` handler attribute, and
-   no `javascript:` URL. A snapshot the renderer escaped correctly passes
-   through this untouched — there is nothing in it for these rules to find.
+   That escaping is the guarantee, and it is deliberately the ONLY one. R12
+   makes this the homeowner's copy of the agreement AS EXECUTED: a rewrite on
+   the way to the screen — even a well-meant one — would print a document that
+   is not the one the mark below it attests, and no reader could tell. A
+   string-level scrub is worse than none here, because the escape chain leaves
+   `=` alone: an agreement whose prose says "phase one=Concept" is ordinary
+   text, and a pattern hunting attribute syntax eats it.
+
+   So the frozen markup is set exactly as the database composed it. What is
+   pinned instead, in `__tests__/page.test.tsx`, is that setting it changes
+   nothing and runs nothing, and `supabase/tests/commercial/
+   agreement_fee_schedules_test.sql` §7 holds the renderer to its escaping.
    ────────────────────────────────────────────────────────────────────────── */
-// Paired first, so a script's SOURCE does not survive as visible text on the
-// sheet once its tags are gone.
-const SCRIPT_BLOCKS = /<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi;
-const INERT_ELEMENTS =
-  /<\s*\/?\s*(script|style|iframe|object|embed|link|meta|base|form)\b[^>]*>/gi;
-const EVENT_ATTRIBUTES = /\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+)/gi;
-const SCRIPT_URLS =
-  /\s(?:href|src|xlink:href)\s*=\s*(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*'|javascript:[^\s"'>]*)/gi;
-
-export function inertSnapshotHtml(html: string): string {
-  return html
-    .replace(SCRIPT_BLOCKS, '')
-    .replace(INERT_ELEMENTS, '')
-    .replace(EVENT_ATTRIBUTES, '')
-    .replace(SCRIPT_URLS, '');
-}
 
 export interface RecordSheetProps {
   /** The studio's own name — the letterhead. Never Patina's. */
@@ -103,16 +94,6 @@ export interface RecordSheetProps {
   /** How she agreed, as a sentence. */
   consentSentence?: string | null;
   /**
-   * WHAT she agreed to — the consent line she actually ticked, as her
-   * signature's own metadata recorded it on the day (Wave 2, P6).
-   *
-   * Never re-composed from the agreement's parts at read time: the parts can
-   * be superseded by an addendum, and a record that quietly restates today's
-   * terms is a record of a signature nobody gave. Null on every signature
-   * written before the composer, which prints nothing here.
-   */
-  agreedSentence?: string | null;
-  /**
    * R12 — the agreement as it stood when the studio countersigned, frozen at
    * execution and never re-rendered. Server-composed HTML from the
    * client-visible parts; the keepsake styles it and adds nothing to it.
@@ -146,7 +127,6 @@ export function RecordSheet({
   signedName = null,
   signedOn = null,
   consentSentence = null,
-  agreedSentence = null,
   executedHtml = null,
   executedChecksum = null,
   releaseSentence = null,
@@ -373,19 +353,6 @@ export function RecordSheet({
               {consentSentence}
             </p>
           )}
-          {agreedSentence && (
-            <p
-              data-testid="record-agreed"
-              style={{
-                fontSize: '0.9rem',
-                lineHeight: 1.6,
-                marginTop: '0.5rem',
-                maxWidth: '52ch',
-              }}
-            >
-              {agreedSentence}
-            </p>
-          )}
         </section>
 
         {/* R12. THE AGREEMENT AS IT WAS EXECUTED, not as it reads today. The
@@ -399,13 +366,12 @@ export function RecordSheet({
             <div
               data-testid="record-executed"
               style={{ fontSize: '0.95rem', lineHeight: 1.6, marginTop: '0.75rem' }}
-              // The snapshot is server-composed by
+              // Set exactly as the database froze it: server-composed by
               // `_render_agreement_snapshot_html`, which escapes every
               // interpolated string and emits no script or style. The client
-              // never composes it and never edits it — and it is made inert
-              // here anyway, because one escaping layer on the far side of a
-              // deploy is not enough for the only markup this portal sets.
-              dangerouslySetInnerHTML={{ __html: inertSnapshotHtml(executedHtml) }}
+              // never composes it, never edits it, and — see the note at the
+              // head of this file — never rewrites it on the way to the sheet.
+              dangerouslySetInnerHTML={{ __html: executedHtml }}
             />
             {executedChecksum && (
               <p className={`${LABEL_CLASS} mt-4`} data-testid="record-executed-checksum">

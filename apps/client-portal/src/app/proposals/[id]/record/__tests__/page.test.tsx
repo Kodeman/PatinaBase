@@ -61,7 +61,6 @@ const BUNDLE: CommercialDocumentBundle = {
       signedOnPaper: false,
       paperSignedOn: null,
       paperScanDocumentId: null,
-      consentSentence: null,
     },
   ],
   furnishings: {
@@ -288,20 +287,22 @@ describe('/proposals/[id]/record — a refusal', () => {
   });
 });
 
-/* ── Wave 2: what she agreed to, and the agreement as executed ───────────────
-   Two additions to this sheet and nothing else. The sentence comes from her
-   own signature's metadata — never `compose_agreement_consent` at read time,
-   because an addendum moves the parts and a record that quietly restates
-   today's terms is a record of a signature nobody gave. The frozen HTML comes
-   from `agreement_execution_snapshots`, written once at countersign (R12).
+/* ── Wave 2: the agreement as executed ───────────────────────────────────────
+   ONE addition to this sheet: the frozen HTML from
+   `agreement_execution_snapshots`, written once at countersign and never
+   re-rendered (R12), under its own mark.
 
-   Absent, both print nothing at all: a pre-Wave-2 execution and an agreement
+   Absent, it prints nothing at all: a pre-Wave-2 execution and an agreement
    with no parts read exactly as this sheet has always read. No PDF, no
    download, no "snapshot pending".
-   ────────────────────────────────────────────────────────────────────────── */
 
-const COMPOSED_LINE =
-  'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.';
+   What she agreed to is deliberately NOT on this sheet in Wave 2 — the
+   sentence lives in the signature's `metadata` and the bundle RPC projects a
+   signature's keys one by one (00425), so there is nothing to print without a
+   ruled addition to that projection. A record must never re-compose it from
+   today's parts: an addendum moves the parts, and a record that quietly
+   restates today's terms is a record of a signature nobody gave.
+   ────────────────────────────────────────────────────────────────────────── */
 
 describe('/proposals/[id]/record — the composed agreement (Wave 2)', () => {
   it('says nothing about a snapshot when the execution predates one', async () => {
@@ -341,28 +342,14 @@ describe('/proposals/[id]/record — the composed agreement (Wave 2)', () => {
     );
   });
 
-  it('prints the sentence she ticked, beside how she signed', async () => {
-    bundleHook.mockReturnValue({
-      data: {
-        ...BUNDLE,
-        signatures: [{ ...BUNDLE.signatures[0], consentSentence: COMPOSED_LINE }],
-      },
-      isLoading: false,
-      isError: false,
-    });
+  it('keeps saying how she signed, which is the fact this sheet carries', async () => {
     await renderPage();
 
-    expect(screen.getByTestId('record-agreed')).toHaveTextContent(COMPOSED_LINE);
-    // How she signed and what she agreed to are two different facts; the sheet
-    // has always carried the first and does not lose it to the second.
     expect(screen.getByTestId('record-consent')).toHaveTextContent(
       'Signed electronically by typed name: Harper Vale.',
     );
-  });
-
-  it('prints no agreed sentence for a signature written before the composer', async () => {
-    await renderPage();
-
+    // And says nothing about WHAT she agreed to — there is no projected
+    // sentence to print, and it is never re-composed from today's parts.
     expect(screen.queryByTestId('record-agreed')).not.toBeInTheDocument();
   });
 
@@ -403,29 +390,28 @@ describe('/proposals/[id]/record — the composed agreement (Wave 2)', () => {
 
     expect(
       screen.getByText(
-        'By signing, you accept the terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
+        'By signing, you accept the services, per-phase fee schedule, and terms in “Cedar Lane — Design Services”. The agreement becomes effective only after the studio countersigns.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/signed role rates/)).not.toBeInTheDocument();
   });
 
-  /* The snapshot is the only markup this portal sets rather than writes, and
-     the strings inside it are part titles and bodies a designer typed.
-     `_render_agreement_snapshot_html` escapes them — but that escaping lives in
-     a database function on the far side of a deploy, and this sheet renders
-     inside her signed-in session. What is pinned here is that nothing
-     executable survives the set, whatever the snapshot carries. */
-  it('renders a snapshot inert, whatever it carries', async () => {
+  /* R12 — THE DOCUMENT, NOT A DRAFT OF IT. The snapshot is composed and
+     escaped once by `_render_agreement_snapshot_html`, and the mark beneath it
+     is the executed document's own fingerprint. The sheet therefore sets it
+     exactly as it came and rewrites nothing: prose is ordinary text, and `=`
+     is not in the escape chain, so an agreement that says "phase one=Concept"
+     must arrive on the keepsake saying it. */
+  it('sets the frozen agreement exactly as the database wrote it', async () => {
+    const frozen =
+      '<h2>Phases</h2>' +
+      '<p>Phase one=Concept, phase two=Documentation.</p>' +
+      '<p>Delivery online=yes, and fees are billed per phase.</p>';
     bundleHook.mockReturnValue({
       data: {
         ...BUNDLE,
         executionSnapshot: {
-          html:
-            '<h2>Services</h2>' +
-            '<p><img src="x" onerror="globalThis.__patina_xss = true"> Interior design.</p>' +
-            '<script>globalThis.__patina_xss = true;</script>' +
-            '<p><a href="javascript:globalThis.__patina_xss = true">Terms</a></p>' +
-            '<iframe src="https://example.invalid"></iframe>',
+          html: frozen,
           documentHash: 'a1b2c3d4e5f6' + '0'.repeat(52),
           createdAt: '2026-08-05T18:31:00Z',
         },
@@ -436,18 +422,37 @@ describe('/proposals/[id]/record — the composed agreement (Wave 2)', () => {
     await renderPage();
 
     const executed = screen.getByTestId('record-executed');
-    // The agreement itself still reads.
-    expect(executed).toHaveTextContent('Services');
-    expect(executed).toHaveTextContent('Interior design.');
+    expect(executed.innerHTML).toBe(frozen);
+    expect(executed).toHaveTextContent('Phase one=Concept, phase two=Documentation.');
+    expect(executed).toHaveTextContent('Delivery online=yes, and fees are billed per phase.');
+  });
 
-    // Nothing executable is in the document.
-    expect(executed.querySelectorAll('script')).toHaveLength(0);
-    expect(executed.querySelectorAll('iframe')).toHaveLength(0);
-    expect(executed.querySelector('img')?.getAttribute('onerror')).toBeNull();
-    expect(executed.querySelector('a')?.getAttribute('href')).toBeNull();
-    expect(executed.innerHTML).not.toContain('onerror');
-    expect(executed.innerHTML).not.toContain('javascript:');
-    // And the script's source did not survive as visible text on the keepsake.
-    expect(executed.textContent ?? '').not.toContain('__patina_xss');
+  /* Setting markup is not running it: a script element inserted through
+     `innerHTML` never executes, which is why the keepsake can hold the frozen
+     document whole without a rewrite standing between it and the reader. */
+  it('runs nothing when it sets the snapshot', async () => {
+    const marker = '__patina_snapshot_ran';
+    delete (globalThis as Record<string, unknown>)[marker];
+    bundleHook.mockReturnValue({
+      data: {
+        ...BUNDLE,
+        executionSnapshot: {
+          html:
+            '<h2>Services</h2>' +
+            `<script>globalThis.${marker} = true;</script>` +
+            '<p>Interior design services.</p>',
+          documentHash: 'a1b2c3d4e5f6' + '0'.repeat(52),
+          createdAt: '2026-08-05T18:31:00Z',
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await renderPage();
+
+    expect((globalThis as Record<string, unknown>)[marker]).toBeUndefined();
+    expect(screen.getByTestId('record-executed')).toHaveTextContent(
+      'Interior design services.',
+    );
   });
 });
