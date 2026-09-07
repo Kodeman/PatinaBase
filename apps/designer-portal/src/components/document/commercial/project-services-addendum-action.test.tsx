@@ -4,6 +4,7 @@ import { ProjectServicesAddendumAction } from "./project-services-addendum-actio
 const mockPush = jest.fn();
 const mockMutateAsync = jest.fn();
 const mockCopyParts = jest.fn();
+const mockBoundProposal = jest.fn();
 const mockRememberRoomOrigin = jest.fn();
 const mockAddendumComposed = jest.fn();
 
@@ -21,10 +22,19 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
     mutateAsync: mockMutateAsync,
     isPending: false,
   }),
-  useCopyAgreementPartsFromAuthority: () => ({
-    mutateAsync: mockCopyParts,
-    isPending: false,
-  }),
+}));
+
+/** The copy is the package's hook (R23 — one data layer), and it binds the
+ *  proposal at construction. The mock records what it was bound to, because
+ *  that is the id the act is about to write onto. */
+jest.mock("@patina/supabase", () => ({
+  useCopyAgreementPartsFromAuthority: (proposalId: string) => {
+    mockBoundProposal(proposalId);
+    return {
+      mutateAsync: (why: string | null) => mockCopyParts(proposalId, why),
+      isPending: false,
+    };
+  },
 }));
 
 jest.mock("@/hooks/use-auth", () => ({
@@ -169,17 +179,20 @@ describe("ProjectServicesAddendumAction · composed from parts (P7)", () => {
     await waitFor(() =>
       expect(mockMutateAsync).toHaveBeenCalledWith("Design services addendum"),
     );
-    expect(mockCopyParts).toHaveBeenCalledWith({
-      proposalId: "addendum-proposal-1",
-      why: "Added the study to the scope",
-    });
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/drafting/addendum-proposal-1"),
+    );
+    expect(mockCopyParts).toHaveBeenCalledWith(
+      "addendum-proposal-1",
+      "Added the study to the scope",
+    );
+    expect(mockBoundProposal).toHaveBeenCalledWith("addendum-proposal-1");
     expect(mockAddendumComposed).toHaveBeenCalledWith({
       project_id: "project-1",
       proposal_id: "addendum-proposal-1",
       has_why: true,
     });
     expect(mockRememberRoomOrigin).toHaveBeenCalledWith("/doc/project-1");
-    expect(mockPush).toHaveBeenCalledWith("/drafting/addendum-proposal-1");
   });
 
   it("treats an empty why as no why — the line is optional", async () => {
@@ -190,13 +203,12 @@ describe("ProjectServicesAddendumAction · composed from parts (P7)", () => {
     );
 
     await waitFor(() =>
-      expect(mockCopyParts).toHaveBeenCalledWith({
-        proposalId: "addendum-proposal-1",
-        why: null,
-      }),
+      expect(mockCopyParts).toHaveBeenCalledWith("addendum-proposal-1", null),
     );
-    expect(mockAddendumComposed).toHaveBeenCalledWith(
-      expect.objectContaining({ has_why: false }),
+    await waitFor(() =>
+      expect(mockAddendumComposed).toHaveBeenCalledWith(
+        expect.objectContaining({ has_why: false }),
+      ),
     );
   });
 
@@ -240,6 +252,39 @@ describe("ProjectServicesAddendumAction · composed from parts (P7)", () => {
       await screen.findByText("this addendum has no origin agreement to copy"),
     ).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("retries onto the draft it already made — never a second addendum", async () => {
+    mockCopyParts.mockRejectedValueOnce({
+      message: "this addendum has no origin agreement to copy",
+    });
+    render(<ProjectServicesAddendumAction projectId="project-1" />);
+    clickAct();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create the addendum" }),
+    );
+    expect(
+      await screen.findByText("this addendum has no origin agreement to copy"),
+    ).toBeInTheDocument();
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+
+    // The title it was minted with is the title it keeps — the field says so
+    // rather than pretending a retry can rename it.
+    expect(screen.getByLabelText("Addendum title")).toBeDisabled();
+    expect(
+      screen.getByText("The draft is made. Rename it in the Contract Room."),
+    ).toBeInTheDocument();
+
+    mockCopyParts.mockResolvedValue(7);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create the addendum" }),
+    );
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/drafting/addendum-proposal-1"),
+    );
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockCopyParts).toHaveBeenCalledTimes(2);
   });
 
   it("starts a second addendum with a clean why", async () => {

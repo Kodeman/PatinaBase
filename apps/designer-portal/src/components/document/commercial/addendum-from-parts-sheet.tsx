@@ -29,6 +29,10 @@ export const WHY_HELP =
   "One line, kept with the addendum. Your client reads it beside the change.";
 export const WHY_PLACEHOLDER = "Added the study to the scope";
 export const WHY_MAX = 200;
+/** The draft exists; only the parts are still to come across. Retitling it is
+ *  the room's act from here, not this sheet's. */
+export const TITLE_FROZEN_NOTE =
+  "The draft is made. Rename it in the Contract Room.";
 
 export function AddendumFromPartsSheet({
   open,
@@ -37,6 +41,7 @@ export function AddendumFromPartsSheet({
   authorName,
   pending = false,
   error,
+  titleFrozen = false,
   onConfirm,
 }: {
   open: boolean;
@@ -46,6 +51,9 @@ export function AddendumFromPartsSheet({
   authorName: string | null | undefined;
   pending?: boolean;
   error?: string | null;
+  /** A draft has already been created by this act — a retry writes onto it,
+   *  so the title it was minted with is the title it keeps. */
+  titleFrozen?: boolean;
   onConfirm: (input: { title: string; why: string | null }) => void;
 }) {
   const [title, setTitle] = useState(defaultTitle);
@@ -65,16 +73,24 @@ export function AddendumFromPartsSheet({
   return (
     <DocSheet open={open} onClose={onClose} title="Create services addendum">
       <div className="mx-auto max-w-[460px] space-y-5">
-        <label className={LABEL}>
-          Title
-          <Input
-            className="mt-2"
-            aria-label="Addendum title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            maxLength={200}
-          />
-        </label>
+        <div>
+          <label className={LABEL}>
+            Title
+            <Input
+              className="mt-2"
+              aria-label="Addendum title"
+              value={title}
+              disabled={titleFrozen}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={200}
+            />
+          </label>
+          {titleFrozen && (
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
+              {TITLE_FROZEN_NOTE}
+            </p>
+          )}
+        </div>
 
         <div>
           <label className={LABEL}>

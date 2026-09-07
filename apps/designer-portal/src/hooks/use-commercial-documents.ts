@@ -896,51 +896,6 @@ export function useCreateServiceAddendum(projectId: string) {
   });
 }
 
-/**
- * P7 — the addendum inherits the agreement it amends.
- *
- * `create_service_addendum` is unchanged in Wave 2: it mints the draft and
- * stops. This is the second half — the active authority's part set copied into
- * that draft, verbatim and in order, with the designer's one-line `why` kept
- * beside the change (the 00569 pattern). The RPC calls
- * `upsert_agreement_parts` on the way out, so the money projection and the
- * change history both run from the same act.
- *
- * App-local, beside `useCreateServiceAddendum`, because the two are one flow
- * and the frozen cross-lane interface assigns no package hook to this RPC.
- */
-export function useCopyAgreementPartsFromAuthority() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationKey: ["copy-agreement-parts-from-authority"],
-    mutationFn: async (input: {
-      proposalId: string;
-      why: string | null;
-    }): Promise<number> => {
-      const { data, error } = await getSupabase().rpc(
-        "copy_agreement_parts_from_authority",
-        {
-          p_proposal_id: input.proposalId,
-          p_why: input.why,
-        },
-      );
-      if (error) throw error;
-      return Number(data ?? 0);
-    },
-    onSuccess: (_count, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: commercialDocumentKeys.bundle(input.proposalId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["agreement-parts", input.proposalId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["agreement-part-events", input.proposalId],
-      });
-    },
-  });
-}
-
 export function useProjectBillingAuthority(projectId: string, enabled = true) {
   return useQuery({
     queryKey: commercialDocumentKeys.authority(projectId),
