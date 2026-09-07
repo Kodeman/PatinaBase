@@ -115,3 +115,133 @@ export interface StudioAgreementDefaults {
   updatedBy: string | null;
   updatedAt: string | null;
 }
+
+/**
+ * Wave 2 additions — "The Agreement, Composed": the Library (P4), fee
+ * schedules (P5), and change history (P8). Frozen cross-lane interface:
+ * build/waves/w2/build-sheet.md §2 "Cross-lane interfaces". Every export
+ * above this point is Wave 1 and stays byte-identical.
+ */
+
+// ── P5 — the four new W2 schedule payloads. The other eleven variants'
+// payloads (rate_card, ceiling, retainer, cadence, flat, per_phase,
+// procurement, pricing_basis, draws, allowances) are declared above (W1).
+// All four are record-only in W2 (R9) — no terms projection, no authority
+// column, no consent fragment.
+
+/** percent_of_cost and percent_of_spend share one editor with a basis
+ *  toggle (build-sheet §4.1) — record only in W2 (R9). */
+export interface PercentPayload {
+  basis: 'cost' | 'spend';
+  percent: number | null;
+}
+
+/** cost_plus — markup on net plus a disclosure line. Record only in W2 (R9). */
+export interface CostPlusPayload {
+  markupPercent: number | null;
+  disclosure?: string;
+}
+
+/** day_rate — a rate plus a minimum-days floor. Record only in W2 (R9). */
+export interface DayRatePayload {
+  dayRateCents: number | null;
+  minimumDays: number | null;
+}
+
+/** package — a named flat offering. Record only in W2 (R9). */
+export interface PackagePayload {
+  name: string;
+  priceCents: number | null;
+  includes: string[];
+}
+
+// ── P4 — the Library: `agreement_templates` + `studio_agreement_parts`.
+
+/**
+ * One entry of `agreement_templates.parts` (jsonb array). Either an inline
+ * part body (how the seeded templates work) or a reference into
+ * `studio_agreement_parts` by `partKey` (how a studio template composes from
+ * the Library). `required` / `clientVisible`, when present on the entry,
+ * override the referenced part's defaults (materialize_agreement_template,
+ * build-sheet §3.2 step 4).
+ */
+export interface AgreementTemplatePartEntry {
+  partKey?: string;
+  kind: AgreementPartKind;
+  variant?: AgreementScheduleVariant | null;
+  title: string;
+  payload: Record<string, unknown>;
+  required?: boolean;
+  clientVisible?: boolean;
+}
+
+/** `public.agreement_templates` (W2) — the Library's Template object (R7).
+ *  `kind` here is ownership (seeded|studio) — distinct from a part's kind;
+ *  see the table comment in the migration banner. */
+export interface AgreementTemplate {
+  id: string;
+  templateKey: string;
+  kind: 'seeded' | 'studio';
+  studioId: string | null;
+  class: AgreementTemplateClass;
+  title: string;
+  parts: AgreementTemplatePartEntry[];
+  consentKey: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `public.studio_agreement_parts` (W2) — the Library's Part object (R7). */
+export interface StudioAgreementPart {
+  id: string;
+  studioId: string;
+  kind: AgreementPartKind;
+  variant: AgreementScheduleVariant | null;
+  partKey: string;
+  title: string;
+  payload: Record<string, unknown>;
+  requiredDefault: boolean;
+  clientVisibleDefault: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── P8 — change history on parts: `agreement_part_events`.
+
+/** `agreement_part_events.action` — code-resident vocabulary, CHECKed in SQL
+ *  (the set is closed and small, unlike `AgreementPartKind`). */
+export const AGREEMENT_PART_EVENT_ACTIONS = [
+  'added', 'edited', 'removed', 'reordered', 'renamed', 'materialized',
+] as const;
+export type AgreementPartEventAction = (typeof AGREEMENT_PART_EVENT_ACTIONS)[number];
+
+/** `public.agreement_part_events` (W2) — studio-only change history under
+ *  the open part in the room. Never reaches the client bundle (R8). */
+export interface AgreementPartEvent {
+  id: string;
+  proposalId: string;
+  partId: string | null;
+  partKey: string;
+  action: AgreementPartEventAction;
+  actor: string | null;
+  actorName: string | null;
+  why: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  at: string;
+}
+
+// ── P6 — the client's copy from parts: `agreement_execution_snapshots` (R12).
+
+/** `public.agreement_execution_snapshots` (W2, R12) — the frozen HTML the
+ *  client keeps at execution. No PDF, no client-side render stored, no
+ *  re-render on read. `null` on the bundle until countersign. */
+export interface AgreementExecutionSnapshot {
+  proposalId: string;
+  html: string;
+  partSet: Record<string, unknown>[];
+  documentHash: string;
+  createdAt: string;
+}
