@@ -35,6 +35,7 @@ export * from "./events";
 export * from "./proposal";
 export * from "./commercial";
 export * from "./agreement";
+export * from "./agreement-copy";
 export * from "./project";
 export * from "./project-v2";
 export * from "./ffe";

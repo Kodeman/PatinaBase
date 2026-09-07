@@ -5,31 +5,34 @@
  *
  * One spec, two implementations: this file and
  * `apps/client-portal/src/components/agreement-parts-body.tsx` render the same
- * table (build sheet §4.5 / §5.2) in their own registers. If you change a
- * sentence here, change it there — the two surfaces are the same instrument
- * seen from two chairs, and a drift between them is a drift in the agreement.
+ * table (build sheet §4.5 / §5.2) in their own registers. Every sentence the
+ * homeowner reads comes from `AGREEMENT_PART_COPY` (@patina/types) so the two
+ * surfaces cannot drift by retyping — a drift between them is a drift in the
+ * agreement.
+ *
+ * The layout rule is the client shell's, too: a part always prints its
+ * heading, and a leaf with nothing in it prints the recorded line rather than
+ * vanishing. The designer sees the same page the client will.
  *
  * What this file does NOT render: the header, the signature block, and the
  * closing "Furnishings, freight, tax…" notice. Those are the Core, they live
  * in `service-agreement-preview.tsx`, and they are the same on both paths.
  */
 
-import type { AgreementPart } from "@patina/types";
 import {
-  partKindLabel,
+  AGREEMENT_PART_COPY,
+  agreementCadenceText,
+  agreementDepositLine,
+  agreementRetainerActivation,
+  type AgreementPart,
+} from "@patina/types";
+import {
   readBody,
   readCents,
   readItems,
   readPhases,
   readRoles,
 } from "../rooms/drafting/agreement/part-kinds";
-
-const CADENCE_LABELS: Record<string, string> = {
-  monthly: "Monthly",
-  biweekly: "Every two weeks",
-  milestone: "At named milestones",
-  per_draw: "At each draw",
-};
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat("en-US", {
@@ -52,11 +55,18 @@ function MutedLine({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The one line every leaf this build does not draw falls back to — the
+ *  client shell's sentence, imported rather than retyped. */
+function RecordedLine() {
+  return <MutedLine>{AGREEMENT_PART_COPY.recorded}</MutedLine>;
+}
+
 /**
- * A plain function, not a component, on purpose: the caller needs to know
- * whether there IS a body before it prints the heading, and a JSX element is
- * truthy even when the component inside returns null. A part with nothing
- * written in it renders nothing at all — never a bare heading.
+ * The body under a part's heading, or `null` when the part has a heading and
+ * nothing else — a clause nobody has written yet, an empty list, a rate card
+ * with no roles. The heading itself is printed by the caller either way, which
+ * is the client shell's rule: a part the studio kept is a part the client can
+ * see is there.
  */
 function renderPartBody(
   part: AgreementPart,
@@ -98,7 +108,7 @@ function renderPartBody(
 
   if (part.kind !== "schedule") {
     // `phases`, and anything a later wave adds. Never raw JSON.
-    return <MutedLine>Recorded with this agreement.</MutedLine>;
+    return <RecordedLine />;
   }
 
   switch (part.variant) {
@@ -134,7 +144,7 @@ function renderPartBody(
       if (cents === null) {
         return (
           <p className="text-[12.5px] leading-relaxed text-[var(--text-body)]">
-            No ceiling — professional time is billed as it is worked.
+            {AGREEMENT_PART_COPY.ceilingUncapped}
           </p>
         );
       }
@@ -147,26 +157,33 @@ function renderPartBody(
 
     case "retainer": {
       const cents = readCents(payload.cents);
-      if (cents === null) return null;
+      if (cents === null) return <RecordedLine />;
       return (
-        <p className="text-[12.5px] text-[var(--color-charcoal)]">
-          {money(cents, currency)}
-          {payload.activationPolicy === "retainer_paid"
-            ? " · work begins when paid"
-            : " · agreement activates immediately"}
-        </p>
+        <>
+          <p className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
+            {money(cents, currency)}
+          </p>
+          <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
+            {agreementRetainerActivation(payload.activationPolicy)}
+          </p>
+        </>
       );
     }
 
     case "cadence": {
       const cadence =
         typeof payload.cadence === "string" ? payload.cadence : "";
-      if (!cadence) return null;
       return (
-        <p className="text-[12.5px] text-[var(--color-charcoal)]">
-          {CADENCE_LABELS[cadence] ?? cadence}. Additional work requires written
-          authorization before it can be invoiced.
-        </p>
+        <>
+          {cadence && (
+            <p className="font-heading text-[1.05rem] capitalize text-[var(--color-charcoal)]">
+              {agreementCadenceText(cadence)}
+            </p>
+          )}
+          <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
+            {AGREEMENT_PART_COPY.cadenceNote}
+          </p>
+        </>
       );
     }
 
@@ -179,12 +196,10 @@ function renderPartBody(
           ["Terms of sale", payload.termsOfSale],
         ] as const
       ).filter(([, value]) => typeof value === "string" && value.trim());
-      if (percent === null && extras.length === 0) return null;
+      if (percent === null && extras.length === 0) return <RecordedLine />;
       return (
         <div className="space-y-1 text-[12.5px] text-[var(--color-charcoal)]">
-          {percent !== null && (
-            <p>{percent}% deposit on each furnishings authorization</p>
-          )}
+          {percent !== null && <p>{agreementDepositLine(percent)}</p>}
           {extras.map(([label, value]) => (
             <p key={label} className="text-[12px] text-[var(--color-mocha)]">
               {label} · {String(value)}
@@ -196,7 +211,7 @@ function renderPartBody(
 
     case "flat": {
       const cents = readCents(payload.cents);
-      if (cents === null) return null;
+      if (cents === null) return <RecordedLine />;
       return (
         <p className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
           {money(cents, currency)}
@@ -206,7 +221,7 @@ function renderPartBody(
 
     case "per_phase": {
       const phases = readPhases(payload).filter((phase) => phase.label.trim());
-      if (phases.length === 0) return null;
+      if (phases.length === 0) return <RecordedLine />;
       return (
         <div className="divide-y divide-[var(--doc-ink-border)] border-y border-[var(--doc-ink-border)]">
           {phases.map((phase) => (
@@ -229,12 +244,7 @@ function renderPartBody(
     default:
       // One of the eight variants Wave 1 does not author. It is part of the
       // instrument, so it is named; it is not opened, so it says only that.
-      return (
-        <MutedLine>
-          Recorded with this agreement ·{" "}
-          {partKindLabel(part.kind, part.variant)}
-        </MutedLine>
-      );
+      return <RecordedLine />;
   }
 }
 
@@ -262,7 +272,7 @@ function AttachmentLeaf({
         // Display only in W1 — nothing is recorded. W2/P6 makes it an
         // acknowledgment stored in the signature's metadata.
         <p className="mt-2 text-[12px] text-[var(--color-charcoal)]">
-          I received this
+          {AGREEMENT_PART_COPY.attachmentAcknowledgment}
         </p>
       )}
     </section>
@@ -289,16 +299,12 @@ export function AgreementPartsBody({
 
   return (
     <>
-      {sections.map((part) => {
-        const body = renderPartBody(part, currency);
-        if (body === null) return null;
-        return (
-          <section key={part.id}>
-            <PartHeading>{part.title}</PartHeading>
-            {body}
-          </section>
-        );
-      })}
+      {sections.map((part) => (
+        <section key={part.id} data-part-key={part.partKey}>
+          <PartHeading>{part.title}</PartHeading>
+          {renderPartBody(part, currency)}
+        </section>
+      ))}
       {attachments.map((part, index) => (
         <AttachmentLeaf
           key={part.id}

@@ -1,5 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import type { AgreementPart } from "@patina/types";
+import {
+  AGREEMENT_PART_COPY,
+  agreementCadenceText,
+  agreementDepositLine,
+  type AgreementPart,
+} from "@patina/types";
 import { AgreementPartsBody } from "./agreement-parts-body";
 import { ServiceAgreementPreview } from "./service-agreement-preview";
 import type {
@@ -187,7 +192,7 @@ describe("AgreementPartsBody", () => {
       screen.getByRole("heading", { name: "Wormhole" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Recorded with this agreement."),
+      screen.getByText("Recorded with your agreement."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/should never print/)).not.toBeInTheDocument();
   });
@@ -203,11 +208,86 @@ describe("AgreementPartsBody", () => {
       }),
     ]);
     expect(
-      screen.getByText("Recorded with this agreement · Draws"),
+      screen.getByRole("heading", { name: "Draw schedule" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Recorded with your agreement."),
     ).toBeInTheDocument();
   });
 
-  it("prints no heading for a part with nothing written in it", () => {
+  // ── §4.5's ten rows, asserted as the literal sentences the client shell
+  // prints. These four are what D5 found drifted; the fixture below pins the
+  // shared constants to the same literals so neither surface can move alone.
+
+  it("prints the retainer's activation sentence, not a designer shorthand", () => {
+    renderParts([
+      part({
+        partKey: "patina.retainer",
+        kind: "schedule",
+        variant: "retainer",
+        title: "Retainer",
+        payload: { cents: 250_000, activationPolicy: "retainer_paid" },
+      }),
+    ]);
+    expect(screen.getByText("$2,500")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Design work begins after the fully executed agreement and retainer payment.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("prints the other activation policy's sentence", () => {
+    renderParts([
+      part({
+        partKey: "patina.retainer",
+        kind: "schedule",
+        variant: "retainer",
+        title: "Retainer",
+        payload: { cents: 250_000, activationPolicy: "immediate" },
+      }),
+    ]);
+    expect(
+      screen.getByText("Due under the terms of the fully executed agreement."),
+    ).toBeInTheDocument();
+  });
+
+  it("prints the cadence as the client reads it, with the authorization note", () => {
+    renderParts([
+      part({
+        partKey: "patina.cadence",
+        kind: "schedule",
+        variant: "cadence",
+        title: "Billing cadence",
+        payload: { cadence: "biweekly" },
+      }),
+    ]);
+    expect(screen.getByText("biweekly")).toBeInTheDocument();
+    expect(screen.queryByText("Every two weeks")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Additional work requires written authorization before it can be invoiced.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("prints the deposit line the client portal prints", () => {
+    renderParts([
+      part({
+        partKey: "patina.deposit",
+        kind: "schedule",
+        variant: "procurement",
+        title: "Furnishings deposit",
+        payload: { depositPercent: 50 },
+      }),
+    ]);
+    expect(screen.getByText("50% deposit")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/on each furnishings authorization/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the heading of a part with nothing written in it", () => {
     renderParts([
       part({
         partKey: "patina.exclusions",
@@ -215,8 +295,54 @@ describe("AgreementPartsBody", () => {
         title: "Exclusions",
         payload: { items: [] },
       }),
+      part({
+        partKey: "patina.retainer",
+        kind: "schedule",
+        variant: "retainer",
+        title: "Retainer",
+        payload: {},
+      }),
     ]);
-    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    // The client shell prints the heading either way — a part the studio kept
+    // is a part the client can see is there.
+    expect(
+      screen.getByRole("heading", { name: "Exclusions" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Retainer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Recorded with your agreement."),
+    ).toBeInTheDocument();
+  });
+});
+
+// The fixture both surfaces assert against. If a sentence changes it changes
+// here, in @patina/types, and both renderers move together or neither does.
+describe("AGREEMENT_PART_COPY — the shared sentences", () => {
+  it("is the client shell's wording, verbatim", () => {
+    expect(AGREEMENT_PART_COPY).toEqual({
+      ceilingUncapped:
+        "No ceiling — professional time is billed as it is worked.",
+      retainerOnPayment:
+        "Design work begins after the fully executed agreement and retainer payment.",
+      retainerOnExecution:
+        "Due under the terms of the fully executed agreement.",
+      cadenceNote:
+        "Additional work requires written authorization before it can be invoiced.",
+      recorded: "Recorded with your agreement.",
+      attachmentAcknowledgment: "I received this",
+    });
+  });
+
+  it("opens the underscore in a cadence and leaves the case to the page", () => {
+    expect(agreementCadenceText("per_draw")).toBe("per draw");
+    expect(agreementCadenceText("monthly")).toBe("monthly");
+  });
+
+  it("names the deposit without naming the authorization", () => {
+    expect(agreementDepositLine(0)).toBe("0% deposit");
+    expect(agreementDepositLine(50)).toBe("50% deposit");
   });
 });
 
