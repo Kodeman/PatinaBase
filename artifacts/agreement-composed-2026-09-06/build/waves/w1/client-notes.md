@@ -553,3 +553,205 @@ git status --short -- apps/client-portal/src/app/api/proposals/          → emp
   in it is now moot: `agreementPartsMatchTerms`'s agreement with the real
   `_project_agreement_terms` is no longer something the integration steward has
   to check, because the predicate no longer exists.
+
+---
+
+# Round 4 review fixes — R21 lands on the client's paper
+
+Findings C-1 … C-5 of `client-review-r4.md`. Two are code (C-1, C-2, both
+blockers, both fixed here); three are rulings or fixtures this lane cannot
+reach from inside `apps/client-portal/**` and are escalated below with the
+exact interface each needs.
+
+## C-1 (blocker, fixed) — zero is an amount nobody wrote
+
+R21: *"The composed homeowner body never prints `$0` or `0%` for an unset money
+part; it prints today's 'Not yet set'."* `payloadCents` separated only NULL
+from a finite number, so a zero reached the page as a figure. It is reachable
+on the **first** composed agreement, not an edge case:
+`proposal_service_terms.retainer_amount_cents` is `NOT NULL DEFAULT 0`
+(00412:74) and `materialize_standard_parts` seeds `patina.retainer`
+unconditionally from it.
+
+`agreement-parts-body.tsx` gains one predicate —
+
+```ts
+/** R21 — a written figure is a positive one. */
+function isWritten(cents: number | null): cents is number {
+  return cents !== null && cents > 0;
+}
+```
+
+— and one presentational leaf, `NotYetSet`, carrying today's words in today's
+treatment (`type-data-large … italic text-[var(--text-muted)]`, lifted from
+`commercial-document-shell.tsx`'s ceiling and retainer rows).
+
+| Leaf | NULL | `0` (or negative) | `> 0` |
+|---|---|---|---|
+| `CeilingLeaf` | *No ceiling — professional time is billed as it is worked.* (uncapped, 00575/F-2) | **Not yet set** | the figure |
+| `RetainerLeaf` | *Recorded with your agreement.* | **Not yet set**, and the activation sentence is withheld — today's `retainerIsSet &&` guard | figure + activation sentence |
+| `FlatLeaf` | *Recorded with your agreement.* | **Not yet set** | the figure |
+| `ProcurementLeaf` | no deposit line | no deposit line (never `0% deposit`) | `{n}% deposit` |
+
+NULL and `0` stay distinct on the ceiling exactly as the finding directs: NULL
+is a *stated absence* of a cap, `0` is a cap nobody has typed. `ProcurementLeaf`
+collapses them, because a percent has no "Not yet set" twin on today's paper —
+today's client body renders no deposit at all — and `0% deposit` would be a
+term the studio never wrote. Its `RecordedLine` fallback now triggers on
+`!depositIsWritten && notes.length === 0`, so a zero-percent part with no
+other field still says it is on the paper.
+
+## C-2 (blocker, fixed) — an empty part is nothing, not a naked heading
+
+R21: *"Empty clause/list parts render nothing, not a naked heading."* Today's
+body omits the whole section (`{terms.terms && …}`, `{terms.deliverables.length
+> 0 && …}`); the composed body drew the `<h2>` and gated only the body. Also
+reachable on the first composed agreement — `patina.terms` is seeded as
+`jsonb_build_object('body', COALESCE(v_terms.terms, ''))` over a nullable
+column, and deliverables/exclusions from arrays defaulting to `[]`.
+
+- `ClauseLeaf` returns `null` when the body is empty.
+- `ListLeaf` returns `null` when no item survives the text filter.
+- `RateCardLeaf` gains the `RecordedLine` fallback `PerPhaseLeaf` already had —
+  a rate card is a money part (R4) and keeps its title.
+- `PartSection` now **calls** its leaf rather than mounting it, and returns
+  `null` when the leaf drew nothing — otherwise an empty `<section>` would keep
+  its `data-testid="agreement-part"` and its band of the body's `space-y-8`,
+  which is a naked gap rather than a naked heading. None of the leaves holds
+  state or calls a hook, so calling them is safe; the comment in the file says
+  so at the call site.
+
+## C-3, C-4 (majors) — escalated, unchanged in this worktree
+
+Both are the same seam and both are **outside `apps/client-portal/**` at the
+frozen §5.2 / §2.4 interface**. This lane already tried to solve C-3 from
+inside the client in `708489b50` and correctly reverted it in `b7a5c0946`; it
+is not attempting it again on its own authority.
+
+- **C-3 — the kill switch does not reach the homeowner.** Parts rows survive
+  `agreement-parts` being switched off and W1 has no un-compose path
+  (`patina.services` / `patina.terms` are `required: true`). Flag-off is
+  byte-identical on the client only for a document that never had parts.
+- **C-4 — hiding every part reverts the homeowner to the full legacy body.**
+  The bundle's parts edge filters on `client_visible`, so `parts.length` is
+  both "is this composed" and "how many parts survived visibility". Hide one
+  and it disappears (R8, intended); hide all and today's seven-section body
+  returns, printing the very figures the studio just hid. Latent in W1
+  (`materialize_standard_parts` seeds all nine `client_visible = true`) and
+  live the moment W2 ships the toggle.
+
+**What the client will consume the moment it is ruled** — one boolean on the
+bundle, adapted with the file's existing defensive helpers and defaulted so a
+pre-00575 RPC keeps today's answer:
+
+```ts
+// on CommercialDocumentBundle
+composed: boolean;            // ← from the RPC; true once the proposal has ≥ 1 parts row,
+                              //   independent of how many survive client_visible
+// in DesignServicesBody
+if (bundle.composed) return <AgreementPartsBody parts={bundle.parts} currency={terms.currency} />;
+```
+
+Under that shape a composed agreement with every part hidden renders the
+composed body with nothing in it but the closing boundary — the studio's
+choice, honoured — instead of un-hiding the whole legacy body. It is a
+one-line change here; it is a `supabase/**` change there, and it needs the
+orchestrator's ruling first because §5.2 is the frozen cross-lane branch.
+
+**Standing on the record either way** (unchanged from round 2): the client must
+never gate on the `agreement-parts` flag. A PostHog flag resolves against
+whoever is looking; a homeowner is a different person entity, and in the one
+case it would matter it would hide clauses from the person signing a document
+whose fingerprint hashes them (F-1).
+
+R17 is the other half of C-3 and is still absent from the backend branch —
+`grep -n "agreement_projection\|agreement_composed" .codex/worktrees/agent-agr-w1-backend/supabase/migrations/00575_agreement_parts.sql` returns nothing at
+backend head `b04a686ef`. Backend lane's, not this one's.
+
+## C-5 (major) — not delivered, and not deliverable from this lane
+
+Build sheet §6.6's named client e2e assertion is still `test.fixme(` at
+`apps/client-portal/tests/threshold.spec.ts:449`. It needs 00575 applied to the
+local stack **and** a seed laying down both a `proposal_service_terms` row and
+parts beside `supabase/seed/the-client-page.sql:95-118`. This lane may not
+reset or seed the shared stack (`stack-notice.md`), so the fixture cannot
+exist here. The integration steward owns both halves; the item should not be
+signed off as delivered until `:449` runs. What does run is the flag-off half
+at `:392` — an agreement opens and carries **no** parts body.
+
+## Considered and deliberately left alone
+
+- `RateCardLeaf`'s per-role figure and `PerPhaseLeaf`'s per-phase figure still
+  print `$0` for a zero row. Those are **rows inside** a money part, not unset
+  money parts, and today's legacy body prints a zero rate row identically
+  (`money(rate.hourlyRateCents)`, unguarded) — so guarding them here would
+  break the parity the wave is built on. The round-4 finding names four leaves;
+  these are not among them. Recorded so the next reviewer sees it was a
+  decision, not an oversight.
+- `AttachmentLeaf` still draws its rule and lettered eyebrow for an attachment
+  with no body. An attachment is a lettered artifact of the agreement, not a
+  section of its prose; R21 names clause and list. W1 seeds no attachments.
+- The designer twin
+  (`.codex/worktrees/agent-agr-w1-designer/apps/designer-portal/src/components/document/commercial/agreement-parts-body.tsx`)
+  needs the identical C-1/C-2 change. It is **not** touched from here — the
+  designer lane owns that worktree. If the two land unevenly the surfaces drift,
+  which is the exact failure §4.5's shared spec table exists to prevent.
+
+## Gates re-run (round 4 fixes)
+
+`cd` does not persist between this agent's Bash calls; the gates ran as
+`pnpm --dir <worktree> --filter @patina/client-portal …`, and the banner names
+the worktree path.
+
+```
+pnpm --dir <wt> --filter @patina/client-portal type-check
+  > @patina/client-portal@0.1.0 type-check
+    /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-client/apps/client-portal
+  > tsc --noEmit
+  (clean — no diagnostics)
+
+pnpm --dir <wt> --filter @patina/client-portal test -- --ci \
+  src/components/__tests__/commercial-document-shell.test.tsx
+  Test Suites: 1 passed, 1 total
+  Tests:       67 passed, 67 total
+  Snapshots:   1 passed, 1 total   ← the flag-off byte-identity snapshot, still unregenerated
+
+pnpm --dir <wt> --filter @patina/client-portal test -- --ci --coverage
+  Test Suites: 129 passed, 129 total
+  Tests:       1987 passed, 1987 total     (1978 + 9 new)
+  Snapshots:   1 passed, 1 total
+  All files                     73.96 / 69.26 / 74.01 / 76.28   (floor 70/60/70/70 — clears)
+  agreement-parts-body.tsx     100.00 / 91.66 / 100.00 / 100.00
+  commercial-documents.ts       92.72 / 86.47 / 100.00 /  95.36
+  commercial-document-shell.tsx 75.49 / 78.63 /  89.65 /  78.49
+
+pnpm --dir <wt> --filter @patina/client-portal test -- --ci \
+  src/components/threshold/__tests__/consent-copy.test.ts
+  Tests: 27 passed, 27 total          (the sign route is still genuinely untouched)
+
+git diff --stat -- apps/client-portal
+  .../__tests__/commercial-document-shell.test.tsx   | 130 +++++++++++++++++--
+  .../src/components/agreement-parts-body.tsx        | 125 ++++++++++++------
+  2 files changed, 220 insertions(+), 35 deletions(-)
+
+git status --short -- apps/client-portal/src/app/api/proposals \
+  apps/client-portal/src/components/__tests__/__snapshots__ \
+  apps/client-portal/tests
+  (empty — sign route, flag-off snapshot and the e2e spec all untouched)
+```
+
+The nine new jest cases: four zero-figure cases (ceiling, retainer, flat,
+deposit), one zero-percent-with-terms case, one whole freshly-composed
+nine-part set that prints no figure anywhere, two empty-prose cases (clause,
+list), and one empty rate card. The existing "survives a malformed payload on
+every leaf" case was rewritten rather than added to — under R21 its unreadable
+clause and list now draw nothing, so it asserts three sections where it asserted
+five, plus that the two prose titles are absent.
+
+## Not re-run this round
+
+- `tests/threshold.spec.ts`. Untouched by this round (`git status --short`
+  above), and its runnable half asserts a stack with nothing composed carries
+  no parts body — an answer no render change can move. Booting :3002 against
+  the shared stack for an untouched file was not worth the collision risk.
+- Everything in the earlier "Not verified" lists still stands.
