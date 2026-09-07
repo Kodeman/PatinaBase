@@ -13,11 +13,13 @@
 -- sets must be indistinguishable. If they ever diverge, the money rail has
 -- two implementations and the one the guards enforce is a coin toss.
 --
--- Then R5: a removed part is ABSENT rather than sticky; only the nine
--- patina.* keys write the money row — a custom schedule part, even one
--- carrying cents, is recorded and hashed and projects nothing; and a standard
--- key is not enough on its own — a part must have the SHAPE its key promises,
--- so a clause keyed patina.ceiling stays prose.
+-- Then R5: a removed part is ABSENT rather than sticky; the money row is read
+-- by SHAPE (kind + variant) under whatever key the composition gave the part,
+-- because the composer mints `custom.<uuid>` for everything a designer adds
+-- (N1) — with exactly one part of each money shape allowed, so nothing is
+-- ever ranked; a variant with no Wave-1 column (flat, per_phase, …) is
+-- recorded and hashed and projects nothing; and the shape is REQUIRED, so a
+-- clause keyed patina.ceiling stays prose however many cents it names.
 --
 -- Last, the flag-off door: upsert_design_services_draft still turns an omitted
 -- or JSON-null ceiling into 0, exactly as 00422 did.
@@ -257,15 +259,49 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- (6)-(7) R5 — ONLY THE NINE PATINA KEYS PROJECT.
+-- (6)-(7) R5 — WHAT PROJECTS IS A SHAPE, AND THERE IS ONE OF EACH.
+--
+-- (6) A money part under the composer's own `custom.<uuid>` key projects: the
+--     rail mints a fresh key for everything a designer adds, so a projection
+--     keyed on the patina.* names would print the figure on the client's page
+--     and write nothing to the money row (N1).
+-- (7) A SECOND part of the same money shape is refused instead — the money
+--     row is never left picking between two ceilings.
+-- Variants outside the five that project — flat, per_phase, percent_of_cost —
+-- are recorded and hashed and reach the money row not at all.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 DO $$
-DECLARE v_before jsonb; v_after jsonb; v_custom uuid := extensions.gen_random_uuid();
+DECLARE v_before jsonb; v_after jsonb; v_err text; v_custom uuid := extensions.gen_random_uuid();
 BEGIN
   v_before := pg_temp.terms_shape('a6300000-0000-4000-8000-00000000000b');
 
-  -- (6) a custom part carrying cents
+  -- (7) two ceilings — the seeded one and a studio-keyed second — is refused,
+  -- and nothing is written.
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a6300000-0000-4000-8000-00000000000b',
+      jsonb_build_array(
+        jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+          'title', 'Services', 'required', true,
+          'payload', jsonb_build_object('body', 'Full-service interior design.')),
+        jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+          'partKey', 'patina.ceiling', 'title', 'Ceiling',
+          'payload', jsonb_build_object('cents', 2400000)),
+        jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+          'partKey', 'studio.second_ceiling', 'title', 'An internal cap',
+          'payload', jsonb_build_object('cents', 111))
+      )
+    );
+    ASSERT false, 'a second ceiling must be refused, not silently ranked';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement carries only one ceiling',
+    format('duplicate refusal: %L', v_err);
+  ASSERT pg_temp.terms_shape('a6300000-0000-4000-8000-00000000000b') = v_before,
+    'a refused upsert writes nothing to the money row';
+
+  -- (6) the money parts, under the composer's keys
   PERFORM public.upsert_agreement_parts(
     'a6300000-0000-4000-8000-00000000000b',
     jsonb_build_array(
@@ -292,35 +328,45 @@ BEGIN
         'title', 'Terms', 'required', true,
         'payload', jsonb_build_object(
           'body', 'Billed at actual hours against the signed ceiling.')),
-      -- A one-off money-shaped part. Recorded, hashed, projecting nothing.
+      -- The retainer the designer added from the rail, under the key the rail
+      -- minted. It IS the engagement's retainer.
       jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
-        'partKey', 'custom.' || v_custom::text, 'title', 'A side retainer',
+        'partKey', 'custom.' || v_custom::text, 'title', 'Retainer',
         'payload', jsonb_build_object(
-          'cents', 9900000, 'activationPolicy', 'immediate')),
-      -- (7) and a SECOND ceiling under a studio key
-      jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
-        'partKey', 'studio.second_ceiling', 'title', 'An internal cap',
-        'payload', jsonb_build_object('cents', 111))
+          'cents', 9900000, 'activationPolicy', 'retainer_paid')),
+      -- A flat fee: a real schedule variant with nowhere on the money row to
+      -- land until R9's Wave-2 columns exist. Recorded, hashed, projecting
+      -- nothing.
+      jsonb_build_object('kind', 'schedule', 'variant', 'flat',
+        'partKey', 'studio.flat_uplift', 'title', 'Concept fee',
+        'payload', jsonb_build_object('cents', 350000))
     )
   );
 
-  v_after := pg_temp.terms_shape('a6300000-0000-4000-8000-00000000000b');
-  ASSERT v_after = v_before, format(
-    'R5: a custom schedule part must write NOTHING to the money row. before: %s ||| after: %s',
-    v_before, v_after);
   ASSERT (SELECT t.retainer_amount_cents FROM public.proposal_service_terms t
-          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 0,
-    'a custom retainer part must not become the engagement''s retainer';
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 9900000,
+    'N1: a retainer under the composer''s key IS the engagement''s retainer';
+  ASSERT (SELECT t.retainer_activation_policy FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 'retainer_paid',
+    'N1: and the policy stated beside it travels with it';
   ASSERT (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
           WHERE t.proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 2400000,
-    'the patina.ceiling value stands against a second ceiling under another key';
+    'the one ceiling is the ceiling';
+  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+          WHERE proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 3,
+    'the rate card projects its three roles';
 
-  -- They ARE recorded, and they ARE hashed — recorded is not the same as ignored.
+  -- The flat fee reaches no column, because Wave 1 has none for it.
+  v_after := pg_temp.terms_shape('a6300000-0000-4000-8000-00000000000b');
+  ASSERT NOT (v_after::text LIKE '%350000%'),
+    format('R9: a flat variant has no Wave-1 column to land in: %s', v_after);
+
+  -- Every part IS recorded, and IS hashed — recorded is not the same as read.
   ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
           WHERE proposal_id = 'a6300000-0000-4000-8000-00000000000b') = 7,
-    'the custom parts are stored on the document';
+    'the composed parts are stored on the document';
 
-  RAISE NOTICE 'PASS 6-7: only the nine patina keys reach the money row (R5)';
+  RAISE NOTICE 'PASS 6-7: money reads by shape under any key, one of each, and only the five that have a column (R5/R9)';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

@@ -16,12 +16,17 @@
 --   (4)  R4. An agreement that bills time needs a ceiling; one that does not
 --        bill time may be uncapped, and an uncapped agreement sends, signs,
 --        countersigns and reads back as uncapped rather than as exhausted (F-2).
---   (5)  A client never touches the parts table. Their only edge is the bundle,
---        which shows client-visible parts and nothing else.
---   (6)  The projection, the R4 floor and the send refusal all read the SAME
---        one rate part (patina.role_rates) — a rate card under another key
---        projects nothing and demands nothing.
---   (7)  F-2's fourth reader: a billable hour logged against an UNCAPPED
+--   (5)  A client never touches the parts table, and neither does the studio:
+--        the table grants SELECT and the RPC is the only write door (N4).
+--        The client's edge is the bundle, client-visible parts and no more.
+--   (6)  N1. MONEY IS READ BY SHAPE, NOT BY KEY. The composer mints
+--        `custom.<uuid>` for every part added from the rail, so the
+--        projection, the R4 floor and the send refusal all read kind +
+--        variant under whatever key the composition gave them — and one of
+--        each money shape, so the money row never picks between two.
+--   (7)  N3. R4's floor is the same height at every door: the parts write,
+--        the seeding of the standard parts, and send.
+--   (8)  F-2's fourth reader: a billable hour logged against an UNCAPPED
 --        authority is authorized, not parked forever.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -329,38 +334,110 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- (13)-(15) RLS. Co-member reads and writes; outsider sees nothing and may
---           write nothing; the client never touches the table at all.
+-- (13)-(15) RLS AND GRANTS. The co-member READS the table and writes it only
+--           through the RPC; the outsider reaches nothing at all; the client
+--           never touches the table.
+--
+--           N4: the write grant is withheld from `authenticated` on purpose.
+--           The money projection and the document fingerprint both live
+--           INSIDE upsert_agreement_parts, so a direct UPDATE would move the
+--           figure the client signs on the rendered page without moving the
+--           figure countersign snapshots into the billing authority — two
+--           parties bound to different numbers, refused by nothing.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
 DO $$ BEGIN PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000001'); END $$;
 
 DO $$
-DECLARE v_seen integer; v_touched integer; v_err text;
+DECLARE v_seen integer; v_touched integer; v_err text; v_ceiling integer; v_digest text;
 BEGIN
-  -- (13) the co-member is the studio
+  -- (13) the co-member is the studio: it reads every part …
   PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000002');
   SELECT count(*) INTO v_seen FROM public.proposal_agreement_parts
   WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001';
   ASSERT v_seen = 9, format('a co-member must read all nine parts, saw %s', v_seen);
-  UPDATE public.proposal_agreement_parts SET title = 'Services'
-  WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001' AND part_key = 'patina.services';
-  GET DIAGNOSTICS v_touched = ROW_COUNT;
-  ASSERT v_touched = 1, 'a co-member must be able to edit a part';
   PERFORM pg_temp.reset_role();
+
+  -- … and writes none of them directly. THE N4 PROBE: the ceiling part edited
+  -- straight on the table would have moved the digest and left the money row
+  -- holding the old figure.
+  v_ceiling := (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
+                WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000001');
+  v_digest := pg_temp.fingerprint('a5300000-0000-4000-8000-000000000001');
+
+  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000002');
+  v_err := NULL;
+  BEGIN
+    UPDATE public.proposal_agreement_parts
+    SET payload = jsonb_build_object('cents', 99000000)
+    WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001'
+      AND part_key = 'patina.ceiling';
+    ASSERT false, 'a co-member must not be able to edit a part directly';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err IS NOT NULL, 'the direct co-member UPDATE must be refused';
+
+  v_err := NULL;
+  BEGIN
+    INSERT INTO public.proposal_agreement_parts (
+      proposal_id, position, kind, part_key, title
+    ) VALUES (
+      'a5300000-0000-4000-8000-000000000001', 60, 'clause', 'custom.sideload', 'Sideload'
+    );
+    ASSERT false, 'a co-member must not be able to add a part directly';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err IS NOT NULL, 'the direct co-member INSERT must be refused';
+
+  v_err := NULL;
+  BEGIN
+    DELETE FROM public.proposal_agreement_parts
+    WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001'
+      AND part_key = 'patina.exclusions';
+    ASSERT false, 'a co-member must not be able to remove a part directly';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err IS NOT NULL, 'the direct co-member DELETE must be refused';
+  PERFORM pg_temp.reset_role();
+
+  ASSERT pg_temp.fingerprint('a5300000-0000-4000-8000-000000000001') = v_digest,
+    'N4: no direct write may move the digest the client signs';
+  ASSERT (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000001')
+         IS NOT DISTINCT FROM v_ceiling,
+    'N4: the money row is unmoved because nothing was written';
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001') = 9,
+    'the nine parts stand exactly as the RPC left them';
+
+  -- The RPC is the door, and it is open to the same co-member.
+  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000002');
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-000000000001',
+    (SELECT jsonb_agg(jsonb_build_object(
+       'kind', ap.kind, 'variant', ap.variant, 'partKey', ap.part_key,
+       'title', CASE WHEN ap.part_key = 'patina.services' THEN 'Services' ELSE ap.title END,
+       'payload', ap.payload, 'required', ap.required,
+       'clientVisible', ap.client_visible
+     ) ORDER BY ap.position)
+     FROM public.proposal_agreement_parts ap
+     WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000001')
+  );
+  PERFORM pg_temp.reset_role();
+  ASSERT (SELECT ap.title FROM public.proposal_agreement_parts ap
+          WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000001'
+            AND ap.part_key = 'patina.services') = 'Services',
+    'a co-member composes through the RPC';
 
   -- (14) the outsider is nobody
   PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000003');
   SELECT count(*) INTO v_seen FROM public.proposal_agreement_parts
   WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001';
   ASSERT v_seen = 0, format('an outsider must see no parts, saw %s', v_seen);
-  -- Two independent walls stand between the outsider and this row, and the
-  -- one that fires first is guard_commercial_authored_child: it is SECURITY
-  -- INVOKER, so its own `proposals` read runs under the outsider's RLS, sees
-  -- nothing, and refuses in the freeze guard's words before the parts table's
-  -- WITH CHECK is ever evaluated. Either refusal is correct; what matters is
-  -- that no row lands, so this asserts the refusal and not its errcode.
+  -- Three independent walls now stand between the outsider and this row — the
+  -- withheld grant, the RLS policy, and guard_commercial_authored_child. What
+  -- matters is that no row lands, so this asserts the refusal, not its code.
   BEGIN
     INSERT INTO public.proposal_agreement_parts (
       proposal_id, position, kind, part_key, title
@@ -375,14 +452,22 @@ BEGIN
     SELECT 1 FROM public.proposal_agreement_parts ap
     WHERE ap.part_key = 'custom.trespass'
   ), 'the outsider INSERT must leave no row behind';
-  UPDATE public.proposal_agreement_parts SET title = 'Hijacked'
-  WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001';
-  GET DIAGNOSTICS v_touched = ROW_COUNT;
-  ASSERT v_touched = 0, 'an outsider UPDATE must reach no rows';
-  DELETE FROM public.proposal_agreement_parts
-  WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001';
-  GET DIAGNOSTICS v_touched = ROW_COUNT;
-  ASSERT v_touched = 0, 'an outsider DELETE must reach no rows';
+  v_err := NULL;
+  BEGIN
+    UPDATE public.proposal_agreement_parts SET title = 'Hijacked'
+    WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001';
+    GET DIAGNOSTICS v_touched = ROW_COUNT;
+    ASSERT v_touched = 0, 'an outsider UPDATE must reach no rows';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  v_err := NULL;
+  BEGIN
+    DELETE FROM public.proposal_agreement_parts
+    WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001';
+    GET DIAGNOSTICS v_touched = ROW_COUNT;
+    ASSERT v_touched = 0, 'an outsider DELETE must reach no rows';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
   PERFORM pg_temp.reset_role();
 
   -- (15) the client's edge is the bundle, never the table
@@ -396,7 +481,7 @@ BEGIN
           WHERE proposal_id = 'a5300000-0000-4000-8000-000000000001') = 9,
     'the nine parts must still stand after the RLS probes';
 
-  RAISE NOTICE 'PASS 13-15: the studio composes, the outsider cannot, the client reads elsewhere';
+  RAISE NOTICE 'PASS 13-15: the studio composes through the RPC only, the outsider not at all, the client reads elsewhere';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -789,42 +874,124 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- (22) A RATE CARD UNDER A NON-STANDARD KEY. The projection reads exactly one
---      rate part (patina.role_rates), so _agreement_requires_rate_card must
---      read the same one — otherwise the document owes role rates that nothing
---      will ever project, and it can never be sent.
+-- (22) THE COMPOSER'S OWN KEYS. N1: the rail mints `custom.<uuid>` for every
+--      part a designer adds, so if the money projection read the nine
+--      patina.* names, every rate card, ceiling, retainer, cadence and
+--      deposit composed from the rail would render on the client's page and
+--      reach the money row not at all — and the document would execute into
+--      a billing authority with no rates, parking every billable hour in
+--      'pending_authorization' forever.
+--
+--      Money is read by SHAPE. This case composes exactly what the rail
+--      emits — every money part under a custom key — and asserts the figures
+--      land, that the floor and the send refusal read the same shapes, and
+--      that a second part of one shape is refused rather than picked between.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
-SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000006', 'The trade-rate agreement');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000006', 'The composed agreement');
 
 DO $$
+DECLARE
+  v_err text;
+  v_rate_key text := 'custom.' || extensions.gen_random_uuid()::text;
+  v_ceiling_key text := 'custom.' || extensions.gen_random_uuid()::text;
+  v_retainer_key text := 'custom.' || extensions.gen_random_uuid()::text;
+  v_cadence_key text := 'custom.' || extensions.gen_random_uuid()::text;
+  v_deposit_key text := 'custom.' || extensions.gen_random_uuid()::text;
+  v_prose jsonb;
+  v_money jsonb;
 BEGIN
-  PERFORM public.upsert_agreement_parts(
-    'a5300000-0000-4000-8000-000000000006',
-    jsonb_build_array(
-      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
-        'title', 'Services', 'required', true,
-        'payload', jsonb_build_object('body', 'A fixed scope, for a fixed fee.')),
-      -- A rate card the studio keeps for its own reference, under its own key.
-      jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
-        'partKey', 'custom.trade_rates', 'title', 'Trade rates',
-        'payload', jsonb_build_object('roles', jsonb_build_array(
-          jsonb_build_object('roleName', 'Millworker', 'hourlyRateCents', 12500, 'sortOrder', 0)))),
-      jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
-        'title', 'Terms', 'required', true,
-        'payload', jsonb_build_object('body', 'Payable on the agreed cadence.'))
-    )
+  v_prose := jsonb_build_array(
+    jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+      'title', 'Services', 'required', true,
+      'payload', jsonb_build_object('body', 'Full-service interior design.')),
+    jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+      'title', 'Terms', 'required', true,
+      'payload', jsonb_build_object('body', 'Billed at actual hours.'))
+  );
+  v_money := jsonb_build_array(
+    jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+      'partKey', v_rate_key, 'title', 'Role rates',
+      'payload', jsonb_build_object('roles', jsonb_build_array(
+        jsonb_build_object('roleName', 'Principal', 'hourlyRateCents', 22500, 'sortOrder', 0)))),
+    jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+      'partKey', v_ceiling_key, 'title', 'Ceiling',
+      'payload', jsonb_build_object('cents', 2400000)),
+    jsonb_build_object('kind', 'schedule', 'variant', 'retainer',
+      'partKey', v_retainer_key, 'title', 'Retainer',
+      'payload', jsonb_build_object(
+        'cents', 500000, 'creditRule', 'credited', 'activationPolicy', 'retainer_paid')),
+    jsonb_build_object('kind', 'schedule', 'variant', 'cadence',
+      'partKey', v_cadence_key, 'title', 'Billing cadence',
+      'payload', jsonb_build_object('cadence', 'biweekly')),
+    jsonb_build_object('kind', 'schedule', 'variant', 'procurement',
+      'partKey', v_deposit_key, 'title', 'Furnishings deposit',
+      'payload', jsonb_build_object('depositPercent', 25))
   );
 
-  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+  -- (22a) A composer-keyed rate card with no ceiling meets the same floor a
+  -- patina-keyed one meets. It used to sail through.
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a5300000-0000-4000-8000-000000000006',
+      v_prose || jsonb_build_array(v_money->0)
+    );
+    ASSERT false, 'a composer-keyed rate card with no ceiling must be refused';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement that bills time needs a ceiling',
+    format('N1: the floor must read the shape, not the key: %L', v_err);
+
+  -- (22b) Two ceilings, however keyed, is not a document the money row can
+  -- read. It is refused in the designer's words, not the table's.
+  v_err := NULL;
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a5300000-0000-4000-8000-000000000006',
+      v_prose || v_money || jsonb_build_array(
+        jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+          'partKey', 'studio.second_ceiling', 'title', 'An internal cap',
+          'payload', jsonb_build_object('cents', 111)))
+    );
+    ASSERT false, 'a second ceiling must be refused';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement carries only one ceiling',
+    format('duplicate refusal: %L', v_err);
+  ASSERT (SELECT count(*) FROM public.proposal_agreement_parts
           WHERE proposal_id = 'a5300000-0000-4000-8000-000000000006') = 0,
-    'a rate card under a custom key projects no role rates (R5)';
+    'a refused upsert leaves no parts behind';
+
+  -- (22c) The whole composition, every money part under the rail's own key.
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-000000000006', v_prose || v_money);
+
+  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000006') = 1,
+    'N1: a rate card the designer added must project its rate';
+  ASSERT (SELECT r.hourly_rate_cents FROM public.proposal_service_rates r
+          WHERE r.proposal_id = 'a5300000-0000-4000-8000-000000000006') = 22500,
+    'the figure on the page is the figure in the money row';
   ASSERT (SELECT t.billing_ceiling_cents FROM public.proposal_service_terms t
-          WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000006') IS NULL,
-    'the R4 floor must not demand a ceiling for rates that never project';
-  ASSERT NOT public._agreement_requires_rate_card('a5300000-0000-4000-8000-000000000006'),
-    'the refusal and the projection must read the same one part';
+          WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000006') = 2400000,
+    'N1: a composer-keyed ceiling must become the ceiling';
+  ASSERT (SELECT t.retainer_amount_cents FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000006') = 500000,
+    'N1: a composer-keyed retainer must become the retainer';
+  ASSERT (SELECT t.retainer_activation_policy FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000006') = 'retainer_paid',
+    'N1: and its activation policy travels with it';
+  ASSERT (SELECT t.billing_cadence FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000006') = 'biweekly',
+    'N1: a composer-keyed cadence must become the cadence';
+  ASSERT (SELECT t.furnishings_deposit_percent FROM public.proposal_service_terms t
+          WHERE t.proposal_id = 'a5300000-0000-4000-8000-000000000006') = 25,
+    'N1: a composer-keyed deposit must become the deposit percent';
+  ASSERT public._agreement_requires_rate_card('a5300000-0000-4000-8000-000000000006'),
+    'the send refusal reads the same rate card the projection read';
+  ASSERT NOT public._agreement_floor_unmet('a5300000-0000-4000-8000-000000000006'),
+    'a capped hourly composition meets the floor';
 END $$;
 
 SELECT pg_temp.send_agreement('a5300000-0000-4000-8000-000000000006');
@@ -832,8 +999,127 @@ DO $$
 BEGIN
   ASSERT (SELECT commercial_state FROM public.proposals
           WHERE id = 'a5300000-0000-4000-8000-000000000006') = 'sent',
-    'an agreement whose only rate card is a custom part must still be sendable';
-  RAISE NOTICE 'PASS 22: projection, R4 floor and send refusal all read patina.role_rates';
+    'the composed agreement sends';
+  RAISE NOTICE 'PASS 22: money is read by shape — the composer''s own keys project, and one of each';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (24) N3 — THE FLOOR STANDS AT EVERY DOOR OUT OF DRAFT. Q3's exact route:
+--      a co-member clears the ceiling on the terms row while the document is
+--      a draft (proposal_service_terms_studio_rw, 00412:318 — case 23 does
+--      this too), materialize_standard_parts lays that state out as parts,
+--      and the document SENDS, because send only ever asked whether rate ROWS
+--      existed. Seeding still lays it out — the room must be able to show a
+--      studio the state it is in — but nothing lets it out of draft, and
+--      nothing lets the composition be saved that way either.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000008', 'The cleared-ceiling agreement');
+
+DO $$
+DECLARE v_err text; v_touched integer; v_seeded jsonb;
+BEGIN
+  PERFORM pg_temp.assume_role('a5000000-0000-4000-8000-000000000001');
+  UPDATE public.proposal_service_terms SET billing_ceiling_cents = NULL
+  WHERE proposal_id = 'a5300000-0000-4000-8000-000000000008';
+  GET DIAGNOSTICS v_touched = ROW_COUNT;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_touched = 1, 'the studio may clear the ceiling on its own draft';
+  ASSERT (SELECT count(*) FROM public.proposal_service_rates
+          WHERE proposal_id = 'a5300000-0000-4000-8000-000000000008') = 1,
+    'the fixture still bills time';
+
+  -- Seeding shows the studio the state it is in, cap and all.
+  v_seeded := public.materialize_standard_parts('a5300000-0000-4000-8000-000000000008');
+  ASSERT (v_seeded->>'materialized')::boolean,
+    'the room must be able to open on a cleared-ceiling draft';
+  ASSERT (SELECT jsonb_typeof(ap.payload->'cents') FROM public.proposal_agreement_parts ap
+          WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000008'
+            AND ap.part_key = 'patina.ceiling') = 'null',
+    'the seeded ceiling part is empty, because the terms row is';
+  ASSERT public._agreement_floor_unmet('a5300000-0000-4000-8000-000000000008'),
+    'the seeded composition is below the floor';
+
+  -- And it does not leave draft. THE Q3 REGRESSION.
+  BEGIN
+    PERFORM pg_temp.send_agreement('a5300000-0000-4000-8000-000000000008');
+    ASSERT false, 'a seeded uncapped hourly agreement must not send';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement that bills time needs a ceiling',
+    format('N3: the send door must ask the floor: %L', v_err);
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = 'a5300000-0000-4000-8000-000000000008') = 'draft',
+    'the refused document stays a draft';
+
+  -- Nor can the composition be SAVED that way: the studio must state a cap or
+  -- drop the rate card, and the sentence is the same one at both doors.
+  v_err := NULL;
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a5300000-0000-4000-8000-000000000008',
+      (SELECT jsonb_agg(jsonb_build_object(
+         'kind', ap.kind, 'variant', ap.variant, 'partKey', ap.part_key,
+         'title', ap.title, 'payload', ap.payload, 'required', ap.required,
+         'clientVisible', ap.client_visible
+       ) ORDER BY ap.position)
+       FROM public.proposal_agreement_parts ap
+       WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000008'));
+    ASSERT false, 'the seeded composition must not save as it stands';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement that bills time needs a ceiling',
+    format('N3: the save door asks the same floor: %L', v_err);
+END $$;
+
+-- And the send door holds for a composition that reached draft by the other
+-- road: parts saved while capped, then the cap emptied underneath.
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000009', 'The hollowed agreement');
+
+DO $$
+DECLARE v_err text;
+BEGIN
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-000000000009',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.services',
+        'title', 'Services', 'required', true,
+        'payload', jsonb_build_object('body', 'Full-service interior design.')),
+      jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+        'partKey', 'patina.role_rates', 'title', 'Role rates',
+        'payload', jsonb_build_object('roles', jsonb_build_array(
+          jsonb_build_object('roleName', 'Principal', 'hourlyRateCents', 22500, 'sortOrder', 0)))),
+      jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
+        'partKey', 'patina.ceiling', 'title', 'Ceiling',
+        'payload', jsonb_build_object('cents', 2400000)),
+      jsonb_build_object('kind', 'clause', 'partKey', 'patina.terms',
+        'title', 'Terms', 'required', true,
+        'payload', jsonb_build_object('body', 'Billed at actual hours.'))
+    )
+  );
+
+  -- The cap is emptied on the part itself, the only way left: as the owner of
+  -- the table, standing in for a future writer this grant does not yet allow.
+  UPDATE public.proposal_agreement_parts
+  SET payload = jsonb_build_object('cents', NULL)
+  WHERE proposal_id = 'a5300000-0000-4000-8000-000000000009'
+    AND part_key = 'patina.ceiling';
+
+  ASSERT public._agreement_floor_unmet('a5300000-0000-4000-8000-000000000009'),
+    'the floor predicate sees the emptied cap';
+  BEGIN
+    PERFORM pg_temp.send_agreement('a5300000-0000-4000-8000-000000000009');
+    ASSERT false, 'an uncapped hourly agreement must not send';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'an agreement that bills time needs a ceiling',
+    format('N3: the send door must ask the floor: %L', v_err);
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = 'a5300000-0000-4000-8000-000000000009') = 'draft',
+    'the refused document stays a draft';
+
+  RAISE NOTICE 'PASS 24: R4''s floor stands at the save door and the send door, by either road in';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
