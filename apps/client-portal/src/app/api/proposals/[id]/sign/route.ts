@@ -36,6 +36,25 @@ async function notifyCommercialTransition(
   }
 }
 
+/**
+ * The attachments a composed agreement requires the client to acknowledge,
+ * read off the bundle the database just answered with — never off the browser
+ * payload. Both key spellings, because the bundle RPC's jsonb is read raw
+ * here rather than through the portal's DTO adapter.
+ */
+function requiredAttachmentKeys(bundle: unknown): string[] {
+  const parts = (bundle as { parts?: unknown } | null)?.parts;
+  if (!Array.isArray(parts)) return [];
+  return parts.flatMap((item) => {
+    const part = (item ?? {}) as Record<string, unknown>;
+    if (part.kind !== 'attachment') return [];
+    const payload = (part.payload ?? {}) as Record<string, unknown>;
+    if (payload.acknowledgeRequired !== true && payload.acknowledge_required !== true) return [];
+    const key = part.partKey ?? part.part_key;
+    return typeof key === 'string' && key.length > 0 ? [key] : [];
+  });
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getUser();
   if (!user) {
@@ -45,11 +64,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as {
     signedByName?: unknown;
+    attachmentsAcknowledged?: unknown;
   };
   const signedByName = typeof body.signedByName === 'string' ? body.signedByName.trim() : '';
   if (signedByName.length < 2) {
     return NextResponse.json({ error: 'invalid_name' }, { status: 400 });
   }
+  const claimedAcknowledgments = Array.isArray(body.attachmentsAcknowledged)
+    ? body.attachmentsAcknowledged.filter(
+        (key): key is string => typeof key === 'string' && key.length > 0,
+      )
+    : [];
 
   const clientIp = resolveClientIp(request.headers);
 
@@ -227,6 +252,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     }
 
+    // WAVE 2, P6 — WHAT SHE CONSENTED TO IS THE DATABASE'S ANSWER, NOT THE
+    // BROWSER'S. The sentence recorded against the signature is
+    // `compose_agreement_consent`'s, read off the bundle above; a client that
+    // could choose its own consent sentence could sign one agreement and file
+    // the record of another.
+    //
+    // The acknowledgments are the browser's, but only as a claim: every key is
+    // checked against the attachments the bundle carries, unknown keys are
+    // dropped without comment, and an agreement whose required attachment is
+    // unticked is simply not signable yet. That refusal reuses `not_signable`
+    // — the door already speaks it, and REFUSAL_TOKENS is pinned by the drift
+    // guard against this file, so a new token would be a second edit in two
+    // places for a state the client already reads correctly.
+    const required = requiredAttachmentKeys(commercialBundle);
+    const acknowledged = required.filter((key) => claimedAcknowledgments.includes(key));
+    if (acknowledged.length !== required.length) {
+      return NextResponse.json({ error: 'not_signable' }, { status: 409 });
+    }
+
     // A services agreement/addendum records the client's act only. The RPC
     // never activates or creates a project; that remains the studio's separate
     // countersignature transaction.
@@ -239,6 +283,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         p_signed_name: signedByName,
         p_client_id: user.id,
         p_signed_ip: clientIp,
+        p_consent: {
+          consentSentence:
+            commercialBundle?.consentSentence ?? commercialBundle?.consent_sentence ?? null,
+          attachmentsAcknowledged: acknowledged,
+        },
       }
     );
     if (signError) {

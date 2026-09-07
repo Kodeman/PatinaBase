@@ -42,12 +42,19 @@ describe('POST /api/proposals/[id]/sign', () => {
   let invokeMock: jest.Mock;
   let proposalStatus: 'sent' | 'viewed' | 'accepted';
   let validUntil: string | null;
+  /**
+   * Wave 2, P6. What the bundle says beyond the document itself — its parts
+   * and the sentence `compose_agreement_consent` composed. Empty by default,
+   * so every test written before the composer keeps its own answer.
+   */
+  let commercialExtras: Record<string, unknown>;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetUser.mockResolvedValue({ id: 'client-1' });
     proposalStatus = 'sent';
     validUntil = null;
+    commercialExtras = {};
 
     // The default preflight resolves to a live commercial kind (never
     // 'legacy') — prod's get_client_commercial_document_bundle only returns
@@ -59,7 +66,10 @@ describe('POST /api/proposals/[id]/sign', () => {
     userRpcMock = jest.fn().mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
-          data: { document: { id: 'prop-1', documentKind: 'design_services', commercialState: 'sent' } },
+          data: {
+            document: { id: 'prop-1', documentKind: 'design_services', commercialState: 'sent' },
+            ...commercialExtras,
+          },
           error: null,
         });
       }
@@ -249,6 +259,11 @@ describe('POST /api/proposals/[id]/sign', () => {
       p_signed_name: 'Jamie Homeowner',
       p_client_id: 'client-1',
       p_signed_ip: '203.0.113.7',
+      // Wave 2, P6. An un-composed agreement consents to nothing extra and
+      // acknowledges nothing — the argument is still sent, so the widened
+      // signature is exercised on every services signature, not only a
+      // composed one.
+      p_consent: { consentSentence: null, attachmentsAcknowledged: [] },
     });
     expect(await response.json()).toMatchObject({
       commercialState: 'client_signed',
@@ -629,5 +644,167 @@ describe('POST /api/proposals/[id]/sign', () => {
 
     expect(response.status).toBe(410);
     expect(mockCreateServiceClient).not.toHaveBeenCalled();
+  });
+
+  /* ── Wave 2, P6: the consent and the attachments ─────────────────────── */
+
+  const ATTACHMENT_PART = {
+    id: 'p3',
+    position: 3,
+    kind: 'attachment',
+    partKey: 'studio.lead_paint_notice',
+    title: 'the lead-paint notice',
+    payload: { body: 'A notice.', acknowledgeRequired: true },
+  };
+
+  const OPTIONAL_ATTACHMENT_PART = {
+    id: 'p4',
+    position: 4,
+    kind: 'attachment',
+    part_key: 'studio.care_guide',
+    title: 'the care guide',
+    payload: { body: 'A guide.' },
+  };
+
+  const COMPOSED_LINE =
+    'I agree to these design-services terms and the flat design fee, and understand my signature alone does not authorize work until the studio countersigns.';
+
+  it('records the sentence the DATABASE composed, never one the browser sent', async () => {
+    commercialExtras = { consentSentence: COMPOSED_LINE, parts: [] };
+
+    const response = await POST(
+      makeRequest(
+        {},
+        {
+          signedByName: 'Jamie Homeowner',
+          // A browser trying to file a record of an agreement it did not sign.
+          consentSentence: 'I agree to nothing at all.',
+        },
+      ),
+      makeParams(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_design_services_agreement_with_trusted_ip',
+      expect.objectContaining({
+        p_consent: { consentSentence: COMPOSED_LINE, attachmentsAcknowledged: [] },
+      }),
+    );
+  });
+
+  it('refuses to sign while a required attachment is unacknowledged', async () => {
+    commercialExtras = { parts: [ATTACHMENT_PART] };
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'not_signable' });
+    expect(mockCreateServiceClient).not.toHaveBeenCalled();
+  });
+
+  it('records the acknowledgment the client actually gave', async () => {
+    commercialExtras = { consentSentence: COMPOSED_LINE, parts: [ATTACHMENT_PART] };
+
+    const response = await POST(
+      makeRequest(
+        {},
+        {
+          signedByName: 'Jamie Homeowner',
+          attachmentsAcknowledged: ['studio.lead_paint_notice'],
+        },
+      ),
+      makeParams(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_design_services_agreement_with_trusted_ip',
+      expect.objectContaining({
+        p_consent: {
+          consentSentence: COMPOSED_LINE,
+          attachmentsAcknowledged: ['studio.lead_paint_notice'],
+        },
+      }),
+    );
+  });
+
+  it('drops a key the agreement never carried, without comment', async () => {
+    commercialExtras = { parts: [ATTACHMENT_PART, OPTIONAL_ATTACHMENT_PART] };
+
+    const response = await POST(
+      makeRequest(
+        {},
+        {
+          signedByName: 'Jamie Homeowner',
+          attachmentsAcknowledged: [
+            'studio.lead_paint_notice',
+            // Neither required nor, in the second case, a part at all.
+            'studio.care_guide',
+            'studio.not_on_this_agreement',
+          ],
+        },
+      ),
+      makeParams(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_design_services_agreement_with_trusted_ip',
+      expect.objectContaining({
+        p_consent: {
+          consentSentence: null,
+          attachmentsAcknowledged: ['studio.lead_paint_notice'],
+        },
+      }),
+    );
+  });
+
+  it('asks nothing of an agreement whose attachments require no acknowledgment', async () => {
+    commercialExtras = { parts: [OPTIONAL_ATTACHMENT_PART] };
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_design_services_agreement_with_trusted_ip',
+      expect.objectContaining({
+        p_consent: { consentSentence: null, attachmentsAcknowledged: [] },
+      }),
+    );
+  });
+
+  it('never gates a furnishings authorization on an agreement’s attachments', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: {
+            document: {
+              id: 'prop-1',
+              documentKind: 'furnishings_authorization',
+              commercialState: 'sent',
+            },
+            parts: [ATTACHMENT_PART],
+          },
+          error: null,
+        });
+      }
+      return Promise.resolve({
+        data: { proposal: { id: 'prop-1', status: 'sent', valid_until: null } },
+        error: null,
+      });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: { commercial_state: 'executed', newly_executed: true },
+      error: null,
+    });
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'execute_furnishings_authorization_with_trusted_ip',
+      expect.not.objectContaining({ p_consent: expect.anything() }),
+    );
   });
 });
