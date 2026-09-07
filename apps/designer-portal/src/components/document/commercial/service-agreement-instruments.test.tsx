@@ -8,6 +8,11 @@ let mockDocumentState = "executed";
 // (terms + at least one role rate), so these two are what the gate reads.
 let mockTerms: unknown = null;
 let mockRates: unknown[] = [];
+// "The Agreement, Composed" W1 — a document's parts reach this surface too.
+let mockParts: unknown[] = [];
+// Left undefined by default so the pre-existing countersign cases keep the
+// exact document they had; the composed cases set it.
+let mockDocumentKind: string | undefined;
 
 // A terms row complete enough for the send sheet's own readiness assessment,
 // which runs whenever `terms` is present (the sheet mounts closed).
@@ -53,10 +58,12 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
         id: "agreement-1",
         projectId: "project-1",
         state: mockDocumentState,
+        kind: mockDocumentKind,
       },
       terms: mockTerms,
       rates: mockRates,
       signatures: [],
+      parts: mockParts,
     },
   }),
   useCountersignDesignServicesAgreement: () => ({
@@ -111,6 +118,8 @@ describe("ServiceAgreementInstruments notification recovery", () => {
     mockDocumentState = "executed";
     mockTerms = null;
     mockRates = [];
+    mockParts = [];
+    mockDocumentKind = undefined;
   });
 
   it("keeps execution-notice recovery discoverable after refresh", async () => {
@@ -212,6 +221,8 @@ describe("ServiceAgreementInstruments paper issuance from draft", () => {
     });
     mockTerms = READY_TERMS;
     mockRates = READY_RATES;
+    mockParts = [];
+    mockDocumentKind = undefined;
   });
 
   it("offers the paper act on a ready draft as an offer, not as a claim about what the client already holds", () => {
@@ -361,5 +372,176 @@ describe("ServiceAgreementInstruments paper issuance from draft", () => {
         expect.objectContaining({ issueOnPaper: false }),
       ),
     );
+  });
+});
+
+/**
+ * A composed agreement on the document page.
+ *
+ * This surface holds the bundle and, before D1/D2, passed neither the parts
+ * nor a parts-shaped readiness to the two children that need them: the client
+ * copy fell back to the seven fixed sections (printing "Not yet set" for a
+ * ceiling a flat-fee agreement deliberately does not have) and the send sheet
+ * asked the seven-facet question, refusing a send R4 allows.
+ */
+describe("ServiceAgreementInstruments · a composed agreement", () => {
+  // A flat fee, no rate card, no ceiling — legal under R4, and exactly the
+  // shape the seven-facet assessment refuses.
+  const FLAT_FEE_PARTS = [
+    {
+      id: "part-1",
+      proposalId: "agreement-1",
+      position: 1,
+      kind: "clause",
+      variant: null,
+      partKey: "patina.services",
+      title: "Services",
+      payload: { body: "Whole-home interior design services." },
+      required: true,
+      clientVisible: true,
+      sourceTemplateKey: null,
+      sourcePartId: null,
+      updatedAt: null,
+    },
+    {
+      id: "part-2",
+      proposalId: "agreement-1",
+      position: 2,
+      kind: "schedule",
+      variant: "flat",
+      partKey: "custom.flat",
+      title: "Design fee",
+      payload: { cents: 1_100_000 },
+      required: true,
+      clientVisible: true,
+      sourceTemplateKey: null,
+      sourcePartId: null,
+      updatedAt: null,
+    },
+    {
+      id: "part-3",
+      proposalId: "agreement-1",
+      position: 3,
+      kind: "clause",
+      variant: null,
+      partKey: "patina.terms",
+      title: "Terms",
+      payload: { body: "Ownership and cancellation." },
+      required: true,
+      clientVisible: true,
+      sourceTemplateKey: null,
+      sourcePartId: null,
+      updatedAt: null,
+    },
+  ];
+
+  // The projection of that composition: no ceiling (NULL = uncapped), no
+  // role rates.
+  const FLAT_FEE_TERMS = {
+    ...READY_TERMS,
+    billingCeilingCents: null,
+    retainerAmountCents: 0,
+    currency: "USD",
+  };
+
+  beforeEach(() => {
+    mockCountersign.mockReset();
+    mockReplay.mockReset();
+    mockRecordPaperSignature.mockReset();
+    mockTerms = FLAT_FEE_TERMS;
+    mockRates = [];
+    mockParts = FLAT_FEE_PARTS;
+    mockDocumentKind = "design_services";
+  });
+
+  it("reads a SENT composed agreement as its parts, never as Not yet set", async () => {
+    mockDocumentState = "sent";
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: { email: "avery@example.com" } }}
+        clientName="Avery Client"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Preview client copy" }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Design fee" }),
+    ).toBeVisible();
+    expect(screen.getByText("$11,000")).toBeVisible();
+    expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
+    // The seven fixed sections are gone with them.
+    expect(
+      screen.queryByRole("heading", { name: "How design time is billed" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lets a flat-fee composition be sent from the document page (R4)", async () => {
+    mockDocumentState = "draft";
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: { email: "avery@example.com" } }}
+        clientName="Avery Client"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review & send" }));
+
+    expect(
+      await screen.findByText(/Ready to send · every contractual facet/),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /Send agreement/ }),
+    ).toBeEnabled();
+    // The seven-facet questions a composed agreement never has to answer.
+    expect(
+      screen.queryByText("Set the design authorization ceiling."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Add at least one role with an hourly rate."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still asks the composed question when a part is incomplete", async () => {
+    mockDocumentState = "draft";
+    mockParts = FLAT_FEE_PARTS.map((part) =>
+      part.partKey === "custom.flat"
+        ? { ...part, payload: { cents: null } }
+        : part,
+    );
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: { email: "avery@example.com" } }}
+        clientName="Avery Client"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review & send" }));
+
+    expect(await screen.findByText("Complete Design fee.")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /Send agreement/ }),
+    ).toBeDisabled();
+  });
+
+  it("keeps the seven-facet path for a document with no parts", async () => {
+    mockDocumentState = "draft";
+    mockParts = [];
+    mockTerms = { ...READY_TERMS, currency: "USD" };
+    mockRates = READY_RATES;
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: { email: "avery@example.com" } }}
+        clientName="Avery Client"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview client copy" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "How design time is billed" }),
+    ).toBeVisible();
   });
 });
