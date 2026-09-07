@@ -62,6 +62,28 @@ function RecordedLine() {
 }
 
 /**
+ * R21 — a written figure is a positive one, and this preview must say what the
+ * homeowner's page says. `materialize_standard_parts` seeds the retainer part
+ * from `retainer_amount_cents` (NOT NULL DEFAULT 0), so the very first
+ * composed agreement carries `{ cents: 0 }`; printing `$0` here while
+ * `apps/client-portal/src/components/agreement-parts-body.tsx` prints "Not yet
+ * set" is the preview lying about the page.
+ */
+function isWritten(cents: number | null): cents is number {
+  return cents !== null && cents > 0;
+}
+
+/** The seven-facet room's own treatment for an unwritten figure
+ *  (`service-agreement-preview.tsx` — the same type scale, italic, muted). */
+function NotYetSet() {
+  return (
+    <p className="font-heading text-[1.05rem] italic text-[var(--text-muted)]">
+      {AGREEMENT_PART_COPY.notYetSet}
+    </p>
+  );
+}
+
+/**
  * The body under a part's heading, or `null` when the part has a heading and
  * nothing else — a clause nobody has written yet, an empty list, a rate card
  * with no roles. The heading itself is printed by the caller either way, which
@@ -148,6 +170,7 @@ function renderPartBody(
           </p>
         );
       }
+      if (!isWritten(cents)) return <NotYetSet />;
       return (
         <p className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
           {money(cents, currency)}
@@ -158,6 +181,9 @@ function renderPartBody(
     case "retainer": {
       const cents = readCents(payload.cents);
       if (cents === null) return <RecordedLine />;
+      // The activation clause is withheld with the figure: a sentence about
+      // when a retainer is due, under no retainer, promises nothing.
+      if (!isWritten(cents)) return <NotYetSet />;
       return (
         <>
           <p className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
@@ -196,10 +222,12 @@ function renderPartBody(
           ["Terms of sale", payload.termsOfSale],
         ] as const
       ).filter(([, value]) => typeof value === "string" && value.trim());
-      if (percent === null && extras.length === 0) return <RecordedLine />;
+      // R21 — `0% deposit` is not a deposit term, it is an unwritten one, and
+      // a percent has no "Not yet set" twin on today's paper: it draws nothing.
+      if (!isWritten(percent) && extras.length === 0) return <RecordedLine />;
       return (
         <div className="space-y-1 text-[12.5px] text-[var(--color-charcoal)]">
-          {percent !== null && <p>{agreementDepositLine(percent)}</p>}
+          {isWritten(percent) && <p>{agreementDepositLine(percent)}</p>}
           {extras.map(([label, value]) => (
             <p key={label} className="text-[12px] text-[var(--color-mocha)]">
               {label} · {String(value)}
@@ -212,6 +240,7 @@ function renderPartBody(
     case "flat": {
       const cents = readCents(payload.cents);
       if (cents === null) return <RecordedLine />;
+      if (!isWritten(cents)) return <NotYetSet />;
       return (
         <p className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
           {money(cents, currency)}

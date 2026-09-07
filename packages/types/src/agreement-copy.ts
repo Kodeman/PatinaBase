@@ -25,6 +25,17 @@ export const AGREEMENT_PART_COPY = {
     "Additional work requires written authorization before it can be invoiced.",
   /** The one line every leaf neither surface draws falls back to. */
   recorded: "Recorded with your agreement.",
+  /**
+   * R21 — the words today's paper prints for a figure nobody wrote. A money
+   * part whose amount is zero is UNWRITTEN, not `$0`:
+   * `proposal_service_terms.retainer_amount_cents` is NOT NULL DEFAULT 0
+   * (00412) and the standard parts are seeded from it, so the very first
+   * composed agreement carries a retainer part reading `{ cents: 0 }`. Both
+   * surfaces print this sentence for it, and neither prints the activation
+   * clause that would otherwise promise something about a retainer that does
+   * not exist.
+   */
+  notYetSet: "Not yet set",
   /** Attachment acknowledgment — display only in Wave 1. */
   attachmentAcknowledgment: "I received this",
 } as const;

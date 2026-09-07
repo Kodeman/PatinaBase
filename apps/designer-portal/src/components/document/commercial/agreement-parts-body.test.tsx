@@ -315,6 +315,109 @@ describe("AgreementPartsBody", () => {
       screen.getByText("Recorded with your agreement."),
     ).toBeInTheDocument();
   });
+
+  // ── R21 · an amount nobody wrote is unwritten, on BOTH surfaces ──────────
+  //
+  // `materialize_standard_parts` seeds `patina.ceiling` from
+  // `billing_ceiling_cents` and `patina.retainer` from
+  // `retainer_amount_cents` (NOT NULL DEFAULT 0), so the very first composed
+  // agreement carries `{ cents: 0 }` in both. The homeowner's page
+  // (`apps/client-portal/src/components/agreement-parts-body.tsx`) prints
+  // "Not yet set" for exactly that; this preview printed `$0`, and a preview
+  // that lies about the page is worse than no preview.
+
+  it("prints Not yet set for a ceiling nobody has written, never $0", () => {
+    renderParts([
+      part({
+        partKey: "patina.ceiling",
+        kind: "schedule",
+        variant: "ceiling",
+        title: "Ceiling",
+        payload: { cents: 0 },
+      }),
+    ]);
+    expect(screen.getByText("Not yet set")).toBeInTheDocument();
+    expect(screen.queryByText("$0")).not.toBeInTheDocument();
+    // And an ABSENT ceiling still says what an absent ceiling means (F-2).
+    expect(
+      screen.queryByText(AGREEMENT_PART_COPY.ceilingUncapped),
+    ).not.toBeInTheDocument();
+  });
+
+  it("withholds the retainer's activation sentence with its figure", () => {
+    renderParts([
+      part({
+        partKey: "patina.retainer",
+        kind: "schedule",
+        variant: "retainer",
+        title: "Retainer",
+        payload: { cents: 0, activationPolicy: "retainer_paid" },
+      }),
+    ]);
+    expect(screen.getByText("Not yet set")).toBeInTheDocument();
+    expect(screen.queryByText("$0")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(AGREEMENT_PART_COPY.retainerOnPayment),
+    ).not.toBeInTheDocument();
+  });
+
+  it("prints Not yet set for a flat fee nobody has written", () => {
+    renderParts([
+      part({
+        partKey: "custom.flat",
+        kind: "schedule",
+        variant: "flat",
+        title: "Flat fee",
+        payload: { cents: 0 },
+      }),
+    ]);
+    expect(screen.getByText("Not yet set")).toBeInTheDocument();
+    expect(screen.queryByText("$0")).not.toBeInTheDocument();
+  });
+
+  it("draws no deposit line for a deposit of zero percent", () => {
+    renderParts([
+      part({
+        partKey: "patina.deposit",
+        kind: "schedule",
+        variant: "procurement",
+        title: "Furnishings deposit",
+        payload: { depositPercent: 0 },
+      }),
+    ]);
+    // A percent has no "Not yet set" twin on today's paper: it draws nothing
+    // but the heading and the recorded line.
+    expect(screen.queryByText("0% deposit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(AGREEMENT_PART_COPY.recorded),
+    ).toBeInTheDocument();
+  });
+
+  it("still prints a figure somebody did write", () => {
+    renderParts([
+      part({
+        partKey: "patina.retainer",
+        kind: "schedule",
+        variant: "retainer",
+        title: "Retainer",
+        payload: { cents: 500_000, activationPolicy: "retainer_paid" },
+      }),
+      part({
+        partKey: "patina.deposit",
+        kind: "schedule",
+        variant: "procurement",
+        title: "Furnishings deposit",
+        payload: { depositPercent: 25 },
+      }),
+    ]);
+    expect(screen.getByText("$5,000")).toBeInTheDocument();
+    expect(
+      screen.getByText(AGREEMENT_PART_COPY.retainerOnPayment),
+    ).toBeInTheDocument();
+    expect(screen.getByText("25% deposit")).toBeInTheDocument();
+    expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
+  });
 });
 
 // The fixture both surfaces assert against. If a sentence changes it changes
@@ -331,6 +434,9 @@ describe("AGREEMENT_PART_COPY — the shared sentences", () => {
       cadenceNote:
         "Additional work requires written authorization before it can be invoiced.",
       recorded: "Recorded with your agreement.",
+      // R21 — the words today's paper prints for a figure nobody wrote. Both
+      // surfaces print exactly this for a money part whose amount is zero.
+      notYetSet: "Not yet set",
       attachmentAcknowledgment: "I received this",
     });
   });
