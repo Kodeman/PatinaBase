@@ -26,6 +26,7 @@ import {
   useMaterializeAgreementTemplate,
   useMaterializeStandardParts,
   useAgreementStudioContext,
+  useSaveAgreementPart,
   useSaveAgreementParts,
 } from "@patina/supabase";
 import {
@@ -63,6 +64,7 @@ import { PartHistoryStrip } from "./part-history-strip";
 import {
   assessAgreementReadiness,
   BLANK_ROLE_BLOCKER,
+  blockersForPart,
   documentBlockers,
   duplicateMoneyBlocker,
   partsNeedingAttention,
@@ -118,6 +120,7 @@ export function AgreementComposer({
   // id]) — so the bundle behind the preview refetches on every save without
   // this room asking it to.
   const save = useSaveAgreementParts(proposalId);
+  const savePart = useSaveAgreementPart();
   const materialize = useMaterializeStandardParts(proposalId);
   const discard = useDiscardAgreementParts(proposalId);
   const attachClient = useAttachDocumentClient();
@@ -178,6 +181,9 @@ export function AgreementComposer({
   const [addOpen, setAddOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  const [keptPartIds, setKeptPartIds] = useState<Set<string>>(
+    () => new Set<string>(),
+  );
 
   const readOnly = document.state !== "draft";
 
@@ -192,19 +198,27 @@ export function AgreementComposer({
     if (readOnly) return;
     if (bundle.parts.length > 0) return;
     materializeFired.current = true;
-    materialize.mutate(undefined, {
-      onSuccess: (next) => {
+    // `mutateAsync`, not `mutate` with callbacks. React Query drops the
+    // callbacks passed to `mutate` when the observer unmounts before the RPC
+    // answers, and `reactStrictMode` unmounts every component once on mount:
+    // the nine rows were written and the parts key was invalidated, but the
+    // room never heard, so it went on saying "This agreement has no parts
+    // yet." until the designer reloaded. Awaiting the promise puts the
+    // continuation in this file, where nothing can throw it away.
+    void (async () => {
+      try {
+        const next = await materialize.mutateAsync();
         const seeded = renumber(
           [...next.parts].sort((a, b) => a.position - b.position),
         );
         setParts(seeded);
         setSelectedId((current) => current ?? seeded[0]?.id ?? null);
-      },
-      onError: (error) =>
+      } catch (error) {
         setSaveNote(
           refusalMessage(error, "The standard parts could not be opened."),
-        ),
-    });
+        );
+      }
+    })();
     // The agreement id is the remount key upstream; re-running this on a
     // background refetch would re-ask a question already answered.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -355,6 +369,45 @@ export function AgreementComposer({
     } catch (error) {
       setTemplateError(
         refusalMessage(error, "That template could not be opened here."),
+      );
+    }
+  };
+
+  /**
+   * One part, kept for the next agreement.
+   *
+   * The Library's PARTS shelf has always said "Compose an agreement, and what
+   * you write there can be kept here" and no act anywhere performed the
+   * keeping: `save_agreement_part` had exactly one caller in the portal, the
+   * Library card's own RENAME. This is the act the sentence promised.
+   *
+   * The Library takes a DETACHED copy — `save_agreement_part` mints its own
+   * `studio.<uuid>` key, so the composed part is untouched and the agreement
+   * is not re-saved. Its client visibility and its required flag travel with
+   * it as the defaults the picker lays down (R8), which is also the only road
+   * by which a part can ever arrive on an agreement hidden from the client.
+   */
+  const keepInLibrary = async (part: AgreementPart) => {
+    if (!studioId) {
+      setSaveNote("This agreement has no studio Library to keep parts in.");
+      return;
+    }
+    setSaveNote(null);
+    try {
+      await savePart.mutateAsync({
+        studioId,
+        kind: part.kind,
+        variant: part.variant,
+        title: part.title.trim(),
+        payload: part.payload ?? {},
+        requiredDefault: part.required,
+        clientVisibleDefault: part.clientVisible,
+      });
+      setKeptPartIds((current) => new Set(current).add(part.id));
+      setSaveNote(`${part.title.trim()} is in your Library.`);
+    } catch (error) {
+      setSaveNote(
+        refusalMessage(error, "That part could not be kept in your Library."),
       );
     }
   };
@@ -580,6 +633,15 @@ export function AgreementComposer({
                 disabled={parts.length === 0}
               />
             }
+            // R3 draws the same line here as on the Template act: owners and
+            // admins edit the Library, every active member composes from it.
+            // `save_agreement_part` enforces it; hiding it is the courtesy.
+            onKeepInLibrary={
+              libraryOn && canManage && !readOnly
+                ? (part) => void keepInLibrary(part)
+                : undefined
+            }
+            keptPartIds={keptPartIds}
           />
 
           {/* The history strip needs a rhythm under the editor; flag off there
@@ -593,6 +655,7 @@ export function AgreementComposer({
                   onChange={(payload) => changePayload(selected.id, payload)}
                   readOnly={readOnly}
                   libraryOn={libraryOn}
+                  blockers={blockersForPart(readiness, selected.id)}
                 />
                 {/* P8 — under the open part, and only under a part that has a
                     history. A part nobody has touched draws nothing. */}

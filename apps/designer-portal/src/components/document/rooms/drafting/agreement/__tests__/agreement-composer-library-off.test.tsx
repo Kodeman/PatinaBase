@@ -101,7 +101,10 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
-  useMaterializeStandardParts: () => ({ mutate: jest.fn(), isPending: false }),
+  useMaterializeStandardParts: () => ({
+    mutateAsync: jest.fn().mockResolvedValue({ parts: [] }),
+    isPending: false,
+  }),
   useDiscardAgreementParts: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -110,8 +113,8 @@ jest.mock("@patina/supabase", () => ({
   useAgreementParts: () => ({ data: [], refetch: jest.fn() }),
   useAgreementTemplates: () => ({ data: [], isLoading: false }),
   useStudioAgreementParts: () => ({ data: [], isLoading: false }),
-  useAgreementPartEvents: () => ({ data: [], isLoading: false }),
   useSaveAgreementPart: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useAgreementPartEvents: () => ({ data: [], isLoading: false }),
   useSaveAgreementAsTemplate: () => ({
     mutateAsync: jest.fn(),
     isPending: false,

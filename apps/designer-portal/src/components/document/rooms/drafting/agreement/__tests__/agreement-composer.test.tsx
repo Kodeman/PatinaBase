@@ -87,7 +87,7 @@ jest.mock("@patina/supabase", () => ({
     isPending: false,
   }),
   useMaterializeStandardParts: () => ({
-    mutate: mockMaterialize,
+    mutateAsync: mockMaterialize,
     isPending: false,
   }),
   useDiscardAgreementParts: () => ({
@@ -110,6 +110,7 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  useSaveAgreementPart: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useAgreementPartEvents: () => ({ data: [], isLoading: false }),
 }));
 
@@ -242,11 +243,20 @@ beforeEach(() => {
 });
 
 describe("AgreementComposer · materialize", () => {
+  // The seeding is asked for in an effect and answered a tick later, which is
+  // the walk's own timing: under StrictMode React unmounts the first observer
+  // between the two, and React Query drops the callbacks passed to `mutate`
+  // when that happens. The rows below are the proof the room heard the answer
+  // — with the callbacks form it painted "This agreement has no parts yet."
+  // over nine written rows until the designer reloaded.
+  const seedsThreeParts = () =>
+    mockMaterialize.mockImplementation(async () => {
+      await Promise.resolve();
+      return bundleWith(threeParts());
+    });
+
   it("seeds the standard parts once on an empty draft, even under StrictMode", async () => {
-    mockMaterialize.mockImplementation(
-      (_input: unknown, callbacks: { onSuccess: (b: unknown) => void }) =>
-        callbacks.onSuccess(bundleWith(threeParts())),
-    );
+    seedsThreeParts();
 
     render(
       <StrictMode>
@@ -255,7 +265,26 @@ describe("AgreementComposer · materialize", () => {
     );
 
     await waitFor(() => expect(mockMaterialize).toHaveBeenCalledTimes(1));
-    expect(railRows()).toHaveLength(3);
+    await waitFor(() => expect(railRows()).toHaveLength(3));
+  });
+
+  it("stops saying the agreement has no parts once the seeding lands", async () => {
+    seedsThreeParts();
+
+    render(
+      <StrictMode>
+        <AgreementComposer proposal={proposal} bundle={bundleWith([])} />
+      </StrictMode>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText("This agreement has no parts yet."),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("room-count")).toHaveTextContent(
+      "of 3 parts need attention",
+    );
   });
 
   it("does not seed an agreement that already has parts", () => {
