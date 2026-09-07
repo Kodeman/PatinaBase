@@ -285,3 +285,181 @@ studio's row shapes.
 - The R12 snapshot HTML has been asserted for content (every client-visible
   title present, no studio-only title or body) but never *rendered in a
   browser*. The keepsake's appearance is the client lane's walk.
+
+---
+
+# Round 1 fixes — adversarial review (2026-09-07)
+
+Five findings from `backend-review-r1.md`: two blockers, three majors. All five
+addressed. Nothing else was touched.
+
+## B1 · the fingerprint break — `00577` PART 1b
+
+The four `ADD COLUMN`s on `proposal_service_terms` changed
+`_commercial_document_fingerprint` for **every existing services document**,
+and `_countersign_design_services_agreement_impl` raises `23514` when the
+stored client signature's `evidence_fingerprint` disagrees. Every agreement
+sitting in `client_signed` on Strata at push time would have become
+permanently uncountersignable — and the signature table is immutable, so no
+repair migration could have followed.
+
+Fixed **in the same migration**, in the shape Wave 1 used for `parts`: 00577
+now re-issues `_commercial_document_fingerprint` from **00575:503 verbatim**
+(lineage `00412:704 → 00422:251 → 00423:1214 → 00575:503 → 00577`) with a
+single delta — the `serviceTerms` leg drops `fee_basis`, `fee_amount_cents`,
+`fee_schedule` and `retainer_credit_rule` from the hashed object while they
+stand at their pre-W2 values (three NULL, `retainer_credit_rule = 'credited'`,
+the column DEFAULT). Write any one of them and all four ride in the digest, so
+a real fee-schedule change still invalidates a stale signature.
+
+The banner's `WHAT THIS FILE DOES NOT DO` bullet asserted the opposite ("a new
+COLUMN is covered automatically"). It has been replaced with the reasoning
+above; the build sheet's §3.3 claim it inherited is **wrong** and integration
+should not re-import it.
+
+Proved by test case (15) in `agreement_fee_schedules_test.sql`, which carries
+`pg_temp.fingerprint_00575(uuid, boolean)` — 00575's body with one switch —
+and asserts, on a Wave-1-shaped agreement with the four columns unwritten:
+
+- `_commercial_document_fingerprint = fingerprint_00575(id, drop_w2 => true)`
+  (the digest a pre-00577 database produced), **and**
+- `_commercial_document_fingerprint <> fingerprint_00575(id, drop_w2 => false)`
+  (i.e. the unconditional fold really would have moved it — the assertion that
+  fails on the un-fixed migration),
+- then writes a flat fee and asserts the two comparisons swap,
+- then runs the full parts-less rail send → client sign → countersign and
+  asserts `newlyExecuted`.
+
+## B2 · raw payload keys, raw cents, raw enum on the keepsake — `00577` PART 4
+
+`_render_agreement_snapshot_html`'s record-only `ELSE` branch iterated
+`jsonb_each(payload)` and printed keys and values verbatim
+(`dayRateCents | 250000`), the retainer printed `payload->>'creditRule'`
+unmapped (`$5,000.00 · non_refundable`), and the attestation branch did the
+same. A database column name, a raw stored enum, and a raw integer cents
+figure, all on the homeowner's permanent copy.
+
+## M3 · and it drifted from the page she signed
+
+Same function, same fix. The renderer is now leaf-for-leaf what
+`apps/client-portal/src/components/agreement-parts-body.tsx` draws, and every
+sentence that is not the document's own words is `AGREEMENT_PART_COPY`
+(`packages/types/src/agreement-copy.ts`) duplicated as a SQL literal and
+pinned by test case (13) — the same twinning the consent sentence already has.
+
+| leaf | before | now |
+|---|---|---|
+| ceiling, no figure | rendered nothing | `ceilingUncapped` |
+| ceiling / flat / retainer at zero | dropped | `notYetSet` |
+| flat / retainer with no `cents` key | dropped | `recorded` |
+| retainer with a figure | `$5,000.00 · non_refundable` | figure + `agreementRetainerActivation(activationPolicy)` |
+| cadence | the bare stored word | word with the underscore opened + `cadenceNote` |
+| procurement | `18%` | `18% deposit` + the three notes as a `<dl>` |
+| rate card / per-phase with no rows | dropped | `recorded` |
+| record-only variants (R9) | raw payload table | `recorded`, title kept |
+| attestation | raw definition list | **not drawn** (the client body never draws one) |
+| `phases` kind | a `<ul>` of fees | `recorded` (what `PartSection`'s fallback prints) |
+| attachment asking acknowledgment | silent | `attachmentAcknowledgment` |
+
+**This departs from build sheet §3.3's renderer sketch**, deliberately and on
+the binding vocabulary rule, which outranks it. §3.3 specified the raw-key
+record-only table and the attestation definition list that produced B2.
+
+Two differences from the client body are left standing and are **not** drift
+in substance — both noted here rather than silently:
+
+- money prints as `$5,000.00` (the sheet's `FM999,999,990.00`) where the
+  client body's `Intl` formatter prints `$5,000`. Same figure, different
+  precision.
+- a rate-card role with an unreadable rate prints `Not yet set` where the
+  client body's `?? 0` prints `$0`. R21 forbids printing a zero nobody typed;
+  the keepsake does not reproduce that.
+
+## M1 · `compose_agreement_consent` had no authorization — `00577` PART 5
+
+`SECURITY DEFINER`, granted to `authenticated`, and it read any agreement's
+composed consent sentence for any signed-in caller. It now asks the **same
+predicate `get_client_commercial_document_bundle` asks**, character for
+character (`auth.uid()` present AND (`client_id` matches OR
+`is_studio_comember(designer_id)`)) — never stricter, so the bundle's call
+(the only caller in the tree) passes for exactly the readers it already
+admitted. Test case (14): the lead, her co-member and the homeowner all read
+the same sentence; a signed-in stranger and an unauthenticated caller both get
+`insufficient_privilege`.
+
+## M2 · cross-studio Template leak — `00576` PART 8 + the hook
+
+Two halves, both closed:
+
+- `materialize_agreement_template` now requires the Template's `studio_id` to
+  be `NULL` (seeded) or one of the studios that **both** the actor and the
+  agreement's lead designer actively belong to — resolved with
+  `save_agreement_as_template`'s own query, except that belonging to more than
+  one studio is not itself a refusal here; the Template merely has to be one of
+  them.
+- `useAgreementTemplates` gained `.or('studio_id.is.null,studio_id.eq.<id>')`.
+  RLS answers "may this member see it", which for a two-studio designer is yes
+  to both Libraries; the filter means the other studio's Templates are never
+  offered.
+
+Test case (11) in `agreement_library_test.sql` builds the 00566 two-studio
+account — one designer, admin in studio A and studio B — and asserts she can
+SEE studio B's Template, cannot materialize it into studio A's agreement, that
+studio B's words never reach studio A's part rows, and that her own studio's
+Template and a seeded Template both still compose. Verified to FAIL against
+the pre-fix function body (reverted onto the scratch DB and re-run:
+`ERROR: a Template from another studio must not compose into this agreement`).
+
+## Gates re-run (round 1)
+
+Scratch DB `patina_w2fix`, cloned from the shared stack (Wave 1 head, `00575`)
+with `pg_dump --exclude-schema=cron`, rebuilt fresh before the final run.
+
+```
+00576 exit=0 errors=0
+00577 exit=0 errors=0
+exit=0 passes=12  agreement_library_test.sql
+exit=0 passes=8   agreement_fee_schedules_test.sql
+exit=0 passes=30  agreement_parts_test.sql
+exit=0 passes=5   agreement_parts_projection_test.sql
+exit=0 passes=13  design_services_paper_issue_test.sql
+exit=0 passes=7   multi_studio_signature_test.sql
+exit=0 passes=0   public_sd_hardening_contract_test.sql   (asserts silently)
+```
+
+`pnpm --filter @patina/supabase type-check` → `tsc --noEmit`, clean.
+`pnpm --filter @patina/types type-check` → `tsc --noEmit`, clean.
+
+`python3 scripts/generate-legacy-grants.py` → +6 lines, one new statement
+(`REVOKE ALL ON FUNCTION public._commercial_document_fingerprint(uuid) …`
+under 00577).
+
+**Types were NOT regenerated this round, deliberately.** No fix changed the
+public schema's shape — no column, no table, no function signature — so
+`database.types.ts` is already correct. Regenerating from the scratch clone
+would have *removed* 92 lines of `Relationships` entries, because several FK
+constraints fail to restore into a clone (their data COPY fails first). The
+regenerated file was diffed, seen to be a pure regression, and reverted.
+
+**Both pinned hardening manifests are unchanged and still green.** Neither
+`sign_design_services_agreement_with_trusted_ip` nor
+`_countersign_design_services_agreement_impl` was touched this round, so no
+re-pin was needed; `public_sd_hardening_contract_test.sql` exits 0 as proof.
+
+### Pre-existing scratch-clone failures (NOT caused by these fixes)
+
+Six commercial suites fail identically on a pristine Wave-1 clone with no W2
+migration applied (`patina_w1base`, same dump, same errors, same line numbers):
+`authorized_schedule_test`, `design_services_authority_test`,
+`design_services_gap_hardening_test`, `executed_on_paper_test`,
+`trade_rfq_test`, `trade_scope_test`. Cause is the clone, not the code — parts
+of the dump's data COPY fail on FK order, so fixture-dependent suites cannot
+find their seeded rows. The integration steward's `supabase:reset` replay is
+the run that gates these.
+
+### Still not verified by this lane
+
+Everything under "Not verified by this lane" above still stands. Additionally:
+`useAgreementTemplates`'s new filter has no unit test — `packages/supabase`
+carries no jest/vitest harness — so it is covered by the SQL half (the RPC
+refusal) plus the designer lane's picker walk.
