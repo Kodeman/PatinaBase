@@ -388,3 +388,168 @@ curl `/sign-in` until it answers, then run with `reuseExistingServer: true`.
   renders today's body.
 - `pnpm lint` still not run for client-portal, and still would not mean
   anything (legacy `.eslintrc.json` under ESLint 9).
+
+---
+
+# Round 2 review — fixes
+
+Adversarial review `client-review-r2.md` returned one blocker (F-1) and four
+majors (F-2 … F-5), all five of them the same object: the round-1 guard
+`agreementPartsMatchTerms` and the deviated `DesignServicesBody` branch.
+
+## The resolution: the guard is reverted, §5.2 is restored verbatim
+
+F-1's own fix line gives the orchestrator two roads — ratify the guard as a W1
+amendment to §5.2, **or** direct backend containment (b) and revert the client
+to the sheet's branch. This lane took the second, for three reasons, in order
+of weight:
+
+1. **No ruling exists and this lane cannot make one.** `contract.md`'s first
+   paragraph: *"Deviations require the orchestrator's ruling, recorded in
+   `rulings-2026-09-06.md`."* Round 1's C2 said the same. Writing that ruling
+   myself would be the identical sin F-1 names, one layer up. `rulings-2026-09-06.md`
+   is untouched on this branch.
+2. **The guard cannot be made sound inside this lane's pathspec.** F-2 and F-3
+   are in direct contradiction given the data the client actually receives.
+   The bundle projects only `client_visible = true` parts (00575:2501-2508), so
+   from the client's side **absent and hidden are the same array**. F-2 demands
+   that an absent money part be read as its §3.7 default (zero rate rows,
+   NULL ceiling) — otherwise the flat-fee attack walks through. F-3 demands
+   that an absent money part NOT be read as its default — otherwise hiding a
+   part inverts R8, drops every composed clause and prints the hidden figure on
+   the fallback body. Both cannot hold on a filtered array. Distinguishing them
+   needs either the unfiltered set or a `hasHiddenMoneyParts` tell from the
+   RPC — both `supabase/**`, which this lane may not touch.
+3. **F-5 is unfixable here by definition.** Making the two surfaces agree means
+   editing `apps/designer-portal/src/components/document/commercial/service-agreement-preview.tsx`,
+   which §2.3 puts out of this lane's reach. A ratified guard would therefore
+   ship with a known studio/homeowner drift and no signal to the studio —
+   exactly what §4.5's "the same table … so the two surfaces cannot drift by
+   accident" exists to prevent.
+
+F-4 (a freshly materialized agreement diverges from birth, because
+`materialize_standard_parts` seeds `patina.deposit` from
+`COALESCE(terms, studio default, 50)` and the rate card from the studio's P3
+defaults, while deliberately not re-projecting) is a fourth, independent
+demonstration of the same thing: a client-side predicate has to model two
+writers with two default sets, and gets it wrong on a state that holds from
+room-open until the designer's first Save.
+
+So: with the guard gone, F-2, F-3, F-4 and F-5 have no subject. F-1 is closed
+by conformance — `DesignServicesBody` is once again the sheet's literal
+`if (bundle.parts.length > 0)`, and no deviation from a frozen interface is
+outstanding.
+
+### What was removed
+
+| Removed | Where |
+|---|---|
+| `agreementPartsMatchTerms` + its five part-key constants + `rateFingerprint` + the 20-line rubric comment | `apps/client-portal/src/lib/commercial-documents.ts` (−95 lines) |
+| the `&& agreementPartsMatchTerms(...)` conjunct and its import | `apps/client-portal/src/components/commercial-document-shell.tsx` |
+| `furnishingsDepositPercent` on the local `DesignServicesTerms` and its adapter read | `commercial-documents.ts` — it existed only to feed the guard; §5.1 does not ask for it, so it goes rather than linger as an unrequested field |
+| the 13 `agreementPartsMatchTerms` cases | `commercial-documents.test.ts` (the 14th case that commit added, the null-ceiling adapter one, stays) |
+| 4 divergence render cases + the `projectionOf` / `baseBundle` fixture machinery (F-7's "self-consistent, not cross-validated" model of §3.7) | `commercial-document-shell.test.tsx` — `bundle()` is byte-for-byte the fixture the committed snapshot was written from again |
+
+### What was kept
+
+- `billingCeilingCents` adapted as `number | null` via `nullableNumber`, and
+  the adapter case pinning it. This is §4.6's requirement on the client's local
+  `DesignServicesTerms`, not the guard's: 00575 makes NULL mean *uncapped* and
+  collapsing it onto `0` would lose that. Display is unmoved — `ceilingIsSet`
+  is false for both `0` and `null`, so the flag-off body still prints
+  `Not yet set`, and **the committed snapshot still passes unregenerated**.
+- Everything else from round 1: the adapter, the renderer, the attachment leaf,
+  the e2e split. Untouched.
+- The sign route is still byte-identical to `main` (§5.4).
+
+### Two comments added, both trivial and both from the review's minor list
+
+- F-10: `DesignServicesBody`'s `if (!terms) return null` now carries a note that
+  `terms` supplies the currency the parts renderer prints in, so a
+  parts-carrying agreement with no `proposal_service_terms` row renders nothing
+  — unreachable today, live when W2 adds the `consultation` /
+  `furnishings_services` classes.
+- The e2e `test.fixme`'s missing-fixture note no longer cites the matcher; the
+  seed still needs a terms row **and** parts, because `DesignServicesBody`
+  returns null before the parts branch without one.
+
+No other minor from `client-review-r2.md` was actioned — none was in this
+round's finding list, and each is a behaviour change of its own.
+
+## ⚠ OWED THE ORCHESTRATOR — the hole the revert reopens
+
+C2 is real and is now uncontained. Recorded here because reverting is not the
+same as resolving:
+
+> `materialize_standard_parts` writes nine rows on first flag-on open and they
+> never go away. `upsert_design_services_draft` — the seven-facet, flag-OFF
+> writer — touches only the terms row and never `proposal_agreement_parts`
+> (00575:1638-1641). So: compose under the flag → turn the flag off → raise the
+> ceiling in the seven-facet room → send. The parts rows still say the old
+> figure, the client renders them, and the countersignature snapshots authority
+> from the terms row. The homeowner signs money the authority does not carry.
+
+**Recommendation: adopt containment (b) in the backend lane** —
+`upsert_design_services_draft` refuses while `proposal_agreement_parts` rows
+exist for the proposal, so the flag-off writer cannot move money out from under
+a composed agreement. That closes the *hashed* instrument as well as the
+displayed one, which the client guard never could: F-1/§3.4 hash **all** parts,
+so a diverged agreement's signed evidence records parts the homeowner was not
+shown. Containment (a) (project at the RPC) is the alternative. Both are
+`supabase/**`.
+
+**Adopt into the record either way (the reviewer agrees, F-1):** *the client
+must never gate on the `agreement-parts` flag.* A PostHog flag resolves against
+whoever is looking. `agreement-parts` is rolled out to studios; a homeowner is
+a different person entity, so a client-side gate evaluates false for
+essentially every client — and in the one case it matters (flag ON for the
+studio, false for the homeowner) it would hide composed clauses from the person
+signing a document whose fingerprint hashes them.
+
+## Gates re-run after the revert (worktree `agent-agr-w1-client`)
+
+`cd` does not persist between this agent's Bash calls; the gates ran as
+`pnpm --dir <worktree> --filter @patina/client-portal …`, and each banner line
+names the worktree path.
+
+```
+pnpm --dir <wt> --filter @patina/client-portal type-check
+  > @patina/client-portal@0.1.0 type-check
+    /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-client/apps/client-portal
+  > tsc --noEmit
+  (clean — no diagnostics)
+
+pnpm --dir <wt> --filter @patina/client-portal test -- --ci --coverage
+  Test Suites: 129 passed, 129 total
+  Tests:       1978 passed, 1978 total
+  Snapshots:   1 passed, 1 total     ← the flag-off byte-identity proof, still unregenerated
+  All files                     73.94 / 69.25 / 73.98 / 76.26   (floor 70/60/70/70 — clears)
+  agreement-parts-body.tsx     100.00 / 91.30 / 100.00 / 100.00
+  commercial-documents.ts       92.72 / 86.47 / 100.00 /  95.36
+  commercial-document-shell.tsx 75.49 / 78.63 /  89.65 /  78.49
+
+pnpm --dir <wt> --filter @patina/client-portal test -- --ci \
+  src/components/threshold/__tests__/consent-copy.test.ts
+  Tests: 27 passed, 27 total          (the sign route is still genuinely untouched)
+
+git diff -- apps/client-portal/src/components/__tests__/__snapshots__/   → empty
+git status --short -- apps/client-portal/src/app/api/proposals/          → empty
+```
+
+1995 → 1978 is exactly the 17 guard cases removed: 13 predicate + 4 render.
+
+## Not re-run this round
+
+- `tests/threshold.spec.ts`. The only edit to it is a comment inside the
+  `test.fixme`'s doc block; the runnable half asserts that a stack with nothing
+  composed carries **no** parts body, and the revert cannot change that answer
+  (with no parts rows anywhere on the local stack, both the old conjunction and
+  the restored branch are false). Booting a warm dev server on :3002 and
+  running chromium unsandboxed against the shared stack was not worth the
+  collision risk for a comment. The lane's earlier result stands: 13 passed,
+  1 skipped, 1 pre-existing mat-count failure that clears on the steward's
+  reset.
+- Everything in the two earlier "Not verified" lists still stands, and one item
+  in it is now moot: `agreementPartsMatchTerms`'s agreement with the real
+  `_project_agreement_terms` is no longer something the integration steward has
+  to check, because the predicate no longer exists.
