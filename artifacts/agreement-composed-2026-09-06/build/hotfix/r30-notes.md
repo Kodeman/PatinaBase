@@ -167,3 +167,120 @@ the only assertion they could drift is a count of `designer@patina.dev`'s client
 - `service_addendum` — out of scope by the ruling; an addendum amends a standing
   engagement and always has a house.
 - Nothing was deployed. No production mutation of any kind was run.
+
+---
+
+## 8. Round 1 review — the two majors, fixed (2026-09-07)
+
+Both findings landed on the same file, and both were the same species of
+mistake: the household door had been built for the moment the paper ARRIVES and
+for nothing on either side of it.
+
+### R30-1 — the door vanished the moment she signed
+
+`partitionProposals(...).pending` is `commercial_state = 'sent'`, and `sealed`
+is component state that dies with the page. Her signature moves the agreement
+to `client_signed` — and the studio's countersignature, which is what creates
+the project, comes days later. So between the two acts the paper is signed AND
+still bound to no project, which is precisely the shape no door drew: she
+signed, came back the next morning, and met "No active projects yet" over the
+paper she had just put her name to. A project-bound agreement never does this
+(`threshold.tsx:463-477` turns each accepted document into a lasting
+`ThresholdReceipt`), so the household door was diverging from the ruling's
+"exactly as a project-bound one does".
+
+Fixed by borrowing the house's own back matter rather than inventing a second
+idiom for it: `letterbox-door.tsx` now reads `partitionProposals(...).accepted`
+through the same project-less `design_services` filter as `origins`, mints the
+same `instrument:<proposalId>` entry `threshold.tsx` mints
+(`Design services agreement · <title>`, dated off the summary's `executedAt`),
+and hangs the house's own `Previously` component under the doors. The line
+unfolds into `InstrumentReading` — the paper read in full — exactly as it does
+in a house. `Previously` renders nothing when it holds nothing, so a household
+with only a letter is byte-identical to before.
+
+Three consequences wired with it: the empty-state/hold gate now asks
+`anythingHere` (waiting OR kept) so a household whose only paper is signed no
+longer falls through to `ProjectsEmptyState`; the plate's designer fallback
+gains `kept[0].designerId`, so a visit where nothing is waiting still reads the
+right letterhead; and countersigning still drops BOTH the paper and its record
+(the summary's projectId stops being null), so the house and this door can never
+show the same agreement at once.
+
+### R30-2 — one plate's studio name on every signature receipt
+
+`studioName` was resolved once per page — from the letter in the slot when one
+exists, else `origins[0].designerId` — and handed to every `DoorGate`, which
+prints it as `<holder> has your signature. You'll have a copy.` Two reachable
+shapes mis-attributed a legally consequential act: a studio invoice from studio
+A alongside an origin agreement from studio B (the invoice wins the plate, so
+B's agreement is signed under A's name), and two origin agreements from two
+studios (the code explicitly supports this — the sentence pluralises to "Two
+agreements are waiting for you.").
+
+Fixed by resolving identity per door: a small `OriginDoor` wrapper calls
+`useStudioIdentity({ studioId: null, designerId: door.designerId })` off the
+`SealedDoor` record that already carried the designer, and passes that name to
+its own `DoorGate`. The query key is `['studio-identity', {studioId, projectId,
+designerId}]`, so two doors from one studio still share a single read, and the
+receipt only exists after she signs — long after the read settles — so no door
+waits on it. The plate is unchanged: it is the letterhead, and it still names
+the studio whose letter is in the slot.
+
+### Tests
+
+Two jest cases in `threshold.test.tsx`, both proven to FAIL against the
+pre-fix component (reverted `letterbox-door.tsx` to HEAD, ran the block: 8
+passed / 2 failed; restored: 10 passed):
+
+- `keeps the signed agreement on the next visit, before the studio countersigns`
+  — a `client_signed`, project-less agreement on a fresh render: no empty state,
+  the plate still reads its studio, one `previously-line` reading
+  `Design services agreement · … / 6 September / SIGNED`, and no door.
+- `names each agreement's own studio on the receipt for its signature` — two
+  origin agreements from two designers; the plate reads the first one's studio
+  and the Ash agreement, signed end to end through the hold gesture, prints
+  `The Ash Studio has your signature.`
+
+`drops the agreement the moment countersigning binds it to a house` gained one
+line: the record leaves with the paper.
+
+One e2e case added to `origin-door.spec.ts`, which is the finding's own
+reproduction driven in a real browser. The `beforeAll` is refactored into
+`mintOriginAgreement(title)` and called twice — one household left at `sent`,
+one signed — so no test depends on another having run. The signature goes
+through `sign_design_services_agreement_with_trusted_ip` with exactly the four
+arguments `app/api/proposals/[id]/sign/route.ts` passes it; that RPC records the
+client's act and creates no project, so the precondition (`client_signed`,
+`project_id NULL`, zero houses) is asserted in the database before the browser
+opens. The spec now leaves TWO throwaway `r30-origin-*@patina.dev` households
+per run instead of one; both own zero projects.
+
+### Gates, re-run from the worktree
+
+```
+pnpm --dir <wt>/apps/client-portal type-check        → clean (tsc --noEmit, no output)
+pnpm --dir <wt>/apps/client-portal test:coverage     → 129 suites / 2010 tests passed
+    coverage: 74.15 lines / 69.48 branches / 74.22 functions / 76.46 statements
+    (floor 70 / 60 / 70 / 70 — met)
+    letterbox-door.tsx 97.7 / 84.69 / 92.59 / 98.75
+npx playwright test --workers=1 --project=chromium tests/origin-door.spec.ts → 3 passed (58.3s)
+npx playwright test --workers=1 --project=chromium tests/threshold.spec.ts   → 13 passed, 1 failed
+```
+
+The single `threshold.spec.ts` red is the SAME pre-existing seed drift §5
+recorded, unchanged by this round: `threshold.spec.ts:250` expects
+`MULTI_OTHER_HOUSE_COUNT = 2` other houses for `client@patina.dev` and finds 4.
+Confirmed at the database this round — the stack holds 8 projects, 5 of them
+that client's: the seed's three plus two `Client User — design services
+agreement` houses created at `12:18:25Z` and `12:27:14Z` by another lane's
+countersign. It sits on the multi-house `<Threshold>` path, which this change
+does not touch. The two households this lane's e2e minted own zero projects and
+appear nowhere in that list.
+
+The e2e ran against a dev server Playwright started itself on :3002 with the
+config's pinned `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321` and the CLI
+demo anon key; `SUPABASE_SERVICE_ROLE_KEY` was read out of the running
+`supabase_storage_supabase` container's env rather than any `.env` file. The
+worktree carries no `.env.local` (only `.env.example`), so nothing could point
+at Strata. Nothing was deployed; no production mutation of any kind was run.
