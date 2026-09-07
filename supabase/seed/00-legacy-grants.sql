@@ -13312,7 +13312,13 @@ END $g$;
 
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+  REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

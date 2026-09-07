@@ -18,6 +18,7 @@
 --   _issue_design_services_agreement_on_paper   00477:252
 --   _countersign_design_services_agreement_impl 00475 → 00511 → 00566:304
 --   get_project_authority_summary               00422:2381
+--   classify_project_time_entry_authority       00412:2400
 --   get_client_commercial_document_bundle       00412 → 00414 → 00422 → 00423
 --                                                → 00425:1214
 --
@@ -33,9 +34,14 @@
 --   (F-2) billing_ceiling_cents drops NOT NULL on BOTH proposal_service_terms
 --         (00412:73) and project_billing_authorities (00412:145). NULL means
 --         uncapped, and it is legal ONLY when the agreement carries no
---         rate_card part. Three readers become NULL-safe: the addendum
+--         rate_card part. FOUR readers become NULL-safe: the addendum
 --         promotion loop (00566:841-842), the exhaustion test and the
---         remaining-headroom arithmetic (00422:2449, :2467).
+--         remaining-headroom arithmetic (00422:2449, :2467), and — the one
+--         that decides whether a logged hour is billable at all —
+--         classify_project_time_entry_authority (00412:2607-2613), whose
+--         `v_prior_cents + NEW.rated_amount_cents <= COALESCE(project,
+--         authority)` comparison is NULL on an uncapped authority and so
+--         parked EVERY billable hour in 'pending_authorization' forever.
 --   (F-3) ALL parts are hashed, not only client-visible ones; the parts alias
 --         inside the fingerprint is `ap`, because the outer alias is `p`.
 --   (F-4) upsert_design_services_draft refuses an empty rates array
@@ -174,6 +180,14 @@ ALTER TABLE public.project_billing_authorities
 -- signed: either it has no parts at all (every document authored before
 -- 00575, and every flag-off document — the legacy contract, unchanged), or it
 -- has a rate_card part and therefore bills time (R4).
+--
+-- "A rate_card part" means the ONE part the rate projection reads: part_key
+-- 'patina.role_rates', in the schedule/rate_card shape. Keying this on the
+-- variant alone would demand role rates that nothing will ever project — a
+-- rate card under any other key projects nothing (R5), so the document would
+-- become permanently unsendable with a refusal naming a part that is right
+-- there on the page. Predicate, projection and the R4 floor below all read
+-- the same one part.
 CREATE OR REPLACE FUNCTION public._agreement_requires_rate_card(p_proposal_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -188,6 +202,7 @@ AS $$
       OR EXISTS (
            SELECT 1 FROM public.proposal_agreement_parts ap
            WHERE ap.proposal_id = p_proposal_id
+             AND ap.part_key = 'patina.role_rates'
              AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
          );
 $$;
@@ -799,7 +814,7 @@ REVOKE ALL ON FUNCTION public._issue_design_services_agreement_on_paper(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- PART 4c — The three NULL-unsafe ceiling readers (F-2)
+-- PART 4c — The four NULL-unsafe ceiling readers (F-2)
 --
 -- Head bodies VERBATIM; only the ceiling arithmetic learns NULL. The older
 -- bodies at 00414:911-913, 00475:891 and 00511:4595 are SUPERSEDED by
@@ -1507,26 +1522,265 @@ REVOKE ALL ON FUNCTION public.get_project_authority_summary(uuid)
 GRANT EXECUTE ON FUNCTION public.get_project_authority_summary(uuid)
   TO authenticated;
 
+-- classify_project_time_entry_authority, head 00412:2400 — the reader that
+-- decides, on every logged hour, whether that hour is authorized. Body
+-- VERBATIM; the only delta is the ceiling comparison. The trigger
+-- aac_classify_project_time_entry_authority_trg is untouched: CREATE OR
+-- REPLACE swaps the body under it, and the stable-project-row lock
+-- design_services_authority_test.sql:191 pins is still exactly where 00412
+-- put it.
+CREATE OR REPLACE FUNCTION public.classify_project_time_entry_authority()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_is_services_project boolean;
+  v_authority public.project_billing_authorities%ROWTYPE;
+  v_rate public.project_billing_authority_rates%ROWTYPE;
+  v_prior_cents bigint;
+  v_current_version integer;
+  v_project_designer_id uuid;
+  v_team_role text;
+  v_normalized_role text;
+  v_role_match_count integer := 0;
+  v_current_rate_count integer := 0;
+  v_retainer_ready boolean := false;
+  v_is_bound boolean := false;
+  v_project_ceiling_cents bigint;
+BEGIN
+  IF TG_OP = 'UPDATE' AND OLD.billing_authority_id IS NOT NULL AND (
+    NEW.billing_authority_id IS DISTINCT FROM OLD.billing_authority_id
+    OR NEW.authority_rate_id IS DISTINCT FROM OLD.authority_rate_id
+    OR NEW.hourly_rate_cents IS DISTINCT FROM OLD.hourly_rate_cents
+  ) THEN
+    RAISE EXCEPTION 'time-entry authority and rate provenance are immutable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Browser-supplied rate/authority ids are never selection authority. New
+  -- rows and previously-unclassified rows are resolved exclusively from the
+  -- signed project authority and server-owned team role below.
+  IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND OLD.authority_rate_id IS NULL) THEN
+    NEW.billing_authority_id := NULL;
+    NEW.authority_rate_id := NULL;
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM public.project_commercial_documents d
+    WHERE d.project_id = NEW.project_id AND d.is_origin
+      AND d.document_kind = 'design_services'
+  ) INTO v_is_services_project;
+
+  IF NOT NEW.billable THEN
+    NEW.billing_state := 'nonbillable';
+    NEW.rated_amount_cents := CASE WHEN NEW.duration_minutes IS NULL THEN NULL ELSE 0 END;
+    RETURN NEW;
+  END IF;
+  IF NOT v_is_services_project THEN
+    NEW.billing_state := 'authorized';
+    IF NEW.duration_minutes IS NOT NULL AND NEW.hourly_rate_cents IS NOT NULL THEN
+      NEW.rated_amount_cents := round(NEW.duration_minutes / 60.0 * NEW.hourly_rate_cents)::integer;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  -- Every commercial classifier takes the same stable project lock used by an
+  -- addendum countersign. It serializes project-wide accrued-ceiling reads even
+  -- when the entry binds a superseded authority while another entry binds the
+  -- active replacement authority.
+  SELECT project.designer_id INTO v_project_designer_id
+  FROM public.projects project
+  WHERE project.id = NEW.project_id
+  FOR UPDATE;
+
+  SELECT authority.billing_ceiling_cents INTO v_project_ceiling_cents
+  FROM public.project_billing_authorities authority
+  WHERE authority.project_id = NEW.project_id AND authority.status = 'active'
+  ORDER BY authority.effective_at DESC, authority.id DESC
+  LIMIT 1;
+
+  IF TG_OP = 'UPDATE' AND OLD.billing_authority_id IS NOT NULL THEN
+    v_is_bound := true;
+    SELECT * INTO v_authority FROM public.project_billing_authorities
+    WHERE id = OLD.billing_authority_id AND project_id = NEW.project_id
+    FOR UPDATE;
+    SELECT * INTO v_rate FROM public.project_billing_authority_rates
+    WHERE id = OLD.authority_rate_id
+      AND billing_authority_id = OLD.billing_authority_id;
+    IF v_authority.id IS NULL OR v_rate.id IS NULL THEN
+      RAISE EXCEPTION 'bound commercial time entry has invalid authority provenance'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    NEW.billing_authority_id := OLD.billing_authority_id;
+    NEW.authority_rate_id := OLD.authority_rate_id;
+    NEW.hourly_rate_cents := OLD.hourly_rate_cents;
+  ELSE
+    SELECT * INTO v_authority FROM public.project_billing_authorities
+    WHERE project_id = NEW.project_id
+      AND effective_at <= NEW.started_at
+      AND (ended_at IS NULL OR ended_at > NEW.started_at)
+    ORDER BY effective_at DESC, id DESC LIMIT 1
+    FOR UPDATE;
+  END IF;
+  IF v_authority.id IS NULL THEN
+    NEW.billing_authority_id := NULL;
+    NEW.authority_rate_id := NULL;
+    NEW.billing_state := 'pending_authorization';
+    NEW.rated_amount_cents := NULL;
+    RETURN NEW;
+  END IF;
+
+  IF NOT v_is_bound THEN
+    SELECT max(rate.version) INTO v_current_version
+    FROM public.project_billing_authority_rates rate
+    JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+    WHERE rate.billing_authority_id = v_authority.id
+      AND source.effective_at <= NEW.started_at;
+
+    IF v_project_designer_id IS NOT DISTINCT FROM NEW.user_id THEN
+      v_team_role := 'lead_designer';
+    ELSE
+      SELECT CASE WHEN count(DISTINCT member.role) = 1 THEN min(member.role) END
+      INTO v_team_role
+      FROM public.project_team_members member
+      WHERE member.project_id = NEW.project_id
+        AND member.user_id = NEW.user_id
+        AND member.removed_at IS NULL;
+    END IF;
+    v_normalized_role := regexp_replace(
+      replace(lower(btrim(COALESCE(v_team_role, ''))), '_', ' '),
+      '\s+', ' ', 'g'
+    );
+
+    IF v_current_version IS NOT NULL AND v_normalized_role <> '' THEN
+      SELECT count(*) INTO v_role_match_count
+      FROM public.project_billing_authority_rates rate
+      JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+      WHERE rate.billing_authority_id = v_authority.id
+        AND rate.version = v_current_version
+        AND source.effective_at <= NEW.started_at
+        AND regexp_replace(
+          replace(lower(btrim(rate.role_name)), '_', ' '), '\s+', ' ', 'g'
+        ) = v_normalized_role;
+      IF v_role_match_count = 1 THEN
+        SELECT rate.* INTO v_rate
+        FROM public.project_billing_authority_rates rate
+        JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+        WHERE rate.billing_authority_id = v_authority.id
+          AND rate.version = v_current_version
+          AND source.effective_at <= NEW.started_at
+          AND regexp_replace(
+            replace(lower(btrim(rate.role_name)), '_', ' '), '\s+', ' ', 'g'
+          ) = v_normalized_role;
+      END IF;
+    END IF;
+
+    IF v_rate.id IS NULL AND v_current_version IS NOT NULL THEN
+      SELECT count(*) INTO v_current_rate_count
+      FROM public.project_billing_authority_rates rate
+      JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+      WHERE rate.billing_authority_id = v_authority.id
+        AND rate.version = v_current_version
+        AND source.effective_at <= NEW.started_at;
+      IF v_current_rate_count = 1 THEN
+        SELECT rate.* INTO v_rate
+        FROM public.project_billing_authority_rates rate
+        JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+        WHERE rate.billing_authority_id = v_authority.id
+          AND rate.version = v_current_version
+          AND source.effective_at <= NEW.started_at;
+      END IF;
+    END IF;
+  END IF;
+
+  IF v_rate.id IS NULL THEN
+    NEW.billing_authority_id := NULL;
+    NEW.authority_rate_id := NULL;
+    NEW.hourly_rate_cents := NULL;
+    NEW.rated_amount_cents := NULL;
+    NEW.billing_state := 'pending_authorization';
+    RETURN NEW;
+  END IF;
+  IF NOT v_is_bound THEN
+    NEW.billing_authority_id := v_authority.id;
+    NEW.authority_rate_id := v_rate.id;
+    NEW.hourly_rate_cents := v_rate.hourly_rate_cents;
+  END IF;
+
+  v_retainer_ready := v_authority.retainer_activation_policy = 'immediate'
+    OR v_authority.retainer_amount_cents = 0
+    OR EXISTS (
+      SELECT 1 FROM public.invoices invoice
+      WHERE invoice.id = v_authority.retainer_invoice_id
+        AND invoice.status = 'paid'
+        AND invoice.amount_paid_cents >= invoice.total_cents
+    );
+
+  IF NEW.duration_minutes IS NULL THEN
+    NEW.rated_amount_cents := NULL;
+    NEW.billing_state := CASE WHEN v_retainer_ready
+      THEN 'authorized' ELSE 'pending_authorization' END;
+    RETURN NEW;
+  END IF;
+  NEW.rated_amount_cents := round(
+    NEW.duration_minutes / 60.0 * CASE WHEN v_is_bound
+      THEN OLD.hourly_rate_cents ELSE v_rate.hourly_rate_cents END
+  )::integer;
+  IF NOT v_retainer_ready THEN
+    NEW.billing_state := 'pending_authorization';
+    RETURN NEW;
+  END IF;
+  SELECT COALESCE(sum(t.rated_amount_cents), 0) INTO v_prior_cents
+  FROM public.project_time_entries t
+  WHERE t.project_id = NEW.project_id
+    AND t.billing_state = 'authorized'
+    AND t.billable AND t.duration_minutes IS NOT NULL
+    AND t.id IS DISTINCT FROM NEW.id;
+  -- 00575 (F-2): the ONE delta from 00412:2607-2613. billing_ceiling_cents is
+  -- nullable now and NULL means uncapped, so the comparison has to answer
+  -- "authorized" instead of evaluating to NULL and falling to the ELSE.
+  IF COALESCE(v_project_ceiling_cents, v_authority.billing_ceiling_cents) IS NULL
+     OR v_prior_cents + NEW.rated_amount_cents
+        <= COALESCE(v_project_ceiling_cents, v_authority.billing_ceiling_cents) THEN
+    NEW.billing_state := 'authorized';
+  ELSE
+    NEW.billing_state := 'pending_authorization';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority()
+  FROM PUBLIC, anon, authenticated, service_role;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PART 5 — The projection: one implementation, two callers
 --
 -- Lifted VERBATIM out of upsert_design_services_draft (00422:1749-1793) so
 -- the seven-facet room and a composed part list write the terms row through
--- ONE body. Exactly one behavior changes: billingCeilingCents may now arrive
--- as JSON null and land as SQL NULL, because a removed ceiling part means
--- uncapped rather than zero-capped. The seven-facet room never sends null —
--- its hook always writes Math.round(terms.billingCeilingCents)
--- (use-commercial-documents.ts) — so the flag-off path is unmoved.
+-- ONE body. The flag-off caller's behavior is byte-identical to 00422 —
+-- including COALESCE(billingCeilingCents, 0), which a JSON null or an omitted
+-- key still lands as 0. Only the parts door may write NULL, and it says so
+-- explicitly: p_allow_null_ceiling. The guarantee lives in the FUNCTION, not
+-- in the discipline of one TypeScript caller (both RPCs are GRANTed to
+-- authenticated, and Math.round(undefined) serializes as JSON null).
 --
 -- upsert_design_services_draft keeps its own empty-rates refusal
 -- (00422:1722-1728); this helper does not re-assert it, because a flat-fee
 -- agreement composed from parts legitimately carries zero rates (F-4).
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- The 3-argument shape never shipped anywhere; dropping it keeps a re-run of
+-- this file from leaving two overloads that an unqualified 3-arg call cannot
+-- choose between.
+DROP FUNCTION IF EXISTS public._project_agreement_terms(uuid, jsonb, jsonb);
+
 CREATE OR REPLACE FUNCTION public._project_agreement_terms(
   p_proposal_id uuid,
   p_terms jsonb,
-  p_rates jsonb
+  p_rates jsonb,
+  p_allow_null_ceiling boolean DEFAULT false
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -1546,9 +1800,14 @@ BEGIN
     COALESCE(p_terms->>'scope', ''),
     COALESCE(p_terms->'deliverables', '[]'::jsonb),
     COALESCE(p_terms->'exclusions', '[]'::jsonb),
-    -- The ONE delta from 00422:1756: COALESCE(…, 0) became a NULL-preserving
-    -- read, so a removed ceiling part is uncapped rather than zero-capped.
-    (NULLIF(p_terms->>'billingCeilingCents', ''))::integer,
+    -- The ONE delta from 00422:1756, and it is opt-in: only a caller that
+    -- passes p_allow_null_ceiling may write NULL (uncapped). The false branch
+    -- is 00422:1756 character for character, so the flag-off door still turns
+    -- an omitted or JSON-null ceiling into 0.
+    CASE WHEN p_allow_null_ceiling
+      THEN (NULLIF(p_terms->>'billingCeilingCents', ''))::integer
+      ELSE COALESCE((p_terms->>'billingCeilingCents')::integer, 0)
+    END,
     COALESCE((p_terms->>'retainerAmountCents')::integer, 0),
     COALESCE(NULLIF(p_terms->>'retainerActivationPolicy', ''), 'immediate'),
     COALESCE(NULLIF(p_terms->>'billingCadence', ''), 'monthly'),
@@ -1586,7 +1845,7 @@ BEGIN
   END LOOP;
 END;
 $$;
-REVOKE ALL ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb)
+REVOKE ALL ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean)
   FROM PUBLIC, anon, authenticated, service_role;
 
 -- upsert_design_services_draft, head 00422:1707 — body VERBATIM with
@@ -1637,8 +1896,10 @@ BEGIN
 
   -- 00575: the projection moved to _project_agreement_terms, verbatim.
   -- Every refusal above, the kind widen, both set_config calls, the return
-  -- object and the EXCEPTION restore below are unchanged.
-  PERFORM public._project_agreement_terms(p_proposal_id, p_terms, p_rates);
+  -- object and the EXCEPTION restore below are unchanged. false = this door
+  -- may not write an uncapped ceiling; 00422's COALESCE(..., 0) still stands
+  -- for it.
+  PERFORM public._project_agreement_terms(p_proposal_id, p_terms, p_rates, false);
 
   PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
   RETURN jsonb_build_object(
@@ -1793,9 +2054,16 @@ BEGIN
   -- R4, as a DB floor and not only a UI one: an agreement that bills time is
   -- an agreement with a cap. The readiness panel says the same thing first;
   -- this is the sentence that holds when the panel is bypassed.
+  --
+  -- Both halves read the same parts the projection above reads — by part_key
+  -- AND shape. A rate card under a studio or custom key projects no rates, so
+  -- it bills no time and owes no cap; refusing it here would be a refusal
+  -- about money that no part carries (R5), and it would disagree with
+  -- _agreement_requires_rate_card.
   IF EXISTS (
        SELECT 1 FROM public.proposal_agreement_parts ap
        WHERE ap.proposal_id = p_proposal_id
+         AND ap.part_key = 'patina.role_rates'
          AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
          AND jsonb_typeof(ap.payload->'roles') = 'array'
          AND jsonb_array_length(ap.payload->'roles') > 0
@@ -1803,6 +2071,7 @@ BEGIN
      AND NOT EXISTS (
        SELECT 1 FROM public.proposal_agreement_parts ap
        WHERE ap.proposal_id = p_proposal_id
+         AND ap.part_key = 'patina.ceiling'
          AND ap.kind = 'schedule' AND ap.variant = 'ceiling'
          AND ap.payload->>'cents' IS NOT NULL
      )
@@ -1815,9 +2084,14 @@ BEGIN
   WHERE proposal_id = p_proposal_id;
   v_version := COALESCE(v_existing.current_rate_version, 1);
 
-  -- Only the nine standard keys project. Everything else — a custom clause, a
-  -- second ceiling under a studio key, a percent_of_cost schedule — is
-  -- recorded and hashed but writes nothing to the money row (R5).
+  -- Only the nine standard keys project, and only when the part actually HAS
+  -- the shape its key promises: every subquery below asserts the kind, and
+  -- every schedule subquery also asserts the variant. Without that, a clause
+  -- part keyed patina.ceiling would write billing_ceiling_cents — prose
+  -- carrying money, which R5 forbids. Everything else — a custom clause, a
+  -- second ceiling under a studio key, a percent_of_cost schedule, a part
+  -- posted under a standard key in the wrong shape — is recorded and hashed
+  -- but writes nothing to the money row.
   --
   -- patina.retainer's payload->>'creditRule' is READ AND DISCARDED in Wave 1:
   -- the column arrives on proposal_service_terms in Wave 2 (D-2). It is not a
@@ -1826,6 +2100,7 @@ BEGIN
     'scope', COALESCE((
       SELECT ap.payload->>'body' FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.services'
+        AND ap.kind = 'clause'
     ), ''),
     'deliverables', COALESCE((
       SELECT jsonb_agg(e.item->>'text' ORDER BY e.ord)
@@ -1836,6 +2111,7 @@ BEGIN
              THEN ap.payload->'items' ELSE '[]'::jsonb END
       ) WITH ORDINALITY AS e(item, ord)
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.deliverables'
+        AND ap.kind = 'list'
     ), '[]'::jsonb),
     'exclusions', COALESCE((
       SELECT jsonb_agg(e.item->>'text' ORDER BY e.ord)
@@ -1846,31 +2122,38 @@ BEGIN
              THEN ap.payload->'items' ELSE '[]'::jsonb END
       ) WITH ORDINALITY AS e(item, ord)
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.exclusions'
+        AND ap.kind = 'list'
     ), '[]'::jsonb),
     'terms', (
       SELECT ap.payload->>'body' FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.terms'
+        AND ap.kind = 'clause'
     ),
     'billingCeilingCents', (
       SELECT (ap.payload->>'cents')::integer FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.ceiling'
+        AND ap.kind = 'schedule' AND ap.variant = 'ceiling'
     ),
     'retainerAmountCents', COALESCE((
       SELECT (ap.payload->>'cents')::integer FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.retainer'
+        AND ap.kind = 'schedule' AND ap.variant = 'retainer'
     ), 0),
     'retainerActivationPolicy', COALESCE((
       SELECT NULLIF(ap.payload->>'activationPolicy', '')
       FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.retainer'
+        AND ap.kind = 'schedule' AND ap.variant = 'retainer'
     ), 'immediate'),
     'billingCadence', COALESCE((
       SELECT NULLIF(ap.payload->>'cadence', '') FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.cadence'
+        AND ap.kind = 'schedule' AND ap.variant = 'cadence'
     ), 'monthly'),
     'furnishingsDepositPercent', (
       SELECT (ap.payload->>'depositPercent')::numeric FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.deposit'
+        AND ap.kind = 'schedule' AND ap.variant = 'procurement'
     ),
     'currency', COALESCE(v_existing.currency, 'USD'),
     'currentRateVersion', v_version
@@ -1889,9 +2172,12 @@ BEGIN
            THEN ap.payload->'roles' ELSE '[]'::jsonb END
     ) WITH ORDINALITY AS e(rate, ord)
     WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.role_rates'
+      AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
   ), '[]'::jsonb);
 
-  PERFORM public._project_agreement_terms(p_proposal_id, v_terms, v_rates);
+  -- true = the parts door, and only the parts door, may leave the ceiling
+  -- NULL: a removed ceiling part is uncapped, not zero-capped.
+  PERFORM public._project_agreement_terms(p_proposal_id, v_terms, v_rates, true);
 
   PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
   RETURN jsonb_build_object(
@@ -2429,16 +2715,20 @@ COMMENT ON FUNCTION public.materialize_standard_parts(uuid) IS
   'returned unchanged with materialized = false. Does not re-project: the '
   'terms row it read is already the projection.';
 
-COMMENT ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb) IS
+COMMENT ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) IS
   '00575: the terms/rates projection, lifted verbatim out of '
   'upsert_design_services_draft (00422:1749-1793) so the seven-facet room and '
-  'a composed part list write through one body. billingCeilingCents may be '
-  'JSON null, which lands as SQL NULL — uncapped.';
+  'a composed part list write through one body. p_allow_null_ceiling is the '
+  'ONLY behavioral difference between the two doors: false (the flag-off '
+  'draft) keeps 00422''s COALESCE(billingCeilingCents, 0); true (the parts '
+  'door) lets a missing ceiling part land as SQL NULL — uncapped.';
 
 COMMENT ON FUNCTION public._agreement_requires_rate_card(uuid) IS
   '00575: TRUE when this agreement must carry at least one role rate before '
   'it can be sent or signed — it has no parts at all (every pre-00575 and '
-  'every flag-off document, the legacy contract unchanged), or it has a '
-  'rate_card part and therefore bills time (R4).';
+  'every flag-off document, the legacy contract unchanged), or it carries the '
+  'patina.role_rates part in schedule/rate_card shape and therefore bills '
+  'time (R4). Keyed on the one part the rate projection reads, so the '
+  'refusal and the projection can never disagree.';
 
 COMMIT;
