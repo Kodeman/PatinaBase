@@ -46,6 +46,33 @@ merged onto `agreement/w1-integration` in
 
 ---
 
+## Integration steward reset — round 2, 2026-09-06 (after lane rounds 4–5)
+
+The three lanes advanced past the heads the first integration merged (backend
+round 4, designer's independent-review fixes, client rounds 4–5). The integration
+branch has therefore been re-merged onto the current `origin/main` tip
+`3a9472f92`, and **the steward is taking the stack again**.
+
+- Stack state immediately before this reset: running, head `00575` — the body
+  left by the first integration reset, which is now stale relative to the
+  backend lane's round-4 edits to `00575_agreement_parts.sql` (`+515 / −…` on
+  that file since). This is exactly the drift `env.md` and the backend round-4
+  review warned about.
+- `supabase db reset` is run from the **integration worktree**
+  `/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w1-integration`, so
+  the replay picks up the round-4 body of `00575_agreement_parts.sql` and the
+  regenerated `supabase/seed/00-legacy-grants.sql`. Expected head after the
+  reset: `00575`.
+- No scratch databases remain (`select datname from pg_database where datname
+  like 'patina%'` → 0 rows); every lane's `patina_w1*` scratch DB was dropped.
+- **No other agent may reset, seed, stop, or start the shared stack from this
+  point on.** Every remaining Wave 1 gate runs against the shared `postgres`
+  database on 54322.
+- The stack is left running at head `00575` for the designer/client walk — see
+  `walk-env.md` in this directory for the boot recipe.
+
+---
+
 This notice exists per the parallel-work discipline in
 `.claude/skills/patina-parallel-work` and the shared-stack lesson in project
 memory (`feedback_shared_local_supabase_stack_last_reset_wins.md`): concurrent

@@ -4,6 +4,14 @@ Date 2026-09-06 · prepared by the Wave 1 integration steward.
 Everything below is **local only**. Nothing here touches Strata, and no
 production key appears in this file.
 
+> **Refreshed for integration round 2** (lanes' rounds 4–5). Integration head is
+> `b2a9e68f94cc590ec77c218dc3ca992d4c498303` on `agreement/w1-integration`,
+> merged over `origin/main` `3a9472f92`. The stack has been reset again from
+> this worktree, so the `00575` body it carries is the **round-4** body
+> (`discard_agreement_parts` present, the R17 projection trigger armed) — the
+> earlier reset left a pre-R17 copy behind. §3 and §5 below are rewritten for
+> what the merged tree actually does.
+
 ---
 
 ## 0 · What is already true when you sit down
@@ -103,9 +111,18 @@ pnpm --filter @patina/client-portal dev
 
 The client side of Wave 1 carries **no flag**: the shell renders the composed
 body when the bundle it already fetches carries parts
-(`commercial-document-shell.tsx:194` — `if (bundle.parts.length > 0)`), and
-today's body otherwise. So the homeowner's page is the honest test of what the
-designer composed — nothing to force on, and nothing to force off.
+(`commercial-document-shell.tsx:205` — `if (bundle.composed ?? bundle.parts.length > 0)`),
+and today's body otherwise. So the homeowner's page is the honest test of what
+the designer composed — nothing to force on, and nothing to force off.
+
+`get_client_commercial_document_bundle` emits the `parts` key (verified against
+the reset stack: `pg_get_functiondef` line 100). It does **not** emit
+`composed` / `agreementComposed` / `agreement_composed` — nothing in the stack
+does — so the `??` always falls through to `parts.length > 0` and the branch
+behaves exactly as it did before the key was added. Client finding **F-1/F-2**:
+the kill switch the shell now reads has no producer. It rides as an advisory,
+not a blocker, because the fallback is today's behaviour; but do not walk
+expecting `composed: false` to hide a composed agreement — nothing can set it.
 
 Two portals on one browser share a cookie jar and will sign each other out
 (`project_local_two_portal_cookie_collision.md`). Use two profiles, or one
@@ -139,28 +156,48 @@ the flag.
 
 ## 5 · What the walk should try to break
 
-The Wave 1 reviews leave four things standing that only a person at the
-keyboard will feel. They are written here as walk targets, not as claims:
+Rounds 4–5 closed the two things this section used to open with: the Add menu
+no longer offers a second part of a money variant it already carries (R18), and
+readiness reports the duplicate as a blocker, so Save can no longer reach the
+database's 23514. The R17 walls are armed on the reset stack — the projection
+trigger, the typed `agreement_composed` refusal, and the withdrawn
+`authenticated` write grants on `proposal_service_terms` /
+`proposal_service_rates` — and `discard_agreement_parts` exists.
 
-1. **A second money part of the same kind.** Add a second Ceiling (or
-   Retainer / Cadence / Deposit / Role-rates) from the Add menu. Readiness is
-   expected to say ready; Save is expected to be refused by the database with
-   *"an agreement carries only one …"*. Backend R2 / designer DR20.
-2. **A money part added from the rail.** Remove a standard money part and add
-   a fresh one, then read the client page. The composer mints
-   `custom.<uuid>` keys; money projects by kind+variant, so this should now
-   reach `proposal_service_terms` — but the **prose** parts (scope, terms,
-   deliverables, exclusions) still project by `part_key`, so a rail-composed
-   clause may write an empty body into the row both flag-off renderers read.
-   Backend R3.
-3. **Two members, one flag.** Sign in as the designer with the flag on, compose
-   a ceiling; sign in as a second co-member with the flag **off** and save the
-   seven-facet room. The page the client signs and the authority the studio
-   bills against can end up carrying different numbers. Backend R1 — the open
-   blocker, unruled.
-4. **Flag-off byte-identity.** Restart with `agreement-parts:false` and read
+What the reviews still leave standing, as walk targets rather than claims:
+
+1. **Money on the page she signs.** Compose an agreement for a class that bills
+   and leave every money part **client-hidden** (or leave it with no money part
+   the class requires that the homeowner can see). The designer UI is expected
+   to refuse; the DB floor (`_agreement_floor_unmet`) asks the *ceiling*
+   question and not the *client-visible money* one, so a document composed by
+   any other path can send, sign and countersign into an hourly authority.
+   Backend **M1-new** (major, 0.90). Watch what the homeowner's page prints.
+2. **A money part added from the rail.** Remove a standard money part and add a
+   fresh one, then read the client page. The composer mints `custom.<uuid>`
+   keys; money projects by kind+variant, so it reaches
+   `proposal_service_terms` — but the **prose** parts (scope, terms,
+   deliverables, exclusions) project by `part_key` (R19), so a rail-composed
+   clause can write an empty body into the row both flag-off renderers read.
+3. **Two members, one flag.** Sign in as the designer with the flag on and
+   merely **open** the Contract Room on a fresh draft; that composes the draft
+   irreversibly for the whole studio. Then sign in as a co-member the flag has
+   not reached and open the seven-facet room: they should now meet the plain
+   refusal sentence with Save disabled, not a form that silently loses. Backend
+   **M3** — the database can un-compose, but no product surface calls
+   `discard_agreement_parts`, so there is no way back from the UI.
+4. **Not yet set, on both surfaces.** Compose a ceiling part and leave the
+   figure empty, then read the designer's live client-preview beside the
+   homeowner's page. R21 says both print "Not yet set". Client **F-5** says
+   they drift on the first composed agreement — the preview prints `$0`.
+5. **A deposit nobody typed.** Client **F-6**: a 50% furnishings deposit that
+   was never entered can print as a money term of the design-services
+   agreement the homeowner signs. Read the composed body for a deposit line
+   you did not write.
+6. **Flag-off byte-identity.** Restart with `agreement-parts:false` and read
    the seven-facet room and the client body. Nothing may differ from `main`.
-   (The jest snapshot already pins this; the eye is the second witness.)
+   (The designer drafting-room jest snapshot and the client shell snapshot pin
+   this; the eye is the second witness.)
 
 ## 6 · Tearing down
 
