@@ -31,6 +31,12 @@ export interface CommercialTransitionEvidence {
     id: string;
     invoiceStatus: string | null;
   } | null;
+  /** One row of the design-build draw ledger (agreement_draw_invoices),
+   * resolved by the caller's eventId and scoped to this proposal. */
+  agreementDraw: {
+    id: string;
+    invoiceStatus: string | null;
+  } | null;
 }
 
 export interface CommercialTransitionPolicyInput {
@@ -56,6 +62,7 @@ const STUDIO_TRANSITIONS = new Set<CommercialTransition>([
   "furnishings_sent",
   "trade_scope_sent",
   "trade_draw_ready",
+  "agreement_draw_ready",
 ]);
 
 const CLIENT_TRANSITIONS = new Set<CommercialTransition>([
@@ -66,7 +73,11 @@ const CLIENT_TRANSITIONS = new Set<CommercialTransition>([
   "trade_scope_accepted",
 ]);
 
-const SERVICES_KINDS = new Set(["design_services", "service_addendum"]);
+const SERVICES_KINDS = new Set([
+  "design_services",
+  "service_addendum",
+  "design_build",
+]);
 
 const SERVICES_TRANSITIONS = new Set<CommercialTransition>([
   "client_signed",
@@ -86,12 +97,20 @@ const TRADE_SCOPE_ONLY_TRANSITIONS = new Set<CommercialTransition>([
   "trade_draw_ready",
 ]);
 
+/** The design-build prime's own draw rail. Kept apart from the trade-scope set
+ * because the two ledgers are different tables on different documents: a draw
+ * on a turnkey agreement is never a trade scope draw. */
+const AGREEMENT_DRAW_TRANSITIONS = new Set<CommercialTransition>([
+  "agreement_draw_ready",
+]);
+
 /** Transitions whose idempotency/evidence key is a sub-document event id
  * rather than the commercial document id itself (mirrors budget_published's
  * checkpoint-id keying). */
 const EVENT_SCOPED_TRANSITIONS = new Set<CommercialTransition>([
   "budget_published",
   "trade_draw_ready",
+  "agreement_draw_ready",
 ]);
 
 export function actorCanNotify(
@@ -117,6 +136,12 @@ export function documentKindCanNotify(
   if (TRADE_SCOPE_ONLY_TRANSITIONS.has(transition)) {
     return documentKind === "trade_scope";
   }
+  if (AGREEMENT_DRAW_TRANSITIONS.has(transition)) {
+    return documentKind === "design_build";
+  }
+  // design_build is deliberately absent: a turnkey deposit reaches the client
+  // on the door in the same act as their signature, so a deposit_ready email
+  // would be a second, contradictory notice.
   if (transition === "deposit_ready") {
     return documentKind === "furnishings_authorization" ||
       documentKind === "trade_scope";
@@ -177,6 +202,16 @@ function hasBoundTradeScopeEvidence(
 ): boolean {
   const document = input.evidence.projectDocument;
   return document !== null && document.documentKind === "trade_scope";
+}
+
+/** Same shape as the trade-scope binding above: the design-build prime carries
+ * no working-budget checkpoint either, so the project_commercial_documents row
+ * scoped to this proposal by the caller is the whole of the binding. */
+function hasBoundDesignBuildEvidence(
+  input: CommercialTransitionPolicyInput,
+): boolean {
+  const document = input.evidence.projectDocument;
+  return document !== null && document.documentKind === "design_build";
 }
 
 export function assessCommercialTransition(
@@ -273,6 +308,17 @@ export function assessCommercialTransition(
       const draw = evidence.tradeScopeDraw;
       return input.commercialState === "executed" &&
         hasBoundTradeScopeEvidence(input) &&
+        Boolean(input.eventId) &&
+        draw !== null &&
+        draw.id === input.eventId &&
+        (draw.invoiceStatus === "sent" || draw.invoiceStatus === "partially_paid")
+        ? { allowed: true }
+        : { allowed: false, reason: "transition_not_committed" };
+    }
+    case "agreement_draw_ready": {
+      const draw = evidence.agreementDraw;
+      return input.commercialState === "executed" &&
+        hasBoundDesignBuildEvidence(input) &&
         Boolean(input.eventId) &&
         draw !== null &&
         draw.id === input.eventId &&

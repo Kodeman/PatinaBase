@@ -353,3 +353,20 @@ Deno.test('a client-addressed commercial letter resolves the client portal (P-03
   });
   assertStringIncludes(studioCopy.html, '>Dashboard</a>');
 });
+
+Deno.test('agreement draw ready copy names the retainage held back, and never a figure', () => {
+  const email = renderCommercialEmail({
+    transition: 'agreement_draw_ready',
+    audience: 'client',
+    documentTitle: 'Halvorsen kitchen and mudroom',
+    documentKind: 'design_build',
+    portalUrl: 'https://client.patina.cloud/projects/project-1#letterbox',
+  });
+
+  assertStringIncludes(email.subject, 'Draw ready: Halvorsen kitchen and mudroom');
+  assertStringIncludes(email.html, 'The next draw on your agreement is ready');
+  assertStringIncludes(email.html, 'Retainage is held back from this draw');
+  assertStringIncludes(email.message, 'The next draw on Halvorsen kitchen and mudroom is ready.');
+  // The notice points at the paper; the amount lives on the invoice.
+  assert(!email.html.includes('$'));
+});

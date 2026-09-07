@@ -20,7 +20,8 @@ export type CommercialTransition =
   | 'trade_scope_sent'
   | 'trade_scope_executed'
   | 'trade_scope_accepted'
-  | 'trade_draw_ready';
+  | 'trade_draw_ready'
+  | 'agreement_draw_ready';
 
 export interface CommercialEmailInput {
   transition: CommercialTransition;
@@ -208,6 +209,14 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
       body = `The next draw for &ldquo;<strong>${title}</strong>&rdquo; is ready. The trade continues once Patina records the required payment against the internal invoice.`;
       cta = 'Review draw';
       message = `A trade scope draw invoice for ${input.documentTitle} is ready.`;
+      break;
+    case 'agreement_draw_ready':
+      subject = `Draw ready: ${input.documentTitle}`;
+      eyebrow = 'Payment required';
+      headline = 'The next draw on your agreement is ready';
+      body = `The next draw on &ldquo;<strong>${title}</strong>&rdquo; is ready. Retainage is held back from this draw and released at the end, exactly as your agreement describes.`;
+      cta = 'Review draw';
+      message = `The next draw on ${input.documentTitle} is ready.`;
       break;
   }
 
