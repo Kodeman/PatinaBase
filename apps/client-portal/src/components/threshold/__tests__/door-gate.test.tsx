@@ -737,3 +737,206 @@ describe('DoorGate — per commercial kind', () => {
     );
   });
 });
+
+/* ── THE COMPOSED DOOR (Wave 2, P6) ──────────────────────────────────────────
+   An agreement composed from parts says what it actually authorizes on the
+   consent line, and an attachment it requires her to acknowledge is a gate on
+   the act rather than a line under it. The composer's own outputs are pinned
+   in consent-copy.test.ts; what is pinned here is that the door reads the
+   bundle's parts, that the ticks gate the hold, and that the keys reach the
+   sign route. ────────────────────────────────────────────────────────────── */
+
+const PER_PHASE_LINE =
+  'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.';
+
+function composedBundle(parts: unknown[]) {
+  return {
+    isLoading: false,
+    isError: false,
+    data: {
+      document: { kind: 'design_services' as const },
+      furnishings: null,
+      tradeScope: null,
+      parts,
+    },
+  };
+}
+
+const MONEY_PARTS = [
+  {
+    id: 'p1',
+    position: 1,
+    kind: 'schedule',
+    variant: 'per_phase',
+    partKey: 'patina.per_phase',
+    title: 'Per-phase fee',
+    payload: {
+      phases: [
+        { key: 'concept', label: 'Concept', cents: 350000 },
+        { key: 'documentation', label: 'Documentation', cents: 450000 },
+      ],
+    },
+    required: true,
+  },
+  {
+    id: 'p2',
+    position: 2,
+    kind: 'schedule',
+    variant: 'retainer',
+    partKey: 'patina.retainer',
+    title: 'Retainer',
+    payload: { cents: 500000, creditRule: 'non_refundable' },
+    required: false,
+  },
+];
+
+const ATTACHMENT_PARTS = [
+  {
+    id: 'p3',
+    position: 3,
+    kind: 'attachment',
+    variant: null,
+    partKey: 'studio.lead_paint_notice',
+    title: 'the lead-paint notice',
+    payload: { body: 'A notice.', acknowledgeRequired: true },
+    required: false,
+  },
+  {
+    id: 'p4',
+    position: 4,
+    kind: 'attachment',
+    variant: null,
+    partKey: 'studio.care_guide',
+    title: 'the care guide',
+    payload: { body: 'A guide.', acknowledgeRequired: false },
+    required: false,
+  },
+];
+
+describe('DoorGate — the composed agreement', () => {
+  beforeEach(() => {
+    reduceMotion(true);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ projectId: 'proj-1' }),
+    }) as unknown as typeof fetch;
+  });
+
+  function renderComposed(parts: unknown[]) {
+    bundleMock.mockReturnValue(composedBundle(parts));
+    return renderGate({ proposal: { ...PROPOSAL, kind: 'design_services' } });
+  }
+
+  it('reads the consent line off the parts, not off the kind alone', () => {
+    renderComposed(MONEY_PARTS);
+
+    expect(screen.getByTestId('door-consent-line')).toHaveTextContent(PER_PHASE_LINE);
+    // The legacy line named the seven facets; a per-phase agreement has none
+    // of the terms it asserted.
+    expect(screen.getByTestId('door-consent-line')).not.toHaveTextContent(
+      'the signed role rates',
+    );
+  });
+
+  it('keeps today’s line for a parts-less agreement', () => {
+    renderComposed([]);
+
+    expect(screen.getByTestId('door-consent-line')).toHaveTextContent(
+      consentLineFor('design_services'),
+    );
+  });
+
+  it('stops the summary above it naming terms this paper does not carry', () => {
+    renderComposed(MONEY_PARTS);
+
+    const summary = screen.getByTestId('door-summary');
+    // The frozen sentence told her she was accepting role rates, a ceiling and
+    // a retainer. This agreement is per-phase: it has none of the first two,
+    // and the consent line below names the retainer it does have.
+    expect(summary).not.toHaveTextContent('signed role rates');
+    expect(summary).not.toHaveTextContent('design authorization ceiling');
+    expect(summary).toHaveTextContent(
+      'The agreement becomes effective only after the studio countersigns.',
+    );
+  });
+
+  it('leaves the summary untouched on an agreement with no parts', () => {
+    renderComposed([]);
+
+    expect(screen.getByTestId('door-summary')).toHaveTextContent(
+      'By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in',
+    );
+  });
+
+  it('asks about the attachments it must, and only those', () => {
+    renderComposed([...MONEY_PARTS, ...ATTACHMENT_PARTS]);
+
+    const acks = screen.getAllByTestId('door-attachment-ack');
+    expect(acks).toHaveLength(1);
+    expect(acks[0]).toHaveAttribute('data-part-key', 'studio.lead_paint_notice');
+    expect(acks[0]).toHaveTextContent('I received the lead-paint notice.');
+  });
+
+  it('offers no acknowledgment at all when no attachment asks for one', () => {
+    renderComposed([...MONEY_PARTS, ATTACHMENT_PARTS[1]]);
+
+    expect(screen.queryAllByTestId('door-attachment-ack')).toHaveLength(0);
+    expect(screen.getByTestId('door-hint')).toHaveTextContent(
+      'Type your full name and tick the line to sign.',
+    );
+  });
+
+  it('holds the act back until every attachment is ticked, and says so', () => {
+    renderComposed([...MONEY_PARTS, ...ATTACHMENT_PARTS]);
+
+    fireEvent.change(screen.getByLabelText('Type your full name'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(screen.getByLabelText(PER_PHASE_LINE));
+
+    expect(signAction()).toBeDisabled();
+    expect(screen.getByTestId('door-hint')).toHaveTextContent(
+      'Tick each attachment you received, type your full name, and tick the line to sign.',
+    );
+
+    fireEvent.click(screen.getByLabelText('I received the lead-paint notice.'));
+
+    expect(signAction()).not.toBeDisabled();
+    expect(screen.getByTestId('door-hint')).toHaveTextContent('Ready when you are.');
+  });
+
+  it('carries the acknowledged keys to the sign route', async () => {
+    renderComposed([...MONEY_PARTS, ...ATTACHMENT_PARTS]);
+
+    fireEvent.change(screen.getByLabelText('Type your full name'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(screen.getByLabelText(PER_PHASE_LINE));
+    fireEvent.click(screen.getByLabelText('I received the lead-paint notice.'));
+
+    await holdSign();
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body as string)).toEqual({
+      signedByName: 'Harper Vale',
+      attachmentsAcknowledged: ['studio.lead_paint_notice'],
+    });
+  });
+
+  it('sends an empty acknowledgment list when the agreement asks for none', async () => {
+    renderComposed(MONEY_PARTS);
+
+    fireEvent.change(screen.getByLabelText('Type your full name'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(screen.getByLabelText(PER_PHASE_LINE));
+
+    await holdSign();
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body as string)).toEqual({
+      signedByName: 'Harper Vale',
+      attachmentsAcknowledged: [],
+    });
+  });
+});

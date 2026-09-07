@@ -36,6 +36,8 @@ import type { AgreementPart } from "@patina/types";
 import { Input } from "@/components/ui/controls";
 import { AddPartMenu } from "./add-part-menu";
 import { addPartOptions, createsAuthority, partKindLabel } from "./part-kinds";
+import { Button } from "@/components/ui/controls";
+import { AuthorityChip } from "./schedules/authority-chip";
 
 export interface PartsRailProps {
   parts: AgreementPart[];
@@ -49,6 +51,30 @@ export interface PartsRailProps {
   onAdd: Parameters<typeof AddPartMenu>[0]["onAdd"];
   /** Composition is frozen once the agreement leaves draft (R6). */
   readOnly: boolean;
+  /**
+   * `agreement-parts && agreement-library`. Off, the footer is Wave 1's blank
+   * `+ Add a part` menu and a schedule row chips only what Wave 1 chipped.
+   * On, the footer opens the Library and every schedule row wears its R9
+   * standing.
+   */
+  libraryOn?: boolean;
+  /** Wave 2 footer — opens `add-part-sheet.tsx`, the Library picker (M2). */
+  onOpenLibrary?: () => void;
+  /** Wave 2 footer — opens `template-picker-sheet.tsx`. */
+  onOpenTemplatePicker?: () => void;
+  /** Wave 2 footer — `save-as-template-action.tsx`, which the composer mounts
+   *  because only it knows the studio and the acting member's role (R3). */
+  saveAsTemplate?: React.ReactNode;
+  /**
+   * Keeps ONE part in the studio's Library — the act the Library's own PARTS
+   * shelf promises ("Compose an agreement, and what you write there can be
+   * kept here") and that nothing in the room performed. The composer owns it
+   * because only it knows the studio (R32) and the acting member's role (R3);
+   * absent, the row menu offers Wave 1's four acts and nothing more.
+   */
+  onKeepInLibrary?: (part: AgreementPart) => void;
+  /** Part ids already kept this session, so the act is offered once. */
+  keptPartIds?: ReadonlySet<string>;
 }
 
 export function PartsRail({
@@ -61,6 +87,12 @@ export function PartsRail({
   onRemove,
   onAdd,
   readOnly,
+  libraryOn = false,
+  onOpenLibrary,
+  onOpenTemplatePicker,
+  saveAsTemplate,
+  onKeepInLibrary,
+  keptPartIds,
 }: PartsRailProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -99,10 +131,13 @@ export function PartsRail({
                 selected={part.id === selectedId}
                 blocked={blockedIds.has(part.id)}
                 readOnly={readOnly}
+                libraryOn={libraryOn}
                 onSelect={onSelect}
                 onReorder={onReorder}
                 onRename={onRename}
                 onRemove={onRemove}
+                onKeepInLibrary={onKeepInLibrary}
+                kept={keptPartIds?.has(part.id) === true}
               />
             ))}
           </ul>
@@ -115,9 +150,20 @@ export function PartsRail({
         </p>
       )}
 
-      {!readOnly && (
-        <AddPartMenu options={addPartOptions(parts)} onAdd={onAdd} />
-      )}
+      {!readOnly &&
+        (libraryOn ? (
+          <div className="space-y-1">
+            <Button variant="ghost" size="sm" onClick={onOpenLibrary}>
+              + Add a part
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onOpenTemplatePicker}>
+              Start from a template…
+            </Button>
+            {saveAsTemplate}
+          </div>
+        ) : (
+          <AddPartMenu options={addPartOptions(parts)} onAdd={onAdd} />
+        ))}
     </nav>
   );
 }
@@ -129,10 +175,13 @@ function PartRow({
   selected,
   blocked,
   readOnly,
+  libraryOn,
   onSelect,
   onReorder,
   onRename,
   onRemove,
+  onKeepInLibrary,
+  kept,
 }: {
   part: AgreementPart;
   index: number;
@@ -140,10 +189,13 @@ function PartRow({
   selected: boolean;
   blocked: boolean;
   readOnly: boolean;
+  libraryOn: boolean;
   onSelect: (id: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onRename: (id: string, title: string) => void;
   onRemove: (id: string) => void;
+  onKeepInLibrary?: (part: AgreementPart) => void;
+  kept: boolean;
 }) {
   const {
     attributes,
@@ -220,7 +272,24 @@ function PartRow({
           >
             <span className="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
               {partKindLabel(part.kind, part.variant)}
-              {createsAuthority(part.variant) ? " · creates authority" : ""}
+              {/* Wave 1 chipped only what created authority in Wave 1 (DR5:
+                  `flat` and `per_phase` did not, and their editors said so).
+                  Wave 2 gives every schedule part its R9 standing, including
+                  `record only` — the chip and the editor still agree,
+                  because in Wave 2 the fee schedules project. */}
+              {libraryOn && part.kind === "schedule" ? (
+                <>
+                  {" · "}
+                  <AuthorityChip
+                    variant={part.variant}
+                    className="text-[10.5px] tracking-[0.1em]"
+                  />
+                </>
+              ) : createsAuthority(part.variant) && !libraryOn ? (
+                " · creates authority"
+              ) : (
+                ""
+              )}
             </span>
             <span className="block text-[13px]">
               {part.title}
@@ -277,6 +346,14 @@ function PartRow({
                 >
                   Move down
                 </RowMenuItem>
+                {onKeepInLibrary && (
+                  <RowMenuItem
+                    disabled={kept}
+                    onClick={() => act(() => onKeepInLibrary(part))}
+                  >
+                    {kept ? "Kept in the Library" : "Keep in the Library"}
+                  </RowMenuItem>
+                )}
                 {/* R4: every part is removable, including a required one and
                     including Exclusions. Readiness is what refuses a send,
                     not the rail. */}

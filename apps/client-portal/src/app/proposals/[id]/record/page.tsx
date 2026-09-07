@@ -5,7 +5,11 @@ import { Loader2 } from 'lucide-react';
 import { useStudioIdentity } from '@patina/supabase';
 
 import { RecordSheet } from '@/components/record/record-sheet';
-import { KIND_LABEL, summaryLineFor } from '@/components/threshold/consent-copy';
+import {
+  KIND_LABEL,
+  composeSummaryLine,
+  type ConsentPart,
+} from '@/components/threshold/consent-copy';
 import { useClientCommercialDocument } from '@/hooks/use-commercial-client';
 import {
   checksumMark,
@@ -100,6 +104,15 @@ export default function ProposalRecordPage({
   const signedOn =
     parseSourceDate(signature.paperSignedOn) ?? parseSourceDate(signature.signedAt);
   const sent = parseSourceDate(paper.document.sentAt);
+  // Only presence matters to `composeSummaryLine` — it names no money — so
+  // this carries the shape and nothing more. Every part the bundle sends is
+  // one the studio left client-visible.
+  const summaryParts: ConsentPart[] = (paper.parts ?? []).map((part) => ({
+    kind: part.kind,
+    variant: part.variant,
+    clientVisible: true,
+    payload: part.payload,
+  }));
   const kindLabel = KIND_LABEL[paper.document.kind] ?? 'Paper';
 
   // What the signature let go, when the paper names it. A furnishings
@@ -129,14 +142,38 @@ export default function ProposalRecordPage({
       editionLine={`${kindLabel} · Edition ${paper.document.version}${
         sent ? ` · Issued ${LONG_DATE.format(sent)}` : ''
       }`}
-      question={summaryLineFor(paper.document.kind, paper.document.title)}
+      /* The same reduction the door makes, and for the same reason: a
+         composed agreement's four-facet summary named role rates, a ceiling
+         and a retainer this paper may never have carried. What she agreed to
+         is the line below, off her own signature. */
+      question={composeSummaryLine(
+        paper.document.kind,
+        paper.document.title,
+        summaryParts,
+      )}
       stampState={signature.signedOnPaper ? 'signed_on_paper' : 'signed'}
       stampDateLabel={signedOn ? DAY_MONTH.format(signedOn) : null}
       stampSubject={`${paper.document.title} · Edition ${paper.document.version}`}
       signatureHeading={block.heading}
       signedName={block.name}
       signedOn={block.dateLine}
-      consentSentence={block.sentence}
+      /* R36 — WHAT SHE TICKED, off her own signature row. It was written into
+         `commercial_document_signatures.metadata.consentSentence` at insert by
+         the sign route, and the bundle now projects that one key beside
+         `signedOnPaper` and `paperSignedOn` — one scalar at a time, in 00425's
+         discipline; raw metadata still never crosses the edge. Re-composing
+         the sentence from today's parts is the one thing a record must never
+         do: the parts move under an addendum, and her signature does not. A
+         signature taken before the consent was recorded carries none, and the
+         sheet falls back to the standing sentence for the method, exactly as
+         it did in Wave 1. */
+      consentSentence={signature.consentSentence ?? block.sentence}
+      /* R12. Present only once the studio has countersigned a composed
+         agreement. A pre-Wave-2 execution, or an agreement with no parts,
+         carries none — and the sheet then reads exactly as it does today,
+         with no empty state and nothing said about a snapshot. */
+      executedHtml={paper.executionSnapshot?.html ?? null}
+      executedChecksum={checksumMark(paper.executionSnapshot?.documentHash)}
       releaseSentence={release}
       checksum={checksumMark(signature.documentFingerprint)}
       backHref={back}

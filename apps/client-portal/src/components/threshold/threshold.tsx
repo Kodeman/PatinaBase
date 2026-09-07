@@ -437,7 +437,21 @@ export function Threshold({
   // NULL, so the raw column would hide the one paper that matters most.
   const signatureGates: DoorProposal[] = pendingProposals.flatMap((proposal) => {
     const commercial = commercialSummaryFromProposal(proposal);
-    if (commercial.projectId !== projectId || commercial.kind === 'legacy') return [];
+    if (commercial.kind === 'legacy') return [];
+    // R30, carried to Wave 2 — THE PAPERS WITHOUT A HOUSE. A design services
+    // agreement is `project_id NULL` by design until countersign creates the
+    // project (00331, 00566 "ORIGIN"), so a household that already has a house
+    // and is sent a SECOND origin agreement had it filtered off every door she
+    // owns: the paper was addressed to her, reachable from nowhere, and
+    // `?proposal=` folded to a page that did not draw it. It stands on every
+    // house's doorstep instead, so it is reachable from wherever she is.
+    //
+    // `design_services` only, exactly as R30 scopes it: an addendum always
+    // binds to a project, and a furnishings authorization is minted from the
+    // schedule of one — neither is a paper that comes before a house.
+    const houseless =
+      commercial.projectId === null && commercial.kind === 'design_services';
+    if (!houseless && commercial.projectId !== projectId) return [];
     return [
       {
         id: proposal.id,
@@ -450,6 +464,7 @@ export function Threshold({
         // The acts on the leaf keep the old route's expiry gate; the summary
         // does not carry the date, so it comes off the row.
         validUntil: proposal.valid_until ?? null,
+        houseless,
       },
     ];
   });

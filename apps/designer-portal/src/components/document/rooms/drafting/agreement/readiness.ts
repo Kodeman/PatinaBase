@@ -22,6 +22,8 @@ import type { AgreementPart } from "@patina/types";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import {
   duplicateMoneyVariants,
+  FEE_BASIS_BLOCKER,
+  feeBasisParts,
   readBody,
   readCents,
   readItems,
@@ -76,6 +78,10 @@ export function duplicateMoneyBlocker(label: string): string {
  *  showed none of the reason. Named here once because the rail marks the row
  *  with it and the readiness panel prints it. */
 export const BLANK_ROLE_BLOCKER = "Every role on the rate card needs a name.";
+
+/** R33 — a fee the homeowner never sees never reaches the money row. */
+export const HIDDEN_FEE_BLOCKER =
+  "This fee is hidden from your client, so it cannot bill.";
 
 /** The blocker that is about the client account rather than the agreement.
  *  Excluded from the attention count, exactly as the seven-facet room
@@ -133,6 +139,15 @@ export function assessAgreementReadiness({
     for (const partId of duplicate.partIds.slice(1)) {
       add(partId, duplicateMoneyBlocker(duplicate.label));
     }
+  }
+
+  // R18's second half — one fee basis. A flat fee standing beside a fee by
+  // phase is one of each, so the per-variant rule above sees nothing, while
+  // `upsert_agreement_parts` raises `an agreement carries one fee basis`
+  // (check_violation, 00577) at Save. The picker no longer offers the second;
+  // this catches one that arrives from a template or a Library part.
+  for (const extra of feeBasisParts(parts).slice(1)) {
+    add(extra.id, FEE_BASIS_BLOCKER);
   }
 
   for (const part of parts) {
@@ -246,6 +261,24 @@ export function assessAgreementReadiness({
   // she can see.
   const clientFacing = parts.filter((part) => part.clientVisible !== false);
 
+  // R33 — a hidden fee bills nobody. `upsert_agreement_parts` projects only
+  // client-visible fee parts into the money row, so a studio-only flat fee
+  // that carries a figure is a figure that goes nowhere: it is not what the
+  // homeowner consents to, it is not on the copy she keeps, and it is not what
+  // the executed authority charges. Say so where she typed it, rather than
+  // letting her believe the number is doing something.
+  const hiddenFees = parts.filter(
+    (part) =>
+      part.clientVisible === false &&
+      part.kind === "schedule" &&
+      part.variant !== null &&
+      (FEE_VARIANTS as readonly string[]).includes(part.variant) &&
+      scheduleValueIsSet(part),
+  );
+  for (const part of hiddenFees) {
+    add(part.id, HIDDEN_FEE_BLOCKER);
+  }
+
   // R-5 — the class floor. An agreement that bills has to name a fee
   // somewhere typed; prose never carries money (R5).
   const namesAFee = clientFacing.some(
@@ -255,7 +288,12 @@ export function assessAgreementReadiness({
       (FEE_VARIANTS as readonly string[]).includes(part.variant) &&
       scheduleValueIsSet(part),
   );
-  if (!namesAFee) {
+  // A hidden fee IS a fee the designer typed, so telling her the agreement
+  // "names no fee. Add a rate card, a flat fee, or a per-phase fee." over a
+  // Flat fee row she is looking at reads as the room losing her work. The
+  // hidden-fee sentence above already says the true thing — the fee is there
+  // and cannot bill — so it stands alone and this one steps aside.
+  if (!namesAFee && hiddenFees.length === 0) {
     add(
       null,
       "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
@@ -322,6 +360,28 @@ export function partsNeedingAttention(readiness: AgreementReadiness): number {
     if (blocker.partId) ids.add(blocker.partId);
   }
   return ids.size;
+}
+
+/**
+ * What one part is being held on, in the readiness panel's own words.
+ *
+ * The panel prints only the blockers that belong to NO part, and the rail
+ * marks a held row with the bare words "needs attention" — so a part-scoped
+ * sentence (R33's hidden fee, a blank rate-card role, a duplicate money part)
+ * was authored, attached, and then rendered nowhere at all. The editor is
+ * where the designer typed the thing being refused, so the editor is where it
+ * says so.
+ */
+export function blockersForPart(
+  readiness: AgreementReadiness,
+  partId: string | null,
+): string[] {
+  if (!partId) return [];
+  const seen = new Set<string>();
+  for (const blocker of readiness.blockers) {
+    if (blocker.partId === partId) seen.add(blocker.message);
+  }
+  return [...seen];
 }
 
 /** The blockers that belong to no part — rendered as their own lines under

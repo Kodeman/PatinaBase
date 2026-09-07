@@ -22,6 +22,8 @@ The seed runs first in [db.seed] sql_paths on every local `supabase db reset`
 and never executes on prod.
 """
 
+from __future__ import annotations
+
 import glob
 import re
 from collections.abc import Iterator
@@ -48,6 +50,99 @@ DROP_FN = re.compile(
     r"DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([A-Za-z_.\"]+\s*\([^)]*\))", re.IGNORECASE
 )
 ON_FN = re.compile(r"ON\s+FUNCTION\s+([A-Za-z_.\"]+\s*\([^)]*\))", re.IGNORECASE)
+ON_FN_HEAD = re.compile(r"\bON\s+FUNCTION\s+", re.IGNORECASE)
+# The characters Postgres allows inside an unquoted identifier. The target-list
+# scanner needs both edges of the FROM/TO terminator, not just the trailing one:
+# `public.find_products_similar_to(uuid, integer)` ends in `to` immediately
+# before `(`, so a trailing-only `\b` matches mid-identifier and the scan
+# truncates the target list. Every function whose name ends in `to` or `from`
+# would silently keep its whole multi-function statement.
+IDENT_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$")
+TERMINATOR = re.compile(r"(?:FROM|TO)\b", re.IGNORECASE)
+
+
+def scan_function_targets(stmt: str) -> tuple[str, list[str], str] | None:
+    """Read `… ON FUNCTION a(…), b(…) FROM …;` into `(head, targets, tail)`.
+
+    Returns None only when there is no readable target list at all (a table
+    grant, or a statement whose FROM/TO terminator this scanner never finds).
+    A target is returned exactly as written — including the bare `f` form
+    Postgres allows when a name is unambiguous — so callers that only need to
+    COUNT the functions a statement names do not have to be able to rewrite it.
+    """
+    head_match = ON_FN_HEAD.search(stmt)
+    if head_match is None:
+        return None
+    head = stmt[: head_match.end()]
+    rest = stmt[head_match.end() :]
+
+    targets: list[str] = []
+    current: list[str] = []
+    depth = 0
+    i, n = 0, len(rest)
+    tail = None
+    while i < n:
+        ch = rest[i]
+        if ch == '"':
+            j = i + 1
+            while j < n and rest[j] != '"':
+                j += 1
+            current.append(rest[i : j + 1])
+            i = j + 1
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif depth == 0:
+            if ch == ",":
+                targets.append("".join(current))
+                current = []
+                i += 1
+                continue
+            after_identifier = i > 0 and rest[i - 1] in IDENT_CHARS
+            keyword = None if after_identifier else TERMINATOR.match(rest, i)
+            # A keyword only ends the target list once a complete target has
+            # been read — `FROM` cannot appear inside `public.f(uuid)` — and
+            # only when it starts an identifier rather than ending one.
+            if keyword and "".join(current).strip():
+                tail = rest[i:]
+                break
+        current.append(ch)
+        i += 1
+
+    if tail is None:
+        return None
+    targets.append("".join(current))
+    cleaned = [" ".join(t.split()) for t in targets]
+    if not all(cleaned):
+        return None
+    return head, cleaned, " ".join(tail.split())
+
+
+def split_function_targets(stmt: str) -> list[tuple[str, str]] | None:
+    """Split `… ON FUNCTION a(…), b(…) FROM …;` into one statement per function.
+
+    Returns `[(signature_text, statement), …]`, or None when the statement does
+    not name a function list this scanner can rewrite safely (a table grant, a
+    target written without its argument list) — in which case the caller keeps
+    the statement whole, which is the safe direction.
+
+    R31. A migration that names seventeen functions in one REVOKE is one
+    statement in the seed, wrapped in a guard that swallows undefined_function;
+    the day a LATER migration drops any one of the seventeen, the whole
+    statement raises and the guard silently un-hardens the other sixteen. That
+    is what happened to 00511's hardening when Wave 2 widened
+    sign_design_services_agreement_with_trusted_ip. One function per statement
+    means a missing function can only ever cost itself.
+    """
+    scanned = scan_function_targets(stmt)
+    if scanned is None:
+        return None
+    head, targets, tail = scanned
+    if not all("(" in t and t.endswith(")") for t in targets):
+        return None
+    return [(t, f"{head}{t} {tail}") for t in targets]
 
 
 def signature(text: str) -> str:
@@ -182,18 +277,51 @@ def extract_statements() -> list[tuple[str, str]]:
             # statement itself is emitted as its migration wrote it.
             if not stmt.upper().startswith(("GRANT ", "REVOKE ")):
                 continue
-            target = ON_FN.search(stmt)
-            if target and last_drop.get(signature(target.group(1)), (-1, -1)) > (
-                index,
-                position,
-            ):
+            pieces = split_function_targets(stmt)
+            if pieces is None:
+                target = ON_FN.search(stmt)
+                if target and last_drop.get(signature(target.group(1)), (-1, -1)) > (
+                    index,
+                    position,
+                ):
+                    continue
+                out.append((Path(path).name, stmt))
                 continue
-            out.append((Path(path).name, stmt))
+            for target_text, piece in pieces:
+                if last_drop.get(signature(target_text), (-1, -1)) > (index, position):
+                    continue
+                out.append((Path(path).name, piece))
     return out
+
+
+def assert_one_function_per_statement(stmts: list[tuple[str, str]]) -> None:
+    """R31's invariant, checked on the statements about to be written.
+
+    The split degrades silently — an unreadable target list returns None and
+    the caller keeps the whole statement, which replays correctly today and
+    un-hardens every neighbour the day one of the named functions is dropped.
+    Nothing downstream notices. So the generator refuses to write a seed that
+    still carries a multi-function block.
+    """
+    offenders: list[tuple[str, str]] = []
+    for fname, stmt in stmts:
+        if ON_FN_HEAD.search(stmt) is None:
+            continue
+        scanned = scan_function_targets(stmt)
+        count = "unreadable" if scanned is None else str(len(scanned[1]))
+        if count != "1":
+            offenders.append((fname, f"{count} functions: {stmt[:160]}"))
+    if offenders:
+        detail = "\n  ".join(f"{fname}: {why}" for fname, why in offenders)
+        raise AssertionError(
+            f"{len(offenders)} statement(s) name more than one function "
+            f"(R31 requires one guarded block per function):\n  {detail}"
+        )
 
 
 def main() -> None:
     stmts = extract_statements()
+    assert_one_function_per_statement(stmts)
     lines: list[str] = []
     lines.append(
         """-- ═══════════════════════════════════════════════════════════════════════════
@@ -253,6 +381,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
 -- Statements naming a function signature a later migration DROPs are omitted
 -- entirely — the object they address no longer exists by the time this runs.
 -- The rest are guarded, so an object dropped some other way is skipped too.
+-- A statement naming several functions is emitted ONE FUNCTION PER GUARDED
+-- BLOCK (R31): a single missing function inside a shared block raises, and the
+-- guard would then swallow the hardening of every other function named beside
+-- it.
 """
     )
     for fname, stmt in stmts:

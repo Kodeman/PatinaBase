@@ -355,6 +355,8 @@ DECLARE
 
   v_ds_proposal UUID := 'b0000000-0000-0000-0000-00000000cb01';
   v_ds_document UUID := 'b0000000-0000-0000-0000-00000000cb11';
+  v_ph_proposal UUID := 'b0000000-0000-0000-0000-00000000cb04';
+  v_ph_document UUID := 'b0000000-0000-0000-0000-00000000cb14';
   v_fa_proposal UUID := 'b0000000-0000-0000-0000-00000000cb02';
   v_fa_document UUID := 'b0000000-0000-0000-0000-00000000cb12';
   v_fa_snapshot UUID := 'b0000000-0000-0000-0000-00000000cb22';
@@ -564,6 +566,105 @@ BEGIN
   ) VALUES (
     v_ds_document, v_project, v_ds_proposal, 'design_services', NULL,
     TRUE, ts - INTERVAL '112 days', ts - INTERVAL '112 days', uid_designer
+  );
+
+  -- ── The composed agreement STILL AT ITS DOOR (R26, R36) ────────────────
+  --
+  -- Every other commercial paper in this file is laid down executed, which
+  -- leaves the local stack with no door for anyone to walk through: the
+  -- homeowner's signing surface — the composed consent sentence, the
+  -- attachment she has to say she received, the hold — could only be read in
+  -- a unit test. This is the one paper left SENT, and
+  -- apps/client-portal/tests/threshold.spec.ts drives it end to end: the
+  -- shape below is asserted character for character there, so a change here
+  -- is a change to that test.
+  --
+  -- The parts, in position order: Services · a per-phase fee · a retainer
+  -- that is not refundable · the lead-paint notice, which she must acknowledge
+  -- · Terms. compose_agreement_consent reads exactly this set and answers
+  --   "I agree to these design-services terms, the per-phase fee schedule,
+  --    and the retainer, which is not refundable, and understand my signature
+  --    alone does not authorize work until the studio countersigns."
+  --
+  -- Same order the origin agreement above takes, and for the same reasons:
+  -- the terms row before the parts (once a proposal has parts, only
+  -- upsert_agreement_parts may write that row — R17), the parts before the
+  -- send (authored children freeze the moment a document leaves draft), and
+  -- the send itself under the row-exact capability GUCs. NO
+  -- commercial_document_signatures row: the test writes the client's, which is
+  -- the act it exists to prove.
+
+  INSERT INTO public.proposals (
+    id, project_id, designer_id, client_id, designer_client_id, title, description,
+    status, document_kind, commercial_state, total_amount, subtotal,
+    created_at, updated_at
+  ) VALUES (
+    v_ph_proposal, v_project, uid_designer, uid_solo, v_relationship,
+    'Cedar Lane — Phase Work',
+    'Phase work for the hall and stair, priced by phase.',
+    'draft', 'design_services', 'draft', 1100000, 1100000,
+    ts - INTERVAL '9 days', ts - INTERVAL '9 days'
+  );
+
+  INSERT INTO public.proposal_service_terms (
+    proposal_id, scope, deliverables, exclusions,
+    billing_ceiling_cents, retainer_amount_cents, retainer_activation_policy,
+    billing_cadence, currency, terms, current_rate_version,
+    created_at, updated_at
+  ) VALUES (
+    v_ph_proposal,
+    'Phase work for the hall and stair: concept, documentation and selections.',
+    '[]'::jsonb, '[]'::jsonb,
+    NULL, 500000, 'immediate', 'monthly', 'USD',
+    'Each phase is invoiced as it completes.',
+    1, ts - INTERVAL '9 days', ts - INTERVAL '9 days'
+  );
+
+  INSERT INTO public.proposal_agreement_parts (
+    proposal_id, position, kind, variant, part_key, title, payload,
+    required, client_visible, created_at, updated_at
+  ) VALUES
+    (v_ph_proposal, 1, 'clause', NULL, 'patina.services', 'Services',
+     jsonb_build_object('body',
+       'Phase work for the hall and stair: concept, documentation and selections.'),
+     TRUE, TRUE, ts - INTERVAL '9 days', ts - INTERVAL '9 days'),
+    (v_ph_proposal, 2, 'schedule', 'per_phase', 'custom.phase_fee', 'Fee by phase',
+     jsonb_build_object('phases', jsonb_build_array(
+       jsonb_build_object('key', 'concept', 'label', 'Concept', 'cents', 350000),
+       jsonb_build_object('key', 'documentation', 'label', 'Documentation', 'cents', 450000),
+       jsonb_build_object('key', 'selections', 'label', 'Selections', 'cents', 300000))),
+     FALSE, TRUE, ts - INTERVAL '9 days', ts - INTERVAL '9 days'),
+    (v_ph_proposal, 3, 'schedule', 'retainer', 'patina.retainer', 'Retainer',
+     jsonb_build_object('cents', 500000, 'creditRule', 'non_refundable',
+                        'activationPolicy', 'immediate'),
+     FALSE, TRUE, ts - INTERVAL '9 days', ts - INTERVAL '9 days'),
+    (v_ph_proposal, 4, 'attachment', NULL, 'patina.lead_paint_notice', 'the lead-paint notice',
+     jsonb_build_object(
+       'body', 'This home predates 1978. Federal law requires the studio to give you the lead-paint pamphlet before work begins.',
+       'acknowledgeRequired', TRUE),
+     FALSE, TRUE, ts - INTERVAL '9 days', ts - INTERVAL '9 days'),
+    (v_ph_proposal, 5, 'clause', NULL, 'patina.terms', 'Terms',
+     jsonb_build_object('body',
+       'Each phase is invoiced as it completes. Additional scope is authorized in writing before it is invoiced.'),
+     TRUE, TRUE, ts - INTERVAL '9 days', ts - INTERVAL '9 days');
+
+  PERFORM set_config('app.proposal_send_id', v_ph_proposal::text, true);
+  PERFORM set_config('app.commercial_document_id', v_ph_proposal::text, true);
+  UPDATE public.proposals
+     SET status = 'sent',
+         commercial_state = 'sent',
+         sent_at = ts - INTERVAL '8 days',
+         updated_at = ts - INTERVAL '8 days'
+   WHERE id = v_ph_proposal;
+  PERFORM set_config('app.proposal_send_id', '', true);
+  PERFORM set_config('app.commercial_document_id', '', true);
+
+  INSERT INTO public.project_commercial_documents (
+    id, project_id, proposal_id, document_kind, wave_name,
+    is_origin, bound_at, executed_at, created_by
+  ) VALUES (
+    v_ph_document, v_project, v_ph_proposal, 'design_services', NULL,
+    FALSE, ts - INTERVAL '8 days', NULL, uid_designer
   );
 
   -- ── One signed furnishings authorization ───────────────────────────────

@@ -48,6 +48,9 @@ export interface ThresholdProposal {
   totalAmountCents: number;
   sentAt: string | null;
   updatedAt: string | null;
+  /** R30 — bound to no project yet, so it stands on every house's doorstep
+   *  and contributes to no house's ledger. */
+  houseless?: boolean;
 }
 
 /** Something already signed or executed — history, not an ask. */
@@ -511,8 +514,13 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     heldCents: heldDraws
       ? [...heldInstruments].reduce((sum, proposalId) => sum + (heldDraws[proposalId] ?? 0), 0)
       : null,
+    // R30 — a paper that belongs to no house belongs to no house's ledger
+    // either. An origin agreement stands on the doorstep of EVERY house she
+    // has, so counting its figure here would count the same money once per
+    // house.
     awaitingCents: input.proposals.signatureGates.reduce(
-      (sum, proposal) => sum + (proposal.totalAmountCents || 0),
+      (sum, proposal) =>
+        sum + (proposal.houseless ? 0 : proposal.totalAmountCents || 0),
       0,
     ),
     overageLine: houseOverageLine(bands),

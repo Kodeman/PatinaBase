@@ -1049,6 +1049,75 @@ describe('Threshold — the doorstep’s own asks', () => {
     expect(roomlessDoor).not.toBeNull();
     expect(roomlessDoor?.closest('section[id^="room-"]')).toBeNull();
   });
+
+  // R30, carried to Wave 2 — THE PAPERS WITHOUT A HOUSE. A design services
+  // agreement is bound to no project until it is countersigned, so a household
+  // that already has a house and is sent a second origin agreement had it
+  // filtered off every door she owns.
+  describe('a paper that comes before a house', () => {
+    const ORIGIN_AGREEMENT = {
+      ...AUTHORIZATION,
+      id: 'prop-origin',
+      title: 'Design services agreement',
+      project_id: null,
+      document_kind: 'design_services',
+      total_amount: 0,
+    } as unknown as Proposal;
+
+    it('stands on this house’s doorstep and says which paper it is', () => {
+      proposalsMock.mockReturnValue(
+        settled([AUTHORIZATION, ORIGIN_AGREEMENT, SIGNED_AGREEMENT]),
+      );
+
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door-door-prop-origin')).not.toBeNull();
+      expect(screen.getByTestId('door-houseless')).toHaveTextContent(
+        'This one comes before a house. It is addressed to you, so it waits on every door until you sign it.',
+      );
+    });
+
+    // The shape the RPC actually sends: `list_client_proposals` OMITS
+    // `project_id` when the column is NULL rather than sending `null`, so a
+    // fixture that spells `project_id: null` proves less than it looks. This
+    // one carries no such key at all.
+    it('stands on the doorstep when the row carries no project_id key at all', () => {
+      const ROW_WITHOUT_THE_KEY: Record<string, unknown> = {
+        ...(ORIGIN_AGREEMENT as unknown as Record<string, unknown>),
+      };
+      delete ROW_WITHOUT_THE_KEY.project_id;
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          ROW_WITHOUT_THE_KEY as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door-door-prop-origin')).not.toBeNull();
+      expect(screen.getByTestId('door-houseless')).toBeInTheDocument();
+    });
+
+    it('leaves an addendum with no project off this house’s doors', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          {
+            ...ORIGIN_AGREEMENT,
+            id: 'prop-addendum',
+            document_kind: 'service_addendum',
+          } as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door-door-prop-addendum')).toBeNull();
+      expect(container.querySelector('#door')).toBeNull();
+    });
+  });
 });
 
 describe('Threshold — the acts the house owes', () => {

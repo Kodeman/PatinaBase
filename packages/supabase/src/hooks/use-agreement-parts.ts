@@ -109,7 +109,13 @@ export interface AgreementPartsMutationOptions {
 }
 
 /** `upsert_agreement_parts` takes the WHOLE ordered array, every time, so a
- *  removed part is absent rather than blank. Domain parts in, RPC keys out. */
+ *  removed part is absent rather than blank. Domain parts in, RPC keys out.
+ *
+ *  Provenance rides along. The RPC is DELETE-then-INSERT and reads
+ *  `sourceTemplateKey` / `sourcePartId` off each entry (00575), so a mapper
+ *  that dropped them would blank the columns `materialize_agreement_template`
+ *  had just written, on the very next Save — the Library entry a part came
+ *  from would survive exactly until the designer typed into it. */
 export function toAgreementPartPayload(
   parts: readonly AgreementPart[]
 ): AgreementPartInput[] {
@@ -121,6 +127,8 @@ export function toAgreementPartPayload(
     payload: part.payload ?? {},
     required: part.required,
     clientVisible: part.clientVisible,
+    sourceTemplateKey: part.sourceTemplateKey ?? null,
+    sourcePartId: part.sourcePartId ?? null,
   }));
 }
 

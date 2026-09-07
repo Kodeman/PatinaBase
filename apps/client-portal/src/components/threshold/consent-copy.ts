@@ -107,3 +107,230 @@ export function refusalSentence(token: string | undefined | null): string {
 
 /** Every refusal token the sign route can return, for the drift guard. */
 export const REFUSAL_TOKENS: readonly string[] = Object.keys(REFUSALS);
+
+/* ── THE COMPOSED CONSENT (Wave 2, P6) ───────────────────────────────────────
+   An agreement composed from parts is not the seven fixed facets any more, so
+   the line she ticks names what is actually on the paper. The composer below
+   and `public.compose_agreement_consent(uuid)` are the SAME function written
+   twice, in two languages, and they must not drift: `__tests__/consent-copy
+   .test.ts` pins these outputs and `supabase/tests/commercial/agreement_fee_
+   schedules_test.sql` pins the SQL side against the same literals.
+
+   Two rules hold that parity:
+   · Fragments are emitted in a CANONICAL VARIANT ORDER, never in the
+     designer's part order. Two implementations iterating a caller-supplied
+     order cannot be compared.
+   · Zero fragments returns `consentLineFor(kind)` byte-for-byte, so the
+     flag-off path, the legacy path and a parts-less agreement all read the
+     sentence the door has always shown.
+
+   R9 — only the six authority variants and `procurement`'s deposit consent to
+   anything in Wave 2. Every other schedule variant is record-only and
+   contributes nothing. R5 — no figure is ever interpolated into the sentence;
+   it names the term, the paper carries the number. ────────────────────────── */
+
+/**
+ * One part, as the consent composer reads it. `kind` and `variant` stay plain
+ * strings for the same reason the bundle's DTO keeps them plain: the
+ * vocabulary is code-resident and un-CHECKed, so a variant a later wave adds
+ * must arrive intact and contribute nothing rather than throw.
+ */
+export interface ConsentPart {
+  kind: string;
+  variant: string | null;
+  clientVisible: boolean;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * The order the fragments are said in, whatever order the parts arrive in.
+ * `cadence` is deliberately absent: it is a billing mechanic, not an
+ * authorization, and today's `summaryLineFor` already omits it.
+ */
+const CONSENT_VARIANT_ORDER: readonly string[] = [
+  'rate_card',
+  'ceiling',
+  'flat',
+  'per_phase',
+  'retainer',
+  'procurement',
+];
+
+function consentCents(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function consentRows(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/**
+ * The fragment one money part consents to, or null when the part carries
+ * nothing to consent to. An unset ceiling, a zero retainer and a zero deposit
+ * are all figures nobody wrote (R21) — the sentence does not name them.
+ */
+function consentFragment(part: ConsentPart): string | null {
+  switch (part.variant) {
+    case 'rate_card':
+      return consentRows(part.payload.roles).length > 0 ? 'the signed role rates' : null;
+    case 'ceiling': {
+      const cents = consentCents(part.payload.cents);
+      return cents !== null && cents > 0 ? 'the design authorization ceiling' : null;
+    }
+    case 'flat':
+      return 'the flat design fee';
+    case 'per_phase':
+      return consentRows(part.payload.phases).length > 0
+        ? 'the per-phase fee schedule'
+        : null;
+    case 'retainer': {
+      const cents = consentCents(part.payload.cents);
+      if (cents === null || cents <= 0) return null;
+      // `retainer_credit_rule` defaults to 'credited' in the database, so an
+      // absent or unknown rule reads as the default rather than as silence.
+      if (part.payload.creditRule === 'non_refundable') {
+        return 'the retainer, which is not refundable';
+      }
+      if (part.payload.creditRule === 'replenishing') return 'the replenishing retainer';
+      return 'the retainer credited against fees';
+    }
+    case 'procurement': {
+      const percent = consentCents(part.payload.depositPercent);
+      return percent !== null && percent > 0 ? 'the furnishings deposit' : null;
+    }
+    default:
+      // The eight record-only variants (R9), and any variant a later wave
+      // adds to an agreement this build has already shipped.
+      return null;
+  }
+}
+
+/** A, "A and B", "A, B, and C" — the door's own list grammar. */
+function oxford(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
+/**
+ * The composed consent. Zero money parts — or no parts at all — returns
+ * `consentLineFor(kind)` verbatim, so the flag-off and legacy paths are
+ * byte-identical to what the door has always shown.
+ */
+export function composeConsentLine(
+  kind: CommercialDocumentKind,
+  parts: readonly ConsentPart[] | null | undefined,
+): string {
+  // Wave 2 composes for the two services kinds only. A furnishings
+  // authorization or a trade scope keeps its own consent, whatever parts a
+  // later wave hangs on it.
+  if (kind !== 'design_services' && kind !== 'service_addendum') {
+    return consentLineFor(kind);
+  }
+
+  const money = (parts ?? []).filter(
+    (part) => part.kind === 'schedule' && part.clientVisible === true,
+  );
+
+  const fragments: string[] = [];
+  for (const variant of CONSENT_VARIANT_ORDER) {
+    // One part per money variant (R18). A set that carries two anyway says
+    // the fragment once rather than twice — `compose_agreement_consent` takes
+    // the same one part per variant (`DISTINCT ON`, 00577), so the two agree
+    // on the set no caller can build.
+    const part = money.find((candidate) => candidate.variant === variant);
+    if (!part) continue;
+    const fragment = consentFragment(part);
+    if (fragment) fragments.push(fragment);
+  }
+
+  if (fragments.length === 0) return consentLineFor(kind);
+
+  return `I agree to ${oxford([
+    'these design-services terms',
+    ...fragments,
+  ])}, and understand my signature alone does not authorize work until the studio countersigns.`;
+}
+
+/**
+ * The noun the SUMMARY uses for each term the consent line names. The consent
+ * sentence says a term in full and in its own words ("the retainer, which is
+ * not refundable"); the summary lists it the way `summaryLineFor` has always
+ * listed one — bare and article-less, inside a single long list. Every
+ * retainer, whatever its credit rule, is "retainer" up there; the rule itself
+ * belongs to the sentence she ticks.
+ *
+ * Presence is decided in exactly one place — `consentFragment` — so a term the
+ * consent line does not name cannot appear in the summary above it. A consent
+ * fragment with no entry here contributes nothing, which is what a later
+ * wave's new variant should do until somebody writes its noun.
+ */
+const SUMMARY_FRAGMENT: Record<string, string> = {
+  'the signed role rates': 'signed role rates',
+  'the design authorization ceiling': 'design authorization ceiling',
+  'the flat design fee': 'flat design fee',
+  'the per-phase fee schedule': 'per-phase fee schedule',
+  'the retainer credited against fees': 'retainer',
+  'the retainer, which is not refundable': 'retainer',
+  'the replenishing retainer': 'retainer',
+  'the furnishings deposit': 'furnishings deposit',
+};
+
+/**
+ * WHAT SIGNING DOES, FOR AN AGREEMENT COMPOSED FROM PARTS.
+ *
+ * `summaryLineFor`'s services sentence names the services, the signed role
+ * rates, the design authorization ceiling and the retainer, because before
+ * Wave 2 every design-services agreement carried exactly those four facets and
+ * the sentence was true of all of them. A COMPOSED agreement carries whatever
+ * parts the studio put in it: a flat-fee engagement has no role rates and no
+ * ceiling; a per-phase one has no retainer unless a retainer part was added.
+ * Printed unchanged over such a paper, that sentence tells the homeowner — on
+ * the signing surface, directly above the consent she ticks — that she accepts
+ * terms the paper she is signing does not contain.
+ *
+ * So the list is composed from the SAME parts the consent line reads, in the
+ * same canonical order: it names every money term the paper carries and no
+ * term it does not. An agreement carrying role rates, a ceiling and a retainer
+ * therefore reads byte-for-byte as `summaryLineFor` has always read it — the
+ * commonest composed agreement loses nothing — while a per-phase paper says
+ * "per-phase fee schedule" where it used to claim role rates.
+ *
+ * An agreement with no parts at all — flag off, legacy, or pre-Wave-2 —
+ * returns `summaryLineFor` verbatim, so the deployed door is byte-identical to
+ * what it has always shown.
+ */
+export function composeSummaryLine(
+  kind: CommercialDocumentKind,
+  title: string,
+  parts: readonly ConsentPart[] | null | undefined,
+): string {
+  // Wave 2 composes for the two services kinds only; a furnishings
+  // authorization and a trade scope keep their own summary whatever parts a
+  // later wave hangs on them.
+  if (kind !== 'design_services' && kind !== 'service_addendum') {
+    return summaryLineFor(kind, title);
+  }
+
+  const all = parts ?? [];
+  if (all.length === 0) return summaryLineFor(kind, title);
+
+  const money = all.filter(
+    (part) => part.kind === 'schedule' && part.clientVisible === true,
+  );
+
+  const fragments: string[] = [];
+  for (const variant of CONSENT_VARIANT_ORDER) {
+    const part = money.find((candidate) => candidate.variant === variant);
+    if (!part) continue;
+    const consented = consentFragment(part);
+    const noun = consented ? SUMMARY_FRAGMENT[consented] : undefined;
+    if (noun) fragments.push(noun);
+  }
+
+  return `By signing, you accept ${oxford([
+    'the services',
+    ...fragments,
+    `terms in “${title}”`,
+  ])}. The agreement becomes effective only after the studio countersigns.`;
+}

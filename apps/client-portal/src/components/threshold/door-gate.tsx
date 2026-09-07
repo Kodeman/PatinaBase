@@ -27,10 +27,11 @@ import { noteInBrief } from '@/lib/threshold/standing';
 
 import {
   KIND_LABEL,
-  consentLineFor,
+  composeConsentLine,
+  composeSummaryLine,
   refusalSentence,
   signLabelFor,
-  summaryLineFor,
+  type ConsentPart,
 } from './consent-copy';
 import { DoorActs } from './door-acts';
 
@@ -87,6 +88,13 @@ export interface DoorProposal extends ThresholdProposal {
    * acts on the leaf keep that gate.
    */
   validUntil?: string | null;
+  /**
+   * R30 — a paper that comes before a house. An agreement is bound to no
+   * project until it is countersigned, so it stands on the doorstep of every
+   * house she has rather than belonging to one of them; the leaf says so, and
+   * the house ledger leaves its figure out.
+   */
+  houseless?: boolean;
 }
 
 export interface DoorGateProps {
@@ -138,6 +146,13 @@ export function DoorGate({
 
   const [name, setName] = useState('');
   const [agreed, setAgreed] = useState(false);
+  /**
+   * Wave 2, P6. One tick per attachment the studio marked
+   * `acknowledgeRequired`, keyed by `part_key` — the keys the sign route
+   * validates against the bundle's own attachments before the RPC records
+   * them beside the signature.
+   */
+  const [acknowledged, setAcknowledged] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedAt, setSignedAt] = useState<Date | null>(null);
@@ -198,6 +213,27 @@ export function DoorGate({
     null;
   const sent = parseSourceDate(proposal.sentAt);
 
+  /* ── THE COMPOSED CONSENT AND ITS ATTACHMENTS (Wave 2, P6) ────────────────
+     The bundle drops every part the studio hid before the row crosses this
+     edge (lib/commercial-documents.ts), so what arrives here IS the
+     client-visible set — that is why `clientVisible` is true below rather
+     than read off a field the RPC does not send. An agreement with no parts
+     composes to today's line, byte for byte. */
+  const parts = bundle.data?.parts ?? [];
+  const consentParts: ConsentPart[] = parts.map((part) => ({
+    kind: part.kind,
+    variant: part.variant,
+    clientVisible: true,
+    payload: part.payload,
+  }));
+  const acknowledgeable = parts.filter(
+    (part) => part.kind === 'attachment' && part.payload.acknowledgeRequired === true,
+  );
+  const acknowledgedKeys = acknowledgeable
+    .filter((part) => acknowledged[part.partKey] === true)
+    .map((part) => part.partKey);
+  const allAcknowledged = acknowledgedKeys.length === acknowledgeable.length;
+
   // The paper has to be on the leaf before the act is offered.
   const drawn = !bundle.isLoading && !bundle.isError;
   // The old page held every act back under one `isActionable`, expiry
@@ -209,7 +245,14 @@ export function DoorGate({
   // signable, so the block that asks for her name disarms with it — a page
   // may not go on offering an answer she has already given.
   const ready =
-    drawn && !declined && !expired && agreed && signatureIsComplete(name);
+    drawn &&
+    !declined &&
+    !expired &&
+    agreed &&
+    // Every attachment the agreement requires her to acknowledge is a gate on
+    // the act, not a footnote under it.
+    allAcknowledged &&
+    signatureIsComplete(name);
 
   async function onSign() {
     if (!ready || inFlight.current) return;
@@ -226,7 +269,7 @@ export function DoorGate({
       const response = await fetch(`/api/proposals/${proposal.id}/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signedByName }),
+        body: JSON.stringify({ signedByName, attachmentsAcknowledged: acknowledgedKeys }),
       });
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -395,6 +438,20 @@ export function DoorGate({
         </p>
       </div>
 
+      {/* R30 — the paper that comes before a house. It is addressed to her,
+          not to this house, so it stands on every door she has and says which
+          it is; without the line the same paper on three doorsteps reads as
+          three papers. */}
+      {proposal.houseless && !signedAt && (
+        <p
+          data-testid="door-houseless"
+          className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]"
+        >
+          This one comes before a house. It is addressed to you, so it waits on
+          every door until you sign it.
+        </p>
+      )}
+
       {receipt && (
         <p
           data-testid="door-receipt"
@@ -486,7 +543,12 @@ export function DoorGate({
               data-testid="door-summary"
               className="max-w-[56ch] text-[15px] leading-relaxed text-[var(--text-body)]"
             >
-              {summaryLineFor(kind, proposal.title)}
+              {/* A composed agreement drops the four-facet half of this
+                  sentence: it named role rates, a ceiling and a retainer that
+                  a flat-fee or per-phase agreement does not carry, and the
+                  consent line below names what this paper actually holds. An
+                  agreement with no parts reads exactly as it always has. */}
+              {composeSummaryLine(kind, proposal.title, consentParts)}
             </p>
 
             {note && (
@@ -569,6 +631,36 @@ export function DoorGate({
               caption={items.length > 0 ? null : caption}
               act={
                 <div>
+                  {/* THE ATTACHMENTS COME FIRST. An attachment the agreement
+                      requires her to acknowledge is a separate act from
+                      agreeing to the terms — she says she received the paper,
+                      and then she says she agrees to it. Each tick is carried
+                      to the signature by `part_key`. */}
+                  {acknowledgeable.map((part) => (
+                    <label
+                      key={part.partKey}
+                      data-testid="door-attachment-ack"
+                      data-part-key={part.partKey}
+                      className="mb-3 flex max-w-[52ch] cursor-pointer items-start gap-3 text-[15px] leading-normal text-[var(--text-body)]"
+                      htmlFor={`door-ack-${fieldId}-${part.id}`}
+                    >
+                      <input
+                        id={`door-ack-${fieldId}-${part.id}`}
+                        type="checkbox"
+                        checked={acknowledged[part.partKey] === true}
+                        disabled={submitting || !!signedAt || declined || expired}
+                        onChange={(event) =>
+                          setAcknowledged((current) => ({
+                            ...current,
+                            [part.partKey]: event.target.checked,
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 shrink-0 border border-current"
+                      />
+                      <span>{`I received ${part.title}.`}</span>
+                    </label>
+                  ))}
+
                   <label
                     className="flex max-w-[52ch] cursor-pointer items-start gap-3 text-[15px] leading-normal text-[var(--text-body)]"
                     htmlFor={consentId}
@@ -581,7 +673,9 @@ export function DoorGate({
                       onChange={(event) => setAgreed(event.target.checked)}
                       className="mt-1 h-4 w-4 shrink-0 border border-current"
                     />
-                    <span>{consentLineFor(kind)}</span>
+                    <span data-testid="door-consent-line">
+                      {composeConsentLine(kind, consentParts)}
+                    </span>
                   </label>
 
                   {/* The name goes on a rule with the day beside it, and the
@@ -612,7 +706,9 @@ export function DoorGate({
                           : 'Drawing this paper.'
                         : ready
                           ? 'Ready when you are.'
-                          : 'Type your full name and tick the line to sign.'}
+                          : acknowledgeable.length > 0
+                            ? 'Tick each attachment you received, type your full name, and tick the line to sign.'
+                            : 'Type your full name and tick the line to sign.'}
                   </p>
                   {/* A refused signature is a genuine error, so it takes the
                       error ink — NOT terracotta, which on this surface is the

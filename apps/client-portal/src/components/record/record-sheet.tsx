@@ -30,6 +30,28 @@ import { Stamp, type StampState } from '@/components/threshold/instruments/stamp
 const LABEL_CLASS =
   'font-mono text-[10px] uppercase tracking-[0.14em] text-[#6B6259]';
 
+/* ── THE SNAPSHOT IS THE DOCUMENT, NOT A DRAFT OF IT ─────────────────────────
+   The executed agreement is the ONE place this portal sets HTML it did not
+   write, and the strings inside it are part titles and bodies a designer
+   typed. `public._render_agreement_snapshot_html` escapes every one of them
+   (& < > ") on the way in and emits no script, no style and no attribute a
+   designer's text can reach; the snapshot row is immutable and its hash is the
+   executed document's own fingerprint.
+
+   That escaping is the guarantee, and it is deliberately the ONLY one. R12
+   makes this the homeowner's copy of the agreement AS EXECUTED: a rewrite on
+   the way to the screen — even a well-meant one — would print a document that
+   is not the one the mark below it attests, and no reader could tell. A
+   string-level scrub is worse than none here, because the escape chain leaves
+   `=` alone: an agreement whose prose says "phase one=Concept" is ordinary
+   text, and a pattern hunting attribute syntax eats it.
+
+   So the frozen markup is set exactly as the database composed it. What is
+   pinned instead, in `__tests__/page.test.tsx`, is that setting it changes
+   nothing and runs nothing, and `supabase/tests/commercial/
+   agreement_fee_schedules_test.sql` §7 holds the renderer to its escaping.
+   ────────────────────────────────────────────────────────────────────────── */
+
 export interface RecordSheetProps {
   /** The studio's own name — the letterhead. Never Patina's. */
   studioName: string;
@@ -71,6 +93,14 @@ export interface RecordSheetProps {
   signedOn?: string | null;
   /** How she agreed, as a sentence. */
   consentSentence?: string | null;
+  /**
+   * R12 — the agreement as it stood when the studio countersigned, frozen at
+   * execution and never re-rendered. Server-composed HTML from the
+   * client-visible parts; the keepsake styles it and adds nothing to it.
+   */
+  executedHtml?: string | null;
+  /** Twelve characters of the frozen agreement's own checksum. */
+  executedChecksum?: string | null;
   /** What the answer let go, in words. */
   releaseSentence?: string | null;
   /** Twelve characters of the artifact's checksum. */
@@ -97,6 +127,8 @@ export function RecordSheet({
   signedName = null,
   signedOn = null,
   consentSentence = null,
+  executedHtml = null,
+  executedChecksum = null,
   releaseSentence = null,
   checksum = null,
   backHref,
@@ -322,6 +354,32 @@ export function RecordSheet({
             </p>
           )}
         </section>
+
+        {/* R12. THE AGREEMENT AS IT WAS EXECUTED, not as it reads today. The
+            markup is composed by the database at countersign and stored
+            whole; nothing here re-renders it from the parts, and the mark
+            below is the frozen document's own, which is what makes the sheet
+            checkable years later. No PDF: this is the copy she keeps. */}
+        {executedHtml && (
+          <section className="mb-10 border-t pt-4" style={{ borderColor: '#E5E2DD' }}>
+            <p className={LABEL_CLASS}>The agreement as executed</p>
+            <div
+              data-testid="record-executed"
+              style={{ fontSize: '0.95rem', lineHeight: 1.6, marginTop: '0.75rem' }}
+              // Set exactly as the database froze it: server-composed by
+              // `_render_agreement_snapshot_html`, which escapes every
+              // interpolated string and emits no script or style. The client
+              // never composes it, never edits it, and — see the note at the
+              // head of this file — never rewrites it on the way to the sheet.
+              dangerouslySetInnerHTML={{ __html: executedHtml }}
+            />
+            {executedChecksum && (
+              <p className={`${LABEL_CLASS} mt-4`} data-testid="record-executed-checksum">
+                {`Mark ${executedChecksum}`}
+              </p>
+            )}
+          </section>
+        )}
       </main>
 
       {/* The maker's mark, at the plate's edge. Provenance, not a string she

@@ -52,9 +52,25 @@ GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid, text) TO PUBLIC;
 -- The comparable shape of a terms row: everything except its identity and its
 -- clock. proposal_id differs by construction; the timestamps differ by the
 -- microsecond the two calls happened to land on.
+-- 00577: the four Wave-2 fee columns are excluded from the comparison, and
+-- that is not a weakening of R19 — it is what R19 can mean at all.
+-- retainer_credit_rule, fee_basis, fee_amount_cents and fee_schedule are
+-- PARTS-ONLY columns: upsert_agreement_parts is their only writer, and the
+-- seven-facet room has no field for any of them (upsert_design_services_draft
+-- passes none, and _project_agreement_terms never names them). So a rate-card
+-- composition writes fee_basis 'hourly' where the same seven facets leave it
+-- NULL, by construction and by design. Comparing them here would ask the
+-- flag-off door to author a Wave-2 concept it cannot see, and no composition
+-- could ever satisfy it. The four are pinned instead, on their own terms, in
+-- agreement_fee_schedules_test.sql cases 3 and 5.
+--
+-- Every W1 column — the four prose slots and the five money figures — is still
+-- compared, which is the fork this file exists to catch.
 CREATE OR REPLACE FUNCTION pg_temp.terms_shape(p_id uuid) RETURNS jsonb
 LANGUAGE sql AS $$
   SELECT to_jsonb(t) - 'proposal_id' - 'created_at' - 'updated_at'
+                     - 'retainer_credit_rule' - 'fee_basis'
+                     - 'fee_amount_cents' - 'fee_schedule'
   FROM public.proposal_service_terms t WHERE t.proposal_id = p_id;
 $$;
 GRANT EXECUTE ON FUNCTION pg_temp.terms_shape(uuid) TO PUBLIC;

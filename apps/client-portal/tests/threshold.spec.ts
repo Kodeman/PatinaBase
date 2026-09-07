@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * The Threshold (spec §7) — the homeowner's project page as ONE chrome-less
@@ -68,6 +69,109 @@ const SEEDED_ROOMS = ['Study', 'Hall', 'Stair'];
  * `the-client-page.sql` writes them (R26). Titles, not keys: this is the page
  * the homeowner reads.
  */
+/**
+ * The solo household's composed design-services agreement
+ * (`the-client-page.sql:356`, `v_ds_proposal`). Its keepsake route is read
+ * directly by the Wave 2 touchpoint below.
+ */
+const COMPOSED_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb01';
+
+/* ── THE DOOR THE COMPOSED AGREEMENT STANDS AT (Wave 2, P6 · R26) ────────────
+   `supabase/seed/the-client-page.sql` lays this one down SENT with no
+   `commercial_document_signatures` row — every other commercial paper it
+   writes is EXECUTED (`:255`, `:552`, `:671`), so this is the only seeded
+   client's page with a door to drive. The test is written unconditionally
+   (R26) against the fixture below; on a stack missing it or the Wave 2
+   migrations it is a red that names its own cause in the first assertion.
+
+   Note the id: `…cb02` is ALREADY TAKEN — it is the solo household's seeded
+   furnishings authorization (`the-client-page.sql:358`, `v_fa_proposal`).
+   `…cb01` is the composed agreement and `…cb03` the trade scope; `…cb04` is
+   the first free one and is what the seed must use.
+
+   The shape is fixed here because the sentence, the tick and the recorded
+   metadata are all asserted against it character for character:
+
+     proposals            id `b0000000-0000-0000-0000-00000000cb04`
+                          Cedar Lane — Phase Work, design_services,
+                          status 'sent', commercial_state 'sent',
+                          client uid_solo, on the Cedar Lane Study project
+     parts                1 clause  Services
+                          2 schedule/per_phase  { phases: Concept 350000,
+                              Documentation 450000, Selections 300000 }
+                          3 schedule/retainer   { cents: 500000,
+                              creditRule: 'non_refundable' }
+                          4 attachment `patina.lead_paint_notice`,
+                              title 'the lead-paint notice',
+                              payload.acknowledgeRequired = true
+                          5 clause  Terms
+     signatures           none — this test writes the client's
+
+   THE TEST SIGNS, so it consumes the fixture: it is written for the reset
+   stack the gate order in build-sheet §7 runs it on (`pnpm supabase:reset`
+   before the e2e), which is the same ground every SQL suite in that list
+   assumes. Run twice against one stack without a reset and the second run
+   finds a door already open — that is the fixture's nature, not a flake.
+   ────────────────────────────────────────────────────────────────────────── */
+const PER_PHASE_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb04';
+const PER_PHASE_AGREEMENT_TITLE = 'Cedar Lane — Phase Work';
+const PER_PHASE_ACK_PART_KEY = 'patina.lead_paint_notice';
+const PER_PHASE_ACK_LINE = 'I received the lead-paint notice.';
+/**
+ * `composeConsentLine` and `compose_agreement_consent` both produce this, from
+ * the same parts, in the same canonical variant order — that they agree is the
+ * whole of P6, and this is the one place a browser, a route and a database are
+ * asserted to have arrived at the same sentence.
+ */
+const PER_PHASE_CONSENT_LINE =
+  'I agree to these design-services terms, the per-phase fee schedule, and the retainer, which is not refundable, and understand my signature alone does not authorize work until the studio countersigns.';
+
+const LOCAL_URL = 'http://127.0.0.1:54321';
+/**
+ * The local service-role key is NOT written into this file — the repo's
+ * pre-commit scan rejects any file carrying a service_role JWT, the CLI's
+ * public demo key included, and playwright.config.ts states the same rule.
+ * Export it before running this suite:
+ *
+ *   export SUPABASE_SERVICE_ROLE_KEY="$(supabase status -o json | jq -r .SERVICE_ROLE_KEY)"
+ */
+const SERVICE_JWT = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+
+/**
+ * Built LAZILY: supabase-js throws `supabaseKey is required.` from its own
+ * constructor, so a module-scope client would crash the import and an operator
+ * who forgot the export would meet that instead of the sentence below
+ * (pay-link.spec.ts:80 keeps the same discipline).
+ *
+ * This client READS. The one write in this file is still the letter, and it
+ * says so where it happens.
+ */
+let adminClient: SupabaseClient | null = null;
+function admin(): SupabaseClient {
+  if (!adminClient) {
+    expect(
+      SERVICE_JWT,
+      'SUPABASE_SERVICE_ROLE_KEY must be exported from the LOCAL stack (see the note above)',
+    ).not.toBe('');
+    adminClient = createClient(LOCAL_URL, SERVICE_JWT, { auth: { persistSession: false } });
+  }
+  return adminClient;
+}
+
+/** What the database filed against her signature, or null until it has one. */
+async function clientSignatureMetadata(
+  proposalId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data, error } = await admin()
+    .from('commercial_document_signatures')
+    .select('metadata')
+    .eq('proposal_id', proposalId)
+    .eq('party_role', 'client')
+    .maybeSingle();
+  if (error) return null;
+  return (data?.metadata as Record<string, unknown> | null) ?? null;
+}
+
 const SEEDED_AGREEMENT_PART_TITLES = [
   'Services',
   'Deliverables',
@@ -460,7 +564,142 @@ test.describe('The Threshold — the client page', () => {
       expect(
         await shell.getByText(/require a separate named furnishings authorization/i).count(),
       ).toBe(1);
+
+      // Wave 2, M5 — attachments are leaves outside the body's measure, and
+      // this agreement carries none, so the rail is not drawn at all.
+      expect(await shell.getByTestId('agreement-attachments').count()).toBe(0);
     }).toPass({ timeout: 90_000 });
+  });
+
+  /**
+   * "The Agreement, Composed" (Wave 2, R12) — the keepsake half.
+   *
+   * `retired-routes.ts` deliberately leaves `/proposals/<id>/record` standing
+   * while folding its siblings onto `#door`, and the sheet now carries the
+   * frozen agreement a countersignature seals. The seed's composed agreement
+   * was executed before the snapshot existed, which is exactly the case R12
+   * rules on: the page renders as it always has — no snapshot section, no
+   * empty state, nothing said about a snapshot that is not there.
+   *
+   * Unconditional (R26): the fixture this reads is the one
+   * `supabase/seed/the-client-page.sql` lays down for every stack.
+   */
+  test('keeps the record route standing, and claims no snapshot it does not have', async ({
+    page,
+  }) => {
+    await signInAsClient(page);
+
+    const record = await page.request.get(`/proposals/${COMPOSED_AGREEMENT_ID}/record`, {
+      maxRedirects: 0,
+    });
+    expect(record.status(), 'the keepsake is not folded onto the page anchor').toBe(200);
+
+    await page.goto(`/proposals/${COMPOSED_AGREEMENT_ID}/record`, {
+      waitUntil: 'domcontentloaded',
+    });
+
+    await expect(async () => {
+      // Either the sheet or its "nothing to keep" line — the seed writes no
+      // `commercial_document_signatures` row for this agreement, so which one
+      // stands is the fixture's business, not this assertion's.
+      await expect(
+        page.getByTestId('record-sheet').or(page.getByText(/nothing to keep/i)).first(),
+      ).toBeVisible({ timeout: 5_000 });
+
+      // R12's rule for an execution that predates the snapshot.
+      expect(await page.getByTestId('record-executed').count()).toBe(0);
+      expect(await page.getByText('The agreement as executed').count()).toBe(0);
+    }).toPass({ timeout: 60_000 });
+  });
+
+  /**
+   * "The Agreement, Composed" (Wave 2, P6) — THE DOOR, end to end.
+   *
+   * Build sheet §6, the e2e touchpoint, in one act: the door of a seeded
+   * per-phase agreement shows the sentence the DATABASE composed, the
+   * acknowledgment holds the act back until it is ticked, and after signing
+   * the row the database wrote carries both facts.
+   *
+   * The last assertion is `expect.poll` against the database, never a settled
+   * page: the signature is written by an RPC inside the sign route, and a
+   * screen that has finished animating proves only that the browser is done.
+   * No `page.waitForTimeout` anywhere — the hold is driven by pressing and
+   * then waiting on a state the app itself publishes.
+   *
+   * Unconditional (R26): the fixture is named at the head of this file and
+   * `supabase/seed/the-client-page.sql` lays it down. It is not made
+   * conditional — on a stack without the Wave 2 migrations and that seed it is
+   * red at its first assertion, which says so in its own message.
+   */
+  test('signs a composed agreement at its door, and files what she agreed to', async ({
+    page,
+  }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    const doorway = page
+      .getByTestId('door-way')
+      .filter({ hasText: PER_PHASE_AGREEMENT_TITLE })
+      .first();
+    await expect(
+      doorway,
+      `the seed must leave ${PER_PHASE_AGREEMENT_TITLE} (${PER_PHASE_AGREEMENT_ID}) SENT — see the fixture note at the head of this file`,
+    ).toBeVisible({ timeout: 90_000 });
+
+    // 1 · The sentence is composed from the parts, and it is the database's.
+    await expect(doorway.getByTestId('door-consent-line')).toHaveText(PER_PHASE_CONSENT_LINE);
+    // The frozen summary above it no longer names terms this paper never had.
+    await expect(doorway.getByTestId('door-summary')).not.toContainText('signed role rates');
+
+    // 2 · The attachment gate. Name typed, consent ticked, and the act still
+    //     will not arm until she says she received the notice.
+    const ack = doorway.getByTestId('door-attachment-ack');
+    await expect(ack).toHaveCount(1);
+    await expect(ack.first()).toHaveAttribute('data-part-key', PER_PHASE_ACK_PART_KEY);
+
+    await doorway.getByTestId('door-sign-name').fill('Nora Ellison');
+    await doorway.getByText(PER_PHASE_CONSENT_LINE).click();
+
+    const sign = doorway.getByRole('button', { name: /sign and accept/i });
+    await expect(sign).toBeDisabled();
+    await expect(doorway.getByTestId('door-hint')).toContainText(
+      'Tick each attachment you received',
+    );
+
+    await doorway.getByText(PER_PHASE_ACK_LINE).click();
+    await expect(sign).toBeEnabled();
+    await expect(doorway.getByTestId('door-hint')).toContainText('Ready when you are.');
+
+    // 3 · The act is a press and a hold, so it is driven as one: press, wait on
+    //     the holding state the control publishes, and let go once the door has
+    //     swung. A click alone is refused as a pointer gesture's tail.
+    await sign.hover();
+    await page.mouse.down();
+    await expect(sign).toHaveAttribute('data-hold-state', 'holding');
+    await expect(doorway).toHaveCount(0, { timeout: 60_000 });
+    await page.mouse.up();
+
+    // 4 · What the database filed. Both halves: the sentence she ticked, and
+    //     the key of the attachment she said she received.
+    await expect
+      .poll(async () => (await clientSignatureMetadata(PER_PHASE_AGREEMENT_ID))?.consentSentence, {
+        timeout: 60_000,
+        message: 'the signature must record the sentence the database composed',
+      })
+      .toBe(PER_PHASE_CONSENT_LINE);
+    await expect
+      .poll(
+        async () =>
+          (await clientSignatureMetadata(PER_PHASE_AGREEMENT_ID))?.attachmentsAcknowledged,
+        {
+          timeout: 60_000,
+          message: 'the signature must record the acknowledgment she gave',
+        },
+      )
+      .toEqual([PER_PHASE_ACK_PART_KEY]);
+
+    // And the keepsake now has an agreement to keep.
+    await expect(page.getByTestId('door-keep-a-copy').first()).toBeVisible({ timeout: 30_000 });
   });
 
   /* ── Wave 2: the retired routes ─────────────────────────────────────────── */

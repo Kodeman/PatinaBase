@@ -311,6 +311,45 @@ export const documentEvents = {
   zoneFlight: (props: { doc_id: string; held_ms: number }) =>
     track('document_zone_flight', props),
 
+  // ── "The Agreement, Composed" Wave 2 (P4 · P7) — the Library's five acts.
+  // Fired from the sheet or the page that owns the mutation, never from a
+  // leaf. Nothing here carries a title, a body, or a figure: an agreement's
+  // words are the studio's and the client's, not telemetry.
+
+  /** A composition was kept as a studio Template (`save_agreement_as_template`). */
+  agreementTemplateSaved: (props: { proposal_id: string }) =>
+    track('agreement_template_saved', props),
+
+  /** A Template was laid into a draft, replacing its part set wholesale. */
+  agreementTemplateMaterialized: (props: {
+    proposal_id: string;
+    template_kind: 'seeded' | 'studio';
+    part_count: number;
+  }) => track('agreement_template_materialized', props),
+
+  /** A part was added to a composition, from the Library or blank. */
+  agreementPartSaved: (props: {
+    proposal_id: string;
+    kind: string;
+    variant: string | null;
+    origin: 'library' | 'patina' | 'blank';
+  }) => track('agreement_part_saved', props),
+
+  /** A part was taken off a composition. */
+  agreementPartRemoved: (props: {
+    proposal_id: string;
+    kind: string;
+    variant: string | null;
+  }) => track('agreement_part_removed', props),
+
+  /** A services addendum was composed from the active authority's part set,
+   *  with or without the one-line why the client reads beside the change. */
+  agreementAddendumComposed: (props: {
+    project_id: string;
+    proposal_id: string;
+    has_why: boolean;
+  }) => track('agreement_addendum_composed', props),
+
   commandBar,
   wayfinding,
 };
