@@ -356,3 +356,68 @@ describe("the part editor · the per-phase total", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("the part editor · a percent with a decimal in it", () => {
+  const percentPart = () =>
+    part({
+      partKey: "custom.percent",
+      kind: "schedule",
+      variant: "percent_of_cost",
+      title: "Percent of cost",
+      payload: { percent: 12, basis: "cost" },
+    });
+
+  const costPlusPart = () =>
+    part({
+      partKey: "custom.cost-plus",
+      kind: "schedule",
+      variant: "cost_plus",
+      title: "Cost plus",
+      payload: { markupPercent: 12 },
+    });
+
+  it("keeps the point the designer just typed on a percent", () => {
+    const onChange = renderEditor(percentPart(), true);
+    const field = screen.getByLabelText("Percent");
+
+    fireEvent.change(field, { target: { value: "12." } });
+    expect(field).toHaveValue("12.");
+
+    fireEvent.change(field, { target: { value: "12.5" } });
+    expect(field).toHaveValue("12.5");
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ percent: 12.5 }),
+    );
+  });
+
+  it("keeps the point the designer just typed on a markup", () => {
+    const onChange = renderEditor(costPlusPart(), true);
+    const field = screen.getByLabelText("Markup on net · percent");
+
+    fireEvent.change(field, { target: { value: "12." } });
+    expect(field).toHaveValue("12.");
+
+    fireEvent.change(field, { target: { value: "12.5" } });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ markupPercent: 12.5 }),
+    );
+  });
+
+  it("clears a percent the designer empties", () => {
+    const onChange = renderEditor(percentPart(), true);
+    fireEvent.change(screen.getByLabelText("Percent"), {
+      target: { value: "" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ percent: null }),
+    );
+  });
+
+  it("hands the stored percent back when the field is left", () => {
+    renderEditor(percentPart(), true);
+    const field = screen.getByLabelText("Percent");
+    fireEvent.change(field, { target: { value: "12." } });
+    fireEvent.blur(field);
+    expect(field).toHaveValue("12");
+  });
+});

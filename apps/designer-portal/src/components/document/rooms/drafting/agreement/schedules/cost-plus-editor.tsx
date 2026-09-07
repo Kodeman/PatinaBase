@@ -8,23 +8,21 @@
  */
 
 import { Input, Textarea } from "@/components/ui/controls";
+import { readPercent, usePercentField } from "./percent-field";
 import type { ScheduleEditorProps } from "./index";
 
 const LABEL =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
-
-const readPercent = (value: unknown): number | null => {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
 
 export function CostPlusEditor({
   payload,
   onChange,
   readOnly,
 }: ScheduleEditorProps) {
-  const markup = readPercent(payload.markupPercent);
+  const markupField = usePercentField(
+    readPercent(payload.markupPercent),
+    (next) => onChange({ ...payload, markupPercent: next }),
+  );
 
   return (
     <div className="space-y-4">
@@ -34,17 +32,8 @@ export function CostPlusEditor({
           className="mt-2 max-w-[140px]"
           inputMode="decimal"
           disabled={readOnly}
-          value={markup === null ? "" : String(markup)}
-          onChange={(event) =>
-            onChange({
-              ...payload,
-              markupPercent:
-                event.target.value.trim() === ""
-                  ? null
-                  : readPercent(event.target.value),
-            })
-          }
           placeholder="%"
+          {...markupField}
         />
       </label>
       <label className={LABEL}>

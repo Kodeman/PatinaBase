@@ -12,6 +12,7 @@
  */
 
 import { Input } from "@/components/ui/controls";
+import { readPercent, usePercentField } from "./percent-field";
 import type { ScheduleEditorProps } from "./index";
 
 const LABEL =
@@ -22,18 +23,14 @@ const BASES = [
   { value: "spend", label: "Of spend" },
 ] as const;
 
-const readPercent = (value: unknown): number | null => {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
 export function PercentEditor({
   payload,
   onChange,
   readOnly,
 }: ScheduleEditorProps) {
-  const percent = readPercent(payload.percent);
+  const percentField = usePercentField(readPercent(payload.percent), (next) =>
+    onChange({ ...payload, percent: next }),
+  );
   const basis = payload.basis === "spend" ? "spend" : "cost";
 
   return (
@@ -45,17 +42,8 @@ export function PercentEditor({
           inputMode="decimal"
           disabled={readOnly}
           aria-label="Percent"
-          value={percent === null ? "" : String(percent)}
-          onChange={(event) =>
-            onChange({
-              ...payload,
-              percent:
-                event.target.value.trim() === ""
-                  ? null
-                  : readPercent(event.target.value),
-            })
-          }
           placeholder="%"
+          {...percentField}
         />
       </label>
       <div className={LABEL}>
