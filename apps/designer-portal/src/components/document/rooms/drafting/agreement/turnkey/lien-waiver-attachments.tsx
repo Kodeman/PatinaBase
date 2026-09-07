@@ -25,6 +25,7 @@ import {
   type LienWaiverType,
 } from "@patina/types";
 import { Button, Select } from "@/components/ui/controls";
+import { documentEvents } from "@/lib/analytics/document-events";
 import { turnkeyMoney } from "./money";
 
 const LABEL =
@@ -89,6 +90,10 @@ export function LienWaiverAttachments({
         storagePath: null,
         receivedAt: new Date().toISOString(),
         recordedBy,
+      });
+      documentEvents.agreementLienWaiverRecorded({
+        proposal_id: proposalId,
+        waiver_type: waiverType,
       });
       setOpenDrawId(null);
       setContactId("");

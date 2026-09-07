@@ -129,6 +129,11 @@ export function commercialDocumentExperience(
   switch (kind) {
     case "design_services":
     case "service_addendum":
+    // W3 — the turnkey class opens the SAME room. Every downstream consumer
+    // of this experience (the drafting room, the instruments, the preview,
+    // the finalize head, the offer facets, the doc page) inherits the
+    // decision from this one line rather than each learning a sixth kind.
+    case "design_build":
       return "design_services";
     case "furnishings_authorization":
       return "commercial_readonly";

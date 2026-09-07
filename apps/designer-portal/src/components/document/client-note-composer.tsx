@@ -132,10 +132,17 @@ function openDesignServicesOptions(
   return (proposals ?? [])
     .filter(
       (p) =>
-        p.document_kind === "design_services" &&
+        (p.document_kind === "design_services" ||
+          p.document_kind === "design_build") &&
         normalizedProposalState(p) === "sent",
     )
-    .map((p) => ({ id: p.id, title: "the design services agreement" }));
+    .map((p) => ({
+      id: p.id,
+      title:
+        p.document_kind === "design_build"
+          ? "the design-build agreement"
+          : "the design services agreement",
+    }));
 }
 
 /** Open trade scopes: the id is the scope's underlying `proposals` row id —

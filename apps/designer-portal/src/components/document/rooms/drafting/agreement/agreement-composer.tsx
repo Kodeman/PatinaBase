@@ -74,6 +74,7 @@ import {
   partsNeedingAttention,
 } from "./readiness";
 import {
+  DrawLedger,
   JurisdictionAttachments,
   LienWaiverAttachments,
   TURNKEY_PART_KEYS,
@@ -342,10 +343,20 @@ export function AgreementComposer({
   /** R39 — hiding a part from the client. `client_visible` is the column;
    *  R33 already refuses to project a hidden fee and readiness already says
    *  so where the designer typed it. This is the act that sets it. */
-  const setClientVisible = (id: string, clientVisible: boolean) =>
+  const setClientVisible = (id: string, clientVisible: boolean) => {
+    const target = parts.find((part) => part.id === id) ?? null;
     mutate(
       parts.map((part) => (part.id === id ? { ...part, clientVisible } : part)),
     );
+    if (target) {
+      documentEvents.agreementPartVisibilityChanged({
+        proposal_id: proposalId,
+        kind: target.kind,
+        variant: target.variant,
+        client_visible: clientVisible,
+      });
+    }
+  };
 
   const turnkeyContext: TurnkeyContext | undefined = turnkeyOn
     ? { parts, writePart, projectId: document.projectId }
@@ -492,6 +503,12 @@ export function AgreementComposer({
         template_kind: template.kind,
         part_count: landed.length,
       });
+      if (template.class === "design_build") {
+        documentEvents.agreementTurnkeyComposed({
+          proposal_id: proposalId,
+          part_count: landed.length,
+        });
+      }
     } catch (error) {
       setTemplateError(
         refusalMessage(error, "That template could not be opened here."),
@@ -837,6 +854,14 @@ export function AgreementComposer({
                 <JurisdictionAttachments
                   onAttach={readOnly ? undefined : attachNotice}
                   readOnly={readOnly}
+                />
+                {/* P9 · P13 — the ledger, and the studio's act on it. The
+                    deposit is not billed from here: it is offered on the
+                    homeowner's door the moment she signs. */}
+                <DrawLedger
+                  proposalId={proposalId}
+                  draws={drawLedger.data ?? []}
+                  executed={document.state === "executed"}
                 />
                 {/* P12 — the exchange, not the form. Empty until the
                     agreement is sent, because the ledger is materialized at

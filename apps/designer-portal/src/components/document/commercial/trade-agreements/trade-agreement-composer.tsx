@@ -26,6 +26,7 @@ import {
 } from "@patina/supabase";
 import { LIEN_WAIVER_POLICIES, type LienWaiverPolicy } from "@patina/types";
 import { Button, Input, Select, Textarea } from "@/components/ui/controls";
+import { documentEvents } from "@/lib/analytics/document-events";
 import {
   SubPicker,
   type SubChoice,
@@ -110,6 +111,7 @@ export function TradeAgreementComposer({
       });
       if (thenSend) {
         const result = await send.mutateAsync(id);
+        documentEvents.tradeAgreementSent({ project_id: projectId });
         setNote(
           result.emailSent && result.recipient
             ? `Sent to ${result.recipient}.`

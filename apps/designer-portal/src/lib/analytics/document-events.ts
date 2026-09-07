@@ -17,16 +17,16 @@
  * No-ops when PostHog is not initialized (the track() guard).
  */
 
-import posthog from 'posthog-js';
-import { isAnalyticsEnabled } from './posthog';
+import posthog from "posthog-js";
+import { isAnalyticsEnabled } from "./posthog";
 
 function track(event: string, properties?: Record<string, unknown>): void {
   if (!isAnalyticsEnabled()) return;
   posthog.capture(event, properties);
 }
 
-const LAST_DOC_KEY = 'patina:last-document-in-hand';
-const RECENT_DOCS_KEY = 'patina:recent-documents-in-hand';
+const LAST_DOC_KEY = "patina:last-document-in-hand";
+const RECENT_DOCS_KEY = "patina:recent-documents-in-hand";
 const RECENT_DOCS_MAX = 5;
 
 // R106 (the Arrival Arc) — the nudge/fresh-times chip states should fire once
@@ -50,7 +50,7 @@ export function rememberDocumentInHand(
   engagementId: string | null,
   doc?: { title?: string | null; subtitle?: string | null },
 ) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
   try {
     if (engagementId) window.localStorage.setItem(LAST_DOC_KEY, engagementId);
   } catch {
@@ -72,7 +72,7 @@ export function rememberDocumentInHand(
 
 /** Read the recent-documents-in-hand MRU, most-recent first. SSR-safe. */
 export function readRecentDocumentsInHand(): RecentDocumentInHand[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(RECENT_DOCS_KEY);
     if (!raw) return [];
@@ -85,25 +85,25 @@ export function readRecentDocumentsInHand(): RecentDocumentInHand[] {
 
 /** Doorway/Room weight (D14): most books are sheets (pull, glance, put back);
  *  the Library and People are rooms (walk in). */
-type DoorWeight = 'room' | 'sheet';
+type DoorWeight = "room" | "sheet";
 
 /** Where a doorway act originated. */
-type WayfindingSource = 'drawer' | 'palette' | 'contents' | 'shortcut';
+type WayfindingSource = "drawer" | "palette" | "contents" | "shortcut";
 
 /** F1 — ⌘K command bar: opened, queried (debounced by the caller), zero
  *  result, and the row kind/position of what got picked. */
 const commandBar = {
   /** The bar opened, via the hotkey or a click affordance ("Find anything"). */
-  opened: (props: { source: 'hotkey' | 'affordance' }) =>
-    track('document_command_bar_opened', props),
+  opened: (props: { source: "hotkey" | "affordance" }) =>
+    track("document_command_bar_opened", props),
 
   /** A query was typed (caller debounces — this is not fired per keystroke). */
   queried: (props: { query_length: number; result_count: number }) =>
-    track('document_command_bar_queried', props),
+    track("document_command_bar_queried", props),
 
   /** A query matched nothing. */
   zeroResult: (props: { query_length: number }) =>
-    track('document_command_bar_zero_result', props),
+    track("document_command_bar_zero_result", props),
 
   /** A row was chosen — document, ledger, action, person, or the Engine. */
   selected: (props: {
@@ -111,7 +111,7 @@ const commandBar = {
     key: string;
     position: number;
     query_length: number;
-  }) => track('document_command_bar_selected', props),
+  }) => track("document_command_bar_selected", props),
 };
 
 /** F1 — the doorway grammar: doors, Rooms, help, margin notes, and Contents
@@ -123,11 +123,11 @@ const wayfinding = {
     key: string;
     weight: DoorWeight;
     source: WayfindingSource;
-  }) => track('document_wayfinding_door_opened', props),
+  }) => track("document_wayfinding_door_opened", props),
 
   /** A Room (D14 room-weight door) was actually entered. */
   roomEntered: (props: { key: string; source: WayfindingSource }) =>
-    track('document_wayfinding_room_entered', props),
+    track("document_wayfinding_room_entered", props),
 
   /** Help was opened for a surface, and from where — 'palette' (⌘K's Help…
    *  row) plus the help-desk Wave 1 `?` doorways. Mirrors HelpOpenSource in
@@ -135,27 +135,27 @@ const wayfinding = {
    *  of feature modules). */
   helpOpened: (props: {
     surface_key: string;
-    source: 'palette' | 'sheet-head' | 'front-matter' | 'court-bar';
-  }) => track('document_help_opened', props),
+    source: "palette" | "sheet-head" | "front-matter" | "court-bar";
+  }) => track("document_help_opened", props),
 
   /** A margin note's lifecycle (R94 — notes recede permanently on use). */
   marginNote: (props: {
     key: string;
-    action: 'shown' | 'dismissed' | 'acted';
-  }) => track('document_margin_note', props),
+    action: "shown" | "dismissed" | "acted";
+  }) => track("document_margin_note", props),
 
   /** An act taken from the Desk's Contents index (R95 — labels + doorways
    *  only; this event is the metric, not a badge on the index itself). */
   contentsActed: (props: { key: string; kind: string }) =>
-    track('document_desk_contents_acted', props),
+    track("document_desk_contents_acted", props),
 
   /** R97 — the Desk Walkthrough started, and from where. The package's
    *  help.tour.started carries no source, so this parallel event holds the
    *  attribution ('first_signin' auto-modal, 'command_bar' replay, or the
    *  existing-designer 'margin_note' offer) for the activation funnel. */
   walkthroughStarted: (props: {
-    source: 'first_signin' | 'command_bar' | 'margin_note';
-  }) => track('document_walkthrough_started', props),
+    source: "first_signin" | "command_bar" | "margin_note";
+  }) => track("document_walkthrough_started", props),
 };
 
 /**
@@ -168,52 +168,52 @@ const wayfinding = {
 // only an alias carries the implicit index signature that assignment needs.
 export type LensLineProps = {
   stage: string;
-  state: 'standing' | 'guide' | 'none';
+  state: "standing" | "guide" | "none";
   action_key: string | null;
   standing_count: number;
-  tier: 'full' | 'narrow' | 'mobile';
+  tier: "full" | "narrow" | "mobile";
 };
 
 export const documentEvents = {
   lensLineShown: (props: LensLineProps) =>
-    track('document_lens_line_shown', props),
+    track("document_lens_line_shown", props),
 
   lensLineActed: (props: LensLineProps) =>
-    track('document_lens_line_acted', props),
+    track("document_lens_line_acted", props),
 
-  lensStandingSheetOpened: (props: Omit<LensLineProps, 'action_key'>) =>
-    track('document_lens_standing_opened', props),
+  lensStandingSheetOpened: (props: Omit<LensLineProps, "action_key">) =>
+    track("document_lens_standing_opened", props),
 
   historyToggled: (props: { expanded: boolean; completed_count: number }) =>
-    track('document_previous_work_toggled', props),
+    track("document_previous_work_toggled", props),
 
   /** A Project region was folded shut or unfolded (the region head's Fold word
    *  or the fold seam). `region` is the RegionFoldKey the choice persists under. */
   regionFolded: (props: { region: string; folded: boolean }) =>
-    track('document_region_folded', props),
+    track("document_region_folded", props),
 
   actionShown: (props: {
     surface_key: string;
     region_key: string;
     action_key: string;
-    variant: 'primary' | 'inked' | 'secondary' | 'tertiary' | 'danger';
-    presentation: 'inline' | 'mobile_dock';
-  }) => track('document_action_shown', props),
+    variant: "primary" | "inked" | "secondary" | "tertiary" | "danger";
+    presentation: "inline" | "mobile_dock";
+  }) => track("document_action_shown", props),
 
   actionSelected: (props: {
     surface_key: string;
     region_key: string;
     action_key: string;
-    variant: 'primary' | 'inked' | 'secondary' | 'tertiary' | 'danger';
-    presentation: 'inline' | 'mobile_dock';
-  }) => track('document_action_selected', props),
+    variant: "primary" | "inked" | "secondary" | "tertiary" | "danger";
+    presentation: "inline" | "mobile_dock";
+  }) => track("document_action_selected", props),
 
   /** The Desk's composition on render — week-one noise + need-kind mix. */
   deskRendered: (props: {
     folder_count: number;
     chip_count: number;
     need_kinds: Record<string, number>;
-  }) => track('document_desk_rendered', props),
+  }) => track("document_desk_rendered", props),
 
   /** Arrival Arc Phase 0 (DECISIONS.md I64) — a document_state read came back
    *  with 0 rows right after a cached read that had folders/chips in it. The
@@ -228,14 +228,14 @@ export const documentEvents = {
     previous_folder_count: number;
     previous_chip_count: number;
     session_valid: boolean;
-  }) => track('desk_zero_row_read', props),
+  }) => track("desk_zero_row_read", props),
 
   /** Log-strip engagement (R20/D10): logged or discarded, adjusted, idle. */
   logStripActed: (props: {
-    action: 'log' | 'discard';
+    action: "log" | "discard";
     adjusted: boolean;
     had_idle: boolean;
-  }) => track('document_log_strip_acted', props),
+  }) => track("document_log_strip_acted", props),
 
   /** Designer Handoff (Wave 1B) — a pool request claimed from the Desk's
    *  Open requests strip. Unprefixed (not `document_*`) per the task-level
@@ -245,7 +245,7 @@ export const documentEvents = {
     lead_id: string;
     project_type: string | null;
     scan_count: number;
-  }) => track('design_request_claimed', props),
+  }) => track("design_request_claimed", props),
 
   /** Arrival Arc (R106) — the Match Ceremony surface rendered for a lead.
    *  Unprefixed `ceremony_*` family, sibling to `design_request_*`. */
@@ -253,16 +253,16 @@ export const documentEvents = {
     lead_id: string;
     has_scan: boolean;
     has_draft: boolean;
-  }) => track('ceremony_opened', props),
+  }) => track("ceremony_opened", props),
 
   /** R106 §3 — the ceremony parked mid-write: the explicit "Put down for
    *  now", or route-leave with a dirty (autosaved) draft still open. */
   ceremonyPutDown: (props: {
     lead_id: string;
-    via: 'put_down' | 'route_leave';
+    via: "put_down" | "route_leave";
     intro_length: number;
     slot_count: number;
-  }) => track('ceremony_put_down', props),
+  }) => track("ceremony_put_down", props),
 
   /** R106 §7 — the threshold act completed. `time_to_complete_seconds` runs
    *  from the ceremony row's created_at (the accept) to the send;
@@ -275,7 +275,7 @@ export const documentEvents = {
     time_to_complete_seconds: number | null;
     has_credential_line: boolean;
     has_portfolio_url: boolean;
-  }) => track('ceremony_completed', props),
+  }) => track("ceremony_completed", props),
 
   /** R106 §4 (the Arrival Arc) — the quiet-48h nudge chip actually rendered.
    *  Fires once per ceremony per session (first render only). Unprefixed
@@ -284,7 +284,7 @@ export const documentEvents = {
   nudgeFired: (props: { ceremony_id: string; lead_id: string | null }) => {
     if (nudgeFiredSeen.has(props.ceremony_id)) return;
     nudgeFiredSeen.add(props.ceremony_id);
-    track('nudge_fired', props);
+    track("nudge_fired", props);
   },
 
   /** R106 §4 — the stale-offered-slots chip actually rendered ("offered times
@@ -295,7 +295,7 @@ export const documentEvents = {
   }) => {
     if (freshTimesRequestedSeen.has(props.ceremony_id)) return;
     freshTimesRequestedSeen.add(props.ceremony_id);
-    track('fresh_times_requested', props);
+    track("fresh_times_requested", props);
   },
 
   /** Onboarding Wave 1 (L6) — this person's first successful write (a margin
@@ -303,13 +303,14 @@ export const documentEvents = {
    *  signal (synthesis §10) — fired once per person, guarded in
    *  `profiles.help_state.firstAuthoredAt` by the caller so a second write,
    *  on this document or another, never re-fires it. */
-  firstAuthored: (props: { doc_id: string }) => track('document_first_authored', props),
+  firstAuthored: (props: { doc_id: string }) =>
+    track("document_first_authored", props),
 
   /** Onboarding Wave 1 (L6) — a document was put down (or navigated away
    *  from) within 10 seconds of being picked up, with no write in between:
    *  the "pick-up/put-down thrash" stuck signal (synthesis §10, R-b). */
   zoneFlight: (props: { doc_id: string; held_ms: number }) =>
-    track('document_zone_flight', props),
+    track("document_zone_flight", props),
 
   // ── "The Agreement, Composed" Wave 2 (P4 · P7) — the Library's five acts.
   // Fired from the sheet or the page that owns the mutation, never from a
@@ -318,29 +319,29 @@ export const documentEvents = {
 
   /** A composition was kept as a studio Template (`save_agreement_as_template`). */
   agreementTemplateSaved: (props: { proposal_id: string }) =>
-    track('agreement_template_saved', props),
+    track("agreement_template_saved", props),
 
   /** A Template was laid into a draft, replacing its part set wholesale. */
   agreementTemplateMaterialized: (props: {
     proposal_id: string;
-    template_kind: 'seeded' | 'studio';
+    template_kind: "seeded" | "studio";
     part_count: number;
-  }) => track('agreement_template_materialized', props),
+  }) => track("agreement_template_materialized", props),
 
   /** A part was added to a composition, from the Library or blank. */
   agreementPartSaved: (props: {
     proposal_id: string;
     kind: string;
     variant: string | null;
-    origin: 'library' | 'patina' | 'blank';
-  }) => track('agreement_part_saved', props),
+    origin: "library" | "patina" | "blank";
+  }) => track("agreement_part_saved", props),
 
   /** A part was taken off a composition. */
   agreementPartRemoved: (props: {
     proposal_id: string;
     kind: string;
     variant: string | null;
-  }) => track('agreement_part_removed', props),
+  }) => track("agreement_part_removed", props),
 
   /** A services addendum was composed from the active authority's part set,
    *  with or without the one-line why the client reads beside the change. */
@@ -348,7 +349,49 @@ export const documentEvents = {
     project_id: string;
     proposal_id: string;
     has_why: boolean;
-  }) => track('agreement_addendum_composed', props),
+  }) => track("agreement_addendum_composed", props),
+
+  // ── "The Agreement, Composed" Wave 3 (P9 · P10 · P12 · P14) — the turnkey
+  // acts. Fired from the container that owns the mutation, never from a leaf.
+  // Nothing here carries a scope, a body, a name, or a figure: an agreement's
+  // words and its money are the studio's and the client's, not telemetry.
+
+  /** A studio filed its licensing attestation (R10). Never the credential
+   *  number, never the issuing state — only that the gate is now open. */
+  agreementAttestationSaved: (props: { studio_id: string }) =>
+    track("agreement_attestation_saved", props),
+
+  /** A draft was turned into a design-build agreement by laying down the
+   *  turnkey template. */
+  agreementTurnkeyComposed: (props: {
+    proposal_id: string;
+    part_count: number;
+  }) => track("agreement_turnkey_composed", props),
+
+  /** One draw was billed. The key, not the amount. */
+  agreementDrawIssued: (props: {
+    proposal_id: string;
+    draw_key: string;
+    is_retainage_release: boolean;
+  }) => track("agreement_draw_issued", props),
+
+  /** A lien waiver was recorded against a draw (P12). */
+  agreementLienWaiverRecorded: (props: {
+    proposal_id: string;
+    waiver_type: string;
+  }) => track("agreement_lien_waiver_recorded", props),
+
+  /** A Trade Agreement was sent to a trade on a token link (P14). */
+  tradeAgreementSent: (props: { project_id: string }) =>
+    track("trade_agreement_sent", props),
+
+  /** A part was hidden from, or shown to, the client (R39). */
+  agreementPartVisibilityChanged: (props: {
+    proposal_id: string;
+    kind: string;
+    variant: string | null;
+    client_visible: boolean;
+  }) => track("agreement_part_visibility_changed", props),
 
   commandBar,
   wayfinding,
