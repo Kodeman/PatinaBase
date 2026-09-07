@@ -44,6 +44,7 @@ import { StudioInviteModal } from './studio-invite-modal';
 import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { StudioSetupChecklist } from './studio-setup-checklist';
 import { MemberTitleLine } from './member-title-line';
+import { AgreementLibraryCard } from './agreement-library-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { RolodexSeedSheet } from '../people/directory/rolodex-seed-sheet';
@@ -158,6 +159,9 @@ export function AccountStudioPage() {
   // "The Agreement, Composed" W1 (P3). Fail-closed: the defaults card, and the
   // read behind it, exist only for a studio the flag has reached.
   const { value: agreementPartsOn } = useFeatureFlag('agreement-parts');
+  // W2 (P4). Reads beside its wave-1 sibling; the card below Billing renders
+  // only when BOTH are on, which is the program's fail-closed rule.
+  const { value: agreementLibraryOn } = useFeatureFlag('agreement-library');
   const [seedReviewOpen, setSeedReviewOpen] = useState(false);
   const [skipSeedError, setSkipSeedError] = useState<string | null>(null);
 
@@ -1382,6 +1386,16 @@ export function AccountStudioPage() {
             </dl>
           )}
         </div>
+      )}
+
+      {/* The Agreement Library (Wave 2, M4). One insertion, below Billing and
+          below Wave 1's Agreement defaults card — both of which are untouched.
+          Behind BOTH gates: `agreement-library` only ever shows where
+          `agreement-parts` already does, and `useFeatureFlag` reads false
+          while it is loading, so a studio neither flag has reached sees the
+          Account page it has today. */}
+      {agreementPartsOn && agreementLibraryOn && studio && (
+        <AgreementLibraryCard studioId={studio.id} canManage={canManage} />
       )}
 
       {/* Members */}

@@ -574,7 +574,11 @@ describe("assessAgreementReadiness — R18, one part per money variant", () => {
     expect(messages).toEqual(["part-second-retainer"]);
   });
 
-  it("lets an agreement state more than one flat fee — nothing projects", () => {
+  // Wave 1 let an agreement state two flat fees, on the reasoning that
+  // nothing projected from either. Wave 2's projection DOES write `fee_basis`
+  // from them, so 00577 refuses a second one — "an agreement carries one fee
+  // basis" — and the room has to hold it rather than earn the 23514.
+  it("holds a second flat fee, which W2's projection can no longer take", () => {
     const first = part({
       partKey: "custom.flat-a",
       kind: "schedule",
@@ -590,7 +594,11 @@ describe("assessAgreementReadiness — R18, one part per money variant", () => {
       payload: { cents: 250_000 },
     });
     const readiness = assess([...nine(), first, second]);
-    expect(readiness.ready).toBe(true);
+    expect(readiness.ready).toBe(false);
+    expect(readiness.blockers).toContainEqual({
+      partId: second.id,
+      message: "An agreement carries one fee basis.",
+    });
   });
 });
 
@@ -729,5 +737,138 @@ describe("assessAgreementReadiness — the floor is client-facing", () => {
         blocker.message.startsWith("An agreement that bills hourly"),
       ),
     ).toBe(true);
+  });
+});
+
+// ── R18's second half. `upsert_agreement_parts` raises "an agreement carries
+// one fee basis" (check_violation, 00577) for more than one of flat/per_phase
+// in ANY combination, and the per-variant duplicate rule cannot see it.
+
+const flatFee = (cents: number | null = 900_000, partKey = "custom.flat") =>
+  part({
+    partKey,
+    kind: "schedule",
+    variant: "flat",
+    title: "Flat fee",
+    payload: { cents },
+  });
+const feeByPhase = (partKey = "custom.per-phase") =>
+  part({
+    partKey,
+    kind: "schedule",
+    variant: "per_phase",
+    title: "Fee by phase",
+    payload: {
+      phases: [{ key: "concept", label: "Concept", cents: 400_000 }],
+    },
+  });
+
+describe("assessAgreementReadiness — one fee basis (R18 · 00577)", () => {
+  const base = () => [services(), terms()];
+
+  it("holds a flat fee standing beside a fee by phase", () => {
+    const readiness = assess([...base(), flatFee(), feeByPhase()]);
+    expect(readiness.ready).toBe(false);
+    expect(readiness.blockers.map((blocker) => blocker.message)).toContain(
+      "An agreement carries one fee basis.",
+    );
+  });
+
+  it("holds two flat fees, differently keyed", () => {
+    const messages = assess([
+      ...base(),
+      flatFee(900_000, "custom.flat-a"),
+      flatFee(400_000, "custom.flat-b"),
+    ]).blockers.map((blocker) => blocker.message);
+    expect(messages).toContain("An agreement carries one fee basis.");
+  });
+
+  it("marks the SECOND one, not the first", () => {
+    const first = flatFee();
+    const second = feeByPhase();
+    const readiness = assess([...base(), first, second]);
+    const marked = readiness.blockers
+      .filter(
+        (blocker) => blocker.message === "An agreement carries one fee basis.",
+      )
+      .map((blocker) => blocker.partId);
+    expect(marked).toEqual([second.id]);
+  });
+
+  it("says nothing about a single fee basis", () => {
+    const readiness = assess([...base(), flatFee()]);
+    expect(readiness.blockers.map((blocker) => blocker.message)).not.toContain(
+      "An agreement carries one fee basis.",
+    );
+    expect(readiness.ready).toBe(true);
+  });
+});
+
+// ── §4.2 — a record-only part is never a blocker on money grounds, but a
+// REQUIRED one blocks while its typed payload is empty. Before the W2 payload
+// shapes were taught to `scheduleValueIsSet`, every one of these read complete.
+
+describe("assessAgreementReadiness — required Wave 2 fee schedules", () => {
+  const withSchedule = (
+    variant: string,
+    payload: Record<string, unknown>,
+    title: string,
+  ) => [
+    services(),
+    terms(),
+    flatFee(),
+    part({
+      partKey: `studio.${variant}`,
+      kind: "schedule",
+      variant: variant as AgreementPart["variant"],
+      title,
+      required: true,
+      payload,
+    }),
+  ];
+
+  it.each([
+    ["percent_of_cost", "Percent of cost"],
+    ["percent_of_spend", "Percent of spend"],
+    ["cost_plus", "Cost plus"],
+    ["day_rate", "Day rate"],
+    ["package", "Package"],
+  ])("holds an empty required %s", (variant, title) => {
+    const messages = assess(withSchedule(variant, {}, title)).blockers.map(
+      (blocker) => blocker.message,
+    );
+    expect(messages).toContain(`Complete ${title}.`);
+  });
+
+  it.each([
+    ["percent_of_cost", { basis: "cost", percent: 12 }, "Percent of cost"],
+    ["cost_plus", { markupPercent: 18 }, "Cost plus"],
+    ["day_rate", { dayRateCents: 120_000, minimumDays: 1 }, "Day rate"],
+    [
+      "package",
+      { name: "One room", priceCents: 850_000, includes: [] },
+      "Package",
+    ],
+  ])("lets a written required %s through", (variant, payload, title) => {
+    const messages = assess(
+      withSchedule(variant, payload as Record<string, unknown>, title),
+    ).blockers.map((blocker) => blocker.message);
+    expect(messages).not.toContain(`Complete ${title}.`);
+  });
+
+  it("asks nothing of an OPTIONAL empty fee schedule — record only is not a blocker", () => {
+    const readiness = assess([
+      services(),
+      terms(),
+      flatFee(),
+      part({
+        partKey: "studio.package",
+        kind: "schedule",
+        variant: "package",
+        title: "Package",
+        payload: {},
+      }),
+    ]);
+    expect(readiness.ready).toBe(true);
   });
 });

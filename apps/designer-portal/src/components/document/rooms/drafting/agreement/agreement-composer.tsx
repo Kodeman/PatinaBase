@@ -21,11 +21,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  useAgreementParts,
   useDiscardAgreementParts,
+  useMaterializeAgreementTemplate,
   useMaterializeStandardParts,
+  useOrganizations,
   useSaveAgreementParts,
 } from "@patina/supabase";
-import { AGREEMENT_PART_COPY, type AgreementPart } from "@patina/types";
+import {
+  AGREEMENT_PART_COPY,
+  type AgreementPart,
+  type AgreementTemplate,
+} from "@patina/types";
 import { RoomShell } from "../../room-shell";
 import { DocSheet } from "../../../overlays/doc-sheet";
 import { DocumentAction } from "../../../document-action";
@@ -34,6 +41,8 @@ import { ClientPicker } from "@/components/portal/client-picker";
 import { useAttachDocumentClient } from "@/hooks/use-attach-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients } from "@/hooks/use-clients";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { documentEvents } from "@/lib/analytics/document-events";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import { ServiceAgreementPreview } from "../../../commercial/service-agreement-preview";
@@ -42,10 +51,15 @@ import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
 import {
   createBlankPart,
   duplicateMoneyVariants,
+  localPartId,
   unnamedRateCardRoles,
 } from "./part-kinds";
 import { PartEditor } from "./part-editor";
 import { PartsRail } from "./parts-rail";
+import { AddPartSheet, type AddPartChoice } from "./add-part-sheet";
+import { TemplatePickerSheet } from "./template-picker-sheet";
+import { SaveAsTemplateAction } from "./save-as-template-action";
+import { PartHistoryStrip } from "./part-history-strip";
 import {
   assessAgreementReadiness,
   BLANK_ROLE_BLOCKER,
@@ -109,6 +123,41 @@ export function AgreementComposer({
   const attachClient = useAttachDocumentClient();
   const { user, status: authStatus } = useAuth();
   const clients = useClients();
+
+  // Wave 2 — the Library. `agreement-parts` is already on (this component is
+  // what that flag renders), so this second read IS `agreementParts &&
+  // agreementLibrary`. Fail-closed: `useFeatureFlag` answers
+  // { value: false, isLoading: true } until PostHog responds, and the extra
+  // `!libraryLoading` says out loud that nothing Wave 2 renders may flash to
+  // a studio the flag has not reached. Every hook here sits above every early
+  // return in this file — there are none — and above every conditional.
+  const { value: libraryFlag, isLoading: libraryLoading } =
+    useFeatureFlag("agreement-library");
+  const libraryOn = libraryFlag && !libraryLoading;
+
+  // R3 — owners and admins edit the Library; every active member composes
+  // from it. Resolved the way the nameplate and Account → Studio resolve it:
+  // prefer a design_studio membership, else the first org.
+  const { data: orgs } = useOrganizations();
+  const studio = useMemo(
+    () =>
+      (orgs ?? []).find((org) => org.type === "design_studio") ??
+      (orgs ?? [])[0] ??
+      null,
+    [orgs],
+  );
+  const studioId = studio?.id ?? null;
+  const canManage =
+    studio?.membership?.role === "owner" ||
+    studio?.membership?.role === "admin";
+
+  // The re-read after a Template is laid in. `materialize_agreement_template`
+  // replaces the part set on the server and answers with a count; the room
+  // holds the composition in local state, so it asks the table what it now
+  // says rather than trusting a shape the mutation was never promised to
+  // return.
+  const partsRead = useAgreementParts(proposalId);
+  const materializeTemplate = useMaterializeAgreementTemplate(proposalId);
   const ownsProposal = user?.id === proposal.designer_id;
   const ownerClients = useMemo(
     () =>
@@ -130,6 +179,9 @@ export function AgreementComposer({
   const [clientError, setClientError] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
 
   const readOnly = document.state !== "draft";
 
@@ -206,9 +258,17 @@ export function AgreementComposer({
     mutate(parts.map((part) => (part.id === id ? { ...part, title } : part)));
 
   const removePart = (id: string) => {
+    const removed = parts.find((part) => part.id === id) ?? null;
     const next = parts.filter((part) => part.id !== id);
     mutate(next);
     if (selectedId === id) setSelectedId(next[0]?.id ?? null);
+    if (libraryOn && removed) {
+      documentEvents.agreementPartRemoved({
+        proposal_id: proposalId,
+        kind: removed.kind,
+        variant: removed.variant,
+      });
+    }
   };
 
   const reorderPart = (from: number, to: number) => {
@@ -231,6 +291,76 @@ export function AgreementComposer({
     });
     mutate([...parts, blank]);
     setSelectedId(blank.id);
+  };
+
+  /**
+   * A part chosen in the Library picker (M2), laid at the end of the rail.
+   *
+   * Local, like every other act in this room: the picker writes nothing, and
+   * the part reaches the table with the rest of the composition when the
+   * designer saves. `sourcePartId` rides along so the saved row can be traced
+   * back to the Library entry it came from.
+   */
+  const addFromLibrary = (choice: AddPartChoice) => {
+    const added: AgreementPart = {
+      id: localPartId(),
+      proposalId,
+      position: parts.length + 1,
+      kind: choice.kind,
+      variant: choice.variant,
+      partKey: choice.partKey,
+      title: choice.title,
+      payload: choice.payload,
+      required: choice.required,
+      clientVisible: choice.clientVisible,
+      sourceTemplateKey: null,
+      sourcePartId: choice.sourcePartId,
+      updatedAt: null,
+    };
+    mutate([...parts, added]);
+    setSelectedId(added.id);
+    documentEvents.agreementPartSaved({
+      proposal_id: proposalId,
+      kind: choice.kind,
+      variant: choice.variant,
+      origin: choice.sourcePartId
+        ? "library"
+        : choice.partKey.startsWith("patina.")
+          ? "patina"
+          : "blank",
+    });
+  };
+
+  /**
+   * A Template, laid into this draft. The RPC replaces the part set wholesale
+   * — which is exactly what the sheet warns about before this runs — so the
+   * room throws away the composition it was holding and re-reads the one the
+   * database now has. Unsaved edits go with it, which is why the sheet is
+   * handed `dirty` and says so in the warning.
+   */
+  const applyTemplate = async (template: AgreementTemplate) => {
+    setTemplateError(null);
+    try {
+      await materializeTemplate.mutateAsync(template.templateKey);
+      const fresh = await partsRead.refetch();
+      const landed = renumber(
+        [...(fresh.data ?? [])].sort((a, b) => a.position - b.position),
+      );
+      setParts(landed);
+      setSelectedId(landed[0]?.id ?? null);
+      setDirty(false);
+      setTemplatesOpen(false);
+      setSaveNote(`The parts of ${template.title} are on this agreement.`);
+      documentEvents.agreementTemplateMaterialized({
+        proposal_id: proposalId,
+        template_kind: template.kind,
+        part_count: landed.length,
+      });
+    } catch (error) {
+      setTemplateError(
+        refusalMessage(error, "That template could not be opened here."),
+      );
+    }
   };
 
   const persist = async () => {
@@ -441,16 +571,43 @@ export function AgreementComposer({
             onRemove={removePart}
             onAdd={addPart}
             readOnly={readOnly}
+            libraryOn={libraryOn}
+            onOpenLibrary={() => setAddOpen(true)}
+            onOpenTemplatePicker={() => {
+              setTemplateError(null);
+              setTemplatesOpen(true);
+            }}
+            saveAsTemplate={
+              <SaveAsTemplateAction
+                proposalId={proposalId}
+                canManage={canManage}
+                disabled={parts.length === 0}
+              />
+            }
           />
 
-          <div>
+          {/* The history strip needs a rhythm under the editor; flag off there
+              is no strip, and the column stays the bare div Wave 1 shipped. */}
+          <div className={libraryOn ? "space-y-6" : undefined}>
             {selected ? (
-              <PartEditor
-                key={selected.id}
-                part={selected}
-                onChange={(payload) => changePayload(selected.id, payload)}
-                readOnly={readOnly}
-              />
+              <>
+                <PartEditor
+                  key={selected.id}
+                  part={selected}
+                  onChange={(payload) => changePayload(selected.id, payload)}
+                  readOnly={readOnly}
+                  libraryOn={libraryOn}
+                />
+                {/* P8 — under the open part, and only under a part that has a
+                    history. A part nobody has touched draws nothing. */}
+                {libraryOn && (
+                  <PartHistoryStrip
+                    key={`history-${selected.partKey}`}
+                    proposalId={proposalId}
+                    partKey={selected.partKey}
+                  />
+                )}
+              </>
             ) : (
               <p className="text-[12.5px] italic text-[var(--text-muted)]">
                 Pick a part on the left, or add one.
@@ -495,6 +652,28 @@ export function AgreementComposer({
       >
         <ServiceAgreementPreview {...previewProps} />
       </DocSheet>
+
+      {libraryOn && !readOnly && (
+        <>
+          <AddPartSheet
+            open={addOpen}
+            onClose={() => setAddOpen(false)}
+            studioId={studioId}
+            parts={parts}
+            onAdd={addFromLibrary}
+          />
+          <TemplatePickerSheet
+            open={templatesOpen}
+            onClose={() => setTemplatesOpen(false)}
+            studioId={studioId}
+            documentKind={document.kind}
+            onMaterialize={(template) => void applyTemplate(template)}
+            pending={materializeTemplate.isPending}
+            error={templateError}
+            unsavedChanges={dirty}
+          />
+        </>
+      )}
 
       <ServiceAgreementSendSheet
         open={sendOpen}

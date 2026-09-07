@@ -94,6 +94,28 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: mockDiscard,
     isPending: false,
   }),
+  // Wave 2 — the room reads these to resolve the studio (R3), to re-read the
+  // composition after a Template is laid in, and to mount the Library sheets.
+  // With `agreement-library` off (this suite's flag mock) none of them is
+  // called, but the module still has to answer.
+  useOrganizations: () => ({ data: [] }),
+  useAgreementParts: () => ({ data: [], refetch: jest.fn() }),
+  useMaterializeAgreementTemplate: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useAgreementTemplates: () => ({ data: [], isLoading: false }),
+  useStudioAgreementParts: () => ({ data: [], isLoading: false }),
+  useSaveAgreementAsTemplate: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useAgreementPartEvents: () => ({ data: [], isLoading: false }),
+}));
+
+// Fail-closed, and this suite pins Wave 1's room: `agreement-library` off.
+jest.mock("@/hooks/use-feature-flag", () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
 
 jest.mock("../../../../commercial/service-agreement-preview", () => ({
