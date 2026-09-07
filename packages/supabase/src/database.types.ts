@@ -29297,7 +29297,12 @@ export type Database = {
         Returns: Json
       }
       _project_agreement_terms: {
-        Args: { p_proposal_id: string; p_rates: Json; p_terms: Json }
+        Args: {
+          p_allow_null_ceiling?: boolean
+          p_proposal_id: string
+          p_rates: Json
+          p_terms: Json
+        }
         Returns: undefined
       }
       _project_approval_hash: { Args: { p_value: Json }; Returns: string }
