@@ -276,19 +276,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // countersignature transaction.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const commercialService = createServiceClient() as any;
+
+    // DEPLOY ORDER IS NOT A PROMISE. `p_consent` is the fifth argument the
+    // Wave 2 migration adds; PostgREST resolves an RPC by the argument NAMES
+    // it is sent, so a portal that sends `p_consent` to a database that has
+    // not been migrated yet cannot find the function at all and answers
+    // `sign_failed` for EVERY services signature — composed or not.
+    //
+    // So the wider call is made only when there is something to record: a
+    // bundle the database itself calls composed, an agreement carrying
+    // acknowledgments, or a sentence `compose_agreement_consent` composed. An
+    // un-composed agreement — which is every agreement today, and every
+    // agreement with either flag off — keeps taking the four-argument call it
+    // has always taken, and signs whichever way round the two deploys land.
+    const composedBundle =
+      commercialBundle?.composed === true ||
+      commercialDocument?.composed === true ||
+      (Array.isArray(commercialBundle?.parts) && commercialBundle.parts.length > 0);
+    const consentSentence =
+      commercialBundle?.consentSentence ?? commercialBundle?.consent_sentence ?? null;
+    const signArgs: Record<string, unknown> = {
+      p_proposal_id: id,
+      p_signed_name: signedByName,
+      p_client_id: user.id,
+      p_signed_ip: clientIp,
+    };
+    if (composedBundle || required.length > 0 || consentSentence !== null) {
+      signArgs.p_consent = {
+        consentSentence,
+        attachmentsAcknowledged: acknowledged,
+      };
+    }
+
     const { data: signResult, error: signError } = await commercialService.rpc(
       'sign_design_services_agreement_with_trusted_ip',
-      {
-        p_proposal_id: id,
-        p_signed_name: signedByName,
-        p_client_id: user.id,
-        p_signed_ip: clientIp,
-        p_consent: {
-          consentSentence:
-            commercialBundle?.consentSentence ?? commercialBundle?.consent_sentence ?? null,
-          attachmentsAcknowledged: acknowledged,
-        },
-      }
+      signArgs
     );
     if (signError) {
       // The token, never the database's own sentence (`W1-02`).

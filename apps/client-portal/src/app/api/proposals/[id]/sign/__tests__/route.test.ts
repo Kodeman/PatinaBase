@@ -260,10 +260,11 @@ describe('POST /api/proposals/[id]/sign', () => {
       p_client_id: 'client-1',
       p_signed_ip: '203.0.113.7',
       // Wave 2, P6. An un-composed agreement consents to nothing extra and
-      // acknowledges nothing — the argument is still sent, so the widened
-      // signature is exercised on every services signature, not only a
-      // composed one.
-      p_consent: { consentSentence: null, attachmentsAcknowledged: [] },
+      // acknowledges nothing, so it takes the FOUR-argument call it has always
+      // taken. PostgREST resolves an RPC by the argument names it is given, so
+      // sending `p_consent` to a database the Wave 2 migration has not reached
+      // yet fails to resolve the function at all — and that would break every
+      // services signature, composed or not, in one deploy order.
     });
     expect(await response.json()).toMatchObject({
       commercialState: 'client_signed',
@@ -772,6 +773,56 @@ describe('POST /api/proposals/[id]/sign', () => {
         p_consent: { consentSentence: null, attachmentsAcknowledged: [] },
       }),
     );
+  });
+
+  /* DEPLOY ORDER. The fifth argument arrives with the Wave 2 migration, and a
+     Worker can be live ahead of it. An agreement with nothing to record must
+     therefore keep taking the four-argument call — otherwise a portal deployed
+     first turns EVERY services signature, composed or not, into `sign_failed`.
+     A composed one has something to record and takes the wider call, which is
+     the deploy order the wave already commits to. */
+  it('keeps the four-argument call for an agreement with nothing to record', async () => {
+    commercialExtras = {};
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_design_services_agreement_with_trusted_ip',
+      expect.not.objectContaining({ p_consent: expect.anything() }),
+    );
+  });
+
+  it('keeps the four-argument call for a composed agreement with no parts left visible', async () => {
+    // `composed: false` is the database saying so itself, and an empty part
+    // array carries nothing to consent to.
+    commercialExtras = { composed: false, parts: [], consentSentence: null };
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_design_services_agreement_with_trusted_ip',
+      expect.not.objectContaining({ p_consent: expect.anything() }),
+    );
+  });
+
+  it('widens the call the moment the bundle carries a part', async () => {
+    commercialExtras = { parts: [OPTIONAL_ATTACHMENT_PART] };
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock.mock.calls[0][1]).toHaveProperty('p_consent');
+  });
+
+  it('widens the call when the database says the bundle is composed', async () => {
+    commercialExtras = { composed: true };
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock.mock.calls[0][1]).toHaveProperty('p_consent');
   });
 
   it('never gates a furnishings authorization on an agreement’s attachments', async () => {
