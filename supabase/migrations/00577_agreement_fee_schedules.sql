@@ -22,6 +22,8 @@
 --   _countersign_design_services_agreement_impl  00566:304  → 00575:1302
 --   get_client_commercial_document_bundle        00425:1214 → 00575:3393
 --   sign_design_services_agreement_with_trusted_ip            00511:1825
+--   _commercial_document_fingerprint  00412:704 → 00422:251 → 00423:1214
+--                                                            → 00575:503
 --
 -- OVERLOAD HAZARD, and how it is answered. Adding a defaulted argument to a
 -- plpgsql function CREATES A NEW OVERLOAD; the old one survives and PostgREST
@@ -36,19 +38,32 @@
 --     hardening contract test asserts the caller universe exhaustively
 --     (public_sd_hardening_contract_test.sql), and draw invoicing is Wave 3.
 --   · It does not widen billing_cadence with 'per_draw'. Wave 3.
---   · It does not touch _commercial_document_fingerprint. The four new
---     columns ride on proposal_service_terms, and the fingerprint hashes that
---     row as `to_jsonb(t)` (00423:1224-1227), so a new COLUMN is covered
---     automatically — the same reason furnishings_deposit_percent needed no
---     edit. Wave 1 already folded the parts TABLE in; a new table would have
---     been a different story, and neither of the two added here is hashed:
---     the change history is the studio's own log, and the execution snapshot
---     is written AFTER the fingerprint it records.
+--   · It adds neither of its two new TABLES to the fingerprint: the change
+--     history is the studio's own log, and the execution snapshot is written
+--     AFTER the fingerprint it records.
 --   · It does not redefine create_service_addendum. P7 composes the
 --     addendum's part set AFTER that RPC returns, through
 --     copy_agreement_parts_from_authority below.
 --   · It does not extend the countersign's idempotent-retry branch to compare
 --     consent. A retry keeps the first signature row, exactly as it does now.
+--
+-- IT DOES, HOWEVER, HAVE TO TOUCH _commercial_document_fingerprint, and an
+-- earlier draft of this banner said the opposite. The fingerprint hashes
+-- proposal_service_terms as `to_jsonb(t) - created_at - updated_at`
+-- (00575:512-515), so "a new COLUMN is covered automatically" is true in the
+-- wrong direction: adding the four columns below changes the digest of EVERY
+-- existing services document, and _countersign_design_services_agreement_impl
+-- refuses with 23514 when the stored client signature's evidence_fingerprint
+-- disagrees. Every agreement sitting in client_signed at push time would
+-- become permanently uncountersignable, and no flag covers it —
+-- `agreement-library` gates UI, not schema. So PART 1b re-issues the
+-- fingerprint with the serviceTerms leg made conditional in exactly the shape
+-- Wave 1 used for `parts`: at their pre-W2 values the four keys are dropped
+-- from the hashed object, and a document that has not written a fee schedule
+-- hashes precisely what it hashed before this file ran. The moment one of
+-- them carries a value, all four ride in the digest and a stale signature is
+-- correctly refused. Existing signature rows cannot be repaired — the table
+-- is immutable — which is why the compatibility has to live in the hash.
 --
 -- Every new SECURITY DEFINER pins `search_path = public, pg_temp` (or with
 -- `extensions` where it mints a uuid or digests), the posture of the
@@ -127,6 +142,123 @@ ALTER TABLE public.project_billing_authorities
 ALTER TABLE public.project_billing_authorities
   ADD CONSTRAINT project_billing_authorities_fee_schedule_check
   CHECK (fee_schedule IS NULL OR jsonb_typeof(fee_schedule) = 'array');
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PART 1b — The fingerprint keeps its word to every document already signed
+--
+-- 00575:503 body VERBATIM. The delta is the serviceTerms leg alone: the four
+-- columns added directly above are dropped from the hashed object while they
+-- stand at their pre-W2 values (fee_basis, fee_amount_cents and fee_schedule
+-- NULL; retainer_credit_rule 'credited', the column's own DEFAULT). This is
+-- the same conditional shape Wave 1 gave `parts`, and for the same reason:
+-- an unconditional key changes the digest of every legacy document, and
+-- _countersign_design_services_agreement_impl raises 23514 when the stored
+-- client signature's evidence_fingerprint disagrees with the current one.
+-- A homeowner who signed yesterday must still be able to have her studio
+-- countersign tomorrow; her signature row is immutable, so the hash is the
+-- only place that promise can be kept.
+--
+-- It is NOT a hole in the instrument. The moment a designer writes a fee
+-- basis, an amount or a schedule — the whole point of P5 — all four keys
+-- enter the digest, the fingerprint moves, and a signature taken against the
+-- older paper is refused exactly as it should be.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public._commercial_document_fingerprint(p_proposal_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+  SELECT encode(extensions.digest(convert_to((jsonb_build_object(
+    'proposal', public._proposal_review_fingerprint(p_proposal_id),
+    'documentKind', p.document_kind,
+    'serviceTerms', (
+      SELECT CASE
+        WHEN t.fee_basis IS NULL
+         AND t.fee_amount_cents IS NULL
+         AND t.fee_schedule IS NULL
+         AND t.retainer_credit_rule IS NOT DISTINCT FROM 'credited'
+        THEN to_jsonb(t) - 'created_at' - 'updated_at'
+               - 'fee_basis' - 'fee_amount_cents' - 'fee_schedule'
+               - 'retainer_credit_rule'
+        ELSE to_jsonb(t) - 'created_at' - 'updated_at'
+      END
+      FROM public.proposal_service_terms t WHERE t.proposal_id = p.id
+    ),
+    'serviceRates', COALESCE((
+      SELECT jsonb_agg(to_jsonb(r) - 'id' - 'created_at' ORDER BY r.version, r.sort_order, r.role_name)
+      FROM public.proposal_service_rates r WHERE r.proposal_id = p.id
+    ), '[]'::jsonb),
+    'furnishings', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'sourceProposalItemId', i.source_proposal_item_id,
+        'sourceFfeItemId', i.source_ffe_item_id,
+        'projectRoomId', i.project_room_id,
+        'productId', i.product_id, 'name', i.name, 'roomName', i.room_name,
+        'category', i.category, 'itemType', i.item_type, 'quantity', i.quantity,
+        'clientUnitPriceCents', i.client_unit_price_cents,
+        'clientLineTotalCents', i.client_line_total_cents,
+        'snapshot', i.snapshot, 'sortOrder', i.sort_order
+      ) ORDER BY i.sort_order, i.id)
+      FROM public.furnishing_authorization_items i
+      JOIN public.project_commercial_documents d ON d.id = i.commercial_document_id
+      WHERE d.proposal_id = p.id
+    ), '[]'::jsonb)
+  ) || CASE WHEN p.document_kind = 'trade_scope' THEN jsonb_build_object(
+    'tradeScope', jsonb_build_object(
+      'partyId', (SELECT t.party_id FROM public.trade_scope_terms t WHERE t.proposal_id = p.id),
+      'partyDisplayName', (SELECT t.party_display_name FROM public.trade_scope_terms t WHERE t.proposal_id = p.id),
+      'partyCompanyName', (SELECT t.party_company_name FROM public.trade_scope_terms t WHERE t.proposal_id = p.id),
+      'partyTrade', (SELECT t.party_trade FROM public.trade_scope_terms t WHERE t.proposal_id = p.id),
+      'clientPriceCents', (SELECT t.client_price_cents FROM public.trade_scope_terms t WHERE t.proposal_id = p.id),
+      'currency', (SELECT t.currency FROM public.trade_scope_terms t WHERE t.proposal_id = p.id),
+      'terms', (SELECT t.terms FROM public.trade_scope_terms t WHERE t.proposal_id = p.id),
+      'sections', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'roomName', s.room_name, 'projectRoomId', s.project_room_id,
+          'prose', s.prose, 'allocationCents', s.allocation_cents,
+          'sortOrder', s.sort_order
+        ) ORDER BY s.sort_order, s.id)
+        FROM public.trade_scope_sections s WHERE s.proposal_id = p.id
+      ), '[]'::jsonb),
+      'draws', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'label', w.label, 'percentage', w.percentage,
+          'amountCents', w.amount_cents, 'sortOrder', w.sort_order,
+          'gatesOnAcceptance', w.gates_on_acceptance
+        ) ORDER BY w.sort_order, w.id)
+        FROM public.trade_scope_draws w WHERE w.proposal_id = p.id
+      ), '[]'::jsonb)
+    )
+  ) ELSE '{}'::jsonb END
+    -- 00575: parts join the hash the moment a document HAS parts, and not
+    -- one moment sooner. CONDITIONAL, not unconditional: an unconditional
+    -- key changes the digest of every legacy document, and countersign
+    -- refuses when the stored client signature's evidence_fingerprint
+    -- disagrees (00566:628-631). A parts-less document must hash exactly
+    -- what it hashed before this migration, or every in-flight
+    -- client_signed agreement dies. ALL parts are hashed, not only
+    -- client-visible ones: the send guard freezes the whole set, and a
+    -- studio-only part is still part of the instrument the two parties are
+    -- bound by. to_jsonb(ap) minus the timestamps means a new column on
+    -- that table is covered automatically, the same property serviceTerms
+    -- has. The alias is `ap`, because the outer alias is already `p`.
+    || CASE WHEN EXISTS (
+         SELECT 1 FROM public.proposal_agreement_parts ap WHERE ap.proposal_id = p.id
+       ) THEN jsonb_build_object(
+    'parts', (
+      SELECT jsonb_agg(to_jsonb(ap) - 'created_at' - 'updated_at'
+                       ORDER BY ap.position, ap.id)
+      FROM public.proposal_agreement_parts ap WHERE ap.proposal_id = p.id
+    )
+  ) ELSE '{}'::jsonb END)::text, 'UTF8'), 'sha256'), 'hex')
+  FROM public.proposals p
+  WHERE p.id = p_proposal_id;
+$$;
+REVOKE ALL ON FUNCTION public._commercial_document_fingerprint(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PART 2 — The change history (P8)
@@ -230,6 +362,26 @@ GRANT ALL ON TABLE public.agreement_execution_snapshots TO service_role;
 -- Server-side HTML, no CSS and no script — the keepsake styles it. Every
 -- interpolated string is escaped, because a clause body is whatever the
 -- designer typed and this string is stored and later injected into a page.
+--
+-- R12 + R27 — THIS IS THE PAGE SHE SIGNED, FROZEN. Not a third rendering of
+-- the parts with its own opinions: leaf for leaf it says what
+-- apps/client-portal/src/components/agreement-parts-body.tsx said on the
+-- night she ticked the box. Every sentence that is not the document's own
+-- words is AGREEMENT_PART_COPY (packages/types/src/agreement-copy.ts),
+-- duplicated below as SQL literals and pinned by
+-- supabase/tests/commercial/agreement_fee_schedules_test.sql the same way the
+-- consent sentence is pinned against composeConsentLine. If the TypeScript
+-- moves and this does not, that suite goes red.
+--
+-- DEPARTS DELIBERATELY FROM BUILD SHEET §3.3's renderer sketch, which had a
+-- record-only schedule and an attestation printed as their raw payload keys
+-- and values. That prints `dayRateCents 250000` and `non_refundable` onto the
+-- homeowner's permanent copy: a database column name and a raw enum, both
+-- forbidden in anything she reads, and a figure in raw cents beside figures
+-- that are formatted. A record-only variant says the one line the page she
+-- signed said for it; an attestation is not drawn at all, because the client
+-- body never draws one (a studio's licence is between the studio and its
+-- state).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public._agreement_html_escape(p_value text)
@@ -264,23 +416,49 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
+  -- AGREEMENT_PART_COPY (packages/types/src/agreement-copy.ts), verbatim. The
+  -- SQL test pins each of these against the same literal the client body
+  -- imports; a sentence that moves in one place and not the other goes red.
+  c_ceiling_uncapped  CONSTANT text :=
+    'No ceiling — professional time is billed as it is worked.';
+  c_retainer_on_payment CONSTANT text :=
+    'Design work begins after the fully executed agreement and retainer payment.';
+  c_retainer_on_execution CONSTANT text :=
+    'Due under the terms of the fully executed agreement.';
+  c_cadence_note CONSTANT text :=
+    'Additional work requires written authorization before it can be invoiced.';
+  c_recorded CONSTANT text := 'Recorded with your agreement.';
+  c_not_yet_set CONSTANT text := 'Not yet set';
+  c_attachment_ack CONSTANT text := 'I received this';
+
   v_part public.proposal_agreement_parts%ROWTYPE;
   v_html text := '';
   v_body text;
-  v_row jsonb;
+  v_notes text;
   v_cents numeric;
+  v_text text;
 BEGIN
   FOR v_part IN
     SELECT ap.* FROM public.proposal_agreement_parts ap
     WHERE ap.proposal_id = p_proposal_id AND ap.client_visible
     ORDER BY ap.position, ap.id
   LOOP
+    -- An attestation reaches the homeowner as nothing at all, here exactly as
+    -- in the body she read: AgreementPartsBody filters `kind === 'attestation'`
+    -- out before it draws a single section.
+    CONTINUE WHEN v_part.kind = 'attestation';
+
     v_body := '';
 
     IF v_part.kind = 'clause' THEN
-      v_body := '<p>' || replace(
-        public._agreement_html_escape(COALESCE(v_part.payload->>'body', '')),
-        E'\n', '<br>') || '</p>';
+      -- R21 — an empty clause is nothing on the page, not a title over blank
+      -- paper. The heading goes with it at the foot of this loop.
+      v_text := NULLIF(btrim(COALESCE(v_part.payload->>'body', '')), '');
+      IF v_text IS NOT NULL THEN
+        v_body := '<p>' || replace(
+          public._agreement_html_escape(v_part.payload->>'body'),
+          E'\n', '<br>') || '</p>';
+      END IF;
 
     ELSIF v_part.kind = 'list' THEN
       SELECT COALESCE(string_agg(
@@ -294,19 +472,18 @@ BEGIN
       WHERE NULLIF(btrim(COALESCE(e.item->>'text', '')), '') IS NOT NULL;
       v_body := CASE WHEN v_body = '' THEN '' ELSE '<ul>' || v_body || '</ul>' END;
 
-    ELSIF v_part.kind = 'phases' THEN
-      SELECT COALESCE(string_agg(
-               '<li>' || public._agreement_html_escape(e.phase->>'label')
-               || CASE WHEN jsonb_typeof(e.phase->'feeCents') = 'number'
-                       THEN ' — ' || public._agreement_money((e.phase->>'feeCents')::numeric)
-                       ELSE '' END
-               || '</li>', '' ORDER BY e.ord), '')
-      INTO v_body
-      FROM jsonb_array_elements(
-             CASE WHEN jsonb_typeof(v_part.payload->'phases') = 'array'
-                  THEN v_part.payload->'phases' ELSE '[]'::jsonb END)
-        WITH ORDINALITY AS e(phase, ord);
-      v_body := CASE WHEN v_body = '' THEN '' ELSE '<ul>' || v_body || '</ul>' END;
+    ELSIF v_part.kind = 'attachment' THEN
+      v_body := '<article class="leaf">';
+      v_text := NULLIF(btrim(COALESCE(v_part.payload->>'body', '')), '');
+      IF v_text IS NOT NULL THEN
+        v_body := v_body || '<p>' || replace(
+          public._agreement_html_escape(v_part.payload->>'body'),
+          E'\n', '<br>') || '</p>';
+      END IF;
+      IF (v_part.payload->'acknowledgeRequired') = 'true'::jsonb THEN
+        v_body := v_body || '<p>' || public._agreement_html_escape(c_attachment_ack) || '</p>';
+      END IF;
+      v_body := v_body || '</article>';
 
     ELSIF v_part.kind = 'schedule' THEN
       IF v_part.variant = 'rate_card' THEN
@@ -315,14 +492,21 @@ BEGIN
                  || '</td><td>'
                  || CASE WHEN jsonb_typeof(e.role->'hourlyRateCents') = 'number'
                          THEN public._agreement_money((e.role->>'hourlyRateCents')::numeric)
-                         ELSE 'Not yet set' END
-                 || ' per hour</td></tr>', '' ORDER BY e.ord), '')
+                         ELSE c_not_yet_set END
+                 || ' per hour</td></tr>', ''
+                 ORDER BY CASE WHEN jsonb_typeof(e.role->'sortOrder') = 'number'
+                               THEN (e.role->>'sortOrder')::numeric
+                               ELSE e.ord END, e.ord), '')
         INTO v_body
         FROM jsonb_array_elements(
                CASE WHEN jsonb_typeof(v_part.payload->'roles') = 'array'
                     THEN v_part.payload->'roles' ELSE '[]'::jsonb END)
-          WITH ORDINALITY AS e(role, ord);
-        v_body := CASE WHEN v_body = '' THEN '' ELSE '<table>' || v_body || '</table>' END;
+          WITH ORDINALITY AS e(role, ord)
+        WHERE NULLIF(btrim(COALESCE(e.role->>'roleName', '')), '') IS NOT NULL;
+        -- A rate card with no readable role keeps its title and says it is on
+        -- the paper, exactly as RateCardLeaf does.
+        v_body := CASE WHEN v_body = '' THEN '<p>' || c_recorded || '</p>'
+                       ELSE '<table>' || v_body || '</table>' END;
 
       ELSIF v_part.variant = 'per_phase' THEN
         SELECT COALESCE(string_agg(
@@ -330,74 +514,99 @@ BEGIN
                  || '</td><td>'
                  || CASE WHEN jsonb_typeof(e.phase->'cents') = 'number'
                          THEN public._agreement_money((e.phase->>'cents')::numeric)
-                         ELSE 'Not yet set' END
+                         ELSE '—' END
                  || '</td></tr>', '' ORDER BY e.ord), '')
         INTO v_body
         FROM jsonb_array_elements(
                CASE WHEN jsonb_typeof(v_part.payload->'phases') = 'array'
                     THEN v_part.payload->'phases' ELSE '[]'::jsonb END)
-          WITH ORDINALITY AS e(phase, ord);
-        v_body := CASE WHEN v_body = '' THEN '' ELSE '<table>' || v_body || '</table>' END;
+          WITH ORDINALITY AS e(phase, ord)
+        WHERE NULLIF(btrim(COALESCE(e.phase->>'label', '')), '') IS NOT NULL;
+        v_body := CASE WHEN v_body = '' THEN '<p>' || c_recorded || '</p>'
+                       ELSE '<table>' || v_body || '</table>' END;
+
+      ELSIF v_part.variant = 'ceiling' THEN
+        -- Three states, and the middle one is why CeilingLeaf is the longest
+        -- leaf in the client body: NO figure is a stated absence of a ceiling
+        -- and says so in words (F-2), a zero is a figure nobody wrote (R21),
+        -- and a written figure is the figure.
+        IF jsonb_typeof(v_part.payload->'cents') IS DISTINCT FROM 'number' THEN
+          v_body := '<p>' || c_ceiling_uncapped || '</p>';
+        ELSIF (v_part.payload->>'cents')::numeric > 0 THEN
+          v_body := '<p>' || public._agreement_money((v_part.payload->>'cents')::numeric) || '</p>';
+        ELSE
+          v_body := '<p>' || c_not_yet_set || '</p>';
+        END IF;
+
+      ELSIF v_part.variant IN ('flat', 'retainer') THEN
+        IF jsonb_typeof(v_part.payload->'cents') IS DISTINCT FROM 'number' THEN
+          v_body := '<p>' || c_recorded || '</p>';
+        ELSE
+          v_cents := (v_part.payload->>'cents')::numeric;
+          IF v_cents > 0 THEN
+            v_body := '<p>' || public._agreement_money(v_cents) || '</p>';
+            IF v_part.variant = 'retainer' THEN
+              -- The activation sentence, by policy — agreementRetainerActivation.
+              -- The stored word itself is never printed: `non_refundable` is a
+              -- value in a column, not something anyone reads.
+              v_body := v_body || '<p>' || CASE
+                WHEN v_part.payload->>'activationPolicy' = 'retainer_paid'
+                THEN c_retainer_on_payment ELSE c_retainer_on_execution END || '</p>';
+            END IF;
+          ELSE
+            -- Withheld with the figure: a clause about when a retainer is due,
+            -- under no retainer, is a promise about nothing.
+            v_body := '<p>' || c_not_yet_set || '</p>';
+          END IF;
+        END IF;
+
+      ELSIF v_part.variant = 'cadence' THEN
+        v_text := NULLIF(btrim(COALESCE(v_part.payload->>'cadence', '')), '');
+        IF v_text IS NOT NULL THEN
+          -- agreementCadenceText: the stored value, underscore opened up.
+          v_body := '<p>' || public._agreement_html_escape(replace(v_text, '_', ' ')) || '</p>';
+        END IF;
+        v_body := v_body || '<p>' || c_cadence_note || '</p>';
+
+      ELSIF v_part.variant = 'procurement' THEN
+        -- agreementDepositLine, and the three notes ProcurementLeaf prints
+        -- beside it. R21 — `0% deposit` is an unwritten term, not a term.
+        IF jsonb_typeof(v_part.payload->'depositPercent') = 'number'
+           AND (v_part.payload->>'depositPercent')::numeric > 0 THEN
+          v_body := '<p>' || public._agreement_html_escape(
+            v_part.payload->>'depositPercent') || '% deposit</p>';
+        END IF;
+        SELECT COALESCE(string_agg(
+                 '<dt>' || note.label || '</dt><dd>'
+                 || public._agreement_html_escape(note.value) || '</dd>', ''
+                 ORDER BY note.ord), '')
+        INTO v_notes
+        FROM (VALUES
+                ('Markup basis', v_part.payload->>'markupBasis', 1),
+                ('Freight and handling', v_part.payload->>'freightHandling', 2),
+                ('Terms of sale', v_part.payload->>'termsOfSale', 3)
+             ) AS note(label, value, ord)
+        WHERE NULLIF(btrim(COALESCE(note.value, '')), '') IS NOT NULL;
+        IF v_notes <> '' THEN
+          v_body := v_body || '<dl>' || v_notes || '</dl>';
+        END IF;
+        -- Neither a deposit nor a note: the part takes its section with it,
+        -- the way an empty clause does (R28, F2).
 
       ELSE
-        -- Every other schedule is one figure or one word. R21: an unset money
-        -- part prints nothing at all rather than a zero the designer never
-        -- typed, so an unreadable or absent value leaves the part off the page.
-        v_cents := CASE WHEN jsonb_typeof(v_part.payload->'cents') = 'number'
-                        THEN (v_part.payload->>'cents')::numeric ELSE NULL END;
-        IF v_part.variant = 'ceiling' AND v_cents IS NOT NULL THEN
-          v_body := '<p>' || public._agreement_money(v_cents) || '</p>';
-        ELSIF v_part.variant IN ('flat', 'retainer') AND v_cents IS NOT NULL THEN
-          v_body := '<p>' || public._agreement_money(v_cents)
-            || CASE WHEN v_part.variant = 'retainer'
-                    THEN ' · ' || public._agreement_html_escape(
-                           COALESCE(v_part.payload->>'creditRule', 'credited'))
-                    ELSE '' END
-            || '</p>';
-        ELSIF v_part.variant = 'cadence'
-              AND NULLIF(btrim(COALESCE(v_part.payload->>'cadence', '')), '') IS NOT NULL THEN
-          v_body := '<p>' || public._agreement_html_escape(v_part.payload->>'cadence') || '</p>';
-        ELSIF v_part.variant = 'procurement'
-              AND jsonb_typeof(v_part.payload->'depositPercent') = 'number' THEN
-          v_body := '<p>' || public._agreement_html_escape(
-            v_part.payload->>'depositPercent') || '%</p>';
-        ELSE
-          -- A record-only schedule (R9) still belongs on the page she keeps:
-          -- it is on the agreement she signed. Rendered as its own rows, with
-          -- no money read out of it, because nothing in it creates authority.
-          SELECT COALESCE(string_agg(
-                   '<tr><td>' || public._agreement_html_escape(e.key)
-                   || '</td><td>' || public._agreement_html_escape(
-                        CASE WHEN jsonb_typeof(e.value) = 'string'
-                             THEN e.value #>> '{}' ELSE e.value::text END)
-                   || '</td></tr>', '' ORDER BY e.key), '')
-          INTO v_body
-          FROM jsonb_each(v_part.payload) AS e(key, value)
-          WHERE jsonb_typeof(e.value) IN ('string', 'number', 'boolean');
-          v_body := CASE WHEN v_body = '' THEN '' ELSE '<table>' || v_body || '</table>' END;
-        END IF;
+        -- The record-only variants (R9), and any variant a later wave adds to
+        -- an agreement this build already froze. One line, the same line the
+        -- page she signed printed for them. Never the payload's own keys.
+        v_body := '<p>' || c_recorded || '</p>';
       END IF;
 
-    ELSIF v_part.kind = 'attachment' THEN
-      v_body := '<article class="leaf"><p>' || replace(
-        public._agreement_html_escape(COALESCE(v_part.payload->>'body', '')),
-        E'\n', '<br>') || '</p></article>';
-
-    ELSIF v_part.kind = 'attestation' THEN
-      SELECT COALESCE(string_agg(
-               '<dt>' || public._agreement_html_escape(e.key) || '</dt><dd>'
-               || public._agreement_html_escape(
-                    CASE WHEN jsonb_typeof(e.value) = 'string'
-                         THEN e.value #>> '{}' ELSE e.value::text END)
-               || '</dd>', '' ORDER BY e.key), '')
-      INTO v_body
-      FROM jsonb_each(v_part.payload) AS e(key, value)
-      WHERE jsonb_typeof(e.value) IN ('string', 'number', 'boolean');
-      v_body := CASE WHEN v_body = '' THEN '' ELSE '<dl>' || v_body || '</dl>' END;
+    ELSE
+      -- Any other kind, including one a later wave writes. Its title, and one
+      -- sentence — PartSection's own fallback.
+      v_body := '<p>' || c_recorded || '</p>';
     END IF;
 
-    -- An empty part renders nothing at all, not a naked heading (R3-6/R21).
-    IF v_body IS NOT NULL AND v_body <> '' AND v_body <> '<p></p>' THEN
+    IF v_body IS NOT NULL AND v_body <> '' THEN
       v_html := v_html || '<h2>' || public._agreement_html_escape(v_part.title)
                        || '</h2>' || v_body;
     END IF;
@@ -442,6 +651,8 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_kind text;
+  v_designer_id uuid;
+  v_client_id uuid;
   v_legacy text;
   v_part public.proposal_agreement_parts%ROWTYPE;
   v_fragments text[] := ARRAY[]::text[];
@@ -449,9 +660,27 @@ DECLARE
   v_list text;
   v_n integer;
 BEGIN
-  SELECT p.document_kind INTO v_kind FROM public.proposals p WHERE p.id = p_proposal_id;
+  SELECT p.document_kind, p.designer_id, p.client_id
+  INTO v_kind, v_designer_id, v_client_id
+  FROM public.proposals p WHERE p.id = p_proposal_id;
   IF NOT FOUND THEN
     RETURN NULL;
+  END IF;
+
+  -- 00511's posture: a SECURITY DEFINER function that reads one agreement asks
+  -- who is asking. This one is granted to `authenticated` and composes a
+  -- sentence out of that agreement's money parts, so without this block any
+  -- signed-in stranger could read the fee shape of any studio's agreement by
+  -- calling it with a proposal id. The predicate is
+  -- get_client_commercial_document_bundle's own, character for character —
+  -- never stricter, so the bundle's call (the only caller in the tree) passes
+  -- for exactly the readers it already admitted.
+  IF auth.uid() IS NULL OR NOT (
+    v_client_id IS NOT DISTINCT FROM auth.uid()
+    OR public.is_studio_comember(v_designer_id)
+  ) THEN
+    RAISE EXCEPTION 'commercial document % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   -- consentLineFor(kind), character for character
@@ -2511,6 +2740,9 @@ COMMENT ON FUNCTION public.compose_agreement_consent(uuid) IS
   'canonical variant order that does not depend on the designer''s ordering. '
   'Twinned with composeConsentLine in the client portal''s consent-copy.ts; '
   'the SQL and jest suites pin the same literals so either one drifting turns '
-  'the other red. Zero money parts returns the legacy literal verbatim.';
+  'the other red. Zero money parts returns the legacy literal verbatim. '
+  'Readable only by the two parties to the agreement — the same predicate '
+  'get_client_commercial_document_bundle states, so its call passes and a '
+  'signed-in stranger''s does not.';
 
 COMMIT;
