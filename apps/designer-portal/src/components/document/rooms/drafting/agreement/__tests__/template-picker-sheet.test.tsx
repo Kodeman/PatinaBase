@@ -5,6 +5,7 @@ import {
   REPLACE_WARNING_UNSAVED,
   TemplatePickerSheet,
   templateClassFor,
+  documentKindForTemplateClass,
 } from "../template-picker-sheet";
 
 const mockTemplates = jest.fn();
@@ -68,6 +69,12 @@ const SHELF = [
     kind: "seeded",
     class: "furnishings_services",
   }),
+  template({
+    templateKey: "patina.design_build",
+    title: "Design-build",
+    kind: "seeded",
+    class: "design_build",
+  }),
 ];
 
 function renderSheet({
@@ -109,30 +116,47 @@ beforeEach(() => {
 });
 
 describe("the template picker", () => {
-  it("shows only the templates for this document's class, Patina first", () => {
+  // R35 — the shelf is filtered by the document KIND each class composes onto,
+  // so all three seeded classes stand on a design-services paper and only
+  // design_build (Wave 3) is held back.
+  it("shows every template this document can take, Patina first", () => {
     renderSheet();
     const rows = screen.getAllByRole("listitem");
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(
       within(rows[0]).getByText("Design services (Patina standard)"),
     ).toBeInTheDocument();
     expect(within(rows[0]).getByText("Patina")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Furnishings only")).toBeInTheDocument();
     expect(
-      within(rows[1]).getByText("Full-service residential"),
+      within(rows[2]).getByText("Full-service residential"),
     ).toBeInTheDocument();
-    expect(within(rows[1]).getByText("studio")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("studio")).toBeInTheDocument();
+  });
+
+  it("holds design-build back until Wave 3", () => {
+    renderSheet();
+    expect(screen.queryByText("Design-build")).not.toBeInTheDocument();
+    expect(documentKindForTemplateClass("design_build")).toBe("design_build");
+    expect(documentKindForTemplateClass("consultation")).toBe("design_services");
+    expect(documentKindForTemplateClass("furnishings_services")).toBe(
+      "design_services",
+    );
+    expect(documentKindForTemplateClass("design_services")).toBe(
+      "design_services",
+    );
   });
 
   it("previews a template by its part titles", () => {
     renderSheet();
-    expect(screen.getAllByText("Services · Terms")).toHaveLength(2);
+    expect(screen.getAllByText("Services · Terms")).toHaveLength(3);
   });
 
   it("composes an addendum from the design-services shelf", () => {
     expect(templateClassFor("service_addendum")).toBe("design_services");
     expect(templateClassFor("design_services")).toBe("design_services");
     renderSheet({ documentKind: "service_addendum" });
-    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
   });
 
   it("warns that the parts are replaced before it materializes anything", () => {

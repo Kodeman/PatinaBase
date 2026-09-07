@@ -41,6 +41,24 @@ export function templateClassFor(documentKind: string): string {
   return documentKind === "service_addendum" ? "design_services" : documentKind;
 }
 
+/**
+ * R35 — the picker filters by KIND, not by class.
+ *
+ * A Template's class says what shape of engagement it is —
+ * `design_services`, `consultation`, `furnishings_services`, `design_build` —
+ * and the first three are all composed onto a `design_services` document.
+ * Comparing class to document kind matched only the one class named the same
+ * as the kind, so `Consultation / hourly` and `Furnishings only` sat on the
+ * shelf where the designer could see them and could never reach them: two of
+ * Patina's three seeded Templates, dark.
+ *
+ * `design_build` alone stays out until Wave 3, where R10 gates it on an
+ * attestation nothing in this build collects.
+ */
+export function documentKindForTemplateClass(templateClass: string): string {
+  return templateClass === "design_build" ? "design_build" : "design_services";
+}
+
 export function TemplatePickerSheet({
   open,
   onClose,
@@ -69,7 +87,9 @@ export function TemplatePickerSheet({
   const shelf = useMemo(() => {
     const wanted = templateClassFor(documentKind);
     return ((templates.data ?? []) as AgreementTemplate[])
-      .filter((template) => template.class === wanted)
+      .filter(
+        (template) => documentKindForTemplateClass(template.class) === wanted,
+      )
       .sort((a, b) => {
         // Seeded first, then alphabetical — Patina's shelf is where a studio
         // that has saved nothing yet starts.
