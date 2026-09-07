@@ -13246,7 +13246,13 @@ END $g$;
 
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.proposal_agreement_parts TO authenticated;
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.proposal_agreement_parts FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.proposal_agreement_parts TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -13265,6 +13271,12 @@ END $g$;
 -- 00575_agreement_parts.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._agreement_requires_rate_card(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00575_agreement_parts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_floor_unmet(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

@@ -28339,6 +28339,10 @@ export type Database = {
         Returns: number[]
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _agreement_floor_unmet: {
+        Args: { p_proposal_id: string }
+        Returns: boolean
+      }
       _agreement_requires_rate_card: {
         Args: { p_proposal_id: string }
         Returns: boolean

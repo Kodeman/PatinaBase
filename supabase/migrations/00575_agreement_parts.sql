@@ -48,6 +48,32 @@
 --         (00422:1722-1728) and a flat-fee agreement has none, so the
 --         projection is EXTRACTED into _project_agreement_terms and called by
 --         both writers rather than that guard being weakened.
+--   (N-1) MONEY IS READ BY SHAPE, NOT BY KEY. The composer mints a fresh
+--         `custom.<uuid>` key for every part added from the rail, so a
+--         projection keyed on the nine patina.* names would record a rate
+--         card, a ceiling, a retainer, a cadence or a deposit on the page the
+--         client signs and write NONE of it to proposal_service_terms — the
+--         row countersign snapshots into the billing authority. The five
+--         money figures therefore read kind + variant under any key; the four
+--         prose slots still read their key (two clauses cannot both be "the
+--         scope"); and a second part of any money shape is refused, so the
+--         money row is never choosing between two ceilings.
+--   (N-3) R4's floor is ONE predicate, _agreement_floor_unmet, asked where a
+--         composition is SAVED (upsert_agreement_parts) and at every door a
+--         document can leave draft by (send, sign, the paper issue). It used
+--         to be asked at exactly one of those four, so
+--         materialize_standard_parts could seed an uncapped hourly agreement
+--         from a terms row whose ceiling a co-member had cleared, and
+--         send_commercial_document — which only ever asked whether rate ROWS
+--         existed — let it out. Seeding itself does not ask: it lays out a
+--         state that already exists so the room can show it, and refusing
+--         there would lock a studio whose defaults carry a rate card and no
+--         ceiling out of the composer entirely.
+--   (N-4) The parts table grants authenticated SELECT and nothing else. The
+--         money projection and the document fingerprint both live inside the
+--         RPC, so a direct UPDATE moved the figure the client signs without
+--         moving the figure the authority snapshots — two parties bound to
+--         different numbers, with no refusal anywhere.
 --
 -- Every new SECURITY DEFINER here pins `search_path = public, pg_temp` — the
 -- posture of the surrounding commercial family (00412 / 00422 / 00423), and
@@ -113,8 +139,22 @@ CREATE POLICY proposal_agreement_parts_studio_rw ON public.proposal_agreement_pa
 -- There is deliberately NO client policy. A client reads parts only through
 -- get_client_commercial_document_bundle, the same discipline the terms and
 -- rates tables keep (00412:332-335).
+--
+-- The studio READS this table directly (the composer's rail is a plain select)
+-- and WRITES it only through upsert_agreement_parts / materialize_standard_parts.
+-- That is not a nicety: the money row is PROJECTED from these rows inside the
+-- RPC, and the document fingerprint the client signs is computed from them. A
+-- direct UPDATE would move the figure on the rendered page without moving
+-- proposal_service_terms, and countersign snapshots the terms row into the
+-- authority — the two parties would be bound to different numbers with no
+-- refusal anywhere. So the write grant is withheld and the policy's write half
+-- stands only as a second wall if one is ever restored. This is the program
+-- rule "no wave writes business tables outside definer RPCs", enforced by the
+-- grant rather than by discipline.
 REVOKE ALL ON TABLE public.proposal_agreement_parts FROM PUBLIC, anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.proposal_agreement_parts TO authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON TABLE public.proposal_agreement_parts FROM authenticated;
+GRANT SELECT ON TABLE public.proposal_agreement_parts TO authenticated;
 GRANT ALL ON TABLE public.proposal_agreement_parts TO service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -179,15 +219,16 @@ ALTER TABLE public.project_billing_authorities
 -- TRUE when this proposal still owes a role rate before it can be sent or
 -- signed: either it has no parts at all (every document authored before
 -- 00575, and every flag-off document — the legacy contract, unchanged), or it
--- has a rate_card part and therefore bills time (R4).
+-- carries a rate card and therefore bills time (R4).
 --
--- "A rate_card part" means the ONE part the rate projection reads: part_key
--- 'patina.role_rates', in the schedule/rate_card shape. Keying this on the
--- variant alone would demand role rates that nothing will ever project — a
--- rate card under any other key projects nothing (R5), so the document would
--- become permanently unsendable with a refusal naming a part that is right
--- there on the page. Predicate, projection and the R4 floor below all read
--- the same one part.
+-- "A rate card" is a SHAPE, not a key: kind 'schedule', variant 'rate_card',
+-- under whatever part_key the composition gave it. The composer mints a fresh
+-- `custom.<uuid>` key for every part added from the rail, so a predicate
+-- keyed on 'patina.role_rates' would let a rate card the client reads on the
+-- page demand nothing, project nothing, and execute into an authority with no
+-- rates at all — every billable hour then parks in 'pending_authorization'
+-- forever. Predicate, projection and the R4 floor below all read the same
+-- shape, and the readiness panel in the room reads it too.
 CREATE OR REPLACE FUNCTION public._agreement_requires_rate_card(p_proposal_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -202,11 +243,56 @@ AS $$
       OR EXISTS (
            SELECT 1 FROM public.proposal_agreement_parts ap
            WHERE ap.proposal_id = p_proposal_id
-             AND ap.part_key = 'patina.role_rates'
              AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
          );
 $$;
 REVOKE ALL ON FUNCTION public._agreement_requires_rate_card(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- R4's floor, as ONE predicate, so that every door a document can leave draft
+-- by asks the same question rather than three doors asking two questions.
+-- TRUE means the floor is UNMET: the agreement bills time and carries no cap.
+--
+-- "Bills time" is a rate card holding at least one named role at a real rate
+-- — exactly what the room's readiness panel calls `billsTime`, so the panel
+-- and the database cannot disagree. "A cap" is a ceiling part stating an
+-- amount above zero: a zero cap beside a rate card authorizes no hour at all,
+-- which is not a cap but a document that bills nothing.
+--
+-- Both halves read the shape, not the key (see _agreement_requires_rate_card
+-- above), and both are total over a malformed payload — jsonb_typeof asks
+-- before any cast, so a garbage figure fails the test instead of raising in
+-- the middle of a send.
+CREATE OR REPLACE FUNCTION public._agreement_floor_unmet(p_proposal_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT EXISTS (
+           SELECT 1
+           FROM public.proposal_agreement_parts ap
+           CROSS JOIN LATERAL jsonb_array_elements(
+             CASE WHEN jsonb_typeof(ap.payload->'roles') = 'array'
+                  THEN ap.payload->'roles' ELSE '[]'::jsonb END
+           ) AS e(role)
+           WHERE ap.proposal_id = p_proposal_id
+             AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
+             AND btrim(COALESCE(e.role->>'roleName', '')) <> ''
+             AND jsonb_typeof(e.role->'hourlyRateCents') = 'number'
+             AND (e.role->>'hourlyRateCents')::numeric > 0
+         )
+     AND NOT EXISTS (
+           SELECT 1
+           FROM public.proposal_agreement_parts ap
+           WHERE ap.proposal_id = p_proposal_id
+             AND ap.kind = 'schedule' AND ap.variant = 'ceiling'
+             AND jsonb_typeof(ap.payload->'cents') = 'number'
+             AND (ap.payload->>'cents')::numeric > 0
+         );
+$$;
+REVOKE ALL ON FUNCTION public._agreement_floor_unmet(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -385,6 +471,15 @@ BEGIN
         AND NOT EXISTS (SELECT 1 FROM public.proposal_service_rates r WHERE r.proposal_id = p_proposal_id))
   ) THEN
     RAISE EXCEPTION 'design-services send requires terms, and role rates whenever a rate card is present'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- 00575: R4's floor is asked at the door too, not only where the parts were
+  -- written. A composition can reach 'draft' by more than one road —
+  -- materialize_standard_parts seeds from a terms row a co-member may have
+  -- edited — so the last gate before the client sees the document asks again.
+  IF v_proposal.document_kind IN ('design_services', 'service_addendum')
+     AND public._agreement_floor_unmet(p_proposal_id) THEN
+    RAISE EXCEPTION 'an agreement that bills time needs a ceiling'
       USING ERRCODE = 'check_violation';
   END IF;
   IF v_proposal.document_kind = 'furnishings_authorization' AND NOT EXISTS (
@@ -669,6 +764,11 @@ BEGIN
     RAISE EXCEPTION 'design services agreement requires terms, and at least one role rate whenever a rate card is present'
       USING ERRCODE = 'check_violation';
   END IF;
+  -- 00575: and R4's floor, at this door as at the other two.
+  IF public._agreement_floor_unmet(p_proposal_id) THEN
+    RAISE EXCEPTION 'an agreement that bills time needs a ceiling'
+      USING ERRCODE = 'check_violation';
+  END IF;
 
   v_fingerprint := public._commercial_document_fingerprint(p_proposal_id);
   IF v_fingerprint IS NULL THEN
@@ -784,6 +884,12 @@ BEGIN
          AND NOT EXISTS (SELECT 1 FROM public.proposal_service_rates r WHERE r.proposal_id = p_proposal_id))
   THEN
     RAISE EXCEPTION 'design services agreement requires terms, and at least one role rate whenever a rate card is present'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- 00575: and R4's floor. Paper is the same issuance by another route, so it
+  -- refuses on the same ground.
+  IF public._agreement_floor_unmet(p_proposal_id) THEN
+    RAISE EXCEPTION 'an agreement that bills time needs a ceiling'
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -1984,10 +2090,17 @@ GRANT ALL ON TABLE public.studio_agreement_defaults TO service_role;
 
 -- upsert_agreement_parts replaces the WHOLE ordered set in one act — the same
 -- discipline proposal_service_rates keeps (00422:1780), so a part the studio
--- removed is ABSENT, not blank. The projection is derived by part_key, never
--- by variant: UNIQUE (proposal_id, part_key) guarantees at most one of each,
--- and a custom or duplicate schedule part must never silently rewrite the
--- money row (R5).
+-- removed is ABSENT, not blank.
+--
+-- The money projection reads a part by its SHAPE — kind, and for a schedule
+-- its variant — never by its key. A designer who removes the seeded Ceiling
+-- and adds a new one from the rail means the ceiling; the composer gives that
+-- new part a fresh `custom.<uuid>` key, and a projection keyed on
+-- 'patina.ceiling' would record the figure on the page and write nothing to
+-- the money row the authority snapshots. Prose is still prose: only the
+-- typed schedule variants project, and only when the part carries the shape
+-- its kind promises (R5). Uniqueness of each money shape is enforced below,
+-- so "the ceiling" is never a choice between two.
 CREATE OR REPLACE FUNCTION public.upsert_agreement_parts(
   p_proposal_id uuid,
   p_parts jsonb
@@ -2003,6 +2116,7 @@ DECLARE
   v_terms jsonb;
   v_rates jsonb;
   v_version integer;
+  v_duplicate text;
   v_previous_commercial text := current_setting('app.commercial_document_id', true);
 BEGIN
   IF auth.uid() IS NULL
@@ -2051,31 +2165,38 @@ BEGIN
     NULLIF(e.part->>'sourcePartId', '')::uuid
   FROM jsonb_array_elements(p_parts) WITH ORDINALITY AS e(part, ord);
 
+  -- One of each money part. The projection below reads a money part by its
+  -- shape, so two ceilings — however they are keyed — would leave the money
+  -- row picking between them. The Add menu offers every schedule variant;
+  -- this is the sentence that answers "add a second ceiling", in the words a
+  -- designer uses for the part rather than the words the table uses.
+  SELECT CASE ap.variant
+           WHEN 'rate_card'   THEN 'rate card'
+           WHEN 'ceiling'     THEN 'ceiling'
+           WHEN 'retainer'    THEN 'retainer'
+           WHEN 'cadence'     THEN 'billing cadence'
+           WHEN 'procurement' THEN 'furnishings deposit'
+         END
+    INTO v_duplicate
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = p_proposal_id
+    AND ap.kind = 'schedule'
+    AND ap.variant IN ('rate_card', 'ceiling', 'retainer', 'cadence', 'procurement')
+  GROUP BY ap.variant
+  HAVING count(*) > 1
+  ORDER BY 1
+  LIMIT 1;
+  IF v_duplicate IS NOT NULL THEN
+    RAISE EXCEPTION 'an agreement carries only one %', v_duplicate
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   -- R4, as a DB floor and not only a UI one: an agreement that bills time is
   -- an agreement with a cap. The readiness panel says the same thing first;
-  -- this is the sentence that holds when the panel is bypassed.
-  --
-  -- Both halves read the same parts the projection above reads — by part_key
-  -- AND shape. A rate card under a studio or custom key projects no rates, so
-  -- it bills no time and owes no cap; refusing it here would be a refusal
-  -- about money that no part carries (R5), and it would disagree with
-  -- _agreement_requires_rate_card.
-  IF EXISTS (
-       SELECT 1 FROM public.proposal_agreement_parts ap
-       WHERE ap.proposal_id = p_proposal_id
-         AND ap.part_key = 'patina.role_rates'
-         AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
-         AND jsonb_typeof(ap.payload->'roles') = 'array'
-         AND jsonb_array_length(ap.payload->'roles') > 0
-     )
-     AND NOT EXISTS (
-       SELECT 1 FROM public.proposal_agreement_parts ap
-       WHERE ap.proposal_id = p_proposal_id
-         AND ap.part_key = 'patina.ceiling'
-         AND ap.kind = 'schedule' AND ap.variant = 'ceiling'
-         AND ap.payload->>'cents' IS NOT NULL
-     )
-  THEN
+  -- this is the sentence that holds when the panel is bypassed. It is the
+  -- SAME predicate send, sign and the paper door ask, reading the same shapes
+  -- the projection below reads.
+  IF public._agreement_floor_unmet(p_proposal_id) THEN
     RAISE EXCEPTION 'an agreement that bills time needs a ceiling'
       USING ERRCODE = 'check_violation';
   END IF;
@@ -2084,14 +2205,25 @@ BEGIN
   WHERE proposal_id = p_proposal_id;
   v_version := COALESCE(v_existing.current_rate_version, 1);
 
-  -- Only the nine standard keys project, and only when the part actually HAS
-  -- the shape its key promises: every subquery below asserts the kind, and
-  -- every schedule subquery also asserts the variant. Without that, a clause
-  -- part keyed patina.ceiling would write billing_ceiling_cents — prose
-  -- carrying money, which R5 forbids. Everything else — a custom clause, a
-  -- second ceiling under a studio key, a percent_of_cost schedule, a part
-  -- posted under a standard key in the wrong shape — is recorded and hashed
-  -- but writes nothing to the money row.
+  -- WHAT PROJECTS, AND ON WHAT GROUND.
+  --
+  -- The four prose columns are read from the four standard keys: 'the scope'
+  -- and 'the terms' are named slots on the legacy row, and two clauses cannot
+  -- both be the scope. UNIQUE (proposal_id, part_key) makes each of those a
+  -- scalar, and each subquery also asserts the kind — a schedule keyed
+  -- patina.services is not the scope.
+  --
+  -- The five money figures are read by SHAPE — kind 'schedule' plus variant —
+  -- under whatever key the composition gave them, because the composer mints
+  -- a fresh key for every part it adds and the figure on the page must be the
+  -- figure in the money row. The duplicate refusal above makes each of these
+  -- a scalar too.
+  --
+  -- Both halves still insist on the shape, so a clause keyed patina.ceiling
+  -- is prose that happens to mention a cap and writes nothing (R5), and every
+  -- variant outside these five — flat, per_phase, percent_of_cost, draws,
+  -- allowances — is recorded and hashed and reaches the money row not at all,
+  -- until R9's Wave-2 columns exist to hold it.
   --
   -- patina.retainer's payload->>'creditRule' is READ AND DISCARDED in Wave 1:
   -- the column arrives on proposal_service_terms in Wave 2 (D-2). It is not a
@@ -2131,28 +2263,28 @@ BEGIN
     ),
     'billingCeilingCents', (
       SELECT (ap.payload->>'cents')::integer FROM public.proposal_agreement_parts ap
-      WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.ceiling'
+      WHERE ap.proposal_id = p_proposal_id
         AND ap.kind = 'schedule' AND ap.variant = 'ceiling'
     ),
     'retainerAmountCents', COALESCE((
       SELECT (ap.payload->>'cents')::integer FROM public.proposal_agreement_parts ap
-      WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.retainer'
+      WHERE ap.proposal_id = p_proposal_id
         AND ap.kind = 'schedule' AND ap.variant = 'retainer'
     ), 0),
     'retainerActivationPolicy', COALESCE((
       SELECT NULLIF(ap.payload->>'activationPolicy', '')
       FROM public.proposal_agreement_parts ap
-      WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.retainer'
+      WHERE ap.proposal_id = p_proposal_id
         AND ap.kind = 'schedule' AND ap.variant = 'retainer'
     ), 'immediate'),
     'billingCadence', COALESCE((
       SELECT NULLIF(ap.payload->>'cadence', '') FROM public.proposal_agreement_parts ap
-      WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.cadence'
+      WHERE ap.proposal_id = p_proposal_id
         AND ap.kind = 'schedule' AND ap.variant = 'cadence'
     ), 'monthly'),
     'furnishingsDepositPercent', (
       SELECT (ap.payload->>'depositPercent')::numeric FROM public.proposal_agreement_parts ap
-      WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.deposit'
+      WHERE ap.proposal_id = p_proposal_id
         AND ap.kind = 'schedule' AND ap.variant = 'procurement'
     ),
     'currency', COALESCE(v_existing.currency, 'USD'),
@@ -2171,7 +2303,7 @@ BEGIN
       CASE WHEN jsonb_typeof(ap.payload->'roles') = 'array'
            THEN ap.payload->'roles' ELSE '[]'::jsonb END
     ) WITH ORDINALITY AS e(rate, ord)
-    WHERE ap.proposal_id = p_proposal_id AND ap.part_key = 'patina.role_rates'
+    WHERE ap.proposal_id = p_proposal_id
       AND ap.kind = 'schedule' AND ap.variant = 'rate_card'
   ), '[]'::jsonb);
 
@@ -2375,6 +2507,18 @@ BEGIN
     (p_proposal_id, 9, 'clause', NULL, 'patina.terms', 'Terms',
      jsonb_build_object('body', COALESCE(v_terms.terms, '')), true, true);
 
+  -- R4's floor is deliberately NOT asked here. Seeding is not composing: this
+  -- reads a state that already exists — a terms row a co-member may have
+  -- cleared the ceiling on while the document was a draft
+  -- (proposal_service_terms_studio_rw, 00412:318), or a studio default rate
+  -- card with no default ceiling beside it — and lays it out as parts so the
+  -- room can show it. Refusing here would lock that studio out of the
+  -- composer altogether, with a sentence about a part it has not been shown
+  -- yet. The room's readiness panel names the missing ceiling the moment the
+  -- rail renders, upsert_agreement_parts refuses to SAVE the composition
+  -- without it, and send / sign / the paper door each refuse to let the
+  -- document leave draft — which is where the harm was: an uncapped hourly
+  -- agreement that seeded, and then SENT.
   RETURN jsonb_build_object(
     'proposalId', p_proposal_id,
     'materialized', true,
@@ -2668,8 +2812,11 @@ COMMENT ON COLUMN public.proposal_agreement_parts.variant IS
 COMMENT ON COLUMN public.proposal_agreement_parts.part_key IS
   'Stable identity of this part within its agreement: patina.<name> for a '
   'standard part, studio.<slug> for one the studio owns, custom.<uuid> for a '
-  'one-off. UNIQUE per proposal, and the key the money projection reads — only '
-  'the nine patina.* keys write the terms row (R5).';
+  'one-off. UNIQUE per proposal. The four PROSE slots on the terms row (scope, '
+  'deliverables, exclusions, terms) are read by key; the five MONEY figures are '
+  'read by shape (kind + variant) under whatever key the composition gave them, '
+  'because the composer mints a fresh key for every part it adds. Prose never '
+  'carries money either way (R5).';
 
 COMMENT ON COLUMN public.proposal_agreement_parts.source_part_id IS
   'The Library part this one was materialized from. Deliberately carries NO '
@@ -2682,14 +2829,15 @@ COMMENT ON COLUMN public.proposal_agreement_parts.source_template_key IS
 
 COMMENT ON COLUMN public.proposal_service_terms.billing_ceiling_cents IS
   'NULL means UNCAPPED, and it is legal only when the agreement carries no '
-  'rate_card part (public._agreement_requires_rate_card). An agreement that '
-  'bills time needs a cap; a flat fee or a retainer has nothing to cap.';
+  'part in schedule/rate_card shape (public._agreement_requires_rate_card, '
+  'public._agreement_floor_unmet). An agreement that bills time needs a cap; '
+  'a flat fee or a retainer has nothing to cap.';
 
 COMMENT ON COLUMN public.project_billing_authorities.billing_ceiling_cents IS
   'NULL means UNCAPPED, snapshotted from proposal_service_terms at '
-  'countersign. Legal only when the source agreement carries no rate_card '
-  'part (public._agreement_requires_rate_card). Every reader treats NULL as '
-  '"no ceiling", never as zero.';
+  'countersign. Legal only when the source agreement carries no part in '
+  'schedule/rate_card shape (public._agreement_requires_rate_card). Every '
+  'reader treats NULL as "no ceiling", never as zero.';
 
 COMMENT ON TABLE public.studio_agreement_defaults IS
   'Per-studio agreement defaults. One row per organization; absence means the '
@@ -2702,18 +2850,34 @@ COMMENT ON COLUMN public.studio_agreement_defaults.retainer_credit_rule IS
   'terms row yet.';
 
 COMMENT ON FUNCTION public.upsert_agreement_parts(uuid, jsonb) IS
-  '00575: replaces an agreement''s whole ordered part list and projects the '
-  'nine standard money keys into proposal_service_terms / '
-  'proposal_service_rates through _project_agreement_terms — the same body '
-  'upsert_design_services_draft uses, never a fork. Draft-only, author-only. '
-  'Refuses a rate card with no ceiling (R4).';
+  '00575: replaces an agreement''s whole ordered part list and projects it '
+  'into proposal_service_terms / proposal_service_rates through '
+  '_project_agreement_terms — the same body upsert_design_services_draft '
+  'uses, never a fork. Prose reads by key, money reads by shape (kind + '
+  'variant) under whatever key the composition gave it. Draft-only, '
+  'author-only. Refuses a second part of any money shape, and a rate card '
+  'with no ceiling (R4). It is the only door authenticated callers have to '
+  'this table: the table itself grants SELECT and nothing more.';
 
 COMMENT ON FUNCTION public.materialize_standard_parts(uuid) IS
   '00575: seeds the nine standard parts of a design-services agreement from '
   'its existing terms row, then the studio''s agreement defaults, then the '
   'Patina literals. Idempotent — an agreement that already has parts is '
   'returned unchanged with materialized = false. Does not re-project: the '
-  'terms row it read is already the projection.';
+  'terms row it read is already the projection. Deliberately does NOT ask '
+  'R4''s floor: seeding lays out a state that already exists so the room can '
+  'show it, and the floor is asked where a composition is SAVED and at every '
+  'door out of draft.';
+
+COMMENT ON FUNCTION public._agreement_floor_unmet(uuid) IS
+  '00575: R4''s floor as one predicate — TRUE when the agreement bills time '
+  '(a rate card holding a named role at a real rate) and carries no cap (a '
+  'ceiling part stating an amount above zero). Asked by '
+  'upsert_agreement_parts, materialize_standard_parts, send_commercial_document, '
+  '_sign_design_services_agreement_authorized and '
+  '_issue_design_services_agreement_on_paper, so the floor is the same height '
+  'at every door — and it reads the same shapes the readiness panel in the '
+  'room reads, so panel and database cannot drift.';
 
 COMMENT ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) IS
   '00575: the terms/rates projection, lifted verbatim out of '
@@ -2726,9 +2890,9 @@ COMMENT ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean)
 COMMENT ON FUNCTION public._agreement_requires_rate_card(uuid) IS
   '00575: TRUE when this agreement must carry at least one role rate before '
   'it can be sent or signed — it has no parts at all (every pre-00575 and '
-  'every flag-off document, the legacy contract unchanged), or it carries the '
-  'patina.role_rates part in schedule/rate_card shape and therefore bills '
-  'time (R4). Keyed on the one part the rate projection reads, so the '
-  'refusal and the projection can never disagree.';
+  'every flag-off document, the legacy contract unchanged), or it carries a '
+  'part in schedule/rate_card shape and therefore bills time (R4). Reads the '
+  'shape the rate projection reads, under any key, so the refusal and the '
+  'projection can never disagree.';
 
 COMMIT;
