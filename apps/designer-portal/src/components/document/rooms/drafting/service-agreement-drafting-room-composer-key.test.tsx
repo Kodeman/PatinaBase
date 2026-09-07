@@ -18,10 +18,7 @@ import { ServiceAgreementDraftingRoom } from "./service-agreement-drafting-room"
 
 let mockMountCount = 0;
 
-const bundle = (
-  terms: { updatedAt: string } | null,
-  partCount: number,
-) => ({
+const bundle = (terms: { updatedAt: string } | null, partCount: number) => ({
   document: {
     id: "agreement-1",
     projectId: null,
