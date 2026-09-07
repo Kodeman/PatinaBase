@@ -251,6 +251,17 @@ export function unnamedRateCardRoles(parts: AgreementPart[]): AgreementPart[] {
 
 let blankCounter = 0;
 
+/** An id for a part that exists only in the composer's list. `upsert_agreement_parts`
+ *  is DELETE-then-INSERT, so every id it hands back is new anyway; this one
+ *  only has to be unique inside the room until Save. */
+export function localPartId(): string {
+  const uuid =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `local-${Date.now()}-${(blankCounter += 1)}`;
+  return `new-${uuid}`;
+}
+
 /** A part that exists only in the composer's local state until Save. The key
  *  is namespaced `custom.<uuid>` because the projection is keyed on
  *  `part_key` (R5) — a custom part must never be mistaken for a standard one
