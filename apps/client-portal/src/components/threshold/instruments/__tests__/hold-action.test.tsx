@@ -396,7 +396,10 @@ describe('HoldAction — the act, held', () => {
   it('an unavailable act cannot be held', () => {
     draw({ disabled: true });
     const target = actWord();
-    expect(target).toBeDisabled();
+    // `aria-disabled`, never `disabled` (R139): the act keeps its place in the
+    // tab order so it can answer for itself when it is reached.
+    expect(target).not.toBeDisabled();
+    expect(target).toHaveAttribute('aria-disabled', 'true');
     hold(target);
     expect(onHold).not.toHaveBeenCalled();
   });

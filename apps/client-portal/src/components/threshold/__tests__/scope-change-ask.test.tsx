@@ -224,7 +224,7 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
     scopeMock.mockReturnValue({ data: [STUDIO_CHANGE], isLoading: false });
     wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
 
-    expect(screen.getByTestId("scope-change-approve")).toBeDisabled();
+    expect(screen.getByTestId("scope-change-approve")).toHaveAttribute("aria-disabled", "true");
     await userEvent.type(
       screen.getByTestId("scope-change-sign-name"),
       "Whit Vale",
@@ -298,7 +298,7 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
 
     // One character is not a name; the act stays unarmed on it.
     fireEvent.change(rule, { target: { value: "W" } });
-    expect(screen.getByTestId("scope-change-approve")).toBeDisabled();
+    expect(screen.getByTestId("scope-change-approve")).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.change(rule, { target: { value: "Whit Vale" } });
     const target = screen.getByTestId("scope-change-approve");

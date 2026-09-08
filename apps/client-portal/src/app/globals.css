@@ -55,7 +55,6 @@
      in both portals. --ink-x/--ink-y are set at runtime by ScoredAction. */
   --color-quiet-ink: #65594E;
   --bg-warm: #EEE6DB;
-  --color-error: #C77B6E;
   --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
   --press-in: 70ms;
   --press-out: 240ms;
@@ -317,18 +316,19 @@ a:hover {
   content: none;
 }
 
-/* ── TERTIARY · unscored until asked, and never inked at all ──────────────
-   it carries no .da-pool in the markup; a whisper does not flood. */
+/* ── TERTIARY · a scored word with a RESTING rule ─────────────────────────
+   it carries no .da-pool in the markup; a whisper does not flood.
+
+   The rule rests drawn, unconditionally — no `scaleX(0)`, no `hover: none`
+   variant. A phone has no hover, and the hover-gated rule left a touch
+   surface with no interactive mark on it at all (R139, sheet §A5). */
 .da-tertiary {
   color: var(--color-quiet-ink);
 }
 .da-tertiary .da-label::before {
   height: 1px;
-  background-color: var(--color-quiet-ink);
-  transform: scaleX(0);
-  transition:
-    transform 300ms var(--ease-editorial),
-    background-color 150ms linear;
+  background-color: var(--color-aged-oak);
+  transition: background-color 150ms linear, height 150ms var(--ease-editorial);
 }
 .da-tertiary .da-label::after {
   content: none;
@@ -344,6 +344,60 @@ a:hover {
 .da-danger .da-label::before,
 .da-danger .da-label::after {
   background-color: var(--color-terracotta);
+}
+
+/* ── TERMINAL · the one filled act, where money moves or a paper is signed ──
+   Sheet §A5 as amended by §F-C. The only fill this grammar has: charcoal
+   ground, paper ink, the amount inside the label. Not a fourth decoration —
+   a fourth CONSEQUENCE, and the reason the other three may stay bare words.
+
+   --ink-paper, --ink-faint, --rail and --hairline-strong are the house
+   sheet's names; their declarations live in H2's :root block. */
+.da-terminal {
+  padding: 13px 22px;
+  min-height: 48px;
+  border-radius: 3px;
+  background-color: var(--color-charcoal);
+  color: var(--ink-paper);
+}
+/* the shared 12px mono caps are overridden on the label itself, so the
+   figure reads as money and not as a running head */
+.da-terminal .da-label {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.da-terminal .da-label::before,
+.da-terminal .da-label::after {
+  content: none;
+}
+/* the hold inks the whole face, not a rule under a word */
+.da-terminal .da-pool {
+  inset: 0;
+  border-radius: 3px;
+  background-color: var(--ink-faint);
+}
+.da-terminal:hover {
+  background-color: #1F1D1A;
+}
+.da-terminal:active {
+  transform: translateY(1px);
+}
+
+/* ── THE CONSEQUENCE SENTENCE (sheet §A6) ─────────────────────────────────
+   Its home is H2's type block; it is declared here so H4's gates have it
+   before H2 merges. The integration lane keeps one copy. */
+.consequence {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--color-charcoal);
+  max-width: 56ch;
+  margin: 0 0 12px;
 }
 
 /* ── hover · the scoring answers, and a 3.5px bead gathers under the finger ─ */
@@ -368,10 +422,8 @@ a:hover {
   color: var(--color-charcoal);
 }
 .da-tertiary:hover .da-label::before {
-  transform: scaleX(1);
-}
-.da-danger:hover {
-  color: var(--color-error);
+  height: 1.5px;
+  background-color: var(--color-quiet-ink);
 }
 
 /* ── press · the word drops a pixel, the ink opens from the contact point,
@@ -420,15 +472,59 @@ a:hover {
   transition-timing-function: linear;
 }
 .da-tertiary:active .da-label::before {
-  transform: scaleX(1);
+  height: 1.5px;
+  background-color: var(--color-charcoal);
   transition-duration: var(--press-in);
   transition-timing-function: linear;
 }
 
-/* ── focus · the proofreader's caret in the margin, and the scores turn clay.
-   No ring: the mark that says "here" is the mark a proofreader would make. ── */
+/* ── unavailable · full opacity, always. Never `opacity: .5` (sheet §A5) ────
+   quiet ink at half opacity measures 2.21:1 and is not a state anyone can
+   read. A word that cannot be taken loses its ink, not its legibility; a
+   terminal act keeps its ROLE — a filled shape on the rail with a border. */
+.da-act:disabled,
+.da-act[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+.da-primary:disabled,
+.da-primary[aria-disabled='true'],
+.da-secondary:disabled,
+.da-secondary[aria-disabled='true'],
+.da-tertiary:disabled,
+.da-tertiary[aria-disabled='true'],
+.da-danger:disabled,
+.da-danger[aria-disabled='true'] {
+  color: var(--color-quiet-ink);
+}
+.da-primary:disabled .da-label::before,
+.da-primary[aria-disabled='true'] .da-label::before,
+.da-primary:disabled .da-label::after,
+.da-primary[aria-disabled='true'] .da-label::after,
+.da-secondary:disabled .da-label::before,
+.da-secondary[aria-disabled='true'] .da-label::before,
+.da-tertiary:disabled .da-label::before,
+.da-tertiary[aria-disabled='true'] .da-label::before,
+.da-danger:disabled .da-label::before,
+.da-danger[aria-disabled='true'] .da-label::before,
+.da-danger:disabled .da-label::after,
+.da-danger[aria-disabled='true'] .da-label::after {
+  background-color: var(--hairline-strong);
+}
+.da-terminal:disabled,
+.da-terminal[aria-disabled='true'],
+.da-terminal[aria-disabled='true']:hover {
+  background-color: var(--rail);
+  color: var(--ink-faint);
+  border: 1px solid var(--hairline-strong);
+}
+
+/* ── focus · the proofreader's caret in the margin, and the scores turn clay,
+   now with an outline standing alongside them. The caret alone was a 14px
+   glyph in the gutter and nothing else; `outline` does not affect layout, so
+   the ring costs no neighbour a reflow (sheet §A5, R139). ─────────────────── */
 .da-act:focus-visible {
-  outline: none;
+  outline: 2px solid var(--color-clay-ink);
+  outline-offset: 2px;
 }
 .da-act::before {
   /* A caret is a mark, not a word. The `/ ''` alt text keeps the glyph out of
@@ -450,6 +546,9 @@ a:hover {
 }
 .da-act:focus-visible::before {
   opacity: 1;
+}
+.da-terminal::before {
+  color: var(--ink-paper);
 }
 .da-act:focus-visible .da-label::before,
 .da-act:focus-visible .da-label::after {
@@ -496,15 +595,6 @@ a:hover {
   }
   .da-primary:hover .da-trailing {
     transform: none;
-  }
-  .da-tertiary .da-label::before {
-    transform: none;
-    opacity: 0;
-  }
-  .da-tertiary:hover .da-label::before,
-  .da-tertiary:active .da-label::before {
-    transform: none;
-    opacity: 1;
   }
 }
 
