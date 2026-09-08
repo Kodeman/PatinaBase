@@ -211,21 +211,80 @@ describe('WallGate', () => {
     renderGate();
 
     // No hold is spent on an act that cannot be taken: the word is unarmed
-    // until there is a name, the way the three other acts are.
+    // until there is a name, the way the three other acts are. Unarmed is
+    // `aria-disabled` (R139) — the act keeps its focus and answers for itself.
     const target = screen.getByRole('button', { name: /accept/i });
-    expect(target).toBeDisabled();
+    expect(target).toHaveAttribute('aria-disabled', 'true');
+    expect(target).not.toBeDisabled();
     await holdAccept();
     expect(mutateAsync).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
       target: { value: 'H' },
     });
-    expect(target).toBeDisabled();
+    expect(target).toHaveAttribute('aria-disabled', 'true');
 
     fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
       target: { value: 'Harper Vale' },
     });
-    expect(target).not.toBeDisabled();
+    expect(target).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('is the terminal tier, and the amount is inside the label', () => {
+    renderGate();
+    const target = screen.getByRole('button', { name: /accept/i });
+    expect(target).toHaveClass('da-terminal');
+    expect(target).toHaveTextContent('Accept the finished work · $1,440.00');
+  });
+
+  it('says what accepting does, and what it does not, in every state', () => {
+    renderGate();
+    const said =
+      'Accepting releases $1,440.00 to Prairie Coat Painting for the finished work. ' +
+      'It does not close the project or change your invoice.';
+
+    // unavailable — no name on the rule yet
+    expect(screen.getByRole('button', { name: /accept/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByTestId('wall-consequence')).toHaveTextContent(said);
+
+    // and armed
+    fireEvent.change(screen.getByTestId('accept-trade-scope-name'), {
+      target: { value: 'Harper Vale' },
+    });
+    expect(screen.getByTestId('wall-consequence')).toHaveTextContent(said);
+  });
+
+  it('names no figure it has not been given', () => {
+    bundleMock.mockReturnValue({
+      ...BUNDLE,
+      data: {
+        ...BUNDLE.data,
+        tradeScope: { ...BUNDLE.data.tradeScope, party: null, draws: [] },
+      },
+    });
+    renderGate();
+    expect(screen.getByTestId('wall-consequence')).toHaveTextContent(
+      'Accepting records that this work is finished. ' +
+        'It does not close the project or change your invoice.',
+    );
+    expect(screen.getByRole('button', { name: /accept/i })).toHaveTextContent(
+      'Accept the finished work',
+    );
+    expect(screen.getByRole('button', { name: /accept/i })).not.toHaveTextContent('$');
+  });
+
+  it('sends an unmet activation to the rule rather than nowhere', () => {
+    renderGate();
+    fireEvent.click(screen.getByRole('button', { name: /accept/i }));
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByTestId('accept-trade-scope-name')).toHaveFocus();
+    expect(screen.getByTestId('gate_accept-status')).toHaveTextContent(
+      'Type your full name to accept.',
+    );
   });
 
   it('accepts, heals the hatching and stamps what was released', async () => {
@@ -253,6 +312,11 @@ describe('WallGate', () => {
     expect(stamp).toHaveTextContent('Prairie Coat Painting');
     expect(screen.getByTestId('wall-hatch')).toHaveAttribute('data-wall-state', 'settled');
     expect(onAccepted).toHaveBeenCalledTimes(1);
+
+    // No enabled act sits beside its own completed state: the act and its
+    // consequence sentence go, and the record stands alone.
+    expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('wall-consequence')).not.toBeInTheDocument();
   });
 
   it('surfaces a refused acceptance', async () => {

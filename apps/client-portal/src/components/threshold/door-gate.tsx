@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { formatCurrency } from '@patina/shared';
 import type { CommercialDocumentKind } from '@patina/types';
 
 import { HoldAction, ScoredAction } from '@/components/threshold/instruments/scored-action';
@@ -285,6 +286,22 @@ export function DoorGate({
     bundle.data?.tradeScope?.draws[0]?.amountCents ??
     null;
   const sent = parseSourceDate(proposal.sentAt);
+
+  /* THE CONSEQUENCE SENTENCE (R141, sheet §A6), composed from what the door
+     already holds: the studio that sent the paper and the deposit the bundle
+     names. A signature is not a payment, and the sentence says so — the
+     deposit becomes payable and is paid from the letterbox, not from here. */
+  const doorConsequence = [
+    studioName
+      ? `Signing records your name on this paper and returns it to ${studioName}.`
+      : 'Signing records your name on this paper and returns it to your studio.',
+    depositCents !== null && depositCents > 0
+      ? `The deposit of ${formatCurrency(
+          depositCents,
+          bundle.data?.serviceTerms?.currency ?? 'USD',
+        )} becomes payable; signing does not pay it.`
+      : 'Nothing is charged by signing.',
+  ].join(' ');
 
   /* ── THE COMPOSED CONSENT AND ITS ATTACHMENTS (Wave 2, P6) ────────────────
      The bundle drops every part the studio hid before the row crosses this
@@ -836,22 +853,36 @@ export function DoorGate({
                 the doorway carries `perspective` for the swing, which makes it
                 the containing block for anything fixed inside it. */}
             {!signedAt && (
-              <HoldAction
-                actionKey="gate_sign"
-                regionKey="gate"
-                surfaceKey="the_threshold"
-                variant="primary"
-                presentation="mobile_dock"
-                verb="sign"
-                wrapperClassName="mt-5 max-[600px]:-mx-5 max-[600px]:px-5"
-                disabled={!ready}
-                loading={submitting}
-                loadingLabel="Signing"
-                aria-describedby={hintId}
-                onHold={onSign}
-              >
-                {signLabelFor(kind)}
-              </HoldAction>
+              <>
+                {/* The sentence stands over the act in every state, armed or
+                    not (R141): a filled act carrying a paper's name has
+                    already said it is heavy — this says what the weight is. */}
+                <p data-testid="door-consequence" className="consequence mt-5">
+                  {doorConsequence}
+                </p>
+                <HoldAction
+                  actionKey="gate_sign"
+                  regionKey="gate"
+                  surfaceKey="the_threshold"
+                  variant="terminal"
+                  presentation="mobile_dock"
+                  verb="sign"
+                  wrapperClassName="max-[600px]:-mx-5 max-[600px]:px-5"
+                  disabled={!ready}
+                  loading={submitting}
+                  loadingLabel="Signing"
+                  unmetReason={
+                    acknowledgeable.length > 0
+                      ? 'Tick each attachment you received, type your full name, and tick the line to sign.'
+                      : 'Type your full name and tick the line to sign.'
+                  }
+                  unmetFocusId={nameId}
+                  aria-describedby={hintId}
+                  onHold={onSign}
+                >
+                  {signLabelFor(kind)}
+                </HoldAction>
+              </>
             )}
 
             {/* The other four answers the old /proposals/[id] page took, on
