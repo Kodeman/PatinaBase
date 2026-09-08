@@ -27,7 +27,8 @@ export type DocumentActionVariant =
   | 'inked'
   | 'secondary'
   | 'tertiary'
-  | 'danger';
+  | 'danger'
+  | 'terminal';
 export type DocumentActionPresentation = 'inline' | 'mobile_dock';
 
 interface ActionRegion {
@@ -50,7 +51,7 @@ const ActionRegionContext = createContext<ActionRegion | null>(null);
    the matching "The Scored Ink (I107)" block. Colour and depth are value only
    — never a shadow (D4). ─────────────────────────────────────────────────── */
 const BASE_CLASS =
-  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
+  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
 
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   primary: 'da-primary font-medium tracking-[0.12em]',
@@ -58,6 +59,7 @@ const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   secondary: 'da-secondary font-normal tracking-[0.1em]',
   tertiary: 'da-tertiary font-light tracking-[0.1em]',
   danger: 'da-danger font-medium tracking-[0.12em]',
+  terminal: 'da-terminal font-medium tracking-[0]',
 };
 
 interface DocumentActionBaseProps {
