@@ -1,0 +1,18 @@
+=== PAPERS IN FULL ===
+WHAT YOU HAVE SIGNED
+
+INSTRUMENT · SIGNED 8 SEPTEMBER
+
+Client User — design services agreement
+instrument links: 6
+ link 0 H1|no-href
+ link 1 P|no-href
+ link 2 SPAN|no-href
+ link 3 A|#previously
+ link 4 A|/projects/03e6a36d-6a88-451a-a348-587c1eaedbc3
+ link 5 P|no-href
+read-in-full present: 0
+
+mentions Rough-in: false
+mentions waiver: false
+mentions billed: false

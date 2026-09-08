@@ -1,0 +1,50 @@
+=== the door with a failed proposals read ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Owed on the open invoice
+$23,978 · due 8 September
+
+Your papers could not be drawn just now. Nothing on them has changed.
+
+TRY AGAIN
+
+THE LETTERBOX
+
+INV-0004 · $23,978 total · $0 paid. Balance $23,978, due September 8.
+
+OPEN THE INVOICE
+OPEN THE LETTERBOX
+PRINT
+Previously
+WHAT THE HOUSE SENT
+8 SEPTEMBER
+Draw ready: Client User — design services agreement
+SENT
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+INV-0004
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Client User — design services agreement
+Birch Hollow
+Marrow & Vale Residence
+Aspen Loft Refresh
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE
+
+aborted list_client_proposals requests: 3
+HAS-RETRY: true
+SAYS-EMPTY: false
+RETRY BUTTONS: ["TRY AGAIN"]

@@ -1,0 +1,338 @@
+=== STEP 9 · right rail ===
+0 OF 10 PARTS NEED ATTENTION
+
+JURISDICTION NOTICES
+
+Notice of cancellation (Wisconsin)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Minnesota)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Illinois)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (California)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (New York)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Massachusetts)
+HELD FOR COUNSEL REVIEW
+
+DRAWS
+
+The draw ledger opens when this agreement is sent.
+
+The draw ledger opens when this agreement is sent.
+
+TRADE AGREEMENTS
+
+Trade Agreements open once this agreement is executed and its project exists.
+
+THE CLIENT'S COPY · LIVE
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Pricing basis
+
+The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.
+
+Cost basis
+$71,300
+Fee 18%
+$12,834
+
+GUARANTEED MAXIMUM PRICE
+
+$84,134
+
+Schedule of values
+Construction
+$84,134
+The whole of it
+$84,134
+Draw schedule
+Deposit at signing
+10%
+Rough-in
+30%
+Cabinets set
+40%
+Substantial completion
+20%
+Allowances
+Tile allowance
+$4,000
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Plumbing fixtures allowance
+$3,500
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Lighting allowance
+$2,800
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequence of work, and answers for the result.
+
+Change orders
+
+A change to the scope, the schedule or the sum is agreed in writing before the work is done, and is recorded against this agreement.
+
+Termination
+
+Either party may end this engagement in writing. Work performed and materials ordered to that date remain payable.
+
+Terms
+
+Invoices are due on receipt. Work proceeds against the draw schedule above. Wisconsin law governs this agreement.
+
+ATTACHMENT A · LIEN WAIVER FORM
+
+Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.
+
+I received this
+
+CLIENT SIGNATURE
+
+Awaiting
+
+STUDIO SIGNATURE
+
+Awaiting
+
+This agreement covers the work described above, at the price shown. Anything added to it is a separate written change order before the work is done.
+=== jurisdiction panel html ===
+<section aria-label="Jurisdiction attachments" class="space-y-3"><p class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">Jurisdiction notices</p><ul class="space-y-1"><li data-notice-state="WI" data-notice-held="true" class="flex items-center justify-between gap-4 text-[12px] text-[var(--text-faint)]"><span>Notice of cancellation (Wisconsin)</span><span class="font-mono text-[11px] uppercase tracking-[0.08em]">Held for counsel review</span></li><li data-notice-state="MN" data-notice-held="true" class="flex items-center justify-between gap-4 text-[12px] text-[var(--text-faint)]"><span>Notice of cancellation (Minnesota)</span><span class="font-mono text-[11px] uppercase tracking-[0.08em]">Held for counsel review</span></li><li data-notice-state="IL" data-notice-held="true" class="flex items-center justify-between gap-4 text-[12px] text-[var(--text-faint)]"><span>Notice of cancellation (Illinois)</span><span class="font-mono text-[11px] uppercase tracking-[0.08em]">Held for counsel review</span></li><li data-notice-state="CA" data-notice-held="true" class="flex items-center justify-between gap-4 text-[12px] text-[var(--text-faint)]"><span>Notice of cancellation (California)</span><span class="font-mono text-[11px] uppercase tracking-[0.08em]">Held for counsel review</span></li><li data-notice-state="NY" data-notice-held="true" class="flex items-center justify-between gap-4 text-[12px] text-[var(--text-faint)]"><span>Notice of cancellation (New York)</span><span class="font-mono text-[11px] uppercase tracking-[0.08em]">Held for counsel review</span></li><li data-notice-state="MA" data-notice-held="true" class="flex items-center justify-between gap-4 text-[12px] text-[var(--text-faint)]"><span>Notice of cancellation (Massachusetts)</span><span class="font-mono text-[11px] uppercase tracking-[0.08em]">Held for counsel review</span></li></ul></section>
+=== SEND SHEET ===
+Send design agreement
+PUT BACK · ESC
+
+YES TO THE DESIGNER
+
+Send for the client signature
+
+Client User receives the services, rates, retainer policy, billing cadence, ceiling, and terms. Their signature preserves consent; the agreement still awaits the studio countersignature before work is authorized.
+
+RECIPIENT
+
+client@patina.dev
+
+FURNISHINGS DEPOSIT
+
+No furnishings deposit set — authorizations will default to 50%.
+
+Ready to send · every contractual facet is present.
+
+A NOTE TO THE CLIENT · OPTIONAL
+Send later
+Send agreement →
+BUTTONS [{"t":"PUT BACK · ESC","disabled":false},{"t":"Send later","disabled":false},{"t":"Send agreement →","disabled":false}]
+NET send_commercial_document 200 {"sentAt": "2026-09-08T12:10:04.791066+00:00", "status": "sent", "updatedAt": "2026-09-08T12:10:04.791066+00:00", "proposalId": "95390bd8-86e4-4a0b-9595-9dd5657cc51e", "documentKind": "design_build", "commercialState": "sent", "documentFingerprint": "2f7dbe6b00125970b1d7dfd86af6ef1cd37a1fe2fa64f7bc6960abdfca24dca2", "proposalSendDispatchId": "32ddc512-1f17-47c6-8a53-f4cdc394f7d8", "proposal_send_dispatch_id": "32ddc512-1f17-47c6-8a53-f4cdc394f7d8"}
+NET proposal-send 200 {"ok":false,"delivery_state":"unconfirmed","attempt_count":3,"retryable":false,"retry_exhausted":true,"detail":"RESEND_API_KEY environment variable is required"}
+url after send: http://localhost:3000/desk
+=== page after send ===
+Skip to the paper
+Good morning, Leah
+
+TUESDAY · SEPTEMBER 8
+
+＋
+CAPTURE A LEAD
+BEGIN A BRIEF
+＋
+OPEN A PROJECT
+NO PROPOSAL NEEDED
+FIND ANYTHING
+⌘K
+
+–New desk, same studio — your projects are all here as documents now. The walkthrough is six quick stops if you'd like the lay of it.
+APPEARS ONCE · RECEDES ON USE
+
+–The studio isn’t fully set up. FINISH SETTING UP
+
+EVERY JOB · 21 LIVE · 1 OVERDUE
+
+One thing is overdue — Aspen.
+
+BRIEF · 5
+Full Room
+
+Lily Tanaka · New lead — respond by Sep 14
+
+OPEN THE JOB
+Full Room
+
+Marcus Wright · New lead — respond by Sep 11
+
+OPEN THE JOB
+Full Room
+
+Sarah Chen · New lead — respond by Sep 13
+
+OPEN THE JOB
+Full Room
+
+David Nielsen · New lead — respond by Sep 13
+
+OPEN THE JOB
+Consultation
+
+Elena Ruiz · quiet · nothing needs your hand
+
+OPEN THE JOB
+DISCOVERY · 1
+The Ashfords (no-login household)
+
+The Ashfords (no-login household) · Schedule the discovery call
+
+OPEN THE JOB
+DIRECTION · 5
+Elena Marlowe — Living Room Direction
+
+Elena Marlowe (no-login household) · drafting, untouched 10d
+
+OPEN THE JOB
+Concurrency source draft
+
+quiet · nothing needs your hand
+
+OPEN THE JOB
+Concurrency target draft
+
+quiet · nothing needs your hand
+
+OPEN THE JOB
+Client User — design services agreement
+
+quiet · nothing needs your hand
+
+OPEN THE JOB
+Client User — design services agreement
+
+quiet · nothing needs your hand
+
+OPEN THE JOB
+PROPOSAL · 3
+Sample accepted proposal
+
+Signed — open the project
+
+OPEN THE PROJECT
+Aspen Loft — Living Room Refresh
+
+sent, unopened 1d
+
+OPEN THE JOB
+Client User — design services agreement
+
+With client since Sep 8
+
+OPEN THE JOB
+PROJECT · 6
+Aspen Loft Refresh
+
+
+Overdue 4 days — 2 decisions overdue — oldest due Sep 4
+
+REVIEW DECISIONS
+Birch Hollow
+
+Band — no anchor yet
+
+OPEN THE JOB
+Marrow & Vale Residence
+
+Band — no anchor yet
+
+OPEN THE JOB
+Olsen Lake House
+
+AP-012 has an open damage claim
+
+REVIEW THE CLAIM
+Chen Residence
+
+Name the phases for this project
+
+OPEN THE SCHEDULE
+Client User — design services agreement
+
+Name the phases for this project
+
+OPEN THE SCHEDULE
+INSTALL · 1
+Cedar Lane Study
+
+Nora Ellison · Installation · Name the phases for this project
+
+OPEN THE SCHEDULE
+THE STUDIO
+
+ROOMS
+
+Library
+↗
+pieces and makers
+People
+↗
+clients, makers, trades
+The Scans
+↗
+measured rooms
+
+LEDGERS
+
+Orders
+SHEET
+POs, receiving, claims
+Accounts
+SHEET
+invoices, receivables, earnings
+Hours
+SHEET
+time in hand
+The Post
+SHEET
+mail and messages
+
+BEGIN
+
+—
+Open a project
+no proposal needed
+—
+Draft a design agreement
+for an existing household
+—
+Draw an invoice · new
+—
+Add a maker
+a vendor on your roster
+—
+Open the Contract Room
+facets fill in any order
+PATINA
+Library
+People
+The Scans
+Ledgers
+↑
+⌘K
+HANDS FREE
+THE POST
+LH
+Leah Hartwell
+LEAH HARTWELL

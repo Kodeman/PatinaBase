@@ -1,0 +1,73 @@
+room url at executed: http://localhost:3000/drafting/95390bd8-86e4-4a0b-9595-9dd5657cc51e
+=== ROOM AT executed · right rail ===
+0 OF 10 PARTS NEED ATTENTION
+
+Only a draft agreement can be sent.
+
+JURISDICTION NOTICES
+
+Notice of cancellation (Wisconsin)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Minnesota)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Illinois)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (California)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (New York)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Massachusetts)
+HELD FOR COUNSEL REVIEW
+
+DRAWS
+
+Deposit at signing
+$8,413.40
+PAID
+Rough-in
+$23,978.19
+NOT YET BILLED
+$1,262.01 held
+Bill this draw
+Cabinets set
+$31,970.92
+NOT YET BILLED
+$1,682.68 held
+Bill this draw
+Substantial completion
+$15,985.46
+NOT YET BILLED
+$841.34 held
+Bill this draw
+Final · retainage release
+$3,786.03
+NOT YET BILLED
+Bill this draw
+
+LIEN WAIVERS
+
+Deposit at signing
+$8,413.40
+Record a waiver
+Rough-in
+$23,978.19
+Record a waiver
+Cabinets set
+$31,970.92
+Record a waiver
+Substantial completion
+$15,985.46
+Record a waiver
+Final · retainage release
+$3,786.03
+Record a waiver
+
+TRADE AGREEMENTS
+
+No trades engaged on this project yet.
+
++ New Trade Agreement
+
+
+BUTTONS: [{"t":"← THE DESK","disabled":false},{"t":"REVIEW & SEND →","disabled":true},{"t":"Preview client copy","disabled":false},{"t":"Saved","disabled":true},{"t":"Client User","disabled":false},{"t":"⠿","disabled":true},{"t":"PRICING BASIS · RECORD ONLY Pricing basis·","disabled":false},{"t":"⠿","disabled":true},{"t":"DRAWS · RECORD ONLY Draw schedule·","disabled":false},{"t":"⠿","disabled":true},{"t":"ALLOWANCES · RECORD ONLY Allowances","disabled":false},{"t":"⠿","disabled":true},{"t":"CLAUSE Who does the work·","disabled":false},{"t":"⠿","disabled":true},{"t":"CLAUSE Supervision·","disabled":false},{"t":"⠿","disabled":true},{"t":"CLAUSE Change orders·","disabled":false},{"t":"⠿","disabled":true},{"t":"CLAUSE Termination·","disabled":false},{"t":"⠿","disabled":true},{"t":"CLAUSE Terms·","disabled":false},{"t":"⠿","disabled":true},{"t":"ATTACHMENT Notice of cancellation HIDDEN FROM YOUR","disabled":false},{"t":"⠿","disabled":true},{"t":"ATTACHMENT Lien waiver form","disabled":false},{"t":"Fixed price","disabled":true},{"t":"Cost-plus","disabled":true},{"t":"Cost-plus with GMP","disabled":true},{"t":"Time and materials with a not-to-exceed","disabled":true},{"t":"Remove","disabled":true},{"t":"Remove","disabled":true},{"t":"Remove","disabled":true},{"t":"Remove","disabled":true},{"t":"Remove","disabled":true},{"t":"Remove","disabled":true},{"t":"Remove","disabled":true},{"t":"+ Add a cost line","disabled":true},{"t":"Remove","disabled":true},{"t":"+ Add a line","disabled":true},{"t":"Bill this draw","disabled":false},{"t":"Bill this draw","disabled":false},{"t":"Bill this draw","disabled":false},{"t":"Bill this draw","disabled":false},{"t":"Record a waiver","disabled":false},{"t":"Record a waiver","disabled":false},{"t":"Record a waiver","disabled":false},{"t":"Record a waiver","disabled":false},{"t":"Record a waiver","disabled":false},{"t":"+ New Trade Agreement","disabled":false},{"t":"ESTIMATE · ISSUED","disabled":false},{"t":"Library","disabled":false},{"t":"People","disabled":false},{"t":"The Scans","disabled":false},{"t":"Ledgers ↑","disabled":false},{"t":"⌘K","disabled":false},{"t":"THE POST","disabled":false},{"t":"LH Leah Hartwell LEAH HARTWELL","disabled":false},{"t":"More","disabled":false}]
+room names Trade Agreements: true

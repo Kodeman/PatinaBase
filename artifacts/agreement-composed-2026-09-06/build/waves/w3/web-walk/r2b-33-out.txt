@@ -1,0 +1,61 @@
+DOOR ACTS: [{"tag":"BUTTON","href":null,"text":"WHAT CHANGED SINCE YESTERDAY"},{"tag":"A","href":"/pay/6d424b33978d3f55071e4b13e7640e1be3484221bbd48f6bee1261bcf27e8daa","text":"OPEN THE INVOICE"},{"tag":"BUTTON","href":null,"text":"OPEN THE LETTERBOX"},{"tag":"A","href":"/invoices/16e389f2-bcf5-49f7-a8d1-6e320aa658c8/print","text":"PRINT"},{"tag":"BUTTON","href":null,"text":"8 SEPTEMBER Design-build agreement · Client User — design se"},{"tag":"BUTTON","href":null,"text":"8 SEPTEMBER Draw ready: Client User — design services agreem"},{"tag":"BUTTON","href":null,"text":"8 SEPTEMBER Agreement executed: Client User — design service"},{"tag":"BUTTON","href":null,"text":"8 SEPTEMBER Signature received: Client User — design service"},{"tag":"BUTTON","href":null,"text":"8 SEPTEMBER Proposal ready for your review SENT"},{"tag":"BUTTON","href":null,"text":"8 SEPTEMBER Proposal ready for your review SENT"},{"tag":"A","href":"#previously","text":"Design-build agreement · Client User — design services agree"},{"tag":"A","href":"#letterbox","text":"INV-0004"},{"tag":"BUTTON","href":null,"text":"THE PAPERS, IN FULL"},{"tag":"A","href":"/projects/03e6a36d-6a88-451a-a348-587c1eaedbc3","text":"Client User — design services agreement"},{"tag":"A","href":"/projects/b0000000-0000-0000-0000-0000000000d3","text":"Birch Hollow"},{"tag":"A","href":"/projects/b0000000-0000-0000-0000-0000000000d4","text":"Marrow & Vale Residence"},{"tag":"A","href":"/projects/b0000000-0000-0000-0000-0000000000d1","text":"Aspen Loft Refresh"},{"tag":"BUTTON","href":null,"text":"YOUR DETAILS"},{"tag":"BUTTON","href":null,"text":"LEAVE THE HOUSE"},{"tag":"BUTTON","href":null,"text":"ASK FOR A CHANGE"}]
+
+after clicking Previously — url: /
+shows the agreement body: false
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+Nothing waits for your name. A balance of $23,978 stands open.
+
+Previously — Design-build agreement · Client User — design services agreement, 8 September.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Owed on the open invoice
+$23,978 · due 8 September
+
+THE LETTERBOX
+
+INV-0004 · $23,978 total · $0 paid. Balance $23,978, due September 8.
+
+OPEN THE INVOICE
+OPEN THE LETTERBOX
+PRINT
+Previously
+8 SEPTEMBER
+Design-build agreement · Client User — design services ag…
+SIGNED
+WHAT THE HOUSE SENT
+8 SEPTEMBER
+Draw ready: Client User — design services agreement
+SENT
+8 SEPTEMBER
+Agreement executed: Client User — design services agreeme…
+SENT
+8 SEPTEMBER
+Signature received: Client User — design services agreeme…
+SENT
+8 SEPTEMBER
+Proposal ready for your review
+SENT
+8 SEPTEMBER
+Proposal ready for your review
+SENT
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+INV-0004
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Client User — design services agreement
+Birch Hollow
+Marrow & Vale Residence
+Aspen Lo

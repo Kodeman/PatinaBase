@@ -1,0 +1,33 @@
+NET proposals?select=*%2Cproject%3Aprojects%21proposals_project_id_fkey%28id%2Cname%29%2Cclient%3Aprofiles%21client_id%28id%2Cemail%2Cfull_name%29%2Citems%3Aproposal_items%28*%2Cproduct%3Aproducts%28id%2Cname%2Cimages%2Cbrand%2Csource_url%2Cdimensions%2Cmaterials%2Cprice_retail%2Cprice_trade%2Cproduct_styles%28count%29%29%29&id=eq.95390bd8-86e4-4a0b-9595-9dd5657cc51e 200 {"id":"95390bd8-86e4-4a0b-9595-9dd5657cc51e","project_id":"f3fec788-c74f-44ae-bd32-cc2fc0642fdd","designer_id":"a0000000-0000-0000-0000-000000000004","client_id":"a0000000-0000-0000-0000-000000000005","title":"Client User — design services agreement","description":null,"cover_image":null,"subtotal":0,"discount_amount":0,"discount_percent":null,"tax_rate":null,"tax_amount":0,"total_amount":8413400,"deposit_percent":50.00,"payment_terms":null,"payment_notes":null,"valid_until":"2026-09-22T12:10:04.762+00:00","status":"accepted","version":1,"parent_proposal_id":null,"sent_at":"2026-09-08T12:10:04.791066+00:00","viewed_at":null,"accepted_at":"2026-09-08T12:17:22.397486+00:00","declined_at":null,
+NET list_trade_agreements 200 []
+rolodex hit: 1
+WAIVER POLICIES: ["conditional_then_unconditional=Conditional, then unconditional on payment","unconditional_on_payment=Unconditional on payment","none=No waivers required"]
+NET create_trade_agreement 200 "7e1c1d96-4e05-4607-b5a3-2cd419bfd420"
+NET list_trade_agreements 200 [{"id": "7e1c1d96-4e05-4607-b5a3-2cd419bfd420", "scope": "Fabricate and install the kitchen and mudroom cabinetry and millwork, per the issued drawings.", "state": "draft", "title": "Cabinetry & millwork", "trade": "Cabinetry", "sentAt": null, "currency": "USD", "schedule": {"startOn": "2026-10-01", "sequencing": "After rough-in, before tile", "durationDays": 21}, "signedAt": null, "voidedAt": null, "contactId": "c0000000-0000-4000-8000-00000000ca02", "signature": null, "priceCents": 3800000, "sovLineIds": [], "hasLiveLink": false, "contactEmail": "marta@reyescabinetry.test", "retainageBps": 500, "payWhenPaidDays": 7, "lienWaiverPolicy": "conditional_then_unconditional", "sourceProposalId": 
+NET trade-agreement-send 502 {"error":"send_failed","detail":"RESEND_API_KEY environment variable is required"}
+=== TRADE AGREEMENTS ===
+
+
+TRADE
+Reyes CabinetryCabinetry
+WHAT THIS COVERS
+SCOPE
+PRICE · DOLLARS
+RETAINAGE · PERCENT
+STARTS ON
+DURATION · DAYS
+PAID WITHIN · DAYS OF THE STUDIO BEING PAID
+LIEN WAIVERS
+Conditional, then unconditional on payment
+Unconditional on payment
+No waivers required
+SEQUENCING
+A certificate of insurance is required before work begins
+
+RESEND_API_KEY environment variable is required
+
+Send to the trade
+Save as a draft
+Cancel
+
+

@@ -205,3 +205,60 @@ Other notes for the next owner:
 
 Next owner: whoever runs Wave 3 round 2. The stack is at `00579`, freshly
 reset, with no walk, e2e or probe residue.
+
+---
+
+## The web walk, round 2 (2026-09-08, web walker) — NO RESET
+
+The round-2 web walker took the stack and **did not reset it**. No migration, no
+seed file, no grant and no product file was touched; `supabase db reset` was
+never run. Ledger head probed before the first click and unchanged after:
+`00579, 00578, 00577`.
+
+Docker and every Supabase container were **down** when this walk started (all
+`Exited … 6 hours ago`). `supabase start --workdir
+/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-integration`
+brought them back from the existing volumes ("Starting database from backup"),
+so round 1's rows and the earlier round-2 attempt's rows were all still present
+and this walk ran on top of them.
+
+**One row was deleted, deliberately**: the `studio_license_attestations` row on
+studio `fdd04b99-143f-410b-8be3-c18b5e2077cf`, left by the earlier round-2
+attempt, so that walk step 1 could be walked honestly (the design-build template
+must be *disabled* before the attestation exists). It was re-created through the
+Account → Studio card in step 3 and is on the stack again, identical:
+`WI Dwelling Contractor · 1234567 · WI · 2027-03-31`.
+
+What this walk left behind (all of it walk data, all of it cleared by a
+`supabase db reset --workdir <integration worktree>`):
+
+- proposal `95390bd8-86e4-4a0b-9595-9dd5657cc51e` — the Halvorsen turnkey prime,
+  composed, sent, client-signed, countersigned; its project
+  `f3fec788-c74f-44ae-bd32-cc2fc0642fdd`, one `project_billing_authorities` row
+  (`per_draw`, NULL ceiling), one `agreement_execution_snapshots` row, five
+  `agreement_draw_invoices` rows.
+- proposal `de3970a0-de56-4e0f-9c02-421e870d9dcf` — **sent, awaiting signature,
+  with its pricing basis hidden from the client**. This is the live reproduction
+  of finding W3R2-01; leave it if you want to see it, reset if you don't.
+- proposal `fa5842b5-ad38-4464-8cfc-ec960c62ca4e` — a fresh turnkey draft, never
+  sent, used for the three flag-off captures.
+- invoices INV-0003 (deposit, `paid` — settled through `record_invoice_payment`,
+  not Stripe, which is unconfigured locally) and INV-0004 (Rough-in, `sent`,
+  with a live pay token), plus the `designer_earnings` `design_fee` row.
+- trade agreement `7e1c1d96-4e05-4607-b5a3-2cd419bfd420` (Reyes Cabinetry,
+  `signed`), its spent token, a second token minted and then set `revoked`
+  without being spent (the R46 probe), and one `record_agreement_draw_lien_waiver`
+  row against draw 2.
+- one `comms_threads` `direct` row from the R47 "Ask a question" probe.
+- the rows round 1 and the earlier round-2 attempt left, untouched (proposals
+  `280f1dfc…`/`277e058d…`, project `03e6a36d…`, INV-0001/0002, trade agreement
+  `455b1296…`, the `studio_contacts` row for Marta Reyes).
+
+Dev servers: designer :3000 and client :3002 were started with `nohup` from the
+integration worktree four times (all flags on, `design-build:false`, all three
+off, all flags on again) and **all were killed**; both ports confirmed clear at
+the end. Nothing else was left running. The Supabase containers were left
+**up**.
+
+Next owner: whoever runs the Wave 3 fixes for round 2. Reset before a fresh
+walk, or expect to meet the rows above.

@@ -1,0 +1,81 @@
+NET POST list_my_project_decision_reviews 200 []
+NET POST list_client_proposals 200 [{"id": "de3970a0-de56-4e0f-9c02-421e870d9dcf", "title": "Client User — design services agreement", "status": "sent", "sent_at": "2026-09-08T12:29:46.077466+00:00", "version": 1, "created_at": "2026-09-08T06:13:21.988533+00:00", "updated_at": "2026-09-08T12:29:46.077466+00:00", "designer_id": "a0000
+NET POST resolve_studio_identity 200 [{"studio_id":"fdd04b99-143f-410b-8be3-c18b5e2077cf","name":"Leah Hartwell","logo_url":null,"website":null,"source":"studio"}]
+NET POST get_project_working_budget 200 null
+NET POST mark_project_read 200 "2026-09-08T12:30:44.301978+00:00"
+NET POST get_client_project_threshold 200 {"origin": "commercial", "projectId": "f3fec788-c74f-44ae-bd32-cc2fc0642fdd", "selections": [], "projectName": "Client User — design services agreement"}
+NET POST rpc_unread_summary 200 [{"thread_id":"c0ff0000-0000-0000-0000-000000000001","kind":"project","project_id":"b0000000-0000-0000-0000-0000000000d1","last_message_at":"2026-09-08T03:18:01.385803+00:00","unread_count":0}]
+NET POST resolve_studio_identity 200 [{"studio_id":"fdd04b99-143f-410b-8be3-c18b5e2077cf","name":"Leah Hartwell","logo_url":null,"website":null,"source":"studio"}]
+NET POST get_invoice_link 200 {"token": "6d424b33978d3f55071e4b13e7640e1be3484221bbd48f6bee1261bcf27e8daa", "status": "active"}
+NET POST get_client_commercial_document_bundle 200 {"why": null, "parts": [{"id": "6b3631e5-a944-4195-a4dd-e234eaff41bb", "kind": "schedule", "title": "Draw schedule", "partKey": "patina.draws", "payload": {"draws": [{"key": "deposit", "pct": 10, "label": "Deposit at signing", "sortOrder": 0, "retainageApplies": false}, {"key": "draw_2", "pct": 30, 
+=== ASK A QUESTION ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+One door in this house is closed until you sign it.
+
+Previously — Design-build agreement · Client User — design services agreement, 8 September.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Owed on the open invoice
+$23,978 · due 8 September
+Client User — design services agreement
+
+Shut since 8 September · it opens on your name
+
+This one comes before a house. It is addressed to you, so it waits on every door until you sign it.
+
+By signing, you accept the work described, draw schedule, retainage, and terms in “Client User — design services agreement”. The agreement becomes effective only after the studio countersigns.
+
+YOUR NAME IS NEEDED BEFORE THE LINE CONTINUES.
+
+Client User — design services agreement
+
+DESIGN-BUILD AGREEMENT · $84,134
+
+I received Lien waiver form.
+I agree to these design-build terms, the draw schedule, and the retainage withheld from each draw, and understand my signature alone does not authorize work until the studio countersigns.
+TYPE YOUR FULL NAME
+8 September 2026
+
+Your typed name acts as your electronic signature.
+
+Tick each attachment you 
+send button: 1 ASK FOR A CHANGE
+
+after sending: LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+One door in this house is closed until you sign it.
+
+Previously — Design-build agreement · Client User — design services agreement, 8 September.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Owed on the open invoice
+$23,978 · due 8 September
+Client User — design services agreement
+
+Shut since 8 September · it opens on your name
+
+This one comes before a house. It is addressed to you, so it waits on every door until you sign it.
+
+By signing, you accept the work described, draw schedule, retainage, and terms in “Client User — design services agreement”. The agreement becomes effective only after the studio countersigns.
+
+YOUR NAME IS NEEDED BEFORE THE LINE CONTINUES.
+
+Client User — design services agreement
+
+DESIGN-BUILD AGREEMENT · $84,134
+
+I received Lien waiver form.
+I a

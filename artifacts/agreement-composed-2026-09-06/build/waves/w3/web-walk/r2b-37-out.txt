@@ -1,0 +1,37 @@
+readiness before hiding the price: 0 OF 10 PARTS NEED ATTENTION
+
+The pricing basis carries allowance lines with no allowance behind them — Tile allowance, Plumbing fixtures allowance, Lighting allowance. Add them here, or give them another category.
+readiness with the PRICE hidden: 0 OF 10 PARTS NEED ATTENTION
+
+The pricing basis carries allowance lines with no allowance behind them — Tile allowance, Plumbing fixtures allowance, Lighting allowance. Add them here, or give them another category.
+review&send disabled: false
+client copy still names a GMP: false
+NET upsert_agreement_parts 200 {"parts": [{"id": "4f322e1d-fdb3-4988-885c-f55a11ea0da3", "kind": "schedule", "title": "Pricing basis", "payload": {"basis": "cost_plus_gmp", "feeBps": 1800, "gmpCents": 8413400, "costLines": [{"id": "line-1788870555246-0", "label": "Cabinetry & millwork", "category": "sub", "basisCents": 3800000}, {"id": "line-1788870555662-1", "label": "Electrical", "category": "sub", "basisCents": 950000}, {"id
+
+=== SEND SHEET with the price hidden ===
+Send design agreement
+PUT BACK · ESC
+
+YES TO THE DESIGNER
+
+Send for the client signature
+
+Client User receives the services, rates, retainer policy, billing cadence, ceiling, and terms. Their signature preserves consent; the agreement still awaits the studio countersignature before work is authorized.
+
+RECIPIENT
+
+client@patina.dev
+
+FURNISHINGS DEPOSIT
+
+No furnishings deposit set — authorizations will default to 50%.
+
+The pricing basis carries allowance lines with no allowance behind them — Tile allowance, Plumbing fixtures allowance, Lighting allowance. Add them here, or give them another category.
+
+Ready to send · every contractual facet is present.
+
+A NOTE TO THE CLIENT · OPTIONAL
+Send later
+Send agreement →
+NET send_commercial_document 200 {"sentAt": "2026-09-08T12:29:46.077466+00:00", "status": "sent", "updatedAt": "2026-09-08T12:29:46.077466+00:00", "proposalId": "de3970a0-de56-4e0f-9c02-421e870d9dcf", "documentKind": "design_build", "commercialState": "sent", "documentFingerprint": "bebdb3079952dfa590947d89bc8332a97927c8fc10f9751ce09be3a4ecb0faec", "proposalSendDispatchId": "425f4e28-36cf-4dfa-8955-b40b31ee6815", "proposal_send_d
+url after send: http://localhost:3000/desk
