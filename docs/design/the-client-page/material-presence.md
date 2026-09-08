@@ -160,3 +160,68 @@ The implementation agent's clean worktree and merged local branch were
 removed after integration. The integration worktree is deliberately retained
 to serve the requested local review; remove it after that review, not while
 the preview is in use. The shared main checkout was not modified.
+
+## Second pass: imagery, September 8
+
+Kody requested another pass with imagery. The local fixture has no usable
+selection photography: Aspen and Cedar's furnishings point to the same
+fixture pendant despite being named a table/chair; its storage URL returns
+400, and local product-images/room-scans object counts are zero. Do not repair
+that mismatch by representing concept imagery as actual product evidence.
+
+### Design direction
+
+Retain paper `#FAF7F2`, sheet `#FFFDF8`, olive `#354B36`, walnut `#77513A` and
+ink `#2C2926`. Playfair carries room-scale titles; Inter carries controls and
+explanations. A large, left-aligned room image sits beside a short material
+story, followed by three photographic view controls. On phones the image,
+story and views stack. The existing house identity and financial hierarchy
+stay intact: this pass spends its visual emphasis on real texture, not more
+decorative cards, colors or motion.
+
+### Explicit review-only mode
+
+`HousePreview` offers **Imagery study / Your project images** only when both
+`NODE_ENV=development` and `NEXT_PUBLIC_PATINA_IMAGE_REVIEW=1`. The current
+port-3202 launchd preview has that opt-in in its process environment; no
+committed environment, production configuration, auth rule or business row
+was changed. Production/test mode does not render the study even with the
+flag set. Without opt-in, the normal real-image view is unchanged except for
+selection-picker thumbnails.
+
+The study has Living, Dining and Materials views, prominently disclosed as
+generated imagery, with no real project amounts or product identities
+attached. Switching views changes only local presentation state. The actual
+room records remain below; direct project-room links above the study reach
+their existing gates. `#house-imagery` opens the review section directly.
+
+Asset provenance and the exact generation prompts are recorded in
+`apps/client-portal/public/design-review/imagery/README.md`. The living image
+is reused from the original generated proposal; dining and material images
+are newly generated. All three are local JPEG assets, not remote requests.
+
+### Review and evidence
+
+- Independent source review confirmed disclosure, production guard, lack of
+  financial mutation, native keyboard buttons and retained room anchors.
+- Reviewer-requested image-error announcement/retry and intermediate-width
+  thumbnail stacking were implemented. Visual review also darkened project
+  room links for readability.
+- Browser inspected the authenticated Aspen local house at 1440px, 900px
+  and 390px. Living/Dining/Materials images loaded, titles and pressed states
+  changed together, and switching back restored the real room picker.
+- Phone document width measured 390px at a 390px viewport (no page overflow).
+  The Living Room shortcut placed the existing acceptance gate at 287px from
+  the viewport top; acceptance remained disabled with no typed signature.
+- Enter activated the imagery-mode control. Generated imagery is not proof of
+  actual project photographs, signed-edition images, or production data reads.
+- This checks the imagery pass, not the unresolved batch sign-in failures or
+  every payment/approval path from the first review. No deployment occurred.
+- Final client type-check passed; Threshold component/derivation tests passed
+  **54 suites / 1,190 tests**. Independent source re-review confirmed both
+  follow-up fixes with no additional findings in the corrections.
+
+Real room photography is a separate data-integration task: use project/room
+scan associations and signed cover URLs, not `heroImageUrl` (currently mapped
+from a brief-document URL that may be a PDF). No silent sample-image fallback
+is authorized for the production house.
