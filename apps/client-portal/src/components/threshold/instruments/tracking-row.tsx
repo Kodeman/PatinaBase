@@ -165,7 +165,7 @@ export function TrackingRow({
       <div
         data-testid="tracking-row-plate"
         data-plate={large ? '96' : '64'}
-        className={`${plate} col-start-1 row-start-1 row-span-2 shrink-0 overflow-hidden rounded-[3px] border border-[var(--border-default)] bg-[var(--paper-doc)]`}
+        className={`${plate} col-start-1 row-start-1 row-span-2 shrink-0 overflow-hidden rounded-[3px] border border-[var(--hairline)] bg-[var(--paper-doc)]`}
       >
         {drawImage ? (
           // eslint-disable-next-line @next/next/no-img-element

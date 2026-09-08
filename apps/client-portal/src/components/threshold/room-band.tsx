@@ -366,7 +366,7 @@ function ConceptRenderPlate({
           alt={`Concept render of ${roomName}`}
           onError={() => setBrokenSrc(src)}
           data-testid="room-band-concept-image"
-          className="block aspect-[3/2] w-full rounded-[3px] border border-[var(--border-default)] object-cover"
+          className="block aspect-[3/2] w-full rounded-[3px] border border-[var(--hairline)] object-cover"
         />
         <span
           data-testid="room-band-concept-label"

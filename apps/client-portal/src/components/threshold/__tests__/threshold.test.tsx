@@ -742,6 +742,22 @@ describe('Threshold — which house', () => {
     expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
   });
 
+  // The key is the one section that is skipped outright when a read fails, so
+  // it is the one anchor a landmark or a pole link could be left pointing at
+  // after the page has decided not to draw it (IA-21).
+  it('points nothing at the key on a page that could not draw one', () => {
+    roomsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+    });
+    const { container } = renderThreshold();
+
+    expect(container.querySelector('#key')).toBeNull();
+    expect(container.querySelector('a[href="#key"]')).toBeNull();
+  });
+
   it('says what she bought direct could not be read rather than “Nothing on the road.”', () => {
     ordersMock.mockReturnValue({
       data: undefined,

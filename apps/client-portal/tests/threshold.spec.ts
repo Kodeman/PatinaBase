@@ -859,6 +859,13 @@ test.describe('The Threshold — the client page', () => {
     await expect(consequence).toBeVisible();
     await expect(consequence).toContainText('It does not close the project or change your invoice.');
     await expect(consequence).toContainText(/^Accepting /);
+    // The seed carries the draw this acceptance releases, so the sentence
+    // names the money and the maker rather than falling back to the honest
+    // but figureless form.
+    await expect(consequence).toContainText(`Accepting releases ${HELD_DRAW} to ${MAKER}`);
+    await expect(
+      page.getByRole('button', { name: new RegExp(`accept the finished work · \\${HELD_DRAW}`, 'i') }),
+    ).toHaveCount(1);
 
     // It stands over the act, not under it.
     const [consequenceBottom, actTop] = await Promise.all([

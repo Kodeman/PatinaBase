@@ -427,6 +427,12 @@ describe('RoomBand', () => {
       expect(label).toHaveTextContent('Concept · not installed');
       expect(label.className).toContain('t-body-sm');
 
+      // The sheet's own stroke token (#E8E3DB), not the portal's
+      // --border-default (#E5E2DD), and never --rail — §A10 keeps that for
+      // fills.
+      expect(image.className).toContain('border-[var(--hairline)]');
+      expect(image.className).not.toContain('border-[var(--border-default)]');
+
       // The drawing stays beneath it.
       expect(screen.getByTestId('room-band-drawing')).toBeInTheDocument();
     });

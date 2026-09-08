@@ -618,6 +618,25 @@ describe("the states", () => {
   });
 });
 
+describe("the sheet's own rules", () => {
+  /* R139 retired the sheet's bespoke payment button for the terminal tier, and
+     the three custom properties that painted it (--pay-act-bg / --pay-act-fg /
+     --pay-act-bg-hover) went unread from that moment. A declared token nobody
+     reads is a second answer waiting to disagree with the first. */
+  it("declares no ink of its own for the act — the terminal tier paints it", () => {
+    const { container } = render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    const rules = Array.from(container.querySelectorAll("style"))
+      .map((node) => node.textContent ?? "")
+      .join("\n");
+
+    expect(rules).not.toContain("--pay-act-bg");
+    expect(rules).not.toContain("--pay-act-fg");
+    expect(rules).not.toContain("--pay-act-bg-hover");
+    // and it is still the print sheet it always was
+    expect(rules).toContain("@media print");
+  });
+});
+
 describe("the act", () => {
   /* PP-3 — WORKING IS NOT BLOCKED.
      The terminal tier draws `:disabled` and `[aria-disabled]` the same way:

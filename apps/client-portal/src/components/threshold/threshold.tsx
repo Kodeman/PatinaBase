@@ -1326,27 +1326,46 @@ export function Threshold({
       />
     );
   } else {
+    // `label` is the sentence the pole's desktop rail prints; `short` is the
+    // noun the ≤600px bar puts after "You are in: ", which supplies the verb
+    // itself — "You are in: You stand at the doorstep" says it twice.
     const sections = [
-      { id: "doorstep", label: "You stand at the doorstep" },
+      { id: "doorstep", label: "You stand at the doorstep", short: "the doorstep" },
       // The money and the ask, in the order the page prints them. Without
       // these two the caret could land on every part of the house except the
       // two the page is actually about.
-      ...(model.groundFloor ? [] : [{ id: "letterbox", label: "The letterbox" }]),
+      ...(model.groundFloor
+        ? []
+        : [{ id: "letterbox", label: "The letterbox", short: "the letterbox" }]),
       ...(firstGateAnchor
-        ? [{ id: firstGateAnchor, label: "What needs you" }]
+        ? [
+            {
+              id: firstGateAnchor,
+              label: "What needs you",
+              // `firstGateAnchor` is only ever "wall" or "door" — the two
+              // gates whose paper the page has already proven is present.
+              short: firstGateAnchor === "wall" ? "the wall" : "the door",
+            },
+          ]
         : []),
       // The key is skipped when the rooms did not read, so the array skips it
       // too: this array is also the story pole's set of ids that are ON the
       // page, and a chapter allowed to link at an id that never renders is
       // IA-21's own failure.
-      ...(roomsUnread ? [] : [{ id: "key", label: "The whole house" }]),
-      ...model.bands.map((band) => ({ id: band.anchor, label: band.name })),
-      ...(road ? [{ id: "road", label: "The road" }] : []),
-      ...(model.note ? [{ id: "note", label: "The note" }] : []),
+      ...(roomsUnread
+        ? []
+        : [{ id: "key", label: "The whole house", short: "the whole house" }]),
+      ...model.bands.map((band) => ({
+        id: band.anchor,
+        label: band.name,
+        short: band.name,
+      })),
+      ...(road ? [{ id: "road", label: "The road", short: "the road" }] : []),
+      ...(model.note ? [{ id: "note", label: "The note", short: "the note" }] : []),
       ...(model.previously.length > 0
-        ? [{ id: "previously", label: "Previously" }]
+        ? [{ id: "previously", label: "Previously", short: "Previously" }]
         : []),
-      { id: "mat", label: "The mat" },
+      { id: "mat", label: "The mat", short: "the mat" },
     ];
 
     body = (
