@@ -23,7 +23,6 @@ import {
 import type { ClientSelection } from '@/lib/commercial-documents';
 import { legalDate } from '@/lib/threshold/dates';
 import {
-  DAY_MONTH,
   parseSourceDate,
   type RoomBandModel,
   type RoomConceptRender,
@@ -441,7 +440,7 @@ function stampDetail(piece: ClientSelection): string | null {
   const executed = parseSourceDate(piece.instrument?.executedAt);
   const parts = [
     piece.instrument?.name ?? null,
-    executed ? `agreed ${DAY_MONTH.format(executed)}` : null,
+    executed ? `agreed ${legalDate(executed)}` : null,
   ].filter((part): part is string => !!part);
   return parts.length > 0 ? parts.join(' · ') : null;
 }

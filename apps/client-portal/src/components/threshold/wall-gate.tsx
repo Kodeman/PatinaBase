@@ -10,14 +10,14 @@ import {
 } from '@/components/threshold/instruments/signature-line';
 import { SpineGate } from '@/components/threshold/instruments/spine-gate';
 import { Stamp } from '@/components/threshold/instruments/stamp';
-import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   useAcceptTradeScope,
   useClientCommercialDocument,
 } from '@/hooks/use-commercial-client';
 import { makingEvents } from '@/lib/analytics/events';
 import type { ClientSelection } from '@/lib/commercial-documents';
-import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
+import { legalDate } from '@/lib/threshold/dates';
 import type { ThresholdMark } from '@/lib/threshold/derive';
 import { refusalSentence } from '@/lib/threshold/refusal';
 
@@ -144,7 +144,10 @@ export function WallGate({
           } paid.`
         : null,
       gatedDraw && gatedDraw.amountCents > 0
-        ? `The draw of ${moneyInWords(gatedDraw.amountCents)} releases on your acceptance.`
+        ? `The draw of ${formatCurrency(
+            gatedDraw.amountCents,
+            bundle.data?.tradeScope?.currency ?? 'USD',
+          )} releases on your acceptance.`
         : null,
     ]
       .filter((clause): clause is string => clause !== null)
@@ -241,11 +244,14 @@ export function WallGate({
             data-testid="wall-stamp"
             state="approved"
             since={acceptedAt}
-            dateLabel={DAY_MONTH.format(acceptedAt)}
+            dateLabel={legalDate(acceptedAt)}
           >
             {[
               gatedDraw && gatedDraw.amountCents > 0
-                ? `${moneyInWords(gatedDraw.amountCents)} released`
+                ? `${formatCurrency(
+                    gatedDraw.amountCents,
+                    bundle.data?.tradeScope?.currency ?? 'USD',
+                  )} released`
                 : null,
               party,
               selection.roomName || null,

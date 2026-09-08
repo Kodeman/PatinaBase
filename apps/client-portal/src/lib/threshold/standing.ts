@@ -248,22 +248,22 @@ export function readingMarkLine(at: Date | null | undefined): string | null {
  * `datedCount` is how many open invoices actually carry a due date;
  * `totalCount` is how many are open at all.
  *
- * The year is spelled out the moment it is not this year — the rule
- * `SpineToll` and the letterbox already keep. `today` is omitted during SSR
- * and the first client paint, which simply drops the year.
+ * The year is always spelled out: a due date is a term of the invoice it is
+ * owed on, and "due 15 September" read in January names no day at all. The
+ * letterbox and `SpineToll` keep the same rule. `today` is kept in the
+ * signature — callers still thread it — but the day no longer depends on it.
  */
 export function owedDueLine(
   due: Date | null | undefined,
   datedCount: number,
-  today?: Date,
+  /** Kept so callers thread today the way they always have; the day no longer
+   * reads it. */
+  _today?: Date,
   /** How many invoices are open in all, dated or not. Defaults to the dated. */
   totalCount: number = datedCount,
 ): string | null {
   if (!due || Number.isNaN(due.getTime())) return null;
-  const day =
-    today && today.getFullYear() !== due.getFullYear()
-      ? (legalDate(due) ?? '')
-      : dayAndMonth(due);
+  const day = legalDate(due) ?? '';
   // Neither "due" nor "first due" is true of a partly-dated set: a bare "due"
   // against a sum of three says the whole balance falls that day, and "first
   // due" says the other two have days of their own. `soonest due` names what

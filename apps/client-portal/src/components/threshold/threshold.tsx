@@ -720,10 +720,11 @@ export function Threshold({
   const studioName = words(identityQuery.data?.name);
   // The lead is the hand on this house. A house with no lead named yet has no
   // name to print, and the copy that would have used one says "your designer".
-  const designerGivenName = givenName(
+  const leadDesignerName = words(
     (teamQuery.data ?? []).find((member) => member.role === 'lead_designer')?.user
       ?.full_name,
   );
+  const designerGivenName = givenName(leadDesignerName);
 
   // The plan and the trade bundles are in this gate for the same reason the
   // other six are: they are not decoration on a settled page, they DECIDE what
@@ -1126,7 +1127,11 @@ export function Threshold({
       note={model.note}
       earlier={model.previously.filter((entry) => entry.kind === "note")}
       enclosures={enclosures}
-      authorName={studioName}
+      // The letter signs full name · studio · date. The lead is the hand that
+      // wrote it; a house with no lead named yet signs with the studio alone
+      // rather than dropping the signature.
+      authorName={leadDesignerName ?? studioName}
+      studioName={studioName}
       today={today}
       reply={replyHeadsTheRecord ? undefined : writeBack}
     />

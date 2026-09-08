@@ -111,9 +111,11 @@ describe('SpineGate', () => {
     render(<SpineGate {...FURNISHINGS_GATE} />);
     expect(screen.getByText('Furnishings authorization No. 7')).toBeInTheDocument();
     expect(screen.getByTestId('spine-gate-vitals')).toHaveTextContent(
-      'Furnishings authorization · $6,890',
+      'Furnishings authorization · $6,890.00',
     );
-    expect(screen.getByTestId('spine-gate-deposit')).toHaveTextContent('$3,445 on signing');
+    expect(screen.getByTestId('spine-gate-deposit')).toHaveTextContent(
+      '$3,445.00 on signing',
+    );
   });
 
   it('carries the caption in the standing-sentence voice', () => {
@@ -145,7 +147,7 @@ describe('SpineGate', () => {
       screen.getByText('Your acceptance is needed before the line continues.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('spine-gate-deposit')).toHaveTextContent(
-      '$1,440 releases on your acceptance',
+      '$1,440.00 releases on your acceptance',
     );
     expect(
       screen.getByRole('link', { name: /accept the finished work/i }),
@@ -173,12 +175,15 @@ describe('SpineGate', () => {
 // ── The toll — an open balance on the line ──────────────────────────────────
 
 describe('SpineToll', () => {
-  it('spells the year only once the due date leaves this one', () => {
+  // A due date is a term of the invoice (PP-2), so the year is on the page in
+  // this year and in every other one — never a day the reader has to date off
+  // her own calendar.
+  it('spells the year on every due date, this year or another', () => {
     const today = new Date(2026, 7, 5);
 
     const { unmount } = render(<SpineToll {...INVOICE_4} today={today} />);
     expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'A toll on the line · due 15 August',
+      'A toll on the line · due 15 August 2026',
     );
     unmount();
 
@@ -192,11 +197,11 @@ describe('SpineToll', () => {
     render(<SpineToll {...INVOICE_4} />);
     const ledger = within(screen.getByTestId('spine-toll-ledger'));
     expect(ledger.getByText('Total')).toBeInTheDocument();
-    expect(ledger.getByText('$18,250')).toBeInTheDocument();
+    expect(ledger.getByText('$18,250.00')).toBeInTheDocument();
     expect(ledger.getByText('Paid')).toBeInTheDocument();
     // paid and balance are the same figure on a half-settled invoice; both
     // must be present, which getAllByText proves without over-asserting order
-    expect(ledger.getAllByText('$9,125')).toHaveLength(2);
+    expect(ledger.getAllByText('$9,125.00')).toHaveLength(2);
     expect(ledger.getByText('Balance')).toBeInTheDocument();
   });
 
@@ -204,7 +209,7 @@ describe('SpineToll', () => {
     render(<SpineToll {...INVOICE_4} />);
     expect(screen.getByText('Invoice No. 4')).toBeInTheDocument();
     expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'A toll on the line · due 15 August',
+      'A toll on the line · due 15 August 2026',
     );
   });
 
@@ -221,7 +226,9 @@ describe('SpineToll', () => {
 
   it('floors an overpaid invoice at zero rather than showing a negative toll', () => {
     render(<SpineToll {...INVOICE_4} paidCents={2000000} />);
-    expect(within(screen.getByTestId('spine-toll-ledger')).getByText('$0')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('spine-toll-ledger')).getByText('$0.00'),
+    ).toBeInTheDocument();
   });
 
   it('settles in place — the act never leaves the page — and reports the follow', () => {
