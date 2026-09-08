@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { formatCurrency, onlineSurchargeCents } from "@patina/shared";
 
+import { Colophon } from "@/components/threshold/instruments/colophon";
 import { payLinkEvents } from "@/lib/analytics/events";
 import {
   useCheckoutConfirmation,
@@ -892,7 +893,7 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
         </div>
 
         <footer className="flex flex-col gap-1.5 border-t border-[var(--border-default)] pt-[18px] font-mono text-[11.5px] tracking-[0.03em] text-[var(--color-quiet-ink)]">
-          <span>Prepared by {studioName} · Sent through Patina</span>
+          <Colophon studioName={studioName} />
           {/* S18: a browser stamps the URL into the print header and no
               stylesheet can suppress it. Say so in the studio's voice. */}
           <span data-pay-print="only">

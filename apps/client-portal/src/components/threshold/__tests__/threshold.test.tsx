@@ -1308,7 +1308,7 @@ describe('Threshold — the acts the house owes', () => {
     authMock.mockReturnValue({ user: { name: 'Harper Vale' }, signOut });
     renderThreshold();
 
-    fireEvent.click(screen.getByRole('button', { name: /leave the house/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 

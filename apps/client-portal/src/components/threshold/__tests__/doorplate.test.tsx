@@ -68,4 +68,23 @@ describe('Doorplate — the letterhead, minus the corner links', () => {
     expect(screen.queryByTestId('doorplate-line')).not.toBeInTheDocument();
     expect(screen.getByTestId('doorplate-sub')).toHaveTextContent('Procurement · August 2026');
   });
+
+  // BE-23 / PP-1: with the client's display name unset, the addressee slot
+  // must print nothing — never a fallback like "PREPARED FOR CLIENT USER".
+  it('never invents an addressee — the right slot is silent with no display name', () => {
+    render(<Doorplate {...vale({ preparedFor: undefined })} />);
+
+    expect(screen.getByTestId('doorplate-line')).not.toHaveTextContent('prepared for');
+    expect(screen.getByTestId('doorplate-line')).not.toHaveTextContent('CLIENT USER');
+    expect(screen.queryByText(/prepared for client user/i)).not.toBeInTheDocument();
+  });
+
+  // PP-1: no PATINA wordmark on the Threshold. The doorplate's mark is a
+  // decorative StrataMark (three drawn lines), never the word "Patina" —
+  // this pins that absence so it can never quietly return.
+  it('carries no PATINA wordmark', () => {
+    render(<Doorplate {...vale()} />);
+
+    expect(screen.queryByText(/patina/i)).not.toBeInTheDocument();
+  });
 });

@@ -14,8 +14,8 @@ import {
 /* ── THE NOTE ────────────────────────────────────────────────────────────────
    The one place on this surface that speaks in the first person, because it is
    a quotation: a line the designer wrote to this client, printed as she wrote
-   it, datelined and signed with her initial. Everything around it stays in the
-   third person.
+   it, datelined, and signed in full — name, studio, and the date it was sent.
+   Everything around it stays in the third person.
 
    ABSENCE IS SILENCE. With no standing note the section renders nothing at all
    — the Doorstep's sentence already carries the page, and an empty letter is
@@ -39,11 +39,21 @@ function dateline(sentAt: string | null, today: Date): string | null {
   return DAY_MONTH.format(sent);
 }
 
-/** "Nora Quist" signs "— N." — the initial, the way a note between two people is signed. */
-function initialOf(authorName: string | null | undefined): string | null {
-  const trimmed = authorName?.trim();
-  if (!trimmed) return null;
-  return `— ${trimmed[0].toUpperCase()}.`;
+/** "Nora Quist · Local Dev Studio · 4 August" — the note signs in full: who
+ * wrote it, the studio she keeps it for, and the day she sent it. A studio
+ * name that is not yet known, or a note with no sent date, simply drops that
+ * segment rather than leaving a bare " · " in its place. */
+function signatureOf(
+  authorName: string | null | undefined,
+  studioName: string | null | undefined,
+  sentAt: string | null,
+): string | null {
+  const name = authorName?.trim();
+  if (!name) return null;
+  const studio = studioName?.trim() || null;
+  const sent = parseSourceDate(sentAt);
+  const sentDate = sent ? DAY_MONTH.format(sent) : null;
+  return [name, studio, sentDate].filter((part): part is string => !!part).join(' · ');
 }
 
 export interface NoteEnclosure extends ThresholdNoteEnclosure {
@@ -63,6 +73,10 @@ export interface TheNoteProps {
   earlier: PreviouslyEntry[];
   enclosures: NoteEnclosure[];
   authorName?: string | null;
+  /** The studio the author writes for — the signature's middle segment.
+   * Optional so a caller that does not yet know it still signs with the name
+   * and date alone, never a placeholder. */
+  studioName?: string | null;
   today?: Date;
   /** The reply field, wired next door. Absent when there is nothing to write to. */
   reply?: ReactNode;
@@ -73,6 +87,7 @@ export function TheNote({
   earlier,
   enclosures,
   authorName,
+  studioName,
   today = new Date(),
   reply,
 }: TheNoteProps) {
@@ -81,7 +96,7 @@ export function TheNote({
   if (!note) return null;
 
   const line = dateline(note.sentAt, today);
-  const signature = initialOf(authorName);
+  const signature = signatureOf(authorName, studioName, note.sentAt);
 
   return (
     <section
@@ -113,7 +128,7 @@ export function TheNote({
         {signature && (
           <p
             data-testid="note-signature"
-            className="mt-2 text-right font-heading text-[1.05rem] italic text-[var(--text-body)]"
+            className="t-authorship mt-2 text-right text-[var(--text-body)]"
           >
             {signature}
           </p>
