@@ -73,6 +73,7 @@ import { Doorplate } from './doorplate';
 import { Doorstep } from './doorstep';
 import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
+import { HousePreview } from './house-preview';
 import { Letterbox } from './letterbox';
 import { Mat, type MatPaper, type MatPerson } from './mat';
 import type { OtherHouse } from './other-houses';
@@ -994,6 +995,7 @@ export function Threshold({
       sinceActive={sinceActive}
       onToggleSince={() => setSinceActive((was) => !was)}
       readingMark={readingMarkLine(parseSourceDate(previousReadAt))}
+      preview={roomsUnread ? undefined : <HousePreview bands={model.bands} />}
     >
       {ledger}
       {model.groundFloor ? null : letterbox}
@@ -1207,7 +1209,7 @@ export function Threshold({
   }
 
   return (
-    <div className="min-w-0" data-testid="the-threshold" style={ACCENT_STYLE}>
+    <div className="threshold-material min-w-0" data-testid="the-threshold" style={ACCENT_STYLE}>
       {doorplate}
       <SinceYesterday active={sinceActive} changed={model.changed}>
         {body}
