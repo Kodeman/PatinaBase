@@ -33,6 +33,7 @@ import {
   signLabelFor,
   type ConsentPart,
 } from './consent-copy';
+import { DepositOffer, type DepositOfferModel } from './deposit-offer';
 import { DoorActs } from './door-acts';
 
 /* ── THE DOOR ────────────────────────────────────────────────────────────────
@@ -116,6 +117,13 @@ export interface DoorGateProps {
    */
   projectId: string | null;
   /**
+   * R30 — the designer whose studio sent this paper. Only the household door
+   * has to supply it: with no project there is no project thread, and this is
+   * what lets "Ask a question" reach the studio anyway. A project-bound door
+   * leaves it null and asks in the project's thread as it always has.
+   */
+  designerId?: string | null;
+  /**
    * Fired the moment the signature lands, BEFORE the refetch that takes the
    * paper out of the open papers. The Threshold answers it by keeping this
    * mark and its paper for the rest of the visit, which is what leaves the
@@ -137,6 +145,7 @@ export function DoorGate({
   proposal,
   note,
   projectId,
+  designerId = null,
   onSigned,
   first = true,
   studioName,
@@ -159,6 +168,23 @@ export function DoorGate({
   const [declined, setDeclined] = useState(false);
   const [deliveryPending, setDeliveryPending] = useState(false);
   const [replay, setReplay] = useState<string | null>(null);
+  /**
+   * P13 — what the sign route offered once the signature was already
+   * recorded. Null until then, null when the route could not mint the
+   * invoice, and null on every kind of paper but a turnkey prime. It takes no
+   * part in `ready`, in the act's `disabled`, or in any preflight.
+   *
+   * IT IS A MOMENT, NOT A FIXTURE (ruled round 1 — client-notes.md §11, walk
+   * step 13 amended). This is the visit in which she signed; on the next one
+   * the paper is a record and the deposit is a LETTER, standing in her
+   * letterbox with its own `/pay/<token>` act, which is the surface that owns
+   * money. Nothing is blocked either way, and a second "Your deposit is
+   * ready" printed permanently over a signed paper would be the same ask
+   * repeated at her. Re-minting the sentence here on a later visit would need
+   * the draw ledger to carry its invoice's id (PART 12, backend) — named in
+   * the notes rather than guessed at from a title match.
+   */
+  const [depositOffer, setDepositOffer] = useState<DepositOfferModel | null>(null);
   const [doorState, setDoorState] = useState<DoorState>('shut');
   const [swingHeight, setSwingHeight] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -275,6 +301,7 @@ export function DoorGate({
         error?: string;
         projectId?: string | null;
         notificationDelivery?: { state?: string };
+        depositOffer?: DepositOfferModel | null;
       };
       if (!response.ok) throw new Error(refusalSentence(body.error));
 
@@ -309,6 +336,14 @@ export function DoorGate({
       }
       window.requestAnimationFrame(() => setReceiptInked(true));
       onSigned?.();
+
+      // P13 / R15 — THE MONEY IS MENTIONED LAST, AND ONLY AFTER THE SIGNATURE
+      // IS COMPLETE AND VISIBLE. The receipt has inked and the Threshold has
+      // been told to keep this door standing before the offer exists at all.
+      // The route already returns `null` here whenever it could not mint the
+      // invoice, and `DepositOffer` renders nothing for a null — so a billing
+      // failure is silence on a page that otherwise reads exactly the same.
+      setDepositOffer(body.depositOffer ?? null);
 
       // W2-01. THE INVALIDATION GOES LAST, AND IT WAITS FOR THE LEAF.
       //
@@ -479,6 +514,17 @@ export function DoorGate({
             Keep a copy
           </ScoredAction>
         </div>
+      )}
+
+      {/* P13 — the offer stands in the post-signature region, under the
+          receipt and the copy she keeps: the signature is finished and said so
+          before any money is named. Null renders nothing at all. */}
+      {signedAt && (
+        <DepositOffer
+          offer={depositOffer}
+          drawCount={bundle.data?.designBuild?.draws.length ?? null}
+          currency={bundle.data?.serviceTerms?.currency ?? 'USD'}
+        />
       )}
 
       {deliveryPending && (
@@ -765,6 +811,7 @@ export function DoorGate({
               <DoorActs
                 proposalId={proposal.id}
                 projectId={projectId}
+                studioProfileId={designerId}
                 title={proposal.title}
                 kind={resolvedKind}
                 validUntil={proposal.validUntil ?? null}

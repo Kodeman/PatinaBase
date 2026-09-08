@@ -9,6 +9,7 @@ import type { Invoice } from '@patina/supabase';
 import { useClientInvoices, useStudioIdentity } from '@patina/supabase';
 
 import { ProjectsEmptyState, EmptyStateActs } from '@/components/projects/ProjectsEmptyState';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { Doorplate } from '@/components/threshold/doorplate';
 import { Letterbox } from '@/components/threshold/letterbox';
 import {
@@ -21,6 +22,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import {
   commercialSummaryFromProposal,
+  isOriginKind,
   type CommercialDocumentBundle,
 } from '@/lib/commercial-documents';
 import { useNamedInvoice } from '@/lib/threshold/checkout-return';
@@ -165,10 +167,47 @@ function OriginDoor({
       // house has none to pin.
       note={null}
       projectId={null}
+      // R30 — no project means no project thread, but it never meant no
+      // studio. The ask reaches the designer whose studio sent this paper,
+      // through the direct thread the roster row behind it already allows.
+      designerId={door.designerId}
       first={first}
       studioName={identity.data?.name ?? null}
       onSigned={onSigned}
     />
+  );
+}
+
+/* ── WHEN THE PAPERS CANNOT BE READ (R30 · N2) ───────────────────────────────
+   `useClientSafeProposals` sets no `retry`, so it inherits the app's
+   `retry: 2`; after the third failure the query settles with `isPending` false
+   and no data. Every paper this door draws comes from that one read — so on a
+   failure `origins` and `kept` are empty, and a household whose only paper is
+   a pending origin agreement met "no active projects yet" over the very
+   agreement R30 exists to reach. The empty state is a CLAIM about her house,
+   and the page had no grounds to make it.
+
+   So a failed read says so, in the house's own idiom, and offers the read
+   again. It is not an error surface: nothing has gone wrong with her paper,
+   and the sentence says as much. ─────────────────────────────────────────── */
+function PapersUnread({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div data-testid="papers-unread" className="mt-6 max-w-[52ch]">
+      <p className="text-[17px] leading-[1.62] text-[var(--text-primary)]">
+        Your papers could not be drawn just now. Nothing on them has changed.
+      </p>
+      <div className="mt-3">
+        <ScoredAction
+          actionKey="papers_redraw"
+          regionKey="door"
+          surfaceKey="the_threshold"
+          variant="secondary"
+          onClick={onRetry}
+        >
+          Try again
+        </ScoredAction>
+      </div>
+    </div>
   );
 }
 
@@ -217,8 +256,11 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   );
 
   // ── the agreements waiting for her name ────────────────────────────────────
-  // An ORIGIN agreement is a pending design-services document bound to no
-  // project. `service_addendum` is deliberately absent: an addendum amends a
+  // An ORIGIN agreement is a pending document bound to no project —
+  // design-services, and from Wave 3 a design-build prime, which is
+  // project-less through her signature for exactly the same reason.
+  // `ORIGIN_DOCUMENT_KINDS` (lib/commercial-documents.ts) is the one list, and
+  // `service_addendum` is deliberately absent from it: an addendum amends a
   // standing engagement and therefore always has a house to be read in.
   //
   // The summary's projectId, never the raw column — `list_client_proposals`
@@ -235,7 +277,7 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
         // payload entirely (jsonb_strip_nulls), so the summary's projectId is
         // `undefined` on exactly the papers this door exists for.
         const boundTo = commercial.projectId ?? null;
-        if (boundTo !== null || commercial.kind !== 'design_services') return [];
+        if (boundTo !== null || !isOriginKind(commercial.kind)) return [];
         const paper: DoorProposal = {
           id: proposal.id,
           title: proposal.title,
@@ -261,13 +303,13 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
     () =>
       acceptedProposals.flatMap<KeptRecord>((proposal) => {
         const commercial = commercialSummaryFromProposal(proposal);
-        if ((commercial.projectId ?? null) !== null || commercial.kind !== 'design_services') {
+        if ((commercial.projectId ?? null) !== null || !isOriginKind(commercial.kind)) {
           return [];
         }
         return [
           {
             proposalId: proposal.id,
-            label: `${KIND_LABEL.design_services ?? 'Document'} · ${proposal.title}`,
+            label: `${KIND_LABEL[commercial.kind] ?? 'Document'} · ${proposal.title}`,
             // `executedAt` is the COUNTERSIGNATURE's date, and a countersigned
             // paper has already left this door — so on every record this door
             // can draw it is null, and the line would be permanently undated.
@@ -384,7 +426,17 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
     );
   }
 
-  if (!anythingHere) return <ProjectsEmptyState />;
+  // A failed read is not an empty house. `ProjectsEmptyState` says she has
+  // nothing, and after three failed tries this door does not know that — so it
+  // says what it does know and offers the read again (R30 · N2).
+  const papersUnread = proposalsQuery.isError;
+  if (!anythingHere) {
+    return papersUnread ? (
+      <PapersUnread onRetry={() => void proposalsQuery.refetch()} />
+    ) : (
+      <ProjectsEmptyState />
+    );
+  }
 
   const studioName = identityQuery.data?.name?.trim() || 'Your studio';
 
@@ -438,10 +490,14 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
   // Nothing IS waiting; the sentence simply has nothing to add above a door
   // that already says so, so it steps aside until the door does. A page with
   // no door at all (the record alone, on the next visit) keeps it.
+  //
+  // And a page that could not read the papers may not say "Nothing is waiting
+  // for you" either: it does not know. The notice below the sentence says what
+  // it does know instead (R30 · N2).
   const waiting =
     standings.length > 0
       ? standings.join(' ')
-      : doors.length > 0
+      : doors.length > 0 || papersUnread
         ? null
         : 'Nothing is waiting for you.';
 
@@ -458,6 +514,11 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
           {waiting}
         </p>
       )}
+
+      {/* A letter standing in the slot draws the page, but it says nothing
+          about the papers — so a failed papers read is still said out loud
+          here rather than read as "no agreements". */}
+      {papersUnread && <PapersUnread onRetry={() => void proposalsQuery.refetch()} />}
 
       {doors.map((door) => (
         <OriginDoor

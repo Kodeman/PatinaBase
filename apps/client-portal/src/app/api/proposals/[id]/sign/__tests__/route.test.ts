@@ -859,3 +859,242 @@ describe('POST /api/proposals/[id]/sign', () => {
     );
   });
 });
+
+/* ── THE TURNKEY PRIME (Wave 3, P9 / P13) ────────────────────────────────────
+   Two things are proved here, and the first one is the reason this block
+   exists at all.
+
+   WHICH RPC RAN, not that the request answered 200. Before this wave the
+   route's routing was `furnishings → trade_scope → else`, and the allowlist
+   above it is derived from `COMMERCIAL_DOCUMENT_KINDS` — so appending
+   `design_build` to that array in `@patina/types` auto-admitted the kind into
+   an `else` branch that would have signed it as a plain design-services
+   agreement. The HTTP response of that mistake is byte-identical to the
+   correct one. So every assertion below names the RPC.
+
+   AND THAT THE OFFER NEVER TOUCHES THE SIGNATURE (R15). The deposit is a
+   second, independently failable call made AFTER the signature RPC returned.
+   Its every failure shape is `depositOffer: null` with the signature intact —
+   asserted three ways: a refusal, a throw, and a payload too thin to build an
+   offer from.
+   ────────────────────────────────────────────────────────────────────────── */
+describe('POST /api/proposals/[id]/sign — a design-build prime', () => {
+  function makeRequest(body: Record<string, unknown> = { signedByName: 'Jamie Homeowner' }) {
+    return new NextRequest('http://localhost:3002/api/proposals/prop-db/sign', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    } as unknown as RequestInit);
+  }
+  const makeParams = () => ({ params: Promise.resolve({ id: 'prop-db' }) });
+
+  const DRAW = {
+    drawKey: 'deposit',
+    label: 'Deposit at signing',
+    amountCents: 841340,
+    retainageCents: 0,
+    netCents: 841340,
+    invoiceId: 'inv-deposit',
+    invoiceStatus: 'sent',
+    payToken: 'a'.repeat(64),
+  };
+
+  let userRpcMock: jest.Mock;
+  let serviceRpcMock: jest.Mock;
+  let invokeMock: jest.Mock;
+  /** What `issue_agreement_draw_invoice` answers. Overridden per test. */
+  let drawAnswer: { data: unknown; error: { message: string } | null };
+  /** The RPC names the service client was asked for, in order. */
+  let serviceCalls: string[];
+  let commercialState: string;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetUser.mockResolvedValue({ id: 'client-1' });
+    commercialState = 'sent';
+    drawAnswer = { data: DRAW, error: null };
+    serviceCalls = [];
+
+    userRpcMock = jest.fn().mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: {
+            document: { id: 'prop-db', documentKind: 'design_build', commercialState },
+            composed: true,
+            parts: [],
+          },
+          error: null,
+        });
+      }
+      return Promise.resolve({
+        data: { proposal: { id: 'prop-db', status: 'sent', valid_until: null } },
+        error: null,
+      });
+    });
+    serviceRpcMock = jest.fn().mockImplementation((name: string) => {
+      serviceCalls.push(name);
+      if (name === 'issue_agreement_draw_invoice') return Promise.resolve(drawAnswer);
+      return Promise.resolve({
+        data: { commercial_state: 'client_signed', newly_client_signed: true, project_id: null },
+        error: null,
+      });
+    });
+    invokeMock = jest.fn().mockResolvedValue({ data: { ok: true }, error: null });
+
+    mockCreateServerClient.mockResolvedValue({
+      rpc: userRpcMock,
+      functions: { invoke: invokeMock },
+    });
+    mockCreateServiceClient.mockReturnValue({ rpc: serviceRpcMock });
+  });
+
+  it('signs through the services RPC, and through no other', async () => {
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceCalls[0]).toBe('sign_design_services_agreement_with_trusted_ip');
+    expect(serviceCalls).not.toContain('execute_furnishings_authorization_with_trusted_ip');
+    expect(serviceCalls).not.toContain('execute_trade_scope_with_trusted_ip');
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      commercialState: 'client_signed',
+      newlyClientSigned: true,
+    });
+  });
+
+  it('mints the deposit only after the signature RPC has answered', async () => {
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(serviceCalls).toEqual([
+      'sign_design_services_agreement_with_trusted_ip',
+      'issue_agreement_draw_invoice',
+    ]);
+    expect(serviceRpcMock).toHaveBeenCalledWith('issue_agreement_draw_invoice', {
+      p_proposal_id: 'prop-db',
+      p_draw_key: 'deposit',
+    });
+    expect(await response.json()).toMatchObject({
+      depositOffer: {
+        invoiceId: 'inv-deposit',
+        amountCents: 841340,
+        label: 'Deposit at signing',
+        payPath: `/pay/${'a'.repeat(64)}`,
+      },
+    });
+  });
+
+  /* The deposit is minted by the SERVICE client, never the user session: the
+     client's own signature is the authority for her own deposit, and the RPC
+     skips the studio authorship check for exactly that caller (PART 10). */
+  it('mints the deposit through the trusted service boundary', async () => {
+    await POST(makeRequest(), makeParams());
+
+    expect(userRpcMock).not.toHaveBeenCalledWith(
+      'issue_agreement_draw_invoice',
+      expect.anything(),
+    );
+  });
+
+  it('keeps the signature when the deposit refuses', async () => {
+    drawAnswer = { data: null, error: { message: 'draw not found or access denied' } };
+
+    const response = await POST(makeRequest(), makeParams());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.commercialState).toBe('client_signed');
+    expect(body.depositOffer).toBeNull();
+    // The database's own sentence stays in the log (`W1-02`).
+    expect(JSON.stringify(body)).not.toContain('access denied');
+  });
+
+  it('keeps the signature when the deposit call throws', async () => {
+    serviceRpcMock.mockImplementation((name: string) => {
+      serviceCalls.push(name);
+      if (name === 'issue_agreement_draw_invoice') return Promise.reject(new Error('socket hang up'));
+      return Promise.resolve({
+        data: { commercial_state: 'client_signed', newly_client_signed: true },
+        error: null,
+      });
+    });
+
+    const response = await POST(makeRequest(), makeParams());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.depositOffer).toBeNull();
+  });
+
+  it('offers nothing it cannot build a whole offer from', async () => {
+    // No pay link minted yet — `issue_agreement_draw_invoice` returns
+    // `payToken: null` rather than raising, because a missing link is
+    // recoverable and an aborted issuance is not (00574).
+    drawAnswer = { data: { ...DRAW, payToken: null }, error: null };
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect((await response.json()).depositOffer).toBeNull();
+  });
+
+  it('offers nothing on an agreement with no deposit figure', async () => {
+    drawAnswer = { data: { ...DRAW, netCents: 0, amountCents: 0 }, error: null };
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect((await response.json()).depositOffer).toBeNull();
+  });
+
+  it('sends the signature notice, and no deposit notice', async () => {
+    await POST(makeRequest(), makeParams());
+
+    expect(invokeMock).toHaveBeenCalledWith('commercial-document-notify', {
+      body: { documentId: 'prop-db', transition: 'client_signed' },
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  /* A retry after the signature already landed re-answers the receipt; it must
+     not be refused as `not_signable`, and it must not mint a second deposit
+     over a live invoice (the RPC refuses that; the route simply asks). */
+  it('re-answers a client-signed retry rather than refusing it', async () => {
+    commercialState = 'client_signed';
+    serviceRpcMock.mockImplementation((name: string) => {
+      serviceCalls.push(name);
+      if (name === 'issue_agreement_draw_invoice') return Promise.resolve(drawAnswer);
+      return Promise.resolve({
+        data: { commercial_state: 'client_signed', newly_client_signed: false },
+        error: null,
+      });
+    });
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).newlyClientSigned).toBe(false);
+  });
+
+  /* Every other kind keeps the response it has always had: `depositOffer` is
+     null and the draw RPC is never reached. */
+  it('offers no deposit on a design-services agreement', async () => {
+    userRpcMock.mockImplementation((name: string) =>
+      name === 'get_client_commercial_document_bundle'
+        ? Promise.resolve({
+            data: {
+              document: { id: 'prop-db', documentKind: 'design_services', commercialState: 'sent' },
+            },
+            error: null,
+          })
+        : Promise.resolve({
+            data: { proposal: { id: 'prop-db', status: 'sent', valid_until: null } },
+            error: null,
+          }),
+    );
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect((await response.json()).depositOffer).toBeNull();
+    expect(serviceCalls).not.toContain('issue_agreement_draw_invoice');
+  });
+});
