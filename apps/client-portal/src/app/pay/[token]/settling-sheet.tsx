@@ -1,3 +1,5 @@
+import { Colophon } from "@/components/threshold/instruments/colophon";
+
 import type { InvoiceLinkSettling, InvoiceLinkWithdrawn } from "./invoice-link";
 
 /* ── THE SHEETS WITH NO ACT ──────────────────────────────────────────────────
@@ -127,7 +129,7 @@ function TerminalSheet({
         </section>
 
         <footer className="flex flex-col gap-1.5 border-t border-[var(--border-default)] pt-[18px] font-mono text-[11.5px] tracking-[0.03em] text-[var(--color-quiet-ink)]">
-          <span>Prepared by {studioName} · Sent through Patina</span>
+          <Colophon studioName={studioName} />
           {/* P-2/S18: the browser stamps the bearer URL into the print header
               on THESE sheets exactly as it does on the payable one, so the
               warning is needed here for the same reason. `DeadLink` is the one

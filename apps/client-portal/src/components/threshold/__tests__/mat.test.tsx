@@ -191,7 +191,7 @@ describe("Mat — the people, the papers, and the way out", () => {
     const onSignOut = jest.fn();
     render(<Mat {...mat({ onSignOut })} />);
 
-    const leave = screen.getByRole("button", { name: /leave the house/i });
+    const leave = screen.getByRole("button", { name: /sign out/i });
     expect(leave).toBeInTheDocument();
 
     await userEvent.click(leave);
@@ -213,5 +213,32 @@ describe("Mat — the people, the papers, and the way out", () => {
     render(<Mat {...mat()} />);
 
     expect(screen.queryByTestId('mat-extra')).not.toBeInTheDocument();
+  });
+
+  it('keeps the house-wide "Ask for a change" to exactly one instance', () => {
+    render(
+      <Mat {...mat({ extraActs: <p data-testid="mat-extra">Ask for a change</p> })} />,
+    );
+
+    expect(screen.getAllByText('Ask for a change')).toHaveLength(1);
+  });
+
+  it('drops a column heading whose column has no rows', () => {
+    render(<Mat {...mat({ people: [], papers: [], onOpenPapers: undefined })} />);
+
+    expect(screen.queryByTestId('mat-people')).not.toBeInTheDocument();
+    expect(screen.queryByText('The people, where they work')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mat-papers')).not.toBeInTheDocument();
+    expect(screen.queryByText('The papers')).not.toBeInTheDocument();
+  });
+
+  it('keeps the papers column, headed, when only the "papers, in full" act stands', () => {
+    render(<Mat {...mat({ papers: [], onOpenPapers: jest.fn() })} />);
+
+    const papers = screen.getByTestId('mat-papers');
+    expect(within(papers).getByText('The papers')).toBeInTheDocument();
+    expect(
+      within(papers).getByRole('button', { name: /the papers, in full/i }),
+    ).toBeInTheDocument();
   });
 });

@@ -62,13 +62,14 @@ describe('TheNote', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('prints the note verbatim, datelined and signed with the author’s initial', () => {
+  it('prints the note verbatim, datelined, and signed in full — name, studio, date', () => {
     const { container } = render(
       <TheNote
         note={note()}
         earlier={[]}
         enclosures={[]}
         authorName="Nora Quist"
+        studioName="Quist Interiors"
         today={TODAY}
       />,
     );
@@ -79,7 +80,29 @@ describe('TheNote', () => {
 
     expect(screen.getByTestId('note-body')).toHaveTextContent(BODY);
     expect(screen.getByTestId('note-dateline')).toHaveTextContent('yesterday');
-    expect(screen.getByTestId('note-signature')).toHaveTextContent('— N.');
+    expect(screen.getByTestId('note-signature')).toHaveTextContent(
+      'Nora Quist · Quist Interiors · 4 August',
+    );
+  });
+
+  it('signs with name and date alone when the studio is not yet known', () => {
+    render(
+      <TheNote
+        note={note()}
+        earlier={[]}
+        enclosures={[]}
+        authorName="Nora Quist"
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('note-signature')).toHaveTextContent('Nora Quist · 4 August');
+  });
+
+  it('signs nothing at all with no author name — never a placeholder signature', () => {
+    render(<TheNote note={note()} earlier={[]} enclosures={[]} studioName="Quist Interiors" />);
+
+    expect(screen.queryByTestId('note-signature')).not.toBeInTheDocument();
   });
 
   it('datelines a note sent today as today', () => {

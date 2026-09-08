@@ -14,9 +14,9 @@ import { OtherHouses, type OtherHouse } from './other-houses';
    where, the papers that belong to her, and the two acts every house owes its
    guest — a way to her own details, and a way out.
 
-   "Leave the house" is REQUIRED. The Threshold takes the portal's global
-   header off this route, so sign-out lives nowhere else on the page; a mat
-   without it traps the client inside her own project.
+   "Sign out" is REQUIRED. The Threshold takes the portal's global header off
+   this route, so sign-out lives nowhere else on the page; a mat without it
+   traps the client inside her own project.
 
    The papers are read as lines, not as acts: a paper that opens somewhere is a
    link, a paper the caller opens itself is a button, and a paper that is only
@@ -102,42 +102,53 @@ export function Mat({
       </p>
 
       <div className="mt-4 grid gap-[clamp(18px,2.6vw,38px)] [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
-        <div data-testid="mat-people">
-          <h2 className={COLUMN_HEAD_CLASS}>The people, where they work</h2>
-          {people.map((person) => (
-            <div
-              key={`${person.name}-${person.role}`}
-              className="border-t border-[var(--border-subtle)] py-2 text-[15px] leading-[1.5] text-[var(--text-body)]"
-            >
-              <span>{`${person.name} · ${person.role}`}</span>
-              {person.where && (
-                <span className={SUBLINE_CLASS}>{person.where}</span>
-              )}
-            </div>
-          ))}
-        </div>
+        {people.length > 0 && (
+          <div data-testid="mat-people">
+            <h2 className={COLUMN_HEAD_CLASS}>The people, where they work</h2>
+            {people.map((person) => (
+              <div
+                key={`${person.name}-${person.role}`}
+                className="border-t border-[var(--border-subtle)] py-2 text-[15px] leading-[1.5] text-[var(--text-body)]"
+              >
+                <span>{`${person.name} · ${person.role}`}</span>
+                {person.where && (
+                  <span className={SUBLINE_CLASS}>{person.where}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
-        <div id="mat-papers" data-testid="mat-papers">
-          <h2 className={COLUMN_HEAD_CLASS}>The papers</h2>
-          {papers.map((paper, index) => (
-            <Paper key={`${paper.label}-${index}`} paper={paper} />
-          ))}
-          {onOpenPapers && (
-            <ScoredAction
-              actionKey="mat_papers"
-              regionKey="mat"
-              surfaceKey="the_threshold"
-              variant="tertiary"
-              aria-expanded={papersOpen}
-              // The sheet exists only while it is open; a dangling IDREF is
-              // what a closed one would leave.
-              aria-controls={papersOpen ? 'papers-sheet' : undefined}
-              onClick={onOpenPapers}
-            >
-              {PAPERS_TAB_LABEL}
-            </ScoredAction>
-          )}
-        </div>
+        {/* A column with no named papers AND no "papers, in full" act has
+            nothing to say — the heading itself is dropped rather than
+            standing over an empty list. NOTE: #mat-papers is a load-bearing
+            anchor id (the /documents middleware 308-redirect target) — every
+            production caller today always passes a truthy `onOpenPapers`, so
+            the id always renders live, but a future caller that omits it
+            would make the id disappear. */}
+        {(papers.length > 0 || onOpenPapers) && (
+          <div id="mat-papers" data-testid="mat-papers">
+            <h2 className={COLUMN_HEAD_CLASS}>The papers</h2>
+            {papers.map((paper, index) => (
+              <Paper key={`${paper.label}-${index}`} paper={paper} />
+            ))}
+            {onOpenPapers && (
+              <ScoredAction
+                actionKey="mat_papers"
+                regionKey="mat"
+                surfaceKey="the_threshold"
+                variant="tertiary"
+                aria-expanded={papersOpen}
+                // The sheet exists only while it is open; a dangling IDREF is
+                // what a closed one would leave.
+                aria-controls={papersOpen ? 'papers-sheet' : undefined}
+                onClick={onOpenPapers}
+              >
+                {PAPERS_TAB_LABEL}
+              </ScoredAction>
+            )}
+          </div>
+        )}
 
         <OtherHouses houses={otherHouses} />
 
@@ -160,10 +171,10 @@ export function Mat({
               actionKey="mat_sign_out"
               regionKey="mat"
               surfaceKey="the_threshold"
-              variant="secondary"
+              variant="tertiary"
               onClick={onSignOut}
             >
-              Leave the house
+              Sign out
             </ScoredAction>
           </div>
           {extraActs}

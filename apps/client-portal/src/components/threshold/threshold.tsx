@@ -24,6 +24,7 @@ import {
 import type { ProjectApprovalReview, ProjectNote } from "@patina/supabase";
 import { getFieldTradeLabel } from "@patina/types";
 
+import { Colophon } from '@/components/threshold/instruments/colophon';
 import { openChapterOf } from '@/components/threshold/instruments/making-spine';
 import { monthAndYear } from '@/components/threshold/instruments/standing-sentence';
 import { clientEvents } from '@/lib/analytics/events';
@@ -997,20 +998,37 @@ export function Threshold({
   ];
 
   const mat = (
-    <Mat
-      people={people}
-      papers={papers}
-      otherHouses={otherHouses}
-      onOpenDetails={() => setDetailsOpen((open) => !open)}
-      detailsOpen={detailsOpen}
-      onSignOut={() => void signOut()}
-      correspondence={
-        <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
-      }
-      onOpenPapers={() => setPapersOpen(true)}
-      papersOpen={papersOpen}
-      extraActs={<RequestChangeAct projectId={projectId} projectStatus={project.status} />}
-    />
+    <>
+      <Mat
+        people={people}
+        papers={papers}
+        otherHouses={otherHouses}
+        onOpenDetails={() => setDetailsOpen((open) => !open)}
+        detailsOpen={detailsOpen}
+        onSignOut={() => void signOut()}
+        correspondence={
+          <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
+        }
+        onOpenPapers={() => setPapersOpen(true)}
+        papersOpen={papersOpen}
+        extraActs={<RequestChangeAct projectId={projectId} projectStatus={project.status} />}
+      />
+      {/* House sheet §A8 — the colophon is page furniture on every
+          client-facing surface, mounted directly after the mat. Absence is
+          silence: the identity query is not in the page's `loading` gate, so
+          `studioName` can still be null here on first paint — the rule above
+          the colophon is gated on the same condition Colophon itself checks,
+          so a resolved-but-empty studio name never leaves a bare hairline
+          standing over nothing. */}
+      {studioName?.trim() && (
+        <>
+          <hr className="border-[var(--border-subtle)]" />
+          <div className="mt-6 pb-12">
+            <Colophon studioName={studioName} />
+          </div>
+        </>
+      )}
+    </>
   );
 
   // A review request, a direct order or a capture filed against no house at
