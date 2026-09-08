@@ -7,6 +7,7 @@ import type {
   SectionKey,
 } from '@/lib/document/desk-derivation';
 import {
+  deriveDeskDayLine,
   deriveDeskRoster,
   OPEN_THE_JOB,
   ROSTER_STAGE_ORDER,
@@ -455,5 +456,255 @@ describe('deriveDeskRoster — eleven jobs', () => {
 
     expect(roster.groups[0].lines).toHaveLength(11);
     expect(roster.heading).toBe('Every job · 11 live · 0 overdue');
+  });
+});
+
+describe('deriveDeskDayLine — the day’s line (IA-05)', () => {
+  const HOUR = 3_600_000;
+
+  const overdueRow = () =>
+    row('vandersteen', 'project', {
+      title: 'Vandersteen residence',
+      client_name: 'Anne Vandersteen',
+      project_id: 'p-vandersteen',
+    });
+  const leadRow = () =>
+    row('wright', 'brief', {
+      title: 'Wright apartment',
+      client_name: 'Marcus Wright',
+      project_id: null,
+    });
+  const answeredRow = () =>
+    row('cedar', 'install', {
+      title: 'Cedar Lane Study',
+      client_name: 'Nora Ellison',
+      project_id: 'p-cedar',
+    });
+
+  const overdueNeed = () => need({ kind: 'overdue_invoice', dueOn: '2026-08-19' });
+  const leadNeed = () =>
+    need({
+      kind: 'new_lead',
+      text: 'New lead — respond by Aug 27',
+      dueOn: '2026-08-27',
+    });
+
+  function threeLineRoster() {
+    const v = overdueRow();
+    const l = leadRow();
+    const c = answeredRow();
+    return deriveDeskRoster(
+      input({
+        live: [v, l, c],
+        folders: [folder(v, overdueNeed()), folder(l, leadNeed()), folder(c)],
+      }),
+      NOW,
+    );
+  }
+
+  const answeredNote = (projectId: string, at: string) => ({
+    projectId,
+    answeredAt: at,
+  });
+
+  it('says three things, and each one is a view of a row on the page', () => {
+    const roster = threeLineRoster();
+    const dayLine = deriveDeskDayLine(
+      roster,
+      [answeredNote('p-cedar', new Date(NOW.getTime() - 8 * HOUR).toISOString())],
+      NOW,
+    )!;
+
+    expect(dayLine.lines.map((line) => line.key)).toEqual([
+      'overdue',
+      'lead',
+      'answered',
+    ]);
+
+    const onThePage = new Set(
+      roster.groups.flatMap((group) =>
+        group.lines.map((line) => line.engagementId),
+      ),
+    );
+    for (const line of dayLine.lines) {
+      expect(onThePage.has(line.engagementId)).toBe(true);
+      for (const part of line.parts) {
+        if (part.kind === 'job') expect(onThePage.has(part.engagementId)).toBe(true);
+      }
+    }
+  });
+
+  it('links the overdue job and puts the clause after the dash in its own part', () => {
+    const dayLine = deriveDeskDayLine(threeLineRoster(), [], NOW)!;
+    const [overdue] = dayLine.lines;
+
+    expect(overdue.parts[0]).toEqual({
+      kind: 'job',
+      text: 'Vandersteen residence',
+      engagementId: 'vandersteen',
+    });
+    expect(overdue.parts[1].kind).toBe('overdue');
+    expect(overdue.parts[1].text).toMatch(/^ — project, overdue \d+ days?$/);
+  });
+
+  it('names the person she is keeping waiting, then borrows the lead’s own sentence', () => {
+    const dayLine = deriveDeskDayLine(threeLineRoster(), [], NOW)!;
+    const lead = dayLine.lines.find((line) => line.key === 'lead')!;
+
+    expect(lead.parts).toEqual([
+      { kind: 'job', text: 'Marcus Wright', engagementId: 'wright' },
+      { kind: 'text', text: ' · New lead — respond by Aug 27' },
+    ]);
+  });
+
+  it('falls back to the job when the lead row carries no named client', () => {
+    const unnamed = row('unnamed', 'brief', {
+      title: 'Harbour flat',
+      client_name: '',
+      project_id: null,
+    });
+    const roster = deriveDeskRoster(
+      input({ live: [unnamed], folders: [folder(unnamed, leadNeed())] }),
+      NOW,
+    );
+
+    const lead = deriveDeskDayLine(roster, [], NOW)!.lines.find(
+      (line) => line.key === 'lead',
+    )!;
+    expect(lead.parts[0]).toEqual({
+      kind: 'job',
+      text: 'Harbour flat',
+      engagementId: 'unnamed',
+    });
+  });
+
+  it('leaves a reconnect touchpoint to the roster row — the lead slot is new leads only', () => {
+    const nurtured = row('nurtured', 'brief', {
+      title: 'Kessler loft',
+      client_name: 'Ivy Kessler',
+      project_id: null,
+    });
+    const roster = deriveDeskRoster(
+      input({
+        live: [nurtured],
+        folders: [
+          folder(
+            nurtured,
+            need({
+              kind: 'reconnect_due',
+              text: 'Reconnect — touchpoint due Aug 20',
+              dueOn: '2026-08-20',
+            }),
+          ),
+        ],
+      }),
+      NOW,
+    );
+
+    const dayLine = deriveDeskDayLine(roster, [], NOW);
+    expect(dayLine?.lines.some((line) => line.key === 'lead') ?? false).toBe(
+      false,
+    );
+  });
+
+  it('takes the earliest lead deadline when two leads are open', () => {
+    const soon = row('soon', 'brief', { title: 'Soon', client_name: 'A Soon' });
+    const later = row('later', 'brief', { title: 'Later', client_name: 'B Later' });
+    const roster = deriveDeskRoster(
+      input({
+        live: [later, soon],
+        folders: [
+          folder(later, need({ kind: 'new_lead', text: 'New lead — respond by Sep 4', dueOn: '2026-09-04' })),
+          folder(soon, need({ kind: 'new_lead', text: 'New lead — respond by Aug 27', dueOn: '2026-08-27' })),
+        ],
+      }),
+      NOW,
+    );
+
+    const dayLine = deriveDeskDayLine(roster, [], NOW)!;
+    expect(dayLine.lines[0].engagementId).toBe('soon');
+  });
+
+  it('names the client who replied, and reads the note within the day only', () => {
+    const roster = threeLineRoster();
+    const inside = deriveDeskDayLine(
+      roster,
+      [answeredNote('p-cedar', new Date(NOW.getTime() - 8 * HOUR).toISOString())],
+      NOW,
+    )!;
+    const answered = inside.lines.find((line) => line.key === 'answered')!;
+    expect(answered.parts).toEqual([
+      { kind: 'text', text: 'Nora Ellison replied last night — ' },
+      { kind: 'job', text: 'Cedar Lane Study', engagementId: 'cedar' },
+    ]);
+
+    const outside = deriveDeskDayLine(
+      roster,
+      [answeredNote('p-cedar', new Date(NOW.getTime() - 25 * HOUR).toISOString())],
+      NOW,
+    )!;
+    expect(outside.lines.some((line) => line.key === 'answered')).toBe(false);
+  });
+
+  it('stays silent about a reply it cannot attribute to a named client', () => {
+    const anonymous = row('anon', 'install', {
+      title: 'Anonymous project',
+      client_name: 'Client User',
+      project_id: 'p-anon',
+    });
+    const v = overdueRow();
+    const roster = deriveDeskRoster(
+      input({ live: [v, anonymous], folders: [folder(v, overdueNeed()), folder(anonymous)] }),
+      NOW,
+    );
+
+    const dayLine = deriveDeskDayLine(
+      roster,
+      [answeredNote('p-anon', new Date(NOW.getTime() - HOUR).toISOString())],
+      NOW,
+    )!;
+    expect(dayLine.lines.some((line) => line.key === 'answered')).toBe(false);
+  });
+
+  it('never grows past three lines, and counts the rest below', () => {
+    const v = overdueRow();
+    const l = leadRow();
+    const c = answeredRow();
+    const rest = Array.from({ length: 12 }, (_, i) =>
+      row(`rest-${i}`, 'project', {
+        title: `Rest ${i}`,
+        client_name: `Family ${i}`,
+      }),
+    );
+    const roster = deriveDeskRoster(
+      input({
+        live: [v, l, c, ...rest],
+        folders: [
+          folder(v, overdueNeed()),
+          folder(l, leadNeed()),
+          folder(c),
+          ...rest.map((r) => folder(r)),
+        ],
+      }),
+      NOW,
+    );
+
+    const dayLine = deriveDeskDayLine(
+      roster,
+      [answeredNote('p-cedar', new Date(NOW.getTime() - HOUR).toISOString())],
+      NOW,
+    )!;
+
+    expect(dayLine.lines).toHaveLength(3);
+    expect(dayLine.more).toEqual({ count: 12, stageKey: 'brief' });
+  });
+
+  it('renders nothing at all when nothing needs her', () => {
+    const quiet = Array.from({ length: 6 }, (_, i) => row(`quiet-${i}`, 'project'));
+
+    expect(
+      deriveDeskDayLine(deriveDeskRoster(input({ live: quiet }), NOW), [], NOW),
+    ).toBeNull();
+    expect(deriveDeskDayLine(deriveDeskRoster(input({}), NOW), [], NOW)).toBeNull();
   });
 });

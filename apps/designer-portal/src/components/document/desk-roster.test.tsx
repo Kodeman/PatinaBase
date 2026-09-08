@@ -1,5 +1,8 @@
-import { render, screen } from '@testing-library/react';
-import type { DeskRoster as DeskRosterModel } from '@/lib/document/desk-roster-derivation';
+import { render, screen, within } from '@testing-library/react';
+import type {
+  AnsweredClientNote,
+  DeskRoster as DeskRosterModel,
+} from '@/lib/document/desk-roster-derivation';
 import { DeskRoster } from './desk-roster';
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -8,6 +11,13 @@ jest.mock('@/lib/analytics/document-events', () => ({
 
 jest.mock('@/components/document/command-bar', () => ({
   openLedger: jest.fn(),
+}));
+
+// The day's line's own read. Mocked here so the roster stays renderable
+// without a QueryClient; the notes themselves are set per-test.
+const mockAnsweredNotes = jest.fn(() => [] as AnsweredClientNote[]);
+jest.mock('@/hooks/use-answered-notes', () => ({
+  useAnsweredNotes: () => ({ data: mockAnsweredNotes() }),
 }));
 
 function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
@@ -317,6 +327,172 @@ describe('DeskRoster — no shadow reaches the roster', () => {
 
     for (const el of container.querySelectorAll('*')) {
       expect(el.className.toString()).not.toMatch(/(^|[\s:])(drop-)?shadow-/);
+    }
+  });
+});
+
+describe('DeskRoster — the day’s line (IA-05)', () => {
+  beforeEach(() => {
+    mockAnsweredNotes.mockReturnValue([]);
+  });
+
+  function richRoster(): DeskRosterModel {
+    const model = roster();
+    model.groups[0].lines[0] = {
+      ...model.groups[0].lines[0],
+      engagementId: 'wright',
+      name: 'Wright apartment',
+      needKind: 'new_lead',
+      dueOn: '2026-08-27',
+      needText: 'New lead — respond by Aug 27',
+      client: 'Marcus Wright',
+      projectId: null,
+    };
+    model.groups[1].lines.push({
+      ...model.groups[1].lines[0],
+      engagementId: 'cedar',
+      name: 'Cedar Lane Study',
+      overdueText: null,
+      overdue: { isOverdue: false, days: 0 },
+      needKind: 'task_due',
+      mark: 'quiet',
+      client: 'Nora Ellison',
+      projectId: 'p-cedar',
+      act: { label: 'Open the job', href: '/doc/cedar' },
+    });
+    model.groups[1].count = 2;
+    model.liveCount = 3;
+    return model;
+  }
+
+  it('renders nothing at all when nothing needs her', () => {
+    const model = roster();
+    for (const group of model.groups) {
+      for (const line of group.lines) {
+        line.mark = null;
+        line.needKind = null;
+        line.overdueText = null;
+        line.overdue = { isOverdue: false, days: 0 };
+      }
+    }
+    model.overdueCount = 0;
+    model.overdueLine = 'Nothing is overdue.';
+
+    const { container } = render(<DeskRoster roster={model} />);
+
+    expect(container.querySelector('[data-desk-day-line]')).toBeNull();
+    expect(screen.queryByText(/more below/)).toBeNull();
+  });
+
+  it('names the overdue job as an act into its own row, the clause in the red letter’s ink', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const band = container.querySelector('[data-desk-day-line]')!;
+    const link = within(band as HTMLElement).getByRole('link', {
+      name: 'Vandersteen residence — the row below',
+    });
+    expect(link).toHaveAttribute('href', '#roster-line-vandersteen');
+    expect(container.querySelector('#roster-line-vandersteen')).toHaveAttribute(
+      'data-roster-line',
+      'vandersteen',
+    );
+
+    const clause = band.querySelector('[data-day-line-overdue]')!;
+    expect(clause.className).toContain('var(--color-terracotta-ink)');
+    expect(clause.textContent).toMatch(/^ — project, overdue \d+ days?$/);
+    // The sentence above the band is untouched — the head count, the sentence
+    // and the row mark stay three legible levels of one fact.
+    expect(
+      screen.getByText('One thing is overdue — Vandersteen.'),
+    ).toBeInTheDocument();
+  });
+
+  it('carries every line into a row that is already on the page', () => {
+    mockAnsweredNotes.mockReturnValue([
+      { projectId: 'p-cedar', answeredAt: new Date().toISOString() },
+    ]);
+    const { container } = render(<DeskRoster roster={richRoster()} />);
+
+    const band = container.querySelector('[data-desk-day-line]')!;
+    const links = Array.from(band.querySelectorAll('a[href^="#roster-line-"]'));
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      const id = link.getAttribute('href')!.slice(1);
+      expect(container.querySelector(`[id="${id}"]`)).toHaveAttribute(
+        'data-roster-line',
+      );
+    }
+  });
+
+  it('says at most three things, and names the client who replied', () => {
+    mockAnsweredNotes.mockReturnValue([
+      { projectId: 'p-cedar', answeredAt: new Date().toISOString() },
+    ]);
+    const { container } = render(<DeskRoster roster={richRoster()} />);
+
+    const lines = container.querySelectorAll('[data-day-line]');
+    expect(lines.length).toBeLessThanOrEqual(3);
+    expect(Array.from(lines).map((l) => l.getAttribute('data-day-line'))).toEqual([
+      'overdue',
+      'lead',
+      'answered',
+    ]);
+    expect(
+      container.querySelector('[data-day-line="answered"]')!.textContent,
+    ).toBe('Nora Ellison replied last night — Cedar Lane Study');
+  });
+
+  it('sends “and N more below” to the first stage plate', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const more = container.querySelector('[data-day-line-more]')!;
+    expect(more.textContent).toBe('and 1 more below');
+    expect(more).toHaveAttribute('href', '#roster-stage-proposal');
+    expect(
+      container.querySelector('[data-stage-tab="proposal"]'),
+    ).toHaveAttribute('id', 'roster-stage-proposal');
+  });
+
+  it('names the person she is keeping waiting on the lead line', () => {
+    const { container } = render(<DeskRoster roster={richRoster()} />);
+
+    const lead = container.querySelector('[data-day-line="lead"]')!;
+    expect(lead.textContent).toBe(
+      'Marcus Wright · New lead — respond by Aug 27',
+    );
+    expect(
+      within(lead as HTMLElement).getByRole('link', {
+        name: 'Marcus Wright — the row below',
+      }),
+    ).toHaveAttribute('href', '#roster-line-wright');
+  });
+
+  it('writes the sheet’s inline act, not a control box', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const link = container.querySelector<HTMLElement>(
+      '[data-desk-day-line] a[href^="#roster-line-"]',
+    )!;
+    expect(link.className).toContain('border-[color:var(--color-aged-oak)]');
+    expect(link.className).toContain('text-inherit');
+    expect(link.className).toContain('focus-visible:outline-2');
+    expect(link.className).not.toMatch(/min-h-|rounded-|bg-\[/);
+  });
+
+  it('gives every inline act the sheet’s focus pair — the ring and the caret', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const acts = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-desk-day-line] a'),
+    );
+    expect(acts.length).toBeGreaterThan(0);
+    for (const act of acts) {
+      expect(act.className).toContain('focus-visible:outline-2');
+      expect(act.className).toContain("before:content-['‸']");
+      expect(act.className).toContain('focus-visible:before:opacity-100');
+      // The caret is drawn, never spoken: an explicit name is what keeps the
+      // pseudo-content out of the accessible name.
+      expect(act.getAttribute('aria-label')).toBeTruthy();
     }
   });
 });
