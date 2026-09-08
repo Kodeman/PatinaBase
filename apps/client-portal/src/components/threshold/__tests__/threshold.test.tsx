@@ -3029,3 +3029,110 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     );
   });
 });
+
+describe('Threshold — the landmark ledger and the story pole’s sections', () => {
+  /** The landmarks as rendered: [label, href]. */
+  function landmarks(container: HTMLElement): Array<[string, string | null]> {
+    return Array.from(
+      container.querySelectorAll('[data-testid="landmark-ledger"] a'),
+    ).map((link) => [link.textContent?.trim() ?? '', link.getAttribute('href')]);
+  }
+
+  it('strikes the ledger directly under the doorplate, above the doorstep', () => {
+    const { container } = renderThreshold();
+
+    const ledger = screen.getByTestId('landmark-ledger');
+    const doorplate = container.querySelector('#doorplate')!;
+    const doorstep = container.querySelector('#doorstep')!;
+
+    expect(doorplate.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(ledger.compareDocumentPosition(doorstep) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
+  it('points every landmark at an id that is actually on the page', () => {
+    const { container } = renderThreshold();
+
+    const struck = landmarks(container);
+    expect(struck.length).toBeGreaterThan(0);
+    for (const [, href] of struck) {
+      expect(container.querySelector(href!)).not.toBeNull();
+    }
+  });
+
+  it('sends "What needs you" to the first gate that drew, and keeps the money undimmable', () => {
+    const { container } = renderThreshold();
+
+    expect(landmarks(container)).toEqual(
+      expect.arrayContaining([
+        ['Where we are', '#doorstep'],
+        ['What you owe', '#letterbox'],
+        ['What needs you', '#wall'],
+        ['The papers', '#mat-papers'],
+      ]),
+    );
+    expect(
+      container.querySelector('[data-testid="landmark-ledger"] a[href="#letterbox"]'),
+    ).toHaveAttribute('data-never-dim');
+  });
+
+  it('gives the house holding its place no landmarks at all', () => {
+    roomsMock.mockReturnValue({ data: undefined, isPending: true, isLoading: true, isError: false });
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+    expect(screen.queryByTestId('landmark-ledger')).not.toBeInTheDocument();
+  });
+
+  it('renames no anchor — the id set the redirect map holds is unchanged', () => {
+    const { container } = renderThreshold();
+
+    for (const id of [
+      'doorstep',
+      'key',
+      'letterbox',
+      'wall',
+      'door',
+      'road',
+      'note',
+      'previously',
+      'mat',
+      'mat-papers',
+      'ledger',
+    ]) {
+      expect(container.querySelector(`#${id}`)).not.toBeNull();
+    }
+  });
+
+  it('gives the caret the money and the ask to land on', () => {
+    const observed: string[] = [];
+    const original = window.IntersectionObserver;
+    Object.defineProperty(window, 'IntersectionObserver', {
+      writable: true,
+      configurable: true,
+      value: class {
+        unobserve = jest.fn();
+        disconnect = jest.fn();
+        constructor(_callback: unknown) {}
+        observe(node: Element) {
+          observed.push(node.id);
+        }
+      },
+    });
+
+    try {
+      renderThreshold();
+      expect(observed).toContain('letterbox');
+      expect(observed).toContain('wall');
+      expect(observed).toContain('doorstep');
+      expect(observed).toContain('mat');
+    } finally {
+      Object.defineProperty(window, 'IntersectionObserver', {
+        writable: true,
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+});

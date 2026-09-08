@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 
+import { InlineAct } from '@/components/threshold/instruments/inline-act';
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 
@@ -59,6 +60,65 @@ function movedLine(count: number): string | null {
   return `${capitalize(countInWords(moved))} ${thing} moved since.`;
 }
 
+/**
+ * Whether the since-yesterday block — the block carrying `id="changed"` —
+ * draws at all. Exported so the landmark ledger can omit "What changed"
+ * rather than point at an id the doorstep did not print.
+ */
+export function hasChangedBlock(
+  input: Pick<DoorstepProps, 'showSince' | 'changedCount'> &
+    Partial<Pick<DoorstepProps, 'readingMark'>>,
+): boolean {
+  return (
+    input.showSince ||
+    movedLine(input.changedCount) !== null ||
+    Boolean(input.readingMark)
+  );
+}
+
+/**
+ * The object of the standing sentence, and the gate it belongs to.
+ *
+ * A sentence that names a thing links to it (PP-5): "Finished work waits for
+ * your acceptance" announces a gate sitting a page and a half below, and
+ * saying so without offering the way there is the whole of IX05. The clauses
+ * are the ones `standingSentence` composes, so each phrase is written only
+ * when the thing it names is on the page.
+ */
+const SENTENCE_OBJECTS: ReadonlyArray<{ pattern: RegExp; anchor: string }> = [
+  { pattern: /finished work/i, anchor: 'wall' },
+  { pattern: /(?:one paper|[a-z]+ papers)(?= waits? for your name)/i, anchor: 'door' },
+  { pattern: /a balance of \S+(?= stands open)/i, anchor: 'letterbox' },
+];
+
+interface SentenceParts {
+  before: string;
+  object: string;
+  anchor: string;
+  after: string;
+}
+
+/** The earliest object the sentence names, or null when it names none. */
+function readSentence(sentence: string): SentenceParts | null {
+  let found: { index: number; object: string; anchor: string } | null = null;
+
+  for (const { pattern, anchor } of SENTENCE_OBJECTS) {
+    const match = pattern.exec(sentence);
+    if (!match) continue;
+    if (found === null || match.index < found.index) {
+      found = { index: match.index, object: match[0], anchor };
+    }
+  }
+
+  if (found === null) return null;
+  return {
+    before: sentence.slice(0, found.index),
+    object: found.object,
+    anchor: found.anchor,
+    after: sentence.slice(found.index + found.object.length),
+  };
+}
+
 export function Doorstep({
   sentence,
   previously,
@@ -70,6 +130,7 @@ export function Doorstep({
   children,
 }: DoorstepProps) {
   const moved = movedLine(changedCount);
+  const named = sentence ? readSentence(sentence) : null;
 
   return (
     <section
@@ -84,7 +145,20 @@ export function Doorstep({
             data-testid="doorstep-sentence"
             className="font-heading max-w-[26ch] text-[clamp(1.45rem,2.9vw,2.1rem)] font-medium leading-[1.22] tracking-[-0.014em] text-[var(--text-primary)] max-[860px]:max-w-none"
           >
-            {sentence}
+            {named ? (
+              <>
+                {named.before}
+                <InlineAct
+                  href={`#${named.anchor}`}
+                  data-testid="doorstep-sentence-object"
+                >
+                  {named.object}
+                </InlineAct>
+                {named.after}
+              </>
+            ) : (
+              sentence
+            )}
           </p>
         ) : (
           // The sentence's measure, held open: the same block on the server and
@@ -107,8 +181,12 @@ export function Doorstep({
         </p>
       )}
 
-      {(showSince || moved || readingMark) && (
-        <div className="mt-[14px] flex flex-wrap items-baseline gap-x-[22px] gap-y-1">
+      {hasChangedBlock({ showSince, changedCount, readingMark }) && (
+        <div
+          id="changed"
+          data-testid="doorstep-changed-block"
+          className="mt-[14px] flex flex-wrap items-baseline gap-x-[22px] gap-y-1"
+        >
           {showSince && (
             <ScoredAction
               actionKey="since_yesterday"
