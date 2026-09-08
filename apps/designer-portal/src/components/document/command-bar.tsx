@@ -238,6 +238,12 @@ export function openCommandBar(query?: string) {
  *  clears it on mount. */
 export const callSheetPending = { value: false };
 
+/* B03 — the palette a screen reader can drive. The input is not inside the
+   list it moves through, so the active row has to be NAMED (aria-activedescendant
+   against these ids) rather than merely tinted; the arrow keys below are
+   unchanged, and focus never leaves the input. */
+const optionId = (index: number) => `command-bar-option-${index}`;
+
 export function CommandBar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -979,6 +985,13 @@ export function CommandBar() {
     return () => window.clearTimeout(t);
   }, [query, matchCount]);
 
+  /* What the status line counts is what the QUERY found — the No-match
+     recovery row and the Engine's ask are offered, not matched, so counting
+     the rendered rows would announce "2 results" over the word "No match".
+     With no query the palette is the populated set of doorways, and the rows
+     ARE the count. */
+  const resultCount = query.trim() ? matchCount : flatRows.length;
+
   // Keep the active row in range as the list changes.
   useEffect(() => {
     setActive((a) => Math.min(a, Math.max(0, flatRows.length - 1)));
@@ -1072,6 +1085,7 @@ export function CommandBar() {
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label="Command bar"
       className="fixed inset-0 z-[70] flex items-start justify-center pt-[12vh]"
     >
@@ -1085,6 +1099,9 @@ export function CommandBar() {
         <input
           ref={inputRef}
           type="text"
+          aria-activedescendant={
+            !asking && flatRows[active] ? optionId(active) : undefined
+          }
           aria-label="Find anything"
           placeholder="Find a document or a ledger…"
           className="w-full border-b border-[var(--color-pearl)] bg-transparent px-4 py-3 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:outline-none"
@@ -1133,6 +1150,11 @@ export function CommandBar() {
           </div>
         ) : (
           <div className="max-h-[52vh] overflow-y-auto py-1">
+            <p role="status" className="sr-only">
+              {resultCount === 0
+                ? 'Nothing matches.'
+                : `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`}
+            </p>
             {rendered.map((section) => (
               <div key={section.eyebrow ?? 'results'}>
                 {section.eyebrow && (
@@ -1140,11 +1162,14 @@ export function CommandBar() {
                     {section.eyebrow}
                   </div>
                 )}
-                <ul>
+                <ul role="listbox" aria-label={section.eyebrow ?? 'Results'}>
                   {section.items.map(({ row, index }) => (
-                    <li key={row.key}>
+                    <li key={row.key} role="presentation">
                       <button
                         type="button"
+                        id={optionId(index)}
+                        role="option"
+                        aria-selected={index === active}
                         onMouseEnter={() => setActive(index)}
                         onClick={() => choose(row, index)}
                         className={`flex w-full items-center gap-3 px-4 py-2 text-left ${

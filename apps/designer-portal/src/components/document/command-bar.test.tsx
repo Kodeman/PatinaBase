@@ -9,7 +9,13 @@
  * 'Find anything' across *.test.tsx returned zero hits), so this pins it: a
  * real DOM click on the real DocumentAction opens the real CommandBar.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 
 // SP-16/F21 (A2-L3) — both new suites below need a controllable pathname (to
 // put a document "in hand") and desk data (the row itself); every earlier
@@ -838,5 +844,122 @@ describe('L5 — the two reference doorways in ⌘K', () => {
 
     fireEvent.click(screen.getByText('The words'));
     expect(mockPush).toHaveBeenCalledWith(THE_WORDS_HREF);
+  });
+});
+
+/**
+ * B03 — the palette a screen reader can drive.
+ *
+ * The palette moves an "active row" with the arrow keys while focus stays in
+ * the input, and before R139 that movement existed only as a background tint:
+ * nothing in the accessible tree said which row was active, how many rows
+ * stood, or that the page behind the scrim was inert. This suite holds the
+ * ARIA contract, and holds the keyboard path unchanged beside it — the point
+ * of the change is that the palette gained names, not behaviour.
+ */
+describe('B03 — the palette a screen reader can drive', () => {
+  function openPalette() {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+    return screen.getByRole('dialog', { name: 'Command bar' });
+  }
+
+  const options = () => screen.getAllByRole('option');
+  const paletteInput = () =>
+    screen.getByRole('textbox', { name: 'Find anything' });
+
+  it('opens a modal dialog, not a floating panel over a live page', () => {
+    expect(openPalette()).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('renders its results as listboxes of options', () => {
+    openPalette();
+    const listboxes = screen.getAllByRole('listbox');
+    expect(listboxes.length).toBeGreaterThan(0);
+    for (const listbox of listboxes) {
+      expect(within(listbox).getAllByRole('option').length).toBeGreaterThan(0);
+    }
+    expect(options().length).toBeGreaterThan(1);
+  });
+
+  it('marks exactly one option selected, and names it on the input', () => {
+    openPalette();
+    const selected = options().filter(
+      (option) => option.getAttribute('aria-selected') === 'true',
+    );
+    expect(selected).toHaveLength(1);
+    expect(paletteInput()).toHaveAttribute(
+      'aria-activedescendant',
+      selected[0]!.getAttribute('id'),
+    );
+  });
+
+  it('moves aria-selected and aria-activedescendant with the arrow keys', () => {
+    openPalette();
+    const first = options()[0]!;
+    const second = options()[1]!;
+    expect(first).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(paletteInput(), { key: 'ArrowDown' });
+    expect(first).toHaveAttribute('aria-selected', 'false');
+    expect(second).toHaveAttribute('aria-selected', 'true');
+    expect(paletteInput()).toHaveAttribute(
+      'aria-activedescendant',
+      second.getAttribute('id'),
+    );
+
+    fireEvent.keyDown(paletteInput(), { key: 'ArrowUp' });
+    expect(first).toHaveAttribute('aria-selected', 'true');
+    expect(paletteInput()).toHaveAttribute(
+      'aria-activedescendant',
+      first.getAttribute('id'),
+    );
+  });
+
+  it('never lets the active row run past the end of the list', () => {
+    openPalette();
+    const all = options();
+    const last = all[all.length - 1]!;
+    for (let i = 0; i < all.length + 5; i += 1) {
+      fireEvent.keyDown(paletteInput(), { key: 'ArrowDown' });
+    }
+    expect(last).toHaveAttribute('aria-selected', 'true');
+    expect(paletteInput()).toHaveAttribute(
+      'aria-activedescendant',
+      last.getAttribute('id'),
+    );
+  });
+
+  it('announces how many doorways are standing', () => {
+    openPalette();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `${options().length} results`,
+    );
+  });
+
+  it('says nothing matches rather than counting the recovery rows', () => {
+    openPalette();
+    fireEvent.change(paletteInput(), {
+      target: { value: 'qqqzzz-no-such-surface' },
+    });
+    // The palette still offers a way out — the Help Center row and the
+    // Engine's ask — but neither is a match, and the status line must not
+    // announce "2 results" over the word "No match".
+    expect(screen.getByText('No match')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Nothing matches.');
+  });
+
+  it('leaves the keyboard path itself unchanged — Enter still chooses', () => {
+    openPalette();
+    fireEvent.keyDown(paletteInput(), { key: 'ArrowDown' });
+    fireEvent.keyDown(paletteInput(), { key: 'Enter' });
+    expect(
+      screen.queryByRole('dialog', { name: 'Command bar' }),
+    ).not.toBeInTheDocument();
   });
 });
