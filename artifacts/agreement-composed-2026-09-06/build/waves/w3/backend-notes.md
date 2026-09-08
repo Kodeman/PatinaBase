@@ -457,3 +457,286 @@ pnpm --filter @patina/supabase type-check   → clean
   "AI".
 - **The pristine clone's thirteen failures** are worth one look by the steward on
   a real reset stack, to confirm they are the clone and not main.
+
+---
+
+# Round 1 — the adversarial review, and what moved (2026-09-07)
+
+Seven findings came back: four blockers, three majors. All seven are addressed
+in the two migrations rather than deferred. Nothing was pushed; nothing reached
+Strata; the shared stack was never written to. Every number below was read off a
+fresh pair of clones — `patina_w3base` (pristine, head 00577) and `patina_w3mig`
+(the same dump with 00578 + 00579 applied) — cloned this round WITH their ACLs
+(`pg_dump --no-owner -Fc`, no `--no-acl`), which is the fidelity the earlier run
+lacked and the reason its regression numbers were noisier than they needed to be.
+
+## R1-1 · B1 + B2 — the keepsake had no money on it, and closed with a lie
+
+`_render_agreement_snapshot_html` (00577:476) is what R12 freezes at countersign
+and what the homeowner keeps for the life of the project. Its schedule CASE knew
+`rate_card / per_phase / ceiling / flat / retainer / cadence / procurement` and
+nothing else, so a turnkey prime's three money parts fell through the record-only
+fallback — and then the body closed, unconditionally, with *"This agreement
+authorizes design services only…"* on a construction contract.
+
+**PART 12c** grafts the function VERBATIM from 00577:476-724 and adds three arms
+and a boundary that knows its class. It is now in the banner's lineage list,
+where it should have been from the start.
+
+The figures are not a second implementation: the pricing basis goes through the
+same `_agreement_redact_client_payload` the bundle uses, the schedule of values
+through the same `_agreement_schedule_of_values`, the draws through the same
+`_agreement_draw_rows` the ledger was materialized from, and every figure is
+formatted by the new `_agreement_money_to_the_cent` (`_agreement_money` rounds to
+whole dollars, which is right for a services agreement and wrong for a draw of
+$23,978.19). The keepsake deliberately carries NO invoice status, paid date or
+waiver receipt — that is machine state which moves for years afterwards, and a
+frozen page that named it would be a page that lies a week later.
+
+The actual snapshot, read off the migrated clone by driving the lane's own
+Halvorsen fixture through countersign (`scratchpad/probe.sql`, rolled back):
+
+```
+<h2>Pricing basis</h2><p>The cost of the work, plus the studio’s fee on it, and
+the total will not exceed the guaranteed maximum price below.</p>
+<p class="ceiling-label">Guaranteed maximum price</p><p>$84,134</p>
+<h2>Schedule of values</h2><table>… $44,840 / $11,210 / $8,496 / $7,434 /
+$4,720 / $4,130 / $3,304 … <tr><td>Total</td><td>$84,134</td></tr></table>
+<h2>Draw schedule</h2><table>
+  <tr><td>Deposit at signing</td><td>$8,413.40 of the price</td><td>$8,413.40</td></tr>
+  <tr><td>Rough-in</td><td>$25,240.20 of the price · $1,262.01 held back</td><td>$23,978.19</td></tr>
+  <tr><td>Cabinets set</td><td>$33,653.60 of the price · $1,682.68 held back</td><td>$31,970.92</td></tr>
+  <tr><td>Substantial completion</td><td>$16,826.80 of the price · $841.34 held back</td><td>$15,985.46</td></tr>
+  <tr><td>Final · retainage release</td><td></td><td>$3,786.03</td></tr></table>
+<p>$3,786.03 is held back across the draws and released when the work is finished.</p>
+<h2>Allowances</h2><table>… $4,000 · "Anything over this amount needs a change
+order first. Anything under it comes back to you." …</table>
+… clauses …
+<p class="boundary">This agreement covers the work described above, at the price
+shown. Anything added to it is a separate written change order before the work
+is done.</p>
+```
+
+Cent for cent the walk's own table, and the closing sentence is
+`design-build-body.tsx`'s verbatim, so the two surfaces cannot say different
+things. Covered by the new **T17**.
+
+## R1-2 · B3 — a closed book that published the book
+
+`get_client_commercial_document_bundle` projected `'payload', ap.payload` for
+every client-visible part, so on a closed-book turnkey prime the homeowner was
+handed `costLines` (the trades AT COST), `feeBps`, `subMarkupBps` and
+`costBasisCents`. Hiding the part instead is impossible: R22 counts only
+client-visible fee parts and `pricing_basis` is a turnkey prime's only fee, so
+`client_visible = false` makes her signature raise *"This agreement names no
+fee."* RC-4 asks precisely that a trade's bid not be derivable from her copy.
+
+`_agreement_redact_client_payload(kind, variant, payload, disclosure)` is now the
+one edge: under anything that is not `open_book` (a `conflict` between the clause
+and the payload included — fail closed) the four keys stay behind and the DERIVED
+schedule of values goes over in their place, plus `contractSumCents`, which is
+her own number and, once the cost basis is gone, no longer derivable on a plain
+cost-plus basis. Under `open_book` nothing is withheld — that is what the clause
+elected — and the schedule is projected in the same key so both modes read alike.
+Every other part, and every other kind of document, crosses byte for byte; the
+studio's own row is untouched, and the composer does not read through this
+function. Covered by the new **T16** and re-asserted on the durable record by
+**T17**.
+
+⚠ **This changes the shape the client lane reads** — see §7 below. And it does
+not make the schedule uninvertible: the allowance parts state their amounts AT
+COST, deliberately (a change-order threshold she is not shown is not a
+threshold), so the multiplier remains recoverable by arithmetic from figures she
+is entitled to. Closing that would mean authoring the schedule independently of
+the cost lines, which changes the walk's own pinned numbers and is a P-level
+decision, not a fix. What this fix guarantees is the absolute rule: no trade's
+own price, and no bid, is on her page in either mode.
+
+## R1-3 · B4 — the seeded flow-down clause did not exist
+
+§1.2 item 3 says the flow-down body ships seeded and disabled, in the
+`patina.design_build` template, pending counsel; nothing carried it. It is now the
+template's ELEVENTH entry, `enabled: false`, and
+`materialize_agreement_template` skips any entry marked so — a rule stated
+generally, and defaulting to `true`, so every other seeded entry composes exactly
+as before. The rail still lays out **ten** parts, no agreement anywhere can carry
+the key, `flow_down_clause_key` stays NULL, and `create_trade_agreement` still
+refuses a payload that tries to set it. Turning it on, when counsel clears it, is
+one migration flipping one boolean. Covered by the new **T18**.
+
+## R1-4 · M2 — a sub who signed and reloaded got a 404
+
+Signing revokes the token in the signing transaction (RC-1 requires exactly
+that), and `resolve_trade_agreement_link` demanded `status = 'active'` — while
+`sign_trade_agreement_by_token`, asked the same question, still answered
+`already_signed` with the receipt. Two RPCs disagreeing about what a spent link
+is, on the one surface with no login and no other way back in, against §4.5's
+"already signed → the settled receipt" and walk step 16's "a fresh load of the
+same URL still shows the receipt".
+
+Ruled the way both documents ask: `studio_trade_agreement_tokens` gains
+`spent_at`, written by the signing transaction and by nothing else. Resolve
+accepts an active token, or a spent one on a signed agreement, until it expires.
+Every other revocation — a void, a re-mint — carries no `spent_at` and still
+resolves to NULL, so RC-1's rule holds for every revocation that is somebody
+else's decision. `trade_agreement_test` A3 now runs seven cases instead of six:
+the spent link comes back as the receipt (with no key of the client's on it), and
+a link superseded by a re-mint is dead while its successor resolves.
+
+## R1-5 · M3 — the lien waiver had no door
+
+`agreement_draw_lien_waivers` was written by a direct `GRANT INSERT` plus an RLS
+policy, against this build's own rule that no wave writes a business table
+outside a definer RPC — and it showed: `waiver_type` was policed by nothing but a
+non-empty CHECK, the trade's display name was whatever the caller typed, and P12's
+recording act had no published interface at all.
+
+The grant and the policy are withdrawn (`GRANT SELECT` only) and **PART 5b** is
+the door: `record_agreement_draw_lien_waiver(draw, type, contact, through_date,
+amount, storage_path, received_at)` holds the type to the four LIEN_WAIVER_TYPES
+in the studio's own words, resolves the trade against the studio's roster and
+snapshots its name, stamps `recorded_by` from the session, and defaults
+`received_at` to now (a waiver with no date is one the ledger cannot tell the
+homeowner she has). Granted to `authenticated` alone. Covered by the new **T19**,
+which also asserts the homeowner still gets `{type, receivedAt}` and never the
+amount or the storage path.
+
+## R1-6 · M1 / F-W3-7 — the attestation part, ruled and published
+
+The finding is right that the deviation was in a code comment only. It is now
+**F-W3-7** in the migration banner, in the deviation list below, and published to
+the designer and client lanes in §7.
+
+The deviation stands, because the build sheet contradicts itself: PART 13 says
+`patina.licensing_attestation` is "materialized from `studio_license_attestations`
+at compose time" AND, in the same sentence, that it is "a studio-level record
+**rather than a rail row**" whose "Client sees" cell is **no** — and §8's walk step
+4 asserts **ten** parts in the rail. A row in `proposal_agreement_parts` IS the
+rail: materializing one would lay out eleven, would appear in the designer lane's
+parts rail (which is built and tested for ten), and would break walk step 4. So no
+attestation part is materialized. What gates the class is the studio-level record
+itself, asked at both load-bearing doors — `materialize_agreement_template` and
+`send_commercial_document` — through `studio_has_live_license_attestation`, which
+is what R10 actually rules ("gates selection of the design-build template"). The
+`attestation` kind stays in the vocabulary (contract §1) and both snapshot passes
+already skip it, so a later wave that decides the paper should carry the
+credential can add the row without moving anything.
+
+## Deviations, added to §5
+
+7. **No `patina.licensing_attestation` part is materialized** (F-W3-7, above).
+8. **The pricing basis reaches the homeowner redacted under closed book** (B3).
+   The bundle is a projection, not a table read, and this is the one edge where
+   the disclosure the clause elected can be kept. Published to the client lane.
+9. **`studio_trade_agreement_tokens` carries one column `trade_rfq_tokens` does
+   not** — `spent_at` (M2). The shape is otherwise 00424's verbatim; the extra
+   column exists because a Trade Agreement's link, unlike an RFQ's, has a receipt
+   to show after it is spent.
+
+## Gates, re-run this round
+
+Scratch clones `patina_w3base` / `patina_w3mig` (both dropped at the end).
+
+```
+psql -d patina_w3mig -v ON_ERROR_STOP=1 -f supabase/migrations/00578_design_build_kind.sql   → COMMIT, no error
+psql -d patina_w3mig -v ON_ERROR_STOP=1 -f supabase/migrations/00579_trade_agreements.sql    → COMMIT, no error
+   (both re-applied a second time on top of themselves: clean — idempotent)
+
+supabase/tests/commercial/design_build_test.sql      → 18 PASS blocks, 0 errors
+   (T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 + T16 T17 T18 T19 new)
+supabase/tests/commercial/trade_agreement_test.sql   →  8 PASS blocks, 0 errors
+   (A3 now proves seven kinds of link, not six)
+
+bash scripts/run-sql-tests.sh   (PGURL → the clone)
+                       patina_w3base (pristine)   patina_w3mig (this wave)
+   total                       166                       166
+   green                       126                       132
+   expected-fail                21                        21
+   unexpected-fail              19                        13
+   effective-green         147 / 166                 153 / 166
+```
+
+The migrated clone's thirteen are the SAME thirteen as before, name for name,
+every one a clone artifact (`pg_cron` absent, or an extension/database-level ACL a
+`createdb` cannot reproduce): `aesthete/house_portfolio`, `aesthete/jobs_queue`,
+`aesthete/nightly`, `agent_os/groom`, `agent_os/vitals`, `auth/qr_auth_handoff`,
+`billing/invoice_links`, `edge_api/catalog_roles_remote_conformance_negative`,
+`edge_api/public_acl_residual_census`, `mood_boards/maintenance_quota`,
+`notifications/decision_first_notice`, `scan_pipeline/scan_roles_conformance`,
+`workflow/canonical_workflow_spine`. The pristine clone's nineteen are those
+thirteen plus the six files this wave makes true — `design_build_test`,
+`trade_agreement_test`, `agreement_parts_test`, `agreement_library_test`,
+`public_sd_hardening_contract_test`, `public_rpc_authorization_contract_test` —
+which is the correct direction. **Zero net-new failures.**
+
+Named regressions, on the migrated clone: `agreement_fee_schedules_test` PASS
+(the design-services keepsake still renders as W2 wrote it — the graft added arms,
+it did not move one), `agreement_parts_test` PASS, `agreement_library_test` PASS,
+`agreement_parts_projection_test` PASS, `multi_studio_signature_test` PASS,
+`billing/studio_invoice_test` PASS, `public_sd_hardening_contract_test` PASS —
+**no pin moved this round**: the four bodies edited here
+(`get_client_commercial_document_bundle`, `materialize_agreement_template`,
+`_render_agreement_snapshot_html`, and 00579's two RPCs) are not among that
+file's hashed set, and the seven hashes re-pinned last round still hold, which the
+suite proves by passing on the migrated clone and failing on the pristine one.
+`commercial/trade_scope_test` and `commercial/design_services_authority_test` fail
+identically on BOTH clones (pre-existing, recorded in KNOWN_FAILURES).
+`edge_api/platform_acl_compatibility_test` still aborts on both clones at its
+database-level `PUBLIC must retain only CONNECT` assertion — the clone's `datacl`
+is empty where the stack's is not — so this round's new registrations in that file
+were run standalone against the migrated clone:
+`PASS: the Wave 3 round-1 registrations in platform_acl_compatibility_test hold`.
+**The steward must still run that file whole on the reset shared stack.**
+
+```
+python3 scripts/generate-legacy-grants.py
+  → wrote supabase/seed/00-legacy-grants.sql — baseline + 2568 replayed statements
+git diff --stat supabase/seed/00-legacy-grants.sql
+  → 1 file changed, 55 insertions(+), 1 deletion(-)
+     the one deletion is M3: GRANT SELECT, INSERT → GRANT SELECT on
+     agreement_draw_lien_waivers. No function's grant was narrowed (R31).
+psql -d patina_w3mig -f supabase/seed/00-legacy-grants.sql   → 0 errors
+
+supabase gen types typescript --db-url …/patina_w3mig  → written to a temp file, copied
+git diff --stat packages/supabase/src/database.types.ts   (this round, on top of last round's +593)
+  → 1 file changed, 32 insertions(+), 0 deletions(-)
+     spent_at ×3 (Row/Insert/Update) + the four new functions. Purely additive.
+     Five FK constraints the clone lost in pg_restore were re-added NOT VALID
+     before generating, or their Relationships entries read as 83 deletions.
+
+pnpm --filter @patina/types type-check      → clean
+pnpm --filter @patina/supabase type-check   → clean
+```
+
+## Owed, added to §7 — three lanes have to move with this
+
+1. **designer lane — REQUIRED.**
+   `packages/supabase/src/hooks/use-design-build.ts:249` writes
+   `agreement_draw_lien_waivers` with `.from(...).insert(...)`. That grant is
+   gone. The call becomes
+   `.rpc('record_agreement_draw_lien_waiver', { p_draw_id, p_waiver_type,
+   p_contact_id, p_through_date, p_amount_cents, p_storage_path, p_received_at })`
+   — the RPC returns the row as `{ id, drawId, drawKey, waiverType,
+   contactDisplayName, throughDate, amountCents, receivedAt }`. Its jest test
+   mocks the client, so the suite will stay green while production would not:
+   this one has to be read, not run.
+2. **client lane — REQUIRED.** On a `design_build` bundle the `pricing_basis`
+   part's payload now carries `contractSumCents` and `scheduleOfValues`
+   (`[{id,label,cents}]`, already in the elected disclosure mode, last line
+   carrying the remainder), and under anything but `open_book` it no longer
+   carries `costLines`, `feeBps`, `costBasisCents` or `subMarkupBps`.
+   `readPricingBasis` should read `contractSumCents` when present and
+   `scheduleOfValues` in place of deriving from `costLines`; as it stands a
+   closed-book door renders no schedule of values at all and no cost-basis row.
+   Under `open_book` nothing changed. `design-build-body.tsx`'s own R13 note
+   ("a schedule that could not be inverted would have to be authored rather than
+   derived from the cost lines, which is a backend change and not this wave's")
+   is the change this is.
+3. **sub lane — informational, and it unblocks them.** `/trade/<token>` after
+   signing now resolves instead of 404ing: the DTO comes back with
+   `state: 'signed'` and `existingSignature` filled, which is the settled-receipt
+   branch §4.5 already describes. A revoked-by-void or superseded link still
+   resolves to NULL and must still `notFound()`.
+4. **Every lane — F-W3-7.** No `patina.licensing_attestation` part is
+   materialized; the rail is ten parts. The attestation is a studio-level record
+   read through `studio_has_live_license_attestation`, not a part of the paper.
