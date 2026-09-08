@@ -71,6 +71,29 @@
   --phase-installation: #D4A090;
   --phase-walkthrough: #A8B5A0;
 
+  /* ── House sheet (I153) — docs/design/house-sheet/SPEC.md §A1 ────────────
+     Four hexes this portal lacked, added verbatim, plus --hairline-strong
+     (a genuinely new rgba value Lane H4's terminal-act/unavailable-terminal
+     CSS depends on — W2 review finding H2-1). */
+  /* — house-sheet tokens:start — */
+  --paper-doc: #FCFAF6;
+  --rail: #E8E3DB;
+  --ink-subtle: #5A4E43;
+  --sage-ink: #5F6B57;
+  --hairline-strong: rgba(44, 41, 38, .14);
+
+  /* Aliases onto tokens this portal already carries under its own name —
+     never a rename, never a redefined value. */
+  --oak: var(--color-aged-oak);
+  --ink-faint: var(--color-quiet-ink);
+  --ink: var(--color-charcoal);
+  --paper: var(--color-off-white);
+  --clay-ink: var(--color-clay-ink);
+  --golden-ink: var(--color-golden-hour-ink);
+  --terracotta-ink: var(--color-terracotta-ink);
+  --ink-paper: var(--color-off-white);
+  /* — house-sheet tokens:end — */
+
   /* Design system tokens (HSL) */
   --background: 40 33% 96.5%;
   --foreground: 26 7% 15.3%;
@@ -189,6 +212,105 @@ a:hover {
 .timeline-gradient {
   background: linear-gradient(180deg, rgba(196, 165, 123, 0.25) 0%, rgba(92, 74, 60, 0.4) 100%);
 }
+
+/* ── House sheet — the seven type steps plus .t-money and .t-authorship
+   (I153 / docs/design/house-sheet/SPEC.md §A3), and the consequence sentence
+   (§A6). Named classes only — nothing here restyles an existing selector.
+   .t-head is the one UPPERCASE step; every other step is sentence case.
+   Playfair tracking stays 0 — never negative below 40px. ───────────────── */
+/* — house-sheet type steps:start — */
+.t-d1 {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.15;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.t-d2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.t-d3 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.t-body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.t-body-sm {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.t-meta {
+  font-family: var(--font-meta);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+
+.t-head {
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.t-money {
+  font-family: var(--font-meta);
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+}
+
+.t-authorship {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.consequence {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 56ch;
+  margin: 0 0 12px;
+}
+/* — house-sheet type steps:end — */
 
 /* The Scored Ink (I107) — DocumentAction grammar. Proof Sheet No 001 Proof VI.
    Interaction-triggered only (R15); no shadows (D4); .da-act owns the honest
