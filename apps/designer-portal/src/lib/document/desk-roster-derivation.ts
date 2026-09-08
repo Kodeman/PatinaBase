@@ -108,6 +108,17 @@ export interface RosterLine {
   /** Opening the job is act one — the line's own name carries this. */
   jobHref: string;
   act: RosterAct;
+  /** The project this job stands on, where it has one. The day's line joins
+   *  `project_notes` on it; a lead has none. */
+  projectId?: string | null;
+  /** The client's own name, unconcatenated — `state` joins it with the phase
+   *  and the need, and the day's line needs it standing alone. Null wherever
+   *  `clientOf` refuses a placeholder. */
+  client?: string | null;
+  /** The need's own date, where the rule stated one (NeedLine.dueOn). */
+  dueOn?: string | null;
+  /** The need's own sentence, unconcatenated (NeedLine.text). */
+  needText?: string | null;
 }
 
 export interface RosterGroup {
@@ -272,6 +283,10 @@ export function deriveDeskRoster(
         overdue,
         jobHref,
         act,
+        projectId: row.project_id ?? null,
+        client: clientOf(row),
+        dueOn: need?.dueOn ?? null,
+        needText: need?.text ?? null,
       },
       stage: row.active_section,
       tab: folderTab(row),
@@ -326,5 +341,192 @@ export function deriveDeskRoster(
     overdueCount: overdueNames.length,
     heading: `Every job · ${liveCount} live · ${overdueNames.length} overdue`,
     overdueLine: overdueSentence(overdueNames),
+  };
+}
+
+/* ── The day's line (IA-05) ─────────────────────────────────────────────────
+ *
+ * At most three lines under the roster head, and nothing at all when nothing
+ * needs her. Every line is a VIEW of a roster row already on the page — it
+ * links into the roster and never introduces a job the roster does not list.
+ * That is what keeps it from becoming a second queue.
+ */
+
+/** A note this studio's client answered — `project_notes.answered_at` (00565),
+ *  keyed by project. RLS scopes the read; this module only shapes what it is
+ *  handed. */
+export interface AnsweredClientNote {
+  projectId: string;
+  answeredAt: string;
+}
+
+/** `overdue` is the clause after the dash, which the roster prints in
+ *  terracotta ink; `job` is the inline act into the row. */
+export type DayLinePart =
+  | { kind: 'text'; text: string }
+  | { kind: 'job'; text: string; engagementId: string }
+  | { kind: 'overdue'; text: string };
+
+export interface DayLine {
+  /** Stable across renders, and states which of the three lines this is. */
+  key: 'overdue' | 'lead' | 'answered';
+  /** The row this line is a view of. */
+  engagementId: string;
+  parts: DayLinePart[];
+}
+
+export interface DeskDayLine {
+  lines: DayLine[];
+  /** `and N more below`, pointing at the first stage plate. */
+  more: { count: number; stageKey: SectionKey } | null;
+}
+
+export const MAX_DAY_LINES = 3;
+
+/** "Replied last night" is only true inside a day. */
+export const ANSWERED_NOTE_WINDOW_MS = 86_400_000;
+
+interface FlatLine {
+  line: RosterLine;
+  stageLabel: string;
+}
+
+function flatten(roster: DeskRoster): FlatLine[] {
+  const flat: FlatLine[] = [];
+  for (const group of roster.groups) {
+    for (const line of group.lines) {
+      flat.push({ line, stageLabel: group.label });
+    }
+  }
+  return flat;
+}
+
+function byDueThenId(a: FlatLine, b: FlatLine): number {
+  return (
+    anchorTime(a.line.dueOn) - anchorTime(b.line.dueOn) ||
+    a.line.engagementId.localeCompare(b.line.engagementId)
+  );
+}
+
+export function deriveDeskDayLine(
+  roster: DeskRoster,
+  answeredNotes: readonly AnsweredClientNote[],
+  now: Date,
+): DeskDayLine | null {
+  const flat = flatten(roster);
+  const lines: DayLine[] = [];
+  const taken = new Set<string>();
+
+  // (a) The overdue sentence, re-rendered: the job as an inline act, and the
+  // clause after the dash in the red letter's own ink. The one-line sentence
+  // above the band still names WHAT is overdue; this line says where it sits
+  // and how long it has stood — the same fact at a second grain, never a
+  // second copy of the sentence.
+  const overdue = flat
+    .filter((entry) => entry.line.overdue.isOverdue)
+    .sort(byDueThenId)[0];
+  const elapsed = overdue ? overdueElapsedPhrase(overdue.line.overdue) : null;
+  if (overdue && elapsed) {
+    taken.add(overdue.line.engagementId);
+    lines.push({
+      key: 'overdue',
+      engagementId: overdue.line.engagementId,
+      parts: [
+        {
+          kind: 'job',
+          text: overdue.line.name,
+          engagementId: overdue.line.engagementId,
+        },
+        {
+          kind: 'overdue',
+          text: ` — ${overdue.stageLabel.toLowerCase()}, overdue ${elapsed}`,
+        },
+      ],
+    });
+  }
+
+  // (b) The earliest lead deadline. The need already wrote the sentence
+  // ("New lead — respond by Sep 10"); the day's line borrows it rather than
+  // writing a second one that could drift from it.
+  const lead = flat
+    .filter(
+      (entry) =>
+        entry.line.needKind === 'new_lead' &&
+        !!entry.line.dueOn &&
+        !!entry.line.needText &&
+        !taken.has(entry.line.engagementId),
+    )
+    .sort(byDueThenId)[0];
+  if (lead) {
+    taken.add(lead.line.engagementId);
+    lines.push({
+      key: 'lead',
+      engagementId: lead.line.engagementId,
+      parts: [
+        {
+          kind: 'job',
+          text: lead.line.name,
+          engagementId: lead.line.engagementId,
+        },
+        { kind: 'text', text: ` · ${lead.line.needText}` },
+      ],
+    });
+  }
+
+  // (c) The client's own answer, inside the last day. Without a client name
+  // the line cannot be said — the roster refuses a role noun standing in for
+  // a name it does not have, and so does this.
+  const floor = now.getTime() - ANSWERED_NOTE_WINDOW_MS;
+  const answered = answeredNotes
+    .map((note) => ({ note, at: Date.parse(note.answeredAt) }))
+    .filter(
+      (entry) =>
+        Number.isFinite(entry.at) &&
+        entry.at >= floor &&
+        entry.at <= now.getTime(),
+    )
+    .sort((a, b) => b.at - a.at);
+  for (const { note } of answered) {
+    const match = flat.find(
+      (entry) =>
+        entry.line.projectId === note.projectId &&
+        !!entry.line.client &&
+        !taken.has(entry.line.engagementId),
+    );
+    if (!match) continue;
+    taken.add(match.line.engagementId);
+    lines.push({
+      key: 'answered',
+      engagementId: match.line.engagementId,
+      parts: [
+        { kind: 'text', text: `${match.line.client} replied last night — ` },
+        {
+          kind: 'job',
+          text: match.line.name,
+          engagementId: match.line.engagementId,
+        },
+      ],
+    });
+    break;
+  }
+
+  // Nothing needs her: the band does not render. A "nothing needs you" banner
+  // over sixteen live jobs is itself a second queue.
+  if (lines.length === 0) return null;
+
+  const shown = lines.slice(0, MAX_DAY_LINES);
+  const marked = flat.filter((entry) => entry.line.mark !== null);
+  const spoken = shown.filter((line) =>
+    marked.some((entry) => entry.line.engagementId === line.engagementId),
+  ).length;
+  const remaining = marked.length - spoken;
+  const firstStage = roster.groups[0]?.key ?? null;
+
+  return {
+    lines: shown,
+    more:
+      remaining > 0 && firstStage
+        ? { count: remaining, stageKey: firstStage }
+        : null,
   };
 }
