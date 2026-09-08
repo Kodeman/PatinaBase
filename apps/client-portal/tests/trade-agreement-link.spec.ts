@@ -131,7 +131,15 @@ async function mintTradeAgreement(options: { state?: 'sent' | 'void' } = {}): Pr
     pay_when_paid_days: 7,
     insurance_certificate_required: true,
     lien_waiver_policy: 'conditional_then_unconditional',
-    state,
+    // R46 — MINT AT 'sent', ALWAYS. `mint_trade_agreement_token` refuses an
+    // agreement whose state is not `sent` or `signed` ("trade agreement % is
+    // not sent and cannot be linked", 00579), so a fixture that inserted the
+    // row at `void` threw before the browser ever opened — which is why the
+    // fourth case had never run. The withdrawal happens after the mint, out of
+    // band as service_role, which is also the path production takes:
+    // `guard_trade_agreement_authored` freezes the content columns at `sent`
+    // but leaves `state`, `voided_at` and `void_reason` alone.
+    state: 'sent',
     sent_at: new Date().toISOString(),
     created_by: DESIGNER_ID,
   });
@@ -143,6 +151,14 @@ async function mintTradeAgreement(options: { state?: 'sent' | 'void' } = {}): Pr
     p_agreement_id: agreementId,
   });
   if (mintErr) throw mintErr;
+
+  if (state === 'void') {
+    const { error: voidErr } = await db
+      .from('studio_trade_agreements')
+      .update({ state: 'void', voided_at: new Date().toISOString(), void_reason: 'withdrawn' })
+      .eq('id', agreementId);
+    if (voidErr) throw voidErr;
+  }
   const mintedRow = (Array.isArray(minted) ? minted[0] : minted) as { token?: string } | null;
   expect(mintedRow?.token, 'mint_trade_agreement_token must return the raw token once').toBeTruthy();
 
@@ -232,24 +248,17 @@ test.describe('trade agreement guest link (Wave 3 · P14, R16)', () => {
         .eq('agreement_id', minted.agreementId);
       expect(tokens?.every((row) => (row as { status: string }).status === 'revoked')).toBe(true);
 
-      // S4 — OPEN RULING, deliberately not prejudged here. The build sheet
-      // says two incompatible things about re-opening a signed link: §3.2
-      // revokes the token in the signing transaction and lists `revoked`
-      // among resolve's NULL cases (so a re-open is the not-found page, which
-      // is what this lane implements and what §4.5's `state:'signed'` and
-      // `existingSignature` keys then have no way to reach), while §8 step 16
-      // requires "a fresh load of the same URL still shows the receipt". What
-      // is asserted here is the part BOTH readings agree on: a re-open is
-      // never a second signable form and never a raw DB message. Re-pin this
-      // to the single ruled horn once the orchestrator rules.
+      // R46 — A SPENT TOKEN CANNOT RE-OPEN. `sign_trade_agreement_by_token`
+      // revokes the token in the signing transaction and
+      // `resolve_trade_agreement_link` requires `status = 'active'`, so the
+      // same URL is a dead link on the second load. Build-sheet §8 step 16
+      // said "a fresh load of the same URL still shows the receipt"; that
+      // sentence is corrected — a RE-SENT link shows the receipt, the spent
+      // one does not.
       const second = await context.newPage();
       await second.goto(`/trade/${minted.token}`);
-      await expect(
-        second
-          .getByText(/page not found/i)
-          .or(second.getByTestId('trade-agreement-receipt'))
-          .first(),
-      ).toBeVisible({ timeout: 20000 });
+      await expect(second.getByText(/page not found/i)).toBeVisible({ timeout: 20000 });
+      await expect(second.getByTestId('trade-agreement-receipt')).toHaveCount(0);
       await expect(second.getByTestId('trade-agreement-signed-name')).toHaveCount(0);
       await expect(second.getByRole('button', { name: /sign this agreement/i })).toHaveCount(0);
       await second.close();
