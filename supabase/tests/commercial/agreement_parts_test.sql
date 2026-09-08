@@ -1681,17 +1681,33 @@ BEGIN
   v_errs := v_errs || v_err;
 
   -- (d) a cadence the money row has no column state for — was: violates check
-  --     constraint "proposal_service_terms_billing_cadence_check". 'per_draw'
-  --     is type-legal in the contract and does not become legal here until
-  --     Wave 3 widens the CHECK.
+  --     constraint "proposal_service_terms_billing_cadence_check".
+  --     00578 WIDENED BOTH cadence CHECKs with 'per_draw' for the turnkey
+  --     class, so the value W1 refused here is now legal and the refusal moved
+  --     to the next word that is not. The sentence gained its fourth clause in
+  --     the same change.
+  v_err := pg_temp.save_parts_err(
+    'a5300000-0000-4000-8000-00000000000d',
+    jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'cadence',
+      'partKey', 'patina.cadence', 'title', 'Billing cadence',
+      'payload', jsonb_build_object('cadence', 'on_handshake'))));
+  ASSERT v_err = 'billing runs monthly, every two weeks, at milestones, or on each draw',
+    format('R7(d): %L', v_err);
+  v_errs := v_errs || v_err;
+
+  -- (d2) and 'per_draw' itself now SAVES — the money row can hold it.
   v_err := pg_temp.save_parts_err(
     'a5300000-0000-4000-8000-00000000000d',
     jsonb_build_array(jsonb_build_object('kind', 'schedule', 'variant', 'cadence',
       'partKey', 'patina.cadence', 'title', 'Billing cadence',
       'payload', jsonb_build_object('cadence', 'per_draw'))));
-  ASSERT v_err = 'billing runs monthly, every two weeks, or at milestones',
-    format('R7(d): %L', v_err);
-  v_errs := v_errs || v_err;
+  ASSERT v_err IS NULL, format('R7(d2): per_draw must save from 00578 on: %L', v_err);
+  ASSERT (SELECT billing_cadence FROM public.proposal_service_terms
+          WHERE proposal_id = 'a5300000-0000-4000-8000-00000000000d') = 'per_draw',
+    'R7(d2): per_draw must reach the money row';
+  -- Put the bench back the way the cases below expect to find it.
+  PERFORM public.upsert_agreement_parts(
+    'a5300000-0000-4000-8000-00000000000d', '[]'::jsonb);
 
   -- (e) a negative ceiling — was: violates check constraint
   --     "proposal_service_terms_billing_ceiling_cents_check".

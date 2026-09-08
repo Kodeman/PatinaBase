@@ -415,6 +415,140 @@ export type Database = {
           },
         ]
       }
+      agreement_draw_invoices: {
+        Row: {
+          created_at: string
+          draw_key: string
+          gross_cents: number
+          id: string
+          invoice_id: string | null
+          is_retainage_release: boolean
+          issued_at: string | null
+          label: string
+          net_cents: number
+          proposal_id: string
+          retainage_cents: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          draw_key: string
+          gross_cents: number
+          id?: string
+          invoice_id?: string | null
+          is_retainage_release?: boolean
+          issued_at?: string | null
+          label: string
+          net_cents: number
+          proposal_id: string
+          retainage_cents?: number
+          sort_order: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          draw_key?: string
+          gross_cents?: number
+          id?: string
+          invoice_id?: string | null
+          is_retainage_release?: boolean
+          issued_at?: string | null
+          label?: string
+          net_cents?: number
+          proposal_id?: string
+          retainage_cents?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_draw_invoices_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_draw_invoices_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_draw_lien_waivers: {
+        Row: {
+          amount_cents: number | null
+          contact_display_name: string | null
+          contact_id: string | null
+          created_at: string
+          draw_id: string
+          id: string
+          received_at: string | null
+          recorded_by: string
+          storage_path: string | null
+          through_date: string | null
+          waiver_type: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          contact_display_name?: string | null
+          contact_id?: string | null
+          created_at?: string
+          draw_id: string
+          id?: string
+          received_at?: string | null
+          recorded_by: string
+          storage_path?: string | null
+          through_date?: string | null
+          waiver_type: string
+        }
+        Update: {
+          amount_cents?: number | null
+          contact_display_name?: string | null
+          contact_id?: string | null
+          created_at?: string
+          draw_id?: string
+          id?: string
+          received_at?: string | null
+          recorded_by?: string
+          storage_path?: string | null
+          through_date?: string | null
+          waiver_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_draw_lien_waivers_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_draw_lien_waivers_draw_id_fkey"
+            columns: ["draw_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_draw_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_draw_lien_waivers_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_draw_lien_waivers_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agreement_execution_snapshots: {
         Row: {
           created_at: string
@@ -446,6 +580,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      agreement_jurisdiction_notices: {
+        Row: {
+          body: string
+          citation: string
+          enabled: boolean
+          kind: string
+          state: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          citation: string
+          enabled?: boolean
+          kind: string
+          state: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          citation?: string
+          enabled?: boolean
+          kind?: string
+          state?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       agreement_part_events: {
         Row: {
@@ -24150,6 +24314,364 @@ export type Database = {
           },
         ]
       }
+      studio_license_attestations: {
+        Row: {
+          attested_at: string
+          attested_by: string
+          created_at: string
+          credential_number: string
+          credential_type: string
+          expires_on: string
+          state: string
+          studio_id: string
+          updated_at: string
+        }
+        Insert: {
+          attested_at?: string
+          attested_by: string
+          created_at?: string
+          credential_number: string
+          credential_type: string
+          expires_on: string
+          state: string
+          studio_id: string
+          updated_at?: string
+        }
+        Update: {
+          attested_at?: string
+          attested_by?: string
+          created_at?: string
+          credential_number?: string
+          credential_type?: string
+          expires_on?: string
+          state?: string
+          studio_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_license_attestations_attested_by_fkey"
+            columns: ["attested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_license_attestations_attested_by_fkey"
+            columns: ["attested_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_license_attestations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_license_attestations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_license_attestations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_trade_agreement_signatures: {
+        Row: {
+          agreement_id: string
+          evidence_fingerprint: string
+          id: string
+          metadata: Json
+          party: string
+          signed_at: string
+          signed_ip: string | null
+          signed_name: string
+          signer_user_id: string | null
+        }
+        Insert: {
+          agreement_id: string
+          evidence_fingerprint: string
+          id?: string
+          metadata?: Json
+          party: string
+          signed_at?: string
+          signed_ip?: string | null
+          signed_name: string
+          signer_user_id?: string | null
+        }
+        Update: {
+          agreement_id?: string
+          evidence_fingerprint?: string
+          id?: string
+          metadata?: Json
+          party?: string
+          signed_at?: string
+          signed_ip?: string | null
+          signed_name?: string
+          signer_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_trade_agreement_signatures_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "studio_trade_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreement_signatures_signer_user_id_fkey"
+            columns: ["signer_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreement_signatures_signer_user_id_fkey"
+            columns: ["signer_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_trade_agreement_tokens: {
+        Row: {
+          agreement_id: string
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          spent_at: string | null
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          agreement_id: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          spent_at?: string | null
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          agreement_id?: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          spent_at?: string | null
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_trade_agreement_tokens_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "studio_trade_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreement_tokens_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreement_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreement_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_trade_agreements: {
+        Row: {
+          contact_company_name: string | null
+          contact_display_name: string
+          contact_email: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string
+          currency: string
+          flow_down_clause_key: string | null
+          id: string
+          insurance_certificate_required: boolean
+          lien_waiver_policy: string
+          pay_when_paid_days: number | null
+          price_cents: number
+          project_id: string
+          retainage_bps: number
+          schedule: Json
+          scope: string
+          sent_at: string | null
+          signed_at: string | null
+          source_proposal_id: string | null
+          sov_line_ids: string[]
+          state: string
+          studio_id: string
+          title: string
+          trade: string | null
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        Insert: {
+          contact_company_name?: string | null
+          contact_display_name: string
+          contact_email?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by: string
+          currency?: string
+          flow_down_clause_key?: string | null
+          id?: string
+          insurance_certificate_required?: boolean
+          lien_waiver_policy?: string
+          pay_when_paid_days?: number | null
+          price_cents: number
+          project_id: string
+          retainage_bps?: number
+          schedule?: Json
+          scope: string
+          sent_at?: string | null
+          signed_at?: string | null
+          source_proposal_id?: string | null
+          sov_line_ids?: string[]
+          state?: string
+          studio_id: string
+          title: string
+          trade?: string | null
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Update: {
+          contact_company_name?: string | null
+          contact_display_name?: string
+          contact_email?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          flow_down_clause_key?: string | null
+          id?: string
+          insurance_certificate_required?: boolean
+          lien_waiver_policy?: string
+          pay_when_paid_days?: number | null
+          price_cents?: number
+          project_id?: string
+          retainage_bps?: number
+          schedule?: Json
+          scope?: string
+          sent_at?: string | null
+          signed_at?: string | null
+          source_proposal_id?: string | null
+          sov_line_ids?: string[]
+          state?: string
+          studio_id?: string
+          title?: string
+          trade?: string | null
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_trade_agreements_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreements_source_proposal_id_fkey"
+            columns: ["source_proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreements_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreements_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_trade_agreements_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       style_centroids: {
         Row: {
           centroid: string
@@ -28598,6 +29120,30 @@ export type Database = {
         Args: { p_field: string; p_noun: string; p_payload: Json }
         Returns: number
       }
+      _agreement_contract_sum_cents: {
+        Args: { p_payload: Json }
+        Returns: number
+      }
+      _agreement_design_build_part: {
+        Args: { p_proposal_id: string; p_variant: string }
+        Returns: Json
+      }
+      _agreement_design_build_subs: {
+        Args: { p_disclosure: string; p_proposal_id: string }
+        Returns: Json
+      }
+      _agreement_draw_rows: {
+        Args: { p_contract_sum_cents: number; p_draws: Json }
+        Returns: {
+          draw_key: string
+          gross_cents: number
+          is_retainage_release: boolean
+          label: string
+          net_cents: number
+          retainage_cents: number
+          sort_order: number
+        }[]
+      }
       _agreement_fee_unnamed: {
         Args: { p_proposal_id: string }
         Returns: boolean
@@ -28607,7 +29153,22 @@ export type Database = {
         Returns: boolean
       }
       _agreement_html_escape: { Args: { p_value: string }; Returns: string }
+      _agreement_is_int: { Args: { p_value: Json }; Returns: boolean }
       _agreement_money: { Args: { p_cents: number }; Returns: string }
+      _agreement_money_to_the_cent: {
+        Args: { p_cents: number }
+        Returns: string
+      }
+      _agreement_parts_json: { Args: { p_proposal_id: string }; Returns: Json }
+      _agreement_redact_client_payload: {
+        Args: {
+          p_disclosure: string
+          p_kind: string
+          p_payload: Json
+          p_variant: string
+        }
+        Returns: Json
+      }
       _agreement_requires_rate_card: {
         Args: { p_proposal_id: string }
         Returns: boolean
@@ -28616,8 +29177,16 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      _agreement_schedule_of_values: {
+        Args: { p_disclosure: string; p_payload: Json }
+        Returns: Json
+      }
       _agreement_studio_id: {
         Args: { p_actor: string; p_proposal_id: string }
+        Returns: string
+      }
+      _agreement_sub_disclosure: {
+        Args: { p_proposal_id: string }
         Returns: string
       }
       _apply_board_room_state_00444_impl: {
@@ -30032,11 +30601,25 @@ export type Database = {
         Args: { p_dispatch_id: string }
         Returns: undefined
       }
+      _trade_agreement_fingerprint: {
+        Args: { p_agreement_id: string }
+        Returns: string
+      }
       _trade_rfq_scope_snapshot: {
         Args: { p_proposal_id: string }
         Returns: Json
       }
       _trade_scope_progress_rank: { Args: { p_state: string }; Returns: number }
+      _validate_allowances_payload: {
+        Args: { p_payload: Json; p_pricing_basis?: Json }
+        Returns: string
+      }
+      _validate_draws_payload: { Args: { p_payload: Json }; Returns: string }
+      _validate_no_double_count: { Args: { p_parts: Json }; Returns: string }
+      _validate_pricing_basis_payload: {
+        Args: { p_payload: Json }
+        Returns: string
+      }
       _void_invoice_authorized_legacy_00397: {
         Args: { p_invoice_id: string; p_reason: string }
         Returns: {
@@ -31664,6 +32247,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_trade_agreement: {
+        Args: { p_contact_id: string; p_payload: Json; p_project_id: string }
+        Returns: string
+      }
       create_trade_scope: {
         Args: { p_project_id: string; p_title: string }
         Returns: Json
@@ -32898,6 +33485,10 @@ export type Database = {
         Returns: boolean
       }
       is_studio_comember: { Args: { p_owner: string }; Returns: boolean }
+      issue_agreement_draw_invoice: {
+        Args: { p_draw_key: string; p_proposal_id: string }
+        Returns: Json
+      }
       issue_invoice: {
         Args: { p_due_date?: string; p_invoice_id: string }
         Returns: {
@@ -33059,6 +33650,7 @@ export type Database = {
         Args: { p_product_id: string; p_project_id?: string }
         Returns: Json
       }
+      list_trade_agreements: { Args: { p_project_id: string }; Returns: Json }
       list_trade_scopes: { Args: { p_project_id: string }; Returns: Json }
       list_vendor_profiles: {
         Args: never
@@ -33273,6 +33865,13 @@ export type Database = {
         Returns: undefined
       }
       migrate_legacy_ffe_notes: { Args: never; Returns: number }
+      mint_trade_agreement_token: {
+        Args: { p_agreement_id: string }
+        Returns: {
+          id: string
+          token: string
+        }[]
+      }
       mint_trade_rfq_token: {
         Args: { p_rfq_id: string }
         Returns: {
@@ -33622,6 +34221,18 @@ export type Database = {
       record_activation_event: {
         Args: { p_event_name: string; p_properties?: Json; p_user_id: string }
         Returns: undefined
+      }
+      record_agreement_draw_lien_waiver: {
+        Args: {
+          p_amount_cents?: number
+          p_contact_id?: string
+          p_draw_id: string
+          p_received_at?: string
+          p_storage_path?: string
+          p_through_date?: string
+          p_waiver_type: string
+        }
+        Returns: Json
       }
       record_capture_enrichment_result: {
         Args: {
@@ -34210,6 +34821,7 @@ export type Database = {
           website: string
         }[]
       }
+      resolve_trade_agreement_link: { Args: { p_token: string }; Returns: Json }
       resolve_trade_rfq_link: { Args: { p_token: string }; Returns: Json }
       respond_project_approval: {
         Args: {
@@ -34672,6 +35284,7 @@ export type Database = {
         Args: { p_project_id: string; p_request_id: string }
         Returns: Json
       }
+      send_trade_agreement: { Args: { p_agreement_id: string }; Returns: Json }
       send_weekly_pulse: {
         Args: { p_body: string; p_pulse_id: string; p_subject?: string }
         Returns: {
@@ -34918,6 +35531,10 @@ export type Database = {
           p_signed_ip?: string
           p_signed_name: string
         }
+        Returns: Json
+      }
+      sign_trade_agreement_by_token: {
+        Args: { p_signed_ip?: string; p_signed_name: string; p_token: string }
         Returns: Json
       }
       site_request_approve_item: {
@@ -35219,6 +35836,10 @@ export type Database = {
           verdict_guest_comment: number
           verdict_guest_rejected: number
         }[]
+      }
+      studio_has_live_license_attestation: {
+        Args: { p_studio_id: string }
+        Returns: boolean
       }
       submit_board_share_reaction: {
         Args: {
@@ -35681,6 +36302,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      void_trade_agreement: {
+        Args: { p_agreement_id: string; p_reason?: string }
+        Returns: Json
       }
       void_trade_scope: {
         Args: { p_proposal_id: string; p_reason: string }
