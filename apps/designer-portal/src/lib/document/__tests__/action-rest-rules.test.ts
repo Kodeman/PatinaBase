@@ -136,4 +136,35 @@ describe("PP-3 · the rest rule is unconditional", () => {
     expect(box!.body).toMatch(/border-radius:\s*3px/);
     expect(box!.body).not.toMatch(/box-shadow/);
   });
+
+  it("draws the unavailable terminal act's silhouette back in (§A5)", () => {
+    // The fill retreats to rail stock, so without a hairline the tier stops
+    // reading as terminal — the sheet's "keeps its ROLE while unavailable".
+    const unavailable = ALL_RULES.find((rule) =>
+      /^\.da-terminal:disabled, ?\.da-terminal\[aria-disabled='true'\]$/.test(
+        rule.selector,
+      ),
+    );
+    expect(unavailable).toBeDefined();
+    expect(unavailable!.body).toMatch(
+      /background-color:\s*var\(--doc-rail-stock\)/,
+    );
+    expect(unavailable!.body).toMatch(/border:\s*1px solid var\(--/);
+  });
+
+  it("presses the terminal tier on the shared act clock (§A5)", () => {
+    // Every tier, terminal included, wears .da-act (document-action.tsx
+    // BASE_CLASS), so the sheet's .act--terminal:active press is this rule.
+    const press = ALL_RULES.find((rule) => rule.selector === ".da-act:active");
+    expect(press).toBeDefined();
+    expect(press!.body).toMatch(/transform:\s*translateY\(1px\)/);
+    expect(press!.body).toMatch(/var\(--press-in\)/);
+    // and nothing in the terminal tier takes that press back.
+    const taken = ALL_RULES.filter(
+      (rule) =>
+        /\.da-terminal\b/.test(rule.selector) &&
+        /(^|[;{\s])transform\s*:/.test(rule.body),
+    ).map((rule) => rule.selector);
+    expect(taken).toEqual([]);
+  });
 });

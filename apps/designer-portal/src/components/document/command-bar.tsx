@@ -244,6 +244,13 @@ export const callSheetPending = { value: false };
    unchanged, and focus never leaves the input. */
 const optionId = (index: number) => `command-bar-option-${index}`;
 
+/* The list is a DOM sibling of the input, so the active option is not a
+   descendant of the element that holds focus. ARIA's containment rule for
+   aria-activedescendant is satisfied the two ways it allows from a textbox:
+   the input OWNS this listbox, and it CONTROLS it. One listbox with a group
+   per section — not a listbox per section — so there is one thing to own. */
+const RESULTS_ID = 'command-bar-results';
+
 export function CommandBar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -1102,6 +1109,8 @@ export function CommandBar() {
           aria-activedescendant={
             !asking && flatRows[active] ? optionId(active) : undefined
           }
+          aria-controls={asking ? undefined : RESULTS_ID}
+          aria-owns={asking ? undefined : RESULTS_ID}
           aria-label="Find anything"
           placeholder="Find a document or a ledger…"
           className="w-full border-b border-[var(--color-pearl)] bg-transparent px-4 py-3 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:outline-none"
@@ -1155,43 +1164,49 @@ export function CommandBar() {
                 ? 'Nothing matches.'
                 : `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`}
             </p>
-            {rendered.map((section) => (
-              <div key={section.eyebrow ?? 'results'}>
-                {section.eyebrow && (
-                  <div className="px-4 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                    {section.eyebrow}
-                  </div>
-                )}
-                <ul role="listbox" aria-label={section.eyebrow ?? 'Results'}>
-                  {section.items.map(({ row, index }) => (
-                    <li key={row.key} role="presentation">
-                      <button
-                        type="button"
-                        id={optionId(index)}
-                        role="option"
-                        aria-selected={index === active}
-                        onMouseEnter={() => setActive(index)}
-                        onClick={() => choose(row, index)}
-                        className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
-                          index === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
-                        }`}
-                      >
-                        {renderGlyph(row)}
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
-                            {row.label}
+            <div role="listbox" id={RESULTS_ID} aria-label="Results">
+              {rendered.map((section) => (
+                <div
+                  key={section.eyebrow ?? 'results'}
+                  role="group"
+                  aria-label={section.eyebrow ?? 'Results'}
+                >
+                  {section.eyebrow && (
+                    <div className="px-4 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                      {section.eyebrow}
+                    </div>
+                  )}
+                  <ul role="presentation">
+                    {section.items.map(({ row, index }) => (
+                      <li key={row.key} role="presentation">
+                        <button
+                          type="button"
+                          id={optionId(index)}
+                          role="option"
+                          aria-selected={index === active}
+                          onMouseEnter={() => setActive(index)}
+                          onClick={() => choose(row, index)}
+                          className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
+                            index === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
+                          }`}
+                        >
+                          {renderGlyph(row)}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
+                              {row.label}
+                            </span>
+                            <span className="block truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                              {row.sub}
+                            </span>
                           </span>
-                          <span className="block truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                            {row.sub}
-                          </span>
-                        </span>
-                        {renderTrailing(row)}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+                          {renderTrailing(row)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -877,14 +877,41 @@ describe('B03 — the palette a screen reader can drive', () => {
     expect(openPalette()).toHaveAttribute('aria-modal', 'true');
   });
 
-  it('renders its results as listboxes of options', () => {
+  it('renders its results as ONE listbox, grouped by section', () => {
     openPalette();
+    // One listbox, not one per section: a combobox drives a single list, and
+    // several separately-rooted listboxes sharing one activedescendant pointer
+    // is not a relationship a screen reader is obliged to follow.
     const listboxes = screen.getAllByRole('listbox');
-    expect(listboxes.length).toBeGreaterThan(0);
-    for (const listbox of listboxes) {
-      expect(within(listbox).getAllByRole('option').length).toBeGreaterThan(0);
-    }
+    expect(listboxes).toHaveLength(1);
+    const listbox = listboxes[0]!;
+    expect(within(listbox).getAllByRole('option')).toEqual(options());
     expect(options().length).toBeGreaterThan(1);
+
+    const groups = within(listbox).getAllByRole('group');
+    expect(groups.length).toBeGreaterThan(0);
+    for (const group of groups) {
+      expect(group).toHaveAccessibleName();
+      expect(within(group).getAllByRole('option').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('owns and controls that listbox from the input the focus sits in', () => {
+    openPalette();
+    // ARIA lets aria-activedescendant leave the focused element only for a
+    // logical descendant (aria-owns) or, from a textbox, the controlled
+    // element's subtree (aria-controls). The list is a DOM sibling, so
+    // without one of these the pointer names nothing an AT has to resolve.
+    const listbox = screen.getByRole('listbox');
+    const id = listbox.getAttribute('id');
+    expect(id).toBeTruthy();
+    expect(paletteInput()).toHaveAttribute('aria-owns', id!);
+    expect(paletteInput()).toHaveAttribute('aria-controls', id!);
+    expect(listbox).toContainElement(
+      document.getElementById(
+        paletteInput().getAttribute('aria-activedescendant')!,
+      ),
+    );
   });
 
   it('marks exactly one option selected, and names it on the input', () => {

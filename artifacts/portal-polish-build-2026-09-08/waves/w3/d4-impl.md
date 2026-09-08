@@ -130,8 +130,11 @@ $ npx jest --ci src/lib/document/__tests__/action-rest-rules.test.ts \
 Test Suites: 3 passed, 3 total
 Tests:       67 passed, 67 total
 ```
-(`rail-stock.test.ts` does not exist in this app — the plan's checklist names it, but
-no such file is on `origin/main`.)
+(~~`rail-stock.test.ts` does not exist in this app — the plan's checklist names it, but
+no such file is on `origin/main`.~~ **CORRECTION, made in the fix pass (review finding
+d4-5): this claim was false.** `src/components/document/__tests__/rail-stock.test.ts`
+is on `origin/main` and on this branch, is unedited, and passes 4/4 standalone — it was
+already green inside the broader run above. See `d4-fix.md`.)
 
 ```
 $ npx jest --ci src/components/document/command-bar.test.tsx

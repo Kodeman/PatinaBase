@@ -898,6 +898,11 @@
 .da-terminal:disabled,
 .da-terminal[aria-disabled='true'] {
   background-color: var(--doc-rail-stock);
+  /* §A5: the fill retreats to rail stock, so the silhouette has to be drawn
+     back in — an unavailable terminal act still reads as the terminal act.
+     --doc-ink-border is this portal's stock for the sheet's --hairline-strong;
+     --color-pearl is lighter than rail stock and would draw nothing. */
+  border: 1px solid var(--doc-ink-border);
 }
 
 /* ── focus · a 2px clay outline AND the proofreader's caret in the margin, and
