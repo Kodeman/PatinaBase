@@ -72,12 +72,15 @@
   --phase-walkthrough: #A8B5A0;
 
   /* ── House sheet (I153) — docs/design/house-sheet/SPEC.md §A1 ────────────
-     Four hexes this portal lacked, added verbatim. */
+     Four hexes this portal lacked, added verbatim, plus --hairline-strong
+     (a genuinely new rgba value Lane H4's terminal-act/unavailable-terminal
+     CSS depends on — W2 review finding H2-1). */
   /* — house-sheet tokens:start — */
   --paper-doc: #FCFAF6;
   --rail: #E8E3DB;
   --ink-subtle: #5A4E43;
   --sage-ink: #5F6B57;
+  --hairline-strong: rgba(44, 41, 38, .14);
 
   /* Aliases onto tokens this portal already carries under its own name —
      never a rename, never a redefined value. */
@@ -88,6 +91,7 @@
   --clay-ink: var(--color-clay-ink);
   --golden-ink: var(--color-golden-hour-ink);
   --terracotta-ink: var(--color-terracotta-ink);
+  --ink-paper: var(--color-off-white);
   /* — house-sheet tokens:end — */
 
   /* Design system tokens (HSL) */

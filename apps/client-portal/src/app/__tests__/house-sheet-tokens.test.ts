@@ -4,10 +4,13 @@
  * docs/design/house-sheet/SPEC.md §A1 names sixteen distinct hexes; twelve of
  * them already lived in this portal under its own token names (--color-charcoal
  * for --ink, --color-clay for --clay, and so on) and four were genuinely
- * missing (--paper-doc, --rail, --ink-subtle, --sage-ink). This is a contract
- * test in the manner of the designer portal's contrast.test.ts: it parses
- * globals.css as text so a token that is retuned, renamed, or dropped is
- * caught here rather than by a human noticing a caption go quiet.
+ * missing (--paper-doc, --rail, --ink-subtle, --sage-ink). A fix round (W2
+ * review finding H2-1) added two more names Lane H4's region depends on:
+ * --ink-paper (an alias onto --color-off-white, same hex) and
+ * --hairline-strong (a new rgba literal with no prior equivalent). This is a
+ * contract test in the manner of the designer portal's contrast.test.ts: it
+ * parses globals.css as text so a token that is retuned, renamed, or dropped
+ * is caught here rather than by a human noticing a caption go quiet.
  *
  * It also holds the two houses-sheet regions to their own file boundaries —
  * the tokens/type-step markers this lane owns, and the untouched Scored Ink
@@ -62,6 +65,14 @@ const ALIASES: Record<string, string> = {
   '--clay-ink': '--color-clay-ink',
   '--golden-ink': '--color-golden-hour-ink',
   '--terracotta-ink': '--color-terracotta-ink',
+  '--ink-paper': '--color-off-white',
+};
+
+/** New non-hex literal tokens this lane's fix round adds (W2 review finding
+ * H2-1): the sheet declares these at an rgba value with no existing
+ * equivalent under any name, so they are genuinely new, not aliases. */
+const NEW_RGBA_TOKENS: Record<string, string> = {
+  '--hairline-strong': 'rgba(44, 41, 38, .14)',
 };
 
 /** The nine named type-step classes (§A3) plus the consequence sentence
@@ -141,6 +152,14 @@ describe('house-sheet tokens (§A1)', () => {
       // alias pointing at a token that does not exist)
       const targetDeclared = new RegExp(`${target.replace(/[-]/g, '\\-')}:\\s*#[0-9a-fA-F]{3,8}\\s*;`);
       expect(css).toMatch(targetDeclared);
+    }
+  });
+
+  it('declares the new rgba literal token at the sheet value', () => {
+    for (const [name, value] of Object.entries(NEW_RGBA_TOKENS)) {
+      const escapedValue = value.replace(/[.]/g, '\\.').replace(/[()]/g, '\\$&');
+      const re = new RegExp(`${name.replace(/[-]/g, '\\-')}:\\s*${escapedValue}\\s*;`, 'i');
+      expect(css).toMatch(re);
     }
   });
 
