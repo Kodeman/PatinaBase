@@ -15312,6 +15312,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.rpc_start_agreement_thread(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.rpc_start_agreement_thread(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00579_trade_agreements.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_trade_agreement_signature_immutable() FROM PUBLIC, anon, authenticated, service_role;

@@ -34933,6 +34933,10 @@ export type Database = {
         Args: { p_message_id: string }
         Returns: boolean
       }
+      rpc_start_agreement_thread: {
+        Args: { p_proposal_id: string }
+        Returns: string
+      }
       rpc_start_direct_thread: {
         Args: { counterpart: string }
         Returns: string

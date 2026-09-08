@@ -5227,6 +5227,28 @@ BEGIN
         USING ERRCODE = 'check_violation';
     END IF;
 
+    -- R48 (W3R2-01) — THE PRICE IS NEVER HIDDEN.
+    --
+    -- R39's visibility act is general, and a general act applied to the
+    -- pricing basis took the whole of a design-build agreement's money off
+    -- the paper: the redacted projection dropped the part, the client's copy
+    -- printed a draw schedule against a price it did not name, and the walk
+    -- signed it. The draw schedule is the same kind of term — it is what she
+    -- is asked to pay, and when.
+    --
+    -- So the two turnkey parts that state the money are client-visible by
+    -- construction, refused here rather than caught downstream. The composer
+    -- no longer offers the toggle on either; this is what holds for a payload
+    -- that arrives any other way.
+    IF COALESCE((v_part->>'clientVisible')::boolean, true) IS NOT TRUE
+       AND v_kind = 'schedule'
+       AND v_variant IN ('pricing_basis', 'draws') THEN
+      RAISE EXCEPTION
+        'your client signs the price and the draws, so "%" cannot be hidden from her',
+        v_title
+        USING ERRCODE = 'check_violation';
+    END IF;
+
     IF v_kind = 'schedule' AND v_variant = 'rate_card' THEN
       IF v_payload ? 'roles' AND jsonb_typeof(v_payload->'roles') <> 'array' THEN
         RAISE EXCEPTION 'a rate card is a list of roles and their hourly rates'
@@ -6015,6 +6037,7 @@ DECLARE
   v_name text := btrim(COALESCE(p_signer_name, ''));
   v_previous_accept text := current_setting('app.proposal_accept_id', true);
   v_previous_commercial text := current_setting('app.commercial_document_id', true);
+  v_previous_activation text;   -- 00578, R52
   v_anchor_phase_id uuid;   -- 00475
   -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
   -- composites land in one record and are unpacked below.
@@ -6390,6 +6413,29 @@ BEGIN
         v_project_id, p_proposal_id, v_proposal.document_kind, true,
         v_studio_signature.signed_at, v_actor
       ) RETURNING id INTO v_document_id;
+
+      -- R52 (W3R2-12) — the deposit joins the house it opened.
+      --
+      -- The origin deposit was billed at client_signed, when there was no
+      -- project to bill it against; the project exists as of the line above.
+      -- The GUC is set and restored here rather than left to
+      -- _activate_proposal_as_project_authorized, which clears its own.
+      IF v_proposal.document_kind = 'design_build' THEN
+        v_previous_activation :=
+          current_setting('app.proposal_activation_id', true);
+        PERFORM set_config(
+          'app.proposal_activation_id', p_proposal_id::text, true);
+        UPDATE public.invoices AS invoice
+        SET project_id = v_project_id
+        FROM public.agreement_draw_invoices AS draw
+        WHERE draw.proposal_id = p_proposal_id
+          AND draw.invoice_id = invoice.id
+          AND invoice.project_id IS NULL
+          AND invoice.status <> 'void';
+        PERFORM set_config(
+          'app.proposal_activation_id',
+          COALESCE(v_previous_activation, ''), true);
+      END IF;
 
       -- 00475 (R109 ceremony class): execution IS the engagement start.
       -- Anchors the first main-lane phase to the day authority took effect.
@@ -7119,6 +7165,23 @@ BEGIN
 
   -- ── 00578: the design-build arm (P9, P10, P11, R4, R11) ────────────────
   IF v_proposal.document_kind = 'design_build' THEN
+    -- R48 (W3R2-01) — the door asks the same question upsert_agreement_parts
+    -- asks, because a part hidden before this refusal existed is still on the
+    -- stack. _agreement_design_build_part reads the AUTHORED row, so without
+    -- this the arm below validates a price the client's projection has
+    -- already dropped and the homeowner signs a paper naming none.
+    IF EXISTS (
+      SELECT 1 FROM public.proposal_agreement_parts ap
+      WHERE ap.proposal_id = p_proposal_id
+        AND ap.kind = 'schedule'
+        AND ap.variant IN ('pricing_basis', 'draws')
+        AND NOT ap.client_visible
+    ) THEN
+      RAISE EXCEPTION
+        'your client signs the price and the draws, so neither can be hidden from her'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
     v_pricing_basis := public._agreement_design_build_part(
       p_proposal_id, 'pricing_basis');
     IF v_pricing_basis IS NULL THEN
@@ -7128,6 +7191,16 @@ BEGIN
     v_message := public._validate_pricing_basis_payload(v_pricing_basis);
     IF v_message IS NOT NULL THEN
       RAISE EXCEPTION '%', v_message USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- R48 — and the fee half of R22's floor, asked of this class in its own
+    -- words. _agreement_fee_unnamed reads pricing_basis through the same
+    -- client_visible filter as every other fee, so this is the second reading
+    -- of the same rule: whatever else is true, the paper she signs names a
+    -- price she can read.
+    IF public._agreement_fee_unnamed(p_proposal_id) THEN
+      RAISE EXCEPTION 'this agreement names no price your client can read'
+        USING ERRCODE = 'check_violation';
     END IF;
 
     v_draws := public._agreement_design_build_part(p_proposal_id, 'draws');
@@ -7703,6 +7776,35 @@ BEGIN
           WHERE d.proposal_id = p_proposal_id
             AND NOT d.is_retainage_release
             AND d.invoice_id IS NOT NULL), 0),
+        -- R50 (W3R2-02): THE OFFER IS RE-DERIVED, NOT REMEMBERED.
+        --
+        -- The deposit offer used to exist only in the sign route's response,
+        -- so it died with the page: a homeowner who signed, reloaded, and came
+        -- back found the receipt region gone and the deposit reachable only
+        -- two levels down under EARLIER INVOICES. It is a row, so it is read
+        -- as one — the deposit draw, its live invoice, and that invoice's own
+        -- link token, which is the same token the sign route handed this same
+        -- client minutes earlier.
+        --
+        -- Null the moment it is settled: a paid or voided deposit is not an
+        -- offer, and 'Your deposit is ready' printed over a paid one is the
+        -- same ask repeated at her.
+        'depositOffer', (
+          SELECT jsonb_build_object(
+            'invoiceId', invoice.id,
+            'amountCents', invoice.total_cents - invoice.amount_paid_cents,
+            'label', d.label,
+            'payToken', (
+              SELECT link.token FROM public.invoice_links link
+              WHERE link.invoice_id = invoice.id AND link.status = 'active'
+              ORDER BY link.created_at DESC LIMIT 1))
+          FROM public.agreement_draw_invoices d
+          JOIN public.invoices invoice ON invoice.id = d.invoice_id
+          WHERE d.proposal_id = p_proposal_id
+            AND d.draw_key = 'deposit'
+            AND invoice.status NOT IN ('void', 'paid')
+            AND invoice.amount_paid_cents < invoice.total_cents
+          LIMIT 1),
         -- R13, and the reason it is one function call rather than a join:
         -- studio_trade_agreements is created by the NEXT migration, and this
         -- body must not name a table that does not exist yet — a failed
@@ -8569,8 +8671,797 @@ INSERT INTO public.agreement_templates (
 ) ON CONFLICT (template_key) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- PART 13a — set_invoice_studio_id admits the origin deposit's adoption (R52)
+--
+-- Lineage: 00511_public_sd_hardening.sql:2616 → 00571_studio_invoices.sql:77
+--          → 00578 (this file).
+--
+-- Grafted VERBATIM from 00571_studio_invoices.sql:77-728, then two deltas:
+-- one declaration and one widened identity check, both marked 00578 inline.
+-- The TRIGGER definition is NOT re-issued — its normalized text is pinned by
+-- supabase/tests/edge_api/public_sd_hardening_contract_test.sql and this file
+-- changes only the function body. The ACL is preserved by CREATE OR REPLACE.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.set_invoice_studio_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_active_role text := COALESCE(current_setting('role', true), 'none');
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_commercial_document_id text :=
+    current_setting('app.commercial_document_id', true);
+  v_capability_row_id uuid;
+  v_capability_count integer;
+  v_actor_is_member boolean := false;
+  v_immutable_update boolean := false;
+  -- R52 (00578): the ONE reparenting this row admits, and only inside the
+  -- countersign that creates the project.
+  v_adopts_origin_deposit boolean := false;
+  v_postgres_migration boolean :=
+    session_user = 'postgres' AND v_active_role IN ('none', 'postgres');
+BEGIN
+  -- Financial machine transitions remain replayable after later authority
+  -- revocation. UPDATE never reparents an invoice, and its historical parent
+  -- checks stay non-locking to preserve project -> invoice lock order.
+  IF TG_OP = 'UPDATE' THEN
+    -- 00578, R52 (W3R2-12) — THE ORIGIN DEPOSIT JOINS ITS PROJECT.
+    --
+    -- A design-build deposit is billed at client_signed, before the project
+    -- exists, so it is raised project-less and anchored by its studio. Left
+    -- that way it stayed outside the house it opened for good: the project's
+    -- Money region never named it and the homeowner read it under EARLIER
+    -- INVOICES as 'not for a house'.
+    --
+    -- So the identity tuple admits exactly one transition — NULL project to
+    -- the project this agreement's own countersign just created — and only
+    -- while app.proposal_activation_id names that agreement, which
+    -- _countersign_design_services_agreement_impl sets around this UPDATE and
+    -- restores immediately. It mirrors proposals.project_id, which 00511
+    -- admits under the same GUC. Everything else about the row stays as
+    -- immutable as it was: designer, client, studio, id and created_at are
+    -- untouched here, and a project-bound invoice can still never be
+    -- reparented, because OLD.project_id IS NULL is half the predicate.
+    v_adopts_origin_deposit :=
+      OLD.project_id IS NULL
+      AND NEW.project_id IS NOT NULL
+      AND NULLIF(current_setting('app.proposal_activation_id', true), '')
+            IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM public.agreement_draw_invoices AS draw
+        JOIN public.proposals AS agreement ON agreement.id = draw.proposal_id
+        WHERE draw.invoice_id = NEW.id
+          AND draw.proposal_id::text =
+                current_setting('app.proposal_activation_id', true)
+          AND agreement.document_kind = 'design_build'
+          AND agreement.project_id = NEW.project_id
+          AND agreement.client_id IS NOT DISTINCT FROM NEW.client_id
+          AND agreement.designer_id IS NOT DISTINCT FROM NEW.designer_id
+      );
+
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW.created_at IS DISTINCT FROM OLD.created_at
+       OR (NEW.project_id IS DISTINCT FROM OLD.project_id
+           AND NOT v_adopts_origin_deposit)
+       OR NEW.designer_id IS DISTINCT FROM OLD.designer_id
+       OR NEW.client_id IS DISTINCT FROM OLD.client_id
+       OR NEW.studio_id IS DISTINCT FROM OLD.studio_id
+    THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    v_immutable_update := true;
+
+    -- 00571 studio invoices (S1): a row with no project is anchored by its
+    -- studio. Authority is the studio itself: an active design studio, an
+    -- active non-guest member stamped as designer, a named household, and an
+    -- actor that is either an active non-guest member or a machine role. The
+    -- branch reads no project and takes no lock, so the canonical
+    -- root/authority lock order below is untouched.
+    IF NEW.project_id IS NULL THEN
+      IF NEW.studio_id IS NULL
+         OR NEW.designer_id IS NULL
+         OR NEW.client_id IS NULL
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      -- The machine early return sits above the live-authority reads on this
+      -- arm, exactly as the project path's does below: a settle, a void or a
+      -- reminder replays long after the stamped designer may have been
+      -- suspended or the studio deactivated, and money already captured at
+      -- Stripe must still land on the row. The anchor tuple (project_id,
+      -- designer_id, client_id, studio_id) is immutable above, so no replay
+      -- can reparent the invoice; the INSERT arm still judges live authority
+      -- before the row exists.
+      IF v_active_role = 'service_role' OR v_postgres_migration THEN
+        RETURN NEW;
+      END IF;
+
+      IF NOT EXISTS (
+           SELECT 1
+           FROM public.organization_members AS studio_lead
+           JOIN public.organizations AS anchor_studio
+             ON anchor_studio.id = studio_lead.organization_id
+           WHERE studio_lead.organization_id = NEW.studio_id
+             AND studio_lead.user_id = NEW.designer_id
+             AND studio_lead.status = 'active'
+             AND studio_lead.role <> 'guest'
+             AND anchor_studio.type = 'design_studio'
+             AND anchor_studio.status = 'active'
+         )
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      IF v_active_role <> 'authenticated'
+         OR v_actor IS NULL
+         OR current_user NOT IN ('authenticated', 'postgres')
+         OR NOT EXISTS (
+           SELECT 1
+           FROM public.organization_members AS studio_actor
+           WHERE studio_actor.organization_id = NEW.studio_id
+             AND studio_actor.user_id = v_actor
+             AND studio_actor.status = 'active'
+             AND studio_actor.role <> 'guest'
+         )
+         -- S4 is the row's law on both arms: the household must sit on the
+         -- designer_clients roster of an active non-guest member of this
+         -- studio, the same rule create_draft_studio_invoice resolves the
+         -- household through. The read is RLS-safe for every actor this
+         -- branch admits (designer_clients_studio_rw, 00316:39, is
+         -- studio-wide) and takes no lock. The designer-domain law S7 asks
+         -- for stays the INSERT arm's, exactly as the project path judges its
+         -- lead there and not here: designer_id is immutable above.
+         OR NOT EXISTS (
+           SELECT 1
+           FROM public.designer_clients AS studio_roster
+           JOIN public.organization_members AS roster_membership
+             ON roster_membership.organization_id = NEW.studio_id
+            AND roster_membership.user_id = studio_roster.designer_id
+           WHERE studio_roster.client_id = NEW.client_id
+             AND roster_membership.status = 'active'
+             AND roster_membership.role <> 'guest'
+         )
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      -- Direct PostgREST DML (current_user = 'authenticated') may write only a
+      -- clean draft, exactly as the project path below allows: every state,
+      -- number and money field on an issued invoice belongs to the SECURITY
+      -- DEFINER billing RPCs, which reach here as current_user = 'postgres'.
+      IF current_user = 'authenticated'
+         AND NOT (
+           NEW.status = 'draft'
+           AND NEW.invoice_number IS NULL
+           AND NEW.issue_date IS NULL
+           AND NEW.sent_at IS NULL
+           AND NEW.paid_at IS NULL
+           AND NEW.voided_at IS NULL
+           AND NEW.void_reason IS NULL
+           AND NEW.stripe_checkout_session_id IS NULL
+           AND NEW.amount_paid_cents = 0
+           AND NEW.reminder_count = 0
+           AND NEW.last_reminder_at IS NULL
+           AND NEW.ar_flagged_at IS NULL
+           AND NEW.ar_last_chased_at IS NULL
+           AND NEW.updated_at IS NOT DISTINCT FROM OLD.updated_at
+         )
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      RETURN NEW;
+    END IF;
+
+    SELECT project.* INTO v_project
+    FROM public.projects AS project
+    WHERE project.id = NEW.project_id
+      AND project.client_id IS NOT DISTINCT FROM NEW.client_id
+      AND project.studio_id = NEW.studio_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    IF v_project.designer_id IS DISTINCT FROM NEW.designer_id THEN
+      PERFORM historical_lead.id
+      FROM public.project_team_members AS historical_lead
+      WHERE historical_lead.project_id = NEW.project_id
+        AND historical_lead.user_id = NEW.designer_id
+        AND historical_lead.role = 'previous_lead'
+      ORDER BY historical_lead.id;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+    END IF;
+
+    IF v_active_role = 'service_role' OR v_postgres_migration THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  IF NOT v_immutable_update THEN
+    -- 00571 studio invoices (S1): a row with no project is anchored by its
+    -- studio. Authority is the studio itself: an active design studio, an
+    -- active non-guest member stamped as designer, a named household, and an
+    -- actor that is either an active non-guest member or a machine role. The
+    -- branch reads no project and takes no lock, so the canonical
+    -- root/authority lock order below is untouched.
+    IF NEW.project_id IS NULL THEN
+      IF NEW.studio_id IS NULL
+         OR NEW.designer_id IS NULL
+         OR NEW.client_id IS NULL
+         OR NOT EXISTS (
+           SELECT 1
+           FROM public.organization_members AS studio_lead
+           JOIN public.organizations AS anchor_studio
+             ON anchor_studio.id = studio_lead.organization_id
+           WHERE studio_lead.organization_id = NEW.studio_id
+             AND studio_lead.user_id = NEW.designer_id
+             AND studio_lead.status = 'active'
+             AND studio_lead.role <> 'guest'
+             AND anchor_studio.type = 'design_studio'
+             AND anchor_studio.status = 'active'
+         )
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      -- S4 is the row's law for every caller that judges live authority, not
+      -- the composer's alone: the household must sit on the designer_clients
+      -- roster of an active non-guest member of this studio - the rule
+      -- create_draft_studio_invoice resolves the household through - and the
+      -- stamped member must hold a designer-domain role. Without both, a
+      -- caller could address a studio invoice to any profile in the database,
+      -- or route its design_fee earning to a co-member who designs nothing.
+      -- The pair sits ABOVE the machine early return because the project path
+      -- holds service_role to the same two reads on insert (its live tuple at
+      -- the FOR SHARE select below, and has_designer_domain_role); only a true
+      -- postgres/no-SET-ROLE session receives the bounded legacy-fixture
+      -- bypass the project path grants at exactly this point. The roster read
+      -- is RLS-safe for every caller this branch admits:
+      -- designer_clients_studio_rw (00316:39) shows a co-member the whole
+      -- studio's roster, the SECURITY DEFINER billing RPCs arrive as the table
+      -- owner, and service_role bypasses RLS. Neither read takes a lock, so
+      -- the canonical root -> user_roles -> memberships -> organization order
+      -- below is untouched.
+      IF NOT v_postgres_migration THEN
+        IF NOT EXISTS (
+             SELECT 1
+             FROM public.designer_clients AS studio_roster
+             JOIN public.organization_members AS roster_membership
+               ON roster_membership.organization_id = NEW.studio_id
+              AND roster_membership.user_id = studio_roster.designer_id
+             WHERE studio_roster.client_id = NEW.client_id
+               AND roster_membership.status = 'active'
+               AND roster_membership.role <> 'guest'
+           )
+           OR NOT public.has_designer_domain_role(NEW.designer_id)
+        THEN
+          RAISE EXCEPTION 'studio_id_not_designer_studio';
+        END IF;
+      END IF;
+
+      IF v_active_role = 'service_role' OR v_postgres_migration THEN
+        RETURN NEW;
+      END IF;
+
+      IF v_active_role <> 'authenticated'
+         OR v_actor IS NULL
+         OR current_user NOT IN ('authenticated', 'postgres')
+         OR NOT EXISTS (
+           SELECT 1
+           FROM public.organization_members AS studio_actor
+           WHERE studio_actor.organization_id = NEW.studio_id
+             AND studio_actor.user_id = v_actor
+             AND studio_actor.status = 'active'
+             AND studio_actor.role <> 'guest'
+         )
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      -- Direct PostgREST DML (current_user = 'authenticated') may write only a
+      -- clean draft, exactly as the project path below allows: every state,
+      -- number and money field on an issued invoice belongs to the SECURITY
+      -- DEFINER billing RPCs, which reach here as current_user = 'postgres'.
+      IF current_user = 'authenticated'
+         AND NOT (
+           NEW.status = 'draft'
+           AND NEW.invoice_number IS NULL
+           AND NEW.issue_date IS NULL
+           AND NEW.sent_at IS NULL
+           AND NEW.paid_at IS NULL
+           AND NEW.voided_at IS NULL
+           AND NEW.void_reason IS NULL
+           AND NEW.stripe_checkout_session_id IS NULL
+           AND NEW.amount_paid_cents = 0
+           AND NEW.reminder_count = 0
+           AND NEW.last_reminder_at IS NULL
+           AND NEW.ar_flagged_at IS NULL
+           AND NEW.ar_last_chased_at IS NULL
+         )
+      THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+
+      RETURN NEW;
+    END IF;
+
+    -- Authorization-qualified discovery precedes the canonical root lock.
+    -- A direct actor must already belong to the exact active project studio;
+    -- an owner-executed client path must present its exact transaction-bound
+    -- commercial, activation, or decision capability. Neither path first
+    -- reads or contends on a foreign project selected only by caller input.
+    IF v_postgres_migration OR v_active_role = 'service_role' THEN
+      SELECT project.* INTO v_project
+      FROM public.projects AS project
+      WHERE project.id = NEW.project_id;
+    ELSIF v_active_role = 'authenticated' THEN
+      IF v_actor IS NULL THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      ELSIF current_user = 'authenticated' THEN
+        SELECT project.* INTO v_project
+        FROM public.projects AS project
+        JOIN public.organization_members AS actor_membership
+          ON actor_membership.organization_id = project.studio_id
+         AND actor_membership.user_id = v_actor
+        JOIN public.organizations AS studio
+          ON studio.id = actor_membership.organization_id
+        WHERE project.id = NEW.project_id
+          AND actor_membership.status = 'active'
+          AND actor_membership.role <> 'guest'
+          AND studio.type = 'design_studio'
+          AND studio.status = 'active';
+      ELSIF current_user = 'postgres' THEN
+        SELECT project.* INTO v_project
+        FROM public.projects AS project
+        WHERE project.id = NEW.project_id
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM public.organization_members AS actor_membership
+              JOIN public.organizations AS studio
+                ON studio.id = actor_membership.organization_id
+              WHERE actor_membership.organization_id = project.studio_id
+                AND actor_membership.user_id = v_actor
+                AND actor_membership.status = 'active'
+                AND actor_membership.role <> 'guest'
+                AND studio.type = 'design_studio'
+                AND studio.status = 'active'
+            )
+            OR (
+              project.client_id = v_actor
+              AND (
+                EXISTS (
+                  SELECT 1
+                  FROM public.project_commercial_documents AS document
+                  JOIN public.proposals AS proposal
+                    ON proposal.id = document.proposal_id
+                  JOIN public.designer_clients AS relationship
+                    ON relationship.id = proposal.designer_client_id
+                  WHERE document.project_id = project.id
+                    AND document.proposal_id::text =
+                          v_commercial_document_id
+                    AND document.document_kind IN (
+                      'design_services', 'service_addendum',
+                      'furnishings_authorization', 'trade_scope'
+                    )
+                    AND proposal.document_kind = document.document_kind
+                    AND (
+                      proposal.project_id IS NULL
+                      OR proposal.project_id = project.id
+                    )
+                    AND proposal.client_id = project.client_id
+                    AND relationship.designer_id = proposal.designer_id
+                    AND relationship.client_id = proposal.client_id
+                    AND proposal.commercial_state = 'executed'
+                )
+                OR EXISTS (
+                  SELECT 1
+                  FROM public.proposals AS proposal
+                  JOIN public.designer_clients AS relationship
+                    ON relationship.id = proposal.designer_client_id
+                  WHERE proposal.id = project.proposal_id
+                    AND proposal.id::text = current_setting(
+                      'app.proposal_activation_id', true
+                    )
+                    AND proposal.client_id = project.client_id
+                    AND proposal.designer_id = project.designer_id
+                    AND proposal.status = 'accepted'
+                    AND (
+                      proposal.project_id IS NULL
+                      OR proposal.project_id = project.id
+                    )
+                    AND relationship.designer_id = proposal.designer_id
+                    AND relationship.client_id = proposal.client_id
+                )
+                OR EXISTS (
+                  SELECT 1
+                  FROM public.client_decisions AS decision
+                  JOIN public.designer_clients AS relationship
+                    ON relationship.id = decision.designer_client_id
+                  WHERE decision.id::text = current_setting(
+                    'app.client_decision_write_id', true
+                  )
+                    AND decision.project_id = project.id
+                    AND decision.designer_id = project.designer_id
+                    AND decision.decision_kind = 'approval'
+                    AND decision.coordination_kind = 'selection'
+                    AND decision.court = 'client'
+                    AND decision.status = 'responded'
+                    AND relationship.designer_id = project.designer_id
+                    AND relationship.client_id = project.client_id
+                )
+              )
+            )
+          );
+      ELSE
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+    ELSE
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    NEW.studio_id := COALESCE(NEW.studio_id, v_project.studio_id);
+    NEW.designer_id := COALESCE(NEW.designer_id, v_project.designer_id);
+    NEW.client_id := COALESCE(NEW.client_id, v_project.client_id);
+
+    -- Legacy fixtures and owner maintenance may omit live authority rows, but
+    -- only a true postgres/no-SET-ROLE session receives this bounded bypass.
+    IF v_postgres_migration THEN
+      RETURN NEW;
+    END IF;
+
+    SELECT project.* INTO v_project
+    FROM public.projects AS project
+    WHERE project.id = NEW.project_id
+      AND project.designer_id = NEW.designer_id
+      AND project.client_id IS NOT DISTINCT FROM NEW.client_id
+      AND project.studio_id = NEW.studio_id
+      AND project.status = 'active'
+    FOR SHARE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    PERFORM user_role.id
+    FROM public.user_roles AS user_role
+    JOIN public.roles AS role ON role.id = user_role.role_id
+    WHERE user_role.user_id = NEW.designer_id
+      AND role.domain = 'designer'
+    ORDER BY user_role.role_id, user_role.id
+    FOR SHARE OF user_role;
+    -- Lock above, authority from the DEFINER helper: FOUND would be false for
+    -- any co-member, whose RLS hides the lead's user_roles row.
+    IF NOT public.has_designer_domain_role(NEW.designer_id) THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    PERFORM membership.id
+    FROM public.organization_members AS membership
+    WHERE membership.organization_id = NEW.studio_id
+      AND membership.user_id = ANY(ARRAY[NEW.designer_id, v_actor]::uuid[])
+    ORDER BY membership.user_id, membership.id
+    FOR SHARE;
+
+    PERFORM studio.id
+    FROM public.organizations AS studio
+    WHERE studio.id = NEW.studio_id
+    ORDER BY studio.id
+    FOR SHARE;
+
+    SELECT project.* INTO v_project
+    FROM public.projects AS project
+    JOIN public.organizations AS studio ON studio.id = project.studio_id
+    JOIN public.organization_members AS lead_membership
+      ON lead_membership.organization_id = project.studio_id
+     AND lead_membership.user_id = project.designer_id
+    WHERE project.id = NEW.project_id
+      AND project.designer_id = NEW.designer_id
+      AND project.client_id IS NOT DISTINCT FROM NEW.client_id
+      AND project.studio_id = NEW.studio_id
+      AND project.status = 'active'
+      AND studio.type = 'design_studio'
+      AND studio.status = 'active'
+      AND lead_membership.status = 'active'
+      AND lead_membership.role <> 'guest';
+
+    IF NEW.project_id IS NULL
+       OR NEW.designer_id IS NULL
+       OR NEW.studio_id IS NULL
+       OR NOT FOUND
+    THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+  END IF;
+
+  IF v_active_role = 'authenticated' THEN
+    IF v_actor IS NULL THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM public.organizations AS actor_studio
+      WHERE actor_studio.id = NEW.studio_id
+        AND actor_studio.type = 'design_studio'
+        AND actor_studio.status = 'active'
+    ) THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    v_actor_is_member := EXISTS (
+      SELECT 1
+    FROM public.organization_members AS actor_membership
+    JOIN public.organizations AS actor_studio
+      ON actor_studio.id = actor_membership.organization_id
+    WHERE actor_membership.organization_id = NEW.studio_id
+      AND actor_membership.user_id = v_actor
+      AND actor_membership.status = 'active'
+      AND actor_membership.role <> 'guest'
+      AND actor_studio.type = 'design_studio'
+      AND actor_studio.status = 'active'
+    );
+
+    IF current_user = 'authenticated' THEN
+      IF v_actor_is_member
+         AND v_project.designer_id IS NOT DISTINCT FROM NEW.designer_id
+         AND EXISTS (
+           SELECT 1
+           FROM public.organization_members AS lead_membership
+           WHERE lead_membership.organization_id = NEW.studio_id
+             AND lead_membership.user_id = NEW.designer_id
+             AND lead_membership.status = 'active'
+             AND lead_membership.role <> 'guest'
+         )
+         AND public.has_designer_domain_role(NEW.designer_id)
+         AND NEW.status = 'draft'
+         AND NEW.invoice_number IS NULL
+         AND NEW.issue_date IS NULL
+         AND NEW.sent_at IS NULL
+         AND NEW.paid_at IS NULL
+         AND NEW.voided_at IS NULL
+         AND NEW.void_reason IS NULL
+         AND NEW.stripe_checkout_session_id IS NULL
+         AND NEW.amount_paid_cents = 0
+         AND NEW.reminder_count = 0
+         AND NEW.last_reminder_at IS NULL
+         AND NEW.ar_flagged_at IS NULL
+         AND NEW.ar_last_chased_at IS NULL
+         AND (
+           TG_OP = 'INSERT'
+           OR (
+             NEW.project_id IS NOT DISTINCT FROM OLD.project_id
+             AND NEW.designer_id IS NOT DISTINCT FROM OLD.designer_id
+             AND NEW.client_id IS NOT DISTINCT FROM OLD.client_id
+             AND NEW.studio_id IS NOT DISTINCT FROM OLD.studio_id
+             AND NEW.created_at IS NOT DISTINCT FROM OLD.created_at
+             AND NEW.updated_at IS NOT DISTINCT FROM OLD.updated_at
+           )
+         )
+      THEN
+        RETURN NEW;
+      END IF;
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    ELSIF current_user IS DISTINCT FROM 'postgres' THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    IF v_actor_is_member THEN
+      RETURN NEW;
+    END IF;
+
+    IF v_actor IS DISTINCT FROM NEW.client_id THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    PERFORM 1
+    FROM public.project_commercial_documents AS document
+    JOIN public.proposals AS proposal
+      ON proposal.id = document.proposal_id
+    JOIN public.designer_clients AS author_relationship
+      ON author_relationship.id = proposal.designer_client_id
+    WHERE document.proposal_id::text = v_commercial_document_id
+      AND document.project_id = NEW.project_id
+      AND document.document_kind IN (
+        'design_services', 'service_addendum',
+        'furnishings_authorization', 'trade_scope'
+      )
+      AND proposal.document_kind = document.document_kind
+      AND (
+        proposal.project_id IS NULL
+        OR proposal.project_id = NEW.project_id
+      )
+      AND proposal.client_id = NEW.client_id
+      AND author_relationship.designer_id = proposal.designer_id
+      AND author_relationship.client_id = proposal.client_id
+      AND proposal.commercial_state = 'executed'
+    FOR SHARE OF document, proposal, author_relationship;
+    IF FOUND THEN
+      RETURN NEW;
+    END IF;
+
+    SELECT locked.id, count(*) OVER ()
+    INTO v_capability_row_id, v_capability_count
+    FROM (
+      SELECT milestone.id
+      FROM public.project_payment_milestones AS milestone
+      JOIN public.proposals AS proposal
+        ON proposal.id = v_project.proposal_id
+      JOIN public.designer_clients AS relationship
+        ON relationship.id = proposal.designer_client_id
+      WHERE proposal.id::text =
+              current_setting('app.proposal_activation_id', true)
+        AND proposal.client_id = v_actor
+        AND proposal.designer_id = v_project.designer_id
+        AND proposal.status = 'accepted'
+        AND (
+          proposal.project_id IS NULL
+          OR proposal.project_id = v_project.id
+        )
+        AND relationship.designer_id = proposal.designer_id
+        AND relationship.client_id = proposal.client_id
+        AND milestone.project_id = v_project.id
+        AND milestone.trigger_kind = 'on_signing'
+        AND milestone.invoice_id IS NULL
+        AND milestone.label || ' — payment milestone' = NEW.memo
+        AND milestone.amount_cents = NEW.subtotal_cents
+        AND NEW.tax_cents = 0
+        AND milestone.amount_cents = NEW.total_cents
+      FOR UPDATE OF milestone
+      FOR SHARE OF proposal, relationship
+    ) AS locked
+    LIMIT 1;
+    IF FOUND AND v_capability_count = 1 THEN
+      RETURN NEW;
+    END IF;
+
+    SELECT locked.id, count(*) OVER ()
+    INTO v_capability_row_id, v_capability_count
+    FROM (
+      SELECT milestone.id
+      FROM public.client_decisions AS decision
+      JOIN public.designer_clients AS relationship
+        ON relationship.id = decision.designer_client_id
+      JOIN public.client_decision_options AS option
+        ON option.decision_id = decision.id
+      JOIN public.project_payment_milestones AS milestone
+        ON milestone.project_id = decision.project_id
+       AND milestone.trigger_kind = 'on_section_settled'
+       AND milestone.trigger_section_key = decision.section_key
+      WHERE decision.id::text =
+              current_setting('app.client_decision_write_id', true)
+        AND decision.project_id = v_project.id
+        AND decision.designer_id = v_project.designer_id
+        AND decision.decision_kind = 'approval'
+        AND decision.coordination_kind = 'selection'
+        AND decision.court = 'client'
+        AND decision.status = 'responded'
+        AND relationship.designer_id = v_project.designer_id
+        AND relationship.client_id = v_actor
+        AND option.selected
+        AND option.approves
+        AND milestone.invoice_id IS NULL
+        AND milestone.label || ' — payment milestone' = NEW.memo
+        AND milestone.amount_cents = NEW.subtotal_cents
+        AND NEW.tax_cents = 0
+        AND milestone.amount_cents = NEW.total_cents
+      FOR UPDATE OF milestone
+      FOR SHARE OF decision, relationship, option
+    ) AS locked
+    LIMIT 1;
+    IF FOUND AND v_capability_count = 1 THEN
+      RETURN NEW;
+    END IF;
+
+    RAISE EXCEPTION 'studio_id_not_designer_studio';
+  ELSIF v_active_role <> 'service_role' AND NOT v_postgres_migration THEN
+    RAISE EXCEPTION 'studio_id_not_designer_studio';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PART 13b — R47, keyed by the paper it is about (W3R2-11)
+--
+-- An origin agreement is bound to no project until countersign, so a question
+-- asked at its door has no project thread to land in. Wave 3 answered that
+-- with rpc_start_direct_thread — correct about WHO, silent about WHAT: the
+-- row landed with proposal_id NULL, indistinguishable from any other letter
+-- between the two of them, and a second origin agreement from the same studio
+-- would have folded into the first one's thread.
+--
+-- R47 words it "keyed by proposal when no project exists; never another
+-- project's thread". So this is the direct thread, keyed. The relationship
+-- test is the paper itself: only the client this agreement was addressed to
+-- may open it, and only once the studio has sent it — the same edge
+-- get_client_commercial_document_bundle draws.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.rpc_start_agreement_thread(p_proposal_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_caller uuid := auth.uid();
+  v_proposal public.proposals%ROWTYPE;
+  v_thread uuid;
+BEGIN
+  IF v_caller IS NULL THEN
+    RAISE EXCEPTION 'rpc_start_agreement_thread requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal FROM public.proposals WHERE id = p_proposal_id;
+  -- Missing and denied answer identically: this is GRANTed to authenticated
+  -- and must never confirm that a paper exists.
+  IF NOT FOUND
+     OR v_proposal.client_id IS DISTINCT FROM v_caller
+     OR v_proposal.designer_id IS NULL
+     OR v_proposal.designer_id = v_caller
+     OR v_proposal.sent_at IS NULL
+  THEN
+    RAISE EXCEPTION 'agreement % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT t.id INTO v_thread
+  FROM public.comms_threads t
+  WHERE t.kind = 'direct'
+    AND t.proposal_id = p_proposal_id
+    AND EXISTS (
+      SELECT 1 FROM public.comms_thread_participants p
+      WHERE p.thread_id = t.id AND p.profile_id = v_caller AND p.left_at IS NULL)
+    AND EXISTS (
+      SELECT 1 FROM public.comms_thread_participants p
+      WHERE p.thread_id = t.id AND p.profile_id = v_proposal.designer_id
+        AND p.left_at IS NULL)
+  ORDER BY t.created_at ASC
+  LIMIT 1;
+
+  IF v_thread IS NOT NULL THEN
+    RETURN v_thread;
+  END IF;
+
+  INSERT INTO public.comms_threads (kind, created_by, proposal_id)
+  VALUES ('direct', v_caller, p_proposal_id)
+  RETURNING id INTO v_thread;
+
+  INSERT INTO public.comms_thread_participants (thread_id, profile_id, role)
+  VALUES
+    (v_thread, v_caller, public.comms_resolve_role(v_caller)),
+    (v_thread, v_proposal.designer_id,
+     public.comms_resolve_role(v_proposal.designer_id));
+
+  RETURN v_thread;
+END;
+$$;
+COMMENT ON FUNCTION public.rpc_start_agreement_thread(uuid) IS
+  'R47: the direct thread a question asked at an origin agreement''s door lands in, keyed by that agreement (comms_threads.proposal_id) so it can never be another paper''s — or another project''s — thread.';
+REVOKE ALL ON FUNCTION public.rpc_start_agreement_thread(uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.rpc_start_agreement_thread(uuid)
+  TO authenticated, service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- PART 14 — close
--- 
+--
 -- Every function above that is new carries its own REVOKE/GRANT pair beside
 -- it; every function that was REDEFINED keeps the ACL it already had, which
 -- CREATE OR REPLACE preserves — so no hardened grant is re-issued here and

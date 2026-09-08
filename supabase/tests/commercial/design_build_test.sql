@@ -942,6 +942,203 @@ BEGIN
   RAISE NOTICE 'PASS T3: per_draw reaches the authority and the origin records design_build';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (T22) (T23) (T24) THE WALK'S ROUND-2 RULINGS, on the agreement just executed.
+--   T24  R52 — the origin deposit invoice joins the project at countersign.
+--   T23  R50 — the client bundle RE-DERIVES the deposit offer, so a reload is
+--        not a forgetting.
+--   T22  R47 — a question asked at an origin door opens a thread KEYED BY THE
+--        PAPER, never one that could be any other paper's.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_project_id uuid;
+  v_deposit uuid;
+  v_bundle jsonb;
+  v_offer jsonb;
+  v_thread uuid;
+  v_again uuid;
+BEGIN
+  SELECT project_id INTO v_project_id FROM public.project_commercial_documents
+  WHERE proposal_id = 'a8300000-0000-4000-8000-000000000001';
+  SELECT invoice_id INTO v_deposit FROM public.agreement_draw_invoices
+  WHERE proposal_id = 'a8300000-0000-4000-8000-000000000001' AND draw_key = 'deposit';
+
+  -- (T24) R52. Raised project-less at client_signed, filed under the house the
+  -- countersign above just created.
+  ASSERT v_deposit IS NOT NULL, 'T24: the deposit invoice exists to be adopted';
+  ASSERT (SELECT project_id FROM public.invoices WHERE id = v_deposit)
+         = v_project_id,
+    format('T24: the origin deposit must join its project, got %L',
+           (SELECT project_id FROM public.invoices WHERE id = v_deposit));
+  ASSERT (SELECT studio_id FROM public.invoices WHERE id = v_deposit) IS NOT NULL,
+    'T24: and keeps the studio it was anchored by';
+
+  -- And the transition is the ONLY one: a project-bound invoice cannot be
+  -- reparented, GUC or no GUC.
+  BEGIN
+    PERFORM set_config('app.proposal_activation_id',
+                       'a8300000-0000-4000-8000-000000000001', true);
+    UPDATE public.invoices SET project_id = NULL WHERE id = v_deposit;
+    PERFORM set_config('app.proposal_activation_id', '', true);
+    ASSERT false, 'T24: an adopted invoice must not be un-adopted';
+  EXCEPTION WHEN raise_exception THEN
+    PERFORM set_config('app.proposal_activation_id', '', true);
+    ASSERT SQLERRM = 'studio_id_not_designer_studio',
+      format('T24: %L', SQLERRM);
+  END;
+
+  -- (T23) R50. The homeowner reads her own bundle; the offer is a row, not a
+  -- memory of the sign response.
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle(
+    'a8300000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+  v_offer := v_bundle->'designBuild'->'depositOffer';
+  ASSERT v_offer IS NOT NULL AND jsonb_typeof(v_offer) = 'object',
+    format('T23: the bundle must carry the standing deposit offer, got %s',
+           COALESCE(v_offer::text, 'null'));
+  ASSERT (v_offer->>'invoiceId')::uuid = v_deposit,
+    'T23: and it is the deposit draw''s own invoice';
+  ASSERT (v_offer->>'amountCents')::bigint = pg_temp.m('draw1_net'),
+    format('T23: the offer names the NET still owed, got %s',
+           v_offer->>'amountCents');
+  ASSERT v_offer->>'label' = 'Deposit at signing',
+    'T23: in the studio''s own words for the draw';
+  ASSERT v_offer->>'payToken' ~ '^[0-9a-f]{64}$',
+    format('T23: with the link the payer surface reads, got %L',
+           v_offer->>'payToken');
+
+  -- Settled is not an offer.
+  PERFORM pg_temp.pay_invoice(v_deposit);
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle(
+    'a8300000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+  ASSERT v_bundle->'designBuild'->'depositOffer' = 'null'::jsonb
+      OR v_bundle->'designBuild'->'depositOffer' IS NULL,
+    format('T23: a paid deposit is not an offer, got %s',
+           v_bundle->'designBuild'->'depositOffer');
+  UPDATE public.invoices SET status = 'sent', amount_paid_cents = 0, paid_at = NULL
+  WHERE id = v_deposit;
+
+  -- (T22) R47. Keyed by the paper.
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000004');
+  v_thread := public.rpc_start_agreement_thread(
+    'a8300000-0000-4000-8000-000000000001');
+  v_again := public.rpc_start_agreement_thread(
+    'a8300000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+  ASSERT v_thread IS NOT NULL, 'T22: the origin door can ask its question';
+  ASSERT v_again = v_thread, 'T22: asking twice is one thread, not two';
+  ASSERT (SELECT kind FROM public.comms_threads WHERE id = v_thread) = 'direct',
+    'T22: it is the direct thread between the two of them';
+  ASSERT (SELECT proposal_id FROM public.comms_threads WHERE id = v_thread)
+         = 'a8300000-0000-4000-8000-000000000001',
+    'T22: KEYED BY THE PAPER — this is the half R47 asks for and W3R2-11 found missing';
+  ASSERT (SELECT project_id FROM public.comms_threads WHERE id = v_thread) IS NULL,
+    'T22: and never another project''s thread';
+  ASSERT (SELECT count(*) FROM public.comms_thread_participants
+          WHERE thread_id = v_thread AND left_at IS NULL) = 2,
+    'T22: two participants, the homeowner and the studio''s designer';
+
+  RAISE NOTICE 'PASS T22/T23/T24: the deposit joins the house, the offer is re-derived, the question is keyed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (T25) R48 — THE PRICE IS NEVER HIDDEN.
+--
+-- W3R2-01: R39's visibility act, applied to the pricing basis, took the GMP,
+-- the schedule of values, the cost basis and the fee off the homeowner's copy
+-- while the draw schedule went on billing against them. Refused now at the
+-- save, at the send, and — for a row hidden before the refusal existed — at
+-- the send again, on the parts as they stand.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_err text;
+  v_hidden jsonb;
+BEGIN
+  PERFORM pg_temp.assume_user('a8000000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.mint_draft('a8300000-0000-4000-8000-0000000000a1', 'The priceless turnkey');
+  PERFORM public.materialize_agreement_template(
+    'a8300000-0000-4000-8000-0000000000a1', 'patina.design_build');
+  PERFORM public.upsert_agreement_parts(
+    'a8300000-0000-4000-8000-0000000000a1', pg_temp.turnkey_parts(), NULL);
+
+  -- (a) the save refuses a hidden pricing basis…
+  v_hidden := (
+    SELECT jsonb_agg(
+      CASE WHEN part->>'variant' = 'pricing_basis'
+           THEN part || jsonb_build_object('clientVisible', false)
+           ELSE part END)
+    FROM jsonb_array_elements(pg_temp.turnkey_parts()) AS e(part));
+  v_err := pg_temp.save_err('a8300000-0000-4000-8000-0000000000a1', v_hidden);
+  ASSERT v_err =
+    'your client signs the price and the draws, so "Pricing basis" cannot be hidden from her',
+    format('T25(a): %L', v_err);
+
+  -- (b) …and a hidden draw schedule, for the same reason.
+  v_hidden := (
+    SELECT jsonb_agg(
+      CASE WHEN part->>'variant' = 'draws'
+           THEN part || jsonb_build_object('clientVisible', false)
+           ELSE part END)
+    FROM jsonb_array_elements(pg_temp.turnkey_parts()) AS e(part));
+  v_err := pg_temp.save_err('a8300000-0000-4000-8000-0000000000a1', v_hidden);
+  ASSERT v_err =
+    'your client signs the price and the draws, so "Draw schedule" cannot be hidden from her',
+    format('T25(b): %L', v_err);
+
+  -- (c) the parts the composer saved are still whole, so the send stands.
+  ASSERT pg_temp.send_err('a8300000-0000-4000-8000-0000000000a1') IS NULL,
+    'T25(c): a visible price sends';
+  PERFORM pg_temp.reset_role();
+END $$;
+
+-- (d) A row hidden BEFORE the refusal existed — the shape the walk left on the
+--     stack. The send door reads the authored rows, so it asks again; and
+--     _agreement_fee_unnamed, which reads client_visible fees only, is the
+--     second reading of the same rule.
+DO $$
+DECLARE
+  v_err text;
+BEGIN
+  PERFORM pg_temp.assume_user('a8000000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.mint_draft('a8300000-0000-4000-8000-0000000000a2', 'The hidden-price turnkey');
+  PERFORM public.materialize_agreement_template(
+    'a8300000-0000-4000-8000-0000000000a2', 'patina.design_build');
+  PERFORM public.upsert_agreement_parts(
+    'a8300000-0000-4000-8000-0000000000a2', pg_temp.turnkey_parts(), NULL);
+  PERFORM pg_temp.reset_role();
+
+  -- Straight to the table, exactly as the shipped act did before R48.
+  UPDATE public.proposal_agreement_parts SET client_visible = false
+  WHERE proposal_id = 'a8300000-0000-4000-8000-0000000000a2'
+    AND kind = 'schedule' AND variant = 'pricing_basis';
+
+  ASSERT public._agreement_fee_unnamed('a8300000-0000-4000-8000-0000000000a2'),
+    'T25(d): a hidden pricing basis names no fee she can read';
+
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000001');
+  v_err := pg_temp.send_err('a8300000-0000-4000-8000-0000000000a2');
+  PERFORM pg_temp.reset_role();
+  ASSERT v_err =
+    'your client signs the price and the draws, so neither can be hidden from her',
+    format('T25(d): the send must refuse the walk''s own shape, got %L', v_err);
+
+  -- And the projection agrees with the refusal: the paper carries no price.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.proposal_agreement_parts ap
+    WHERE ap.proposal_id = 'a8300000-0000-4000-8000-0000000000a2'
+      AND ap.client_visible AND ap.variant = 'pricing_basis'),
+    'T25(d): which is exactly why it must not send';
+
+  RAISE NOTICE 'PASS T25: the price is never hidden — refused at save, at send, and on a row hidden before the rule';
+END $$;
+
 -- (T14) The retainer anchor: a SECOND turnkey agreement, carrying a retainer,
 -- countersigns without the anchor-count refusal that reads like a permission
 -- bug. Before PART 7b's graft this raised
@@ -1720,7 +1917,8 @@ INSERT INTO _db_acl VALUES
                                                        ARRAY['authenticated','service_role']),
   ('public.record_agreement_draw_lien_waiver(uuid,text,uuid,date,integer,text,timestamptz)',
                                                        ARRAY['authenticated']),
-  ('public._render_agreement_snapshot_html(uuid)',     ARRAY[]::text[]);
+  ('public._render_agreement_snapshot_html(uuid)',     ARRAY[]::text[]),
+  ('public.rpc_start_agreement_thread(uuid)',          ARRAY['authenticated','service_role']);
 
 DO $$
 DECLARE r record;

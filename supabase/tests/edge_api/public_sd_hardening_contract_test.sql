@@ -1719,9 +1719,23 @@ VALUES
     -- arm's live-authority reads sit BELOW its service_role/postgres early
     -- return, as the project path's do, so a settle or a void still replays
     -- once the stamped designer has left.
+    -- 00578 (R52) re-pinned this body once more (00571's hash was
+    -- 3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c).
+    -- The delta is TWO lines of declaration and one widened identity check on
+    -- the UPDATE arm: `project_id` may move from NULL to a project exactly
+    -- when `app.proposal_activation_id` names the design-build agreement whose
+    -- own countersign created that project, whose draw ledger owns this
+    -- invoice, and whose client and designer match the row's. That is the
+    -- origin deposit joining the house it opened, and it mirrors the same GUC
+    -- 00511 admits `proposals.project_id` under. Everything else this file
+    -- pins is unchanged: still SECURITY INVOKER, still no direct grants, the
+    -- other five identity columns still immutable, a project-bound invoice
+    -- still unreparentable (OLD.project_id IS NULL is half the predicate), and
+    -- the canonical root -> user_roles -> memberships -> organization lock
+    -- order untouched — the new predicate takes no lock.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c',
+    '0d8fea5c746e407fbd92a2eaa7235a98067d9c06d6cd603e07eabb309f14fc59',
     ARRAY[]::text[]
   ),
   (
@@ -1943,10 +1957,23 @@ VALUES
     -- 'commercialDocumentId' anchor keep their exact text, so the caller
     -- contract holds too; and the signature, arguments, result type,
     -- proconfig, SECURITY DEFINER flag and ACL are all unchanged.
+    --
+    -- R52 (00578, walk round 2) adopts the origin deposit invoice into the
+    -- project this function has just created — one UPDATE inside the
+    -- design_build arm of the client_signed branch, bracketed by set_config
+    -- on app.proposal_activation_id and its restore (00577's hash was
+    -- d3a2cade68987dc446b7e0d2ded11540a85d947eb3d5bec8934e367960068fc1).
+    -- It takes no new lock and reads no new authority: the project row is
+    -- already held FOR SHARE two statements above, and the invoices UPDATE is
+    -- authorized by set_invoice_studio_id, which pins its own admission of
+    -- exactly this transition. Signature, arguments, result type, proconfig,
+    -- SECURITY DEFINER flag, ACL, the issue_invoice_for_actor call and the
+    -- 'commercialDocumentId' anchor are all unchanged, so every other contract
+    -- in this file still holds.
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'd3a2cade68987dc446b7e0d2ded11540a85d947eb3d5bec8934e367960068fc1'
+    '3ca87ae1f02130749ae7886ab8b3f44d0ed700906c5ff2dbd28ab83a7f099d0e'
   ),
   (
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
