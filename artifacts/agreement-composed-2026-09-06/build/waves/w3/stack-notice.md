@@ -304,3 +304,37 @@ back.
 Next owner: whoever runs the Wave 3 walk for round 3. The stack is a clean
 `db reset` of `agreement/w3-integration` at `50d11f528` with the seeds — no
 walk rows of any kind stand on it.
+
+---
+
+## 2026-09-08 — the merge-and-deploy steward's reset
+
+`supabase db reset --workdir /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-integration`
+was run ONCE, immediately before the pre-merge gate sweep, from
+`agreement/w3-integration` at `6a689f8f2` (the walk-verified `8a22b83f7`, plus
+round 3's walk record and the W3R3-02 fix). Everything the round-3 web walk left
+on this stack — the executed turnkey project, the sent origin agreement, the
+three drafts, the signed trade agreement and the seeded rolodex contact, all
+listed in `walk-web-r3.md` §1 — was **destroyed by that reset**. Nothing in this
+pass depended on any of it.
+
+- Ledger head after the reset: `00579` (probed:
+  `select version from supabase_migrations.schema_migrations order by version desc limit 3`
+  → `00579, 00578, 00577`).
+- `supabase/seed/00-legacy-grants.sql` was **not** regenerated: this pass wrote
+  no migration and added no GRANT/REVOKE, so the seed already on the branch is
+  current. It replayed clean as the first seed of the reset.
+- `./scripts/run-sql-tests.sh` on the reset stack: **166 total, 145 green,
+  21 expected-fail, 0 unexpected — effective 166 / 166.** The 21 are the
+  documented set in `supabase/tests/KNOWN_FAILURES.md`, unchanged either way by
+  this pass.
+- `packages/supabase/src/database.types.ts` was regenerated against this stack
+  with `SUPABASE_DB_URL` exported; `git diff --exit-code` on it is **clean**.
+- No dev server was started; no portal was booted; no Playwright run was made.
+  The Supabase containers are left **up**, and the stack stands as a clean
+  `db reset` of `agreement/w3-integration` with the seeds and no walk rows.
+- **No local `.env` file was read or written by this pass.**
+
+Next owner: the stack is clean at `00579`. A later pass wanting Wave 3 walk data
+must re-create it; nothing here is load-bearing for the production deploy, which
+runs against Strata.
