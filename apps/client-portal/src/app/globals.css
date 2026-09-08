@@ -518,6 +518,22 @@ a:hover {
   border: 1px solid var(--hairline-strong);
 }
 
+/* ── LOADING · ink, not a spinner (sheet §A5) ─────────────────────────────
+   Working is not unavailable, and the two must not share a face: a busy
+   terminal act stays filled and swaps its label ("Pay $4,060.00" → "Opening
+   payment") while `aria-busy` sits on its wrapper. These rules follow the
+   unavailable block so an act that is busy AND aria-disabled reads as
+   working, and the :hover pair matches its specificity. */
+.da-terminal.is-loading,
+.da-terminal.is-loading:hover {
+  background-color: var(--color-charcoal);
+  color: var(--ink-paper);
+  border: 0;
+}
+.da-terminal.is-loading .da-label {
+  opacity: 1;
+}
+
 /* ── focus · the proofreader's caret in the margin, and the scores turn clay,
    now with an outline standing alongside them. The caret alone was a 14px
    glyph in the gutter and nothing else; `outline` does not affect layout, so

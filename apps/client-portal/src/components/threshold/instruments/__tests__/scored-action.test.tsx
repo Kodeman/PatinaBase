@@ -102,6 +102,26 @@ describe('The Scored Ink block — the rest rules', () => {
     expect(GLOBALS).not.toContain('--color-error');
   });
 
+  it('keeps a working terminal act filled, not wearing the unavailable face', () => {
+    // `.da-terminal:disabled` and `[aria-disabled]` are the UNAVAILABLE rule
+    // (rail ground, faint ink, hairline border). A payment in flight must not
+    // borrow it — sheet §A5 "Loading — ink, not a spinner".
+    const loading = GLOBALS.slice(
+      GLOBALS.indexOf('.da-terminal.is-loading,'),
+      GLOBALS.indexOf('/* \u2500\u2500 focus'),
+    );
+    expect(loading).toContain('.da-terminal.is-loading:hover');
+    expect(loading).toContain('background-color: var(--color-charcoal)');
+    expect(loading).toContain('color: var(--ink-paper)');
+    expect(loading).toContain('border: 0');
+    // and it wins: the loading rules are declared after the unavailable ones
+    expect(GLOBALS.indexOf('.da-terminal.is-loading,')).toBeGreaterThan(
+      GLOBALS.indexOf(".da-terminal[aria-disabled='true']:hover"),
+    );
+    // no ring, no dots, no spin anywhere in the block
+    expect(GLOBALS).not.toContain('@keyframes spin');
+  });
+
   it('never dims an unavailable act', () => {
     // a declaration, not the prose that forbids one
     expect(GLOBALS).not.toMatch(/opacity:\s*(0?\.5|50%)\s*;/);
