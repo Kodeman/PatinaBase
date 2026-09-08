@@ -167,6 +167,27 @@ const PARTS = [
     },
   },
   {
+    // The three Halvorsen allowances, each backed by the cost line of the same
+    // id and amount — `_validate_allowances_payload` refuses an allowance with
+    // no line behind it. Without this part the composed consent sentence stops
+    // one fragment short of `HALVORSEN_DESIGN_BUILD_CONSENT`, which is the pin
+    // both halves are asserted against; the spec had never run, so the gap had
+    // never been read.
+    kind: 'schedule',
+    variant: 'allowances',
+    partKey: 'patina.allowances',
+    title: 'Allowances',
+    required: false,
+    clientVisible: true,
+    payload: {
+      allowances: [
+        { id: 'tile', label: 'Tile allowance', amountCents: 400_000, overageRule: 'change_order', underageRule: 'credit' },
+        { id: 'plumbingFixtures', label: 'Plumbing fixtures allowance', amountCents: 350_000, overageRule: 'change_order', underageRule: 'credit' },
+        { id: 'lighting', label: 'Lighting allowance', amountCents: 280_000, overageRule: 'change_order', underageRule: 'credit' },
+      ],
+    },
+  },
+  {
     kind: 'clause',
     variant: null,
     partKey: 'patina.sub_disclosure',
@@ -355,11 +376,14 @@ test.describe('P13 — the deposit is offered after the signature, never before'
     // The paper reads as a turnkey paper: the price, the draws, the trades.
     await expect(page.getByTestId('door-consent-line')).toContainText('design-build terms');
 
-    // R41 — THE SCHEDULE OF VALUES IS ON THE PAGE. The bundle redacts a
-    // closed-book pricing basis before it crosses, so a door that read
-    // `costLines` rendered nothing here in production while the keepsake and
-    // the consent sentence both named a schedule. Assert the section, its
-    // disclosure and its total, and assert no trade's own cost is printed.
+    // R41 / R43 — THE SCHEDULE OF VALUES IS ON THE PAGE SHE READS. The paper
+    // itself opens under "Read it in full"; the bundle redacts a closed-book
+    // pricing basis before it crosses, so a door that read `costLines`
+    // rendered NOTHING here in production while the keepsake and the consent
+    // sentence both named a schedule. Assert the section, its disclosure, its
+    // studio-authored lines and its total — and that no trade's own cost, and
+    // no cost pro-rated by the fee, is anywhere on the page.
+    await page.getByRole('button', { name: 'Read it in full' }).click();
     const sov = page.getByTestId('design-build-sov');
     await expect(sov).toBeVisible({ timeout: 30_000 });
     await expect(sov).toHaveAttribute('data-disclosure', 'closed_book');
@@ -368,9 +392,12 @@ test.describe('P13 — the deposit is offered after the signature, never before'
     await expect(sov.getByTestId('design-build-sov-line')).toHaveCount(2);
     await expect(sov).toContainText('Kitchen');
     await expect(sov).toContainText('$64,000');
-    // R43 — no trade's cost, and no cost pro-rated by the fee.
     await expect(page.locator('body')).not.toContainText('$38,000');
     await expect(page.locator('body')).not.toContainText('$44,840');
+    // Fold the paper back up so the signing act below is the one the walk
+    // takes, with nothing else open under it.
+    await page.getByRole('button', { name: 'Read it in full' }).click();
+    await expect(sov).toHaveCount(0);
     // The words BOTH halves say. The door renders `composeConsentLine` and the
     // signature row keeps `compose_agreement_consent`'s; this is the exported
     // pin (`HALVORSEN_DESIGN_BUILD_CONSENT`) the SQL test asserts against too,
