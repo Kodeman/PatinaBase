@@ -995,7 +995,6 @@ export function Threshold({
       sinceActive={sinceActive}
       onToggleSince={() => setSinceActive((was) => !was)}
       readingMark={readingMarkLine(parseSourceDate(previousReadAt))}
-      preview={roomsUnread ? undefined : <HousePreview bands={model.bands} />}
     >
       {ledger}
       {model.groundFloor ? null : letterbox}
@@ -1151,6 +1150,7 @@ export function Threshold({
         <div className="min-w-0">
           {doorstep}
           {asks}
+          {!roomsUnread && <HousePreview bands={model.bands} />}
           {roomsUnread ? (
             <p
               data-testid="threshold-rooms-error"

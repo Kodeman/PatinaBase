@@ -231,7 +231,7 @@ describe('RoomBand', () => {
     render(<RoomBand band={band()} projectId="proj-1" />);
 
     const lift = screen.getByRole('button', {
-      name: 'Brass library sconces — open its record',
+      name: 'View details — Brass library sconces',
     });
     expect(lift).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('threshold-journey')).not.toBeInTheDocument();
@@ -239,6 +239,7 @@ describe('RoomBand', () => {
     fireEvent.click(lift);
 
     expect(lift).toHaveAttribute('aria-expanded', 'true');
+    expect(lift).toHaveAccessibleName('Close details — Brass library sconces');
     const record = screen.getByTestId('room-band-record');
     expect(record).toHaveTextContent('$2,340');
 
@@ -257,6 +258,7 @@ describe('RoomBand', () => {
 
     fireEvent.click(lift);
     expect(lift).toHaveAttribute('aria-expanded', 'false');
+    expect(lift).toHaveAccessibleName('View details — Brass library sconces');
     expect(screen.queryByTestId('room-band-record')).not.toBeInTheDocument();
   });
 
@@ -267,7 +269,7 @@ describe('RoomBand', () => {
       expect(button.querySelector('div, p, ul, ol, dl, section')).toBeNull();
     }
     expect(
-      screen.getByRole('button', { name: 'Kilim runner — open its record' }),
+      screen.getByRole('button', { name: 'View details — Kilim runner' }),
     ).toBeInTheDocument();
   });
 

@@ -43,7 +43,6 @@ export interface DoorstepProps {
    * caller that has only the dateline still gets a row to put it in.
    */
   readingMark?: string | null;
-  preview?: ReactNode;
   /** The house ledger and the letterbox stand here. */
   children?: ReactNode;
 }
@@ -68,7 +67,6 @@ export function Doorstep({
   sinceActive,
   onToggleSince,
   readingMark = null,
-  preview,
   children,
 }: DoorstepProps) {
   const moved = movedLine(changedCount);
@@ -141,8 +139,6 @@ export function Doorstep({
           )}
         </div>
       )}
-
-      {preview}
 
       {children && (
         // The two halves are one row, so they measure to the same height: the
