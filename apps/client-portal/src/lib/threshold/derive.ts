@@ -36,9 +36,24 @@ const OPEN_INVOICE_STATUSES = new Set<Invoice['status']>(['sent', 'partially_pai
 
 // ── input ────────────────────────────────────────────────────────────────────
 
+/**
+ * The one studio-uploaded image a room may carry (00580, R142).
+ *
+ * `url` is the OBJECT PATH inside the private `room-renders` bucket, not a URL
+ * that resolves — a reader signs it. The page prints "Concept · not installed"
+ * over it itself; that label is not the studio's to edit and is not here.
+ */
+export interface RoomConceptRender {
+  url: string;
+  caption: string | null;
+  uploadedAt: string | null;
+  uploadedBy: string | null;
+}
+
 /** A room, plus whatever the working budget has planned for it. */
 export interface ThresholdRoom extends KeyRoom {
   targetCents?: number | null;
+  conceptRender?: RoomConceptRender | null;
 }
 
 /** A document sent and waiting for the client's name. */
@@ -143,6 +158,8 @@ export interface RoomBandModel {
   agreedCents: number;
   /** "about eleven hundred past its target", or null when there is nothing to say. */
   varianceLine: string | null;
+  /** The studio's concept render for this room, or null when it has none. */
+  conceptRender: RoomConceptRender | null;
   pieces: ClientSelection[];
   marks: ThresholdMark[];
 }
@@ -296,6 +313,26 @@ function noteState(note: ThresholdNote): PreviouslyState {
 /** A figure the surface can print: a real number, above zero. */
 function positive(cents: number | null | undefined): number | null {
   return typeof cents === 'number' && Number.isFinite(cents) && cents > 0 ? cents : null;
+}
+
+/**
+ * The room's concept render, or nothing.
+ *
+ * A render with no object path is not a render — it is a row half-written, and
+ * a plate drawn from it would be an empty frame captioned "Concept". The three
+ * remaining fields are each independently optional: a studio that uploaded an
+ * image and said nothing about it still has an image.
+ */
+function conceptRenderOf(room: ThresholdRoom): RoomConceptRender | null {
+  const url = room.conceptRender?.url;
+  if (typeof url !== 'string' || url.trim().length === 0) return null;
+  const caption = room.conceptRender?.caption;
+  return {
+    url: url.trim(),
+    caption: typeof caption === 'string' && caption.trim().length > 0 ? caption.trim() : null,
+    uploadedAt: room.conceptRender?.uploadedAt ?? null,
+    uploadedBy: room.conceptRender?.uploadedBy ?? null,
+  };
 }
 
 /** The letterbox's own reading of a row. Exported so the letter a mailed
@@ -458,6 +495,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
       targetCents,
       agreedCents,
       varianceLine: roomVarianceLine(targetCents, agreedCents),
+      conceptRender: conceptRenderOf(room),
       pieces,
       marks: marks.filter((mark) => mark.roomId === room.id),
     };

@@ -2075,3 +2075,16 @@ export {
   usePreviousReadingMark,
 } from "./use-reading-marks";
 export type { MarkProjectReadInput } from "./use-reading-marks";
+export {
+  useRoomConceptRender,
+  roomConceptRenderPath,
+  roomConceptRenderRoomsKey,
+  roomConceptRenderThresholdKey,
+  ROOM_RENDERS_BUCKET,
+  ROOM_RENDER_MAX_BYTES,
+  ROOM_RENDER_MIME_TYPES,
+} from "./use-room-concept-render";
+export type {
+  UploadRoomConceptRenderInput,
+  UploadRoomConceptRenderResult,
+} from "./use-room-concept-render";

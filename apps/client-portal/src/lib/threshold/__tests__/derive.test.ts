@@ -1397,3 +1397,85 @@ describe('deriveThreshold — every unit the change tick can reach', () => {
     expect(model.changed.has('previously')).toBe(false);
   });
 });
+
+describe('deriveThreshold — the concept render on a band', () => {
+  it('carries the render onto the band of the room that has one, and no other', () => {
+    const model = deriveThreshold(
+      input({
+        rooms: [
+          {
+            ...LIBRARY,
+            conceptRender: {
+              url: 'p-1/r-lib/library.png',
+              caption: 'The library looking north',
+              uploadedAt: '2026-09-08T10:00:00.000Z',
+              uploadedBy: 'user-4',
+            },
+          },
+          ENTRY,
+        ],
+      }),
+    );
+
+    const library = model.bands.find((band) => band.roomId === 'r-lib')!;
+    const entry = model.bands.find((band) => band.roomId === 'r-ent')!;
+
+    expect(library.conceptRender).toEqual({
+      url: 'p-1/r-lib/library.png',
+      caption: 'The library looking north',
+      uploadedAt: '2026-09-08T10:00:00.000Z',
+      uploadedBy: 'user-4',
+    });
+    expect(entry.conceptRender).toBeNull();
+  });
+
+  it('says nothing for a room the studio never uploaded to', () => {
+    const model = deriveThreshold(input());
+    expect(model.bands.every((band) => band.conceptRender === null)).toBe(true);
+  });
+
+  it('refuses a half-written row: no object path is no render', () => {
+    const model = deriveThreshold(
+      input({
+        rooms: [
+          {
+            ...LIBRARY,
+            conceptRender: {
+              url: '   ',
+              caption: 'A caption with no image behind it',
+              uploadedAt: '2026-09-08T10:00:00.000Z',
+              uploadedBy: 'user-4',
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(model.bands[0].conceptRender).toBeNull();
+  });
+
+  it('keeps the image when the studio said nothing under it', () => {
+    const model = deriveThreshold(
+      input({
+        rooms: [
+          {
+            ...LIBRARY,
+            conceptRender: {
+              url: 'p-1/r-lib/library.png',
+              caption: '  ',
+              uploadedAt: null,
+              uploadedBy: null,
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(model.bands[0].conceptRender).toEqual({
+      url: 'p-1/r-lib/library.png',
+      caption: null,
+      uploadedAt: null,
+      uploadedBy: null,
+    });
+  });
+});
