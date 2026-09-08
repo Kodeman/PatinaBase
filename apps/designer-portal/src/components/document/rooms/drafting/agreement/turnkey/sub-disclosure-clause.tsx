@@ -24,7 +24,10 @@
 import { useTradeAgreements } from "@patina/supabase";
 import { Textarea } from "@/components/ui/controls";
 import { SUB_DISCLOSURE_MODES, type SubDisclosureMode } from "@patina/types";
-import { readSubDisclosure } from "@/lib/document/design-build";
+import {
+  readSubDisclosure,
+  withCostBasisCents,
+} from "@/lib/document/design-build";
 import { payloadOf, TURNKEY_PART_KEYS, type TurnkeyContext } from "./context";
 import type { TurnkeyEditorProps } from "./pricing-basis-editor";
 
@@ -43,6 +46,11 @@ export const MODE_NOTES: Record<SubDisclosureMode, string> = {
     "Your client reads one price per line, your fee spread across all of them.",
 };
 
+/** Neither button is pressed until a designer presses one: the mode is a
+ *  term the homeowner reads, and the send door asks for it by name. */
+export const MODE_UNCHOSEN_NOTE =
+  "Say how the trades are shown before this agreement goes out.";
+
 export const NO_TRADES_YET =
   "Trade Agreements appear here once this agreement has a project behind it.";
 
@@ -58,10 +66,10 @@ export function SubDisclosureClause({
 
   const chooseMode = (mode: SubDisclosureMode) => {
     onChange({ ...payload, mode });
-    turnkey?.writePart(TURNKEY_PART_KEYS.pricingBasis, {
-      ...basisPayload,
-      subDisclosure: mode,
-    });
+    turnkey?.writePart(
+      TURNKEY_PART_KEYS.pricingBasis,
+      withCostBasisCents({ ...basisPayload, subDisclosure: mode }),
+    );
   };
 
   return (
@@ -87,7 +95,7 @@ export function SubDisclosureClause({
           ))}
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
-          {MODE_NOTES[clause.mode]}
+          {clause.mode === null ? MODE_UNCHOSEN_NOTE : MODE_NOTES[clause.mode]}
         </p>
       </div>
 
@@ -132,11 +140,13 @@ export function SubDisclosureClause({
                 {/* Studio-side only. Under closed-book the homeowner reads no
                     price per trade at all; under open-book she reads the
                     AWARDED price. Neither ever reads a bid. */}
-                <span className="font-mono text-[11px] text-[var(--color-aged-oak)]">
-                  {clause.mode === "open_book"
-                    ? "Shown to your client"
-                    : "Held from your client"}
-                </span>
+                {clause.mode !== null && (
+                  <span className="font-mono text-[11px] text-[var(--color-aged-oak)]">
+                    {clause.mode === "open_book"
+                      ? "Shown to your client"
+                      : "Held from your client"}
+                  </span>
+                )}
               </div>
             ))}
           </div>

@@ -37,7 +37,6 @@ function agreement(input: Partial<TradeAgreement> = {}): TradeAgreement {
   return {
     id: "ta-1",
     projectId: "project-1",
-    studioId: "studio-1",
     sourceProposalId: "agreement-1",
     contactId: "contact-1",
     contactDisplayName: "Kestrel Cabinetry",
@@ -53,13 +52,12 @@ function agreement(input: Partial<TradeAgreement> = {}): TradeAgreement {
     payWhenPaidDays: 7,
     insuranceCertificateRequired: true,
     lienWaiverPolicy: "conditional_then_unconditional",
-    flowDownClauseKey: null,
     sovLineIds: [],
     state: "draft",
     sentAt: null,
     signedAt: null,
     voidedAt: null,
-    createdAt: "2026-09-07T00:00:00Z",
+    hasLiveLink: false,
     subSignature: null,
     ...input,
   };

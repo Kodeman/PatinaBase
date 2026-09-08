@@ -16,6 +16,8 @@ import type { AgreementPart } from "@patina/types";
 import { PartEditor } from "../part-editor";
 import { JurisdictionAttachments } from "../turnkey/jurisdiction-attachments";
 import { TURNKEY_PART_KEYS, type TurnkeyContext } from "../turnkey/context";
+import { UNWRITTEN_NOTE } from "../turnkey/schedule-of-values";
+import { MODE_UNCHOSEN_NOTE } from "../turnkey/sub-disclosure-clause";
 
 const mockJurisdictionNotices = jest.fn();
 const mockTradeAgreements = jest.fn();
@@ -223,6 +225,119 @@ describe("the pricing-basis editor", () => {
     ).toBe("GMP $84,134.00");
   });
 
+  /**
+   * The seeded turnkey template lays `basis` down as NULL and the clause's
+   * `mode` as NULL. A reader that answered "cost_plus_gmp" and "closed_book"
+   * would draw two pressed buttons over a payload that says nothing, let
+   * readiness go green, and be refused at the send door — and closed-book is
+   * a term the homeowner reads (R13, R21).
+   */
+  const unwritten = part({
+    partKey: TURNKEY_PART_KEYS.pricingBasis,
+    kind: "schedule",
+    variant: "pricing_basis",
+    title: "Pricing basis",
+    payload: {
+      basis: null,
+      costBasisCents: null,
+      feeBps: null,
+      gmpCents: null,
+      subDisclosure: null,
+      costLines: [
+        {
+          id: "cabinetry",
+          label: "Cabinetry & millwork",
+          category: "sub",
+          basisCents: 3_800_000,
+        },
+      ],
+    },
+  });
+
+  it("presses no basis until the designer chooses one", () => {
+    render(
+      <PartEditor
+        part={unwritten}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([unwritten])}
+      />,
+    );
+    for (const name of [
+      "Fixed price",
+      "Cost-plus",
+      "Cost-plus with GMP",
+      "Time and materials with a not-to-exceed",
+    ]) {
+      expect(screen.getByRole("button", { name })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    }
+    // No basis, so no contract-sum field standing in for the unanswered
+    // question — and the refusal the send door would give, given here.
+    expect(screen.queryByLabelText("GMP dollars")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Choose how this agreement is priced."),
+    ).toBeInTheDocument();
+  });
+
+  it("draws no schedule of values over an unwritten basis", () => {
+    const { container } = render(
+      <PartEditor
+        part={unwritten}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([unwritten])}
+      />,
+    );
+    expect(
+      container.querySelector('[data-sov-line="cabinetry"]'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(UNWRITTEN_NOTE)).toBeInTheDocument();
+  });
+
+  it("draws no schedule of values until the disclosure mode is chosen", () => {
+    // A written basis with a contract sum, and no mode: pro-rating IS the
+    // closed-book presentation, so there is no honest table yet.
+    const noMode = part({
+      partKey: TURNKEY_PART_KEYS.subDisclosure,
+      kind: "clause",
+      title: "Who is doing the work",
+      payload: { body: "" },
+    });
+    const { container } = render(
+      <PartEditor
+        part={PRICING_BASIS}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, noMode])}
+      />,
+    );
+    expect(
+      container.querySelector('[data-sov-line="cabinetry"]'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(UNWRITTEN_NOTE)).toBeInTheDocument();
+  });
+
+  it("carries the derived cost basis on every write", () => {
+    const onChange = renderTurnkey(PRICING_BASIS, contextOf([PRICING_BASIS]));
+    fireEvent.change(screen.getByLabelText("Cost line 2 amount"), {
+      target: { value: "10000" },
+    });
+    const written = onChange.mock.calls.at(-1)?.[0] as {
+      costBasisCents: number;
+      costLines: { basisCents: number }[];
+    };
+    expect(written.costBasisCents).toBe(
+      written.costLines.reduce((sum, line) => sum + line.basisCents, 0),
+    );
+    expect(written.costBasisCents).toBe(7_180_000);
+  });
+
   it("hides the fee percentage on a fixed price and clears it", () => {
     const onChange = renderTurnkey(PRICING_BASIS, contextOf([PRICING_BASIS]));
     fireEvent.click(screen.getByRole("button", { name: "Fixed price" }));
@@ -390,6 +505,78 @@ describe("minting a draw key", () => {
     const keys = keysWritten(onChange);
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys.filter((key) => key === "deposit")).toHaveLength(1);
+  });
+
+  it("re-seats the deposit when the first draw is removed", () => {
+    // Remove the deposit from [deposit, rough_in, cabinets_set,
+    // substantial_completion] and the first row used to be `rough_in` — which
+    // `validateDrawSet` and the database both refuse, and which this editor
+    // offered no way to rename. Re-keying is safe: the ledger is materialized
+    // at SEND and the composer is read-only from that moment.
+    const onChange = jest.fn();
+    render(
+      <PartEditor
+        part={DRAWS}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, DRAWS])}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
+
+    const written = onChange.mock.calls.at(-1)?.[0] as {
+      draws: { key: string; retainageApplies: boolean; sortOrder: number }[];
+    };
+    expect(written.draws.map((draw) => draw.key)).toEqual([
+      "deposit",
+      "cabinets_set",
+      "substantial_completion",
+    ]);
+    expect(written.draws[0].retainageApplies).toBe(false);
+    expect(written.draws.map((draw) => draw.sortOrder)).toEqual([0, 1, 2]);
+    expect(new Set(written.draws.map((draw) => draw.key)).size).toBe(3);
+  });
+
+  it("re-mints a later row that already carried the deposit key", () => {
+    const onChange = jest.fn();
+    const twoDeposits = {
+      ...DRAWS,
+      payload: {
+        retainageBps: 500,
+        draws: [
+          {
+            key: "first",
+            label: "Money on signing",
+            sortOrder: 0,
+            pct: 50,
+            retainageApplies: false,
+          },
+          {
+            key: "deposit",
+            label: "Second draw",
+            sortOrder: 1,
+            pct: 50,
+            retainageApplies: true,
+          },
+        ],
+      },
+    };
+    render(
+      <PartEditor
+        part={twoDeposits}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, twoDeposits])}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Draw 1 percent"), {
+      target: { value: "40" },
+    });
+    const keys = keysWritten(onChange);
+    expect(keys[0]).toBe("deposit");
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("never mints the reserved retainage-release key", () => {
@@ -688,6 +875,40 @@ describe("the sub-disclosure clause", () => {
       TURNKEY_PART_KEYS.pricingBasis,
       expect.objectContaining({ subDisclosure: "open_book" }),
     );
+  });
+
+  it("presses neither mode until the designer chooses one", () => {
+    const unchosen = part({
+      partKey: TURNKEY_PART_KEYS.subDisclosure,
+      kind: "clause",
+      title: "Who is doing the work",
+      payload: { body: "" },
+    });
+    mockTradeAgreements.mockReturnValue({ data: [], isLoading: false });
+    render(
+      <PartEditor
+        part={unchosen}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, unchosen])}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Open-book" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "Closed-book" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByText(MODE_UNCHOSEN_NOTE)).toBeInTheDocument();
+    // And no note claiming what the client reads, either way.
+    expect(
+      screen.queryByText(
+        "Your client reads one price per line, your fee spread across all of them.",
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("says so plainly when there is no project to hold Trade Agreements yet", () => {

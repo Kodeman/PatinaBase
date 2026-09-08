@@ -23,8 +23,8 @@ import {
   type PricingBasisKind,
 } from "@patina/types";
 import {
-  CONTRACT_SUM_LABELS,
   contractSumCents,
+  contractSumLabel,
   costBasisCents,
   feeCents,
   PRICING_BASIS_LABELS,
@@ -32,6 +32,7 @@ import {
   readSubDisclosure,
   readSubMarkupBps,
   validatePricingBasis,
+  withCostBasisCents,
 } from "@/lib/document/design-build";
 import { dollars, toCentsOrNull } from "../part-kinds";
 import { payloadOf, TURNKEY_PART_KEYS, type TurnkeyContext } from "./context";
@@ -49,10 +50,9 @@ const CATEGORY_LABELS: Record<DesignBuildCostLine["category"], string> = {
 
 /** Which amount field this basis asks for. `cost_plus` asks for none — its
  *  total is the cost basis plus the fee and it is an estimate, not a cap. */
-const SUM_FIELD: Record<
-  PricingBasisKind,
-  "fixedCents" | "gmpCents" | "nteCents" | null
-> = {
+type SumField = "fixedCents" | "gmpCents" | "nteCents" | null;
+
+const SUM_FIELD: Record<PricingBasisKind, SumField> = {
   fixed: "fixedCents",
   cost_plus: null,
   cost_plus_gmp: "gmpCents",
@@ -85,13 +85,18 @@ export function PricingBasisEditor({
     payloadOf(turnkey, TURNKEY_PART_KEYS.subDisclosure),
   ).mode;
 
+  // Every write recomputes the derived cost basis: the database refuses a
+  // payload whose `costBasisCents` is not exactly the sum of the lines
+  // beneath it, and derives a cost-plus contract sum from that same key.
   const write = (next: Record<string, unknown>) =>
-    onChange({ ...payload, ...next });
+    onChange(withCostBasisCents({ ...payload, ...next }));
 
   const writeLines = (lines: DesignBuildCostLine[]) =>
     write({ costLines: lines });
 
-  const sumField = SUM_FIELD[basis.basis];
+  const sumField: SumField = basis.basis ? SUM_FIELD[basis.basis] : null;
+  const sumLabel = contractSumLabel(basis.basis);
+  const carriesFee = basis.basis !== null && basis.basis !== "fixed";
 
   return (
     <div className="space-y-5">
@@ -127,7 +132,7 @@ export function PricingBasisEditor({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        {basis.basis !== "fixed" && (
+        {carriesFee && (
           <label className={LABEL}>
             Fee · percent
             <Input
@@ -159,11 +164,11 @@ export function PricingBasisEditor({
         </label>
         {sumField && (
           <label className={LABEL}>
-            {CONTRACT_SUM_LABELS[basis.basis]} · dollars
+            {sumLabel} · dollars
             <Input
               className="mt-2"
               inputMode="decimal"
-              aria-label={`${CONTRACT_SUM_LABELS[basis.basis]} dollars`}
+              aria-label={`${sumLabel} dollars`}
               disabled={readOnly}
               value={dollars(basis[sumField])}
               onChange={(event) =>
@@ -284,15 +289,14 @@ export function PricingBasisEditor({
         <span data-chip="cost-basis" className={LABEL}>
           Cost basis {turnkeyMoney(cost)}
         </span>
-        {basis.basis !== "fixed" && (
+        {carriesFee && (
           <span data-chip="fee" className={LABEL}>
             Fee {basis.feeBps === null ? "—" : `${basis.feeBps / 100}%`} ·{" "}
             {turnkeyMoney(fee)}
           </span>
         )}
         <span data-chip="contract-sum" className={LABEL}>
-          {CONTRACT_SUM_LABELS[basis.basis]}{" "}
-          {sum === null ? "—" : turnkeyMoney(sum)}
+          {sumLabel} {sum === null ? "—" : turnkeyMoney(sum)}
         </span>
       </div>
 

@@ -36,36 +36,65 @@ import {
   useSendTradeAgreement,
   useTradeAgreements,
   useVoidTradeAgreement,
-  type TradeAgreementRow,
+  type TradeAgreementListItem,
 } from '../use-trade-agreements';
 
-const row: TradeAgreementRow = {
+/**
+ * A literal copy of `list_trade_agreements`' own key list (00579's
+ * `jsonb_build_object`), in its order. If the RPC's projection changes, this
+ * array is what has to change with it — and every key in it must reach the
+ * mapped shape or be accounted for below.
+ */
+const RPC_KEYS = [
+  'id',
+  'title',
+  'trade',
+  'contactId',
+  'contactDisplayName',
+  'contactCompanyName',
+  'contactEmail',
+  'scope',
+  'priceCents',
+  'currency',
+  'schedule',
+  'retainageBps',
+  'payWhenPaidDays',
+  'insuranceCertificateRequired',
+  'lienWaiverPolicy',
+  'sovLineIds',
+  'sourceProposalId',
+  'state',
+  'sentAt',
+  'signedAt',
+  'voidedAt',
+  'hasLiveLink',
+  'signature',
+] as const;
+
+const item: TradeAgreementListItem = {
   id: 'ta-1',
-  project_id: 'project-1',
-  studio_id: 'studio-1',
-  source_proposal_id: 'agreement-1',
-  contact_id: 'contact-1',
-  contact_display_name: 'Kestrel Cabinetry',
-  contact_company_name: 'Kestrel Cabinetry LLC',
-  contact_email: 'shop@kestrel.example',
-  trade: 'Cabinetry',
   title: 'Cabinetry & millwork',
+  trade: 'Cabinetry',
+  contactId: 'contact-1',
+  contactDisplayName: 'Kestrel Cabinetry',
+  contactCompanyName: 'Kestrel Cabinetry LLC',
+  contactEmail: 'shop@kestrel.example',
   scope: 'Fabricate and install…',
-  price_cents: 3800000,
+  priceCents: 3800000,
   currency: 'USD',
   schedule: { startOn: '2026-10-01', durationDays: 21, sequencing: 'After rough-in' },
-  retainage_bps: 500,
-  pay_when_paid_days: 7,
-  insurance_certificate_required: true,
-  lien_waiver_policy: 'conditional_then_unconditional',
-  flow_down_clause_key: null,
-  sov_line_ids: ['cabinetryAndMillwork'],
+  retainageBps: 500,
+  payWhenPaidDays: 7,
+  insuranceCertificateRequired: true,
+  lienWaiverPolicy: 'conditional_then_unconditional',
+  sovLineIds: ['cabinetryAndMillwork'],
+  sourceProposalId: 'agreement-1',
   state: 'sent',
-  sent_at: '2026-09-07T12:00:00.000Z',
-  signed_at: null,
-  voided_at: null,
-  created_at: '2026-09-07T11:00:00.000Z',
-  sub_signature: null,
+  sentAt: '2026-09-07T12:00:00.000Z',
+  signedAt: null,
+  voidedAt: null,
+  hasLiveLink: true,
+  signature: null,
 };
 
 beforeEach(() => {
@@ -73,11 +102,23 @@ beforeEach(() => {
 });
 
 describe('mapTradeAgreement', () => {
-  it('maps all eight essentials onto the domain shape', () => {
-    const mapped = mapTradeAgreement(row);
+  it('reads the camelCase DTO the RPC publishes — every key it names', () => {
+    // The fixture IS the RPC's key list; a snake_case reader would leave
+    // every one of these undefined and the row would render "$NaN" with no
+    // acts on it.
+    expect(Object.keys(item).sort()).toEqual([...RPC_KEYS].sort());
+
+    const mapped = mapTradeAgreement(item, 'project-1');
+    expect(mapped.id).toBe('ta-1');
+    expect(mapped.title).toBe('Cabinetry & millwork');
+    expect(mapped.trade).toBe('Cabinetry');
+    expect(mapped.contactId).toBe('contact-1');
+    expect(mapped.contactDisplayName).toBe('Kestrel Cabinetry');
+    expect(mapped.contactCompanyName).toBe('Kestrel Cabinetry LLC');
+    expect(mapped.contactEmail).toBe('shop@kestrel.example');
     expect(mapped.scope).toBe('Fabricate and install…');
     expect(mapped.priceCents).toBe(3800000);
-    expect(mapped.sovLineIds).toEqual(['cabinetryAndMillwork']);
+    expect(mapped.currency).toBe('USD');
     expect(mapped.schedule).toEqual({
       startOn: '2026-10-01',
       durationDays: 21,
@@ -87,12 +128,43 @@ describe('mapTradeAgreement', () => {
     expect(mapped.payWhenPaidDays).toBe(7);
     expect(mapped.insuranceCertificateRequired).toBe(true);
     expect(mapped.lienWaiverPolicy).toBe('conditional_then_unconditional');
-    // R16 — the flow-down clause is counsel-gated and stays NULL this wave.
-    expect(mapped.flowDownClauseKey).toBeNull();
+    expect(mapped.sovLineIds).toEqual(['cabinetryAndMillwork']);
+    expect(mapped.sourceProposalId).toBe('agreement-1');
+    expect(mapped.state).toBe('sent');
+    expect(mapped.sentAt).toBe('2026-09-07T12:00:00.000Z');
+    expect(mapped.signedAt).toBeNull();
+    expect(mapped.voidedAt).toBeNull();
+    expect(mapped.hasLiveLink).toBe(true);
+    expect(mapped.subSignature).toBeNull();
+    // The projection carries no project id; the caller's is the only one.
+    expect(mapped.projectId).toBe('project-1');
+  });
+
+  it('carries the state and the price the row acts on', () => {
+    // The two the studio-side row reads before it offers Send or Withdraw.
+    const draft = mapTradeAgreement({ ...item, state: 'draft' }, 'project-1');
+    expect(draft.state).toBe('draft');
+    expect(Number.isNaN(draft.priceCents)).toBe(false);
+  });
+
+  it("reads the sub's receipt off `signature`", () => {
+    const signed = mapTradeAgreement(
+      {
+        ...item,
+        state: 'signed',
+        signedAt: '2026-09-08T09:00:00.000Z',
+        signature: { signedName: 'Dana Ruiz', signedAt: '2026-09-08T09:00:00.000Z' },
+      },
+      'project-1'
+    );
+    expect(signed.subSignature).toEqual({
+      signedName: 'Dana Ruiz',
+      signedAt: '2026-09-08T09:00:00.000Z',
+    });
   });
 
   it('reads an absent schedule as three open questions, not a crash', () => {
-    expect(mapTradeAgreement({ ...row, schedule: null }).schedule).toEqual({
+    expect(mapTradeAgreement({ ...item, schedule: null }, 'project-1').schedule).toEqual({
       startOn: null,
       durationDays: null,
       sequencing: null,
@@ -102,10 +174,12 @@ describe('mapTradeAgreement', () => {
 
 describe('useTradeAgreements', () => {
   it('keys on the project and reads through the RPC', async () => {
-    rpc.mockResolvedValue({ data: [row], error: null });
+    rpc.mockResolvedValue({ data: [item], error: null });
     const config = useTradeAgreements('project-1') as any;
     expect(config.queryKey).toEqual(tradeAgreementKeys.list('project-1'));
-    await expect(config.queryFn()).resolves.toEqual([mapTradeAgreement(row)]);
+    await expect(config.queryFn()).resolves.toEqual([
+      mapTradeAgreement(item, 'project-1'),
+    ]);
     expect(rpc).toHaveBeenCalledWith('list_trade_agreements', { p_project_id: 'project-1' });
   });
 

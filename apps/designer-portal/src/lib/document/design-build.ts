@@ -88,6 +88,20 @@ export function readCostLines(
   });
 }
 
+function sumCostLines(lines: readonly DesignBuildCostLine[]): number {
+  return lines.reduce((sum, line) => sum + line.basisCents, 0);
+}
+
+/**
+ * The pricing basis, read as written and never as assumed.
+ *
+ * NOTHING here defaults. The seeded turnkey template lays `basis` down as
+ * NULL and the clause's `mode` as NULL, so a reader that answered
+ * "cost_plus_gmp" and "closed_book" would draw two pressed buttons over a
+ * payload that says nothing, let readiness go green, and then be refused at
+ * the send door by `_validate_pricing_basis_payload` — and closed-book is a
+ * term the homeowner reads (R13, R21), never one a reader may choose for her.
+ */
 export function readPricingBasis(
   payload: Record<string, unknown>,
 ): DesignBuildPricingBasisPayload {
@@ -95,20 +109,42 @@ export function readPricingBasis(
     typeof payload.basis === "string" &&
     (PRICING_BASIS_KINDS as readonly string[]).includes(payload.basis)
       ? (payload.basis as PricingBasisKind)
-      : "cost_plus_gmp";
+      : null;
   const subDisclosure =
     typeof payload.subDisclosure === "string" &&
     (SUB_DISCLOSURE_MODES as readonly string[]).includes(payload.subDisclosure)
       ? (payload.subDisclosure as SubDisclosureMode)
-      : "closed_book";
+      : null;
+  const costLines = readCostLines(payload);
   return {
     basis,
-    costLines: readCostLines(payload),
+    costLines,
+    costBasisCents: sumCostLines(costLines),
     feeBps: readInt(payload.feeBps),
     gmpCents: readInt(payload.gmpCents),
     nteCents: readInt(payload.nteCents),
     fixedCents: readInt(payload.fixedCents),
     subDisclosure,
+  };
+}
+
+/**
+ * Every write to a pricing-basis payload, with the derived cost basis on it.
+ *
+ * `_validate_pricing_basis_payload` refuses a payload whose `costBasisCents`
+ * is not exactly Σ `costLines[].basisCents` ("The cost basis must equal the
+ * cost lines beneath it, to the cent"), and `_agreement_contract_sum_cents`
+ * derives a cost-plus contract sum from that same key — so a payload that
+ * omits it cannot be saved and, once saved, would have no server-side sum.
+ * It is never typed: three editors write cost lines, and all three route
+ * their write through here so the key cannot fall out of step with them.
+ */
+export function withCostBasisCents(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...payload,
+    costBasisCents: sumCostLines(readCostLines(payload)),
   };
 }
 
@@ -176,17 +212,19 @@ export function readSubDisclosure(
 ): DesignBuildSubDisclosurePayload {
   return {
     body: typeof payload.body === "string" ? payload.body : "",
+    // Null until chosen — see readPricingBasis. The clause's own seeded
+    // payload carries `mode: NULL`, and the send door asks for it by name.
     mode:
       payload.mode === "open_book" || payload.mode === "closed_book"
         ? payload.mode
-        : "closed_book",
+        : null,
   };
 }
 
 /* ── Derivation ──────────────────────────────────────────────────────────── */
 
 export function costBasisCents(basis: DesignBuildPricingBasisPayload): number {
-  return basis.costLines.reduce((sum, line) => sum + line.basisCents, 0);
+  return sumCostLines(basis.costLines);
 }
 
 /** The fee the basis earns on its own cost. A fixed-price agreement carries
@@ -247,9 +285,12 @@ export interface ScheduleOfValuesLine {
  */
 export function scheduleOfValues(
   basis: DesignBuildPricingBasisPayload,
-  mode: SubDisclosureMode = basis.subDisclosure,
+  mode: SubDisclosureMode | null = basis.subDisclosure,
 ): ScheduleOfValuesLine[] {
   const lines = basis.costLines;
+  // Pro-rating IS the closed-book presentation, so an unchosen mode has no
+  // honest table to draw — it has a question outstanding.
+  if (mode === null) return [];
   if (lines.length === 0) return [];
   const cost = costBasisCents(basis);
   const sum = contractSumCents(basis);
@@ -414,6 +455,16 @@ export const CONTRACT_SUM_LABELS: Record<PricingBasisKind, string> = {
   tm_nte: "Not to exceed",
 };
 
+/** What the sum is called before a basis has been chosen: the plain name,
+ *  not one basis's name standing in for the unanswered question. */
+export const UNCHOSEN_CONTRACT_SUM_LABEL = "Contract sum";
+
+export function contractSumLabel(basis: PricingBasisKind | null): string {
+  return basis === null
+    ? UNCHOSEN_CONTRACT_SUM_LABEL
+    : CONTRACT_SUM_LABELS[basis];
+}
+
 /** The fee percentage's ceiling, in basis points — 50%. Beyond it a "fee"
  *  is a second contract, not a fee. */
 export const MAX_FEE_BPS = 5_000;
@@ -424,7 +475,11 @@ export const MAX_RETAINAGE_BPS = 1_000;
 export function validatePricingBasis(
   basis: DesignBuildPricingBasisPayload,
 ): string | null {
-  if (!(PRICING_BASIS_KINDS as readonly string[]).includes(basis.basis)) {
+  // The unanswered question, asked first — the send door asks it first too.
+  if (
+    basis.basis === null ||
+    !(PRICING_BASIS_KINDS as readonly string[]).includes(basis.basis)
+  ) {
     return "Choose how this agreement is priced.";
   }
   if (basis.costLines.length === 0) {
@@ -464,6 +519,7 @@ export function validatePricingBasis(
     }
   }
   if (
+    basis.subDisclosure === null ||
     !(SUB_DISCLOSURE_MODES as readonly string[]).includes(basis.subDisclosure)
   ) {
     return "Choose whether the trades are shown open-book or closed-book.";

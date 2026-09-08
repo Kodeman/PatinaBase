@@ -652,7 +652,7 @@ export {
   useVoidTradeAgreement,
 } from "./use-trade-agreements";
 export type {
-  TradeAgreementRow,
+  TradeAgreementListItem,
   CreateTradeAgreementInput,
   SendTradeAgreementResult,
 } from "./use-trade-agreements";

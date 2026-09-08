@@ -20,6 +20,7 @@ import {
   readPricingBasis,
   unbackedAllowanceLine,
   validateAllowances,
+  withCostBasisCents,
 } from "@/lib/document/design-build";
 import { dollars, toCentsOrNull } from "../part-kinds";
 import { payloadOf, TURNKEY_PART_KEYS, type TurnkeyContext } from "./context";
@@ -94,10 +95,12 @@ export function AllowancesEditor({
       if (placed.has(allowance.id)) continue;
       costLines.push(lineFor(allowance));
     }
-    turnkey.writePart(TURNKEY_PART_KEYS.pricingBasis, {
-      ...basisPayload,
-      costLines,
-    });
+    turnkey.writePart(
+      TURNKEY_PART_KEYS.pricingBasis,
+      // The derived cost basis moves with the lines it is the sum of, or the
+      // database refuses the save.
+      withCostBasisCents({ ...basisPayload, costLines }),
+    );
   };
 
   return (

@@ -23,6 +23,8 @@ import {
   readCostLines,
   readDraws,
   readPricingBasis,
+  readSubDisclosure,
+  withCostBasisCents,
   scheduleOfValues,
   totalPaidCents,
   validateDrawSet,
@@ -132,6 +134,33 @@ describe("the Halvorsen pricing basis", () => {
 
   it("is valid", () => {
     expect(validatePricingBasis(basis)).toBeNull();
+  });
+
+  it("carries the cost basis the database asserts, on the read payload", () => {
+    // `_validate_pricing_basis_payload` refuses a payload whose
+    // `costBasisCents` is not exactly Σ of the lines beneath it.
+    expect(basis.costBasisCents).toBe(halvorsen.expected.costBasisCents);
+    expect(basis.costBasisCents).toBe(costBasisCents(basis));
+    expect(withCostBasisCents(pricingBasisPayload()).costBasisCents).toBe(
+      halvorsen.expected.costBasisCents,
+    );
+  });
+
+  it("reads an unwritten basis and mode as unwritten, never as a default", () => {
+    // The seeded template lays both down as NULL. A default here would make
+    // readiness green over the question the send door asks first.
+    const blank = readPricingBasis({ costLines: halvorsen.costBasisLines });
+    expect(blank.basis).toBeNull();
+    expect(blank.subDisclosure).toBeNull();
+    expect(contractSumCents(blank)).toBeNull();
+    expect(scheduleOfValues(blank)).toEqual([]);
+    expect(validatePricingBasis(blank)).toBe(
+      "Choose how this agreement is priced.",
+    );
+  });
+
+  it("reads an unwritten disclosure clause as unwritten", () => {
+    expect(readSubDisclosure({ body: "" }).mode).toBeNull();
   });
 
   it("refuses a GMP that is a cent away from cost plus fee", () => {

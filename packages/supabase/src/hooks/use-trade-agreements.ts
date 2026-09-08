@@ -35,34 +35,44 @@ const getSupabase = () => createBrowserClient();
 // and emails the link.
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** The snake_case row shape `list_trade_agreements` returns. */
-export interface TradeAgreementRow {
+/**
+ * What `list_trade_agreements` actually returns — one jsonb array of these,
+ * built key by key at 00579's `jsonb_build_object`. The keys below are a
+ * literal copy of that list, in its order, and the shape is **camelCase**:
+ * the RPC projects a DTO, not a table row, so nothing here is snake_case and
+ * nothing here is a column name.
+ *
+ * Three columns the table carries are deliberately absent from the
+ * projection: `project_id` (the caller named it), `studio_id`, and
+ * `created_at` (the list is ordered by it, not dated by it). And
+ * `flow_down_clause_key`, which stays NULL this wave (R16) and is projected
+ * nowhere, so nothing downstream can claim to know it.
+ */
+export interface TradeAgreementListItem {
   id: string;
-  project_id: string;
-  studio_id: string;
-  source_proposal_id: string | null;
-  contact_id: string | null;
-  contact_display_name: string;
-  contact_company_name: string | null;
-  contact_email: string | null;
-  trade: string | null;
   title: string;
+  trade: string | null;
+  contactId: string | null;
+  contactDisplayName: string;
+  contactCompanyName: string | null;
+  contactEmail: string | null;
   scope: string;
-  price_cents: number;
+  priceCents: number;
   currency: string;
   schedule: Partial<TradeAgreementSchedule> | null;
-  retainage_bps: number;
-  pay_when_paid_days: number | null;
-  insurance_certificate_required: boolean;
-  lien_waiver_policy: string;
-  flow_down_clause_key: string | null;
-  sov_line_ids: string[] | null;
+  retainageBps: number;
+  payWhenPaidDays: number | null;
+  insuranceCertificateRequired: boolean;
+  lienWaiverPolicy: string;
+  sovLineIds: string[] | null;
+  sourceProposalId: string | null;
   state: string;
-  sent_at: string | null;
-  signed_at: string | null;
-  voided_at: string | null;
-  created_at: string | null;
-  sub_signature?: { signedName: string; signedAt: string } | null;
+  sentAt: string | null;
+  signedAt: string | null;
+  voidedAt: string | null;
+  hasLiveLink: boolean;
+  /** The sub's receipt, from the agreement's own signature table. */
+  signature: { signedName: string; signedAt: string } | null;
 }
 
 export const tradeAgreementKeys = {
@@ -70,38 +80,39 @@ export const tradeAgreementKeys = {
   list: (projectId: string) => ['trade-agreements', projectId] as const,
 };
 
-export function mapTradeAgreement(row: TradeAgreementRow): TradeAgreement {
+export function mapTradeAgreement(
+  item: TradeAgreementListItem,
+  projectId: string,
+): TradeAgreement {
   return {
-    id: row.id,
-    projectId: row.project_id,
-    studioId: row.studio_id,
-    sourceProposalId: row.source_proposal_id ?? null,
-    contactId: row.contact_id ?? null,
-    contactDisplayName: row.contact_display_name,
-    contactCompanyName: row.contact_company_name ?? null,
-    contactEmail: row.contact_email ?? null,
-    trade: row.trade ?? null,
-    title: row.title,
-    scope: row.scope,
-    priceCents: row.price_cents,
-    currency: row.currency,
+    id: item.id,
+    projectId,
+    sourceProposalId: item.sourceProposalId ?? null,
+    contactId: item.contactId ?? null,
+    contactDisplayName: item.contactDisplayName,
+    contactCompanyName: item.contactCompanyName ?? null,
+    contactEmail: item.contactEmail ?? null,
+    trade: item.trade ?? null,
+    title: item.title,
+    scope: item.scope,
+    priceCents: item.priceCents,
+    currency: item.currency,
     schedule: {
-      startOn: row.schedule?.startOn ?? null,
-      durationDays: row.schedule?.durationDays ?? null,
-      sequencing: row.schedule?.sequencing ?? null,
+      startOn: item.schedule?.startOn ?? null,
+      durationDays: item.schedule?.durationDays ?? null,
+      sequencing: item.schedule?.sequencing ?? null,
     },
-    retainageBps: row.retainage_bps,
-    payWhenPaidDays: row.pay_when_paid_days ?? null,
-    insuranceCertificateRequired: row.insurance_certificate_required,
-    lienWaiverPolicy: row.lien_waiver_policy as LienWaiverPolicy,
-    flowDownClauseKey: row.flow_down_clause_key ?? null,
-    sovLineIds: row.sov_line_ids ?? [],
-    state: row.state as TradeAgreementState,
-    sentAt: row.sent_at ?? null,
-    signedAt: row.signed_at ?? null,
-    voidedAt: row.voided_at ?? null,
-    createdAt: row.created_at ?? null,
-    subSignature: row.sub_signature ?? null,
+    retainageBps: item.retainageBps,
+    payWhenPaidDays: item.payWhenPaidDays ?? null,
+    insuranceCertificateRequired: item.insuranceCertificateRequired,
+    lienWaiverPolicy: item.lienWaiverPolicy as LienWaiverPolicy,
+    sovLineIds: item.sovLineIds ?? [],
+    state: item.state as TradeAgreementState,
+    sentAt: item.sentAt ?? null,
+    signedAt: item.signedAt ?? null,
+    voidedAt: item.voidedAt ?? null,
+    hasLiveLink: item.hasLiveLink === true,
+    subSignature: item.signature ?? null,
   };
 }
 
@@ -116,7 +127,9 @@ export function useTradeAgreements(projectId: string | null | undefined) {
         p_project_id: projectId,
       });
       if (error) throw error;
-      return ((data ?? []) as TradeAgreementRow[]).map(mapTradeAgreement);
+      return ((data ?? []) as TradeAgreementListItem[]).map((item) =>
+        mapTradeAgreement(item, projectId as string)
+      );
     },
     enabled: !!projectId,
   });

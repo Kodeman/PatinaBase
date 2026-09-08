@@ -310,10 +310,21 @@ export interface DesignBuildCostLine {
   basisCents: number;
 }
 
-/** `pricing_basis` schedule payload, design-build shape (record-only, R9). */
+/** `pricing_basis` schedule payload, design-build shape (record-only, R9).
+ *
+ *  `basis` and `subDisclosure` are NULL until a designer chooses them. Neither
+ *  has a safe default: the basis decides which figure is the contract sum, and
+ *  the disclosure mode is a term the homeowner reads on the paper (R13, R21).
+ *  A reader that supplied one would make readiness green over a question the
+ *  send door still asks. */
 export interface DesignBuildPricingBasisPayload {
-  basis: PricingBasisKind;
+  basis: PricingBasisKind | null;
   costLines: DesignBuildCostLine[];
+  /** Σ `costLines[].basisCents`, stored beside the lines so
+   *  `_validate_pricing_basis_payload` can assert the derivation and
+   *  `_agreement_contract_sum_cents` can read a cost-plus total. Never typed:
+   *  every write to this payload recomputes it from the lines. */
+  costBasisCents: number;
   /** Present for `cost_plus` and `cost_plus_gmp`; absent for `fixed`. */
   feeBps: number | null;
   /** Present only for `cost_plus_gmp`. */
@@ -322,7 +333,7 @@ export interface DesignBuildPricingBasisPayload {
   nteCents: number | null;
   /** Present only for `fixed`. */
   fixedCents: number | null;
-  subDisclosure: SubDisclosureMode;
+  subDisclosure: SubDisclosureMode | null;
 }
 
 /** One draw of a design-build draw schedule. `key` is stable and studio-set;
@@ -382,10 +393,12 @@ export interface DesignBuildSupervisionPayload {
 }
 
 /** The sub-disclosure clause's payload — one mode per contract. The schedule
- *  of values is rendered in whichever mode this clause elects (R13). */
+ *  of values is rendered in whichever mode this clause elects (R13), which is
+ *  why an unchosen mode reads NULL rather than falling to closed-book: the
+ *  mode is a term the homeowner reads, and no reader may write it for her. */
 export interface DesignBuildSubDisclosurePayload {
   body: string;
-  mode: SubDisclosureMode;
+  mode: SubDisclosureMode | null;
 }
 
 /**
@@ -509,15 +522,22 @@ export interface TradeAgreementSchedule {
  * R7: its name in every string a person reads is **Trade Agreement**; the
  * word "subcontract" is fine in code and in docs and never in the UI.
  *
- * Research 02 §7's eight essentials, all present and none optional:
- * flow-down (`flowDownClauseKey`, NULL this wave — counsel-gated, R16),
- * scope, price (`priceCents` + `sovLineIds`), schedule, retainage,
- * pay-when-paid, insurance, lien waivers.
+ * Research 02 §7's eight essentials: scope, price (`priceCents` +
+ * `sovLineIds`), schedule, retainage, pay-when-paid, insurance, lien waivers
+ * — and flow-down, which is a COLUMN on the row and appears nowhere here:
+ * `flow_down_clause_key` stays NULL this wave (counsel-gated, R16) and
+ * `list_trade_agreements` projects it nowhere, so nothing in this shape may
+ * claim to know it.
+ *
+ * This is exactly what `list_trade_agreements` returns, mapped. The studio's
+ * own id and the row's `created_at` are likewise not in that projection — the
+ * caller already knows the project it asked about, and the list is ordered by
+ * creation rather than dated.
  */
 export interface TradeAgreement {
   id: string;
+  /** The project the caller listed. Not in the RPC's own projection. */
   projectId: string;
-  studioId: string;
   sourceProposalId: string | null;
   contactId: string | null;
   contactDisplayName: string;
@@ -533,13 +553,13 @@ export interface TradeAgreement {
   payWhenPaidDays: number | null;
   insuranceCertificateRequired: boolean;
   lienWaiverPolicy: LienWaiverPolicy;
-  flowDownClauseKey: string | null;
   sovLineIds: string[];
   state: TradeAgreementState;
   sentAt: string | null;
   signedAt: string | null;
   voidedAt: string | null;
-  createdAt: string | null;
+  /** Whether a live signing link is outstanding on this agreement. */
+  hasLiveLink: boolean;
   /** The sub's receipt, once they have signed on the token link. */
   subSignature: { signedName: string; signedAt: string } | null;
 }

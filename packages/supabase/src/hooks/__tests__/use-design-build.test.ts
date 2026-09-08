@@ -225,7 +225,7 @@ describe('useRecordAgreementDrawLienWaiver', () => {
       recordedBy: 'designer-1',
     });
     expect(from).toHaveBeenCalledWith('agreement_draw_lien_waivers');
-    const payload = insert.mock.calls[0][0] as any;
+    const payload = (insert.mock.calls as unknown as any[][])[0][0];
     expect(payload.contact_display_name).toBe('Kestrel Cabinetry');
     expect(payload.recorded_by).toBe('designer-1');
     expect(payload.waiver_type).toBe('conditional_progress');

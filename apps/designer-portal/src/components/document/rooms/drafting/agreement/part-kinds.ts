@@ -138,16 +138,22 @@ export function blankPayload(
     // ── Wave 3, the turnkey class. A blank one opens with the SHAPE its
     // editor and its validator both expect and with no figure in it: R21's
     // rule holds here too, and an unwritten GMP is not a zero one.
+    // The basis and the disclosure mode open UNCHOSEN, exactly as the seeded
+    // turnkey template lays them down: which figure is the contract sum, and
+    // whether the trades are shown open-book or closed-book, are two of the
+    // questions the send door asks — and closed-book is a term the homeowner
+    // reads, so a blank part may not answer it for her.
     case "pricing_basis":
       return {
-        basis: "cost_plus_gmp",
+        basis: null,
         costLines: [],
+        costBasisCents: null,
         feeBps: null,
         gmpCents: null,
         nteCents: null,
         fixedCents: null,
         subMarkupBps: null,
-        subDisclosure: "closed_book",
+        subDisclosure: null,
       };
     case "draws":
       return { draws: [], retainageBps: 500 };

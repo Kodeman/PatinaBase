@@ -371,6 +371,66 @@ describe("two writes in one act", () => {
     });
   });
 
+  /**
+   * `_validate_pricing_basis_payload` refuses a payload whose
+   * `costBasisCents` is not exactly Σ `costLines[].basisCents` ("The cost
+   * basis must equal the cost lines beneath it, to the cent"), and it judges
+   * the moment `basis` and `costLines` are both non-empty — so a save that
+   * omitted the key could not land a design-build agreement at all. Every
+   * write that touches the lines carries it, from whichever editor moved
+   * them.
+   */
+  const costBasisOfSaved = () =>
+    payloadOfSaved(TURNKEY_PART_KEYS.pricingBasis).costBasisCents;
+
+  const sumOfSavedLines = () =>
+    (
+      payloadOfSaved(TURNKEY_PART_KEYS.pricingBasis).costLines as {
+        basisCents: number;
+      }[]
+    ).reduce((sum, line) => sum + line.basisCents, 0);
+
+  it("hands the save a cost basis equal to the cost lines beneath it", async () => {
+    renderRoom(turnkeyParts());
+    openPart("Pricing basis");
+    fireEvent.change(screen.getByLabelText("Cost line 2 amount"), {
+      target: { value: "12000" },
+    });
+    await save();
+
+    expect(costBasisOfSaved()).toBe(3_800_000 + 1_200_000);
+    expect(costBasisOfSaved()).toBe(sumOfSavedLines());
+    expect(Number.isInteger(costBasisOfSaved())).toBe(true);
+  });
+
+  it("carries the cost basis when the allowances editor moves the lines", async () => {
+    renderRoom(turnkeyParts());
+    openPart("Allowances");
+    fireEvent.click(screen.getByRole("button", { name: "+ Add an allowance" }));
+    fireEvent.change(screen.getByLabelText("Allowance 1"), {
+      target: { value: "Tile allowance" },
+    });
+    fireEvent.change(screen.getByLabelText("Allowance 1 amount"), {
+      target: { value: "4000" },
+    });
+    await save();
+
+    expect(costBasisOfSaved()).toBe(3_800_000 + 950_000 + 400_000);
+    expect(costBasisOfSaved()).toBe(sumOfSavedLines());
+  });
+
+  it("carries the cost basis when the clause writes the disclosure mode", async () => {
+    renderRoom(turnkeyParts());
+    openPart("Who is doing the work");
+    fireEvent.click(screen.getByRole("button", { name: "Open-book" }));
+    await save();
+
+    expect(payloadOfSaved(TURNKEY_PART_KEYS.pricingBasis)).toMatchObject({
+      subDisclosure: "open_book",
+    });
+    expect(costBasisOfSaved()).toBe(sumOfSavedLines());
+  });
+
   it("moves the clause's own mode, not only the pricing basis' copy", async () => {
     renderRoom(turnkeyParts());
     openPart("Who is doing the work");

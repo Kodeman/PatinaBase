@@ -92,10 +92,41 @@ export function DrawsEditor({
   const refusal = validateDrawSet(sum, draws);
   const rows = sum === null ? [] : drawTable(sum, draws);
 
+  /**
+   * The first row is the deposit, always.
+   *
+   * `validateDrawSet` and the database both refuse a schedule whose first key
+   * is not `deposit`, and a key, once minted, is frozen — so removing the
+   * deposit from [deposit, rough_in_2, cabinets_3] would otherwise leave a
+   * schedule the editor offered no way to repair. Every write re-seats the
+   * first row: its key becomes `deposit`, any other row carrying that key is
+   * re-minted off it, and it holds no retainage, because nothing has been
+   * built yet. Re-keying can never orphan an invoice — the draw ledger is
+   * materialized at SEND and the composer is read-only from that moment.
+   */
+  const withDepositFirst = (rows: DesignBuildDraw[]): DesignBuildDraw[] =>
+    rows.map((draw, index) => {
+      if (index === 0) {
+        return { ...draw, key: "deposit", retainageApplies: false };
+      }
+      if (draw.key.trim() !== "deposit") return draw;
+      return {
+        ...draw,
+        key: mintDrawKey(
+          rows.filter((_, rowIndex) => rowIndex !== index),
+          index,
+          draw.label,
+        ),
+      };
+    });
+
   const writeDraws = (next: DesignBuildDraw[]) =>
     onChange({
       ...payload,
-      draws: next.map((draw, index) => ({ ...draw, sortOrder: index })),
+      draws: withDepositFirst(next).map((draw, index) => ({
+        ...draw,
+        sortOrder: index,
+      })),
     });
 
   const editDraw = (index: number, patch: Partial<DesignBuildDraw>) =>

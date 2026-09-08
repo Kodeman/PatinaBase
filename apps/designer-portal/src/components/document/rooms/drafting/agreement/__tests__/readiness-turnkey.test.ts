@@ -146,6 +146,34 @@ describe("the turnkey floor", () => {
     expect(messages([pricingBasis])).toContain(TURNKEY_DRAWS_BLOCKER);
   });
 
+  /**
+   * The seeded template lays `basis` and the clause's `mode` down as NULL. A
+   * panel that read a default for either would go green over the wave's
+   * central question and hand the designer a database sentence at the send
+   * door — `send_commercial_document` asks for both by name.
+   */
+  it("holds until a pricing basis has actually been chosen", () => {
+    const unchosen = {
+      ...pricingBasis,
+      payload: { ...pricingBasis.payload, basis: null },
+    };
+    expect(assess([unchosen, draws]).ready).toBe(false);
+    expect(messages([unchosen, draws])).toContain(
+      "Choose how this agreement is priced.",
+    );
+  });
+
+  it("holds until the trades are said to be open-book or closed-book", () => {
+    const unchosen = {
+      ...pricingBasis,
+      payload: { ...pricingBasis.payload, subDisclosure: null },
+    };
+    expect(assess([unchosen, draws]).ready).toBe(false);
+    expect(messages([unchosen, draws])).toContain(
+      "Choose whether the trades are shown open-book or closed-book.",
+    );
+  });
+
   it("never asks a turnkey agreement to name a rate card or a flat fee", () => {
     // R4's design-services floor does not apply: the typed money part here is
     // the pricing basis, and asking for a fee it has no field for would be a

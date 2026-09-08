@@ -23,7 +23,7 @@ import type {
 } from "@patina/types";
 import {
   contractSumCents,
-  CONTRACT_SUM_LABELS,
+  contractSumLabel,
   scheduleOfValues,
 } from "@/lib/document/design-build";
 import { turnkeyMoney } from "./money";
@@ -36,23 +36,27 @@ export const CLOSED_BOOK_NOTE =
 export const OPEN_BOOK_NOTE =
   "Open-book — the trades stand at cost and the fee is its own line.";
 
+export const UNWRITTEN_NOTE =
+  "The schedule of values appears once the cost lines, the contract sum, and the open-book or closed-book choice are written.";
+
 export function ScheduleOfValues({
   basis,
   mode,
   currency = "USD",
 }: {
   basis: DesignBuildPricingBasisPayload;
-  mode: SubDisclosureMode;
+  /** Null until the sub-disclosure clause elects one. Pro-rating IS the
+   *  closed-book presentation, so there is no table to draw until it does. */
+  mode: SubDisclosureMode | null;
   currency?: string;
 }) {
   const lines = scheduleOfValues(basis, mode);
   const sum = contractSumCents(basis);
 
-  if (lines.length === 0 || sum === null) {
+  if (lines.length === 0 || sum === null || mode === null) {
     return (
       <p className="text-[11.5px] italic text-[var(--text-muted)]">
-        The schedule of values appears once the cost lines and the contract sum
-        are written.
+        {UNWRITTEN_NOTE}
       </p>
     );
   }
@@ -80,7 +84,7 @@ export function ScheduleOfValues({
         ))}
       </div>
       <div className="flex items-baseline justify-between gap-4 pt-1">
-        <span className={LABEL}>{CONTRACT_SUM_LABELS[basis.basis]}</span>
+        <span className={LABEL}>{contractSumLabel(basis.basis)}</span>
         <strong className="font-mono text-[12px] font-medium text-[var(--color-charcoal)]">
           {turnkeyMoney(sum, currency)}
         </strong>

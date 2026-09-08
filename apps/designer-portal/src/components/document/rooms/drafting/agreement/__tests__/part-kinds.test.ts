@@ -146,12 +146,19 @@ describe("scheduleValueIsSet — the Wave 3 turnkey schedules", () => {
 describe("blankPayload — the Wave 3 turnkey schedules", () => {
   it("opens a pricing basis with a shape and no figure in it (R21)", () => {
     const payload = blankPayload("schedule", "pricing_basis");
-    expect(payload.basis).toBe("cost_plus_gmp");
     expect(payload.costLines).toEqual([]);
+    expect(payload.costBasisCents).toBeNull();
     expect(payload.gmpCents).toBeNull();
     expect(payload.feeBps).toBeNull();
     expect(payload.subMarkupBps).toBeNull();
-    expect(payload.subDisclosure).toBe("closed_book");
+  });
+
+  it("opens with the basis and the disclosure mode UNCHOSEN", () => {
+    // Both are questions the send door asks by name, and closed-book is a
+    // term the homeowner reads — so a blank part answers neither for her.
+    const payload = blankPayload("schedule", "pricing_basis");
+    expect(payload.basis).toBeNull();
+    expect(payload.subDisclosure).toBeNull();
   });
 
   it("opens a draw schedule with the retainage the trade norm uses", () => {
