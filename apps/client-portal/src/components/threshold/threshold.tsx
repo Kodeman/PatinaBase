@@ -72,9 +72,10 @@ import { Letters, MuteLetters, WriteBack } from './correspondence';
 import { DetailsSheet } from './details-sheet';
 import { DoorGate, type DoorProposal } from './door-gate';
 import { Doorplate } from './doorplate';
-import { Doorstep } from './doorstep';
+import { Doorstep, hasChangedBlock } from './doorstep';
 import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
+import { LandmarkLedger } from './landmark-ledger';
 import { Letterbox } from './letterbox';
 import { Mat, type MatPaper, type MatPerson } from './mat';
 import type { OtherHouse } from './other-houses';
@@ -821,6 +822,18 @@ export function Threshold({
   const firstWallId =
     wallMarks.find((mark) => selectionById.has(mark.id.replace(/^wall:/, '')))?.id ?? null;
 
+  /**
+   * The first ask that actually draws, by its own element id — the landmark
+   * ledger's "What needs you" and the pole's gate section both point here.
+   * `firstWallId`/`firstDoorId` are already the ids of gates whose paper is
+   * present, so an anchor named here is always on the page; a house with
+   * nothing asking gets no gate section and no landmark at all.
+   */
+  const firstGateAnchor = firstWallId ? "wall" : firstDoorId ? "door" : null;
+  const whatNeedsYou =
+    firstGateAnchor ??
+    (doorstepAsks[0] ? `approval-${doorstepAsks[0].decisionId}` : null);
+
   /** The gate's own element id, which is `door`/`wall` only for the first one. */
   const gateAnchor = (mark: ThresholdMark): string => {
     const first = mark.kind === "door" ? firstDoorId : firstWallId;
@@ -1219,6 +1232,14 @@ export function Threshold({
     />
   );
 
+  /**
+   * The same three terms the hold below reads, named so the landmark ledger
+   * can answer them. While the house is silent nothing under the doorstep has
+   * drawn, and an index of five names over a page holding its place would be
+   * five links to nowhere.
+   */
+  const houseHasSpoken = hydrated && !loading && !model.pending;
+
   let body: ReactNode;
 
   // NEVER REVERSE. The house speaks only once every source it speaks FROM has
@@ -1271,7 +1292,18 @@ export function Threshold({
   } else {
     const sections = [
       { id: "doorstep", label: "You stand at the doorstep" },
-      { id: "key", label: "The whole house" },
+      // The money and the ask, in the order the page prints them. Without
+      // these two the caret could land on every part of the house except the
+      // two the page is actually about.
+      ...(model.groundFloor ? [] : [{ id: "letterbox", label: "The letterbox" }]),
+      ...(firstGateAnchor
+        ? [{ id: firstGateAnchor, label: "What needs you" }]
+        : []),
+      // The key is skipped when the rooms did not read, so the array skips it
+      // too: this array is also the story pole's set of ids that are ON the
+      // page, and a chapter allowed to link at an id that never renders is
+      // IA-21's own failure.
+      ...(roomsUnread ? [] : [{ id: "key", label: "The whole house" }]),
       ...model.bands.map((band) => ({ id: band.anchor, label: band.name })),
       ...(road ? [{ id: "road", label: "The road" }] : []),
       ...(model.note ? [{ id: "note", label: "The note" }] : []),
@@ -1291,7 +1323,11 @@ export function Threshold({
       // falls to one column, which puts the pole under the doorplate.
       <div className="grid items-start gap-[clamp(20px,3vw,44px)] [grid-template-columns:170px_minmax(0,1fr)] max-[860px]:gap-0 max-[860px]:[grid-template-columns:minmax(0,1fr)]">
         <div className="sticky top-[14px] self-start max-[860px]:static">
-          <StoryPole phases={phases} sections={sections} />
+          <StoryPole
+            phases={phases}
+            sections={sections}
+            firstBandAnchor={model.bands[0]?.anchor ?? null}
+          />
         </div>
 
         <div className="min-w-0">
@@ -1357,6 +1393,23 @@ export function Threshold({
   return (
     <div className="min-w-0" data-testid="the-threshold" style={ACCENT_STYLE}>
       {doorplate}
+      {/* Under the doorplate and OUTSIDE the since-yesterday dimming: an index
+          that faded with the page would be an index of nothing. Every landmark
+          is answered from what the branches below actually drew. */}
+      <LandmarkLedger
+        whereWeAre={houseHasSpoken}
+        whatChanged={
+          houseHasSpoken &&
+          hasChangedBlock({
+            showSince,
+            changedCount: model.changed.size,
+            readingMark: readingMarkLine(parseSourceDate(previousReadAt)),
+          })
+        }
+        whatYouOwe={houseHasSpoken && !(model.groundFloor && roomsUnread)}
+        whatNeedsYou={houseHasSpoken ? whatNeedsYou : null}
+        thePapers={houseHasSpoken}
+      />
       <SinceYesterday active={sinceActive} changed={model.changed}>
         {body}
       </SinceYesterday>

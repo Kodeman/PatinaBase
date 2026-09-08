@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { getPhaseLabel } from '@patina/types';
 
+import { InlineAct } from '@/components/threshold/instruments/inline-act';
 import {
   parseSpineDate,
   recognisePhaseSlug,
@@ -11,6 +12,7 @@ import {
   type SpinePhase,
   type splitSpinePhases,
 } from '@/components/threshold/instruments/making-spine';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 
 /* ── The story pole ─────────────────────────────────────────────────────────
    A carpenter's story pole is marked once and then never re-marked: the
@@ -84,23 +86,54 @@ function graduationSpan(phase: SpinePhase): string | null {
   return only ? LONG_MONTH.format(only) : null;
 }
 
+/**
+ * The section of the page a chapter owns.
+ *
+ * ONLY a chapter with a place of its own is a link (SF-03): three chapter
+ * names resolving to one anchor is worse than no link at all, and a
+ * graduation whose section is not on this page stays plain text rather than
+ * pointing at nothing. Procurement is the road — the goods on order stand
+ * there; installation is the first room band — the room the work stands in,
+ * which is where SF-03 sends it (`#study` in the specimen), NOT the key, which
+ * is the drawing's legend and a different part of the page. The other four
+ * chapters have no section of their own on the Threshold.
+ */
+function chapterSection(
+  slug: SpinePhase['slug'],
+  firstBandAnchor: string | null,
+): string | null {
+  if (slug === 'procurement') return 'road';
+  if (slug === 'installation') return firstBandAnchor;
+  return null;
+}
+
 export interface StoryPoleProps {
   phases: ReturnType<typeof splitSpinePhases>;
   /** The page's sections, in reading order, by anchor id. */
   sections: Array<{ id: string; label: string }>;
+  /** The first room band's anchor — installation's place. Null when the page draws no band. */
+  firstBandAnchor?: string | null;
 }
 
-export function StoryPole({ phases, sections }: StoryPoleProps) {
+export function StoryPole({ phases, sections, firstBandAnchor = null }: StoryPoleProps) {
   const [here, setHere] = useState(0);
+  // Below 600 the rail is a sticky bar that opens; above it, the rail is
+  // always the rail and this says nothing.
+  const [open, setOpen] = useState(false);
 
+  const onThePage = new Set(sections.map((section) => section.id));
   const graduations = [...phases.settled, ...(phases.current ? [phases.current] : []), ...phases.future]
     .sort((a, b) => a.index - b.index)
-    .map((phase) => ({
-      phase,
-      held: phase.id === phases.current?.id,
-      name: graduationName(phase),
-      span: graduationSpan(phase),
-    }));
+    .map((phase) => {
+      const place = chapterSection(phase.slug, firstBandAnchor);
+      return {
+        phase,
+        held: phase.id === phases.current?.id,
+        name: graduationName(phase),
+        span: graduationSpan(phase),
+        target: place && onThePage.has(place) ? place : null,
+      };
+    });
   const heldAt = graduations.findIndex((graduation) => graduation.held);
 
   // A finished house holds nothing: `current` is null, so `heldAt` is -1. Its
@@ -137,45 +170,68 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
 
   const caretTop =
     sections.length > 1 ? `${Math.round((here / (sections.length - 1)) * 100)}%` : '0%';
+  const hereLabel = sections[here]?.label ?? sections[0]?.label ?? '';
 
   return (
     <aside
       id="story-pole"
       data-testid="story-pole"
+      data-open={open ? 'true' : 'false'}
       aria-label="The story pole"
-      className="pt-1.5"
+      className="pt-1.5 max-[600px]:sticky max-[600px]:top-0 max-[600px]:z-[2] max-[600px]:border-b max-[600px]:border-[var(--border-default)] max-[600px]:bg-[var(--bg-primary)] max-[600px]:pb-1 max-[600px]:pt-0"
     >
-      <p className="mb-3 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
+      <p className="mb-3 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)] max-[600px]:hidden">
         The story pole
       </p>
 
-      <div
-        aria-hidden="true"
-        data-testid="story-pole-dots"
-        className="mb-2.5 hidden items-center gap-2.5 max-[600px]:flex"
-      >
-        {graduations.map((graduation, index) => {
-          const walked = walkedAt(index);
-          return (
-            <span
-              key={graduation.phase.id}
-              data-dot={graduation.held ? 'held' : walked ? 'walked' : 'ahead'}
-              style={
-                graduation.held
-                  ? { backgroundColor: ACCENT, borderColor: ACCENT }
-                  : walked
-                    ? { borderColor: 'var(--text-primary)' }
-                    : { borderColor: 'var(--border-default)' }
-              }
-              className="h-2 w-2 rounded-full border"
-            />
-          );
-        })}
+      {/* ≤600: one line that says where she is and opens the same list. The
+          rail used to be hidden outright here, which left a 5,700px page with
+          no way to move through it (IA-23 / C03). */}
+      <div className="hidden items-center gap-3 max-[600px]:flex">
+        <ScoredAction
+          actionKey="story_pole_open"
+          regionKey="story_pole"
+          surfaceKey="the_threshold"
+          variant="tertiary"
+          data-testid="story-pole-toggle"
+          aria-expanded={open}
+          aria-controls="story-pole-rail"
+          onClick={() => setOpen((was) => !was)}
+        >
+          {`You are in: ${hereLabel}`}
+        </ScoredAction>
+
+        <div
+          aria-hidden="true"
+          data-testid="story-pole-dots"
+          className="flex items-center gap-2.5"
+        >
+          {graduations.map((graduation, index) => {
+            const walked = walkedAt(index);
+            return (
+              <span
+                key={graduation.phase.id}
+                data-dot={graduation.held ? 'held' : walked ? 'walked' : 'ahead'}
+                style={
+                  graduation.held
+                    ? { backgroundColor: ACCENT, borderColor: ACCENT }
+                    : walked
+                      ? { borderColor: 'var(--text-primary)' }
+                      : { borderColor: 'var(--border-default)' }
+                }
+                className="h-2 w-2 rounded-full border"
+              />
+            );
+          })}
+        </div>
       </div>
 
       <ol
+        id="story-pole-rail"
         data-testid="story-pole-rail"
-        className="relative m-0 list-none border-l border-[var(--border-default)] py-0 pl-4 pr-0 max-[600px]:hidden"
+        className={`relative m-0 list-none border-l border-[var(--border-default)] py-0 pl-4 pr-0 max-[600px]:mt-2.5 ${
+          open ? '' : 'max-[600px]:hidden'
+        }`}
       >
         {graduations.map((graduation, index) => (
           <li
@@ -213,7 +269,17 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
                   : 'block font-normal uppercase tracking-[0.09em] text-[var(--text-body)]'
               }
             >
-              {graduation.name}
+              {graduation.target ? (
+                <InlineAct
+                  href={`#${graduation.target}`}
+                  data-testid={`story-pole-link-${graduation.phase.id}`}
+                  onClick={() => setOpen(false)}
+                >
+                  {graduation.name}
+                </InlineAct>
+              ) : (
+                graduation.name
+              )}
             </b>
             {graduation.span && (
               <span data-testid={`story-pole-span-${graduation.phase.id}`}>
@@ -225,7 +291,9 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
         ))}
       </ol>
 
-      <div className="relative mt-1.5 min-h-[56px] border-l border-[var(--border-subtle)] py-0.5 pl-4 max-[600px]:min-h-0 max-[600px]:border-l-0 max-[600px]:pl-0">
+      {/* ≤600 the toggle above already says where she is, so this does not say
+          it twice. */}
+      <div className="relative mt-1.5 min-h-[56px] border-l border-[var(--border-subtle)] py-0.5 pl-4 max-[600px]:hidden">
         <span
           aria-hidden="true"
           data-testid="story-pole-caret"
@@ -238,7 +306,7 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
           data-testid="story-pole-here"
           className="max-w-[14ch] font-mono text-[11px] leading-[1.5] tracking-[0.03em] text-[var(--text-body)] max-[600px]:max-w-none"
         >
-          {sections[here]?.label ?? sections[0]?.label ?? ''}
+          {hereLabel}
         </p>
       </div>
     </aside>

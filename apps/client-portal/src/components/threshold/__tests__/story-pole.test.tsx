@@ -1,4 +1,5 @@
 import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { splitSpinePhases } from '@/components/threshold/instruments/making-spine';
 import type { MilestoneDetail } from '@/types/project';
@@ -259,5 +260,157 @@ describe('StoryPole — six graduations, and one caret that moves', () => {
     } finally {
       io.restore();
     }
+  });
+});
+
+describe('StoryPole — the pole navigates', () => {
+  const HOUSE = [
+    { id: 'doorstep', label: 'You stand at the doorstep' },
+    { id: 'letterbox', label: 'The letterbox' },
+    { id: 'wall', label: 'What needs you' },
+    { id: 'key', label: 'The whole house' },
+    { id: 'study', label: 'The study' },
+    { id: 'road', label: 'The road' },
+    { id: 'mat', label: 'You stand on the mat' },
+  ];
+
+  /** The house draws its first band as the study — installation's place (SF-03). */
+  function house(sections = HOUSE, firstBandAnchor: string | null = 'study') {
+    return (
+      <StoryPole
+        phases={splitSpinePhases(VALE)}
+        sections={sections}
+        firstBandAnchor={firstBandAnchor}
+      />
+    );
+  }
+
+  it('links a chapter that has a section, to that section', () => {
+    render(house());
+
+    expect(screen.getByTestId('story-pole-link-ph4')).toHaveAttribute('href', '#road');
+    expect(screen.getByTestId('story-pole-link-ph5')).toHaveAttribute('href', '#study');
+  });
+
+  it('sends installation to the first room band and never to the key', () => {
+    render(house());
+
+    const links = screen
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href'));
+    expect(links).not.toContain('#key');
+  });
+
+  it('leaves installation plain when the page draws no band to send it to', () => {
+    render(house(HOUSE, null));
+
+    expect(screen.queryByTestId('story-pole-link-ph5')).not.toBeInTheDocument();
+    expect(screen.getByTestId('story-pole-graduation-ph5')).toBeInTheDocument();
+  });
+
+  it('leaves a chapter with no section of its own as plain text', () => {
+    render(house());
+
+    for (const id of ['ph1', 'ph2', 'ph3', 'ph6']) {
+      expect(screen.queryByTestId(`story-pole-link-${id}`)).not.toBeInTheDocument();
+      expect(screen.getByTestId(`story-pole-graduation-${id}`)).toBeInTheDocument();
+    }
+  });
+
+  it('never links a chapter whose section is not on this page', () => {
+    // A house with no road and no key: neither chapter has a place to stand.
+    render(
+      house([
+        { id: 'doorstep', label: 'You stand at the doorstep' },
+        { id: 'mat', label: 'You stand on the mat' },
+      ]),
+    );
+
+    expect(screen.queryByTestId('story-pole-link-ph4')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('story-pole-link-ph5')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+  });
+
+  it('every link it does draw points at a section the page gave it', () => {
+    render(house());
+
+    const ids = new Set(HOUSE.map((section) => `#${section.id}`));
+    for (const link of screen.getAllByRole('link')) {
+      expect(ids.has(link.getAttribute('href') ?? '')).toBe(true);
+    }
+  });
+
+  it('keeps the caret a reading mark, not a control', () => {
+    render(house());
+
+    const caret = screen.getByTestId('story-pole-caret');
+    expect(caret).toHaveAttribute('aria-hidden', 'true');
+    expect(caret.tagName).toBe('SPAN');
+    expect(caret).not.toHaveAttribute('href');
+    expect(caret.closest('a')).toBeNull();
+    expect(caret.closest('button')).toBeNull();
+  });
+
+  it('offers a one-line bar that says where she is and opens the same list', async () => {
+    const user = userEvent.setup();
+    render(house());
+
+    const toggle = screen.getByTestId('story-pole-toggle');
+    expect(toggle).toHaveTextContent('You are in: You stand at the doorstep');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', 'story-pole-rail');
+    expect(screen.getByTestId('story-pole-rail')).toHaveAttribute('id', 'story-pole-rail');
+    expect(screen.getByTestId('story-pole')).toHaveAttribute('data-open', 'false');
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('story-pole')).toHaveAttribute('data-open', 'true');
+    expect(screen.getByTestId('story-pole-rail').className).not.toContain('max-[600px]:hidden');
+
+    await user.click(toggle);
+    expect(screen.getByTestId('story-pole')).toHaveAttribute('data-open', 'false');
+    expect(screen.getByTestId('story-pole-rail').className).toContain('max-[600px]:hidden');
+  });
+
+  it('says where she is on the bar as the caret moves', () => {
+    const io = captureObserver();
+
+    try {
+      render(
+        <>
+          <div id="doorstep" data-testid="s-doorstep" />
+          <div id="letterbox" data-testid="s-letterbox" />
+          <div id="wall" data-testid="s-wall" />
+          <div id="key" />
+          <div id="study" />
+          <div id="road" />
+          <div id="mat" />
+          {house()}
+        </>,
+      );
+
+      act(() => {
+        io.fire([{ isIntersecting: true, target: screen.getByTestId('s-wall') }]);
+      });
+
+      expect(screen.getByTestId('story-pole-toggle')).toHaveTextContent(
+        'You are in: What needs you',
+      );
+      expect(screen.getByTestId('story-pole-here')).toHaveTextContent('What needs you');
+    } finally {
+      io.restore();
+    }
+  });
+
+  it('shuts the bar behind a chapter she jumps to', async () => {
+    const user = userEvent.setup();
+    render(house());
+
+    await user.click(screen.getByTestId('story-pole-toggle'));
+    expect(screen.getByTestId('story-pole')).toHaveAttribute('data-open', 'true');
+
+    await user.click(screen.getByTestId('story-pole-link-ph4'));
+    expect(screen.getByTestId('story-pole')).toHaveAttribute('data-open', 'false');
   });
 });
