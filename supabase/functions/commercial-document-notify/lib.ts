@@ -75,7 +75,8 @@ export function resolveCommercialNotificationAudiences(
           transition === "furnishings_sent" ||
           transition === "deposit_ready" ||
           transition === "trade_scope_sent" ||
-          transition === "trade_draw_ready"
+          transition === "trade_draw_ready" ||
+          transition === "agreement_draw_ready"
         ? ["client"]
         : ["studio"];
 
