@@ -111,3 +111,44 @@ Other notes for the next owner:
 
 Next owner: unchanged — whoever runs the Wave 3 walk. The stack is at `00579`,
 freshly reset, with no e2e or probe residue.
+
+---
+
+## The web walk, round 1 (2026-09-07, web walker) — NO RESET
+
+The Wave 3 web walker took the stack and **did not reset it**. No migration, no
+seed file, no grant and no product file was touched; `supabase db reset` was
+never run. Ledger head probed before the first click and unchanged after:
+`00579, 00578, 00577`.
+
+The walk is a real walk, so it left real rows behind. They are walk data, not
+seed data, and a
+`supabase db reset --workdir /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-integration`
+clears every one of them:
+
+- proposal `17143662-9354-4f24-87ea-503f818d0bae` — the Halvorsen turnkey prime,
+  composed, sent, client-signed and countersigned — and the project it created,
+  `6bb8a8b7-6d1e-4913-a8ef-954a49528bec`, with its `project_billing_authorities`
+  row (`per_draw`, NULL ceiling), its `agreement_execution_snapshots` row and
+  its five `agreement_draw_invoices` rows.
+- two further drafts on the same household: `a8efd3b8-bd86-4d18-ae05-8b8066bb1aa5`
+  (turnkey, used for the axe pass and the flag-off captures) and
+  `38ea6c93-dce8-45c8-bba8-3ea94d979c03` (design services).
+- one `studio_license_attestations` row on studio
+  `e7d0c2a3-8e35-4282-8b32-638b51be95d0` (WI Dwelling Contractor · 1234567 · WI
+  · 2027-03-31).
+- one `studio_contacts` row, `c0000000-0000-4000-8000-00000000ca01` (Marta
+  Reyes / Reyes Cabinetry), and the `studio_trade_agreements` row signed
+  through it, with its spent token. These were minted through
+  `create_trade_agreement` / `send_trade_agreement` /
+  `mint_trade_agreement_token` (`web-walk/mint-trade.sql`) because the studio
+  surface that would create them is unreachable — finding W3R1-01 in
+  `walk-web-r1.md`.
+- one `invoices` row, `INV-0001`, "Deposit at signing", `$8,413.40`, unpaid.
+
+Dev servers: designer :3000 and client :3002 were started with `nohup` from the
+integration worktree three times (all flags on; `design-build:false`; all three
+off) and **all were killed**; both ports were confirmed clear at the end.
+
+Next owner: whoever runs Wave 3 round 2. Reset before a fresh walk, or expect
+to meet the rows above.
