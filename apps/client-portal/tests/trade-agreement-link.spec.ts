@@ -248,19 +248,21 @@ test.describe('trade agreement guest link (Wave 3 · P14, R16)', () => {
         .eq('agreement_id', minted.agreementId);
       expect(tokens?.every((row) => (row as { status: string }).status === 'revoked')).toBe(true);
 
-      // R46 — A SPENT TOKEN CANNOT RE-OPEN. `sign_trade_agreement_by_token`
-      // revokes the token in the signing transaction and
-      // `resolve_trade_agreement_link` requires `status = 'active'`, so the
-      // same URL is a dead link on the second load. Build-sheet §8 step 16
-      // said "a fresh load of the same URL still shows the receipt"; that
-      // sentence is corrected — a RE-SENT link shows the receipt, the spent
-      // one does not.
+      // R46 — A SPENT TOKEN CANNOT RE-OPEN, and this is what that means as
+      // 00579 built it (M2). `sign_trade_agreement_by_token` revokes the token
+      // in the signing transaction, and `resolve_trade_agreement_link` admits
+      // `status = 'active' OR spent_at IS NOT NULL` — so the sub who signed
+      // reads back the SETTLED RECEIPT on the same URL, and never a second
+      // signable form. An administratively revoked token (never spent) still
+      // resolves to nothing. Round 3 left this unpinned between two readings;
+      // this is the one the code takes, and build-sheet §8 step 16 says so.
       const second = await context.newPage();
       await second.goto(`/trade/${minted.token}`);
-      await expect(second.getByText(/page not found/i)).toBeVisible({ timeout: 20000 });
-      await expect(second.getByTestId('trade-agreement-receipt')).toHaveCount(0);
-      await expect(second.getByTestId('trade-agreement-signed-name')).toHaveCount(0);
+      await expect(second.getByTestId('trade-agreement-receipt')).toBeVisible({
+        timeout: 20000,
+      });
       await expect(second.getByRole('button', { name: /sign this agreement/i })).toHaveCount(0);
+      await expect(second.getByRole('region', { name: /sign this agreement/i })).toHaveCount(0);
       await second.close();
     } finally {
       await context.close();

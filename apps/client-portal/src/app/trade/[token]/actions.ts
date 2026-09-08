@@ -50,18 +50,16 @@
 import { headers } from 'next/headers';
 import { createServiceClient } from '@patina/supabase/server';
 import { resolveClientIp } from '@/lib/utils/client-ip';
-import { isLikelyTradeAgreementToken } from './types';
-
-/** The floor the signature table's own CHECK keeps (char_length(btrim(signed_name)) >= 2). */
-export const MIN_SIGNED_NAME_LENGTH = 2;
-
-export type SignTradeAgreementResult =
-  | { status: 'saved'; signedName: string; signedAt: string | null }
-  | { status: 'already_signed'; signedName: string | null; signedAt: string | null }
-  | { status: 'agreement_void' }
-  | { status: 'invalid' }
-  /** The answer claimed nothing this file can read as either outcome — assert nothing, reload. */
-  | { status: 'unknown' };
+// R46 — A 'use server' MODULE MAY EXPORT ONLY ASYNC FUNCTIONS. The name floor
+// and the result union used to be exported from here, and Next refused the
+// module outright ("Only async functions are allowed to be exported in a 'use
+// server' file"), so /trade answered 500 on every request in dev and the whole
+// spec could never run. They live in ./types beside the token's own shape.
+import {
+  isLikelyTradeAgreementToken,
+  MIN_SIGNED_NAME_LENGTH,
+  type SignTradeAgreementResult,
+} from './types';
 
 function classifyMessage(message: string): 'agreement_void' | 'invalid' {
   // Only the withdrawn case gets its own sentence. invalid_link and every

@@ -158,3 +158,20 @@ export function lienWaiverLine(policy: string): string {
     LIEN_WAIVER_LINES[policy] ?? 'Lien waivers are exchanged as your studio sets out with each payment.'
   );
 }
+
+/** The floor the signature table's own CHECK keeps (char_length(btrim(signed_name)) >= 2). */
+export const MIN_SIGNED_NAME_LENGTH = 2;
+
+/**
+ * What `signTradeAgreement` answers. Declared here rather than in `actions.ts`
+ * because that module carries `'use server'`, and such a module may export
+ * only async functions — a const or a type beside them makes Next refuse the
+ * whole route (R46).
+ */
+export type SignTradeAgreementResult =
+  | { status: 'saved'; signedName: string; signedAt: string | null }
+  | { status: 'already_signed'; signedName: string | null; signedAt: string | null }
+  | { status: 'agreement_void' }
+  | { status: 'invalid' }
+  /** The answer claimed nothing this file can read as either outcome — assert nothing, reload. */
+  | { status: 'unknown' };
