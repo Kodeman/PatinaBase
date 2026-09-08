@@ -1281,7 +1281,11 @@ export function Threshold({
       ...(firstGateAnchor
         ? [{ id: firstGateAnchor, label: "What needs you" }]
         : []),
-      { id: "key", label: "The whole house" },
+      // The key is skipped when the rooms did not read, so the array skips it
+      // too: this array is also the story pole's set of ids that are ON the
+      // page, and a chapter allowed to link at an id that never renders is
+      // IA-21's own failure.
+      ...(roomsUnread ? [] : [{ id: "key", label: "The whole house" }]),
       ...model.bands.map((band) => ({ id: band.anchor, label: band.name })),
       ...(road ? [{ id: "road", label: "The road" }] : []),
       ...(model.note ? [{ id: "note", label: "The note" }] : []),
@@ -1301,7 +1305,11 @@ export function Threshold({
       // falls to one column, which puts the pole under the doorplate.
       <div className="grid items-start gap-[clamp(20px,3vw,44px)] [grid-template-columns:170px_minmax(0,1fr)] max-[860px]:gap-0 max-[860px]:[grid-template-columns:minmax(0,1fr)]">
         <div className="sticky top-[14px] self-start max-[860px]:static">
-          <StoryPole phases={phases} sections={sections} />
+          <StoryPole
+            phases={phases}
+            sections={sections}
+            firstBandAnchor={model.bands[0]?.anchor ?? null}
+          />
         </div>
 
         <div className="min-w-0">

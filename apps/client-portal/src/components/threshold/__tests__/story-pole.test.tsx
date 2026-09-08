@@ -269,19 +269,47 @@ describe('StoryPole — the pole navigates', () => {
     { id: 'letterbox', label: 'The letterbox' },
     { id: 'wall', label: 'What needs you' },
     { id: 'key', label: 'The whole house' },
+    { id: 'study', label: 'The study' },
     { id: 'road', label: 'The road' },
     { id: 'mat', label: 'You stand on the mat' },
   ];
 
+  /** The house draws its first band as the study — installation's place (SF-03). */
+  function house(sections = HOUSE, firstBandAnchor: string | null = 'study') {
+    return (
+      <StoryPole
+        phases={splitSpinePhases(VALE)}
+        sections={sections}
+        firstBandAnchor={firstBandAnchor}
+      />
+    );
+  }
+
   it('links a chapter that has a section, to that section', () => {
-    render(<StoryPole phases={splitSpinePhases(VALE)} sections={HOUSE} />);
+    render(house());
 
     expect(screen.getByTestId('story-pole-link-ph4')).toHaveAttribute('href', '#road');
-    expect(screen.getByTestId('story-pole-link-ph5')).toHaveAttribute('href', '#key');
+    expect(screen.getByTestId('story-pole-link-ph5')).toHaveAttribute('href', '#study');
+  });
+
+  it('sends installation to the first room band and never to the key', () => {
+    render(house());
+
+    const links = screen
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href'));
+    expect(links).not.toContain('#key');
+  });
+
+  it('leaves installation plain when the page draws no band to send it to', () => {
+    render(house(HOUSE, null));
+
+    expect(screen.queryByTestId('story-pole-link-ph5')).not.toBeInTheDocument();
+    expect(screen.getByTestId('story-pole-graduation-ph5')).toBeInTheDocument();
   });
 
   it('leaves a chapter with no section of its own as plain text', () => {
-    render(<StoryPole phases={splitSpinePhases(VALE)} sections={HOUSE} />);
+    render(house());
 
     for (const id of ['ph1', 'ph2', 'ph3', 'ph6']) {
       expect(screen.queryByTestId(`story-pole-link-${id}`)).not.toBeInTheDocument();
@@ -292,13 +320,10 @@ describe('StoryPole — the pole navigates', () => {
   it('never links a chapter whose section is not on this page', () => {
     // A house with no road and no key: neither chapter has a place to stand.
     render(
-      <StoryPole
-        phases={splitSpinePhases(VALE)}
-        sections={[
-          { id: 'doorstep', label: 'You stand at the doorstep' },
-          { id: 'mat', label: 'You stand on the mat' },
-        ]}
-      />,
+      house([
+        { id: 'doorstep', label: 'You stand at the doorstep' },
+        { id: 'mat', label: 'You stand on the mat' },
+      ]),
     );
 
     expect(screen.queryByTestId('story-pole-link-ph4')).not.toBeInTheDocument();
@@ -307,7 +332,7 @@ describe('StoryPole — the pole navigates', () => {
   });
 
   it('every link it does draw points at a section the page gave it', () => {
-    render(<StoryPole phases={splitSpinePhases(VALE)} sections={HOUSE} />);
+    render(house());
 
     const ids = new Set(HOUSE.map((section) => `#${section.id}`));
     for (const link of screen.getAllByRole('link')) {
@@ -316,7 +341,7 @@ describe('StoryPole — the pole navigates', () => {
   });
 
   it('keeps the caret a reading mark, not a control', () => {
-    render(<StoryPole phases={splitSpinePhases(VALE)} sections={HOUSE} />);
+    render(house());
 
     const caret = screen.getByTestId('story-pole-caret');
     expect(caret).toHaveAttribute('aria-hidden', 'true');
@@ -328,7 +353,7 @@ describe('StoryPole — the pole navigates', () => {
 
   it('offers a one-line bar that says where she is and opens the same list', async () => {
     const user = userEvent.setup();
-    render(<StoryPole phases={splitSpinePhases(VALE)} sections={HOUSE} />);
+    render(house());
 
     const toggle = screen.getByTestId('story-pole-toggle');
     expect(toggle).toHaveTextContent('You are in: You stand at the doorstep');
@@ -358,9 +383,10 @@ describe('StoryPole — the pole navigates', () => {
           <div id="letterbox" data-testid="s-letterbox" />
           <div id="wall" data-testid="s-wall" />
           <div id="key" />
+          <div id="study" />
           <div id="road" />
           <div id="mat" />
-          <StoryPole phases={splitSpinePhases(VALE)} sections={HOUSE} />
+          {house()}
         </>,
       );
 
@@ -379,7 +405,7 @@ describe('StoryPole — the pole navigates', () => {
 
   it('shuts the bar behind a chapter she jumps to', async () => {
     const user = userEvent.setup();
-    render(<StoryPole phases={splitSpinePhases(VALE)} sections={HOUSE} />);
+    render(house());
 
     await user.click(screen.getByTestId('story-pole-toggle'));
     expect(screen.getByTestId('story-pole')).toHaveAttribute('data-open', 'true');

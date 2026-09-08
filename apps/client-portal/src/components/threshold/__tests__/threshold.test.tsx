@@ -3105,6 +3105,39 @@ describe('Threshold — the landmark ledger and the story pole’s sections', ()
     }
   });
 
+  it('sends the pole’s Installation to the first room band, not to the key', () => {
+    const { container } = renderThreshold();
+
+    const installation = screen.getByTestId('story-pole-link-ph-5');
+    expect(installation).toHaveAttribute('href', `#room-${LIBRARY}`);
+    expect(container.querySelector(`#room-${LIBRARY}`)).not.toBeNull();
+
+    for (const link of Array.from(
+      container.querySelectorAll('[data-testid="story-pole"] a'),
+    )) {
+      expect(link.getAttribute('href')).not.toBe('#key');
+    }
+  });
+
+  it('draws no chapter link at a key a house whose rooms failed never prints', () => {
+    roomsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+    });
+    const { container } = renderThreshold();
+
+    expect(screen.getByTestId('threshold-rooms-error')).toBeInTheDocument();
+    expect(container.querySelector('#key')).toBeNull();
+
+    for (const link of Array.from(
+      container.querySelectorAll('[data-testid="story-pole"] a'),
+    )) {
+      expect(container.querySelector(link.getAttribute('href')!)).not.toBeNull();
+    }
+  });
+
   it('gives the caret the money and the ask to land on', () => {
     const observed: string[] = [];
     const original = window.IntersectionObserver;

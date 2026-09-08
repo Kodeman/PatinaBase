@@ -185,6 +185,18 @@ describe('Doorstep — a sentence that names a thing links to it', () => {
     expect(object).toHaveTextContent('Two papers');
   });
 
+  it('links the papers when the count outruns the words and comes back a numeral', () => {
+    render(
+      <Doorstep
+        {...step({ sentence: '13 papers wait for your name. Installation comes next.' })}
+      />,
+    );
+
+    const object = screen.getByTestId('doorstep-sentence-object');
+    expect(object).toHaveAttribute('href', '#door');
+    expect(object).toHaveTextContent('13 papers');
+  });
+
   it('links an open balance to the letterbox', () => {
     render(
       <Doorstep

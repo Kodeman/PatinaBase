@@ -84,10 +84,14 @@ export function hasChangedBlock(
  * saying so without offering the way there is the whole of IX05. The clauses
  * are the ones `standingSentence` composes, so each phrase is written only
  * when the thing it names is on the page.
+ *
+ * The paper count is a numeral, not a word, past twelve (`countInWords` falls
+ * back to `String(whole)`), so the door's pattern reads digits too — a house
+ * with thirteen open papers is still a house whose sentence links.
  */
 const SENTENCE_OBJECTS: ReadonlyArray<{ pattern: RegExp; anchor: string }> = [
   { pattern: /finished work/i, anchor: 'wall' },
-  { pattern: /(?:one paper|[a-z]+ papers)(?= waits? for your name)/i, anchor: 'door' },
+  { pattern: /(?:one paper|[a-z0-9]+ papers)(?= waits? for your name)/i, anchor: 'door' },
   { pattern: /a balance of \S+(?= stands open)/i, anchor: 'letterbox' },
 ];
 

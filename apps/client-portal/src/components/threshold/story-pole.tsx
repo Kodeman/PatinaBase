@@ -93,21 +93,29 @@ function graduationSpan(phase: SpinePhase): string | null {
  * names resolving to one anchor is worse than no link at all, and a
  * graduation whose section is not on this page stays plain text rather than
  * pointing at nothing. Procurement is the road — the goods on order stand
- * there; installation is the key — the drawing of what stands in the house.
- * The other four chapters have no section of their own on the Threshold.
+ * there; installation is the first room band — the room the work stands in,
+ * which is where SF-03 sends it (`#study` in the specimen), NOT the key, which
+ * is the drawing's legend and a different part of the page. The other four
+ * chapters have no section of their own on the Threshold.
  */
-const CHAPTER_SECTION: Partial<Record<SpinePhase['slug'], string>> = {
-  procurement: 'road',
-  installation: 'key',
-};
+function chapterSection(
+  slug: SpinePhase['slug'],
+  firstBandAnchor: string | null,
+): string | null {
+  if (slug === 'procurement') return 'road';
+  if (slug === 'installation') return firstBandAnchor;
+  return null;
+}
 
 export interface StoryPoleProps {
   phases: ReturnType<typeof splitSpinePhases>;
   /** The page's sections, in reading order, by anchor id. */
   sections: Array<{ id: string; label: string }>;
+  /** The first room band's anchor — installation's place. Null when the page draws no band. */
+  firstBandAnchor?: string | null;
 }
 
-export function StoryPole({ phases, sections }: StoryPoleProps) {
+export function StoryPole({ phases, sections, firstBandAnchor = null }: StoryPoleProps) {
   const [here, setHere] = useState(0);
   // Below 600 the rail is a sticky bar that opens; above it, the rail is
   // always the rail and this says nothing.
@@ -117,7 +125,7 @@ export function StoryPole({ phases, sections }: StoryPoleProps) {
   const graduations = [...phases.settled, ...(phases.current ? [phases.current] : []), ...phases.future]
     .sort((a, b) => a.index - b.index)
     .map((phase) => {
-      const place = CHAPTER_SECTION[phase.slug];
+      const place = chapterSection(phase.slug, firstBandAnchor);
       return {
         phase,
         held: phase.id === phases.current?.id,
