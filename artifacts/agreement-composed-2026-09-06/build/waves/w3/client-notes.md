@@ -238,7 +238,9 @@ Baseline before this lane: the same suite at 129/2012 (R30's round-4 figures).
   `select … from agreement_draw_invoices` errors ("the Wave 3 turnkey migration
   is not applied to this local stack … run pnpm supabase:reset first"), so it
   becomes a real gate the moment the migration lands and never reports a silent
-  green. Collected by Playwright (2 tests) but not run.
+  green. Collected by Playwright (2 tests) but **not run** — round 2 measured
+  why it cannot be run from this worktree and wrote the steward's runbook for
+  it; see §15.
 - The shared local stack was deliberately not reset or written to, per the lane
   brief, so nothing in this lane was driven against live data.
 - The `design-build` flag itself has no client-side gate: a homeowner has no
@@ -458,3 +460,240 @@ npx playwright test --list tests/design-build-door.spec.ts → 2 tests collected
 Not run here, and named rather than assumed: the e2e itself (§11.4), and every
 other lane's gates. No deploy, no production mutation, no write to the shared
 local stack, nothing pushed.
+
+---
+
+# Round 2 — the fix pass on `client-review-r2.md` (N1–N4)
+
+`git -C /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-client rev-parse --show-toplevel`
+→ `/Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-client`
+
+One of the four findings is this lane's to fix. The other three are named
+here with the evidence that settles them and the exact edit each needs,
+because escalating a cross-lane blocker precisely is the only honest form of
+"addressed" available from inside one worktree.
+
+## 12 · N1 · blocker · FIXED — the door now says what the record keeps
+
+The backend published its half while round 1 was being fixed, and the two
+halves said different words. The SQL is the canonical half — it is the
+sentence FILED (`sign/route.ts` posts `p_consent.consentSentence` off the
+bundle, `_countersign…` keeps it, `record/page.tsx:163` prints it back to her
+under R36) — so **this half was re-cut to it, byte for byte**, rather than the
+other way round.
+
+What changed in `consent-copy.ts`:
+
+| | before (this half) | now (both halves) |
+|---|---|---|
+| `cost_plus_gmp` | `the guaranteed maximum price` | `the cost-plus pricing basis and its guaranteed maximum price` |
+| `fixed` | `the fixed contract price` | `the fixed contract sum` |
+| `tm_nte` | `the not-to-exceed price` | `the time-and-materials basis and its not-to-exceed amount` |
+| `cost_plus` | `the cost-plus pricing basis` | unchanged |
+| unknown basis | (said nothing) | `the pricing basis` — the SQL's `ELSE`, unreachable in both halves and carried so the two CASEs are one CASE |
+| allowances | `the allowances` | `the allowances and what happens if they run over` |
+| retainer / ceiling | in `DESIGN_BUILD_VARIANT_ORDER`, and said | **removed** — the SQL arm has neither, so the door said terms the filed sentence omitted |
+| when the basis is said | whenever the basis string was known | only when the contract sum is above zero |
+
+That last row was the second half of the divergence and needed a second
+function: `designBuildContractSumCents` mirrors
+`public._agreement_contract_sum_cents(jsonb)` (00578:715-748) arm for arm —
+`fixed`→`fixedCents`, `cost_plus_gmp`→`gmpCents`, `tm_nte`→`nteCents`,
+`cost_plus`→`costBasisCents + round(costBasisCents × feeBps / 10000)`, integer
+check by `_agreement_is_int`'s rule. The schedule-of-values fragment is nested
+INSIDE the priced branch exactly as the SQL nests it: a paper that names no sum
+names no breakdown of one either. (Postgres `round()` and `Math.round` agree on
+non-negative numerics, and `feeBps` is validated 0–5000, so the cost-plus arm
+cannot part company with the database over a half cent.)
+
+**The pin the reviewer asked for, in both directions.**
+
+1. `consent-copy.ts` now exports `HALVORSEN_DESIGN_BUILD_CONSENT` — the whole
+   323-character sentence for the fixture. The backend's SQL test already
+   asserts that exact string off the signature row it filed
+   (`design_build_test.sql` T13). Checked mechanically across the two
+   worktrees:
+
+   ```
+   TS : I agree to these design-build terms, the cost-plus pricing basis and its
+        guaranteed maximum price, the schedule of values, the draw schedule, the
+        retainage withheld from each draw, and the allowances and what happens
+        if they run over, and understand my signature alone does not authorize
+        work until the studio countersigns.
+   SQL: (identical)
+   IDENTICAL: True   323 == 323
+   ```
+
+2. `consent-copy.test.ts` reads the SQL off disk the way it already reads the
+   sign route: every fragment this half can emit must appear as a quoted
+   literal in the migration that redefines `compose_agreement_consent` for
+   `'design_build'`, and every SQL test that speaks the turnkey consent must
+   carry the assembled sentence whole. The pin **arms itself** —
+   `expect(sqlTests.length > 0).toBe(migration !== null)` — so it asserts
+   nothing in this worktree (no Wave 3 migration here) and bites the moment
+   the tree contains one. No env flag anybody has to remember.
+
+   Proved both ways rather than asserted. With the backend's `00578` and
+   `design_build_test.sql` copied into this worktree the pin passes; with one
+   fragment reworded in that copy (`'the fixed contract sum'` →
+   `'the fixed contract price'`) it fails —
+   `Expected substring: "'the fixed contract sum'"` — and both copies were
+   then deleted (`git status` shows only the three lane files modified).
+
+3. `design-build-door.spec.ts` no longer asserts a substring of the sentence;
+   it asserts the whole exported constant against `door-consent-line`, so a
+   browser reading a different sentence than the database filed fails there
+   too.
+
+The summary line's nouns were re-keyed to the new fragments and the Halvorsen
+summary is byte-identical to before ("…guaranteed maximum price, schedule of
+values, draw schedule, retainage, allowances…"): presence is still decided in
+exactly one place, so the summary can still never name a term the consent line
+beneath it leaves out.
+
+## 13 · N2 · blocker · CROSS-LANE — the client half is closed, the wave half is not
+
+`_validate_pricing_basis_payload` (00578:637-640) refuses any pricing basis
+whose payload does not carry `costBasisCents` equal to the sum of its cost
+lines, and it is called from both `upsert_agreement_parts` (:4894) and
+`send_commercial_document` (:6656). Nothing writes that field: it is not on
+`DesignBuildPricingBasisPayload` (`packages/types/src/agreement.ts:314-326`,
+the frozen I-1 shape) and the designer's composer does not emit it.
+
+**Done here, in this lane:** the two fixtures this lane owns now carry the
+field, so the e2e can mint a turnkey agreement the moment the other half is
+settled and the consent composer reads the same input the database reads —
+`tests/design-build-door.spec.ts` (`costBasisCents: COST_BASIS_CENTS`, the
+seven cost lines summed = 7,130,000, and 7,130,000 + 18% = the 8,413,400 GMP)
+and the Halvorsen fixture in `consent-copy.test.ts`.
+
+**NOT done here, and it stops the wave.** `packages/types/src/agreement.ts` is
+the T0 handshake commit that is byte-identical on all five lane branches; an
+edit from this worktree would break that identity and the designer's editor
+would still not write the field. The orchestrator rules one of:
+
+- (a) add `costBasisCents: number` to `DesignBuildPricingBasisPayload` and have
+  the designer's pricing-basis editor write it — the payload then states the
+  total it is validated against; or
+- (b) change `_validate_pricing_basis_payload` to derive the sum from
+  `costLines` and drop the field — which is what the client body
+  (`design-build-body.tsx:150`) and the designer both already do.
+
+Either way walk steps 5 and 10 refuse until it is done, and E2E-1/E2E-2 cannot
+mint a fixture.
+
+## 14 · N3 · major · CROSS-LANE — the R12 keepsake is still the design-services renderer's
+
+`public._render_agreement_snapshot_html` is redefined in NEITHER Wave 3
+migration, and `_countersign_design_services_agreement_impl` — grafted for
+`design_build` at 00578:5517 — still writes the R12 snapshot through it for any
+parts-carrying document (00578:6031-6042). Its head (00577:476) has arms for
+`rate_card`, `per_phase`, `ceiling`, `flat`, `retainer`, `cadence` and
+`procurement` only, so `pricing_basis`, `draws` and `allowances` fall into the
+`ELSE` and render "Recorded with your agreement."; it then appends,
+unconditionally, "This agreement authorizes design services only. Furnishings,
+freight, tax, installation, and purchasing require a separate named furnishings
+authorization." — over a turnkey prime, on the homeowner's permanent copy.
+`_agreement_money` (00577:433) also rounds to whole dollars, losing the cents
+the turnkey table is built on.
+
+**Not fixed from this lane, deliberately.** `record/page.tsx` is not in the
+client lane's pathspec list (§2.4) and both client-side options are worse than
+the defect: re-rendering a legal snapshot in the portal makes the record stop
+being a record, and suppressing the snapshot when its closing sentence is
+wrong deletes the R12 copy she is entitled to. The honest fix is one arm in one
+SQL function.
+
+**The edit:** give `_render_agreement_snapshot_html` a `design_build` arm whose
+body matches `design-build-body.tsx` (pricing basis · schedule of values ·
+draws with retainage · allowances), gate the closing design-services-only
+sentence on `v_kind <> 'design_build'`, and use cents rather than
+`_agreement_money`'s whole dollars for the turnkey figures. Add the function to
+the build sheet's §3.3 site list, where it is missing.
+
+## 15 · N4 · major · DEFERRED TO INTEGRATION, with the reason measured
+
+E2E-2 still has not executed, and it cannot execute from this worktree. Both
+halves of why, checked rather than assumed:
+
+```
+curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54321/rest/v1/   → 200
+psql … -c "select count(*) from information_schema.tables
+           where table_name='agreement_draw_invoices';"                  → 0
+```
+
+The shared local stack is up and carries no Wave 3 migration. Applying one, or
+minting the spec's fixtures against it, is a write to the shared stack, which
+the lane brief forbids and which only the integration steward may do. A scratch
+DB does not help: PostgREST and GoTrue are bound to the stack's `postgres`
+database, so a cloned database is unreachable through `:54321`, which is the
+only address the spec and the portal have.
+
+What is true here: the escape is closed (`PATINA_W3_TURNKEY_GATE=1` turns the
+missing migration from a skip into a throw with the same sentence), the spec
+still collects, and it now imports the shared consent constant.
+
+```
+npx playwright test --list tests/design-build-door.spec.ts → 2 tests collected
+  design-build-door.spec.ts:340 signs through the turnkey arm, then offers the deposit
+  design-build-door.spec.ts:439 the offer is an offer: ignore it and the signature still stands
+```
+
+**The runbook for the steward** — every step is load-bearing:
+
+1. Land the backend migrations on the shared stack (`pnpm supabase:reset` from
+   the integration worktree, which replays 00578/00579 and the seeds).
+2. Settle N2 first. Without it `send_commercial_document` refuses and the
+   fixture never mints — the spec's own `turnkey send:` error will say so.
+3. `export SUPABASE_SERVICE_ROLE_KEY="$(supabase status -o json | jq -r .SERVICE_ROLE_KEY)"`
+   — without it the spec skips itself, by design.
+4. `export PATINA_W3_TURNKEY_GATE=1` — a run that skips is indistinguishable
+   from a run that passed, and this is what makes the difference visible.
+5. Start the dev server **from the integration worktree** before running.
+   `playwright.config.ts` pins `:3002` with `reuseExistingServer: true`, so a
+   server already running out of another checkout is silently reused and the
+   run tests the wrong tree (the R30 N5 trap).
+6. `env -u CI pnpm --filter @patina/client-portal test:e2e -- --workers=1 tests/design-build-door.spec.ts`
+
+## 16 · Gates, re-run after the round-2 fix
+
+```
+cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-client
+
+pnpm --filter @patina/client-portal type-check
+  → tsc --noEmit, no output (clean)
+
+pnpm --filter @patina/client-portal test
+  → Test Suites: 131 passed, 131 total
+    Tests:       2165 passed, 2165 total   (2161 before this round: +4)
+    Snapshots:   1 passed
+
+pnpm --filter @patina/client-portal test:coverage
+  → exit 0; floors (70/60/70/70) met
+    All files               74.81 / 70.27 / 74.98 / 77.14
+    consent-copy.ts         96.66 / 87.61 /100.00 / 98.33  (uncovered 223, 351 —
+                            351 is the SQL ELSE fragment, unreachable in both halves)
+    design-build-body.tsx   90.00 / 76.15 / 88.23 / 94.33
+    deposit-offer.tsx      100.00 /100.00 /100.00 /100.00
+    door-gate.tsx           95.48 / 88.96 / 88.00 / 98.33
+    letterbox-door.tsx      96.96 / 86.72 / 90.90 / 97.80
+    threshold.tsx           95.46 / 81.42 / 93.10 / 97.56
+    commercial-documents.ts 87.93 / 86.01 / 95.74 / 92.17
+
+npx playwright test --list tests/design-build-door.spec.ts → 2 tests collected
+```
+
+Prettier still reports drift on these files; it reports the same on
+`door-gate.tsx` and `letterbox-door.tsx`, which this round did not touch, so
+the drift is the repo's and the hook says the check is advisory.
+
+## 17 · Round-2 commits
+
+```
+cacf8c359 fix(client): the sentence she ticks is the sentence the record keeps
+```
+
+No push, no deploy, no production mutation, no write to the shared local stack,
+and nothing outside this worktree was edited — the backend's migration and SQL
+test were read from `agent-agr-w3-backend`, and the two copies made to prove
+the on-disk pin bites were deleted.
