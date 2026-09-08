@@ -66,9 +66,17 @@ export function rosterLineAnchorId(engagementId: string): string {
  *  sentence — the surrounding family, size, case and colour, no control box,
  *  a 1px rest rule 3px under the baseline that raises to --text-faint on
  *  hover. It is written here rather than in globals.css because another lane
- *  owns that file this wave. */
+ *  owns that file this wave.
+ *
+ *  It carries the sheet's own focus rule for every tier: the 2px ring AND the
+ *  proofreader's caret, which fades in on focus. The sheet sets the caret at
+ *  `left: 1px`, calibrated for a padded control box; an inline act has no
+ *  padding, so at 1px the mark would land on the word's first letter. It is
+ *  set just outside the word instead — a proofreader marks the margin. Every
+ *  inline act below carries an `aria-label`, which is what keeps the caret's
+ *  pseudo-content out of the accessible name (opacity:0 does not exempt it). */
 const INLINE_ACT =
-  'border-b border-[color:var(--color-aged-oak)] pb-[3px] text-inherit no-underline transition-colors hover:border-b-[1.5px] hover:border-[color:var(--text-faint)] hover:pb-[2.5px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
+  "relative border-b border-[color:var(--color-aged-oak)] pb-[3px] text-inherit no-underline transition-colors before:pointer-events-none before:absolute before:left-[-0.7em] before:top-1/2 before:-translate-y-1/2 before:text-[14px] before:leading-none before:text-[color:var(--color-quiet-ink)] before:opacity-0 before:transition-opacity before:duration-150 before:content-['‸'] hover:border-b-[1.5px] hover:border-[color:var(--text-faint)] hover:pb-[2.5px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] focus-visible:before:opacity-100 motion-reduce:transition-none motion-reduce:before:transition-none";
 
 /** The roster settles in ONCE per document session. A remount on return to
  *  /desk must not replay it, so the flag lives on the module, not the tree. */
@@ -254,6 +262,7 @@ export function DeskRoster({ roster }: { roster: DeskRosterModel }) {
               <a
                 href={`#roster-stage-${dayLine.more.stageKey}`}
                 data-day-line-more
+                aria-label={`and ${dayLine.more.count} more below`}
                 className={INLINE_ACT}
               >
                 and {dayLine.more.count} more below

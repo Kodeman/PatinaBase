@@ -453,6 +453,20 @@ describe('DeskRoster — the day’s line (IA-05)', () => {
     ).toHaveAttribute('id', 'roster-stage-proposal');
   });
 
+  it('names the person she is keeping waiting on the lead line', () => {
+    const { container } = render(<DeskRoster roster={richRoster()} />);
+
+    const lead = container.querySelector('[data-day-line="lead"]')!;
+    expect(lead.textContent).toBe(
+      'Marcus Wright · New lead — respond by Aug 27',
+    );
+    expect(
+      within(lead as HTMLElement).getByRole('link', {
+        name: 'Marcus Wright — the row below',
+      }),
+    ).toHaveAttribute('href', '#roster-line-wright');
+  });
+
   it('writes the sheet’s inline act, not a control box', () => {
     const { container } = render(<DeskRoster roster={roster()} />);
 
@@ -463,5 +477,22 @@ describe('DeskRoster — the day’s line (IA-05)', () => {
     expect(link.className).toContain('text-inherit');
     expect(link.className).toContain('focus-visible:outline-2');
     expect(link.className).not.toMatch(/min-h-|rounded-|bg-\[/);
+  });
+
+  it('gives every inline act the sheet’s focus pair — the ring and the caret', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const acts = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-desk-day-line] a'),
+    );
+    expect(acts.length).toBeGreaterThan(0);
+    for (const act of acts) {
+      expect(act.className).toContain('focus-visible:outline-2');
+      expect(act.className).toContain("before:content-['‸']");
+      expect(act.className).toContain('focus-visible:before:opacity-100');
+      // The caret is drawn, never spoken: an explicit name is what keeps the
+      // pseudo-content out of the accessible name.
+      expect(act.getAttribute('aria-label')).toBeTruthy();
+    }
   });
 });

@@ -448,6 +448,11 @@ export function deriveDeskDayLine(
   // (b) The earliest lead deadline. The need already wrote the sentence
   // ("New lead — respond by Sep 10"); the day's line borrows it rather than
   // writing a second one that could drift from it.
+  //
+  // 'reconnect_due' is deliberately NOT here. It shares `lead_response_deadline`
+  // with 'new_lead' in `needSortKey`, but the specimen and §F item 5 both say
+  // "new lead", and a nurtured lead's touchpoint is not the deadline this slot
+  // answers. Widening it is a product call, not a lane's — pinned by test.
   const lead = flat
     .filter(
       (entry) =>
@@ -463,9 +468,12 @@ export function deriveDeskDayLine(
       key: 'lead',
       engagementId: lead.line.engagementId,
       parts: [
+        // The person, not the job: this line answers "who am I keeping
+        // waiting". The job name stands in only where the row has no named
+        // client, since `clientOf` refuses a placeholder for a real name.
         {
           kind: 'job',
-          text: lead.line.name,
+          text: lead.line.client ?? lead.line.name,
           engagementId: lead.line.engagementId,
         },
         { kind: 'text', text: ` · ${lead.line.needText}` },

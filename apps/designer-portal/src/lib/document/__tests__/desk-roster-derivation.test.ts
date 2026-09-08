@@ -547,14 +547,64 @@ describe('deriveDeskDayLine — the day’s line (IA-05)', () => {
     expect(overdue.parts[1].text).toMatch(/^ — project, overdue \d+ days?$/);
   });
 
-  it('borrows the lead’s own sentence rather than writing a second one', () => {
+  it('names the person she is keeping waiting, then borrows the lead’s own sentence', () => {
     const dayLine = deriveDeskDayLine(threeLineRoster(), [], NOW)!;
     const lead = dayLine.lines.find((line) => line.key === 'lead')!;
 
     expect(lead.parts).toEqual([
-      { kind: 'job', text: 'Wright apartment', engagementId: 'wright' },
+      { kind: 'job', text: 'Marcus Wright', engagementId: 'wright' },
       { kind: 'text', text: ' · New lead — respond by Aug 27' },
     ]);
+  });
+
+  it('falls back to the job when the lead row carries no named client', () => {
+    const unnamed = row('unnamed', 'brief', {
+      title: 'Harbour flat',
+      client_name: '',
+      project_id: null,
+    });
+    const roster = deriveDeskRoster(
+      input({ live: [unnamed], folders: [folder(unnamed, leadNeed())] }),
+      NOW,
+    );
+
+    const lead = deriveDeskDayLine(roster, [], NOW)!.lines.find(
+      (line) => line.key === 'lead',
+    )!;
+    expect(lead.parts[0]).toEqual({
+      kind: 'job',
+      text: 'Harbour flat',
+      engagementId: 'unnamed',
+    });
+  });
+
+  it('leaves a reconnect touchpoint to the roster row — the lead slot is new leads only', () => {
+    const nurtured = row('nurtured', 'brief', {
+      title: 'Kessler loft',
+      client_name: 'Ivy Kessler',
+      project_id: null,
+    });
+    const roster = deriveDeskRoster(
+      input({
+        live: [nurtured],
+        folders: [
+          folder(
+            nurtured,
+            need({
+              kind: 'reconnect_due',
+              text: 'Reconnect — touchpoint due Aug 20',
+              dueOn: '2026-08-20',
+            }),
+          ),
+        ],
+      }),
+      NOW,
+    );
+
+    const dayLine = deriveDeskDayLine(roster, [], NOW);
+    expect(dayLine?.lines.some((line) => line.key === 'lead') ?? false).toBe(
+      false,
+    );
   });
 
   it('takes the earliest lead deadline when two leads are open', () => {
