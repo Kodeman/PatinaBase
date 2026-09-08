@@ -1001,6 +1001,10 @@ describe('deriveThreshold — what is owed across every open invoice', () => {
     expect(model.ledger.owedInvoiceCount).toBe(2);
     expect(model.letterbox?.id).toBe('inv-4');
     expect(model.letterbox?.balanceCents).toBe(912_500);
+    expect(model.ledger.paidCents).toBe(912_500);
+    // The reconciling sentence may only name a letter when there is exactly
+    // one to name.
+    expect(model.ledger.owedInvoiceNumber).toBeNull();
   });
 
   // A letter drawn against no house is merged into the adopted house's list by
@@ -1032,6 +1036,48 @@ describe('deriveThreshold — what is owed across every open invoice', () => {
     const model = deriveThreshold(input());
     expect(model.ledger.owedCents).toBeNull();
     expect(model.ledger.owedInvoiceCount).toBe(0);
+    expect(model.ledger.paidCents).toBeNull();
+    expect(model.ledger.owedInvoiceNumber).toBeNull();
+  });
+
+  it('names the one open letter and what has been paid against it', () => {
+    const model = deriveThreshold(input({ invoices: [first] }));
+
+    expect(model.ledger.owedInvoiceNumber).toBe('INV-4');
+    expect(model.ledger.paidCents).toBe(912_500);
+    expect(model.ledger.owedCents).toBe(912_500);
+  });
+
+  it('names no letter when the one open letter carries no number', () => {
+    const unnumbered = invoice({
+      id: 'inv-6',
+      invoice_number: '   ',
+      due_date: '2026-08-15',
+      total_cents: 500_000,
+      amount_paid_cents: 100_000,
+    });
+    const model = deriveThreshold(input({ invoices: [unnumbered] }));
+
+    expect(model.ledger.owedInvoiceNumber).toBeNull();
+    expect(model.ledger.paidCents).toBe(100_000);
+  });
+
+  // "$X paid" reconciles the owed figure standing above it, so it counts only
+  // what has been paid against the letters still open — a settled letter's
+  // payment belongs to no outstanding balance.
+  it('counts no payment from a letter that is already settled', () => {
+    const settled = invoice({
+      id: 'inv-paid',
+      status: 'paid',
+      due_date: '2026-07-01',
+      total_cents: 300_000,
+      amount_paid_cents: 300_000,
+    });
+    const model = deriveThreshold(input({ invoices: [settled, first] }));
+
+    expect(model.ledger.paidCents).toBe(912_500);
+    expect(model.ledger.owedInvoiceCount).toBe(1);
+    expect(model.ledger.owedInvoiceNumber).toBe('INV-4');
   });
 
   it('leaves an invoice with no due date at the back of the letterbox', () => {

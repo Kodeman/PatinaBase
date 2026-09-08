@@ -69,8 +69,6 @@ import { InstrumentReading } from './instrument-reading';
    about: standing in the thread, the old flow supplied that context by where
    the client was; a letter has to carry it. ────────────────────────────── */
 
-/** "5 August" — the deck's own date idiom, as the door itself dates things. */
-
 const REASON_MAX = 1000;
 const FEEDBACK_MAX = 1000;
 const QUESTION_MAX = 1000;
