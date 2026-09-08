@@ -151,3 +151,19 @@ $ git diff HEAD~1 | grep -n 'box-shadow|elevation-sheet|desk-settle'
 - Did not run prettier `--write`: `desk-roster.tsx` and `desk/page.tsx` already fail
   `prettier --check` on `origin/main`, so the pre-commit warning is inherited, not introduced, and
   reformatting would have swamped the diff.
+
+## Push
+
+```
+$ git push -u origin portal-polish/d2
+ * [new branch]          portal-polish/d2 -> portal-polish/d2     # e31cb4d17
+$ git push origin portal-polish/d2
+   e31cb4d17..02fc380c0  portal-polish/d2 -> portal-polish/d2
+```
+
+`origin/portal-polish/d2` = `02fc380c0`, branch in sync.
+
+The pre-push hook printed `Affected verification has advisory failures.` on the second push. It is
+advisory by construction (`scripts/hooks/patina-hooks.mjs:236` runs the affected plan with
+`strict: false`) and the failing check is the designer portal's `lint`, which carries the two known
+baseline errors named above — the same two `origin/main` carries. The push landed either way.
