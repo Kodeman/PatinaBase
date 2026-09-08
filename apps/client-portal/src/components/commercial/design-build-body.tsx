@@ -1,4 +1,16 @@
-import { AGREEMENT_PART_COPY } from '@patina/types';
+import {
+  AGREEMENT_PART_COPY,
+  DESIGN_BUILD_DRAW_STATE_LABEL,
+  DESIGN_BUILD_PAPER_COPY,
+  designBuildAllowanceRule,
+  designBuildBasisSentence,
+  designBuildContractSumLabel,
+  designBuildDrawHeldBackLine,
+  designBuildDrawShareLine,
+  designBuildFeeRowLabel,
+  designBuildMoney,
+  designBuildRetainageHeldLine,
+} from '@patina/types';
 
 import type {
   CommercialAgreementPart,
@@ -69,51 +81,15 @@ function payloadCents(value: unknown): number | null {
 }
 
 /**
- * Money to the cent, formatted from the INTEGER rather than from a float.
- * `commercial-document-shell.tsx`'s `money()` rounds to whole dollars, which
- * is right for a furnishings line and wrong for a draw: the Halvorsen deposit
- * is $8,413.40 and the rough-in draw nets $23,978.19, and a homeowner
- * reconciling an invoice against the paper needs both cents.
- *
- * The dollars are formatted by `Intl`; the cents are appended as the digits
- * they already are. Nothing is divided, so nothing can round. A whole-dollar
- * figure keeps the whole-dollar treatment the walk's own table shows
- * (`$71,300`, not `$71,300.00`).
+ * Money to the cent — `@patina/types`' own formatter, re-exported under the
+ * name this module's callers already import. The arithmetic lives there so the
+ * studio's live preview prints the identical figure (R27 / W3R1-04).
  */
-export function moneyToTheCent(cents: number, currency = 'USD'): string {
-  const whole = Math.trunc(cents);
-  const negative = whole < 0;
-  const abs = Math.abs(whole);
-  const dollars = Math.trunc(abs / 100);
-  const rest = abs % 100;
-  const head = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(dollars);
-  const said = rest === 0 ? head : `${head}.${String(rest).padStart(2, '0')}`;
-  return negative ? `−${said}` : said;
-}
+export const moneyToTheCent = designBuildMoney;
 
-/** 1800 basis points, said the way a studio says it: 18%. */
-function percentFromBps(bps: number): string {
-  return bps % 100 === 0 ? `${bps / 100}%` : `${(bps / 100).toFixed(2)}%`;
-}
-
-const BASIS_SENTENCE: Record<string, string> = {
-  fixed: 'A fixed price for the whole of the work.',
-  cost_plus: 'The cost of the work, plus the studio’s fee on it.',
-  cost_plus_gmp:
-    'The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.',
-  tm_nte:
-    'Time and materials as the work is done, and the total will not exceed the amount below.',
-};
-
-const BASIS_CEILING_LABEL: Record<string, string> = {
-  cost_plus_gmp: 'Guaranteed maximum price',
-  tm_nte: 'Not to exceed',
-  fixed: 'Contract price',
-};
+/* R27 / W3R1-04 — every sentence below this line that is not this document's
+   own words comes from `@patina/types`, which the studio's live preview reads
+   too. Two renderers in two codebases cannot drift by retyping. */
 
 /** One line of the schedule of values the homeowner reads. */
 export interface ScheduleOfValuesLine {
@@ -297,16 +273,21 @@ function PricingBasisLeaf({
   reading: PricingBasisReading;
   currency: string;
 }) {
-  const sentence = BASIS_SENTENCE[reading.basis];
-  const ceilingLabel = BASIS_CEILING_LABEL[reading.basis] ?? 'Contract price';
+  const sentence = designBuildBasisSentence(reading.basis);
+  const ceilingLabel = designBuildContractSumLabel(reading.basis);
   const rows: { label: string; value: string }[] = [
     ...(reading.costBasisCents > 0
-      ? [{ label: 'Cost basis', value: moneyToTheCent(reading.costBasisCents, currency) }]
+      ? [
+          {
+            label: DESIGN_BUILD_PAPER_COPY.costBasisLabel,
+            value: moneyToTheCent(reading.costBasisCents, currency),
+          },
+        ]
       : []),
     ...(reading.feeBps !== null && reading.feeCents !== null && reading.feeCents > 0
       ? [
           {
-            label: `Fee ${percentFromBps(reading.feeBps)}`,
+            label: designBuildFeeRowLabel(reading.feeBps),
             value: moneyToTheCent(reading.feeCents, currency),
           },
         ]
@@ -354,7 +335,7 @@ function ScheduleOfValuesLeaf({
 
   return (
     <section data-testid="design-build-sov" data-disclosure={reading.subDisclosure}>
-      <Heading title="Schedule of values" />
+      <Heading title={DESIGN_BUILD_PAPER_COPY.scheduleOfValuesTitle} />
       <div className="mt-4 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
         {lines.map((line) => (
           <div
@@ -368,7 +349,9 @@ function ScheduleOfValuesLeaf({
         ))}
       </div>
       <div className="mt-3 flex items-baseline justify-between gap-4 border-b border-current pb-2">
-        <span className="type-body-small text-[var(--text-primary)]">The whole of it</span>
+        <span className="type-body-small text-[var(--text-primary)]">
+          {DESIGN_BUILD_PAPER_COPY.scheduleOfValuesTotalLabel}
+        </span>
         <span className="type-label" data-testid="design-build-sov-total">
           {moneyToTheCent(total, currency)}
         </span>
@@ -376,14 +359,6 @@ function ScheduleOfValuesLeaf({
     </section>
   );
 }
-
-const DRAW_STATE_LABEL: Record<string, string> = {
-  draft: 'Not yet billed',
-  sent: 'Sent',
-  partially_paid: 'Part paid',
-  paid: 'Paid',
-  void: 'Withdrawn',
-};
 
 /**
  * The draw schedule, read off the ledger the database keeps. Nothing is
@@ -453,14 +428,20 @@ function DrawsLeaf({
               {[
                 draw.isRetainageRelease
                   ? null
-                  : `${moneyToTheCent(draw.grossCents, currency)} of the price`,
+                  : designBuildDrawShareLine(
+                      moneyToTheCent(draw.grossCents, currency),
+                    ),
                 draw.retainageCents > 0
-                  ? `${moneyToTheCent(draw.retainageCents, currency)} held back`
+                  ? designBuildDrawHeldBackLine(
+                      moneyToTheCent(draw.retainageCents, currency),
+                    )
                   : null,
-                DRAW_STATE_LABEL[draw.invoiceStatus ?? ''] ??
-                  (draw.invoiceStatus ? null : 'Not yet billed'),
+                DESIGN_BUILD_DRAW_STATE_LABEL[draw.invoiceStatus ?? ''] ??
+                  (draw.invoiceStatus
+                    ? null
+                    : DESIGN_BUILD_PAPER_COPY.drawNotYetBilled),
                 draw.lienWaiver
-                  ? 'Lien waiver received'
+                  ? DESIGN_BUILD_PAPER_COPY.drawLienWaiverReceived
                   : null,
               ]
                 .filter((piece): piece is string => !!piece)
@@ -471,7 +452,7 @@ function DrawsLeaf({
       </div>
       {retainageHeld > 0 && (
         <p className="type-body-small mt-3" data-testid="design-build-retainage-held">
-          {`${moneyToTheCent(retainageHeld, currency)} is held back across the draws and released when the work is finished.`}
+          {designBuildRetainageHeldLine(moneyToTheCent(retainageHeld, currency))}
         </p>
       )}
     </>
@@ -512,12 +493,7 @@ function AllowancesLeaf({
               </span>
             </div>
             <p className="type-meta-small mt-1 text-[var(--text-muted)]">
-              {row.overageRule === 'client_credit'
-                ? 'Anything over this amount is added to your account.'
-                : 'Anything over this amount needs a change order first.'}
-              {row.underageRule === 'retain'
-                ? ' Anything under it stays with the studio.'
-                : ' Anything under it comes back to you.'}
+              {designBuildAllowanceRule(row.overageRule, row.underageRule)}
             </p>
           </div>
         ))}
@@ -547,7 +523,7 @@ function SubsLeaf({
 
   return (
     <section data-testid="design-build-subs" data-disclosure={disclosure}>
-      <Heading title="Who is doing the work" />
+      <Heading title={DESIGN_BUILD_PAPER_COPY.subsTitle} />
       <div className="mt-4 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
         {subs.map((sub) => (
           <div
@@ -728,8 +704,7 @@ export function DesignBuildBody({ bundle }: { bundle: CommercialDocumentBundle }
             names and nothing beyond it — the sentence a services agreement
             closes with ("design services only") would be false here. */}
         <p className="border-l-2 border-patina-dusty-blue bg-patina-dusty-blue/5 px-4 py-3 type-body-small">
-          This agreement covers the work described above, at the price shown. Anything added to
-          it is a separate written change order before the work is done.
+          {DESIGN_BUILD_PAPER_COPY.boundary}
         </p>
       </div>
 

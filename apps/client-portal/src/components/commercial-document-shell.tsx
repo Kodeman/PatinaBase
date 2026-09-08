@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@patina/design-system';
+import { DESIGN_BUILD_PAPER_COPY } from '@patina/types';
 import { AgreementPartsBody } from '@/components/agreement-parts-body';
 import { DesignBuildBody } from '@/components/commercial/design-build-body';
 import { Stamp } from '@/components/threshold/instruments/stamp';
@@ -29,7 +30,7 @@ const KIND_LABEL: Record<Exclude<CommercialDocumentKind, 'legacy'>, string> = {
   service_addendum: 'Design services addendum',
   furnishings_authorization: 'Furnishings authorization',
   trade_scope: 'Trade scope',
-  design_build: 'Design-build agreement',
+  design_build: DESIGN_BUILD_PAPER_COPY.documentLabel,
 };
 
 const STATE_LABEL = {
