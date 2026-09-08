@@ -196,7 +196,13 @@ export const documentEvents = {
     surface_key: string;
     region_key: string;
     action_key: string;
-    variant: "primary" | "inked" | "secondary" | "tertiary" | "danger";
+    variant:
+      | "primary"
+      | "inked"
+      | "secondary"
+      | "tertiary"
+      | "danger"
+      | "terminal";
     presentation: "inline" | "mobile_dock";
   }) => track("document_action_shown", props),
 
@@ -204,7 +210,13 @@ export const documentEvents = {
     surface_key: string;
     region_key: string;
     action_key: string;
-    variant: "primary" | "inked" | "secondary" | "tertiary" | "danger";
+    variant:
+      | "primary"
+      | "inked"
+      | "secondary"
+      | "tertiary"
+      | "danger"
+      | "terminal";
     presentation: "inline" | "mobile_dock";
   }) => track("document_action_selected", props),
 

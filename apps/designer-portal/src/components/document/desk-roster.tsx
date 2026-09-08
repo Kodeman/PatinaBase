@@ -107,7 +107,7 @@ function JobLine({
       />
       <Link
         href={line.jobHref}
-        className="row-wash-score font-heading text-[16px] font-medium text-[var(--text-primary)] underline decoration-transparent decoration-1 underline-offset-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        className="row-wash-score font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
       >
         {line.name}
       </Link>

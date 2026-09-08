@@ -1,0 +1,139 @@
+/**
+ * PP-3 / R139 — the rest rule, gated at the CSS level.
+ *
+ * An action whose rule only appears on hover is not an affordance: a touch
+ * screen has no hover, so the whole tertiary tier read as plain text on the
+ * device Leah actually carries (IX03 / IX04 / B01). The house sheet's answer
+ * (§A5, amended §F-D) is that every tier's rest rule is unconditional — no
+ * `scaleX(0)`, no `@media (hover:none)` variant.
+ *
+ * eslint reads `.ts`/`.tsx` only and no stylelint config exists in this repo,
+ * so nothing but this suite can see a rule that hides itself at rest. It reads
+ * globals.css the way `shadow-gate.test.ts` does, and it names its one
+ * remaining exception rather than filtering it away.
+ */
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const GLOBALS_CSS = join(__dirname, "../../../app/globals.css");
+
+const source = readFileSync(GLOBALS_CSS, "utf8");
+/** Comments quote CSS prose ("scaleX(0) to scaleX(1)"); strip them first. */
+const stripped = source.replace(/\/\*[\s\S]*?\*\//g, "");
+
+interface Rule {
+  selector: string;
+  body: string;
+}
+
+/** Every top-level and at-rule-nested rule, as selector + declaration body. */
+function rules(css: string): Rule[] {
+  const found: Rule[] = [];
+  const RULE = /([^{}]+)\{([^{}]*)\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = RULE.exec(css)) !== null) {
+    const selector = match[1]!.trim().replace(/\s+/g, " ");
+    if (!selector || selector.startsWith("@")) continue;
+    found.push({ selector, body: match[2]! });
+  }
+  return found;
+}
+
+const ALL_RULES = rules(stripped);
+
+/** A rest rule is one no state pseudo-class gates. */
+const STATE =
+  /:(hover|active|focus|focus-visible|focus-within|disabled|checked)\b/;
+
+function restRulesTouching(pattern: RegExp): Rule[] {
+  return ALL_RULES.filter(
+    (rule) => pattern.test(rule.selector) && !STATE.test(rule.selector),
+  );
+}
+
+/** The Scored Ink grammar: the control, its parts, and the six tiers. */
+const ACTION_SELECTOR =
+  /\.da-(act|hit|pool|label|leading|trailing|primary|secondary|tertiary|danger|inked|terminal)\b/;
+
+describe("PP-3 · the rest rule is unconditional", () => {
+  it("reads globals.css and finds the Scored Ink block", () => {
+    expect(ALL_RULES.length).toBeGreaterThan(100);
+    expect(restRulesTouching(ACTION_SELECTOR).length).toBeGreaterThan(10);
+  });
+
+  it("hides no DocumentAction rest rule behind scaleX(0)", () => {
+    const hidden = restRulesTouching(ACTION_SELECTOR)
+      .filter((rule) => /transform\s*:[^;]*scaleX\(\s*0\s*\)/.test(rule.body))
+      .map((rule) => rule.selector);
+    expect(hidden).toEqual([]);
+  });
+
+  it("names the one .da-* rest rule still drawn at scaleX(0)", () => {
+    // The ad-hoc score kit worn by ~30 non-DocumentAction controls. It carries
+    // the same defect and is not this lane's to change; frozen here by name so
+    // it cannot be joined by a second, and so the debt stays visible.
+    const hidden = restRulesTouching(/\.da-/)
+      .filter((rule) => /transform\s*:[^;]*scaleX\(\s*0\s*\)/.test(rule.body))
+      .map((rule) => rule.selector);
+    expect(hidden).toEqual([".da-score-hover::after"]);
+  });
+
+  it("rests the tertiary and secondary scores on aged oak", () => {
+    const scored = restRulesTouching(
+      /^\.da-(tertiary|secondary) \.da-label::before$/,
+    );
+    expect(scored).toHaveLength(2);
+    for (const rule of scored) {
+      expect(rule.body).toMatch(/background-color:\s*var\(--color-aged-oak\)/);
+    }
+  });
+
+  it("draws the roster row score at rest, in aged oak", () => {
+    const [row] = restRulesTouching(/^\.row-wash-score::after$/);
+    expect(row).toBeDefined();
+    expect(row!.body).toMatch(/background:\s*var\(--color-aged-oak\)/);
+    expect(row!.body).not.toMatch(/scaleX/);
+  });
+
+  it("gives every act a focus outline beside the proofreader’s caret", () => {
+    const focus = ALL_RULES.find(
+      (rule) => rule.selector === ".da-act:focus-visible",
+    );
+    expect(focus).toBeDefined();
+    expect(focus!.body).toMatch(/outline:\s*2px solid var\(--color-clay-ink\)/);
+    expect(focus!.body).toMatch(/outline-offset:\s*2px/);
+    // The caret is the mark, the outline is the ring — R139 keeps both.
+    expect(stripped).toMatch(
+      /\.da-act:focus-visible::before\s*\{[^}]*opacity:\s*1/,
+    );
+  });
+
+  it("dims no act with opacity — faint ink at full opacity instead (B07)", () => {
+    const dimmed = ALL_RULES.filter(
+      (rule) =>
+        ACTION_SELECTOR.test(rule.selector) &&
+        /:disabled|\[aria-disabled/.test(rule.selector) &&
+        /opacity\s*:\s*0?\.\d/.test(rule.body),
+    );
+    expect(dimmed).toEqual([]);
+  });
+
+  it("fills the terminal tier and prints its label in Inter, not mono caps", () => {
+    const label = ALL_RULES.find(
+      (rule) => rule.selector === ".da-terminal .da-label",
+    );
+    expect(label).toBeDefined();
+    expect(label!.body).toMatch(/font-family:\s*var\(--font-body\)/);
+    expect(label!.body).toMatch(/font-size:\s*16px/);
+    expect(label!.body).toMatch(/text-transform:\s*none/);
+    expect(label!.body).toMatch(/font-variant-numeric:\s*tabular-nums/);
+
+    const box = ALL_RULES.find((rule) => rule.selector === ".da-terminal");
+    expect(box).toBeDefined();
+    expect(box!.body).toMatch(/background-color:\s*var\(--color-charcoal\)/);
+    expect(box!.body).toMatch(/min-height:\s*48px/);
+    expect(box!.body).toMatch(/border-radius:\s*3px/);
+    expect(box!.body).not.toMatch(/box-shadow/);
+  });
+});
