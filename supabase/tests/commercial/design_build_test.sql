@@ -203,7 +203,7 @@ GRANT EXECUTE ON FUNCTION pg_temp.allowances() TO PUBLIC;
 -- a retainer or a supervision fee without restating the nine.
 CREATE OR REPLACE FUNCTION pg_temp.turnkey_parts(
   p_basis jsonb DEFAULT NULL, p_draws jsonb DEFAULT NULL,
-  p_extra jsonb DEFAULT '[]'::jsonb)
+  p_extra jsonb DEFAULT '[]'::jsonb, p_mode text DEFAULT 'closed_book')
 RETURNS jsonb LANGUAGE sql STABLE AS $$
   SELECT jsonb_build_array(
     jsonb_build_object('kind', 'schedule', 'variant', 'pricing_basis',
@@ -219,7 +219,7 @@ RETURNS jsonb LANGUAGE sql STABLE AS $$
       'clientVisible', true, 'payload', pg_temp.allowances()),
     jsonb_build_object('kind', 'clause', 'partKey', 'patina.sub_disclosure',
       'title', 'Who does the work', 'required', true, 'clientVisible', true,
-      'payload', jsonb_build_object('mode', 'closed_book',
+      'payload', jsonb_build_object('mode', p_mode,
         'body', 'The studio engages and directs the trades.')),
     jsonb_build_object('kind', 'clause', 'partKey', 'patina.supervision_fee',
       'title', 'Supervision', 'required', true, 'clientVisible', true,
@@ -235,7 +235,7 @@ RETURNS jsonb LANGUAGE sql STABLE AS $$
       'payload', jsonb_build_object('body', 'The turnkey terms.'))
   ) || COALESCE(p_extra, '[]'::jsonb);
 $$;
-GRANT EXECUTE ON FUNCTION pg_temp.turnkey_parts(jsonb, jsonb, jsonb) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_temp.turnkey_parts(jsonb, jsonb, jsonb, text) TO PUBLIC;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (0) FIXTURE — one studio, its owner (the lead), one client.
@@ -1231,6 +1231,126 @@ BEGIN
     'T16: the draw schedule is hers in full — the redaction is one part wide';
 
   RAISE NOTICE 'PASS T16: a closed book closes, an open one does not, and only the pricing basis is touched';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (T20) R40 — ONE SENTENCE, FROM WHAT SHE READS.
+--       `compose_agreement_consent` composes from the CLIENT-VISIBLE
+--       PROJECTION: client_visible parts, run through
+--       `_agreement_redact_client_payload`, which is the payload
+--       `get_client_commercial_document_bundle` hands the door beside the
+--       checkbox. Two parity scenarios the wave did not have — a closed-book
+--       turnkey whose projection carries no cost lines at all, and an
+--       open-book one that withholds nothing — plus the plain `cost_plus`
+--       case, whose contract sum survives the redaction only because it
+--       travels explicitly.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_bundle jsonb;
+  v_payload jsonb;
+  v_sentence text;
+  c_pinned CONSTANT text :=
+    'I agree to these design-build terms, the cost-plus pricing basis and its guaranteed maximum price, the schedule of values, the draw schedule, the retainage withheld from each draw, and the allowances and what happens if they run over, and understand my signature alone does not authorize work until the studio countersigns.';
+BEGIN
+  -- (a) THE CLOSED BOOK. The sentence names a schedule of values; the payload
+  -- it was composed from carries no cost lines. Before R40 the SQL half read
+  -- the authored row and said the fragment from `costLines` — a key the
+  -- homeowner's copy does not have — so the two halves disagreed.
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle(
+    'a8300000-0000-4000-8000-000000000001');
+  v_sentence := public.compose_agreement_consent(
+    'a8300000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+
+  SELECT part->'payload' INTO v_payload
+  FROM jsonb_array_elements(v_bundle->'parts') AS e(part)
+  WHERE part->>'variant' = 'pricing_basis';
+  ASSERT NOT (v_payload ? 'costLines'),
+    'T20(a): the projection the door reads carries no cost lines';
+  ASSERT jsonb_array_length(v_payload->'scheduleOfValues') > 0,
+    'T20(a): it carries a schedule of values instead';
+  ASSERT position('the schedule of values' IN v_sentence) > 0,
+    format('T20(a): so the sentence names one: %L', v_sentence);
+  ASSERT v_sentence = c_pinned,
+    format('T20(a): and it is the pinned sentence: %L', v_sentence);
+  ASSERT v_sentence = (SELECT metadata->>'consentSentence'
+                       FROM public.commercial_document_signatures
+                       WHERE proposal_id = 'a8300000-0000-4000-8000-000000000001'
+                         AND party_role = 'client'),
+    'T20(a): and it is the sentence frozen on her signature row (R36)';
+
+  -- (b) A PLAIN COST-PLUS BASIS names no ceiling, so once the cost basis and
+  -- the fee are withheld the projected `contractSumCents` is the only sum the
+  -- payload carries. A composer that re-derived from the redacted payload
+  -- would price nothing and drop the basis fragment entirely.
+  PERFORM pg_temp.assume_user('a8000000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.mint_draft('a8300000-0000-4000-8000-000000000005',
+                             'The cost-plus turnkey');
+  PERFORM public.materialize_agreement_template(
+    'a8300000-0000-4000-8000-000000000005', 'patina.design_build');
+  PERFORM public.upsert_agreement_parts(
+    'a8300000-0000-4000-8000-000000000005',
+    pg_temp.turnkey_parts(pg_temp.pricing_basis() - 'gmpCents'
+                            || jsonb_build_object('basis', 'cost_plus')),
+    NULL);
+  PERFORM pg_temp.send_agreement('a8300000-0000-4000-8000-000000000005');
+  PERFORM pg_temp.reset_role();
+
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle(
+    'a8300000-0000-4000-8000-000000000005');
+  v_sentence := public.compose_agreement_consent(
+    'a8300000-0000-4000-8000-000000000005');
+  PERFORM pg_temp.reset_role();
+
+  SELECT part->'payload' INTO v_payload
+  FROM jsonb_array_elements(v_bundle->'parts') AS e(part)
+  WHERE part->>'variant' = 'pricing_basis';
+  ASSERT NOT (v_payload ? 'costBasisCents') AND NOT (v_payload ? 'feeBps'),
+    'T20(b): a closed book withholds the two figures a cost-plus sum is made of';
+  ASSERT (v_payload->>'contractSumCents')::bigint = pg_temp.m('gmp'),
+    format('T20(b): and states the sum instead, got %s',
+           v_payload->>'contractSumCents');
+  ASSERT position('the cost-plus pricing basis' IN v_sentence) > 0,
+    format('T20(b): the sentence still prices the paper: %L', v_sentence);
+  ASSERT position('guaranteed maximum' IN v_sentence) = 0,
+    'T20(b): and does not promise a ceiling this basis does not carry';
+  ASSERT position('the schedule of values' IN v_sentence) > 0,
+    format('T20(b): and still names the schedule she reads: %L', v_sentence);
+
+  -- (c) THE OPEN BOOK withholds nothing, and composes the same sentence.
+  PERFORM pg_temp.assume_user('a8000000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.mint_draft('a8300000-0000-4000-8000-000000000006',
+                             'The open-book turnkey');
+  PERFORM public.materialize_agreement_template(
+    'a8300000-0000-4000-8000-000000000006', 'patina.design_build');
+  PERFORM public.upsert_agreement_parts(
+    'a8300000-0000-4000-8000-000000000006',
+    pg_temp.turnkey_parts(NULL, NULL, '[]'::jsonb, 'open_book'), NULL);
+  PERFORM pg_temp.send_agreement('a8300000-0000-4000-8000-000000000006');
+  PERFORM pg_temp.reset_role();
+
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle(
+    'a8300000-0000-4000-8000-000000000006');
+  v_sentence := public.compose_agreement_consent(
+    'a8300000-0000-4000-8000-000000000006');
+  PERFORM pg_temp.reset_role();
+
+  SELECT part->'payload' INTO v_payload
+  FROM jsonb_array_elements(v_bundle->'parts') AS e(part)
+  WHERE part->>'variant' = 'pricing_basis';
+  ASSERT v_payload ? 'costLines' AND v_payload ? 'feeBps',
+    'T20(c): open book is open';
+  ASSERT jsonb_array_length(v_payload->'scheduleOfValues') > 0,
+    'T20(c): and the schedule is projected in the same key both modes read';
+  ASSERT v_sentence = c_pinned,
+    format('T20(c): one sentence in both disclosures: %L', v_sentence);
+
+  RAISE NOTICE 'PASS T20: both halves compose from the projection, in both disclosures';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

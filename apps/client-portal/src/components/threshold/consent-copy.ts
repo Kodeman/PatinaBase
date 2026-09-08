@@ -290,19 +290,26 @@ function consentInt(value: unknown): number | null {
 }
 
 /**
- * `public._agreement_contract_sum_cents(jsonb)` written a second time.
+ * `public._agreement_contract_sum_cents(jsonb)` written a second time, over
+ * the payload the door was actually handed.
  *
- * The SQL arm says the basis fragment only when this is above zero — not when
- * the basis string is merely recognized — so an UNPRICED basis says nothing on
- * either side. `costBasisCents` is read off the payload rather than summed
- * from the cost lines because that is what the SQL reads; the two must agree
- * on the same input, not on the same intention.
+ * R40 — ONE SENTENCE, FROM WHAT SHE READS. `get_client_commercial_document_
+ * bundle` redacts a turnkey pricing basis before it crosses to the client:
+ * under anything but open book the cost lines, the fee, the sub markup and
+ * the cost basis stay behind, and `contractSumCents` and `scheduleOfValues`
+ * are projected in their place. So the projected sum is read FIRST — on a
+ * plain `cost_plus` basis it is the only sum this payload carries — and the
+ * basis-by-basis derivation is the open-book and authored-payload path.
+ * `compose_agreement_consent` reads the same two keys off the same redaction,
+ * so the sentence she ticks is the sentence her signature row keeps.
  *
  * Postgres `round()` on a positive numeric and `Math.round` on a positive
  * number agree, and `feeBps` is validated to 0–5000, so the cost-plus arm
  * cannot part company with the database over a half-cent.
  */
 function designBuildContractSumCents(payload: Record<string, unknown>): number | null {
+  const projected = consentInt(payload.contractSumCents);
+  if (projected !== null) return projected;
   const basis = typeof payload.basis === 'string' ? payload.basis.trim() : '';
   if (basis === 'fixed') return consentInt(payload.fixedCents);
   if (basis === 'cost_plus_gmp') return consentInt(payload.gmpCents);
@@ -322,12 +329,20 @@ function designBuildFragments(part: ConsentPart): string[] {
       const sum = designBuildContractSumCents(part.payload);
       if (sum === null || sum <= 0) return [];
       const basis = typeof part.payload.basis === 'string' ? part.payload.basis : '';
+      // R40: the schedule of values is the PROJECTED array — the one the body
+      // beneath this sentence prints — in both disclosure modes. A payload
+      // that carries no projection at all (an authored row read outside the
+      // bundle) falls back to its cost lines, which is what the projection
+      // would have been derived from.
+      const projectedLines = Array.isArray(part.payload.scheduleOfValues)
+        ? consentRows(part.payload.scheduleOfValues)
+        : consentRows(part.payload.costLines);
       return [
         DESIGN_BUILD_BASIS_FRAGMENT[basis] ?? UNNAMED_BASIS_FRAGMENT,
         // Nested inside the priced branch exactly as the SQL nests it: a
         // schedule of values is the breakdown OF a contract sum, and a paper
         // that names no sum names no schedule of values either.
-        ...(consentRows(part.payload.costLines).length > 0 ? ['the schedule of values'] : []),
+        ...(projectedLines.length > 0 ? ['the schedule of values'] : []),
       ];
     }
     case 'draws': {

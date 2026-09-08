@@ -639,6 +639,103 @@ const HALVORSEN_PARTS: ConsentPart[] = [
 
 const HALVORSEN_CONSENT = HALVORSEN_DESIGN_BUILD_CONSENT;
 
+/* ── R40 · THE PAYLOAD THE DOOR IS ACTUALLY HANDED ───────────────────────────
+   `get_client_commercial_document_bundle` runs a turnkey pricing basis through
+   `_agreement_redact_client_payload` before it crosses to the client. Under
+   anything but open book the cost lines, the fee, the sub markup and the cost
+   basis stay behind and `contractSumCents` + `scheduleOfValues` are projected
+   in their place; under open book nothing is withheld and the same two keys
+   are projected beside what was already there.
+
+   The fixtures above are the AUTHORED row — what `proposal_agreement_parts`
+   holds. These two are the PROJECTION — what `door-gate.tsx` feeds
+   `composeConsentLine`. Both must compose the one pinned sentence, because
+   `compose_agreement_consent` now composes from the projection too and its
+   answer is what the signature row freezes.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const HALVORSEN_SOV_CLOSED = [
+  { id: 'kitchen', label: 'Kitchen', cents: 6400000 },
+  { id: 'mudroom', label: 'Mudroom', cents: 2013400 },
+];
+
+const HALVORSEN_PRICING_BASIS_CLOSED_BOOK = schedule('pricing_basis', {
+  basis: 'cost_plus_gmp',
+  gmpCents: 8413400,
+  nteCents: null,
+  fixedCents: null,
+  subDisclosure: 'closed_book',
+  contractSumCents: 8413400,
+  scheduleOfValues: HALVORSEN_SOV_CLOSED,
+});
+
+const HALVORSEN_PRICING_BASIS_OPEN_BOOK = schedule('pricing_basis', {
+  ...HALVORSEN_PRICING_BASIS.payload,
+  subDisclosure: 'open_book',
+  contractSumCents: 8413400,
+  scheduleOfValues: [
+    ...(HALVORSEN_PRICING_BASIS.payload.costLines as { id: string; label: string; basisCents: number }[]).map(
+      (line) => ({ id: line.id, label: line.label, cents: line.basisCents }),
+    ),
+    { id: '__fee', label: 'Design and construction fee', cents: 1283400 },
+  ],
+});
+
+describe('composeConsentLine — the sentence she ticks is composed from what she reads (R40)', () => {
+  it('composes the pinned sentence from a CLOSED-BOOK projection, which carries no cost lines', () => {
+    const parts = [
+      HALVORSEN_PRICING_BASIS_CLOSED_BOOK,
+      HALVORSEN_DRAWS,
+      HALVORSEN_ALLOWANCES,
+    ];
+    expect('costLines' in HALVORSEN_PRICING_BASIS_CLOSED_BOOK.payload).toBe(false);
+    expect('feeBps' in HALVORSEN_PRICING_BASIS_CLOSED_BOOK.payload).toBe(false);
+    expect('costBasisCents' in HALVORSEN_PRICING_BASIS_CLOSED_BOOK.payload).toBe(false);
+    expect(composeConsentLine('design_build', parts)).toBe(HALVORSEN_CONSENT);
+  });
+
+  it('composes the pinned sentence from an OPEN-BOOK projection, which withholds nothing', () => {
+    const parts = [
+      HALVORSEN_PRICING_BASIS_OPEN_BOOK,
+      HALVORSEN_DRAWS,
+      HALVORSEN_ALLOWANCES,
+    ];
+    expect(composeConsentLine('design_build', parts)).toBe(HALVORSEN_CONSENT);
+  });
+
+  /* The case the redaction used to lose entirely: a plain `cost_plus` basis
+     names no ceiling, so once `costBasisCents` and `feeBps` are withheld the
+     only sum the payload carries is the projected one. Reading it is the
+     difference between a sentence that names the basis and a sentence that
+     names nothing at all. */
+  it('prices a plain cost-plus projection from the projected contract sum', () => {
+    const line = composeConsentLine('design_build', [
+      schedule('pricing_basis', {
+        basis: 'cost_plus',
+        subDisclosure: 'closed_book',
+        contractSumCents: 8413400,
+        scheduleOfValues: HALVORSEN_SOV_CLOSED,
+      }),
+    ]);
+    expect(line).toContain('the cost-plus pricing basis');
+    expect(line).toContain('the schedule of values');
+  });
+
+  it('names no schedule of values when the projection carries no lines', () => {
+    const line = composeConsentLine('design_build', [
+      schedule('pricing_basis', {
+        basis: 'fixed',
+        fixedCents: 8413400,
+        subDisclosure: 'closed_book',
+        contractSumCents: 8413400,
+        scheduleOfValues: [],
+      }),
+    ]);
+    expect(line).toContain('the fixed contract sum');
+    expect(line).not.toContain('schedule of values');
+  });
+});
+
 describe('composeConsentLine — the turnkey prime', () => {
   it('names the price, the schedule of values, the draws, the retainage and the allowances', () => {
     expect(composeConsentLine('design_build', HALVORSEN_PARTS)).toBe(HALVORSEN_CONSENT);

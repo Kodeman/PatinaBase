@@ -7601,6 +7601,13 @@ $$;
 -- determinism across two implementations is the whole point: the TypeScript
 -- twin is composeConsentLine in the client portal's consent-copy.ts and the
 -- SQL test pins the same literals its jest test pins.
+--
+-- R40 (Wave 3 close-out): both halves compose from the CLIENT-VISIBLE
+-- PROJECTION — client_visible parts, run through
+-- _agreement_redact_client_payload — because that is the payload the door
+-- renders beside the checkbox. Before this, the SQL half read the authored
+-- row and the TS half read the bundle, and on a closed-book turnkey they
+-- named different terms.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- Grafted VERBATIM from 00577_agreement_fee_schedules.sql:752-897, then the delta below.
@@ -7625,6 +7632,8 @@ DECLARE
   v_basis jsonb;
   v_draws jsonb;
   v_allow jsonb;
+  v_disclosure text;
+  v_contract_sum bigint;
 BEGIN
   SELECT p.document_kind, p.designer_id, p.client_id
   INTO v_kind, v_designer_id, v_client_id
@@ -7681,7 +7690,28 @@ BEGIN
       AND ap.kind = 'schedule' AND ap.variant = 'allowances'
     ORDER BY ap.position, ap.id LIMIT 1;
 
-    IF COALESCE(public._agreement_contract_sum_cents(v_basis), 0) > 0 THEN
+    -- R40: ONE SENTENCE, FROM WHAT SHE READS.
+    --
+    -- The client half composes from the bundle, and the bundle hands the
+    -- homeowner a REDACTED pricing basis under anything but open book — no
+    -- cost lines, no fee, no cost basis, and the derived schedule of values
+    -- and contract sum in their place. Composing this half from the authored
+    -- row would name a schedule of values her copy does not carry and, on a
+    -- plain cost-plus basis, price a sentence off a cost basis she was never
+    -- shown. So the redaction is applied here too, once, before a fragment is
+    -- said: both halves read the same payload, and the sentence she ticks is
+    -- the sentence frozen on her signature row.
+    v_disclosure := public._agreement_sub_disclosure(p_proposal_id);
+    v_basis := public._agreement_redact_client_payload(
+      'schedule', 'pricing_basis', v_basis, v_disclosure);
+
+    v_contract_sum := CASE
+      WHEN public._agreement_is_int(v_basis->'contractSumCents')
+        THEN (v_basis->>'contractSumCents')::bigint
+      ELSE public._agreement_contract_sum_cents(v_basis)
+    END;
+
+    IF COALESCE(v_contract_sum, 0) > 0 THEN
       v_fragments := v_fragments || (CASE COALESCE(v_basis->>'basis', '')
         WHEN 'fixed'         THEN 'the fixed contract sum'
         WHEN 'cost_plus'     THEN 'the cost-plus pricing basis'
@@ -7689,8 +7719,8 @@ BEGIN
         WHEN 'tm_nte'        THEN 'the time-and-materials basis and its not-to-exceed amount'
         ELSE 'the pricing basis'
       END)::text;
-      IF jsonb_typeof(v_basis->'costLines') = 'array'
-         AND jsonb_array_length(v_basis->'costLines') > 0 THEN
+      IF jsonb_typeof(v_basis->'scheduleOfValues') = 'array'
+         AND jsonb_array_length(v_basis->'scheduleOfValues') > 0 THEN
         v_fragments := v_fragments || 'the schedule of values'::text;
       END IF;
     END IF;
