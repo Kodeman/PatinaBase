@@ -24,6 +24,17 @@
 -- no business inside the prime's two-party ledger. SQL-A9 asserts both
 -- constraint definitions are byte-identical to their pre-wave shape.
 --
+-- Round-1 adversarial review, fixed in place (M2): a sub who reloaded
+--   /trade/<token> after signing got a 404. Signing revokes the token inside
+--   the signing transaction (RC-1 requires that), and resolve demanded an
+--   active one — while sign_trade_agreement_by_token, asked the same
+--   question, still returned 'already_signed' with the receipt. The two RPCs
+--   disagreed about what a spent link is, and §4.5 and walk step 16 both
+--   promise the settled receipt on reload. studio_trade_agreement_tokens gains
+--   spent_at, written ONLY by the signing transaction; resolve accepts an
+--   active token or a spent one on a signed agreement, and every other
+--   revocation — a void, a re-mint — still resolves to nothing.
+--
 -- Adds GRANT/REVOKE -> regenerate seed/00-legacy-grants.sql after this file.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -179,10 +190,22 @@ CREATE TABLE IF NOT EXISTS public.studio_trade_agreement_tokens (
                  CHECK (status IN ('active', 'revoked')),
   expires_at   timestamptz NOT NULL DEFAULT (now() + interval '30 days'),
   last_used_at timestamptz,
+  -- WHY A SPENT LINK IS NOT A DEAD LINK (M2). Signing revokes the token in the
+  -- same transaction as the signature — a signed agreement's link must not
+  -- stay live. But the sub who just signed reloads the page, and §4.5 promises
+  -- them the settled receipt rather than a 404. Those two are only compatible
+  -- if the row remembers WHO spent it: this column is written by
+  -- sign_trade_agreement_by_token and by nothing else, so a token revoked by
+  -- its own signature can still be resolved read-only, while one revoked by a
+  -- void, or superseded by a re-mint, resolves to nothing exactly as before.
+  spent_at     timestamptz,
   created_by   uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.studio_trade_agreement_tokens
+  ADD COLUMN IF NOT EXISTS spent_at timestamptz;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_trade_agreement_token_active
   ON public.studio_trade_agreement_tokens(agreement_id)
@@ -631,6 +654,19 @@ GRANT EXECUTE ON FUNCTION public.mint_trade_agreement_token(uuid)
 -- agreement, a voided agreement. A dead link is indistinguishable from one
 -- that never existed.
 --
+-- THE ONE EXCEPTION IS THE LINK THAT SPENT ITSELF (M2). Signing revokes the
+-- token in the signing transaction, so without this the sub who has just
+-- signed reloads their own page and is told it never existed — while
+-- sign_trade_agreement_by_token, asked the same question, still answers
+-- 'already_signed' with the receipt. Two RPCs disagreeing about what a spent
+-- link is, on the one surface with no login and no other way back in. So a
+-- token whose OWN SIGNATURE spent it (spent_at written by that transaction and
+-- by nothing else) resolves read-only, on a signed agreement, until it
+-- expires: state 'signed', existingSignature filled, and the page draws the
+-- settled receipt §4.5 promises. A token revoked by a void, or superseded by a
+-- re-mint, carries no spent_at and still resolves to NULL — RC-1's rule,
+-- unchanged, for every revocation that is somebody else's decision.
+--
 -- WHAT THIS DTO DOES NOT CARRY, and why. THE ABSENCES ARE THE POINT
 -- (00424:576-600 set this standard and the reasoning is identical here):
 --   · the client's price, the GMP, the contract sum, the schedule of values,
@@ -670,8 +706,8 @@ BEGIN
 
   SELECT * INTO v_token FROM public.studio_trade_agreement_tokens t
   WHERE t.token_hash = v_hash
-    AND t.status = 'active'
     AND t.expires_at > now()
+    AND (t.status = 'active' OR t.spent_at IS NOT NULL)
   LIMIT 1;
   IF NOT FOUND THEN
     RETURN NULL;
@@ -680,6 +716,13 @@ BEGIN
   SELECT * INTO v_agreement FROM public.studio_trade_agreements
   WHERE id = v_token.agreement_id;
   IF NOT FOUND OR v_agreement.state NOT IN ('sent', 'signed') THEN
+    RETURN NULL;
+  END IF;
+
+  -- A spent token is a receipt and nothing more. If the agreement it belongs
+  -- to is not signed, the token was not spent by a signature — whatever wrote
+  -- that column, this row is not a live credential.
+  IF v_token.spent_at IS NOT NULL AND v_agreement.state <> 'signed' THEN
     RETURN NULL;
   END IF;
 
@@ -721,7 +764,7 @@ BEGIN
 END;
 $$;
 COMMENT ON FUNCTION public.resolve_trade_agreement_link(text) IS
-  'The only guest read path for a Trade Agreement. NULL on every miss so a dead link is indistinguishable from one that never existed. The DTO carries the trade''s own terms and NOTHING of the client, the household, the project name, the prime''s price, the schedule of values, another trade''s price, or the bid ledger (R13).';
+  'The only guest read path for a Trade Agreement. NULL on every miss so a dead link is indistinguishable from one that never existed — the single exception being a token its own signature spent, which resolves read-only to the settled receipt until it expires (M2). The DTO carries the trade''s own terms and NOTHING of the client, the household, the project name, the prime''s price, the schedule of values, another trade''s price, or the bid ledger (R13).';
 REVOKE ALL ON FUNCTION public.resolve_trade_agreement_link(text)
   FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.resolve_trade_agreement_link(text)
@@ -840,9 +883,11 @@ BEGIN
   SET state = 'signed', signed_at = v_signature.signed_at, updated_at = now()
   WHERE id = v_agreement.id;
 
-  -- Same transaction, deliberately: a signed agreement's link is spent.
+  -- Same transaction, deliberately: a signed agreement's link is spent. It is
+  -- stamped spent_at in the same statement, which is what lets resolve hand
+  -- this sub their own receipt back and nobody else anything (M2).
   UPDATE public.studio_trade_agreement_tokens
-  SET status = 'revoked', updated_at = now()
+  SET status = 'revoked', spent_at = now(), updated_at = now()
   WHERE id = v_token.id;
 
   RETURN jsonb_build_object(

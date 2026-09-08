@@ -35,6 +35,7 @@
 --   send_commercial_document ................... 00412 → 00423 → 00575:599 → 00578
 --   get_client_commercial_document_bundle ...... 00425 → 00575 → 00577:2559 → 00578
 --   compose_agreement_consent .................. 00577:752 → 00578
+--   _render_agreement_snapshot_html ............ 00577:476 → 00578   (B1/B2)
 --
 -- NOT redefined, deliberately:
 --   sign_design_services_agreement_with_trusted_ip — a thin wrapper (00577
@@ -88,6 +89,51 @@
 --           separate origin leg in create_draft_invoice, so it is NOT grafted.
 --           get_client_project_selections carries the motif at 00423:2963 but
 --           its head is 00441:82, which does not — nothing to graft.
+--   F-W3-7  THE ATTESTATION IS NOT A PART OF THE PAPER. The build sheet's PART
+--           13 says patina.licensing_attestation is "materialized from
+--           studio_license_attestations at compose time" AND, in the same
+--           sentence, that it is "a studio-level record rather than a rail
+--           row" whose "Client sees" cell is no — and its walk step 4 asserts
+--           TEN parts in the rail. Both cannot hold: a row in
+--           proposal_agreement_parts IS the rail. This file materializes no
+--           attestation part. What gates the class is the studio-level record
+--           itself, asked at the two load-bearing doors
+--           (materialize_agreement_template, send_commercial_document) through
+--           studio_has_live_license_attestation. The vocabulary keeps the
+--           'attestation' kind (contract §1) and both snapshot passes already
+--           skip it, so a later wave that decides the paper should carry the
+--           credential can add the row without moving anything here.
+--           PUBLISHED to the designer and client lanes in backend-notes §5.
+--
+-- Round-1 adversarial review, fixed in place (blockers B1-B4, majors M2-M3):
+--   B1/B2  _render_agreement_snapshot_html did not know the turnkey class:
+--          pricing basis, draws and allowances all fell through its record-only
+--          fallback, so R12's keepsake carried no sum, no draw and no
+--          retainage — and it closed with "This agreement authorizes design
+--          services only", a false sentence frozen into the homeowner's
+--          durable record of a construction contract. PART 12c grafts it from
+--          00577:476 with three arms and a boundary that knows its class.
+--   B3     get_client_commercial_document_bundle projected the pricing basis
+--          payload RAW — the trades at cost, feeBps, subMarkupBps and the cost
+--          basis — to a homeowner whose closed-book clause says she is not
+--          shown them, and R22 forbids hiding the part instead (a turnkey
+--          prime that names no fee cannot be signed). The payload is now
+--          redacted at that one edge and the derived schedule of values goes
+--          in its place (_agreement_redact_client_payload in PART 6, read by
+--          PART 12 and by the keepsake, RC-4).
+--   B4     the seeded flow-down clause did not exist anywhere. It is now the
+--          eleventh entry of patina.design_build, `enabled: false`, and
+--          materialize_agreement_template refuses to compose a disabled entry
+--          (PART 8b, PART 13, R16).
+--   M3     agreement_draw_lien_waivers was written by a direct INSERT grant.
+--          The grant and its policy are withdrawn and PART 5b is the door,
+--          which is what "no wave writes business tables outside definer
+--          RPCs" means. ⚠ The designer lane's use-design-build.ts writes that
+--          table directly and must move to the RPC — published in
+--          backend-notes §7.
+--   (M2 is 00579's: a token spent by its own signature now resolves to the
+--    settled receipt, while an administratively revoked one still resolves to
+--    nothing.)
 --
 -- Every value widened below lives in a TEXT CHECK constraint, not a Postgres
 -- ENUM type (verified: proposals.document_kind 00423:93-101,
@@ -525,18 +571,15 @@ CREATE POLICY agreement_draw_lien_waivers_studio_select
       AND public.is_studio_comember(p.designer_id)
   ));
 
+-- There is NO INSERT policy and NO INSERT grant on the waiver ledger. The
+-- program rule for this build is that no wave writes a business table outside
+-- a definer RPC, and a waiver is exactly the kind of row that proves why:
+-- waiver_type is free text by the 00417 doctrine, so only a function can hold
+-- it to the four types anyone means; the trade's name has to be SNAPSHOTTED at
+-- the moment of recording; and the recorder is the session, never a column the
+-- caller fills in. PART 5b is that door.
 DROP POLICY IF EXISTS agreement_draw_lien_waivers_studio_write
   ON public.agreement_draw_lien_waivers;
-CREATE POLICY agreement_draw_lien_waivers_studio_write
-  ON public.agreement_draw_lien_waivers FOR INSERT TO authenticated
-  WITH CHECK (
-    recorded_by = auth.uid()
-    AND EXISTS (
-      SELECT 1 FROM public.agreement_draw_invoices d
-      JOIN public.proposals p ON p.id = d.proposal_id
-      WHERE d.id = agreement_draw_lien_waivers.draw_id
-        AND public.is_studio_comember(p.designer_id)
-    ));
 
 -- The client reads NEITHER table directly. Her edge onto the draw ledger is
 -- the bundle projection in PART 12, and the waiver rows reach her as a
@@ -548,8 +591,126 @@ GRANT ALL ON TABLE public.agreement_draw_invoices TO service_role;
 
 REVOKE ALL ON TABLE public.agreement_draw_lien_waivers
   FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT ON TABLE public.agreement_draw_lien_waivers TO authenticated;
+GRANT SELECT ON TABLE public.agreement_draw_lien_waivers TO authenticated;
 GRANT ALL ON TABLE public.agreement_draw_lien_waivers TO service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PART 5b — record_agreement_draw_lien_waiver (P12): the waiver's one door
+--
+-- The studio records the exchange it had with a trade against a draw. Patina
+-- neither issues nor countersigns the waiver — it records that one was given,
+-- of which kind, by whom, and when — so this RPC validates the vocabulary,
+-- resolves the trade against the studio's own roster, and stamps the recorder
+-- from auth.uid().
+--
+-- The homeowner never reaches this row: the bundle projects {type, receivedAt}
+-- and nothing else (R13's discipline applied to a document she is entitled to
+-- know was exchanged, not to its amount or its paper).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.record_agreement_draw_lien_waiver(
+  p_draw_id uuid,
+  p_waiver_type text,
+  p_contact_id uuid DEFAULT NULL,
+  p_through_date date DEFAULT NULL,
+  p_amount_cents integer DEFAULT NULL,
+  p_storage_path text DEFAULT NULL,
+  p_received_at timestamptz DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_draw public.agreement_draw_invoices%ROWTYPE;
+  v_proposal public.proposals%ROWTYPE;
+  v_type text := lower(btrim(COALESCE(p_waiver_type, '')));
+  v_studio_id uuid;
+  v_contact public.studio_contacts%ROWTYPE;
+  v_name text;
+  v_row public.agreement_draw_lien_waivers%ROWTYPE;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'draw % not found or access denied', p_draw_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_draw FROM public.agreement_draw_invoices
+  WHERE id = p_draw_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'draw % not found or access denied', p_draw_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal FROM public.proposals WHERE id = v_draw.proposal_id;
+  IF NOT FOUND OR NOT public.is_studio_comember(v_proposal.designer_id) THEN
+    RAISE EXCEPTION 'draw % not found or access denied', p_draw_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- LIEN_WAIVER_TYPES (packages/types/src/agreement.ts). The column carries
+  -- free text so the vocabulary can live in one place in code; the door is
+  -- where that vocabulary is enforced, and the sentence is the studio's.
+  IF v_type NOT IN ('conditional_progress', 'unconditional_progress',
+                    'conditional_final', 'unconditional_final') THEN
+    RAISE EXCEPTION 'a lien waiver is conditional or unconditional, on progress or final'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_amount_cents IS NOT NULL AND p_amount_cents < 0 THEN
+    RAISE EXCEPTION 'a lien waiver cannot be for less than nothing'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_contact_id IS NOT NULL THEN
+    v_studio_id := public._agreement_studio_id(v_draw.proposal_id, v_actor);
+    SELECT * INTO v_contact FROM public.studio_contacts
+    WHERE id = p_contact_id
+      AND organization_id IS NOT DISTINCT FROM v_studio_id
+      AND archived_at IS NULL;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'that trade is not on this studio''s roster'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    v_name := COALESCE(
+      NULLIF(btrim(COALESCE(v_contact.full_name, '')), ''),
+      NULLIF(btrim(COALESCE(v_contact.company_name, '')), ''),
+      'This trade');
+  END IF;
+
+  INSERT INTO public.agreement_draw_lien_waivers (
+    draw_id, contact_id, contact_display_name, waiver_type, through_date,
+    amount_cents, storage_path, received_at, recorded_by
+  ) VALUES (
+    v_draw.id, p_contact_id, v_name, v_type, p_through_date,
+    p_amount_cents, NULLIF(btrim(COALESCE(p_storage_path, '')), ''),
+    -- Recording an exchange means it happened: a waiver with no date is a
+    -- waiver the ledger cannot tell the homeowner she has (PART 12 reads
+    -- received_at), so the moment of recording is the default.
+    COALESCE(p_received_at, now()), v_actor
+  ) RETURNING * INTO v_row;
+
+  RETURN jsonb_build_object(
+    'id', v_row.id,
+    'drawId', v_row.draw_id,
+    'drawKey', v_draw.draw_key,
+    'waiverType', v_row.waiver_type,
+    'contactDisplayName', v_row.contact_display_name,
+    'throughDate', v_row.through_date,
+    'amountCents', v_row.amount_cents,
+    'receivedAt', v_row.received_at);
+END;
+$$;
+COMMENT ON FUNCTION public.record_agreement_draw_lien_waiver(
+  uuid, text, uuid, date, integer, text, timestamptz) IS
+  'Records the lien-waiver exchange for one design-build draw (P12). The only writer of agreement_draw_lien_waivers: it holds waiver_type to LIEN_WAIVER_TYPES, snapshots the trade''s name off the studio''s roster, and stamps recorded_by from the session.';
+REVOKE ALL ON FUNCTION public.record_agreement_draw_lien_waiver(
+  uuid, text, uuid, date, integer, text, timestamptz)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.record_agreement_draw_lien_waiver(
+  uuid, text, uuid, date, integer, text, timestamptz)
+  TO authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PART 6 — Payload validation (R5, R9, research 02 §9 item 6)
@@ -1087,6 +1248,202 @@ COMMENT ON FUNCTION public._agreement_draw_rows(jsonb, bigint) IS
 REVOKE ALL ON FUNCTION public._agreement_draw_rows(jsonb, bigint)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public._agreement_draw_rows(jsonb, bigint)
+  TO authenticated, service_role;
+
+-- Money to the cent. _agreement_money rounds to whole dollars because that is
+-- what money() does in agreement-parts-body.tsx; a turnkey page is different
+-- and says so — the Halvorsen deposit is $8,413.40 and the rough-in draw nets
+-- $23,978.19, and a homeowner reconciling an invoice against her paper needs
+-- both cents. moneyToTheCent (design-build-body.tsx) formats the DOLLARS and
+-- appends the cents as the digits they already are; nothing is divided, so
+-- nothing can round. Same rule here, so the keepsake and the live page cannot
+-- print two figures for one number.
+CREATE OR REPLACE FUNCTION public._agreement_money_to_the_cent(p_cents numeric)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+  SELECT CASE
+    WHEN p_cents IS NULL THEN 'Not yet set'
+    ELSE
+      CASE WHEN trunc(p_cents) < 0 THEN U&'\2212' ELSE '' END
+      || '$'
+      || to_char(trunc(abs(trunc(p_cents)) / 100), 'FM999,999,999,990')
+      || CASE WHEN (abs(trunc(p_cents))::bigint % 100) = 0 THEN ''
+              ELSE '.' || lpad((abs(trunc(p_cents))::bigint % 100)::text, 2, '0')
+         END
+  END;
+$$;
+REVOKE ALL ON FUNCTION public._agreement_money_to_the_cent(numeric)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public._agreement_money_to_the_cent(numeric)
+  TO authenticated, service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- THE SCHEDULE OF VALUES IS DERIVED, NEVER SEPARATELY AUTHORED — and under
+-- closed book it is the ONLY form of the cost lines that crosses the edge to
+-- the homeowner (B3, RC-4).
+--
+--   open_book  — the trades at cost, and the studio's fee as its own line.
+--                The two sum to the contract price. This is the disclosure the
+--                clause elected, and the only mode in which a per-trade number
+--                appears at all.
+--   closed_book (and anything that is not open_book, fail-closed) — the fee is
+--                spread across every line, so no line is what any one trade was
+--                paid. `cost x sum / basis` as ONE integer expression, and the
+--                LAST line takes what the rounding left over so the column sums
+--                to the contract price exactly. Identical arithmetic to
+--                scheduleOfValues() in design-build-body.tsx, so the two
+--                surfaces cannot print two tables.
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public._agreement_schedule_of_values(
+  p_payload jsonb,
+  p_disclosure text)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v_sum bigint;
+  v_basis bigint := 0;
+  v_lines jsonb := '[]'::jsonb;
+  v_line jsonb;
+  v_n integer;
+  v_i integer := 0;
+  v_allocated bigint := 0;
+  v_cents bigint;
+BEGIN
+  IF jsonb_typeof(COALESCE(p_payload, 'null'::jsonb)) <> 'object'
+     OR jsonb_typeof(p_payload->'costLines') <> 'array' THEN
+    RETURN '[]'::jsonb;
+  END IF;
+
+  -- A redacted payload carries the sum it was redacted with; an authored one
+  -- states it or derives it. One reader either way.
+  v_sum := CASE WHEN public._agreement_is_int(p_payload->'contractSumCents')
+                THEN (p_payload->>'contractSumCents')::bigint
+                ELSE public._agreement_contract_sum_cents(p_payload) END;
+
+  SELECT COALESCE(sum((line->>'basisCents')::bigint), 0)
+  INTO v_basis
+  FROM jsonb_array_elements(p_payload->'costLines') AS e(line)
+  WHERE public._agreement_is_int(line->'basisCents')
+    AND NULLIF(btrim(COALESCE(line->>'label', '')), '') IS NOT NULL;
+
+  IF v_sum IS NULL OR v_basis <= 0 THEN
+    RETURN '[]'::jsonb;
+  END IF;
+
+  SELECT count(*) INTO v_n
+  FROM jsonb_array_elements(p_payload->'costLines') AS e(line)
+  WHERE public._agreement_is_int(line->'basisCents')
+    AND NULLIF(btrim(COALESCE(line->>'label', '')), '') IS NOT NULL;
+
+  FOR v_line IN
+    SELECT line FROM jsonb_array_elements(p_payload->'costLines')
+      WITH ORDINALITY AS e(line, ord)
+    WHERE public._agreement_is_int(line->'basisCents')
+      AND NULLIF(btrim(COALESCE(line->>'label', '')), '') IS NOT NULL
+    ORDER BY e.ord
+  LOOP
+    v_i := v_i + 1;
+    IF p_disclosure = 'open_book' THEN
+      v_cents := (v_line->>'basisCents')::bigint;
+    ELSIF v_i < v_n THEN
+      v_cents := round((v_line->>'basisCents')::numeric * v_sum / v_basis)::bigint;
+      v_allocated := v_allocated + v_cents;
+    ELSE
+      v_cents := v_sum - v_allocated;
+    END IF;
+
+    v_lines := v_lines || jsonb_build_array(jsonb_build_object(
+      'id', COALESCE(NULLIF(btrim(COALESCE(v_line->>'id', '')), ''),
+                     'line-' || v_i::text),
+      'label', v_line->>'label',
+      'cents', v_cents));
+  END LOOP;
+
+  IF p_disclosure = 'open_book' AND v_sum - v_basis <> 0 THEN
+    v_lines := v_lines || jsonb_build_array(jsonb_build_object(
+      'id', '__fee',
+      'label', 'Design and construction fee',
+      'cents', v_sum - v_basis));
+  END IF;
+
+  RETURN v_lines;
+END;
+$$;
+COMMENT ON FUNCTION public._agreement_schedule_of_values(jsonb, text) IS
+  'The schedule of values a pricing basis describes, in the disclosure mode the sub-disclosure clause elected. Pro-rated with the last line taking the remainder under closed book; at cost with the fee as its own line under open book. The same arithmetic as scheduleOfValues() in design-build-body.tsx.';
+REVOKE ALL ON FUNCTION public._agreement_schedule_of_values(jsonb, text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public._agreement_schedule_of_values(jsonb, text)
+  TO authenticated, service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- WHAT A CLOSED BOOK CLOSES (B3, R13, RC-4)
+--
+-- R22 forces the pricing basis to be client-visible — it is a turnkey prime's
+-- only fee part, and an agreement that names no fee cannot be signed — so the
+-- studio cannot elect closed book by hiding the part. Which means the raw
+-- payload was reaching the homeowner with the trades AT COST in costLines, the
+-- studio's margin in feeBps, its markup in subMarkupBps and the whole cost
+-- basis beside them. A closed book that publishes the book is not closed, and
+-- RC-4 asks precisely that a trade's bid not be derivable from her copy.
+--
+-- So the payload the CLIENT is handed is redacted here, once, at the one edge
+-- she reads through: the derived schedule of values goes over, and the cost
+-- lines, the fee, the markup and the cost basis stay behind. The contract sum
+-- is carried explicitly because it is HER number and, once the cost basis is
+-- gone, no longer derivable on a plain cost-plus basis.
+--
+-- Under open book nothing is withheld — that is what the clause elected — and
+-- the schedule is projected in the same key so both modes read alike.
+--
+-- The studio's own surfaces do not read through here: the composer reads
+-- proposal_agreement_parts directly, and this redaction sits inside
+-- get_client_commercial_document_bundle alone.
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public._agreement_redact_client_payload(
+  p_kind text,
+  p_variant text,
+  p_payload jsonb,
+  p_disclosure text)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  v_payload jsonb := COALESCE(p_payload, '{}'::jsonb);
+  v_sum bigint;
+BEGIN
+  IF p_kind IS DISTINCT FROM 'schedule'
+     OR p_variant IS DISTINCT FROM 'pricing_basis'
+     OR jsonb_typeof(v_payload) <> 'object' THEN
+    RETURN v_payload;
+  END IF;
+
+  v_sum := public._agreement_contract_sum_cents(v_payload);
+
+  v_payload := v_payload || jsonb_build_object(
+    'contractSumCents', to_jsonb(v_sum),
+    'scheduleOfValues',
+      public._agreement_schedule_of_values(v_payload, p_disclosure));
+
+  IF p_disclosure = 'open_book' THEN
+    RETURN v_payload;
+  END IF;
+
+  RETURN v_payload
+    - 'costLines' - 'feeBps' - 'costBasisCents' - 'subMarkupBps';
+END;
+$$;
+COMMENT ON FUNCTION public._agreement_redact_client_payload(text, text, jsonb, text) IS
+  'The pricing basis as the homeowner is handed it. Under anything but open book the cost lines, the fee, the sub markup and the cost basis stay behind and the derived schedule of values goes in their place (B3/RC-4). Every other part crosses unchanged.';
+REVOKE ALL ON FUNCTION public._agreement_redact_client_payload(text, text, jsonb, text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public._agreement_redact_client_payload(text, text, jsonb, text)
   TO authenticated, service_role;
 
 -- The one place that answers "which part is the design-build <x>", so the
@@ -5415,6 +5772,20 @@ BEGIN
     IF jsonb_typeof(v_entry) <> 'object' THEN
       CONTINUE;
     END IF;
+
+    -- 00578 (R16, R11's posture) — A TEMPLATE MAY CARRY A PART IT DOES NOT YET
+    -- COMPOSE. An entry marked `enabled: false` is on file and nothing more:
+    -- counsel can read it, a migration can flip it, and until then it reaches
+    -- no rail, no homeowner and no Trade Agreement. This is how the seeded
+    -- flow-down clause ships (PART 13), for the same reason the six
+    -- jurisdiction notices ship dark — the wording has not been reviewed, and
+    -- an unreviewed clause that composes itself into a contract is exactly the
+    -- accident the ruling is written to prevent. Absent, the key defaults to
+    -- true, so every other seeded entry composes as it always has.
+    IF NOT COALESCE((v_entry->>'enabled')::boolean, true) THEN
+      CONTINUE;
+    END IF;
+
     v_key := NULLIF(btrim(COALESCE(v_entry->>'partKey', '')), '');
 
     IF v_key IS NOT NULL AND v_key LIKE 'studio.%' THEN
@@ -6992,7 +7363,17 @@ BEGIN
       'id', ap.id, 'position', ap.position,
       'kind', ap.kind, 'variant', ap.variant,
       'partKey', ap.part_key, 'title', ap.title,
-      'payload', ap.payload, 'required', ap.required
+      -- 00578 (B3, R13, RC-4): on a turnkey prime the pricing basis crosses
+      -- this edge REDACTED unless the sub-disclosure clause elected open book
+      -- — the derived schedule of values in place of the trades at cost, the
+      -- studio's fee and its markup. Every other part, and every other kind of
+      -- document, crosses byte-for-byte as before.
+      'payload', CASE WHEN v_proposal.document_kind = 'design_build'
+        THEN public._agreement_redact_client_payload(
+               ap.kind, ap.variant, ap.payload,
+               public._agreement_sub_disclosure(p_proposal_id))
+        ELSE ap.payload END,
+      'required', ap.required
     ) ORDER BY ap.position, ap.id)
       FROM public.proposal_agreement_parts ap
       WHERE ap.proposal_id = p_proposal_id AND ap.client_visible), '[]'::jsonb),
@@ -7438,6 +7819,477 @@ BEGIN
 END;
 $$;
 -- ═══════════════════════════════════════════════════════════════════════════
+-- PART 12c — _render_agreement_snapshot_html learns the turnkey paper
+--
+-- R12's keepsake is what the homeowner KEEPS: the page she signed, frozen at
+-- countersign and read back from the bundle for the rest of the project's
+-- life. 00577 wrote it for the nine-part design-services composition, and its
+-- schedule CASE knows rate_card / per_phase / ceiling / flat / retainer /
+-- cadence / procurement. A turnkey prime carries none of those. Left as it
+-- was, the record of the largest money document in the system printed
+--
+--     Pricing basis   Recorded with your agreement.
+--     Draw schedule   Recorded with your agreement.
+--     Allowances      Recorded with your agreement.
+--
+-- — a keepsake with no sum, no draws and no retainage on it (B1) — and then
+-- closed with "This agreement authorizes design services only…", which on a
+-- construction contract is not a boundary but a false statement, frozen into
+-- her durable record (B2).
+--
+-- So: three arms, and a boundary that knows what it is closing.
+--
+-- THE FIGURES ARE THE CLIENT BODY'S FIGURES. The pricing basis is redacted
+-- through the same _agreement_redact_client_payload the bundle uses (B3), the
+-- schedule of values is derived by the same _agreement_schedule_of_values, the
+-- draws by the same _agreement_draw_rows the ledger was materialized from, and
+-- every figure is formatted by _agreement_money_to_the_cent because a draw is
+-- $23,978.19 and not $23,978. The two surfaces cannot drift because they are
+-- one derivation.
+--
+-- WHAT THE KEEPSAKE DOES NOT CARRY: invoice status, paid dates and waiver
+-- receipts. Those are machine state that moves for years after the signature,
+-- and a frozen page that named them would be a page that lies a week later.
+-- The live door shows them; the record shows the agreement.
+--
+-- Grafted VERBATIM from 00577_agreement_fee_schedules.sql:476-724, then the
+-- deltas above.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public._render_agreement_snapshot_html(p_proposal_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  -- AGREEMENT_PART_COPY (packages/types/src/agreement-copy.ts), verbatim. The
+  -- SQL test pins each of these against the same literal the client body
+  -- imports; a sentence that moves in one place and not the other goes red.
+  c_ceiling_uncapped  CONSTANT text :=
+    'No ceiling — professional time is billed as it is worked.';
+  c_retainer_on_payment CONSTANT text :=
+    'Design work begins after the fully executed agreement and retainer payment.';
+  c_retainer_on_execution CONSTANT text :=
+    'Due under the terms of the fully executed agreement.';
+  c_cadence_note CONSTANT text :=
+    'Additional work requires written authorization before it can be invoiced.';
+  c_recorded CONSTANT text := 'Recorded with your agreement.';
+  c_not_yet_set CONSTANT text := 'Not yet set';
+  c_attachment_ack CONSTANT text := 'I received this';
+  -- R37 — AgreementPartsBody closes every composed body with this, always, and
+  -- the copy she keeps is the page she signed. Losing it loses the one line
+  -- that says what she did NOT authorize.
+  c_boundary CONSTANT text :=
+    'This agreement authorizes design services only. Furnishings, freight, tax, installation, and purchasing require a separate named furnishings authorization.';
+  -- 00578 (B2) — and the turnkey paper's own, verbatim from
+  -- design-build-body.tsx. A design-build agreement authorizes the work it
+  -- names; what it holds back is the right to add to it without asking.
+  c_boundary_turnkey CONSTANT text :=
+    'This agreement covers the work described above, at the price shown. Anything added to it is a separate written change order before the work is done.';
+
+  v_part public.proposal_agreement_parts%ROWTYPE;
+  v_html text := '';
+  v_body text;
+  v_notes text;
+  v_cents numeric;
+  v_text text;
+  v_why text;
+  v_letter text;
+  v_index integer := 0;
+  -- 00578
+  v_kind text;
+  v_disclosure text;
+  v_payload jsonb;
+  v_sov jsonb;
+  v_sum bigint;
+  v_rows text;
+  v_ret_total bigint;
+  v_draw record;
+BEGIN
+  SELECT proposal.document_kind INTO v_kind
+  FROM public.proposals proposal WHERE proposal.id = p_proposal_id;
+
+  -- Resolved once for the page, exactly as the bundle resolves it. Anything
+  -- that is not open_book closes the book, including a clause and a payload
+  -- that disagree ('conflict') — fail closed on the homeowner's copy.
+  IF v_kind = 'design_build' THEN
+    v_disclosure := public._agreement_sub_disclosure(p_proposal_id);
+  END IF;
+
+  -- R34 — the change, and why it was made, in that order, exactly as the door
+  -- prints them.
+  v_why := public._agreement_addendum_why(p_proposal_id);
+  IF v_why IS NOT NULL THEN
+    v_html := '<p class="why">' || public._agreement_html_escape(v_why) || '</p>';
+  END IF;
+
+  -- R37 — the same three passes AgreementPartsBody makes, in the same order:
+  -- the sections, the boundary that closes them, then the attachments as
+  -- lettered leaves below both. An attestation is drawn nowhere at all, here
+  -- exactly as there.
+  FOR v_part IN
+    SELECT ap.* FROM public.proposal_agreement_parts ap
+    WHERE ap.proposal_id = p_proposal_id AND ap.client_visible
+      AND ap.kind NOT IN ('attachment', 'attestation')
+    ORDER BY ap.position, ap.id
+  LOOP
+    v_body := '';
+
+    IF v_part.kind = 'clause' THEN
+      -- R21 — an empty clause is nothing on the page, not a title over blank
+      -- paper. The heading goes with it at the foot of this loop.
+      v_text := NULLIF(btrim(COALESCE(v_part.payload->>'body', '')), '');
+      IF v_text IS NOT NULL THEN
+        v_body := '<p>' || replace(
+          public._agreement_html_escape(v_part.payload->>'body'),
+          E'\n', '<br>') || '</p>';
+      END IF;
+
+    ELSIF v_part.kind = 'list' THEN
+      SELECT COALESCE(string_agg(
+               '<li>' || public._agreement_html_escape(e.item->>'text') || '</li>', ''
+               ORDER BY e.ord), '')
+      INTO v_body
+      FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(v_part.payload->'items') = 'array'
+                  THEN v_part.payload->'items' ELSE '[]'::jsonb END)
+        WITH ORDINALITY AS e(item, ord)
+      WHERE NULLIF(btrim(COALESCE(e.item->>'text', '')), '') IS NOT NULL;
+      v_body := CASE WHEN v_body = '' THEN '' ELSE '<ul>' || v_body || '</ul>' END;
+
+    ELSIF v_part.kind = 'schedule' THEN
+      IF v_part.variant = 'rate_card' THEN
+        SELECT COALESCE(string_agg(
+                 '<tr><td>' || public._agreement_html_escape(e.role->>'roleName')
+                 || '</td><td>'
+                 || CASE WHEN jsonb_typeof(e.role->'hourlyRateCents') = 'number'
+                         THEN public._agreement_money((e.role->>'hourlyRateCents')::numeric)
+                         ELSE c_not_yet_set END
+                 -- RateCardLeaf prints "{money} / hr" (R37).
+                 || ' / hr</td></tr>', ''
+                 ORDER BY CASE WHEN jsonb_typeof(e.role->'sortOrder') = 'number'
+                               THEN (e.role->>'sortOrder')::numeric
+                               ELSE e.ord END, e.ord), '')
+        INTO v_body
+        FROM jsonb_array_elements(
+               CASE WHEN jsonb_typeof(v_part.payload->'roles') = 'array'
+                    THEN v_part.payload->'roles' ELSE '[]'::jsonb END)
+          WITH ORDINALITY AS e(role, ord)
+        WHERE NULLIF(btrim(COALESCE(e.role->>'roleName', '')), '') IS NOT NULL;
+        -- A rate card with no readable role keeps its title and says it is on
+        -- the paper, exactly as RateCardLeaf does.
+        v_body := CASE WHEN v_body = '' THEN '<p>' || c_recorded || '</p>'
+                       ELSE '<table>' || v_body || '</table>' END;
+
+      ELSIF v_part.variant = 'per_phase' THEN
+        SELECT COALESCE(string_agg(
+                 '<tr><td>' || public._agreement_html_escape(e.phase->>'label')
+                 || '</td><td>'
+                 || CASE WHEN jsonb_typeof(e.phase->'cents') = 'number'
+                         THEN public._agreement_money((e.phase->>'cents')::numeric)
+                         ELSE '—' END
+                 || '</td></tr>', '' ORDER BY e.ord), '')
+        INTO v_body
+        FROM jsonb_array_elements(
+               CASE WHEN jsonb_typeof(v_part.payload->'phases') = 'array'
+                    THEN v_part.payload->'phases' ELSE '[]'::jsonb END)
+          WITH ORDINALITY AS e(phase, ord)
+        WHERE NULLIF(btrim(COALESCE(e.phase->>'label', '')), '') IS NOT NULL;
+        v_body := CASE WHEN v_body = '' THEN '<p>' || c_recorded || '</p>'
+                       ELSE '<table>' || v_body || '</table>' END;
+
+      ELSIF v_part.variant = 'ceiling' THEN
+        -- Three states, and the middle one is why CeilingLeaf is the longest
+        -- leaf in the client body: NO figure is a stated absence of a ceiling
+        -- and says so in words (F-2), a zero is a figure nobody wrote (R21),
+        -- and a written figure is the figure.
+        IF jsonb_typeof(v_part.payload->'cents') IS DISTINCT FROM 'number' THEN
+          v_body := '<p>' || c_ceiling_uncapped || '</p>';
+        ELSIF (v_part.payload->>'cents')::numeric > 0 THEN
+          v_body := '<p>' || public._agreement_money((v_part.payload->>'cents')::numeric) || '</p>';
+        ELSE
+          v_body := '<p>' || c_not_yet_set || '</p>';
+        END IF;
+
+      ELSIF v_part.variant IN ('flat', 'retainer') THEN
+        IF jsonb_typeof(v_part.payload->'cents') IS DISTINCT FROM 'number' THEN
+          v_body := '<p>' || c_recorded || '</p>';
+        ELSE
+          v_cents := (v_part.payload->>'cents')::numeric;
+          IF v_cents > 0 THEN
+            v_body := '<p>' || public._agreement_money(v_cents) || '</p>';
+            IF v_part.variant = 'retainer' THEN
+              -- The activation sentence, by policy — agreementRetainerActivation.
+              -- The stored word itself is never printed: `non_refundable` is a
+              -- value in a column, not something anyone reads.
+              v_body := v_body || '<p>' || CASE
+                WHEN v_part.payload->>'activationPolicy' = 'retainer_paid'
+                THEN c_retainer_on_payment ELSE c_retainer_on_execution END || '</p>';
+            END IF;
+          ELSE
+            -- Withheld with the figure: a clause about when a retainer is due,
+            -- under no retainer, is a promise about nothing.
+            v_body := '<p>' || c_not_yet_set || '</p>';
+          END IF;
+        END IF;
+
+      ELSIF v_part.variant = 'cadence' THEN
+        v_text := NULLIF(btrim(COALESCE(v_part.payload->>'cadence', '')), '');
+        IF v_text IS NOT NULL THEN
+          -- agreementCadenceText: the stored value, underscore opened up —
+          -- and initcap for the `capitalize` treatment CadenceLeaf gives it,
+          -- because the keepsake carries no stylesheet to do it (R37). The
+          -- live body prints Monthly; so does this.
+          v_body := '<p>' || public._agreement_html_escape(
+                      initcap(replace(v_text, '_', ' '))) || '</p>';
+        END IF;
+        v_body := v_body || '<p>' || c_cadence_note || '</p>';
+
+      ELSIF v_part.variant = 'procurement' THEN
+        -- agreementDepositLine, and the three notes ProcurementLeaf prints
+        -- beside it. R21 — `0% deposit` is an unwritten term, not a term.
+        IF jsonb_typeof(v_part.payload->'depositPercent') = 'number'
+           AND (v_part.payload->>'depositPercent')::numeric > 0 THEN
+          v_body := '<p>' || public._agreement_html_escape(
+            v_part.payload->>'depositPercent') || '% deposit</p>';
+        END IF;
+        SELECT COALESCE(string_agg(
+                 '<dt>' || note.label || '</dt><dd>'
+                 || public._agreement_html_escape(note.value) || '</dd>', ''
+                 ORDER BY note.ord), '')
+        INTO v_notes
+        FROM (VALUES
+                ('Markup basis', v_part.payload->>'markupBasis', 1),
+                ('Freight and handling', v_part.payload->>'freightHandling', 2),
+                ('Terms of sale', v_part.payload->>'termsOfSale', 3)
+             ) AS note(label, value, ord)
+        WHERE NULLIF(btrim(COALESCE(note.value, '')), '') IS NOT NULL;
+        IF v_notes <> '' THEN
+          v_body := v_body || '<dl>' || v_notes || '</dl>';
+        END IF;
+        -- Neither a deposit nor a note: the part takes its section with it,
+        -- the way an empty clause does (R28, F2).
+
+      ELSIF v_part.variant = 'pricing_basis' THEN
+        -- 00578 (B1) — the turnkey prime's one fee part, and the sum the whole
+        -- paper turns on. Redacted first, so what the record carries is what
+        -- the page carried (B3).
+        v_payload := public._agreement_redact_client_payload(
+          v_part.kind, v_part.variant, v_part.payload, v_disclosure);
+
+        -- BASIS_SENTENCE (design-build-body.tsx), verbatim.
+        v_text := CASE v_payload->>'basis'
+          WHEN 'fixed' THEN 'A fixed price for the whole of the work.'
+          WHEN 'cost_plus' THEN
+            'The cost of the work, plus the studio’s fee on it.'
+          WHEN 'cost_plus_gmp' THEN
+            'The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.'
+          WHEN 'tm_nte' THEN
+            'Time and materials as the work is done, and the total will not exceed the amount below.'
+          ELSE NULL END;
+        v_body := CASE WHEN v_text IS NULL THEN ''
+                       ELSE '<p>' || public._agreement_html_escape(v_text)
+                            || '</p>' END;
+
+        -- The cost basis and the fee are OPEN-BOOK ROWS. Under closed book the
+        -- redaction took them, and their absence here is the disclosure the
+        -- clause elected — not a figure withheld by accident.
+        v_notes := '';
+        IF public._agreement_is_int(v_payload->'costBasisCents')
+           AND (v_payload->>'costBasisCents')::bigint > 0 THEN
+          v_notes := v_notes || '<dt>Cost basis</dt><dd>'
+            || public._agreement_money_to_the_cent(
+                 (v_payload->>'costBasisCents')::numeric) || '</dd>';
+        END IF;
+        IF public._agreement_is_int(v_payload->'feeBps')
+           AND public._agreement_is_int(v_payload->'contractSumCents')
+           AND public._agreement_is_int(v_payload->'costBasisCents')
+           AND (v_payload->>'contractSumCents')::bigint
+               - (v_payload->>'costBasisCents')::bigint > 0 THEN
+          -- percentFromBps: 1800 is said as 18%, never as 18.00%.
+          v_notes := v_notes || '<dt>Fee '
+            || CASE WHEN (v_payload->>'feeBps')::bigint % 100 = 0
+                    THEN ((v_payload->>'feeBps')::bigint / 100)::text
+                    ELSE to_char((v_payload->>'feeBps')::numeric / 100.0,
+                                 'FM990.00') END
+            || '%</dt><dd>'
+            || public._agreement_money_to_the_cent(
+                 (v_payload->>'contractSumCents')::numeric
+                 - (v_payload->>'costBasisCents')::numeric) || '</dd>';
+        END IF;
+        IF v_notes <> '' THEN
+          v_body := v_body || '<dl>' || v_notes || '</dl>';
+        END IF;
+
+        -- BASIS_CEILING_LABEL, and R21 for the sum nobody has written yet.
+        IF public._agreement_is_int(v_payload->'contractSumCents') THEN
+          v_body := v_body || '<p class="ceiling-label">'
+            || CASE v_payload->>'basis'
+                 WHEN 'cost_plus_gmp' THEN 'Guaranteed maximum price'
+                 WHEN 'tm_nte' THEN 'Not to exceed'
+                 ELSE 'Contract price' END
+            || '</p><p>' || public._agreement_money_to_the_cent(
+                 (v_payload->>'contractSumCents')::numeric) || '</p>';
+        ELSE
+          v_body := v_body || '<p>' || c_not_yet_set || '</p>';
+        END IF;
+
+        -- The schedule of values, as its own section under the basis, exactly
+        -- where ScheduleOfValuesLeaf draws it.
+        v_sov := CASE WHEN jsonb_typeof(v_payload->'scheduleOfValues') = 'array'
+                      THEN v_payload->'scheduleOfValues' ELSE '[]'::jsonb END;
+        IF jsonb_array_length(v_sov) > 0 THEN
+          SELECT COALESCE(string_agg(
+                   '<tr><td>' || public._agreement_html_escape(e.line->>'label')
+                   || '</td><td>' || public._agreement_money_to_the_cent(
+                        (e.line->>'cents')::numeric) || '</td></tr>', ''
+                   ORDER BY e.ord), ''),
+                 COALESCE(sum((e.line->>'cents')::bigint), 0)
+          INTO v_rows, v_sum
+          FROM jsonb_array_elements(v_sov) WITH ORDINALITY AS e(line, ord);
+          v_body := v_body || '<h2>Schedule of values</h2><table>' || v_rows
+            || '<tr><td>Total</td><td>'
+            || public._agreement_money_to_the_cent(v_sum::numeric)
+            || '</td></tr></table>';
+        END IF;
+
+      ELSIF v_part.variant = 'draws' THEN
+        -- 00578 (B1) — the same rows _agreement_draw_rows gave the ledger at
+        -- send, derived again from the frozen payload rather than read out of
+        -- the ledger: the keepsake is the schedule she agreed to, and it must
+        -- not move when a draw is later billed, voided or re-issued.
+        v_sum := public._agreement_contract_sum_cents(
+          public._agreement_design_build_part(p_proposal_id, 'pricing_basis'));
+        v_rows := '';
+        v_ret_total := 0;
+        FOR v_draw IN
+          SELECT * FROM public._agreement_draw_rows(v_part.payload, v_sum)
+          ORDER BY sort_order
+        LOOP
+          v_ret_total := v_ret_total + v_draw.retainage_cents;
+          v_rows := v_rows || '<tr><td>'
+            || public._agreement_html_escape(v_draw.label) || '</td><td>'
+            || CASE WHEN v_draw.is_retainage_release THEN ''
+                    ELSE public._agreement_money_to_the_cent(
+                           v_draw.gross_cents::numeric) || ' of the price' END
+            || CASE WHEN v_draw.retainage_cents > 0
+                    THEN ' · ' || public._agreement_money_to_the_cent(
+                           v_draw.retainage_cents::numeric) || ' held back'
+                    ELSE '' END
+            || '</td><td>' || public._agreement_money_to_the_cent(
+                 v_draw.net_cents::numeric) || '</td></tr>';
+        END LOOP;
+        IF v_rows <> '' THEN
+          v_body := '<table>' || v_rows || '</table>';
+          IF v_ret_total > 0 THEN
+            v_body := v_body || '<p>'
+              || public._agreement_money_to_the_cent(v_ret_total::numeric)
+              || ' is held back across the draws and released when the work is finished.</p>';
+          END IF;
+        END IF;
+        -- No rows: R21 again. A draw schedule nobody has written yet takes its
+        -- heading with it rather than standing over blank paper.
+
+      ELSIF v_part.variant = 'allowances' THEN
+        SELECT COALESCE(string_agg(
+                 '<tr><td>' || public._agreement_html_escape(e.row->>'label')
+                 || '</td><td>'
+                 || CASE WHEN public._agreement_is_int(e.row->'amountCents')
+                              AND (e.row->>'amountCents')::bigint > 0
+                         THEN public._agreement_money_to_the_cent(
+                                (e.row->>'amountCents')::numeric)
+                         ELSE c_not_yet_set END
+                 || '</td><td>'
+                 || CASE WHEN e.row->>'overageRule' = 'client_credit'
+                         THEN 'Anything over this amount is added to your account.'
+                         ELSE 'Anything over this amount needs a change order first.' END
+                 || CASE WHEN e.row->>'underageRule' = 'retain'
+                         THEN ' Anything under it stays with the studio.'
+                         ELSE ' Anything under it comes back to you.' END
+                 || '</td></tr>', '' ORDER BY e.ord), '')
+        INTO v_rows
+        FROM jsonb_array_elements(
+               CASE WHEN jsonb_typeof(v_part.payload->'allowances') = 'array'
+                    THEN v_part.payload->'allowances' ELSE '[]'::jsonb END)
+          WITH ORDINALITY AS e(row, ord)
+        WHERE NULLIF(btrim(COALESCE(e.row->>'label', '')), '') IS NOT NULL;
+        IF v_rows <> '' THEN
+          v_body := '<table>' || v_rows || '</table>';
+        END IF;
+
+      ELSE
+        -- The record-only variants (R9), and any variant a later wave adds to
+        -- an agreement this build already froze. One line, the same line the
+        -- page she signed printed for them. Never the payload's own keys.
+        v_body := '<p>' || c_recorded || '</p>';
+      END IF;
+
+    ELSE
+      -- Any other kind, including one a later wave writes. Its title, and one
+      -- sentence — PartSection's own fallback.
+      v_body := '<p>' || c_recorded || '</p>';
+    END IF;
+
+    IF v_body IS NOT NULL AND v_body <> '' THEN
+      v_html := v_html || '<h2>' || public._agreement_html_escape(v_part.title)
+                       || '</h2>' || v_body;
+    END IF;
+  END LOOP;
+
+  -- 00578 (B2) — the boundary belongs to the class. A turnkey prime that closed
+  -- with the services sentence would tell the homeowner, in her permanent
+  -- record, that the construction contract she signed authorized no
+  -- construction.
+  v_html := v_html || '<p class="boundary">'
+                   || public._agreement_html_escape(
+                        CASE WHEN v_kind = 'design_build'
+                             THEN c_boundary_turnkey ELSE c_boundary END)
+                   || '</p>';
+
+  -- An attachment is a rule across the page, not another section of it:
+  -- AttachmentLeaf draws a line, then ATTACHMENT {letter} · {title}, then the
+  -- body and the acknowledgment sentence if the part carries one. Unlike a
+  -- clause it is drawn even when its body is empty — the eyebrow IS the leaf,
+  -- and a notice with nothing typed under it is still a notice the paper
+  -- names. The lettering is AgreementPartsBody's own: A..Z, then the ordinal.
+  FOR v_part IN
+    SELECT ap.* FROM public.proposal_agreement_parts ap
+    WHERE ap.proposal_id = p_proposal_id AND ap.client_visible
+      AND ap.kind = 'attachment'
+    ORDER BY ap.position, ap.id
+  LOOP
+    v_letter := CASE WHEN v_index < 26 THEN chr(65 + v_index)
+                     ELSE (v_index + 1)::text END;
+    v_index := v_index + 1;
+
+    v_html := v_html || '<hr>'
+                     || '<p class="attachment-eyebrow">ATTACHMENT ' || v_letter
+                     || ' · ' || public._agreement_html_escape(v_part.title)
+                     || '</p>';
+    v_text := NULLIF(btrim(COALESCE(v_part.payload->>'body', '')), '');
+    IF v_text IS NOT NULL THEN
+      v_html := v_html || '<p>' || replace(
+        public._agreement_html_escape(v_part.payload->>'body'),
+        E'\n', '<br>') || '</p>';
+    END IF;
+    IF (v_part.payload->'acknowledgeRequired') = 'true'::jsonb THEN
+      v_html := v_html || '<p>'
+                       || public._agreement_html_escape(c_attachment_ack) || '</p>';
+    END IF;
+  END LOOP;
+
+  RETURN v_html;
+END;
+$$;
+-- Re-issued verbatim from 00577:725-726. CREATE OR REPLACE preserves an ACL,
+-- but Strata predates the 2026-05-30 grant flip and this is the one function
+-- in this file whose body the homeowner's record is made of.
+REVOKE ALL ON FUNCTION public._render_agreement_snapshot_html(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- PART 13 — patina.design_build, the tenth seeded Template
 --
 -- The Library's fourth seeded row, in 00576 PART 9's shape and under its
@@ -7521,7 +8373,25 @@ INSERT INTO public.agreement_templates (
       'payload', jsonb_build_object(
         'title', 'Lien waiver form',
         'body', 'Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.',
-        'acknowledgeRequired', true))
+        'acknowledgeRequired', true)),
+    -- THE ELEVENTH ENTRY IS NOT AN ELEVENTH PART (R16). The flow-down clause
+    -- is the wording that binds a trade to the terms the studio owes the
+    -- homeowner, and counsel has not read it. It ships the way the six
+    -- jurisdiction notices ship: SEEDED AND DARK. `enabled: false` is what
+    -- materialize_agreement_template refuses to compose, so the rail still
+    -- lays out ten parts and this body reaches no agreement, no homeowner and
+    -- no trade — while existing, in one place, for counsel to review.
+    --
+    -- studio_trade_agreements.flow_down_clause_key is the column that would
+    -- name it (00579 PART 1); it stays NULL, and create_trade_agreement
+    -- REFUSES a payload that tries to set it rather than ignoring it. Turning
+    -- this on is one migration flipping one boolean — and nothing else.
+    jsonb_build_object(
+      'partKey', 'patina.flow_down', 'kind', 'clause', 'variant', NULL,
+      'title', 'Flow-down', 'required', false, 'clientVisible', false,
+      'enabled', false,
+      'payload', jsonb_build_object(
+        'body', 'The trade is bound to the studio by the same obligations the studio owes the homeowner under the prime agreement, so far as they apply to the trade''s own scope of work. Where the two disagree, the prime agreement governs, and the studio tells the trade in writing which of its terms apply before the work begins.'))
   ),
   NULL
 ) ON CONFLICT (template_key) DO NOTHING;
