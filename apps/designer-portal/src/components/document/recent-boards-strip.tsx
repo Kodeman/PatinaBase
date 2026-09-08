@@ -9,16 +9,79 @@ import { SectionEyebrow } from './section-eyebrow';
 import { BoardVerdictSummary } from '@/components/mood-board/board-verdict-summary';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
 
+interface RecentBoardsStripProps {
+  /**
+   * IA-17 — the rail beside the roster head (≥1280px, desk/page.tsx). Three
+   * boards, a 92px cover, name plus relative time only: no room/owner line,
+   * no verdict summary — the rail is 260px wide and quiet, not a second copy
+   * of the full strip. `useRecentBoards(8)` is unchanged; this variant slices.
+   */
+  compact?: boolean;
+}
+
 /**
  * Desk-level doorway into the most recently touched mood boards. The query is
  * RLS-scoped and owner-unified, so proposal and live project boards can share
  * one quiet strip without leaking another studio's work.
  */
-export function RecentBoardsStrip() {
+export function RecentBoardsStrip({ compact = false }: RecentBoardsStripProps) {
   const pathname = usePathname();
   const { data: boards = [], isLoading, isError } = useRecentBoards(8);
 
   if (isError || (!isLoading && boards.length === 0)) return null;
+
+  if (compact) {
+    const visibleBoards = boards.slice(0, 3);
+
+    return (
+      <section aria-labelledby="recent-mood-boards-compact" aria-busy={isLoading || undefined}>
+        <SectionEyebrow>
+          <span id="recent-mood-boards-compact">Boards</span>
+        </SectionEyebrow>
+
+        <div className="mt-3 flex flex-col gap-4">
+          {isLoading
+            ? [0, 1, 2].map((index) => (
+                <div
+                  key={index}
+                  aria-hidden
+                  className="h-[92px] w-[92px] shrink-0 animate-pulse rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] motion-reduce:animate-none"
+                />
+              ))
+            : visibleBoards.map((board) => (
+                <Link
+                  key={board.id}
+                  href={boardRoomHref({
+                    boardId: board.id,
+                    from: pathname,
+                    source: 'desk_recents',
+                  })}
+                  className="group flex items-start gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  aria-label={`Open mood board ${board.name}`}
+                >
+                  <BoardCoverArt
+                    name={board.name}
+                    coverUrl={board.coverImageUrl}
+                    fallbackUrls={board.coverFallbackUrls}
+                    className="h-[92px] w-[92px] shrink-0 rounded-[3px] border border-[var(--border-default)] bg-[var(--doc-sheet-2,var(--bg-muted))] transition-colors group-hover:border-[var(--color-clay)] motion-reduce:transition-none"
+                  />
+                  <div className="min-w-0 pt-0.5">
+                    <p className="max-w-[130px] font-heading text-[14px] leading-snug text-[var(--text-primary)]">
+                      {board.name}
+                    </p>
+                    <p
+                      suppressHydrationWarning
+                      className="mt-1 font-mono text-[11px] text-[var(--text-muted)]"
+                    >
+                      {formatRelativeTime(board.updatedAt)}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
