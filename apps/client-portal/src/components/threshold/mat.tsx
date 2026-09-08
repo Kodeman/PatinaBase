@@ -121,7 +121,11 @@ export function Mat({
 
         {/* A column with no named papers AND no "papers, in full" act has
             nothing to say — the heading itself is dropped rather than
-            standing over an empty list. */}
+            standing over an empty list. NOTE: #mat-papers is a load-bearing
+            anchor id (the /documents middleware 308-redirect target) — every
+            production caller today always passes a truthy `onOpenPapers`, so
+            the id always renders live, but a future caller that omits it
+            would make the id disappear. */}
         {(papers.length > 0 || onOpenPapers) && (
           <div id="mat-papers" data-testid="mat-papers">
             <h2 className={COLUMN_HEAD_CLASS}>The papers</h2>
@@ -167,7 +171,7 @@ export function Mat({
               actionKey="mat_sign_out"
               regionKey="mat"
               surfaceKey="the_threshold"
-              variant="secondary"
+              variant="tertiary"
               onClick={onSignOut}
             >
               Sign out

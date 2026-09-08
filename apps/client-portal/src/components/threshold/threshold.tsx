@@ -1014,11 +1014,20 @@ export function Threshold({
         extraActs={<RequestChangeAct projectId={projectId} projectStatus={project.status} />}
       />
       {/* House sheet §A8 — the colophon is page furniture on every
-          client-facing surface, mounted directly after the mat. */}
-      <hr className="border-[var(--border-subtle)]" />
-      <div className="mt-6 pb-12">
-        <Colophon studioName={studioName} />
-      </div>
+          client-facing surface, mounted directly after the mat. Absence is
+          silence: the identity query is not in the page's `loading` gate, so
+          `studioName` can still be null here on first paint — the rule above
+          the colophon is gated on the same condition Colophon itself checks,
+          so a resolved-but-empty studio name never leaves a bare hairline
+          standing over nothing. */}
+      {studioName?.trim() && (
+        <>
+          <hr className="border-[var(--border-subtle)]" />
+          <div className="mt-6 pb-12">
+            <Colophon studioName={studioName} />
+          </div>
+        </>
+      )}
     </>
   );
 

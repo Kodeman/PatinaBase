@@ -1312,6 +1312,27 @@ describe('Threshold — the acts the house owes', () => {
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 
+  it('closes with the colophon when the studio has a name', () => {
+    renderThreshold();
+
+    expect(
+      screen.getByText('Prepared by Quist Interiors · Sent through Patina'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders no orphan hairline when the studio name is absent', () => {
+    // The identity query is not in the page's `loading` gate, so a null (or
+    // still-resolving) name is a real, reachable state here — the rule above
+    // the colophon must disappear with it rather than standing over nothing.
+    identityMock.mockReturnValue(settled({ name: null, source: 'studio' }));
+    const { container } = renderThreshold();
+
+    expect(
+      screen.queryByText(/Prepared by .* · Sent through Patina/),
+    ).not.toBeInTheDocument();
+    expect(container.querySelectorAll('hr')).toHaveLength(0);
+  });
+
   it('names the papers on the mat, each pointing at its own section', () => {
     renderThreshold();
 
