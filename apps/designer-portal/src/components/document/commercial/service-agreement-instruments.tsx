@@ -9,6 +9,7 @@ import {
   useReplayCommercialNotification,
 } from "@/hooks/use-commercial-documents";
 import { commercialStatusView } from "@/lib/document/commercial-documents";
+import { draftingEditability } from "@/lib/document/drafting-editability";
 import { assessAgreementReadiness } from "../rooms/drafting/agreement/readiness";
 import { rememberRoomOrigin } from "@/lib/document/room-origin";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
@@ -171,6 +172,19 @@ export function ServiceAgreementInstruments({
     rememberRoomOrigin(pathname);
     router.push(`/drafting/${proposalId}`);
   };
+  // W3R1-01 — THE DOOR TO THE LEDGER. A turnkey prime's draw ledger, its
+  // lien-waiver exchange and its Trade Agreements strip are mounted in the
+  // Contract Room, and every one of them exists only after the agreement is
+  // sent. Offering the room on `draft` alone left the studio unable to issue
+  // draw two, engage a trade, or file a waiver against a draw it had already
+  // billed. The Room's own rule decides who may stand in it; this act only
+  // asks it (drafting-editability.ts).
+  const roomPosture = draftingEditability({
+    documentKind: document.kind,
+    status: proposal.status,
+    commercialState: document.state,
+  });
+  const roomIsOpen = roomPosture === "editable" || roomPosture === "ledger";
   const submitCountersign = async (
     disclosedImpact: ScheduleDisclosedImpact | null,
   ) => {
@@ -220,10 +234,10 @@ export function ServiceAgreementInstruments({
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {document.state === "draft" && (
+              {roomIsOpen && (
                 <DocumentAction
                   actionKey="edit-design-agreement"
-                  variant="primary"
+                  variant={roomPosture === "ledger" ? "secondary" : "primary"}
                   trailing="→"
                   onClick={enterDrafting}
                 >

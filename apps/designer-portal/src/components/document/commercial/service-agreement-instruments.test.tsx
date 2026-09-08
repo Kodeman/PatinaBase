@@ -545,3 +545,79 @@ describe("ServiceAgreementInstruments · a composed agreement", () => {
     ).toBeVisible();
   });
 });
+
+/* ── W3R1-01 · THE DOOR TO THE LEDGER ────────────────────────────────────────
+   The draw ledger, the lien-waiver exchange and the Trade Agreements strip are
+   mounted in the Contract Room and nowhere else, and all three exist only once
+   the agreement has been sent. Offering the room on `draft` alone left the
+   studio with no door to any of them: the walk could not issue draw two, could
+   not compose a Trade Agreement, and had to mint one in SQL. ─────────────── */
+
+describe("ServiceAgreementInstruments · the turnkey ledger door", () => {
+  beforeEach(() => {
+    mockCountersign.mockReset();
+    mockReplay.mockReset();
+    mockTerms = null;
+    mockRates = [];
+    mockParts = [];
+    mockDocumentKind = undefined;
+  });
+
+  for (const state of ["sent", "client_signed", "executed"]) {
+    it(`opens the Contract Room on a ${state} design-build prime`, () => {
+      mockDocumentKind = "design_build";
+      mockDocumentState = state;
+      render(
+        <ServiceAgreementInstruments
+          proposal={{ id: "agreement-1", status: "sent", client: null }}
+          clientName="Halvorsen"
+        />,
+      );
+      expect(
+        screen.getByRole("button", { name: "Open the Contract Room" }),
+      ).toBeInTheDocument();
+    });
+  }
+
+  it("keeps it shut on a design-services agreement that has left the studio", () => {
+    mockDocumentKind = "design_services";
+    mockDocumentState = "executed";
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", status: "sent", client: null }}
+        clientName="Avery Client"
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Open the Contract Room" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps it shut on a turnkey prime nobody may act on any more", () => {
+    mockDocumentKind = "design_build";
+    mockDocumentState = "superseded";
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", status: "sent", client: null }}
+        clientName="Halvorsen"
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Open the Contract Room" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still opens it on a draft, as it always has", () => {
+    mockDocumentKind = "design_services";
+    mockDocumentState = "draft";
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", status: "draft", client: null }}
+        clientName="Avery Client"
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Open the Contract Room" }),
+    ).toBeInTheDocument();
+  });
+});
