@@ -17034,6 +17034,10 @@ export type Database = {
           actual_cents: number | null
           budget_cents: number
           committed_cents: number | null
+          concept_render_caption: string | null
+          concept_render_uploaded_at: string | null
+          concept_render_uploaded_by: string | null
+          concept_render_url: string | null
           created_at: string
           dimensions: string | null
           ffe_categories: string[] | null
@@ -17052,6 +17056,10 @@ export type Database = {
           actual_cents?: number | null
           budget_cents?: number
           committed_cents?: number | null
+          concept_render_caption?: string | null
+          concept_render_uploaded_at?: string | null
+          concept_render_uploaded_by?: string | null
+          concept_render_url?: string | null
           created_at?: string
           dimensions?: string | null
           ffe_categories?: string[] | null
@@ -17070,6 +17078,10 @@ export type Database = {
           actual_cents?: number | null
           budget_cents?: number
           committed_cents?: number | null
+          concept_render_caption?: string | null
+          concept_render_uploaded_at?: string | null
+          concept_render_uploaded_by?: string | null
+          concept_render_url?: string | null
           created_at?: string
           dimensions?: string | null
           ffe_categories?: string[] | null
