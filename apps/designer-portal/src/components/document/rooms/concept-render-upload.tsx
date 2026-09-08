@@ -170,7 +170,7 @@ function ConceptRenderForm({
     <div className="mt-1.5 border-l border-[var(--color-pearl)] pl-2.5">
       <label
         htmlFor={`${fieldId}-file`}
-        className="block text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
+        className="block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
       >
         Image file
       </label>
@@ -179,12 +179,12 @@ function ConceptRenderForm({
         type="file"
         accept="image/jpeg,image/png,image/webp"
         onChange={(e) => choose(e.target.files?.[0] ?? null)}
-        className="mt-1 block w-full max-w-[360px] py-2 text-[12px] text-[var(--color-charcoal)]"
+        className="mt-1 block min-h-11 w-full max-w-[360px] py-2 text-[12px] text-[var(--color-charcoal)]"
       />
 
       <label
         htmlFor={`${fieldId}-caption`}
-        className="mt-2 block text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
+        className="mt-2 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
       >
         Caption
       </label>
@@ -193,7 +193,7 @@ function ConceptRenderForm({
         value={caption}
         onChange={(e) => setCaption(e.target.value)}
         placeholder="what this render shows"
-        className="mt-1 block w-full max-w-[360px] border-b border-dashed border-[var(--color-pearl)] bg-transparent py-1.5 text-[13px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)]"
+        className="mt-1 block min-h-11 w-full max-w-[360px] border-b border-dashed border-[var(--color-pearl)] bg-transparent py-1.5 text-[13px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)]"
       />
 
       <p className="mt-2 max-w-[56ch] text-[12px] leading-[1.5] text-[var(--text-subtle)]">
