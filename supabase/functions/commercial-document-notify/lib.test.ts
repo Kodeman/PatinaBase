@@ -76,3 +76,14 @@ Deno.test("without a channel, audiences match the pre-existing online matrix exa
     ["studio"],
   );
 });
+
+Deno.test("an agreement draw is the client's news, and paper never changes that", () => {
+  assertEquals(
+    resolveCommercialNotificationAudiences("agreement_draw_ready", null),
+    ["client"],
+  );
+  assertEquals(
+    resolveCommercialNotificationAudiences("agreement_draw_ready", "paper"),
+    ["client"],
+  );
+});

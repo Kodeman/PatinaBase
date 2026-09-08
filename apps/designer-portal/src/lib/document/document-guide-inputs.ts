@@ -70,7 +70,10 @@ export function composeDocumentGuideInputs({
   }
 
   if (row.active_section === 'proposal') {
-    if (proposal?.documentKind === 'design_services') {
+    if (
+      proposal?.documentKind === 'design_services' ||
+      proposal?.documentKind === 'design_build'
+    ) {
       if (proposal.commercialState === 'client_signed') {
         return [{ label: 'Studio countersignature', owner: 'Studio', blocks: 'Project activation' }];
       }

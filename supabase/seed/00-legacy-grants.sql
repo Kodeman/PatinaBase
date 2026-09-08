@@ -15047,3 +15047,435 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.copy_agreement_parts_from_authority(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_license_attestations FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON TABLE public.studio_license_attestations TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.studio_license_attestations TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.studio_has_live_license_attestation(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.studio_has_live_license_attestation(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.agreement_jurisdiction_notices FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.agreement_jurisdiction_notices TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.agreement_jurisdiction_notices TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_agreement_draw_ledger() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.agreement_draw_invoices FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.agreement_draw_invoices TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.agreement_draw_invoices TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.agreement_draw_lien_waivers FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.agreement_draw_lien_waivers TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.agreement_draw_lien_waivers TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_agreement_draw_lien_waiver( uuid, text, uuid, date, integer, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_agreement_draw_lien_waiver( uuid, text, uuid, date, integer, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_is_int(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_is_int(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._validate_pricing_basis_payload(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._validate_pricing_basis_payload(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_contract_sum_cents(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_contract_sum_cents(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._validate_draws_payload(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._validate_draws_payload(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._validate_allowances_payload(jsonb, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._validate_allowances_payload(jsonb, jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._validate_no_double_count(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._validate_no_double_count(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_parts_json(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_draw_rows(jsonb, bigint) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_draw_rows(jsonb, bigint) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_money_to_the_cent(numeric) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_money_to_the_cent(numeric) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_schedule_of_values(jsonb, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_schedule_of_values(jsonb, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_redact_client_payload(text, text, jsonb, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_redact_client_payload(text, text, jsonb, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_design_build_part(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_sub_disclosure(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_design_build_subs(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.issue_agreement_draw_invoice(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.issue_agreement_draw_invoice(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._render_agreement_snapshot_html(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.rpc_start_agreement_thread(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.rpc_start_agreement_thread(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_trade_agreement_signature_immutable() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_trade_agreement_authored() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_trade_agreements FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.studio_trade_agreements TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.studio_trade_agreements TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_trade_agreement_signatures FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.studio_trade_agreement_signatures TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.studio_trade_agreement_signatures TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_trade_agreement_tokens FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.studio_trade_agreement_tokens TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._trade_agreement_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_trade_agreement(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_trade_agreement(uuid, uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_trade_agreement(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_trade_agreement(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mint_trade_agreement_token(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mint_trade_agreement_token(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_trade_agreement_link(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_trade_agreement_link(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_trade_agreement_by_token(text, text, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_trade_agreement_by_token(text, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.void_trade_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.void_trade_agreement(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_trade_agreements(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_trade_agreements(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00579_trade_agreements.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_design_build_subs(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

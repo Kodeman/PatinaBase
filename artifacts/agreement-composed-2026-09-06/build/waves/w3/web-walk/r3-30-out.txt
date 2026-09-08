@@ -1,0 +1,207 @@
+=== THE DOOR, EXECUTED ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+Nothing waits for your name. A balance of $23,978 stands open.
+
+Previously — Design-build agreement · Client User — design services agreement, 8 September.
+
+Owed on the open invoice
+$23,978 · due 8 September
+
+THE LETTERBOX
+
+INV-0002 · $23,978 total · $0 paid. Balance $23,978, due September 8.
+
+OPEN THE INVOICE
+OPEN THE LETTERBOX
+PRINT
+EARLIER INVOICES
+Previously
+8 SEPTEMBER
+Design-build agreement · Client User — design services ag…
+SIGNED
+WHAT THE HOUSE SENT
+8 SEPTEMBER
+Draw ready: Client User — design services agreement
+SENT
+8 SEPTEMBER
+Agreement executed: Client User — design services agreeme…
+SENT
+8 SEPTEMBER
+Signature received: Client User — design services agreeme…
+SENT
+8 SEPTEMBER
+Proposal ready for your review
+SENT
+8 SEPTEMBER
+Proposal ready for your review
+SENT
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+INV-0002
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Birch Hollow
+Marrow & Vale Residence
+Aspen Loft Refresh
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE
+
+door names Rough-in: false
+door names $23,978: true
+door names a waiver: false
+door names the deposit invoice: false
+
+=== THE PAPERS, IN FULL (executed) ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+Nothing waits for your name. A balance of $23,978 stands open.
+
+Previously — Design-build agreement · Client User — design services agreement, 8 September.
+
+Owed on the open invoice
+$23,978 · due 8 September
+
+THE LETTERBOX
+
+INV-0002 · $23,978 total · $0 paid. Balance $23,978, due September 8.
+
+OPEN THE INVOICE
+OPEN THE LETTERBOX
+PRINT
+EARLIER INVOICES
+Previously
+8 SEPTEMBER
+Design-build agreement · Client User — design services ag…
+SIGNED
+WHAT THE HOUSE SENT
+8 SEPTEMBER
+Draw ready: Client User — design services agreement
+SENT
+8 SEPTEMBER
+Agreement executed: Client User — design services agreeme…
+SENT
+8 SEPTEMBER
+Signature received: Client User — design services agreeme…
+SENT
+8 SEPTEMBER
+Proposal ready for your review
+SENT
+8 SEPTEMBER
+Proposal ready for your review
+SENT
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+INV-0002
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Birch Hollow
+Marrow & Vale Residence
+Aspen Loft Refresh
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE
+THE PAPERS
+THE PAPERS, IN FULL
+WHAT YOU HAVE SIGNED
+
+INSTRUMENT · SIGNED 8 SEPTEMBER
+
+Client User — design services agreement
+ANCHORS: ["OPEN THE INVOICE -> /pay/c7de6de3ec4f1b6fa51bec9a3346560fc446dbb43ade6d1343483bfb2dbf9c46","PRINT -> /invoices/549ea341-0cba-4aec-9a38-a2e0597a0f96/print","Design-build agreement · Client User — d -> #previously","INV-0002 -> #letterbox","Birch Hollow -> /projects/b0000000-0000-0000-0000-0000000000d3","Marrow & Vale Residence -> /projects/b0000000-0000-0000-0000-0000000000d4","Aspen Loft Refresh -> /projects/b0000000-0000-0000-0000-0000000000d1"]
+BUTTONS: ["OPEN THE LETTERBOX","EARLIER INVOICES","8 SEPTEMBER\nDesign-build agreement · Cli","8 SEPTEMBER\nDraw ready: Client User — de","8 SEPTEMBER\nAgreement executed: Client U","8 SEPTEMBER\nSignature received: Client U","8 SEPTEMBER\nProposal ready for your revi","8 SEPTEMBER\nProposal ready for your revi","THE PAPERS, IN FULL","YOUR DETAILS","LEAVE THE HOUSE","ASK FOR A CHANGE","THE PAPERS, IN FULL"]
+
+=== PROJECT · MONEY ===
+ · ONE REGION
+
+Money
+
+$23,978 out
+
+DRAW AN INVOICE
+FOLD ↑
+
+$23,978 out · not yet on the paper · press Money on the index to open
+
+CARE · CLOSING THE BOOK
+
+Closing the book
+
+0 of 6 closed out
+
+CLOSE THE BOOK
+
+0 of 6 closed out · not yet on the paper · press Closing the book on the index to open
+
+The record
+
+4 complete
+
+OPEN THE RECORD
+
+4 complete · not yet on the paper · press The record on the index to open
+
+LEAH HARTWELL
+HANDS ON THE WORK: YOU
+BRIEF A VENDOR
+HOLD
+ARCHIVE
+ADD TO THE TEAM
+MARGIN · 1
+←
+
+IN THE MARGIN
+
+CLOSE
+
+–One client, one paper. The rail on the left says where this stands; the margin here is where decisions, messages, and money gather. Nothing is a form — it fills as the work happens.
+MORE
+APPEARS ONCE · RECEDES ON USE
+
++ DECISION
++ NOTE
+
+THE WHOLE JOB · 1
+
+MONEY · SENT
+INV-0002
+Design-build draw · Rough-in
+ABOUT THE WHOLE JOB
+PATINA
+/
+DOCUMENT
+Library
+People
+The Scans
+Ledgers
+↑
+⌘K
+IN HAND TODAY
+6 min
+THE POST
+LH
+Leah Hartwell
+LEAH HARTWELL
+names INV-0001 (adopted deposit): false
+names INV-0002 (Rough-in): true

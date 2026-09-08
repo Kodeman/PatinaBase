@@ -1,7 +1,8 @@
 "use client";
 
-import type { AgreementPart } from "@patina/types";
+import { DESIGN_BUILD_PAPER_COPY, type AgreementPart } from "@patina/types";
 import { AgreementPartsBody } from "./agreement-parts-body";
+import { redactPartsForClient } from "@/lib/document/design-build";
 import {
   buildServiceAgreementPreview,
   commercialStatusView,
@@ -55,6 +56,18 @@ export function ServiceAgreementPreview({
   parts?: AgreementPart[];
 }) {
   const composed = (parts?.length ?? 0) > 0;
+  // W3R1-04 — the studio's live preview must be the paper it is sending. A
+  // turnkey prime is not a services agreement with extra sections: it carries
+  // its own name at the head and its own boundary at the foot, and the three
+  // money parts in between draw a guaranteed maximum price, a schedule of
+  // values, the draws and the allowances (agreement-parts-body.tsx).
+  const turnkey = document.kind === "design_build";
+  // R51 (W3R2-03) — the studio previews THE PAPER, run through the same
+  // redaction the client bundle applies (`_agreement_redact_client_payload`,
+  // 00578). Without it a closed-book preview printed the cost basis and the
+  // fee that the homeowner's own copy does not carry, and the two documents
+  // disagreed about the same agreement minutes apart.
+  const clientParts = turnkey ? redactPartsForClient(parts ?? []) : (parts ?? []);
   const preview = buildServiceAgreementPreview({
     document,
     terms,
@@ -80,12 +93,19 @@ export function ServiceAgreementPreview({
 
   return (
     <article
-      aria-label="Design services agreement client copy"
+      aria-label={
+        turnkey
+          ? "Design-build agreement client copy"
+          : "Design services agreement client copy"
+      }
       className={compact ? "space-y-5" : "mx-auto max-w-[720px] space-y-7"}
     >
       <header className="border-b border-[var(--doc-ink-border)] pb-4">
         <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
-          Design services agreement · v{preview.version}
+          {turnkey
+            ? DESIGN_BUILD_PAPER_COPY.documentLabel
+            : "Design services agreement"}{" "}
+          · v{preview.version}
         </p>
         <h2 className="mt-1 font-heading text-[1.65rem] leading-tight text-[var(--color-charcoal)]">
           {preview.title}
@@ -103,7 +123,11 @@ export function ServiceAgreementPreview({
       {composed ? (
         // R8 — the designer's order, filtered to the client-visible parts.
         // The Core above and below this branch is untouched.
-        <AgreementPartsBody parts={parts ?? []} currency={preview.currency} />
+        <AgreementPartsBody
+          parts={clientParts}
+          currency={preview.currency}
+          turnkey={turnkey}
+        />
       ) : (
         <>
           <section>
@@ -258,8 +282,9 @@ export function ServiceAgreementPreview({
       </section>
 
       <p className="border-t border-[var(--doc-ink-border)] pt-3 text-[11px] italic leading-relaxed text-[var(--text-muted)]">
-        Furnishings, freight, tax, installation, and permission to purchase are
-        outside this design services agreement.
+        {turnkey
+          ? DESIGN_BUILD_PAPER_COPY.boundary
+          : "Furnishings, freight, tax, installation, and permission to purchase are outside this design services agreement."}
       </p>
     </article>
   );

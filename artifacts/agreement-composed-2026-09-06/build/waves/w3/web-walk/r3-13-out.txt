@@ -1,0 +1,348 @@
+=== DOOR after the deposit is PAID ===
+offer still standing: false
+receipt still standing: true
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Birch Hollow
+
+Discovery · September 2026
+
+Nothing waits for your name.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Client User — design services agreement
+
+Open. It opened on your name.
+
+Client User — design services agreement · signed 8 September · Leah Hartwell has your signature. You’ll have a copy.
+
+KEEP A COPY
+
+THE LETTERBOX
+
+Nothing in the letterbox.
+
+Previously
+—
+Design-build agreement · Client User — design services ag…
+SIGNED
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Marrow & Vale Residence
+Aspen Loft Refresh
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE
+
+=== /doc at client_signed (W3R2-07 chips) ===
+Skip to the paper
+←
+PUT DOWN
+
+Client User
+
+PROPOSAL
+
+The proposal
+SENT SEP 8
+Scope & engagement
+CORE · STAGE 03
+Design vision
+NOTHING YET
+The investment
+$84,134
+The record
+3 COMPLETE
+Client User — design services agreement
+for Client User↗
+
+$84,134 proposed
+
+MESSAGE
+
+$84,134
+
+Countersign the design agreement
+REVIEW COUNTERSIGN CONTROLS
++1 MORE
+
+V1 · AWAITING SIGNATURE
+
+The proposal
+
+Sent Sep 8 · not opened
+
+AWAITING COUNTERSIGN
+
+CLIENT SIGNED
+
+Client consent is preserved. The agreement is awaiting the studio countersignature; work is not yet authorized.
+
+OPEN THE CONTRACT ROOM
+→
+PREVIEW CLIENT COPY
+
+Countersign for the studio
+
+This final act creates one project and one billing authority. It is safe to retry.
+
+Countersign agreement
+
+IMPACT
+
+The schedule effect cannot be computed here — this act proposes a date rather than setting one.
+
+FOLIO
++ FILE
+
+Scope & engagement
+
+Core · stage 03
+
+CORE · 03
+
+Design vision
+
+Not written yet
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+CLIENT SIGNED
+
+Pricing basis
+
+The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.
+
+GUARANTEED MAXIMUM PRICE
+
+$84,134
+
+Schedule of values
+Construction
+$84,134
+The whole of it
+$84,134
+Draw schedule
+Deposit at signing
+10%
+Rough-in
+30%
+Cabinets set
+40%
+Substantial completion
+20%
+Allowances
+Tile allowance
+$4,000
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Plumbing fixtures allowance
+$3,500
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Lighting allowance
+$2,800
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequence of work, and answers for the result.
+
+Termination
+
+Either party may end this engagement in writing. Work performed and materials ordered to that date remain payable.
+
+Terms
+
+Invoices are due on receipt. Work proceeds against the draw schedule above. Wisconsin law governs this agreement.
+
+ATTACHMENT A · LIEN WAIVER FORM
+
+Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.
+
+I received this
+
+CLIENT SIGNATURE
+
+Client User
+
+STUDIO SIGNATURE
+
+Awaiting
+
+This agreement covers the work described above, at the price shown. A
+NET countersign_design_services_agreement 200 {"projectId": "edf7b496-4d74-4485-b47d-66b1f101a84f", "proposalId": "8cac8743-9b06-40ba-aeab-aa6a1829070b", "agreementId": "8cac8743-9b06-40ba-aeab-aa6a1829070b", "newlyExecuted": true, "commercialState": "executed", "retainerInvoiceId": null, "billingAuthorityId": "21dbe965-50d1-42c1-ad17-cfdbb0605ff4"}
+
+url: http://localhost:3000/doc/edf7b496-4d74-4485-b47d-66b1f101a84f
+Skip to the paper
+←
+PUT DOWN
+
+Client User
+
+PROJECT
+ACTIVE
+
+Client approvals
+NOTHING YET
+Schedule
+NOT KNOWN YET
+Pieces
+NOTHING YET
+Money
+NOTHING YET
+Closing the book
+0 OF 6 CLOSED OUT
+The record
+4 COMPLETE
+
+FILED WITH THIS JOB
+
+Plan room
+Spec book
+Boards
+Client User — design services agreement
+for Client User↗
+START
+Sep 8
+×
+TARGET
+Sep 8
+×
+SET A BUDGET BAND
+$84,134
+NEEDS SETUP · 1
+→
+MESSAGE
+PREVIEW
+SHARING
+
+Name the phases for this project
+OPEN THE SCHEDULE
+Now at Client approvals · Reading…
+
+EXACT ARTIFACT · NAMED AUTHORITY
+
+Client approvals
+
+0 decided · no decision lead
+
+ASSIGN PROJECT CLIENT
+FOLD ↑
+
+Bind each request to one issued plan, client-ready specification, or published budget checkpoint. Discussion stays in the project thread; only the recorded outcome settles an approval.
+
+This project does not have a designated decision lead yet.
+
+APPROVAL RECORD
+
+No exact-artifact approvals have been authored.
+
+Schedule dates
+UNFOLD ↓
+
+No active phase handoffs need attention.
+
+Workflow stage
+
+BAND
+
+Schedule
+
+0 phases · nothing active · next milestone —
+
++ NEW OPEN ITEM
+FOLD ↑
+COMPOSE A SCHEDULE · THREE STARTING POINTS
+TYPOGRAPHIC · NO WIZARDS
+i
+The Patina Six
+Consultation · Schematic Design · Design Development · Procurement & Orders · Installation & Styling · Completion — the studio’s standard six, pre-chained. Delete what the project doesn’t need.
+DEFAULT
+ii
+From a past project
+Pull the phase chain from a finished project — with the durations that actually happened, not the ones that were hoped for. Your history becomes your estimate.
+AS-BUILT
+iii
+Start blank
+An empty spine and a ghost line — name your first phase. For the project that fits no template.
+BLANK
+THE WORK
+THE DEPENDENCY WEB
+ADD TASK
++ REVISIONS · 1
+Pieces
+
+Nothing yet
+
+RELEASE FOR AUTHORIZATION
+FOLD ↑
+
+Nothing yet
+
+THE MONEY · ONE REGION
+
+Money
+
+Nothing yet
+
+DRAW AN INVOICE
+FOLD ↑
+
+Nothing yet
+
+CARE · CLOSING THE BOOK
+
+Closing the book
+
+0 of 6 closed out
+
+CLOSE THE BOOK
+
+0 of 6 closed out · not yet on the paper · press Closing the book on the index to open
+
+The record
+
+4 complete
+
+OPEN THE RECORD
+
+4 complete · not yet on the paper · press The record on the index to open
+
+LEAH HARTWELL
+HANDS ON THE WORK: YOU
+BRIEF A VENDOR
+HOLD
+ARCHIVE
+ADD TO THE TEAM
+MARGIN
+←
+
+IN THE MARGIN
+
+CLOSE
+
+–One client, one paper. The rail on the left says where this stands; the margin here is where decisions, messages, and money gather. Nothing is a form — it fills as the work happens.
+MORE
+APPEARS ONCE · RECEDES ON USE
+

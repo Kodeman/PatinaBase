@@ -145,7 +145,22 @@ jest.mock('@/components/projects/ProjectsEmptyState', () => ({
 // Stubbed here so this file's boundary stays the wiring it is about.
 jest.mock('../door-acts', () => ({
   __esModule: true,
-  DoorActs: () => null,
+  // Rendered as a witness rather than as nothing: R30's origin door has to
+  // hand the acts a studio to ask in place of the project it has not got,
+  // and this file is where that wiring is asserted.
+  DoorActs: ({
+    projectId,
+    studioProfileId,
+  }: {
+    projectId: string | null;
+    studioProfileId?: string | null;
+  }) => (
+    <div
+      data-testid="door-acts-stub"
+      data-project-id={projectId ?? ''}
+      data-studio-profile-id={studioProfileId ?? ''}
+    />
+  ),
 }));
 
 jest.mock('@/hooks/use-project-correspondence', () => ({
@@ -1117,6 +1132,154 @@ describe('Threshold — the doorstep’s own asks', () => {
       expect(container.querySelector('#door-door-prop-addendum')).toBeNull();
       expect(container.querySelector('#door')).toBeNull();
     });
+
+    /* Wave 3. A turnkey prime is project-less through her signature for the
+       same reason a design-services agreement is — the project appears at
+       countersignature — so it is a paper that comes before a house too, and
+       the R30 defect would otherwise repeat itself on the one paper that
+       prices a whole job. */
+    it('stands the turnkey prime on the doorstep too', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...ORIGIN_AGREEMENT,
+            id: 'prop-turnkey',
+            title: 'Halvorsen kitchen and mudroom',
+            document_kind: 'design_build',
+          } as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      expect(container.querySelector('#door-door-prop-turnkey')).not.toBeNull();
+      expect(screen.getByTestId('door-houseless')).toBeInTheDocument();
+    });
+
+    /* W3R1-02, then R50 — AND THE SAME PAPER AFTER SHE HAS SIGNED IT.
+       At `client_signed` the paper leaves `pending` for `accepted`, and the
+       receipts filter was project-scoped: the walk signed a houseless
+       design-build prime, reloaded, and found the door, the house and THE
+       PAPERS all empty over a paper carrying her own signature. Round 1 gave
+       it a receipt row; round 2 (W3R2-02) found the DOOR still gone — and with
+       it the post-signature region: KEEP A COPY, the deposit offer and the pay
+       link, none of which stands anywhere else on the page.
+
+       So the door stands too, until the countersign that gives the paper a
+       project. It is not asking: `signedAlready` is what tells it so before
+       its own bundle answers. */
+    it('keeps a signed, project-less prime in the record on every house', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...ORIGIN_AGREEMENT,
+            id: 'prop-turnkey',
+            title: 'Halvorsen kitchen and mudroom',
+            document_kind: 'design_build',
+            commercial_state: 'client_signed',
+            status: 'accepted',
+          } as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      // R50 — the door stands, opened on her name, and it does not ask again.
+      const door = container.querySelector('#door-door-prop-turnkey');
+      expect(door).not.toBeNull();
+      expect(door).toHaveTextContent('Open. It opened on your name.');
+      expect(
+        (door as HTMLElement).querySelector('[data-testid="door-sign-name"]'),
+      ).toBeNull();
+      // W3R1-02's receipt row stands with it.
+      expect(document.querySelector('#previously')).toHaveTextContent(
+        'Design-build agreement · Halvorsen kitchen and mudroom',
+      );
+    });
+
+    it('leaves a signed addendum with no project off the record, as before', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...ORIGIN_AGREEMENT,
+            id: 'prop-addendum',
+            title: 'A change to the work',
+            document_kind: 'service_addendum',
+            commercial_state: 'client_signed',
+            status: 'accepted',
+          } as unknown as Proposal,
+        ]),
+      );
+
+      renderThreshold();
+
+      expect(document.querySelector('#previously')?.textContent ?? '').not.toContain(
+        'A change to the work',
+      );
+    });
+
+    it('leaves a signed paper belonging to ANOTHER house off this one', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...SIGNED_AGREEMENT,
+            id: 'prop-elsewhere',
+            title: 'Another house’s agreement',
+            project_id: 'project-elsewhere',
+          } as unknown as Proposal,
+        ]),
+      );
+
+      renderThreshold();
+
+      expect(document.querySelector('#previously')?.textContent ?? '').not.toContain(
+        'Another house’s agreement',
+      );
+    });
+
+    /* R47 — A QUESTION FROM THE ORIGIN DOOR FILES TO THE AGREEMENT'S STUDIO.
+       A houseless paper stands on the doorstep of every house she owns, so
+       handing its acts the house she happens to be reading would file a
+       question about a brand new engagement into an unrelated project's
+       thread. `DoorActs` picks `rpc_start_direct_thread` when it is given a
+       studio and no project (door-acts.test.tsx:280-299); this is the wiring
+       that gives it one. */
+    it('hands the houseless door its studio, and no project to ask in', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...ORIGIN_AGREEMENT,
+            designer_id: 'designer-nora',
+          } as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      const houselessActs = container.querySelector(
+        '#door-door-prop-origin [data-testid="door-acts-stub"]',
+      );
+      expect(houselessActs).not.toBeNull();
+      expect(houselessActs?.getAttribute('data-project-id')).toBe('');
+      expect(houselessActs?.getAttribute('data-studio-profile-id')).toBe(
+        'designer-nora',
+      );
+
+      // And the house's own paper still asks in the house's thread.
+      const housedActs = container.querySelector(
+        '#door [data-testid="door-acts-stub"]',
+      );
+      expect(housedActs?.getAttribute('data-project-id')).toBe(PROJECT_ID);
+      expect(housedActs?.getAttribute('data-studio-profile-id')).toBe('');
+    });
   });
 });
 
@@ -1400,6 +1563,48 @@ describe('Threshold — never reverse', () => {
     expect(screen.queryByTestId('house-ledger-overage')).not.toBeInTheDocument();
     expect(screen.queryByText(/past its target/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId('room-band-ledger')).not.toBeInTheDocument();
+  });
+
+  /* W3R1-05 — A FAILED READ IS NOT AN EMPTY DOORSTEP.
+     `useClientProposals` inherits `retry: 2`; after the third failure React
+     Query drops `isPending`, so the house settled and printed "Nothing waits
+     for your name." over papers it had simply been unable to read — with no
+     error, no retry and no degraded state anywhere. R30 · N2 already ruled
+     this for the household door; the house reads the same rule now. */
+  it('never says nothing waits for her name over papers it could not read', () => {
+    proposalsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch: jest.fn(),
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('papers-unread')).toHaveTextContent(
+      'Your papers could not be drawn just now. Nothing on them has changed.',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Try again' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Nothing waits for your name.')).not.toBeInTheDocument();
+  });
+
+  it('asks for the read again when the retry is taken', () => {
+    const refetch = jest.fn();
+    proposalsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch,
+    });
+
+    renderThreshold();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(refetch).toHaveBeenCalled();
   });
 
   it('holds the doorplate up throughout — the house is always named', () => {
@@ -2442,6 +2647,78 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     expect(screen.getByTestId('previously-line')).toBeInTheDocument();
   });
 
+  /* ── WAVE 3 · THE TURNKEY PRIME IS AN ORIGIN AGREEMENT TOO ───────────────
+     `proposals.project_id` is NULL on a design-build prime through her
+     signature — the project is minted at countersignature (walk steps 12 and
+     15) — so it arrives at a household with no house exactly as a
+     design-services agreement does. Left out of `ORIGIN_DOCUMENT_KINDS` it
+     would have been drawn by no door at all: the household's very first
+     paper, priced at $84,134, reachable from nowhere. This is the R30 defect
+     on the largest paper in the program, and E2E-2 (which mints a
+     project-less turnkey agreement and opens `/#door`) cannot pass without
+     these two cases holding. ─────────────────────────────────────────────── */
+  const TURNKEY_ORIGIN = {
+    ...ORIGIN_AGREEMENT,
+    id: 'prop-turnkey',
+    title: 'Halvorsen kitchen and mudroom',
+    document_kind: 'design_build',
+    total_amount: 8_413_400,
+  } as unknown as Proposal;
+
+  it('stands a turnkey prime at the door, in its own words', () => {
+    proposalsMock.mockReturnValue(settled([TURNKEY_ORIGIN]));
+    bundles['prop-turnkey'] = { document: { kind: 'design_build' } };
+
+    renderDoor();
+
+    expect(screen.getByText('One agreement is waiting for you.')).toBeInTheDocument();
+    expect(
+      within(theDoor()).getByRole('heading', { name: 'Halvorsen kitchen and mudroom' }),
+    ).toBeInTheDocument();
+    // The turnkey sentence, not the design-services one and not the generic
+    // fallback — a missed branch on the signing surface looks exactly like
+    // the latter.
+    expect(
+      within(theDoor()).getByText(
+        'I agree to these design-build terms and understand my signature alone does not authorize work until the studio countersigns.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(theDoor()).getByLabelText('Type your full name')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  /* The visit after she signs (walk step 13, amended round 1). The record
+     stands, nothing says the agreement is incomplete for want of money, and
+     the deposit — project-less exactly as the prime is — is a LETTER in this
+     door's own letterbox with its own act. That is the offer's persistent
+     half; the post-signature sentence belongs to the moment of signing. */
+  it('keeps the signed turnkey record, with the deposit standing as a letter', () => {
+    proposalsMock.mockReturnValue(
+      settled([
+        {
+          ...TURNKEY_ORIGIN,
+          commercial_state: 'client_signed',
+          status: 'accepted',
+          updated_at: '2026-09-07',
+        } as unknown as Proposal,
+      ]),
+    );
+    bundles['prop-turnkey'] = { document: { kind: 'design_build' } };
+    clientInvoicesMock.mockReturnValue(
+      settled([{ ...STUDIO_INVOICE, id: 'inv-deposit', title: 'Deposit at signing' }]),
+    );
+
+    renderDoor();
+
+    const line = screen.getByTestId('previously-line');
+    expect(line).toHaveTextContent('Design-build agreement · Halvorsen kitchen and mudroom');
+    expect(within(line).getByTestId('previously-state')).toHaveTextContent('SIGNED');
+    expect(screen.getByTestId('letterbox')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    // Nothing on the page holds the record behind the money.
+    expect(screen.queryByText(/payment required/i)).not.toBeInTheDocument();
+  });
+
   // Countersigning creates the project, so `/` opens the house from that point
   // on. What this door must never do is keep drawing the paper the house has
   // taken over — the same agreement, twice, on two surfaces.
@@ -2535,6 +2812,82 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
 
     expect(screen.getByTestId('letterbox-door-hold')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  /* ── THE ORIGIN DOOR CAN ASK ITS STUDIO A QUESTION (R30 · N1) ─────────────
+     The acts row withholds "Ask a question" when there is no thread to ask in,
+     and an origin agreement has no project — so the household's first paper
+     was the one door in the house offering three acts where every other door
+     offers four. It has a studio; it simply had not been handed one. ────── */
+  it('hands the acts the studio to ask, in place of the project it has not got', () => {
+    renderDoor();
+
+    const acts = screen.getByTestId('door-acts-stub');
+    expect(acts).toHaveAttribute('data-project-id', '');
+    expect(acts).toHaveAttribute('data-studio-profile-id', 'designer-nora');
+  });
+
+  /* ── WHEN THE PAPERS CANNOT BE READ (R30 · N2) ────────────────────────────
+     `useClientSafeProposals` sets no `retry`, so it inherits the app's
+     `retry: 2` and, after the third failure, settles with `isPending` false
+     and no data. The hold above covers the PENDING window; this covers the
+     FAILED one — where `origins` and `kept` are empty for a reason that has
+     nothing to do with what she owns, and the empty state would tell her she
+     has no projects over the very agreement this door exists to reach. ──── */
+  function failedPapers() {
+    return {
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch: jest.fn(),
+    };
+  }
+
+  it('says it could not draw the papers rather than saying she has none', () => {
+    proposalsMock.mockReturnValue(failedPapers());
+
+    renderDoor();
+
+    expect(screen.getByTestId('papers-unread')).toHaveTextContent(
+      'Your papers could not be drawn just now. Nothing on them has changed.',
+    );
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nothing is waiting for you.')).not.toBeInTheDocument();
+  });
+
+  it('offers the read again, and asks for it', () => {
+    const query = failedPapers();
+    proposalsMock.mockReturnValue(query);
+
+    renderDoor();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(query.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  /* A letter standing in the slot draws the page — and the page still has to
+     say that it does not know about the papers, rather than let the letter's
+     own sentence stand in for an answer it never gave. */
+  it('says so beside a letter, without holding the letter back', () => {
+    clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
+    proposalsMock.mockReturnValue(failedPapers());
+
+    renderDoor();
+
+    expect(screen.getByTestId('letterbox-regarding')).toBeInTheDocument();
+    expect(screen.getByText('One letter is waiting for you.')).toBeInTheDocument();
+    expect(screen.getByTestId('papers-unread')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  it('keeps the empty state for a household that genuinely has nothing', () => {
+    proposalsMock.mockReturnValue(settled([]));
+
+    renderDoor();
+
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('papers-unread')).not.toBeInTheDocument();
   });
 
   /* Her signature does not create the house — the studio's countersignature

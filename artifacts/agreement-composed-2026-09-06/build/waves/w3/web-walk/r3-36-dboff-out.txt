@@ -1,0 +1,91 @@
+dboff turnkeyRoom bytes 81823 · servicesRoom bytes 83401 · door bytes 45121
+--- turnkey room text (first 1400) ---
+Skip to the paper
+←
+THE DESK
+THE CONTRACT ROOM · DESIGN-BUILD AGREEMENT
+· 3 of 10 parts need attention
+REVIEW & SEND
+→
+
+YES TO THE STUDIO · DESIGN AND CONSTRUCTION
+
+Client User — design services agreement
+
+Compose the parts this agreement is made of. The price, the draws and the trades are inside it.
+
+Preview client copy
+Saved
+
+CLIENT ACCOUNT
+
+Client User
+
+This is a design-build agreement, and it does not open for you yet. Its parts are shown as they stand.
+
+⠿
+PRICING BASIS · RECORD ONLY
+Pricing basis·
+NEEDS ATTENTION
+⠿
+DRAWS · RECORD ONLY
+Draw schedule·
+NEEDS ATTENTION
+⠿
+ALLOWANCES · RECORD ONLY
+Allowances
+⠿
+CLAUSE
+Who does the work·
+⠿
+CLAUSE
+Supervision·
+⠿
+CLAUSE
+Change orders·
+⠿
+CLAUSE
+Termination·
+⠿
+CLAUSE
+Terms·
+NEEDS ATTENTION
+⠿
+ATTACHMENT
+Notice of cancellation
+⠿
+ATTACHMENT
+Lien waiver form
+
+PRICING BASIS · RECORD ONLY
+
+Pricing basis
+
+Complete Pricing basis.
+
+PRICING BASIS
+
+This part opens in a later release. It stays on the agreement exactly as it is, and the client sees it in place.
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+3 OF 10 PARTS NEED ATTENTION
+
+This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+
+THE CLIENT'S COPY · LIVE
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Pricin

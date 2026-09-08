@@ -1,0 +1,105 @@
+REQ POST /api/proposals/8cac8743-9b06-40ba-aeab-aa6a1829070b/sign
+NET /api/proposals/8cac8743-9b06-40ba-aeab-aa6a1829070b/sign 200 {"ok":true,"commercialState":"client_signed","newlyClientSigned":true,"notificationDelivery":{"state":"pending_retry"},"depositOffer":{"invoiceId":"07e7a4ed-32c1-49a8-b034-2bb3628772b1","amountCents":841340,"label":"Deposit at signing","payPath":"/pay/3eb55766d791d82d5810c7d9c45f391499c157ddc39b5df96e4e75a6bc9e1165"}}
+=== AFTER SIGNING ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Birch Hollow
+
+Discovery · September 2026
+
+Nothing waits for your name.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Client User — design services agreement
+
+Open. It opened on your name.
+
+Client User — design services agreement · signed 8 September · Leah Hartwell has your signature. You’ll have a copy.
+
+KEEP A COPY
+
+Your deposit is ready — $8,413.40
+
+The first of five draws · due on signing. You can pay now, or your studio will send it.
+
+PAY THE DEPOSIT
+
+Your signature remains recorded, but confirmation delivery is still pending. You can retry safely.
+
+RESEND CONFIRMATION NOTICE
+
+THE LETTERBOX
+
+Nothing in the letterbox.
+
+Previously
+—
+Design-build agreement · Client User — design services ag…
+SIGNED
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Marrow & Vale Residence
+Aspen Loft Refresh
+A note is waiting there.
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE
+
+=== THE DOOR, RELOADED ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Birch Hollow
+
+Discovery · September 2026
+
+Nothing waits for your name.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Client User — design services agreement
+
+Open. It opened on your name.
+
+Client User — design services agreement · signed 8 September · Leah Hartwell has your signature. You’ll have a copy.
+
+KEEP A COPY
+
+Your deposit is ready — $8,413.40
+
+The first of five draws · due on signing. You can pay now, or your studio will send it.
+
+PAY THE DEPOSIT
+
+THE LETTERBOX
+
+Nothing in the letterbox.
+
+Previously
+—
+Design-build agreement · Client User — design services ag…
+SIGNED
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Marrow & Vale Residence
+Aspen Loft Refresh
+A note is waiting there.
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE

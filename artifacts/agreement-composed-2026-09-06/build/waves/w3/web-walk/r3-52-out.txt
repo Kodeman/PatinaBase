@@ -1,0 +1,4 @@
+clean services draft [{"t":"REVIEW & SEND\n→","disabled":true},{"t":"Save agreement","disabled":true}]
+  after typing: [{"t":"Save agreement","disabled":true}]
+turnkey draft [{"t":"REVIEW & SEND\n→","disabled":true},{"t":"Saved","disabled":true}]
+  after typing: [{"t":"Save agreement","disabled":true}]

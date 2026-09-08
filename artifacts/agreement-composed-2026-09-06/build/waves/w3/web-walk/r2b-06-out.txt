@@ -1,0 +1,435 @@
+
+=== STEP 5 · SOV under OPEN-BOOK ===
+
+
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
++ Add a cost line
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+SCHEDULE OF VALUES
+
+Open-book — the trades stand at cost and the fee is its own line.
+
+Cabinetry & millwork
+$38,000.00
+Electrical
+$9,500.00
+Plumbing
+$7,200.00
+General conditions / site
+$6,300.00
+Tile allowance
+$4,000.00
+Plumbing fixtures allowance
+$3,500.00
+Lighting allowance
+$2,800.00
+Fee · 18%
+$12,834.00
+GMP
+$84,134.00
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== STEP 8 · pricing basis with BOTH ===
+PRICING BASIS · RECORD ONLY
+
+Pricing basis
+Hidden from your client
+
+Write the schedule of values your client will read.
+
+HOW THIS AGREEMENT IS PRICED
+
+Fixed price
+Cost-plus
+Cost-plus with GMP
+Time and materials with a not-to-exceed
+FEE · PERCENT
+MARKUP ON THE TRADES · PERCENT
+GMP · DOLLARS
+
+COST LINES
+
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
++ Add a cost line
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+SCHEDULE OF VALUES · WHAT YOUR CLIENT READS
+
+Your own division of the work — a room, a phase, or one line for the whole of it. It comes to the contract sum, and it is not the cost lines above.
+
++ Add a line
+Start with one line
+YOUR CLIENT’S TOTAL
+$0.00
+
+Write the schedule of values your client will read.
+
+The schedule of values appears once the contract sum, the open-book or closed-book choice, and the lines beneath them are written.
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== STEP 8 · supervision with BOTH ===
+CLAUSE
+
+Supervision
+Hidden from your client
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+SUPERVISION FEE · DOLLARS
+SUPERVISION FEE · PERCENT
+BODY
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+Studios that do both are, in effect, charging twice for the same oversight.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== STEP 8 · readiness with BOTH ===
+3 OF 10 PARTS NEED ATTENTION
+
+
+STEP 8 · review&send disabled: false aria-disabled: null
+
+=== after clearing the markup ===
+2 OF 10 PARTS NEED ATTENTION
+
+
+review&send disabled now: false
+
+=== SOV under CLOSED-BOOK (R43) ===
+
+
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
++ Add a cost line
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+SCHEDULE OF VALUES · WHAT YOUR CLIENT READS
+
+Your own division of the work — a room, a phase, or one line for the whole of it. It comes to the contract sum, and it is not the cost lines above.
+
+Remove
++ Add a line
+YOUR CLIENT’S TOTAL
+$84,134.00
+
+SCHEDULE OF VALUES
+
+Closed-book — your client reads the lines you wrote, not the trades' costs.
+
+Construction
+$84,134.00
+GMP
+$84,134.00
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== R39 · hide toggle present on pricing basis: 1
+=== R39 · readiness with the FEE hidden ===
+0 OF 10 PARTS NEED ATTENTION
+
+
+review&send disabled with fee hidden: false
+=== R39 · readiness after unhiding ===
+0 OF 10 PARTS NEED ATTENTION
+
+
+
+=== R39 · Change orders hidden; client copy preview ===
+ · LIVE
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Pricing basis
+
+The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.
+
+Cost basis
+$71,300
+Fee 18%
+$12,834
+
+GUARANTEED MAXIMUM PRICE
+
+$84,134
+
+Schedule of values
+Construction
+$84,134
+The whole of it
+$84,134
+Draw schedule
+Deposit at signing
+10%
+Rough-in
+30%
+Cabinets set
+40%
+Substantial completion
+20%
+Allowances
+Tile allowance
+$4,000
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Plumbing fixtures allowance
+$3,500
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Lighting allowance
+$2,800
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequence of work, and answers for the result.
+
+Change orders
+
+A change to the scope, the schedule or the sum is agreed in writing before the work is done, and is recorded against this agreement.
+
+Termination
+
+Either party may end this engagement in writing. Work performed and materials ordered to that date remain payable.
+
+Terms
+
+Invoices are due on receipt. Work proceeds against the draw schedule above. Wisconsin law governs this agreement.
+
+ATTACHMENT A · LIEN WAIVER FORM
+
+Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.
+
+I received this
+
+CLIENT SIGNATURE
+
+Awaiting
+
+STUDIO SIGNATURE
+
+Awaiting
+
+This agreement covers the work described above, at the price shown. Anything added to it is a separate written change order before the work is done.
+
+=== readiness before save ===
+0 OF 10 PARTS NEED ATTENTION
+
+
+RPC upsert_agreement_parts -> 200 {"parts": [{"id": "e555ba8a-00dd-4742-a0d5-5fee3bd5776a", "kind": "schedule", "title": "Pricing basis", "payload": {"basis": "cost_plus_gmp", "feeBps": 1800, "gmpCents": 8413400, "costLines": [{"id": "line-1788869117690-0", "label": "Cabinetry & millwork", "category": "sub", "basisCents": 3800000}, {"id": "line-1788869118115-1", "label": "Electrical", "category": "sub", "basisCents": 950000}, {"id": "line-1788869118490-2", "label": "Plumbing", "category": "sub", "basisCents": 720000}, {"id": "li
+
+=== readiness after save ===
+0 OF 10 PARTS NEED ATTENTION
+
+
+
+=== the studio preview after save ===
+ · LIVE
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Pricing basis
+
+The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.
+
+Cost basis
+$71,300
+Fee 18%
+$12,834
+
+GUARANTEED MAXIMUM PRICE
+
+$84,134
+
+Schedule of values
+Construction
+$84,134
+The whole of it
+$84,134
+Draw schedule
+Deposit at signing
+10%
+Rough-in
+30%
+Cabinets set
+40%
+Substantial completion
+20%
+Allowances
+Tile allowance
+$4,000
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Plumbing fixtures allowance
+$3,500
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Lighting allowance
+$2,800
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequence of work, and answers for the result.
+
+Change orders
+
+A change to the scope, the schedule or the sum is agreed in writing before the work is done, and is recorded against this agreement.
+
+Termination
+
+Either party may end this engagement in writing. Work performed and materials ordered to that date remain payable.
+
+Terms
+
+Invoices are due on receipt. Work proceeds against the draw schedule above. Wisconsin law governs this agreement.
+
+ATTACHMENT A · LIEN WAIVER FORM
+
+Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.
+
+I received this
+
+CLIENT SIGNATURE
+
+Awaiting
+
+STUDIO SIGNATURE
+
+Awaiting
+
+This agreement covers the work described above, at the price shown. Anything added to it is a separate written change order before the work is done.

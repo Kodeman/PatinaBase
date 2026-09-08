@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import {
   AGREEMENT_PART_COPY,
+  DESIGN_BUILD_PAPER_COPY,
   agreementCadenceText,
   agreementDepositLine,
   type AgreementPart,
@@ -603,5 +604,233 @@ describe("ServiceAgreementPreview · parts branch", () => {
       screen.getByRole("heading", { name: "Flat fee" }),
     ).toBeInTheDocument();
     expect(screen.getByText("$11,000")).toBeInTheDocument();
+  });
+});
+
+/* ── W3R1-04 · THE STUDIO'S PREVIEW IS THE PAPER IT IS SENDING ───────────────
+   The walk stood the executed Halvorsen prime's two faces side by side: the
+   studio's rail read "DESIGN SERVICES AGREEMENT · V1" with
+   "Pricing basis — Recorded with your agreement.", "Draw schedule — Recorded
+   with your agreement." and "Allowances — Recorded with your agreement.",
+   closing "…outside this design services agreement."; the homeowner's page
+   read "Design-build agreement", a guaranteed maximum price of $84,134, the
+   schedule of values, the draws and the allowances, closing with the turnkey
+   boundary. R27 says those two are one paper.
+
+   The figures are the Halvorsen fixture, the same one
+   `apps/client-portal/src/components/__tests__/commercial-document-shell-design-build.test.tsx`
+   and `supabase/tests/commercial/design_build_test.sql` are written from. ── */
+
+const TURNKEY_DOCUMENT: CommercialDocument = {
+  ...document,
+  kind: "design_build",
+  title: "Halvorsen kitchen and mudroom",
+};
+
+const HALVORSEN_COST_LINES = [
+  { id: "cabinetryAndMillwork", label: "Cabinetry & millwork", category: "sub", basisCents: 3_800_000 },
+  { id: "electrical", label: "Electrical", category: "sub", basisCents: 950_000 },
+  { id: "plumbing", label: "Plumbing", category: "sub", basisCents: 720_000 },
+  { id: "generalConditions", label: "General conditions / site", category: "general_conditions", basisCents: 630_000 },
+  { id: "tile", label: "Tile allowance", category: "allowance", basisCents: 400_000 },
+  { id: "plumbingFixtures", label: "Plumbing fixtures allowance", category: "allowance", basisCents: 350_000 },
+  { id: "lighting", label: "Lighting allowance", category: "allowance", basisCents: 280_000 },
+];
+
+const HALVORSEN_PARTS = (): AgreementPart[] => [
+  part({
+    partKey: "patina.pricing_basis",
+    position: 1,
+    kind: "schedule",
+    variant: "pricing_basis",
+    title: "Pricing basis",
+    payload: {
+      basis: "cost_plus_gmp",
+      feeBps: 1800,
+      gmpCents: 8_413_400,
+      costLines: HALVORSEN_COST_LINES,
+      subDisclosure: "closed_book",
+      scheduleOfValues: [
+        { id: "kitchen", label: "Kitchen", cents: 6_400_000 },
+        { id: "mudroom", label: "Mudroom", cents: 2_013_400 },
+      ],
+    },
+  }),
+  part({
+    partKey: "patina.draws",
+    position: 2,
+    kind: "schedule",
+    variant: "draws",
+    title: "Draw schedule",
+    payload: {
+      retainageBps: 500,
+      draws: [
+        { key: "deposit", label: "Deposit at signing", pct: 10, sortOrder: 1, retainageApplies: false },
+        { key: "rough_in", label: "Rough-in", pct: 30, sortOrder: 2, retainageApplies: true },
+      ],
+    },
+  }),
+  part({
+    partKey: "patina.allowances",
+    position: 3,
+    kind: "schedule",
+    variant: "allowances",
+    title: "Allowances",
+    payload: {
+      allowances: [
+        {
+          id: "tile",
+          label: "Tile allowance",
+          amountCents: 400_000,
+          overageRule: "change_order",
+          underageRule: "credit",
+        },
+      ],
+    },
+  }),
+];
+
+describe("W3R1-04 · the turnkey preview reads as the homeowner's paper", () => {
+  it("names itself a design-build agreement and closes with the turnkey boundary", () => {
+    render(
+      <ServiceAgreementPreview
+        document={TURNKEY_DOCUMENT}
+        terms={terms}
+        rates={[]}
+        signatures={[]}
+        parts={HALVORSEN_PARTS()}
+      />,
+    );
+    expect(screen.getByText(/Design-build agreement/)).toBeInTheDocument();
+    expect(
+      screen.getByText(DESIGN_BUILD_PAPER_COPY.boundary),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/outside this design services agreement/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("prints the guaranteed maximum price, the schedule of values and its total", () => {
+    render(
+      <AgreementPartsBody parts={HALVORSEN_PARTS()} currency="USD" turnkey />,
+    );
+    expect(screen.getByText("Guaranteed maximum price")).toBeInTheDocument();
+    // Twice: the contract sum the basis names, and the schedule of values'
+    // own total. They are the same figure, and that is the invariant.
+    expect(screen.getAllByText("$84,134")).toHaveLength(2);
+    expect(screen.getByText("Cost basis")).toBeInTheDocument();
+    expect(screen.getByText("$71,300")).toBeInTheDocument();
+    expect(screen.getByText("Fee 18%")).toBeInTheDocument();
+    expect(screen.getByText("$12,834")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Schedule of values" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Kitchen")).toBeInTheDocument();
+    expect(screen.getByText("$64,000")).toBeInTheDocument();
+    expect(screen.getByText("Mudroom")).toBeInTheDocument();
+    expect(screen.getByText("$20,134")).toBeInTheDocument();
+    expect(screen.getByText("The whole of it")).toBeInTheDocument();
+  });
+
+  it("prints the draws and the allowances, and never the recorded line for them", () => {
+    render(
+      <AgreementPartsBody parts={HALVORSEN_PARTS()} currency="USD" turnkey />,
+    );
+    expect(screen.getByText("Deposit at signing")).toBeInTheDocument();
+    expect(screen.getByText("10%")).toBeInTheDocument();
+    expect(screen.getByText("Rough-in")).toBeInTheDocument();
+    expect(screen.getByText("30%")).toBeInTheDocument();
+    expect(screen.getByText("Tile allowance")).toBeInTheDocument();
+    expect(screen.getByText("$4,000")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Anything over this amount needs a change order first. Anything under it comes back to you.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(AGREEMENT_PART_COPY.recorded),
+    ).not.toBeInTheDocument();
+  });
+
+  it("leaves a services agreement exactly as it was — the turnkey leaves are class-scoped", () => {
+    render(<AgreementPartsBody parts={HALVORSEN_PARTS()} currency="USD" />);
+    expect(screen.getAllByText(AGREEMENT_PART_COPY.recorded).length).toBe(3);
+    expect(
+      screen.queryByRole("heading", { name: "Schedule of values" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+/* ── R51 · W3R2-03 — THE STUDIO PREVIEWS THE REDACTED PAPER ──────────────────
+   W3R1-04 routed the preview through the design-build body but not through the
+   client's PROJECTION. The walk read the same document minutes apart: the
+   studio's rail and its /doc preview both printed "Cost basis $71,300 · Fee
+   18% $12,834 · GUARANTEED MAXIMUM PRICE $84,134"; the homeowner's own copy of
+   that paper printed the guaranteed maximum price and nothing else. The door
+   is right (R41); the preview was not.
+
+   `redactPartsForClient` is the TypeScript twin of
+   `_agreement_redact_client_payload` (00578), and these cases pin both halves
+   of what it does — and that an OPEN book, which elected disclosure, still
+   shows everything. ── */
+
+describe("R51 · the studio previews the paper, not the row", () => {
+  const previewOf = (parts: AgreementPart[]) =>
+    render(
+      <ServiceAgreementPreview
+        document={TURNKEY_DOCUMENT}
+        terms={terms}
+        rates={[]}
+        signatures={[]}
+        parts={parts}
+      />,
+    );
+
+  it("drops the cost basis and the fee under a closed book, and keeps the price", () => {
+    previewOf(HALVORSEN_PARTS());
+    expect(screen.getByText("Guaranteed maximum price")).toBeInTheDocument();
+    // Twice, as ever: the contract sum, and the schedule of values' total.
+    expect(screen.getAllByText("$84,134")).toHaveLength(2);
+    expect(screen.queryByText("Cost basis")).not.toBeInTheDocument();
+    expect(screen.queryByText("$71,300")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fee 18%")).not.toBeInTheDocument();
+    expect(screen.queryByText("$12,834")).not.toBeInTheDocument();
+  });
+
+  it("keeps the studio's own schedule of values, which is what she reads instead", () => {
+    previewOf(HALVORSEN_PARTS());
+    expect(
+      screen.getByRole("heading", { name: "Schedule of values" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Kitchen")).toBeInTheDocument();
+    expect(screen.getByText("$64,000")).toBeInTheDocument();
+    expect(screen.getByText("Mudroom")).toBeInTheDocument();
+    expect(screen.getByText("$20,134")).toBeInTheDocument();
+  });
+
+  it("withholds nothing under an open book — that is what the clause elected", () => {
+    const openBook = HALVORSEN_PARTS().map((entry) =>
+      entry.variant === "pricing_basis"
+        ? {
+            ...entry,
+            payload: { ...entry.payload, subDisclosure: "open_book" },
+          }
+        : entry,
+    );
+    previewOf(openBook);
+    expect(screen.getByText("Cost basis")).toBeInTheDocument();
+    expect(screen.getByText("$71,300")).toBeInTheDocument();
+    expect(screen.getByText("Fee 18%")).toBeInTheDocument();
+  });
+
+  it("never draws a part the studio hid from its client", () => {
+    const hidden = HALVORSEN_PARTS().map((entry) =>
+      entry.variant === "allowances"
+        ? { ...entry, clientVisible: false }
+        : entry,
+    );
+    previewOf(hidden);
+    expect(screen.queryByText("Tile allowance")).not.toBeInTheDocument();
+    expect(screen.getByText("Deposit at signing")).toBeInTheDocument();
   });
 });

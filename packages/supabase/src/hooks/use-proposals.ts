@@ -19,6 +19,12 @@ import type {
   ProposalPhase,
   ProposalScopeRoom,
 } from './use-scope-builder';
+/** One declaration of the six kinds, in `@patina/types`. The union was
+ *  retyped here and had already drifted — it never learned `'trade_scope'`,
+ *  so every reader of a trade scope's row saw a kind TypeScript said could
+ *  not exist. Reading the shared type instead is what stops it drifting a
+ *  second time when Wave 3 adds `'design_build'`. */
+import type { CommercialDocumentKind } from '@patina/types';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -247,7 +253,7 @@ export interface Proposal {
    * pre-migration; a legacy row's `commercial_state` is a vestigial projection
    * and must never be trusted over its historical `status` semantics — see
    * commercialSummaryFromProposal in the client portal. */
-  document_kind?: 'legacy' | 'design_services' | 'furnishings_authorization' | 'service_addendum';
+  document_kind?: CommercialDocumentKind;
   /** No 'expired' — the DB CHECK (00414) retired it; expiry stays a
    * lazily-evaluated client derivation (see legacyStatusToCommercialState),
    * never a stored commercial_state. */

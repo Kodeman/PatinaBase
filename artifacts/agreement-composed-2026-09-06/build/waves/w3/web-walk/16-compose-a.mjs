@@ -1,0 +1,89 @@
+import { launch, shot, dismissOverlays, HERE } from './lib.mjs';
+import fs from 'node:fs';
+
+const LINES = [
+  ['Cabinetry & millwork', 'sub', '38000'],
+  ['Electrical', 'sub', '9500'],
+  ['Plumbing', 'sub', '7200'],
+  ['General conditions / site', 'general_conditions', '6300'],
+  ['Tile allowance', 'allowance', '4000'],
+  ['Plumbing fixtures allowance', 'allowance', '3500'],
+  ['Lighting allowance', 'allowance', '2800'],
+];
+const DRAWS = [
+  ['Deposit at signing', '10', false],
+  ['Rough-in', '30', true],
+  ['Cabinets set', '40', true],
+  ['Substantial completion', '20', true],
+];
+const ALLOWANCES = [
+  ['Tile allowance', '4000'],
+  ['Plumbing fixtures allowance', '3500'],
+  ['Lighting allowance', '2800'],
+];
+
+const url = fs.readFileSync(`${HERE}/room-url.txt`, 'utf8').trim();
+const { browser, ctx } = await launch({ state: `${HERE}/designer-state.json` });
+const page = await ctx.newPage();
+page.on('pageerror', (e) => console.log('PAGEERR:', String(e).slice(0, 300)));
+page.on('response', async (r) => {
+  if (r.url().includes('/rest/v1/rpc/upsert_agreement_parts')) {
+    let b = ''; try { b = (await r.text()).slice(0, 400); } catch {}
+    console.log('RPC upsert_agreement_parts', r.status(), b);
+  }
+});
+
+const centre = () =>
+  page.evaluate(() => {
+    const main = document.querySelector('nav[aria-label="Agreement parts"]')?.parentElement;
+    return main ? main.children[1].innerText : '';
+  });
+const openPart = async (name) => {
+  await page.locator('nav[aria-label="Agreement parts"] button', { hasText: name }).first().click();
+  await page.waitForTimeout(900);
+};
+
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(10000);
+await dismissOverlays(page);
+
+// ---- STEP 5: pricing basis
+await openPart('Pricing basis');
+await page.getByRole('button', { name: 'Cost-plus with GMP', exact: true }).click();
+await page.waitForTimeout(500);
+await page.getByLabel('Fee percent').fill('18');
+for (let i = 0; i < LINES.length; i += 1) {
+  await page.getByRole('button', { name: '+ Add a cost line' }).click();
+  await page.waitForTimeout(350);
+  const n = i + 1;
+  await page.getByLabel(`Cost line ${n}`, { exact: true }).fill(LINES[i][0]);
+  await page.selectOption(`select[aria-label="Cost line ${n} category"]`, LINES[i][1]);
+  await page.getByLabel(`Cost line ${n} amount`, { exact: true }).fill(LINES[i][2]);
+}
+await page.getByLabel('GMP dollars').fill('84134');
+await page.waitForTimeout(1200);
+console.log('\n=== STEP5 · pricing basis, no disclosure yet ===');
+console.log(await centre());
+await shot(page, '16a-pricing-basis');
+
+// ---- open-book first (build sheet step 5 expects a computed SOV)
+await openPart('Who does the work');
+await page.getByRole('button', { name: 'Open-book', exact: true }).click();
+await page.waitForTimeout(900);
+await openPart('Pricing basis');
+await page.waitForTimeout(1200);
+console.log('\n=== STEP5 · SOV under OPEN-BOOK ===');
+console.log(await centre());
+await shot(page, '16b-sov-open-book');
+
+// ---- STEP 8 (part one): closed-book
+await openPart('Who does the work');
+await page.getByRole('button', { name: 'Closed-book', exact: true }).click();
+await page.waitForTimeout(900);
+await openPart('Pricing basis');
+await page.waitForTimeout(1200);
+console.log('\n=== STEP5 · SOV under CLOSED-BOOK ===');
+console.log(await centre());
+await shot(page, '16c-sov-closed-book');
+
+await browser.close();

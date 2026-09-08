@@ -143,6 +143,18 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
     );
   }
 
+  // W3R1-01 — the Room now admits a turnkey prime PAST draft, for its ledger.
+  // The seven-facet editor is a draft's room and only a draft's: with
+  // `agreement-parts` off, a sent or executed document would otherwise open
+  // seven editable facets over a paper the client has already read. The
+  // composer above is where its ledger lives; this is the honest dead end
+  // when the flag that mounts the composer has not reached this reader.
+  if (bundle.data.document.state !== "draft") {
+    return (
+      <AgreementGate message="This agreement has left the studio. Its record opens in the Contract Room." />
+    );
+  }
+
   return (
     <ServiceAgreementEditor
       key={`${bundle.data.terms?.updatedAt ?? "new"}-${bundle.data.rates.length}`}

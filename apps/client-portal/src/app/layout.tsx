@@ -49,8 +49,8 @@ const supabaseOriginRuntime =
 // The layout fetches nothing. It used to read every project for the header's
 // switcher; the header is gone, the one page reads its own house, and the
 // fetch ran `auth.getUser()` + a projects select + counts on EVERY request —
-// the token and guest routes (/share, /field, /rfq, /plans, /piece, /evidence)
-// included, where the answer is always [].
+// the token and guest routes (/share, /field, /rfq, /trade, /pay, /plans,
+// /piece, /evidence) included, where the answer is always [].
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" className="bg-[var(--bg-primary)]">

@@ -1,0 +1,476 @@
+room url at client_signed: http://localhost:3000/drafting/95390bd8-86e4-4a0b-9595-9dd5657cc51e
+=== THE ROOM AT client_signed ===
+Skip to the paper
+←
+THE DESK
+THE CONTRACT ROOM · DESIGN AGREEMENT
+· 0 of 10 parts need attention
+REVIEW & SEND
+→
+
+YES TO THE DESIGNER · PROFESSIONAL SERVICES ONLY
+
+Client User — design services agreement
+
+Compose the parts this agreement is made of. Furnishings and purchasing stay outside it.
+
+Preview client copy
+Saved
+
+CLIENT ACCOUNT
+
+Client User
+
+This agreement has left the studio. Its parts are fixed as sent.
+
+⠿
+PRICING BASIS · RECORD ONLY
+Pricing basis·
+⠿
+DRAWS · RECORD ONLY
+Draw schedule·
+⠿
+ALLOWANCES · RECORD ONLY
+Allowances
+⠿
+CLAUSE
+Who does the work·
+⠿
+CLAUSE
+Supervision·
+⠿
+CLAUSE
+Change orders·
+⠿
+CLAUSE
+Termination·
+⠿
+CLAUSE
+Terms·
+⠿
+ATTACHMENT
+Notice of cancellation
+HIDDEN FROM YOUR CLIENT
+⠿
+ATTACHMENT
+Lien waiver form
+
+PRICING BASIS · RECORD ONLY
+
+Pricing basis
+
+HOW THIS AGREEMENT IS PRICED
+
+Fixed price
+Cost-plus
+Cost-plus with GMP
+Time and materials with a not-to-exceed
+FEE · PERCENT
+MARKUP ON THE TRADES · PERCENT
+GMP · DOLLARS
+
+COST LINES
+
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
++ Add a cost line
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+SCHEDULE OF VALUES · WHAT YOUR CLIENT READS
+
+Your own division of the work — a room, a phase, or one line for the whole of it. It comes to the contract sum, and it is not the cost lines above.
+
+Remove
++ Add a line
+YOUR CLIENT’S TOTAL
+$84,134.00
+
+SCHEDULE OF VALUES
+
+Closed-book — your client reads the lines you wrote, not the trades' costs.
+
+Construction
+$84,134.00
+GMP
+$84,134.00
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Edited · Leah · today
+Added · Leah · today
+Materialized from Design-build turnkey
+
+0 OF 10 PARTS NEED ATTENTION
+
+Only a draft agreement can be sent.
+
+JURISDICTION NOTICES
+
+Notice of cancellation (Wisconsin)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Minnesota)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Illinois)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (California)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (New York)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Massachusetts)
+HELD FOR COUNSEL REVIEW
+
+DRAWS
+
+Deposit at signing
+$8,413.40
+PAID
+Rough-in
+$23,978.19
+NOT YET BILLED
+$1,262.01 held
+Cabinets set
+$31,970.92
+NOT YET BILLED
+$1,682.68 held
+Substantial completion
+$15,985.46
+NOT YET BILLED
+$841.34 held
+Final · retainage release
+$3,786.03
+NOT YET BILLED
+
+LIEN WAIVERS
+
+Deposit at signing
+$8,413.40
+Record a waiver
+Rough-in
+$23,978.19
+Record a waiver
+Cabinets set
+$31,970.92
+Record a waiver
+Substantial completion
+$15,985.46
+Record a waiver
+Final · retainage release
+$3,786.03
+Record a waiver
+
+TRADE AGREEMENTS
+
+Trade Agreements open once this agreement is executed and its project exists.
+
+THE CLIENT'S COPY · LIVE
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+CLIENT SIGNED
+
+Pricing basis
+
+The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.
+
+Cost basis
+$71,300
+Fee 18%
+$12,834
+
+GUARANTEED MAXIMUM PRICE
+
+$84,134
+
+Schedule of values
+Construction
+$84,134
+The whole of it
+$84,134
+Draw schedule
+Deposit at signing
+10%
+Rough-in
+30%
+Cabinets set
+40%
+Substantial completion
+20%
+Allowances
+Tile allowance
+$4,000
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Plumbing fixtures allowance
+$3,500
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Lighting allowance
+$2,800
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequenc
+
+room carries DRAWS ledger: true
+room carries TRADE AGREEMENTS: true
+
+=== /doc AT client_signed ===
+Skip to the paper
+←
+PUT DOWN
+
+Client User
+
+PROPOSAL
+
+The proposal
+SENT SEP 8
+Scope & engagement
+CORE · STAGE 03
+Design vision
+NOTHING YET
+The investment
+$84,134
+The record
+3 COMPLETE
+Client User — design services agreement
+for Client User↗
+
+$84,134 proposed
+
+MESSAGE
+
+$84,134
+
+Countersign the design agreement
+REVIEW COUNTERSIGN CONTROLS
++1 MORE
+
+V1 · AWAITING SIGNATURE
+
+The proposal
+
+Sent Sep 8 · not opened
+
+AWAITING COUNTERSIGN
+
+CLIENT SIGNED
+
+Client consent is preserved. The agreement is awaiting the studio countersignature; work is not yet authorized.
+
+OPEN THE CONTRACT ROOM
+→
+PREVIEW CLIENT COPY
+
+Countersign for the studio
+
+This final act creates one project and one billing authority. It is safe to retry.
+
+Countersign agreement
+
+IMPACT
+
+The schedule effect cannot be computed here — this act proposes a date rather than setting one.
+
+FOLIO
++ FILE
+
+Scope & engagement
+
+Core · stage 03
+
+CORE · 03
+
+Design vision
+
+Not written yet
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+CLIENT SIGNED
+
+Pricing basis
+
+The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.
+
+Cost basis
+$71,300
+Fee 18%
+$12,834
+
+GUARANTEED MAXIMUM PRICE
+
+$84,134
+
+Schedule of values
+Construction
+$84,134
+The whole of it
+$84,134
+Draw schedule
+Deposit at signing
+10%
+Rough-in
+30%
+Cabinets set
+40%
+Substantial completion
+20%
+Allowances
+Tile allowance
+$4,000
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Plumbing fixtures allowance
+$3,500
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Lighting allowance
+$2,800
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequence of work, and answers for the result.
+
+Change orders
+
+A change to the scope, the schedule or the sum is agreed in writing before the work is done, and is recorded against this agreement.
+
+Termination
+
+Either party may end this engagement in writing. Work performed and materials ordered to that date remain payable.
+
+Terms
+
+Invoices are due on receipt. Work proceeds against the draw schedule above. Wisconsin law governs this agreement.
+
+ATTACHMENT A · LIEN WAIVER FORM
+
+Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.
+
+I received this
+
+CLIENT SIGNATURE
+
+Client User
+
+STUDIO SIGNATURE
+
+Awaiting
+
+This agreement covers the work described above, at the price shown. Anything added to it is a separate written change order before the work is done.
+
+The investment
+
+$84,134
+
+The record
+
+3 complete
+
+OPEN THE RECORD
+MARGIN
+←
+
+IN THE MARGIN
+
+CLOSE
++ NOTE
+
+The margin — decisions, messag
+ACTS: [
+ {
+  "key": "message-family",
+  "text": "MESSAGE",
+  "disabled": false
+ },
+ {
+  "key": "lens-band-guide",
+  "text": "REVIEW COUNTERSIGN CONTROLS",
+  "disabled": false
+ },
+ {
+  "key": "edit-design-agreement",
+  "text": "OPEN THE CONTRACT ROOM\n→",
+  "disabled": false
+ },
+ {
+  "key": "preview-design-agreement",
+  "text": "PREVIEW CLIENT COPY",
+  "disabled": false
+ },
+ {
+  "key": "upload-proposal-folio-file",
+  "text": "+ FILE",
+  "disabled": false
+ },
+ {
+  "key": "toggle-record",
+  "text": "OPEN THE RECORD",
+  "disabled": false
+ },
+ {
+  "key": "new-margin-note",
+  "text": "+ NOTE",
+  "disabled": false
+ },
+ {
+  "key": "message-family",
+  "text": "Message Client User",
+  "disabled": false
+ }
+]

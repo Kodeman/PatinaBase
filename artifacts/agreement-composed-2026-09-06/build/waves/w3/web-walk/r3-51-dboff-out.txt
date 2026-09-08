@@ -1,0 +1,112 @@
+dboff servicesRoom bytes 83396 · turnkeyRoom bytes 81823 · door bytes 45123
+--- services room text ---
+Skip to the paper
+←
+THE DESK
+THE CONTRACT ROOM · DESIGN AGREEMENT
+· 2 of 9 parts need attention
+REVIEW & SEND
+→
+
+YES TO THE DESIGNER · PROFESSIONAL SERVICES ONLY
+
+Client User — design services agreement
+
+Compose the parts this agreement is made of. Furnishings and purchasing stay outside it.
+
+Preview client copy
+Return to the seven facets
+Saved
+
+CLIENT ACCOUNT
+
+Client User
+⠿
+CLAUSE
+Services·
+⋯
+⠿
+LIST
+Deliverables
+⋯
+⠿
+LIST
+Exclusions
+⋯
+⠿
+ROLE RATES · CREATES AUTHORITY
+Role rates
+⋯
+⠿
+CEILING · CREATES AUTHORITY
+Ceiling
+⋯
+⠿
+FURNISHINGS DEPOSIT · CREATES AUTHORITY · DEPOSIT ONLY
+Furnishings deposit
+⋯
+⠿
+RETAINER · CREATES AUTHORITY
+Retainer
+NEEDS ATTENTION
+⋯
+⠿
+BILLING CADENCE · CREATES AUTHORITY
+Billing cadence
+⋯
+⠿
+CLAUSE
+Terms·
+NEEDS ATTENTION
+⋯
++ Add a partStart from a template…
+Save as template…
+
+CLAUSE
+
+Services
+BODY
+
+2 OF 9 PARTS NEED ATTENTION
+
+This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+No furnishings deposit set — authorizations will default to 50%.
+
+THE CLIENT'S COPY · LIVE
+
+DESIGN SERVICES AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Services
+
+Interior design services, including concept development, design documentation, and selections.
+
+Deliverables
+— Concept presentation
+— Design documentation
+— Selection schedules
+Exclusions
+— Construction labor
+— Furnishings, freight, tax, and installation
+Role rates
+
+Recorded with your agreement.
+
+Ceiling
+
+No ceiling — professional time is billed as it is worked.
+
+Retainer
+
+Recorded with your agreement.
+
+Billing cadence
+
+Monthly
+
+Additional work require

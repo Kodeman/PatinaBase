@@ -33,10 +33,25 @@ export function consentLineFor(kind: CommercialDocumentKind): string {
   if (kind === 'design_services' || kind === 'service_addendum') {
     return 'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.';
   }
+  // Wave 3, P9. A turnkey prime is its own class and must not fall through to
+  // the sentence above (which says "design-services terms" over a paper that
+  // carries none) or to the generic fallback below — the generic sentence is
+  // exactly what a missed branch looks like on the signing surface, and the
+  // walk's step 12 asserts against it by name.
+  if (kind === 'design_build') {
+    return 'I agree to these design-build terms and understand my signature alone does not authorize work until the studio countersigns.';
+  }
   return 'I agree to the scope and investment in this proposal.';
 }
 
-/** The word on the act itself. */
+/**
+ * The word on the act itself.
+ *
+ * `design_build` takes 'Sign and accept', deliberately and not by accident: a
+ * turnkey prime is COUNTERSIGNED, so the client's signature does not itself
+ * authorize anyone to begin — which is the whole difference between this word
+ * and the trade scope's 'Sign and authorize'. Pinned in the drift test.
+ */
 export function signLabelFor(kind: CommercialDocumentKind): string {
   if (kind === 'furnishings_authorization') return 'Sign authorization';
   if (kind === 'trade_scope') return 'Sign and authorize';
@@ -56,6 +71,9 @@ export function summaryLineFor(kind: CommercialDocumentKind, title: string): str
   if (kind === 'trade_scope') {
     return `By signing, you authorize the scope of work, price, and draw schedule in “${title}”.`;
   }
+  if (kind === 'design_build') {
+    return `By signing, you accept the pricing basis, schedule of values, draw schedule, and retainage in “${title}”. The agreement becomes effective only after the studio countersigns.`;
+  }
   return `By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in “${title}”. The agreement becomes effective only after the studio countersigns.`;
 }
 
@@ -70,6 +88,7 @@ export const KIND_LABEL: Partial<Record<CommercialDocumentKind, string>> = {
   furnishings_authorization: 'Furnishings authorization',
   service_addendum: 'Design services addendum',
   trade_scope: 'Trade scope',
+  design_build: 'Design-build agreement',
 };
 
 /**
@@ -205,6 +224,163 @@ function consentFragment(part: ConsentPart): string | null {
   }
 }
 
+/* ── THE TURNKEY CLASS'S OWN MONEY PARTS (Wave 3, P9) ────────────────────────
+   A design-build agreement carries none of the six variants above: no rate
+   card, no ceiling by default, no furnishings deposit. What it carries is a
+   PRICING BASIS (which the schedule of values is derived from), a DRAW
+   SCHEDULE with retainage, and ALLOWANCES — R9 makes all three record-only for
+   billing purposes, but they are precisely what the homeowner is consenting
+   to, and a sentence that named none of them would be the generic fallback in
+   disguise.
+
+   Two parts each say two things, so this returns a LIST rather than the single
+   fragment `consentFragment` returns: the pricing basis names both the price
+   it sets and the schedule of values built from its cost lines; the draw
+   schedule names both the draws and the retainage withheld from them.
+
+   The same parity rule the services composer lives under applies here: this is
+   `public.compose_agreement_consent(uuid)` written a second time, in a second
+   language, and the two may not drift. Canonical order, never the designer's
+   part order; zero fragments returns `consentLineFor('design_build')`
+   byte-for-byte.
+   ────────────────────────────────────────────────────────────────────────── */
+/**
+ * THE VARIANTS THE TURNKEY SENTENCE IS MADE OF, IN THE ORDER IT SAYS THEM.
+ *
+ * The SQL half — `public.compose_agreement_consent(uuid)`'s `design_build`
+ * arm — reads exactly these three parts, one query each, in exactly this
+ * order, and has NO retainer arm and NO ceiling arm: a turnkey prime's money
+ * is the basis, the draws and the allowances, and anything else the studio
+ * hangs on the paper is consented to by the paper rather than named a second
+ * time in the sentence. This list used to carry `retainer` and `ceiling`; the
+ * SQL never did, so the door said a term the filed sentence omitted.
+ *
+ * The door renders THIS sentence; the sign route files the DATABASE's
+ * (`sign/route.ts` reads `p_consent.consentSentence` off the bundle) and the
+ * record prints that one back to her (R36). Anything the two halves do not
+ * share reaches a homeowner as one sentence ticked and a different one kept.
+ */
+export const DESIGN_BUILD_VARIANT_ORDER: readonly string[] = [
+  'pricing_basis',
+  'draws',
+  'allowances',
+];
+
+/**
+ * The price a pricing basis sets, in the basis's own words — the SQL arm's
+ * `CASE COALESCE(v_basis->>'basis', '')`, byte for byte.
+ */
+export const DESIGN_BUILD_BASIS_FRAGMENT: Record<string, string> = {
+  fixed: 'the fixed contract sum',
+  cost_plus: 'the cost-plus pricing basis',
+  cost_plus_gmp: 'the cost-plus pricing basis and its guaranteed maximum price',
+  tm_nte: 'the time-and-materials basis and its not-to-exceed amount',
+};
+
+/**
+ * The SQL CASE's `ELSE`. Unreachable in BOTH halves and carried anyway so the
+ * two CASEs are one CASE: a basis outside the four names no contract sum, and
+ * the fragment is only ever said when that sum is above zero.
+ */
+const UNNAMED_BASIS_FRAGMENT = 'the pricing basis';
+
+/** `public._agreement_is_int(jsonb)` — a JSON number with nothing after the point. */
+function consentInt(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/**
+ * `public._agreement_contract_sum_cents(jsonb)` written a second time, over
+ * the payload the door was actually handed.
+ *
+ * R40 — ONE SENTENCE, FROM WHAT SHE READS. `get_client_commercial_document_
+ * bundle` redacts a turnkey pricing basis before it crosses to the client:
+ * under anything but open book the cost lines, the fee, the sub markup and
+ * the cost basis stay behind, and `contractSumCents` and `scheduleOfValues`
+ * are projected in their place. So the projected sum is read FIRST — on a
+ * plain `cost_plus` basis it is the only sum this payload carries — and the
+ * basis-by-basis derivation is the open-book and authored-payload path.
+ * `compose_agreement_consent` reads the same two keys off the same redaction,
+ * so the sentence she ticks is the sentence her signature row keeps.
+ *
+ * Postgres `round()` on a positive numeric and `Math.round` on a positive
+ * number agree, and `feeBps` is validated to 0–5000, so the cost-plus arm
+ * cannot part company with the database over a half-cent.
+ */
+function designBuildContractSumCents(payload: Record<string, unknown>): number | null {
+  const projected = consentInt(payload.contractSumCents);
+  if (projected !== null) return projected;
+  const basis = typeof payload.basis === 'string' ? payload.basis.trim() : '';
+  if (basis === 'fixed') return consentInt(payload.fixedCents);
+  if (basis === 'cost_plus_gmp') return consentInt(payload.gmpCents);
+  if (basis === 'tm_nte') return consentInt(payload.nteCents);
+  if (basis === 'cost_plus') {
+    const costBasisCents = consentInt(payload.costBasisCents);
+    const feeBps = consentInt(payload.feeBps);
+    if (costBasisCents === null || feeBps === null) return null;
+    return costBasisCents + Math.round((costBasisCents * feeBps) / 10000);
+  }
+  return null;
+}
+
+function designBuildFragments(part: ConsentPart): string[] {
+  switch (part.variant) {
+    case 'pricing_basis': {
+      const sum = designBuildContractSumCents(part.payload);
+      if (sum === null || sum <= 0) return [];
+      const basis = typeof part.payload.basis === 'string' ? part.payload.basis : '';
+      // R40: the schedule of values is the PROJECTED array — the one the body
+      // beneath this sentence prints — in both disclosure modes. A payload
+      // that carries no projection at all (an authored row read outside the
+      // bundle) falls back to its cost lines, which is what the projection
+      // would have been derived from.
+      const projectedLines = Array.isArray(part.payload.scheduleOfValues)
+        ? consentRows(part.payload.scheduleOfValues)
+        : consentRows(part.payload.costLines);
+      return [
+        DESIGN_BUILD_BASIS_FRAGMENT[basis] ?? UNNAMED_BASIS_FRAGMENT,
+        // Nested inside the priced branch exactly as the SQL nests it: a
+        // schedule of values is the breakdown OF a contract sum, and a paper
+        // that names no sum names no schedule of values either.
+        ...(projectedLines.length > 0 ? ['the schedule of values'] : []),
+      ];
+    }
+    case 'draws': {
+      if (consentRows(part.payload.draws).length === 0) return [];
+      const retainageBps = consentCents(part.payload.retainageBps);
+      return [
+        'the draw schedule',
+        ...(retainageBps !== null && retainageBps > 0
+          ? ['the retainage withheld from each draw']
+          : []),
+      ];
+    }
+    case 'allowances':
+      return consentRows(part.payload.allowances).length > 0
+        ? ['the allowances and what happens if they run over']
+        : [];
+    default:
+      // The SQL arm has no other arm. A retainer or a ceiling the studio hangs
+      // on a turnkey prime is on the paper and consented to by the paper; it is
+      // not named in this sentence, on either side.
+      return [];
+  }
+}
+
+/**
+ * THE PIN, AND THE ONLY LITERAL EITHER HALF MAY BE COMPARED AGAINST.
+ *
+ * The Halvorsen kitchen and mudroom (`source/fixtures.json`): a cost-plus
+ * basis with a guaranteed maximum, seven cost lines behind a schedule of
+ * values, four draws at 5% retainage, three allowances. The SQL half asserts
+ * this exact string off the signature row it filed
+ * (`supabase/tests/commercial/design_build_test.sql`, T13) and the jest half
+ * asserts `composeConsentLine` returns it. Two implementations, one sentence:
+ * either one moving turns the other red.
+ */
+export const HALVORSEN_DESIGN_BUILD_CONSENT =
+  'I agree to these design-build terms, the cost-plus pricing basis and its guaranteed maximum price, the schedule of values, the draw schedule, the retainage withheld from each draw, and the allowances and what happens if they run over, and understand my signature alone does not authorize work until the studio countersigns.';
+
 /** A, "A and B", "A, B, and C" — the door's own list grammar. */
 function oxford(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? '';
@@ -221,16 +397,31 @@ export function composeConsentLine(
   kind: CommercialDocumentKind,
   parts: readonly ConsentPart[] | null | undefined,
 ): string {
-  // Wave 2 composes for the two services kinds only. A furnishings
-  // authorization or a trade scope keeps its own consent, whatever parts a
-  // later wave hangs on it.
-  if (kind !== 'design_services' && kind !== 'service_addendum') {
+  // A furnishings authorization or a trade scope keeps its own consent,
+  // whatever parts a later wave hangs on it.
+  if (
+    kind !== 'design_services' &&
+    kind !== 'service_addendum' &&
+    kind !== 'design_build'
+  ) {
     return consentLineFor(kind);
   }
 
   const money = (parts ?? []).filter(
     (part) => part.kind === 'schedule' && part.clientVisible === true,
   );
+
+  if (kind === 'design_build') {
+    const turnkey = DESIGN_BUILD_VARIANT_ORDER.flatMap((variant) => {
+      const part = money.find((candidate) => candidate.variant === variant);
+      return part ? designBuildFragments(part) : [];
+    });
+    if (turnkey.length === 0) return consentLineFor(kind);
+    return `I agree to ${oxford([
+      'these design-build terms',
+      ...turnkey,
+    ])}, and understand my signature alone does not authorize work until the studio countersigns.`;
+  }
 
   const fragments: string[] = [];
   for (const variant of CONSENT_VARIANT_ORDER) {
@@ -274,6 +465,18 @@ const SUMMARY_FRAGMENT: Record<string, string> = {
   'the retainer, which is not refundable': 'retainer',
   'the replenishing retainer': 'retainer',
   'the furnishings deposit': 'furnishings deposit',
+  // Wave 3 — the turnkey class's own terms, under the same rule: presence is
+  // decided once, in the fragment functions, so the summary can never name a
+  // term the consent line beneath it leaves out.
+  'the cost-plus pricing basis and its guaranteed maximum price': 'guaranteed maximum price',
+  'the time-and-materials basis and its not-to-exceed amount': 'not-to-exceed amount',
+  'the fixed contract sum': 'fixed contract sum',
+  'the cost-plus pricing basis': 'cost-plus pricing basis',
+  'the pricing basis': 'pricing basis',
+  'the schedule of values': 'schedule of values',
+  'the draw schedule': 'draw schedule',
+  'the retainage withheld from each draw': 'retainage',
+  'the allowances and what happens if they run over': 'allowances',
 };
 
 /**
@@ -305,10 +508,13 @@ export function composeSummaryLine(
   title: string,
   parts: readonly ConsentPart[] | null | undefined,
 ): string {
-  // Wave 2 composes for the two services kinds only; a furnishings
-  // authorization and a trade scope keep their own summary whatever parts a
-  // later wave hangs on them.
-  if (kind !== 'design_services' && kind !== 'service_addendum') {
+  // A furnishings authorization and a trade scope keep their own summary
+  // whatever parts a later wave hangs on them.
+  if (
+    kind !== 'design_services' &&
+    kind !== 'service_addendum' &&
+    kind !== 'design_build'
+  ) {
     return summaryLineFor(kind, title);
   }
 
@@ -318,6 +524,22 @@ export function composeSummaryLine(
   const money = all.filter(
     (part) => part.kind === 'schedule' && part.clientVisible === true,
   );
+
+  if (kind === 'design_build') {
+    const nouns = DESIGN_BUILD_VARIANT_ORDER.flatMap((variant) => {
+      const part = money.find((candidate) => candidate.variant === variant);
+      if (!part) return [];
+      return designBuildFragments(part).flatMap((consented) => {
+        const noun = SUMMARY_FRAGMENT[consented];
+        return noun ? [noun] : [];
+      });
+    });
+    return `By signing, you accept ${oxford([
+      'the work described',
+      ...nouns,
+      `terms in “${title}”`,
+    ])}. The agreement becomes effective only after the studio countersigns.`;
+  }
 
   const fragments: string[] = [];
   for (const variant of CONSENT_VARIANT_ORDER) {

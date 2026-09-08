@@ -13,6 +13,10 @@ const PUBLIC_PREFIXES = [
   '/share',
   '/field',
   '/rfq',
+  // '/trade' is the subcontractor's Trade Agreement link (Wave 3 · P14, R16):
+  // a bearer-token guest surface with a signature act on it, opened with no
+  // session at all.
+  '/trade',
   '/plans',
   '/pay',
   '/evidence',

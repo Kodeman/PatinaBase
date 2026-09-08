@@ -7,6 +7,7 @@ import {
   useDeclineProposal,
   useRequestProposalChange,
   useSendMessage,
+  useStartAgreementThread,
   useStartProjectThread,
 } from '@patina/supabase';
 
@@ -34,11 +35,30 @@ import { InstrumentReading } from './instrument-reading';
    means the door has not learned what this paper is yet, so Decline is
    withheld rather than sent down the rail that skips the fail-closed route.
 
-   AN ACT THAT CANNOT COMPLETE IS NOT OFFERED. No project on the paper, no
-   thread to ask in — so no "Ask a question". Past `valid_until`, the old page
-   held every act back (`isActionable`, page.tsx:124-133) even before the
-   expiry job ran, and neither `decline_proposal` nor `request_proposal_change`
-   checks the date itself; the same gate is kept here.
+   AN ACT THAT CANNOT COMPLETE IS NOT OFFERED — AND THE ORIGIN AGREEMENT CAN
+   COMPLETE IT. The rule stands; what changed is the reading of it. This used
+   to withhold "Ask a question" whenever the paper carried no project, and
+   R30's origin door is exactly that paper: an agreement is bound to no project
+   until the studio countersigns, so a household's VERY FIRST paper was the one
+   door in the house that could not ask its studio a question. It could always
+   have asked — there is simply no project thread to ask in, because there is
+   no project yet.
+
+   So the question goes to the studio ON THE AGREEMENT instead:
+   `rpc_start_agreement_thread` (00578) opens (or finds) the direct thread
+   between the homeowner and that agreement's own designer, KEYED BY THE PAPER
+   on `comms_threads.proposal_id` (R47). The RPC resolves the designer off the
+   agreement itself and admits only the client it was sent to, so the browser
+   names no counterpart and a second origin agreement from the same studio
+   opens its own thread rather than folding into the first one's. The letter is
+   the same letter, named after the same paper; only the thread it lands in
+   differs. With neither a project nor a designer to address, the act is still
+   withheld — the rule is intact, its scope was simply wrong.
+
+   Past `valid_until`, the old page held every act back (`isActionable`,
+   page.tsx:124-133) even before the expiry job ran, and neither
+   `decline_proposal` nor `request_proposal_change` checks the date itself; the
+   same gate is kept here.
 
    ASKING IS A LETTER, NOT A ROUTE. `ProposalClarifyButton` started the
    project thread and then navigated to `/messages?thread=…`. The thread is
@@ -59,8 +79,16 @@ type ActKey = 'read' | 'question' | 'change' | 'decline';
 
 export interface DoorActsProps {
   proposalId: string;
-  /** Null on a paper minted from the schedule; the ask then has no thread. */
+  /** Null on a paper minted from the schedule, and on an ORIGIN agreement,
+   *  which is bound to no project until the studio countersigns it. */
   projectId: string | null;
+  /**
+   * R30 — the designer whose studio sent this paper, for a paper that has no
+   * project to hold a thread. The ask then goes to the direct thread between
+   * the two of them. Null where the door does not know one, and the ask is
+   * withheld only when BOTH this and `projectId` are null.
+   */
+  studioProfileId?: string | null;
   /** The paper's own title, carried into the question so the studio knows
    *  which door it was asked at. */
   title: string;
@@ -77,6 +105,7 @@ export interface DoorActsProps {
 export function DoorActs({
   proposalId,
   projectId,
+  studioProfileId = null,
   title,
   kind,
   validUntil,
@@ -85,6 +114,7 @@ export function DoorActs({
   const panelId = `door-acts-${useId().replace(/:/g, '')}`;
 
   const startThread = useStartProjectThread();
+  const startAgreementThread = useStartAgreementThread();
   const sendMessage = useSendMessage();
   const requestChange = useRequestProposalChange();
   const declineLegacy = useDeclineProposal();
@@ -114,7 +144,10 @@ export function DoorActs({
 
   const isLegacy = kind === 'legacy';
   const expired = hasPassed(validUntil);
-  const asking = startThread.isPending || sendMessage.isPending;
+  const asking =
+    startThread.isPending || startAgreementThread.isPending || sendMessage.isPending;
+  /** A project thread, or the studio's own — either is a thread to ask in. */
+  const canAsk = projectId !== null || studioProfileId !== null;
   const declining = declineLegacy.isPending || declineDocument.isPending;
 
   function toggle(key: ActKey, event: MouseEvent<HTMLButtonElement>) {
@@ -134,13 +167,22 @@ export function DoorActs({
       setError('Add a question so your studio knows what to answer.');
       return;
     }
-    if (!projectId) {
+    if (!projectId && !studioProfileId) {
       setError('This paper is not filed under a project, so there is no thread to ask in.');
       return;
     }
     askLatch.current = true;
     try {
-      const threadId = await startThread.mutateAsync(projectId);
+      // The project's thread where there is a project; THIS AGREEMENT'S OWN
+      // where the paper comes before the house (R47, W3R2-11). The second one
+      // is a direct thread between the homeowner and the studio's designer,
+      // keyed by the paper on `comms_threads.proposal_id`, so a second origin
+      // agreement from the same studio opens its own thread rather than
+      // folding into the first one's — and neither can ever be another
+      // project's. The letter below is identical either way.
+      const threadId = projectId
+        ? await startThread.mutateAsync(projectId)
+        : await startAgreementThread.mutateAsync(proposalId);
       const named = title.trim();
       await sendMessage.mutateAsync({
         threadId,
@@ -206,7 +248,7 @@ export function DoorActs({
   const answerable = !declinedAt && !expired;
   const acts: { key: ActKey; label: string }[] = [
     ...(kind && !isLegacy ? [{ key: 'read' as const, label: 'Read it in full' }] : []),
-    ...(answerable && projectId
+    ...(answerable && canAsk
       ? [{ key: 'question' as const, label: 'Ask a question' }]
       : []),
     ...(answerable ? [{ key: 'change' as const, label: 'Request a change' }] : []),

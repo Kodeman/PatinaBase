@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { AgreementTemplate } from "@patina/types";
+import { DESIGN_BUILD_COPY } from "@patina/types";
 import {
   REPLACE_WARNING,
   REPLACE_WARNING_UNSAVED,
   TemplatePickerSheet,
   templateClassFor,
   documentKindForTemplateClass,
+  templateIsSelectableOn,
 } from "../template-picker-sheet";
 
 const mockTemplates = jest.fn();
@@ -82,11 +84,15 @@ function renderSheet({
   documentKind = "design_services",
   shelf = SHELF,
   unsavedChanges = false,
+  designBuildOn = false,
+  attestationLive = false,
 }: {
   onMaterialize?: jest.Mock;
   documentKind?: string;
   shelf?: AgreementTemplate[];
   unsavedChanges?: boolean;
+  designBuildOn?: boolean;
+  attestationLive?: boolean;
 } = {}) {
   mockTemplates.mockReturnValue({ data: shelf, isLoading: false });
   render(
@@ -97,6 +103,8 @@ function renderSheet({
       documentKind={documentKind}
       onMaterialize={onMaterialize}
       unsavedChanges={unsavedChanges}
+      designBuildOn={designBuildOn}
+      attestationLive={attestationLive}
     />,
   );
   return onMaterialize;
@@ -138,7 +146,9 @@ describe("the template picker", () => {
     renderSheet();
     expect(screen.queryByText("Design-build")).not.toBeInTheDocument();
     expect(documentKindForTemplateClass("design_build")).toBe("design_build");
-    expect(documentKindForTemplateClass("consultation")).toBe("design_services");
+    expect(documentKindForTemplateClass("consultation")).toBe(
+      "design_services",
+    );
     expect(documentKindForTemplateClass("furnishings_services")).toBe(
       "design_services",
     );
@@ -232,5 +242,64 @@ describe("the template picker", () => {
     expect(
       screen.getByText("template not found or not accessible"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("the turnkey template, behind design-build (R10)", () => {
+  it("stays off the shelf entirely with the flag off — Wave 2's picker", () => {
+    renderSheet({ designBuildOn: false });
+    expect(screen.queryByText("Design-build")).not.toBeInTheDocument();
+  });
+
+  it("is LISTED and DISABLED without an attestation, never hidden", () => {
+    renderSheet({ designBuildOn: true, attestationLive: false });
+    const row = screen
+      .getAllByRole("listitem")
+      .find((item) => within(item).queryByText("Design-build")) as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(row.getAttribute("data-template-locked")).toBe("true");
+    expect(within(row).getByRole("button")).toBeDisabled();
+    expect(
+      within(row).getByText(
+        new RegExp(DESIGN_BUILD_COPY.templateNeedsAttestation),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(row).getByRole("link", { name: "Account → Studio" }),
+    ).toBeInTheDocument();
+  });
+
+  it("unlocks the moment the attestation is on file", () => {
+    const onMaterialize = renderSheet({
+      designBuildOn: true,
+      attestationLive: true,
+    });
+    const row = screen
+      .getAllByRole("listitem")
+      .find((item) => within(item).queryByText("Design-build")) as HTMLElement;
+    expect(row.getAttribute("data-template-locked")).toBeNull();
+    fireEvent.click(within(row).getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace the parts" }));
+    expect(onMaterialize).toHaveBeenCalledWith(
+      expect.objectContaining({ templateKey: "patina.design_build" }),
+    );
+  });
+
+  it("reaches a design-services draft, because materializing flips the kind", () => {
+    expect(
+      templateIsSelectableOn("design_build", "design_services", true),
+    ).toBe(true);
+    expect(
+      templateIsSelectableOn("design_build", "design_services", false),
+    ).toBe(false);
+    // And a turnkey document still takes it.
+    expect(templateIsSelectableOn("design_build", "design_build", true)).toBe(
+      true,
+    );
+    // A design-services template never lands on a turnkey paper.
+    expect(
+      templateIsSelectableOn("design_services", "design_build", true),
+    ).toBe(false);
   });
 });

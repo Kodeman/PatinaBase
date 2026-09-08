@@ -1,0 +1,239 @@
+cost lines already present (from allowances): 3
+
+=== chips ===
+
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+Choose whether the trades are shown open-book or closed-book.
+
+The schedule of values appears once the contract sum, the open-book or closed-book choice, and the lines beneath them are written.
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnke
+
+=== STEP8 double-count · pricing basis ===
+PRICING BASIS · RECORD ONLY
+
+Pricing basis
+Hidden from your client
+
+Choose whether the trades are shown open-book or closed-book.
+
+HOW THIS AGREEMENT IS PRICED
+
+Fixed price
+Cost-plus
+Cost-plus with GMP
+Time and materials with a not-to-exceed
+FEE · PERCENT
+MARKUP ON THE TRADES · PERCENT
+GMP · DOLLARS
+
+COST LINES
+
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
++ Add a cost line
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+Choose whether the trades are shown open-book or closed-book.
+
+The schedule of values appears once the contract sum, the open-book or closed-book choice, and the lines beneath them are written.
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== STEP8 double-count · supervision ===
+CLAUSE
+
+Supervision
+Hidden from your client
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+SUPERVISION FEE · DOLLARS
+SUPERVISION FEE · PERCENT
+BODY
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+Studios that do both are, in effect, charging twice for the same oversight.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== STEP8 double-count · readiness ===
+4 OF 10 PARTS NEED ATTENTION
+
+
+review&send disabled: false aria: null
+
+=== after clearing markup ===
+3 OF 10 PARTS NEED ATTENTION
+
+
+
+=== STEP6 draws ===
+DRAWS · RECORD ONLY
+
+Draw schedule
+Hidden from your client
+RETAINAGE · PERCENT
+
+Retainage is withheld from each draw and returned on the final row. It is never billed on top. Up to 10%.
+
+DRAW
+%
+GROSS
+HELD
+NET PAID
+Acts
+$8,413.40
+$0.00
+$8,413.40
+Hold
+Remove
+$25,240.20
+$1,262.01
+$23,978.19
+Hold
+Remove
+$33,653.60
+$1,682.68
+$31,970.92
+Hold
+Remove
+$16,826.80
+$841.34
+$15,985.46
+Hold
+Remove
+Final · retainage release
+—
+$3,786.03
+—
+$3,786.03
++ Add a draw
+PAID ACROSS THE SCHEDULE
+$84,134.00
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== readiness before save ===
+0 OF 10 PARTS NEED ATTENTION
+
+
+RPC upsert_agreement_parts -> 200 {"parts": [{"id": "be31fdf4-4e13-4a5b-a773-edad2bec1298", "kind": "schedule", "title": "Pricing basis", "payload": {"basis": "cost_plus_gmp", "feeBps": 1800, "gmpCents": 8413400, "costLines": [{"id": "allowance-1788839892016-0", "label": "Tile allowance", "category": "allowance", "basisCents": 400000}, {"id": "allowance-1788839892440-1", "label": "Plumbing fixtures allowance", "category": "allowance", "basisCents": 350000}, {"id": "allowance-1788839892848-2", "label": "Lighting allowance", "category": "allowance", "basisCents": 280000}, {"id": "line-1788839895165-3", "label": "Cabinetry & mill
+
+=== readiness after save ===
+0 OF 10 PARTS NEED ATTENTION
+
+
+
+=== client copy preview ===
+ · LIVE
+
+DESIGN SERVICES AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Pricing basis
+
+Recorded with your agreement.
+
+Draw schedule
+
+Recorded with your agreement.
+
+Allowances
+
+Recorded with your agreement.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequence of work, and answers for the result.
+
+Change orders
+
+A change to the scope, the schedule or the sum is agreed in writing before the work is done, and is recorded against this agreement.
+
+Termination
+
+Either party may end this engagement in writing. Work performed and materials ordered to that date remain payable.
+
+Terms
+
+Invoices are due on receipt. Work proceeds against the draw schedule above. Wisconsin law governs this agreement.
+
+ATTACHMENT A · NOTICE OF CANCELLATION
+
+I received this
+
+ATTACHMENT B · LIEN WAIVER FORM
+
+Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.
+
+I received this
+
+CLIENT SIGNATURE
+
+Awaiting
+
+STUDIO SIGNATURE
+
+Awaiting
+
+Furnishings, freight, tax, installation, and permission to purchase are outside this design services agreement.

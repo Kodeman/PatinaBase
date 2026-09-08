@@ -239,6 +239,14 @@ export function WallGate({
           <SpineGate
             variant="acceptance"
             title={selection.name}
+            /* RULED, not overlooked (Wave 3, RC-13). This is a per-kind
+               lookup, and `design_build` gets no peer here on purpose: the
+               wall is the act of ACCEPTING FINISHED TRADE WORK, which exists
+               only where the client holds the trade scope. On a turnkey prime
+               the studio holds each Trade Agreement and the client's money
+               moves on the draw schedule instead — there is no acceptance for
+               her to give, so there is no gate to label. An act that cannot
+               complete is not offered. */
             kindLabel={KIND_LABEL.trade_scope ?? null}
             totalCents={selection.clientLineTotalCents || null}
             caption={caption}

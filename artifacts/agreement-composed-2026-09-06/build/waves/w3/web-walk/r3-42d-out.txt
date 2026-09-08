@@ -1,0 +1,44 @@
+retainer labels: []
+=== readiness, visible fee, complete ===
+2 OF 9 PARTS NEED ATTENTION
+
+No furnishings deposit set — authorizations will default to 50%.
+
+
+NET upsert 200 {"parts": [{"id": "2f384332-a39c-4bd7-9661-b25664a40187", "kind": "clause", "title": "Services", "payload": {"body": "In
+=== readiness with the FEE HIDDEN ===
+3 OF 9 PARTS NEED ATTENTION
+
+No furnishings deposit set — authorizations will default to 50%.
+
+
+NET upsert 200 {"parts": [{"id": "4b1d22eb-c23d-4adf-9284-d264d3a2fa99", "kind": "clause", "title": "Services", "payload": {"body": "In
+=== SEND SHEET with the fee hidden ===
+Send design agreement
+PUT BACK · ESC
+
+YES TO THE DESIGNER
+
+Send for the client signature
+
+Client User receives the services, rates, retainer policy, billing cadence, ceiling, and terms. Their signature preserves consent; the agreement still awaits the studio countersignature before work is authorized.
+
+RECIPIENT
+
+client@patina.dev
+
+FURNISHINGS DEPOSIT
+
+No furnishings deposit set — authorizations will default to 50%.
+
+No furnishings deposit set — authorizations will default to 50%.
+
+FINISH BEFORE SENDING
+
+Set a valid retainer amount, including zero when none is due.
+This fee is hidden from your client, so it cannot bill.
+An agreement that bills hourly needs a ceiling. Add a Ceiling part, or remove the role rates.
+A NOTE TO THE CLIENT · OPTIONAL
+Send later
+Send agreement →
+BUTTONS [{"t":"PUT BACK · ESC","d":false},{"t":"Send later","d":false},{"t":"Send agreement →","d":true}]

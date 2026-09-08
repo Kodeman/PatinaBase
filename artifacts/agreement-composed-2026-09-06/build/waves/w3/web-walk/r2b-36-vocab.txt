@@ -1,0 +1,25 @@
+
+===== designer · turnkey Contract Room (draft) =====
+  clean
+
+===== designer · Contract Room (executed) =====
+  clean
+
+===== designer · Account → Studio =====
+  HIT emoji: ["✓"]
+      …PROFILE NOTIFICATIONS SECURITY DEVICES EXTENSION STUDIO STILL TO DO 4 ✓ Name & brand the studio Set your own title Invite your crew Seed the…
+  HIT checkmark: ["✓"]
+      …PROFILE NOTIFICATIONS SECURITY DEVICES EXTENSION STUDIO STILL TO DO 4 ✓ Name & brand the studio Set your own title Invite your crew Seed the…
+
+===== homeowner's door =====
+  clean
+
+===== homeowner's paper =====
+  clean
+
+===== the sub · /trade/[token] =====
+  clean
+
+===== the disclaimer =====
+verbatim on Account → Studio: true
+a word count appears anywhere: false

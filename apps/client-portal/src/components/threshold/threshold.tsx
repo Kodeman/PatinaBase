@@ -42,7 +42,7 @@ import {
 } from '@/hooks/use-project-correspondence';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
-import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
+import { commercialSummaryFromProposal, isOriginKind } from '@/lib/commercial-documents';
 import { standsUnfiled } from '@/lib/threshold/adopted-house';
 import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import {
@@ -66,6 +66,7 @@ import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
 import { ApprovalAsk, ApprovalRecords, useDoorstepApprovals } from './approval-ask';
 import { KIND_LABEL } from './consent-copy';
+import { PapersUnread } from './letterbox-door';
 import { Letters, MuteLetters, WriteBack } from './correspondence';
 import { DetailsSheet } from './details-sheet';
 import { DoorGate, type DoorProposal } from './door-gate';
@@ -446,11 +447,15 @@ export function Threshold({
     // `?proposal=` folded to a page that did not draw it. It stands on every
     // house's doorstep instead, so it is reachable from wherever she is.
     //
-    // `design_services` only, exactly as R30 scopes it: an addendum always
-    // binds to a project, and a furnishings authorization is minted from the
-    // schedule of one — neither is a paper that comes before a house.
+    // `ORIGIN_DOCUMENT_KINDS` only (lib/commercial-documents.ts): an addendum
+    // always binds to a project, and a furnishings authorization is minted
+    // from the schedule of one — neither is a paper that comes before a
+    // house. A design-build prime is, so Wave 3 put it in that list; without
+    // it, a household that already has a house and is sent a turnkey prime
+    // would have it filtered off every door she owns, which is the R30 defect
+    // exactly.
     const houseless =
-      commercial.projectId === null && commercial.kind === 'design_services';
+      commercial.projectId === null && isOriginKind(commercial.kind);
     if (!houseless && commercial.projectId !== projectId) return [];
     return [
       {
@@ -465,21 +470,98 @@ export function Threshold({
         // does not carry the date, so it comes off the row.
         validUntil: proposal.valid_until ?? null,
         houseless,
+        // R47 — the studio this paper came from, carried so a houseless door
+        // can ask in the studio's own thread rather than in whichever house
+        // the reader happens to be standing in.
+        designerId: proposal.designer_id ?? null,
       },
     ];
   });
+  /* R50 (W3R2-02) — THE DOOR THAT OPENED ON HER NAME STANDS ON THE NEXT VISIT.
+     `sealedDoors` above is this visit's memory, and memory is what the walk
+     found missing: after a reload the receipt, KEEP A COPY, the deposit offer
+     and the pay link were all gone, on this house and on every other, over a
+     paper carrying her signature and an open first draw.
+
+     A signed paper is state, so it is read as state. An agreement she has
+     signed and the studio has not yet countersigned still stands at its door —
+     the same houseless rule `pending` and the receipt row take (R30, W3R1-02)
+     — and `DoorGate` reads the signature and the deposit offer off the bundle,
+     so what it draws is the receipt rather than a second ask. Once the studio
+     countersigns, the paper is `executed`, its project exists, and it is a
+     record in Previously; the door is done. */
+  const standingSignedDoors: { mark: ThresholdMark; paper: DoorProposal }[] =
+    accepted.flatMap((proposal) => {
+      const commercial = commercialSummaryFromProposal(proposal);
+      if (commercial.kind === 'legacy') return [];
+      if (commercial.state !== 'client_signed') return [];
+      const houseless =
+        commercial.projectId === null && isOriginKind(commercial.kind);
+      if (!houseless && commercial.projectId !== projectId) return [];
+      return [
+        {
+          mark: {
+            id: `door:${proposal.id}`,
+            kind: 'door' as const,
+            // Its own doorstep, not a room: an origin paper belongs to the
+            // household, and `heaviestRoom` answers null for one anyway.
+            roomId: houseless ? null : null,
+            label: proposal.title,
+            anchor: 'doorstep',
+            proposalId: proposal.id,
+            amountCents: 0,
+          },
+          paper: {
+            id: proposal.id,
+            title: proposal.title,
+            totalAmountCents:
+              typeof proposal.total_amount === 'number' ? proposal.total_amount : 0,
+            sentAt: commercial.sentAt,
+            updatedAt: proposal.updated_at ?? null,
+            kind: commercial.kind,
+            validUntil: proposal.valid_until ?? null,
+            houseless,
+            designerId: proposal.designer_id ?? null,
+            // The list already says so; the door need not wait for its own
+            // bundle to stop asking for her name.
+            signedAlready: true,
+          },
+        },
+      ];
+    });
+
   // A sealed door's paper is gone from the open papers; the door is still
   // drawn from it, so the lookup keeps it. A live paper always wins.
   const paperById = new Map<string, DoorProposal>([
+    ...standingSignedDoors.map((door) => [door.paper.id, door.paper] as const),
     ...sealedDoors.map((door) => [door.paper.id, door.paper] as const),
     ...signatureGates.map((paper) => [paper.id, paper] as const),
   ]);
 
+  /* W3R1-02 — AND THE SAME PAPER, ONCE SHE HAS SIGNED IT.
+     An origin agreement is `project_id NULL` until countersign creates the
+     project, so the houseless rule above is what makes it reachable while it
+     waits for her name. At `client_signed` the paper leaves `pending` for
+     `accepted` — and this filter, which is project-scoped, dropped it from
+     every house she owns. The walk signed a design-build prime, reloaded, and
+     found the door, the house and THE PAPERS all empty over a paper carrying
+     her signature.
+
+     So `accepted` reads the same rule `pending` does: a project-less origin
+     paper stands on every house's doorstep as its receipt, until the
+     countersign that creates its project files it under one.
+
+     The date is `executedAt`, which is null through this whole window
+     (`proposals.signed_at` is written at countersign alone, R30's round-2
+     amendment) — a receipt with no date sorts last in Previously and states
+     nothing untrue, which is the right answer until the studio signs. */
   const instrumentReceipts: ThresholdReceipt[] = accepted.flatMap(
     (proposal) => {
       const commercial = commercialSummaryFromProposal(proposal);
-      if (commercial.projectId !== projectId || commercial.kind === "legacy")
-        return [];
+      if (commercial.kind === "legacy") return [];
+      const houseless =
+        commercial.projectId === null && isOriginKind(commercial.kind);
+      if (!houseless && commercial.projectId !== projectId) return [];
       const kindLabel = KIND_LABEL[commercial.kind] ?? "Document";
       return [
         {
@@ -654,9 +736,22 @@ export function Threshold({
   // a failing request; nothing bounds a hanging one.
   const heldTooLong = useHoldCeiling(!hydrated || loading || model.pending);
 
+  /* W3R1-05 — A FAILED READ IS NOT AN EMPTY DOORSTEP.
+     `useClientProposals` inherits the app's `retry: 2`; after the third
+     failure React Query drops `isPending` and settles with no data, so the
+     house went on to print "Nothing waits for your name." over papers it had
+     simply been unable to read — and offered no retry anywhere. The walk
+     aborted the RPC three times and met exactly that.
+
+     R30 · N2 already ruled this for the household door, and
+     `letterbox-door.tsx` already draws the sentence and the act. The house
+     reads the same rule from the same component: the doorstep's claim steps
+     aside, and the notice below says what the page actually knows. */
+  const papersUnread = proposalsQuery.isError;
+
   // ── the doorstep's sentence ────────────────────────────────────────────────
   const standing =
-    hydrated && !loading
+    hydrated && !loading && !papersUnread
       ? thresholdStanding({
           doors: model.marks.filter((mark) => mark.kind === "door").length,
           walls: model.marks.filter((mark) => mark.kind === "wall").length,
@@ -692,7 +787,17 @@ export function Threshold({
   const sealedMarks = sealedDoors
     .filter((door) => !openDoorIds.has(door.mark.id))
     .map((door) => door.mark);
-  const doorMarks = [...openDoorMarks, ...sealedMarks];
+  // R50 — and the ones the SERVER says she has signed, for every visit after
+  // the one she signed in. `sealedMarks` wins on id, so a door sealed this
+  // visit keeps the mark (and the mounted component) it was shut in.
+  const heldIds = new Set([
+    ...openDoorIds,
+    ...sealedMarks.map((mark) => mark.id),
+  ]);
+  const standingMarks = standingSignedDoors
+    .filter((door) => !heldIds.has(door.mark.id))
+    .map((door) => door.mark);
+  const doorMarks = [...openDoorMarks, ...sealedMarks, ...standingMarks];
   const wallMarks = model.marks.filter((mark) => mark.kind === 'wall');
   // The first door that will actually RENDER: `renderDoor` answers null for a
   // mark whose paper is missing, and a pin or a `#door` anchor on a door that
@@ -736,7 +841,14 @@ export function Threshold({
         // whose order sets the whole letter ABOVE the doors — there the pin's
         // way back would point at a paragraph read one section ago.
         note={!model.groundFloor && mark.id === firstDoorId ? model.note : null}
-        projectId={projectId}
+        // R47 — A QUESTION FROM THE ORIGIN DOOR FILES TO THE AGREEMENT'S
+        // STUDIO. A houseless paper belongs to no project, and it stands on
+        // the doorstep of EVERY house she owns — so handing it the house she
+        // happens to be reading would file her question about a brand new
+        // engagement into an unrelated project's thread. It is keyed by the
+        // studio instead, exactly as `letterbox-door.tsx` keys the same act.
+        projectId={paper.houseless ? null : projectId}
+        designerId={paper.houseless ? (paper.designerId ?? null) : null}
         first={mark.id === firstDoorId}
         studioName={studioName}
         onSigned={() => sealDoor(mark, paper)}
@@ -1048,6 +1160,9 @@ export function Threshold({
         >
           The approvals could not be read just now. Please refresh before taking action.
         </p>
+      )}
+      {papersUnread && (
+        <PapersUnread onRetry={() => void proposalsQuery.refetch()} />
       )}
       {doorstepAsks.map((approval) => (
         <ApprovalAsk

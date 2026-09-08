@@ -21,6 +21,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  useAgreementDraws,
+  useAgreementJurisdictionNotices,
   useAgreementParts,
   useDiscardAgreementParts,
   useMaterializeAgreementTemplate,
@@ -28,9 +30,12 @@ import {
   useAgreementStudioContext,
   useSaveAgreementPart,
   useSaveAgreementParts,
+  useStudioLicenseAttestation,
+  licenseAttestationIsLive,
 } from "@patina/supabase";
 import {
   AGREEMENT_PART_COPY,
+  DESIGN_BUILD_COPY,
   type AgreementPart,
   type AgreementTemplate,
 } from "@patina/types";
@@ -69,12 +74,32 @@ import {
   duplicateMoneyBlocker,
   partsNeedingAttention,
 } from "./readiness";
+import {
+  DrawLedger,
+  JurisdictionAttachments,
+  LienWaiverAttachments,
+  TURNKEY_PART_KEYS,
+  type TurnkeyContext,
+} from "./turnkey";
+import { TradeAgreementsStrip } from "../../../commercial/trade-agreements";
 
 const labelClass =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
 
 function renumber(parts: AgreementPart[]): AgreementPart[] {
   return parts.map((part, index) => ({ ...part, position: index + 1 }));
+}
+
+/**
+ * The first part the rail actually shows — build sheet PART 13's eleventh
+ * entry, `patina.licensing_attestation`, is a `kind: 'attestation'` record
+ * materialized at compose and never editable here (§8 marks it "gate"). It
+ * rides in the composition and is saved with it; it is not a page of the
+ * paper, so it is neither listed nor selectable. `parts-rail.tsx` hides the
+ * same kind, and this keeps the room from opening on a row that is not there.
+ */
+export function firstRailPartId(parts: AgreementPart[]): string | null {
+  return parts.find((part) => part.kind !== "attestation")?.id ?? null;
 }
 
 /**
@@ -138,6 +163,17 @@ export function AgreementComposer({
     useFeatureFlag("agreement-library");
   const libraryOn = libraryFlag && !libraryLoading;
 
+  // Wave 3 — the turnkey class. A THIRD nested gate, so `design-build` is
+  // independent of the two before it and reaches nobody the earlier two have
+  // not already reached: this component only renders under `agreement-parts`,
+  // `libraryOn` is `agreement-library`, and both must hold before the turnkey
+  // surfaces exist at all. Fail-closed the same way — `useFeatureFlag` reads
+  // { value: false, isLoading: true } until PostHog answers, so nothing Wave 3
+  // draws can flash to a studio the flag has not reached.
+  const { value: designBuildFlag, isLoading: designBuildLoading } =
+    useFeatureFlag("design-build");
+  const designBuildOn = libraryOn && designBuildFlag && !designBuildLoading;
+
   // R32 — WHICH LIBRARY THIS AGREEMENT OPENS. Not the actor's own
   // organizations: `useOrganizations` returns them in no order at all, so for
   // a designer who belongs to two design studios it hands back an arbitrary
@@ -149,6 +185,27 @@ export function AgreementComposer({
   const studioContext = useAgreementStudioContext(proposalId);
   const studioId = studioContext.data?.studioId ?? null;
   const canManage = studioContext.data?.canManage === true;
+
+  // R10 — the studio's self-attested credential, read once and used twice:
+  // the template picker derives its disabled state from it, and readiness
+  // holds the send on it. One read, so the picker and the panel cannot say
+  // different things about the same studio.
+  const attestation = useStudioLicenseAttestation(
+    designBuildOn ? studioId : null,
+  );
+  const attestationLive = licenseAttestationIsLive(attestation.data ?? null);
+  // R11 — what counsel has actually cleared. Empty on a seeded database, and
+  // that is the intended answer.
+  const notices = useAgreementJurisdictionNotices();
+  const enabledJurisdictions = useMemo(
+    () => (notices.data ?? []).map((notice) => notice.state),
+    [notices.data],
+  );
+  // P12 — the draw ledger. Empty until the agreement is sent, because
+  // `send_commercial_document` is what materializes it.
+  const drawLedger = useAgreementDraws(
+    designBuildOn && document.kind === "design_build" ? proposalId : null,
+  );
 
   // The re-read after a Template is laid in. `materialize_agreement_template`
   // replaces the part set on the server and answers with a count; the room
@@ -169,8 +226,8 @@ export function AgreementComposer({
   const [parts, setParts] = useState<AgreementPart[]>(() =>
     renumber([...bundle.parts].sort((a, b) => a.position - b.position)),
   );
-  const [selectedId, setSelectedId] = useState<string | null>(
-    bundle.parts[0]?.id ?? null,
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    firstRailPartId(bundle.parts),
   );
   const [dirty, setDirty] = useState(false);
   const [saveNote, setSaveNote] = useState<string | null>(null);
@@ -185,7 +242,13 @@ export function AgreementComposer({
     () => new Set<string>(),
   );
 
-  const readOnly = document.state !== "draft";
+  // §4.1 — with `design-build` off, a `design_build` agreement renders
+  // read-only prose. It cannot be created with the flag off, so the only way
+  // to stand here is a rollback or a co-member the flag has not reached: the
+  // parts are shown, the editors are frozen, and nothing this room cannot
+  // validate can be typed into a class whose validators are not mounted.
+  const turnkeyFrozen = document.kind === "design_build" && !designBuildOn;
+  const readOnly = document.state !== "draft" || turnkeyFrozen;
 
   // Seed the nine standard parts from the terms row this agreement already
   // has. The ref is React 18 StrictMode's double-effect, not correctness —
@@ -212,7 +275,7 @@ export function AgreementComposer({
           [...next.parts].sort((a, b) => a.position - b.position),
         );
         setParts(seeded);
-        setSelectedId((current) => current ?? seeded[0]?.id ?? null);
+        setSelectedId((current) => current ?? firstRailPartId(seeded));
       } catch (error) {
         setSaveNote(
           refusalMessage(error, "The standard parts could not be opened."),
@@ -229,9 +292,30 @@ export function AgreementComposer({
   const recipientName =
     proposal.client?.full_name ?? proposal.client_name ?? undefined;
 
+  const turnkeyOn = designBuildOn && document.kind === "design_build";
+  // W3R2-06 — the room's chrome reads the KIND, never the flag: a frozen
+  // turnkey draft is still a turnkey draft, and must not wear a services
+  // promise it does not keep.
+  const isTurnkeyKind = document.kind === "design_build";
+
   const readiness = useMemo(
-    () => assessAgreementReadiness({ document, parts, recipientEmail }),
-    [document, parts, recipientEmail],
+    () =>
+      assessAgreementReadiness({
+        document,
+        parts,
+        recipientEmail,
+        turnkey: turnkeyOn
+          ? { attestationLive, enabledJurisdictions }
+          : undefined,
+      }),
+    [
+      document,
+      parts,
+      recipientEmail,
+      turnkeyOn,
+      attestationLive,
+      enabledJurisdictions,
+    ],
   );
   const blockedIds = useMemo(() => {
     const ids = new Set<string>();
@@ -255,23 +339,80 @@ export function AgreementComposer({
 
   const selected = parts.find((part) => part.id === selectedId) ?? null;
 
-  const mutate = (next: AgreementPart[]) => {
-    setParts(renumber(next));
+  /**
+   * Every act in this room goes through here, and every act may be one of a
+   * PAIR. A turnkey editor writes its own payload and a sibling's in the same
+   * handler — the allowances editor lays down its cost line, the
+   * sub-disclosure clause stores its mode where the validator reads it — and
+   * two setters derived from the same render's `parts` would have the second
+   * discard the first. So the updater form is the contract: each write is
+   * applied to what the one before it produced, not to the array this render
+   * closed over.
+   */
+  const mutate = (
+    next: AgreementPart[] | ((current: AgreementPart[]) => AgreementPart[]),
+  ) => {
+    setParts((current) =>
+      renumber(typeof next === "function" ? next(current) : next),
+    );
     setDirty(true);
     setSaveNote(null);
   };
 
   const changePayload = (id: string, payload: Record<string, unknown>) =>
-    mutate(parts.map((part) => (part.id === id ? { ...part, payload } : part)));
+    mutate((current) =>
+      current.map((part) => (part.id === id ? { ...part, payload } : part)),
+    );
+
+  /**
+   * One turnkey editor writing a sibling part's payload — an allowance laying
+   * down its cost line, the sub-disclosure clause storing its mode where the
+   * validator reads it. Local, like every other act in this room: nothing
+   * reaches the table until Save. A part key the composition does not carry is
+   * a no-op, because a designer is allowed to remove a part and a sibling
+   * editor must not resurrect it.
+   */
+  const writePart = (partKey: string, payload: Record<string, unknown>) =>
+    mutate((current) =>
+      current.map((part) =>
+        part.partKey === partKey ? { ...part, payload } : part,
+      ),
+    );
+
+  /** R39 — hiding a part from the client. `client_visible` is the column;
+   *  R33 already refuses to project a hidden fee and readiness already says
+   *  so where the designer typed it. This is the act that sets it. */
+  const setClientVisible = (id: string, clientVisible: boolean) => {
+    const target = parts.find((part) => part.id === id) ?? null;
+    mutate((current) =>
+      current.map((part) =>
+        part.id === id ? { ...part, clientVisible } : part,
+      ),
+    );
+    if (target) {
+      documentEvents.agreementPartVisibilityChanged({
+        proposal_id: proposalId,
+        kind: target.kind,
+        variant: target.variant,
+        client_visible: clientVisible,
+      });
+    }
+  };
+
+  const turnkeyContext: TurnkeyContext | undefined = turnkeyOn
+    ? { parts, writePart, projectId: document.projectId }
+    : undefined;
 
   const renamePart = (id: string, title: string) =>
-    mutate(parts.map((part) => (part.id === id ? { ...part, title } : part)));
+    mutate((current) =>
+      current.map((part) => (part.id === id ? { ...part, title } : part)),
+    );
 
   const removePart = (id: string) => {
     const removed = parts.find((part) => part.id === id) ?? null;
     const next = parts.filter((part) => part.id !== id);
     mutate(next);
-    if (selectedId === id) setSelectedId(next[0]?.id ?? null);
+    if (selectedId === id) setSelectedId(firstRailPartId(next));
     if (libraryOn && removed) {
       documentEvents.agreementPartRemoved({
         proposal_id: proposalId,
@@ -301,6 +442,45 @@ export function AgreementComposer({
     });
     mutate([...parts, blank]);
     setSelectedId(blank.id);
+  };
+
+  /**
+   * A jurisdiction notice counsel HAS cleared, laid in as an attachment leaf
+   * (R11). A held notice is never handed to this function — the strip renders
+   * it greyed and non-attachable — and readiness refuses a send carrying one
+   * even if it arrived some other way.
+   */
+  const attachNotice = (notice: {
+    state: string;
+    title: string;
+    body: string;
+  }) => {
+    if (
+      parts.some((part) => (part.payload ?? {}).jurisdiction === notice.state)
+    )
+      return;
+    const added: AgreementPart = {
+      id: localPartId(),
+      proposalId,
+      position: parts.length + 1,
+      kind: "attachment",
+      variant: null,
+      partKey: `${TURNKEY_PART_KEYS.noticeOfCancellation}.${notice.state.toLowerCase()}`,
+      title: notice.title,
+      payload: {
+        title: notice.title,
+        body: notice.body,
+        jurisdiction: notice.state,
+        acknowledgeRequired: true,
+      },
+      required: false,
+      clientVisible: true,
+      sourceTemplateKey: null,
+      sourcePartId: null,
+      updatedAt: null,
+    };
+    mutate([...parts, added]);
+    setSelectedId(added.id);
   };
 
   /**
@@ -357,7 +537,7 @@ export function AgreementComposer({
         [...(fresh.data ?? [])].sort((a, b) => a.position - b.position),
       );
       setParts(landed);
-      setSelectedId(landed[0]?.id ?? null);
+      setSelectedId(firstRailPartId(landed));
       setDirty(false);
       setTemplatesOpen(false);
       setSaveNote(`The parts of ${template.title} are on this agreement.`);
@@ -366,6 +546,12 @@ export function AgreementComposer({
         template_kind: template.kind,
         part_count: landed.length,
       });
+      if (template.class === "design_build") {
+        documentEvents.agreementTurnkeyComposed({
+          proposal_id: proposalId,
+          part_count: landed.length,
+        });
+      }
     } catch (error) {
       setTemplateError(
         refusalMessage(error, "That template could not be opened here."),
@@ -429,8 +615,7 @@ export function AgreementComposer({
         (selectedKey === null
           ? null
           : (saved.find((part) => part.partKey === selectedKey)?.id ?? null)) ??
-          saved[0]?.id ??
-          null,
+          firstRailPartId(saved),
       );
       setDirty(false);
       setSaveNote("All agreement changes saved.");
@@ -465,6 +650,7 @@ export function AgreementComposer({
   };
 
   const reviewAndSend = async () => {
+    if (readOnly) return;
     if (dirty && !(await persist())) return;
     setSendOpen(true);
   };
@@ -509,14 +695,21 @@ export function AgreementComposer({
 
   return (
     <RoomShell
-      title="The Contract Room · Design Agreement"
+      title={
+        isTurnkeyKind
+          ? DESIGN_BUILD_COPY.roomTitle
+          : "The Contract Room · Design Agreement"
+      }
       count={`${needAttention} of ${parts.length} parts need attention`}
       action={
         <DocumentAction
           actionKey="review-design-agreement"
           variant="primary"
           trailing="→"
-          disabled={refusedAtSave}
+          // W3R1-08 — a room that can be neither edited nor completed does not
+          // offer to send. Flag-off the editors are not mounted; past draft
+          // the parts are frozen and the paper is already gone.
+          disabled={refusedAtSave || readOnly}
           onClick={() => void reviewAndSend()}
         >
           Review &amp; send
@@ -526,7 +719,12 @@ export function AgreementComposer({
       <div className="mx-auto max-w-[1240px] px-6 py-7 sm:px-8">
         <header className="border-b border-[var(--doc-ink-border)] pb-5">
           <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
-            Yes to the designer · professional services only
+            {/* W3R2-06 — keyed off the document's KIND, not the flag: a
+                design-build engagement never carries the services promise,
+                whether or not `design-build` has reached this member. */}
+            {isTurnkeyKind
+              ? DESIGN_BUILD_COPY.roomEyebrow
+              : "Yes to the designer · professional services only"}
           </p>
           <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -534,8 +732,9 @@ export function AgreementComposer({
                 {document.title}
               </h1>
               <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-                Compose the parts this agreement is made of. Furnishings and
-                purchasing stay outside it.
+                {isTurnkeyKind
+                  ? DESIGN_BUILD_COPY.roomSubtitle
+                  : "Compose the parts this agreement is made of. Furnishings and purchasing stay outside it."}
               </p>
             </div>
             {/* The three acts wrap on a narrow phone: unwrapped they measured
@@ -607,7 +806,13 @@ export function AgreementComposer({
           )}
           {readOnly && (
             <p className="mt-2 text-[11px] italic text-[var(--text-muted)]">
-              This agreement has left the studio. Its parts are fixed as sent.
+              {turnkeyFrozen
+                ? // W3R1-08 — a turnkey DRAFT with `design-build` off has not
+                  // left the studio, and the frozen-document sentence said it
+                  // had. What is true is that the class's editors are not
+                  // mounted for this reader, so nothing here can be typed.
+                  "This is a design-build agreement, and it does not open for you yet. Its parts are shown as they stand."
+                : "This agreement has left the studio. Its parts are fixed as sent."}
             </p>
           )}
         </header>
@@ -645,6 +850,7 @@ export function AgreementComposer({
                 : undefined
             }
             keptPartIds={keptPartIds}
+            visibilityOn={designBuildOn}
           />
 
           {/* The history strip needs a rhythm under the editor; flag off there
@@ -659,6 +865,23 @@ export function AgreementComposer({
                   readOnly={readOnly}
                   libraryOn={libraryOn}
                   blockers={blockersForPart(readiness, selected.id)}
+                  turnkey={turnkeyContext}
+                  onToggleClientVisible={
+                    // R48 (W3R2-01) — the act does not exist on the two parts
+                    // that state the money. The database refuses both
+                    // (`upsert_agreement_parts`, `send_commercial_document`,
+                    // 00578) and readiness says so; withholding the toggle is
+                    // what keeps the room from offering the refusal at all.
+                    designBuildOn &&
+                    !readOnly &&
+                    !(
+                      selected.kind === "schedule" &&
+                      (selected.variant === "pricing_basis" ||
+                        selected.variant === "draws")
+                    )
+                      ? (hidden) => setClientVisible(selected.id, !hidden)
+                      : undefined
+                  }
                 />
                 {/* P8 — under the open part, and only under a part that has a
                     history. A part nobody has touched draws nothing. */}
@@ -685,16 +908,55 @@ export function AgreementComposer({
                 // Both of these are blockers ON a part, so the rail marks the
                 // row; they are also the only blockers that hold Save, so the
                 // panel says why in the same sentence.
-                ...duplicates.map((duplicate) =>
-                  duplicateMoneyBlocker(duplicate.label),
-                ),
-                ...(unnamedRoles.length > 0 ? [BLANK_ROLE_BLOCKER] : []),
-                ...documentBlockers(readiness).map(
-                  (blocker) => blocker.message,
-                ),
+                ...new Set([
+                  ...duplicates.map((duplicate) =>
+                    duplicateMoneyBlocker(duplicate.label),
+                  ),
+                  ...(unnamedRoles.length > 0 ? [BLANK_ROLE_BLOCKER] : []),
+                  ...documentBlockers(readiness).map(
+                    (blocker) => blocker.message,
+                  ),
+                ]),
               ]}
               notes={readiness.notes}
             />
+            {turnkeyOn && (
+              <>
+                {/* R11 — what counsel has cleared, and what is held. There is
+                    no enable control here or anywhere else in the studio's
+                    face; a held notice is counsel's draft, not a studio's
+                    paper. */}
+                <JurisdictionAttachments
+                  onAttach={readOnly ? undefined : attachNotice}
+                  readOnly={readOnly}
+                />
+                {/* P9 · P13 — the ledger, and the studio's act on it. The
+                    deposit is not billed from here: it is offered on the
+                    homeowner's door the moment she signs. */}
+                <DrawLedger
+                  proposalId={proposalId}
+                  draws={drawLedger.data ?? []}
+                  executed={document.state === "executed"}
+                />
+                {/* P12 — the exchange, not the form. Empty until the
+                    agreement is sent, because the ledger is materialized at
+                    send from the frozen draws payload. */}
+                <LienWaiverAttachments
+                  proposalId={proposalId}
+                  studioId={studioId}
+                  draws={drawLedger.data ?? []}
+                  recordedBy={user?.id ?? null}
+                />
+                {/* P14 — the subcontract, studio-side. It lives in the room's
+                    right rail rather than in the Money room's ledger, which
+                    is another lane's file. */}
+                <TradeAgreementsStrip
+                  projectId={document.projectId}
+                  studioId={studioId}
+                  sourceProposalId={proposalId}
+                />
+              </>
+            )}
             <div className="hidden min-[1180px]:block">
               <div className="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
                 <p className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
@@ -733,6 +995,8 @@ export function AgreementComposer({
             pending={materializeTemplate.isPending}
             error={templateError}
             unsavedChanges={dirty}
+            designBuildOn={designBuildOn}
+            attestationLive={attestationLive}
           />
         </>
       )}
@@ -752,7 +1016,12 @@ export function AgreementComposer({
         recipientName={recipientName}
         readinessOverride={{
           ready: readiness.ready,
-          blockers: readiness.blockers.map((blocker) => blocker.message),
+          // R49 — a blocker about a PAIR is filed against the rail and both
+          // parts, so the sheet would otherwise print one sentence three
+          // times. The sheet lists reasons, not rows.
+          blockers: [
+            ...new Set(readiness.blockers.map((blocker) => blocker.message)),
+          ],
           notes: readiness.notes,
         }}
       />

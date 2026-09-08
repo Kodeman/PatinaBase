@@ -939,4 +939,208 @@ describe('DoorGate — the composed agreement', () => {
       attachmentsAcknowledged: [],
     });
   });
+
+  /* ── THE DEPOSIT IS OFFERED, NEVER ASKED FOR FIRST (Wave 3, P13 · R15) ────
+     Everything below is about ORDER and about what a failure looks like. The
+     offer cannot exist before the signature: the route mints it only after
+     the signature RPC has returned, and the door only stores it after
+     `setSignedAt` and `onSigned` have run. And when it does not exist, the
+     page is exactly the page it would have been — the signature never
+     acquires an error it did not cause. ──────────────────────────────────── */
+  describe('the deposit offer', () => {
+    const OFFER = {
+      invoiceId: 'inv-deposit',
+      amountCents: 841340,
+      label: 'Deposit at signing',
+      payPath: `/pay/${'b'.repeat(64)}`,
+    };
+
+    beforeEach(() => {
+      bundleMock.mockReturnValue({
+        isLoading: false,
+        isError: false,
+        data: {
+          document: { kind: 'design_build' },
+          furnishings: null,
+          tradeScope: null,
+          parts: [],
+          serviceTerms: { currency: 'USD' },
+          designBuild: {
+            // Five rows: four draws and the retainage release, as the
+            // Halvorsen schedule carries them.
+            draws: [0, 1, 2, 3, 4].map((n) => ({ drawKey: `d${n}` })),
+            retainageHeldCents: 378603,
+            subs: [],
+          },
+        },
+      });
+    });
+
+    function answerWith(depositOffer: unknown) {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ projectId: null, depositOffer }),
+      }) as unknown as typeof fetch;
+    }
+
+    it('is nowhere on the page before she signs', () => {
+      answerWith(OFFER);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.queryByTestId('deposit-offer')).not.toBeInTheDocument();
+    });
+
+    it('stands under the receipt once the signature is recorded', async () => {
+      answerWith(OFFER);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+      signWith();
+      await holdSign();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('deposit-offer')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('door-receipt')).toBeInTheDocument();
+      expect(screen.getByTestId('deposit-offer')).toHaveTextContent('$8,413.40');
+      expect(screen.getByRole('link', { name: 'Pay the deposit' })).toHaveAttribute(
+        'href',
+        `/pay/${'b'.repeat(64)}`,
+      );
+    });
+
+    /* The route answers `ok: true` with a null offer when the second call
+       failed. The signature stands, the receipt inks, and nothing on the page
+       says a word about money that did not happen. */
+    it('says nothing at all when the route could not mint one', async () => {
+      answerWith(null);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+      signWith();
+      await holdSign();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('door-receipt')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('deposit-offer')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByTestId('door-receipt')).toHaveTextContent('has your signature');
+    });
+
+    it('says nothing on a paper that has no deposit to offer', async () => {
+      answerWith(undefined);
+      renderGate();
+      signWith();
+      await holdSign();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('door-receipt')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('deposit-offer')).not.toBeInTheDocument();
+    });
+
+    /* RC-6, said as a test rather than as a promise: the offer takes no part
+       in the act's armed state. The act is disabled before her name and tick,
+       and armed after, whether or not an offer will ever come back. */
+    it('takes no part in whether the act is armed', () => {
+      answerWith(OFFER);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(signAction()).toBeDisabled();
+      signWith();
+      expect(signAction()).toBeEnabled();
+      expect(screen.queryByTestId('deposit-offer')).not.toBeInTheDocument();
+    });
+
+    it('reports the turnkey gate under its own kind', async () => {
+      answerWith(OFFER);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+      signWith();
+      await holdSign();
+
+      expect(makingEvents.gateFollowed).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'design_build' }),
+      );
+    });
+  });
+
+  /* ── R50 · W3R2-02 — THE RECEIPT SURVIVES A RELOAD ───────────────────────
+     Everything above is about the visit she signed in, and that visit was all
+     the post-signature region ever had: `signedAt` and the offer both lived in
+     this component's memory, so a reload took the receipt, KEEP A COPY, the
+     deposit offer and the pay link with it. The walk reloaded and read
+     "Nothing waits for your name."
+
+     These cases are the door on the NEXT visit: no signature made here, no
+     fetch, the bundle alone. ─────────────────────────────────────────────── */
+  describe('a paper she signed on an earlier visit', () => {
+    function signedBundle(depositOffer: unknown) {
+      bundleMock.mockReturnValue({
+        isLoading: false,
+        isError: false,
+        data: {
+          document: { kind: 'design_build' },
+          furnishings: null,
+          tradeScope: null,
+          parts: [],
+          serviceTerms: { currency: 'USD' },
+          signatures: [
+            {
+              party: 'client',
+              signerName: 'Harper Vale',
+              signedAt: '2026-09-08T15:04:00.000Z',
+              documentFingerprint: 'abc',
+            },
+          ],
+          designBuild: {
+            draws: [0, 1, 2, 3, 4].map((n) => ({ drawKey: `d${n}` })),
+            retainageHeldCents: 378603,
+            subs: [],
+            depositOffer,
+          },
+        },
+      });
+    }
+
+    it('stands open on her name, with the receipt and the copy she keeps', () => {
+      signedBundle(null);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.getByText('Open. It opened on your name.')).toBeInTheDocument();
+      expect(screen.getByTestId('door-receipt')).toHaveTextContent(
+        'has your signature',
+      );
+      expect(screen.getByTestId('door-keep-a-copy')).toBeInTheDocument();
+    });
+
+    it('re-derives the deposit offer from the row, not from this session', () => {
+      signedBundle({
+        invoiceId: 'inv-deposit',
+        amountCents: 841340,
+        label: 'Deposit at signing',
+        payToken: 'b'.repeat(64),
+      });
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.getByTestId('deposit-offer')).toHaveTextContent('$8,413.40');
+      expect(screen.getByRole('link', { name: 'Pay the deposit' })).toHaveAttribute(
+        'href',
+        `/pay/${'b'.repeat(64)}`,
+      );
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('offers nothing once the bundle says the deposit is settled', () => {
+      signedBundle(null);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.queryByTestId('deposit-offer')).not.toBeInTheDocument();
+      expect(screen.getByTestId('door-receipt')).toBeInTheDocument();
+    });
+
+    it('never asks for a name she has already given', () => {
+      signedBundle(null);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.queryByLabelText('Type your full name')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('door-acts-stub')).not.toBeInTheDocument();
+    });
+  });
 });

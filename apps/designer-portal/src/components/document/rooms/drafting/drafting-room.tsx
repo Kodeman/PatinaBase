@@ -153,8 +153,13 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     commercialState: proposal?.commercial_state,
   });
 
+  // W3R1-01 — `ledger` is the one posture that is not editable and does not
+  // evict: a turnkey prime past draft keeps its room because the draw ledger,
+  // the lien-waiver exchange and the Trade Agreements strip live there and
+  // nowhere else. The parts inside it are frozen exactly as they are for any
+  // sent document (the composer reads `document.state` itself).
   useEffect(() => {
-    if (proposal && editability !== 'editable') {
+    if (proposal && editability !== 'editable' && editability !== 'ledger') {
       router.replace(`/doc/${proposalId}`);
     }
   }, [editability, proposal, proposalId, router]);

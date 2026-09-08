@@ -62,6 +62,15 @@ export interface ThresholdReceipt {
 
 export type ThresholdNoteState = 'standing' | 'answered' | 'retired';
 
+/**
+ * READ AND DECIDED (Wave 3, RC-13): this is the THRESHOLD's vocabulary, not
+ * `document_kind`. It names what a note is about — a paper, a trade's own
+ * scope, or a letter — and a design-build prime is a `'proposal'` here exactly
+ * as a design-services agreement is. Adding `'design_build'` would split one
+ * concept in two and leave every consumer with a fourth case to handle for a
+ * paper they already handle. No edit; the third member of the union stays
+ * `trade_scope` because a trade scope genuinely is a different object.
+ */
 export interface ThresholdNoteEnclosure {
   kind: 'proposal' | 'trade_scope' | 'invoice';
   id: string;

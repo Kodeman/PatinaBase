@@ -1,0 +1,137 @@
+door mentions the deposit: true
+door mentions $8,413.40: true
+
+=== THE PAPERS, IN FULL ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Birch Hollow
+
+Discovery · September 2026
+
+Nothing waits for your name.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Client User — design services agreement
+
+Open. It opened on your name.
+
+Client User — design services agreement · signed 8 September · Leah Hartwell has your signature. You’ll have a copy.
+
+KEEP A COPY
+
+Your deposit is ready — $8,413.40
+
+The first of five draws · due on signing. You can pay now, or your studio will send it.
+
+PAY THE DEPOSIT
+
+THE LETTERBOX
+
+Nothing in the letterbox.
+
+Previously
+—
+Design-build agreement · Client User — design services ag…
+SIGNED
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Marrow & Vale Residence
+Aspen Loft Refresh
+A note is waiting there.
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE
+THE PAPERS
+THE PAPERS, IN FULL
+
+Nothing has been filed here yet.
+papers sheet names the signed prime: true
+
+=== Marrow & Vale Residence ===
+  deposit offer here: true
+  invoice $8,413.40 here: true
+  signed prime here: true
+
+=== Aspen Loft Refresh ===
+  deposit offer here: true
+  invoice $8,413.40 here: true
+  signed prime here: true
+
+=== /pay/<token> ===
+Leah Hartwell
+prepared by Leah Hartwell
+
+Awaiting payment · due 8 September
+
+Invoice No. INV-0001
+
+Deposit at signing · from Leah Hartwell
+
+from the studio
+
+for Client User
+
+TOTAL
+$8,413.40
+BALANCE DUE
+$8,413.40
+
+due 8 September 2026
+
+issued 8 September 2026
+
+HOW WOULD YOU LIKE TO PAY?
+
+Each row shows what you would pay in full.
+
+Bank transfer
+$8,418.40
++ $5.00 · Bank transfer costs the least to process.
+Card
+$8,665.80
++ $252.40 · This covers what card processing costs.
+Mail a check
+$8,413.40
+No fee.
+Subtotal
+$8,413.40
+Balance
+$8,413.40
+Bank transfer fee
+$5.00
+Total to pay
+$8,418.40
+Pay $8,418.40
+
+Total to pay $8,418.40
+
+WHAT’S INCLUDED
+Deposit at signing
+1
+$8,413.40
+A NOTE FROM LEAH
+
+Design-build draw · Deposit at signing
+
+PAYMENTS
+
+No payments recorded yet.
+
+Print / save PDF
+Prepared by Leah Hartwell · Sent through Patina
+pay button present: 1
+CHECKOUT -> 500 {"error":"stripe_not_configured"}
+
+text changed after the click: true
+NEW LINES: Unable to open the payment page just now. Try again in a moment. (stripe_not_configured)
+ALERTS: ["Unable to open the payment page just now. Try again in a moment. (stripe_not_configured)"]
+button re-enabled: true

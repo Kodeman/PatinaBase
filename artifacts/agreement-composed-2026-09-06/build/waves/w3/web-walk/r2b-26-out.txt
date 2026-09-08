@@ -1,0 +1,133 @@
+=== /trade/<token> — no login ===
+LEAH HARTWELL · TRADE AGREEMENT
+
+Cabinetry & millwork
+
+Marta Reyes
+
+SCOPE
+
+Fabricate and install the kitchen and mudroom cabinetry and millwork, per the issued drawings.
+
+PRICE
+
+$38,000
+
+SCHEDULE
+
+Starts 1 October 2026 · 21 days on site
+After rough-in, before tile
+
+RETAINAGE
+
+5% of each payment is held back until the work is complete.
+
+PAYMENT
+
+The studio pays you within 7 days of being paid for this work.
+
+INSURANCE
+
+A certificate of insurance is required before you start.
+
+LIEN WAIVERS
+
+A conditional waiver with each payment request, an unconditional one once that payment clears.
+
+TYPE YOUR FULL NAME
+8 September 2026
+
+Your typed name acts as your electronic signature.
+
+SIGN THIS AGREEMENT
+Press and hold to sign this agreement.
+LEAKS: {"clientName":false,"projectName":false,"gmp":false,"scheduleOfValues":false,"otherSub":true,"bid":false,"drawFigures":false}
+DOM mentions "bid": false
+DOM mentions GMP cents 8413400: false
+DOM mentions another trade: false
+sign button: 1 disabled: false
+
+=== AFTER SIGNING ===
+LEAH HARTWELL · TRADE AGREEMENT
+
+Cabinetry & millwork
+
+Marta Reyes
+
+SCOPE
+
+Fabricate and install the kitchen and mudroom cabinetry and millwork, per the issued drawings.
+
+PRICE
+
+$38,000
+
+SCHEDULE
+
+Starts 1 October 2026 · 21 days on site
+After rough-in, before tile
+
+RETAINAGE
+
+5% of each payment is held back until the work is complete.
+
+PAYMENT
+
+The studio pays you within 7 days of being paid for this work.
+
+INSURANCE
+
+A certificate of insurance is required before you start.
+
+LIEN WAIVERS
+
+A conditional waiver with each payment request, an unconditional one once that payment clears.
+
+Signed.
+
+Marta Reyes · 8 September 2026
+
+Your studio holds a copy of this agreement as you signed it.
+
+=== THE SAME LINK, A SECOND TIME ===
+LEAH HARTWELL · TRADE AGREEMENT
+
+Cabinetry & millwork
+
+Marta Reyes
+
+SCOPE
+
+Fabricate and install the kitchen and mudroom cabinetry and millwork, per the issued drawings.
+
+PRICE
+
+$38,000
+
+SCHEDULE
+
+Starts 1 October 2026 · 21 days on site
+After rough-in, before tile
+
+RETAINAGE
+
+5% of each payment is held back until the work is complete.
+
+PAYMENT
+
+The studio pays you within 7 days of being paid for this work.
+
+INSURANCE
+
+A certificate of insurance is required before you start.
+
+LIEN WAIVERS
+
+A conditional waiver with each payment request, an unconditional one once that payment clears.
+
+Signed.
+
+Marta Reyes · 8 September 2026
+
+Your studio holds a copy of this agreement as you signed it.
+second load offers a signable form: false

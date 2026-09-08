@@ -1,0 +1,13 @@
+=== readiness · NAMED, VISIBLE rate card ===
+3 OF 9 PARTS NEED ATTENTION
+
+No furnishings deposit set — authorizations will default to 50%.
+
+
+=== readiness · FEE HIDDEN (R33/R39) ===
+4 OF 9 PARTS NEED ATTENTION
+
+No furnishings deposit set — authorizations will default to 50%.
+
+
+review&send disabled: false aria: null

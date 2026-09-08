@@ -51,6 +51,58 @@ describe('draftingEditability — the Room’s own rule, addressable', () => {
     ).toBe('issued');
   });
 
+  it('W3R1-01: keeps a turnkey prime past draft in the room, for its ledger', () => {
+    // The draw ledger, the lien-waiver exchange and the Trade Agreements strip
+    // are mounted in the Contract Room and nowhere else, and all three exist
+    // only after the agreement is sent. `ledger` is `issued` plus a room.
+    for (const commercialState of ['sent', 'client_signed', 'executed']) {
+      expect(
+        draftingEditability({
+          documentKind: 'design_build',
+          status: 'sent',
+          commercialState,
+        }),
+      ).toBe('ledger');
+    }
+    // A draft is still simply editable.
+    expect(
+      draftingEditability({
+        documentKind: 'design_build',
+        status: 'draft',
+        commercialState: 'draft',
+      }),
+    ).toBe('editable');
+    // And a prime nobody may act on any more keeps the old eviction.
+    for (const commercialState of ['superseded', 'declined', 'expired']) {
+      expect(
+        draftingEditability({
+          documentKind: 'design_build',
+          status: 'sent',
+          commercialState,
+        }),
+      ).toBe('issued');
+    }
+  });
+
+  it('W3R1-01: leaves a design-services agreement evicted exactly as before', () => {
+    for (const commercialState of ['sent', 'client_signed', 'executed']) {
+      expect(
+        draftingEditability({
+          documentKind: 'design_services',
+          status: 'sent',
+          commercialState,
+        }),
+      ).toBe('issued');
+      expect(
+        draftingEditability({
+          documentKind: 'service_addendum',
+          status: 'sent',
+          commercialState,
+        }),
+      ).toBe('issued');
+    }
+  });
+
   it('never opens a furnishings authorization', () => {
     expect(
       draftingEditability({

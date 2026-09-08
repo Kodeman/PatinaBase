@@ -22,6 +22,7 @@ const evidence: CommercialTransitionEvidence = {
   depositInvoice: null,
   tradeScopeTerms: null,
   tradeScopeDraw: null,
+  agreementDraw: null,
 };
 
 function assess(
@@ -597,5 +598,156 @@ Deno.test(
       }),
       { allowed: false, reason: "transition_not_committed" },
     );
+  },
+);
+
+// ─── design-build (Wave 3) ───────────────────────────────────────────────────
+
+Deno.test(
+  "design-build joins the services rail but is kept off deposit_ready (DENO-1)",
+  () => {
+    assertEquals(documentKindCanNotify("design_build", "client_signed"), true);
+    assertEquals(documentKindCanNotify("design_build", "executed"), true);
+    assertEquals(documentKindCanNotify("design_build", "budget_published"), true);
+    // The turnkey deposit reaches the client on the door, in the same act as
+    // their signature — an email here would be a second, contradictory notice.
+    assertEquals(documentKindCanNotify("design_build", "deposit_ready"), false);
+    assertEquals(
+      documentKindCanNotify("design_build", "agreement_draw_ready"),
+      true,
+    );
+    assertEquals(
+      documentKindCanNotify("trade_scope", "agreement_draw_ready"),
+      false,
+    );
+    assertEquals(
+      documentKindCanNotify("design_services", "agreement_draw_ready"),
+      false,
+    );
+    assertEquals(
+      documentKindCanNotify("furnishings_authorization", "agreement_draw_ready"),
+      false,
+    );
+    // The prime's own draw rail is not the trade-scope rail, in either
+    // direction.
+    assertEquals(documentKindCanNotify("design_build", "trade_draw_ready"), false);
+    assertEquals(documentKindCanNotify("design_build", "furnishings_sent"), false);
+    assertEquals(documentKindCanNotify("design_build", "trade_scope_sent"), false);
+  },
+);
+
+Deno.test("agreement draw ready is the studio's act and is event-scoped", () => {
+  assertEquals(actorCanNotify("studio", "agreement_draw_ready"), true);
+  assertEquals(actorCanNotify("client", "agreement_draw_ready"), false);
+  assertEquals(actorCanNotify("service", "agreement_draw_ready"), true);
+  assertEquals(actorCanNotify("unknown", "agreement_draw_ready"), false);
+  assertEquals(
+    commercialNotificationEventKey(
+      "agreement_draw_ready",
+      "document-1",
+      "draw-2",
+    ),
+    "draw-2",
+  );
+  assertEquals(
+    commercialNotificationEventKey("agreement_draw_ready", "document-1", null),
+    null,
+  );
+});
+
+Deno.test(
+  "agreement draw ready needs an executed design-build prime and an issued invoice on the named draw (DENO-2)",
+  () => {
+    const executedDesignBuild: CommercialTransitionEvidence = {
+      ...evidence,
+      projectDocument: {
+        projectId: "project-1",
+        documentKind: "design_build",
+        executedAt: "2026-09-07T13:00:00Z",
+        budgetCheckpointId: null,
+        depositInvoiceId: null,
+      },
+      agreementDraw: { id: "draw-2", invoiceStatus: "sent" },
+    };
+    const committed = {
+      transition: "agreement_draw_ready" as const,
+      actorRole: "studio" as const,
+      documentKind: "design_build",
+      commercialState: "executed",
+      eventId: "draw-2",
+      evidence: executedDesignBuild,
+    };
+    assertEquals(assess(committed), { allowed: true });
+    assertEquals(
+      assess({
+        ...committed,
+        evidence: {
+          ...executedDesignBuild,
+          agreementDraw: { id: "draw-2", invoiceStatus: "partially_paid" },
+        },
+      }),
+      { allowed: true },
+    );
+    // Not yet executed — the studio has not countersigned.
+    assertEquals(assess({ ...committed, commercialState: "client_signed" }), {
+      allowed: false,
+      reason: "transition_not_committed",
+    });
+    // No bound project document at all.
+    assertEquals(
+      assess({
+        ...committed,
+        evidence: { ...executedDesignBuild, projectDocument: null },
+      }),
+      { allowed: false, reason: "transition_not_committed" },
+    );
+    // Bound to another rail's document.
+    assertEquals(
+      assess({
+        ...committed,
+        evidence: {
+          ...executedDesignBuild,
+          projectDocument: {
+            ...executedDesignBuild.projectDocument!,
+            documentKind: "trade_scope",
+          },
+        },
+      }),
+      { allowed: false, reason: "transition_not_committed" },
+    );
+    // No eventId names a draw.
+    assertEquals(assess({ ...committed, eventId: null }), {
+      allowed: false,
+      reason: "transition_not_committed",
+    });
+    // The evidence loader scopes its lookup to (id, proposal_id), so a forged
+    // or cross-proposal eventId simply resolves no ledger row.
+    assertEquals(
+      assess({
+        ...committed,
+        eventId: "attacker-draw",
+        evidence: { ...executedDesignBuild, agreementDraw: null },
+      }),
+      { allowed: false, reason: "transition_not_committed" },
+    );
+    // A draw resolved, but not the one the caller named.
+    assertEquals(
+      assess({ ...committed, eventId: "draw-3" }),
+      { allowed: false, reason: "transition_not_committed" },
+    );
+    // The draw's invoice is not out for payment.
+    for (const invoiceStatus of [null, "draft", "paid", "void"]) {
+      assertEquals(
+        assess({
+          ...committed,
+          evidence: {
+            ...executedDesignBuild,
+            agreementDraw: { id: "draw-2", invoiceStatus },
+          },
+        }),
+        { allowed: false, reason: "transition_not_committed" },
+        `invoiceStatus ${String(invoiceStatus)} must not notify`,
+      );
+    }
   },
 );

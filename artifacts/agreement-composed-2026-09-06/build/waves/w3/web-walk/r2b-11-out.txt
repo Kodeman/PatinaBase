@@ -1,0 +1,118 @@
+REQ POST /api/proposals/95390bd8-86e4-4a0b-9595-9dd5657cc51e/sign
+NET /api/proposals/95390bd8-86e4-4a0b-9595-9dd5657cc51e/sign 200 {"ok":true,"commercialState":"client_signed","newlyClientSigned":true,"notificationDelivery":{"state":"pending_retry"},"depositOffer":{"invoiceId":"415417e1-a12f-445b-b836-7677023eb4c3","amountCents":841340,"label":"Deposit at signing","payPath":"/pay/e20fcb2126db7b1b2a075a6405907c1034eb2c4c4c36f10e707b38c6cf6ab6b9"}}
+=== AFTER SIGNING ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+Nothing waits for your name. A balance of $23,978 stands open.
+
+Previously — Design-build agreement · Client User — design services agreement, 8 September.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Owed on the open invoice
+$23,978 · due 8 September
+Client User — design services agreement
+
+Open. It opened on your name.
+
+Client User — design services agreement · signed 8 September · Leah Hartwell has your signature. You’ll have a copy.
+
+KEEP A COPY
+
+Your deposit is ready — $8,413.40
+
+The first of five draws · due on signing. You can pay now, or your studio will send it.
+
+PAY THE DEPOSIT
+
+Your signature remains recorded, but confirmation delivery is still pending. You can retry safely.
+
+RESEND CONFIRMATION NOTICE
+
+THE LETTERBOX
+
+INV-0002 · $23,978 total · $0 paid. Balance $23,978, due September 8.
+
+OPEN THE INVOICE
+OPEN THE LETTERBOX
+PRINT
+EARLIER INVOICES
+Previously
+8 SEPTEMBER
+Design-build agreement · Client User — design services ag…
+SIGNED
+—
+Design-build agreement · Client User — design services ag…
+SIGNED
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+Design-build agreement · Client User — design services agreement
+INV-0002
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Birch Hollow
+Marrow & Vale Residence
+Aspen Loft Refresh
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE
+
+=== THE DOOR, RELOADED ===
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+Nothing waits for your name. A balance of $32,392 stands open.
+
+Previously — Design-build agreement · Client User — design services agreement, 8 September.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+Owed across two open invoices, one from the studio
+$32,392 · soonest due 8 September
+
+THE LETTERBOX
+
+INV-0002 · $23,978 total · $0 paid. Balance $23,978, due September 8.
+
+OPEN THE INVOICE
+OPEN THE LETTERBOX
+PRINT
+EARLIER INVOICES
+Previously
+8 SEPTEMBER
+Design-build agreement · Client User — design services ag…
+SIGNED
+—
+Design-build agreement · Client User — design services ag…
+SIGNED
+
+THE MAT
+
+THE PEOPLE, WHERE THEY WORK
+Leah Hartwell · the studio
+THE PAPERS
+Design-build agreement · Client User — design services agreement
+Design-build agreement · Client User — design services agreement
+INV-0002
+THE PAPERS, IN FULL
+YOUR OTHER HOUSES
+Birch Hollow
+Marrow & Vale Residence
+Aspen Loft Refresh
+YOUR DETAILS
+LEAVE THE HOUSE
+ASK FOR A CHANGE

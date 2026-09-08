@@ -16,6 +16,7 @@
  * custom schedule part cannot rewrite the terms row either.
  */
 
+import { DESIGN_BUILD_COPY } from "@patina/types";
 import type { AgreementPart } from "@patina/types";
 import { Button, Input, Select, Textarea } from "@/components/ui/controls";
 import {
@@ -39,6 +40,7 @@ import {
   PerPhaseEditor,
   ProcurementEditor,
 } from "./schedules";
+import { turnkeyEditorFor, type TurnkeyContext } from "./turnkey";
 
 const labelClass =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
@@ -60,6 +62,19 @@ export interface PartEditorProps {
    * nothing.
    */
   blockers?: string[];
+  /**
+   * Wave 3 — what this editor knows about the rest of the composition. The
+   * composer supplies it only when `design-build` is on AND this is a
+   * design-build agreement; absent, no turnkey editor mounts and this file is
+   * exactly the editor Wave 2 shipped.
+   */
+  turnkey?: TurnkeyContext;
+  /**
+   * R39 — the visibility act. Present, the header carries a "Hidden from your
+   * client" toggle that writes `client_visible`; absent, nothing about
+   * visibility is rendered and the flag-off room is unchanged.
+   */
+  onToggleClientVisible?: (next: boolean) => void;
 }
 
 export function PartEditor({
@@ -68,8 +83,11 @@ export function PartEditor({
   readOnly,
   libraryOn = false,
   blockers = [],
+  turnkey,
+  onToggleClientVisible,
 }: PartEditorProps) {
   const chipped = libraryOn && part.kind === "schedule";
+  const hidden = part.clientVisible === false;
   return (
     <section aria-label={`${part.title} editor`} className="space-y-4">
       <header>
@@ -81,10 +99,36 @@ export function PartEditor({
               <AuthorityChip variant={part.variant} />
             </>
           )}
+          {/* R39 — the chip states the fact; the toggle below is the act.
+              Both only exist where the visibility act does. */}
+          {onToggleClientVisible && hidden && (
+            <>
+              {" · "}
+              <span data-client-visible="false" className={labelClass}>
+                {DESIGN_BUILD_COPY.hiddenFromClient}
+              </span>
+            </>
+          )}
         </p>
         <h2 className="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
           {part.title}
         </h2>
+        {onToggleClientVisible && (
+          <label className="mt-2 flex items-center gap-2 text-[12px] text-[var(--color-charcoal)]">
+            <input
+              type="checkbox"
+              disabled={readOnly}
+              checked={hidden}
+              onChange={(event) => onToggleClientVisible(event.target.checked)}
+            />
+            {DESIGN_BUILD_COPY.hiddenFromClient}
+          </label>
+        )}
+        {onToggleClientVisible && hidden && (
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
+            {DESIGN_BUILD_COPY.hiddenFromClientHelp}
+          </p>
+        )}
         {blockers.length > 0 && (
           <div className="mt-2 border-l-2 border-[var(--color-clay-ink)] pl-3">
             {blockers.map((message) => (
@@ -104,6 +148,7 @@ export function PartEditor({
         onChange={onChange}
         readOnly={readOnly}
         libraryOn={libraryOn}
+        turnkey={turnkey}
       />
       {chipped && authorityStanding(part.variant) === "record-only" && (
         <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
@@ -119,8 +164,30 @@ function PartEditorBody({
   onChange,
   readOnly,
   libraryOn = false,
+  turnkey,
 }: PartEditorProps) {
   const payload = part.payload ?? {};
+
+  // Wave 3 asks first, and only where the composer handed down a turnkey
+  // context. Nothing below this line changed: a variant the turnkey folder
+  // does not open falls straight through to the editor it already had.
+  if (turnkey) {
+    const TurnkeyEditor = turnkeyEditorFor({
+      kind: part.kind,
+      variant: part.variant,
+      partKey: part.partKey,
+    });
+    if (TurnkeyEditor) {
+      return (
+        <TurnkeyEditor
+          payload={payload}
+          onChange={onChange}
+          readOnly={readOnly}
+          turnkey={turnkey}
+        />
+      );
+    }
+  }
 
   if (part.kind === "clause") {
     return (
@@ -565,14 +632,21 @@ function AttachmentEditor({ payload, onChange, readOnly }: EditorProps) {
   );
 }
 
-/** Every kind Wave 1 does not open. Its title, what it is, and one sentence —
- *  never raw JSON, and never a throw. */
+/** Every kind this build does not open: the part named by its title, and one
+ *  sentence — never raw JSON, and never a throw.
+ *
+ *  W3R1-08 — and never a database key either. The eyebrow printed
+ *  `{kind} · {variant}` through an `uppercase` class, so a flag-off turnkey
+ *  draft met the designer with "SCHEDULE · PRICING_BASIS" — a column value
+ *  uppercased into the studio's face, which the binding vocabulary forbids.
+ *  The card names the part the way the paper does. (`PartEditor`'s own header
+ *  sits directly above this and already prints `partKindLabel`, so the card is
+ *  not the place the reader learns what kind of part it is.) */
 export function UnsupportedPartCard({ part }: { part: AgreementPart }) {
   return (
     <div className="border border-[var(--doc-ink-border)] px-4 py-3">
       <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-        {part.kind}
-        {part.variant ? ` · ${part.variant}` : ""}
+        {part.title}
       </p>
       <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
         This part opens in a later release. It stays on the agreement exactly as

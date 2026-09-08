@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DESIGN_BUILD_PAPER_COPY } from "@patina/types";
 import { DocSheet } from "../overlays/doc-sheet";
 import { Button, Textarea } from "@/components/ui/controls";
 import { useSendServiceAgreement } from "@/hooks/use-commercial-documents";
@@ -48,6 +49,13 @@ export function ServiceAgreementSendSheet({
   };
 }) {
   const send = useSendServiceAgreement(document.id);
+  /* W3R2-05 — THE SHEET DESCRIBES THE PAPER IT IS SENDING.
+     A design-build prime carries a pricing basis, draws, allowances, a sub
+     disclosure, supervision, change orders, termination, terms and two
+     attachments — not "services, rates, retainer policy, billing cadence,
+     ceiling", and no furnishings deposit at all. Keyed off the document's
+     KIND, so a frozen turnkey draft reads correctly too. */
+  const turnkey = document.kind === "design_build";
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<string | null>(null);
   const readiness =
@@ -82,19 +90,25 @@ export function ServiceAgreementSendSheet({
   };
 
   return (
-    <DocSheet open={open} onClose={onClose} title="Send design agreement">
+    <DocSheet
+      open={open}
+      onClose={onClose}
+      title={turnkey ? "Send design-build agreement" : "Send design agreement"}
+    >
       <div className="mx-auto max-w-xl">
         <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
-          Yes to the designer
+          {turnkey ? DESIGN_BUILD_PAPER_COPY.documentLabel : "Yes to the designer"}
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
           Send for the client signature
         </h2>
         <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
           {recipientName ? `${recipientName} receives` : "The client receives"}{" "}
-          the services, rates, retainer policy, billing cadence, ceiling, and
-          terms. Their signature preserves consent; the agreement still awaits
-          the studio countersignature before work is authorized.
+          {turnkey
+            ? "the price, the schedule of values, the draw schedule, the allowances, who is doing the work, and the terms."
+            : "the services, rates, retainer policy, billing cadence, ceiling, and terms."}{" "}
+          Their signature preserves consent; the agreement still awaits the
+          studio countersignature before work is authorized.
         </p>
 
         <div className="mt-5 rounded-[4px] border border-[var(--doc-ink-border)] px-4 py-3">
@@ -106,7 +120,9 @@ export function ServiceAgreementSendSheet({
           </p>
         </div>
 
-        {terms && (
+        {/* No furnishings pass through a design-build agreement, so a
+            furnishings deposit is not a term it has. */}
+        {terms && !turnkey && (
           <div className="mt-3 rounded-[4px] border border-[var(--doc-ink-border)] px-4 py-3">
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Furnishings deposit
@@ -129,11 +145,14 @@ export function ServiceAgreementSendSheet({
           </div>
         )}
 
-        {readiness.ready ? (
+        {/* W3R2-17 — "every contractual facet is present" is not something to
+            say over a warning about missing allowance lines. A sheet that
+            carries a caution carries only the caution. */}
+        {readiness.ready && readiness.notes.length === 0 ? (
           <p className="mt-4 border-l-2 border-[var(--color-sage)] pl-3 text-[12px] text-[var(--color-mocha)]">
             Ready to send · every contractual facet is present.
           </p>
-        ) : (
+        ) : !readiness.ready ? (
           <div className="mt-4 border-l-2 border-[var(--color-terracotta)] pl-3">
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Finish before sending
@@ -144,7 +163,7 @@ export function ServiceAgreementSendSheet({
               ))}
             </ul>
           </div>
-        )}
+        ) : null}
 
         <label className="mt-5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           A note to the client · optional

@@ -1,0 +1,101 @@
+on turnkeyRoom bytes 90816 · servicesRoom bytes 83535 · door bytes 45123
+--- turnkey room text (first 1400) ---
+Skip to the paper
+←
+THE DESK
+THE CONTRACT ROOM · DESIGN-BUILD AGREEMENT
+· 3 of 10 parts need attention
+REVIEW & SEND
+→
+
+YES TO THE STUDIO · DESIGN AND CONSTRUCTION
+
+Client User — design services agreement
+
+Compose the parts this agreement is made of. The price, the draws and the trades are inside it.
+
+Preview client copy
+Return to the seven facets
+Saved
+
+CLIENT ACCOUNT
+
+Client User
+⠿
+PRICING BASIS · RECORD ONLY
+Pricing basis·
+NEEDS ATTENTION
+⋯
+⠿
+DRAWS · RECORD ONLY
+Draw schedule·
+NEEDS ATTENTION
+⋯
+⠿
+ALLOWANCES · RECORD ONLY
+Allowances
+⋯
+⠿
+CLAUSE
+Who does the work·
+⋯
+⠿
+CLAUSE
+Supervision·
+⋯
+⠿
+CLAUSE
+Change orders·
+⋯
+⠿
+CLAUSE
+Termination·
+⋯
+⠿
+CLAUSE
+Terms·
+NEEDS ATTENTION
+⋯
+⠿
+ATTACHMENT
+Notice of cancellation
+HIDDEN FROM YOUR CLIENT
+⋯
+⠿
+ATTACHMENT
+Lien waiver form
+⋯
++ Add a partStart from a template…
+Save as template…
+
+PRICING BASIS · RECORD ONLY
+
+Pricing basis
+
+Complete Pricing basis.
+
+Choose how this agreement is priced.
+
+HOW THIS AGREEMENT IS PRICED
+
+Fixed price
+Cost-plus
+Cost-plus with GMP
+Time and materials with a not-to-exceed
+MARKUP ON THE TRADES · PERCENT
+
+COST LINES
+
++ Add a cost line
+COST BASIS $0.00
+CONTRACT SUM —
+
+Choose how this agreement is priced.
+
+The schedule of values appears once the contract sum, the open-book or closed-book choice, and the lines beneath them are written.
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+A

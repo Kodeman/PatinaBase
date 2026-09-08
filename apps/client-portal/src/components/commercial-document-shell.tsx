@@ -11,7 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@patina/design-system';
+import { DESIGN_BUILD_PAPER_COPY } from '@patina/types';
 import { AgreementPartsBody } from '@/components/agreement-parts-body';
+import { DesignBuildBody } from '@/components/commercial/design-build-body';
 import { Stamp } from '@/components/threshold/instruments/stamp';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { formatCalendarDate } from '@/lib/utils/format';
@@ -28,6 +30,7 @@ const KIND_LABEL: Record<Exclude<CommercialDocumentKind, 'legacy'>, string> = {
   service_addendum: 'Design services addendum',
   furnishings_authorization: 'Furnishings authorization',
   trade_scope: 'Trade scope',
+  design_build: DESIGN_BUILD_PAPER_COPY.documentLabel,
 };
 
 const STATE_LABEL = {
@@ -165,6 +168,13 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
       )}
       {document.kind === 'trade_scope' && (
         <TradeScopeBody bundle={bundle} />
+      )}
+      {/* Wave 3 — the turnkey class has its own body, not the composed
+          services one: `AgreementPartsBody` closes with "This agreement
+          authorizes design services only", which is false of a paper that
+          prices the trades, and it has nowhere to hang a draw ledger. */}
+      {document.kind === 'design_build' && (
+        <DesignBuildBody bundle={bundle} />
       )}
 
       <SignatureLedger bundle={bundle} />
@@ -664,6 +674,12 @@ function SignatureLedger({ bundle }: { bundle: CommercialDocumentBundle }) {
             )}
           </div>
         ))}
+        {/* A double negative, and RULED rather than left to luck (RC-13): the
+            two kinds named here are the one-act executions that carry no
+            studio countersignature at all. Every other kind is countersigned,
+            and `design_build` — admitted here the moment the union widened —
+            belongs on that side: a turnkey prime is not effective until the
+            studio signs it, which is what this placeholder says. */}
         {bundle.document.kind !== 'furnishings_authorization' &&
           bundle.document.kind !== 'trade_scope' &&
           !bundle.signatures.some((signature) => signature.party === 'studio') && (

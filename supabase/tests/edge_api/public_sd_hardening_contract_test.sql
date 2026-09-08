@@ -1719,9 +1719,23 @@ VALUES
     -- arm's live-authority reads sit BELOW its service_role/postgres early
     -- return, as the project path's do, so a settle or a void still replays
     -- once the stamped designer has left.
+    -- 00578 (R52) re-pinned this body once more (00571's hash was
+    -- 3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c).
+    -- The delta is TWO lines of declaration and one widened identity check on
+    -- the UPDATE arm: `project_id` may move from NULL to a project exactly
+    -- when `app.proposal_activation_id` names the design-build agreement whose
+    -- own countersign created that project, whose draw ledger owns this
+    -- invoice, and whose client and designer match the row's. That is the
+    -- origin deposit joining the house it opened, and it mirrors the same GUC
+    -- 00511 admits `proposals.project_id` under. Everything else this file
+    -- pins is unchanged: still SECURITY INVOKER, still no direct grants, the
+    -- other five identity columns still immutable, a project-bound invoice
+    -- still unreparentable (OLD.project_id IS NULL is half the predicate), and
+    -- the canonical root -> user_roles -> memberships -> organization lock
+    -- order untouched — the new predicate takes no lock.
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '3a556842c060e47d90ce8b3b04a0b6f3e726a390f2a2446b0dee599862390a4c',
+    '0d8fea5c746e407fbd92a2eaa7235a98067d9c06d6cd603e07eabb309f14fc59',
     ARRAY[]::text[]
   ),
   (
@@ -1903,19 +1917,19 @@ VALUES
     'app_private.issue_invoice_for_actor(uuid,date,uuid)',
     'p_invoice_id uuid, p_due_date date, p_actor_id uuid', 'invoices',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'bdf903ba6445367c7f18551859a0a14aeaa2f0dfbec95d4304110e39b537c727'
+    '19ed2037eedd20097f1a9c1b28d812db520d37e49650d1772aed65f555437f00'
   ),
   (
     'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'd1ea9e357d5f1c685677365601abaff4c96cf83f6006ab8c3479f1d745487293'
+    '4cb2a23d819be51eaf2de2c67a393c53c64230b39f4107b5b6ac82d7e818da58'
   ),
   (
     'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '02f9aab1ace96f0e439dee937ecd50e5b0b58a8366c732caafe66d70e1b25dd8'
+    '4ef70c443cbcc685d7f573f22d12fd64f110bc156213616f1b96a89e4b317e56'
   ),
   (
     -- 00566 rewrote the origin branch's studio resolution (00511's hash was
@@ -1943,22 +1957,35 @@ VALUES
     -- 'commercialDocumentId' anchor keep their exact text, so the caller
     -- contract holds too; and the signature, arguments, result type,
     -- proconfig, SECURITY DEFINER flag and ACL are all unchanged.
+    --
+    -- R52 (00578, walk round 2) adopts the origin deposit invoice into the
+    -- project this function has just created — one UPDATE inside the
+    -- design_build arm of the client_signed branch, bracketed by set_config
+    -- on app.proposal_activation_id and its restore (00577's hash was
+    -- d3a2cade68987dc446b7e0d2ded11540a85d947eb3d5bec8934e367960068fc1).
+    -- It takes no new lock and reads no new authority: the project row is
+    -- already held FOR SHARE two statements above, and the invoices UPDATE is
+    -- authorized by set_invoice_studio_id, which pins its own admission of
+    -- exactly this transition. Signature, arguments, result type, proconfig,
+    -- SECURITY DEFINER flag, ACL, the issue_invoice_for_actor call and the
+    -- 'commercialDocumentId' anchor are all unchanged, so every other contract
+    -- in this file still holds.
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'a5c8dfec6d6798dc7bc8c2ab0f0ac71f97b715536a33be466f65ab0840e9221b'
+    '3ca87ae1f02130749ae7886ab8b3f44d0ed700906c5ff2dbd28ab83a7f099d0e'
   ),
   (
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
     'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '81d54e2f271e78c1c901c6cec0b1d763cffecb87ce7d5c20990dddd789b3e432'
+    '71e3700f9a100f863a968cba9afab3a66e701d1dc369a491f5e9c31d1eacd4a3'
   ),
   (
     'public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)',
     'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '99c9545b3b59638bab7a034d62e743d32eb36bfe31b8a18f070f325fc69d0626'
+    'f36f824ebdfb279f1f2e23e46e2cbd03b1d4d71576e14516b21d99e455a23d14'
   ),
   (
     'public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)',
@@ -1982,7 +2009,7 @@ VALUES
     -- row, same trigger signature and search_path.
     'public.guard_commercial_signature_insert()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '0f12aca3038b2165fc75dbabcbe41391821fa1eac5905d775c378f63b9c7f471'
+    '8146f364549e9ee0b37f5cd9873fc779264a5c38ebe3477e8e41e75340f5fa7b'
   );
 
 UPDATE _00511_expected_dependency

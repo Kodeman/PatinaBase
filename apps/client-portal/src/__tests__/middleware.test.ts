@@ -72,12 +72,15 @@ describe('client middleware Universal Link exemption', () => {
     expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
   });
 
-  // S8 — the header block now covers ALL SIX bearer prefixes. /share, /rfq,
-  // /evidence and /field had carried neither header since they shipped; the
-  // ordinary public pages (/piece, /quiz) are still left alone.
+  // S8 — the header block now covers ALL SEVEN bearer prefixes. /share, /rfq,
+  // /evidence and /field had carried neither header since they shipped; /trade
+  // (Wave 3 · P14) joins them carrying a signature act, so a cached copy would
+  // keep serving a spent link's form. The ordinary public pages (/piece,
+  // /quiz) are still left alone.
   it.each([
     ['/share', `/share/${'a'.repeat(64)}`],
     ['/rfq', `/rfq/${'a'.repeat(64)}`],
+    ['/trade', `/trade/${'a'.repeat(64)}`],
     ['/evidence', `/evidence/${'a'.repeat(64)}`],
     ['/field', `/field/sr_abc123`],
     ['/pay', `/pay/${'a'.repeat(64)}`],
@@ -177,6 +180,31 @@ describe('client middleware Universal Link exemption', () => {
     for (const value of headers.values()) {
       expect(value).not.toContain("a".repeat(64));
       expect(value).not.toContain("b".repeat(64));
+    }
+  });
+
+  // Wave 3 · P14/R16 — the sub opens this link from an email on a phone with
+  // no Patina account. A sign-in redirect here is a dead end, and a token in a
+  // callbackUrl would park a signing credential in a query string.
+  it('lets an unauthenticated guest through to /trade/[token] without a sign-in redirect', async () => {
+    const response = await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: `/trade/${'a'.repeat(64)}`,
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(response).toBeDefined();
+    expect(
+      JSON.stringify((NextResponse.redirect as jest.Mock).mock.calls),
+    ).not.toContain('callbackUrl');
+    const headers = (response as unknown as { headers: Map<string, string> })
+      .headers;
+    for (const value of headers.values()) {
+      expect(value).not.toContain('a'.repeat(64));
     }
   });
 

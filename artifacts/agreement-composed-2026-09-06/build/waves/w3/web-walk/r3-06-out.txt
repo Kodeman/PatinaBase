@@ -1,0 +1,190 @@
+R48 · hide acts inside the PRICING BASIS editor (expect 0): 0
+
+=== STEP 5 · SOV under OPEN-BOOK ===
+
+
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
++ Add a cost line
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+SCHEDULE OF VALUES
+
+Open-book — the trades stand at cost and the fee is its own line.
+
+Cabinetry & millwork
+$38,000.00
+Electrical
+$9,500.00
+Plumbing
+$7,200.00
+General conditions / site
+$6,300.00
+Tile allowance
+$4,000.00
+Plumbing fixtures allowance
+$3,500.00
+Lighting allowance
+$2,800.00
+Fee · 18%
+$12,834.00
+GMP
+$84,134.00
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+R48 · hide acts inside the DRAW SCHEDULE editor (expect 0): 0
+
+=== STEP 8 · READINESS with BOTH ===
+3 OF 10 PARTS NEED ATTENTION
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+
+STEP 8 · review&send in the room {"disabled":false,"aria":null}
+STEP 8 · pricing basis editor: {"namesRule":true,"markupFieldAria":null,"feeAria":null}
+
+=== after clearing the markup ===
+2 OF 10 PARTS NEED ATTENTION
+
+
+review&send now {"disabled":false,"aria":null}
+
+=== SOV under CLOSED-BOOK (R43) ===
+ · WHAT YOUR CLIENT READS
+
+Your own division of the work — a room, a phase, or one line for the whole of it. It comes to the contract sum, and it is not the cost lines above.
+
+Remove
++ Add a line
+YOUR CLIENT’S TOTAL
+$84,134.00
+
+
+
+R39 · hide acts inside the CHANGE ORDERS editor (expect 1): 1
+
+=== R51 · THE CLIENT'S COPY · LIVE (closed book) ===
+ · LIVE
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Pricing basis
+
+The cost of the work, plus the studio’s fee on it, and the total will not exceed the guaranteed maximum price below.
+
+GUARANTEED MAXIMUM PRICE
+
+$84,134
+
+Schedule of values
+Construction
+$84,134
+The whole of it
+$84,134
+Draw schedule
+Deposit at signing
+10%
+Rough-in
+30%
+Cabinets set
+40%
+Substantial completion
+20%
+Allowances
+Tile allowance
+$4,000
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Plumbing fixtures allowance
+$3,500
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Lighting allowance
+$2,800
+
+Anything over this amount needs a change order first. Anything under it comes back to you.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequence of work, and answers for the result.
+
+Termination
+
+Either party may end this engagement in writing. Work performed and materials ordered to that date remain payable.
+
+Terms
+
+Invoices are due on receipt. Work proceeds against the draw schedule above. Wisconsin law governs this agreement.
+
+ATTACHMENT A · LIEN WAIVER FORM
+
+Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.
+
+I received this
+
+CLIENT SIGNATURE
+
+Awaiting
+
+STUDIO SIGNATURE
+
+Awaiting
+
+This agreement covers the work described above, at the price shown. Anything added to it is a separate written change order before the work is done.
+
+=== readiness before save ===
+0 OF 10 PARTS NEED ATTENTION
+
+
+RPC upsert_agreement_parts -> 200 {"parts": [{"id": "2e97e9b8-4a94-4407-a357-5ab7014347a3", "kind": "schedule", "title": "Pricing basis", "payload": {"basis": "cost_plus_gmp", "feeBps": 1800, "gmpCents": 8413400, "costLines": [{"id": "line-1788875337551-0", "label": "Cabinetry & millwork", "category": "sub", "basisCents": 3800000}, {"id": "line-1788875337934-1", "label": "Electrical", "category": "sub", "basisCents": 950000}, {"id": "line-1788875338350-2", "label": "Plumbing", "category": "sub", "basisCents": 720000}, {"id": "line-1788875338709-3", "label": "General conditions / site", "category": "general_conditions", "basisC
+
+=== readiness after save ===
+0 OF 10 PARTS NEED ATTENTION
+
+
+review&send after save {"disabled":false,"aria":null}

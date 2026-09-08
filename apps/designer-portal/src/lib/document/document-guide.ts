@@ -521,7 +521,8 @@ function proposalGuide(
 ): Omit<DocumentGuideModel, 'topInput' | 'remainingInputCount'> {
   const stage = row.active_section;
   const documentKind = proposal?.documentKind ?? 'legacy';
-  const isCommercial = documentKind === 'design_services';
+  const isCommercial =
+    documentKind === 'design_services' || documentKind === 'design_build';
   const state = isCommercial ? proposal?.commercialState : proposal?.status ?? row.proposal_status;
   const controls: DocumentGuideAction = {
     key: 'review-signing-controls',
@@ -664,7 +665,8 @@ export function deriveDocumentGuide({
     need?.kind === 'proposal_signed' ||
     need?.kind === 'proposal_declined' ||
     need?.kind === 'proposal_expired' ||
-    (proposal?.documentKind === 'design_services' &&
+    ((proposal?.documentKind === 'design_services' ||
+      proposal?.documentKind === 'design_build') &&
       proposal.commercialState !== 'sent' &&
       need?.kind === 'hesitating_proposal');
   if (need && !proposalLifecycleNeed) {

@@ -96,6 +96,11 @@ jest.mock("@/hooks/use-clients", () => ({
 // R17(b)/R24 — what the bundle says this agreement is made of. Empty is every
 // document today and every flag-off document tomorrow.
 let mockCommercialParts: unknown[] = [];
+// W3R1-01 — the Room now admits a turnkey prime past draft, so this file has
+// to be able to say which state the bundle is in. Every existing case leaves
+// it at `draft`, which is what they were written against.
+let mockCommercialState = "draft";
+let mockCommercialKind = "design_services";
 
 jest.mock("@/hooks/use-commercial-documents", () => ({
   useCommercialDocument: () => ({
@@ -104,8 +109,8 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
     data: {
       document: {
         id: "agreement-1",
-        kind: "design_services",
-        state: "draft",
+        kind: mockCommercialKind,
+        state: mockCommercialState,
         title: "Okafor design agreement",
         version: 1,
       },
@@ -149,12 +154,45 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCommercialState = "draft";
+    mockCommercialKind = "design_services";
     mockSaveAgreement.mockResolvedValue({});
     mockInviteAndLinkClient.mockResolvedValue({ profileId: "profile-1" });
     mockAttachClient.mockImplementation(
       (_input: unknown, callbacks: { onSuccess: () => void }) =>
         callbacks.onSuccess(),
     );
+  });
+
+  it("W3R1-01: never opens the seven facets over a paper that has left the studio", () => {
+    // The Room admits a turnkey prime past draft so the studio can reach its
+    // draw ledger. With `agreement-parts` off — this whole file's posture —
+    // the composer that holds the ledger is not mounted, and seven editable
+    // facets over an executed agreement would be the worse answer.
+    mockCommercialKind = "design_build";
+    mockCommercialState = "executed";
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          description: "Halvorsen kitchen and mudroom",
+          client: null,
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "This agreement has left the studio. Its record opens in the Contract Room.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Services & deliverables" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Review & send" }),
+    ).not.toBeInTheDocument();
   });
 
   // FLAG-OFF BYTE-IDENTITY (W1 gate). Generated on the unmodified room, then

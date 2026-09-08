@@ -1,0 +1,31 @@
+NET list_trade_agreements 200 []
+NET issue_agreement_draw_invoice 200 {"label": "Rough-in", "drawKey": "draw_2", "netCents": 2397819, "payToken": "c7de6de3ec4f1b6fa51bec9a3346560fc446dbb43ade6d1343483bfb2dbf9c46", "invoiceId": "549ea341-0cba-4aec-9a38-a2e0597a0f96", "amountCents": 2524020, "invoiceStatus": "sent", "retainageCents": 126201}
+BILL SHEET: null
+=== DRAWS after billing Rough-in ===
+
+
+Deposit at signing
+$8,413.40
+PAID
+Rough-in
+$23,978.19
+SENT
+$1,262.01 held
+Cabinets set
+$31,970.92
+NOT YET BILLED
+$1,682.68 held
+Bill this draw
+Substantial completion
+$15,985.46
+NOT YET BILLED
+$841.34 held
+Bill this draw
+Final · retainage release
+$3,786.03
+NOT YET BILLED
+Bill this draw
+
+Rough-in is billed — $23,978.19.
+
+

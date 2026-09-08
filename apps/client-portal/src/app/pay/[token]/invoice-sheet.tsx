@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { formatCurrency, onlineSurchargeCents } from "@patina/shared";
 
 import { payLinkEvents } from "@/lib/analytics/events";
-import { refusalSentence } from "@/lib/threshold/refusal";
 import {
   useCheckoutConfirmation,
   useCheckoutReturn,
@@ -27,7 +26,7 @@ import type { InvoiceLinkPayload, InvoiceLinkStatus } from "./invoice-link";
    used to collapse into "Try again in a moment." — including the ACH-in-flight
    409, where trying again is precisely the wrong instruction and the reason F1
    exists. Each code the edge function can return gets the sentence a person
-   can act on; anything unrecognised still falls through to `refusalSentence`.
+   can act on; anything unrecognised falls through to the caller's own line.
    `invoice_not_found` is absent on purpose: it is a dead link, and the caller
    sends the payer to the dead sheet rather than printing a sentence. ─────── */
 function checkoutRefusalSentence(
@@ -489,14 +488,16 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
         router.replace("/pay/dead");
         return;
       }
+      // W3R3-02 — the till never prints a provider error key. `stripe_error`,
+      // `stripe_not_configured` and every other code are a developer's word
+      // for a developer's problem; the code goes to the log and the payer
+      // gets a sentence this surface authored.
+      if (code) console.error("[pay] checkout refused:", code);
       setRefusal(
         checkoutRefusalSentence(code, studioName) ??
-          refusalSentence(
-            error,
-            method === "check"
-              ? "Unable to let the studio know just now. Try again in a moment."
-              : "Unable to open the payment page just now. Try again in a moment.",
-          ),
+          (method === "check"
+            ? "Unable to let the studio know just now. Try again in a moment."
+            : "The payment page could not open. Try again."),
       );
     } finally {
       setSubmitting(false);

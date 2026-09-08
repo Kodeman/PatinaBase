@@ -1,0 +1,1543 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`the composed room with design-build off leaves the allowances in the read-only card, as Wave 2 shipped 1`] = `
+<div>
+  <p
+    data-testid="room-count"
+  >
+    0 of 1 parts need attention
+  </p>
+  <button>
+    Review & send
+  </button>
+  <div
+    class="mx-auto max-w-[1240px] px-6 py-7 sm:px-8"
+  >
+    <header
+      class="border-b border-[var(--doc-ink-border)] pb-5"
+    >
+      <p
+        class="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]"
+      >
+        Yes to the designer · professional services only
+      </p>
+      <div
+        class="mt-1 flex flex-wrap items-end justify-between gap-4"
+      >
+        <div>
+          <h1
+            class="font-heading text-[1.65rem] text-[var(--color-charcoal)]"
+          >
+            Halvorsen design agreement
+          </h1>
+          <p
+            class="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            Compose the parts this agreement is made of. Furnishings and purchasing stay outside it.
+          </p>
+        </div>
+        <div
+          class="flex flex-wrap items-center gap-3"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Preview client copy
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Return to the seven facets
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-[var(--accent-primary)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] px-[1.6rem] py-[0.7rem]"
+            disabled=""
+            type="button"
+          >
+            Saved
+          </button>
+        </div>
+      </div>
+      <div
+        class="mt-4 max-w-sm"
+      >
+        <p
+          class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+        >
+          Client account
+        </p>
+        <div
+          data-testid="client-picker"
+        />
+      </div>
+    </header>
+    <div
+      class="grid gap-9 pt-7 min-[1180px]:grid-cols-[260px_minmax(0,1fr)_320px]"
+    >
+      <nav
+        aria-label="Agreement parts"
+        class="space-y-3"
+      >
+        <ul
+          class="border-t border-[var(--doc-ink-border)]"
+        >
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-4"
+                aria-disabled="false"
+                aria-label="Reorder Allowances"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                aria-current="true"
+                class="flex-1 text-left text-[var(--color-charcoal)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  Allowances
+                   · 
+                  <span
+                    class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)] text-[10.5px] tracking-[0.1em]"
+                    data-authority-standing="record-only"
+                  >
+                    record only
+                  </span>
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Allowances
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Allowances"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <div
+          id="DndDescribedBy-4"
+          style="display: none;"
+        >
+          
+    To pick up a draggable item, press the space bar.
+    While dragging, use the arrow keys to move the item.
+    Press space again to drop the item in its new position, or press escape to cancel.
+  
+        </div>
+        <div
+          aria-atomic="true"
+          aria-live="assertive"
+          id="DndLiveRegion-4"
+          role="status"
+          style="position: fixed; top: 0px; left: 0px; width: 1px; height: 1px; margin: -1px; border: 0px; padding: 0px; overflow: hidden; clip-path: inset(100%); white-space: nowrap;"
+        />
+        <div
+          class="space-y-1"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            + Add a part
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            Start from a template…
+          </button>
+          <div
+            class="space-y-1"
+          >
+            <button
+              class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+              type="button"
+            >
+              Save as template…
+            </button>
+          </div>
+        </div>
+      </nav>
+      <div
+        class="space-y-6"
+      >
+        <section
+          aria-label="Allowances editor"
+          class="space-y-4"
+        >
+          <header>
+            <p
+              class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            >
+              Allowances
+               · 
+              <span
+                class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+                data-authority-standing="record-only"
+              >
+                record only
+              </span>
+            </p>
+            <h2
+              class="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]"
+            >
+              Allowances
+            </h2>
+          </header>
+          <div
+            class="border border-[var(--doc-ink-border)] px-4 py-3"
+          >
+            <p
+              class="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            >
+              Allowances
+            </p>
+            <p
+              class="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
+            >
+              This part opens in a later release. It stays on the agreement exactly as it is, and the client sees it in place.
+            </p>
+          </div>
+          <p
+            class="text-[11px] leading-relaxed text-[var(--text-muted)]"
+          >
+            This is recorded on the agreement. It does not create billing authority yet.
+          </p>
+        </section>
+      </div>
+      <aside
+        class="space-y-6"
+      >
+        <section
+          aria-label="Agreement readiness"
+          class="border-t border-[var(--doc-ink-border)] pt-4"
+        >
+          <p
+            class="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+          >
+            0
+             of 
+            1
+             parts need attention
+          </p>
+          <ul
+            class="mt-3 space-y-1.5 text-[12px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            <li>
+              This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+            </li>
+          </ul>
+        </section>
+        <div
+          class="hidden min-[1180px]:block"
+        >
+          <div
+            class="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5"
+          >
+            <p
+              class="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            >
+              The client's copy · live
+            </p>
+            <div>
+              Agreement preview
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`the composed room with design-build off leaves the draws in the read-only card, as Wave 2 shipped 1`] = `
+<div>
+  <p
+    data-testid="room-count"
+  >
+    0 of 1 parts need attention
+  </p>
+  <button>
+    Review & send
+  </button>
+  <div
+    class="mx-auto max-w-[1240px] px-6 py-7 sm:px-8"
+  >
+    <header
+      class="border-b border-[var(--doc-ink-border)] pb-5"
+    >
+      <p
+        class="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]"
+      >
+        Yes to the designer · professional services only
+      </p>
+      <div
+        class="mt-1 flex flex-wrap items-end justify-between gap-4"
+      >
+        <div>
+          <h1
+            class="font-heading text-[1.65rem] text-[var(--color-charcoal)]"
+          >
+            Halvorsen design agreement
+          </h1>
+          <p
+            class="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            Compose the parts this agreement is made of. Furnishings and purchasing stay outside it.
+          </p>
+        </div>
+        <div
+          class="flex flex-wrap items-center gap-3"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Preview client copy
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Return to the seven facets
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-[var(--accent-primary)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] px-[1.6rem] py-[0.7rem]"
+            disabled=""
+            type="button"
+          >
+            Saved
+          </button>
+        </div>
+      </div>
+      <div
+        class="mt-4 max-w-sm"
+      >
+        <p
+          class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+        >
+          Client account
+        </p>
+        <div
+          data-testid="client-picker"
+        />
+      </div>
+    </header>
+    <div
+      class="grid gap-9 pt-7 min-[1180px]:grid-cols-[260px_minmax(0,1fr)_320px]"
+    >
+      <nav
+        aria-label="Agreement parts"
+        class="space-y-3"
+      >
+        <ul
+          class="border-t border-[var(--doc-ink-border)]"
+        >
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-3"
+                aria-disabled="false"
+                aria-label="Reorder Draws"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                aria-current="true"
+                class="flex-1 text-left text-[var(--color-charcoal)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  Draws
+                   · 
+                  <span
+                    class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)] text-[10.5px] tracking-[0.1em]"
+                    data-authority-standing="record-only"
+                  >
+                    record only
+                  </span>
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Draws
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Draws"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <div
+          id="DndDescribedBy-3"
+          style="display: none;"
+        >
+          
+    To pick up a draggable item, press the space bar.
+    While dragging, use the arrow keys to move the item.
+    Press space again to drop the item in its new position, or press escape to cancel.
+  
+        </div>
+        <div
+          aria-atomic="true"
+          aria-live="assertive"
+          id="DndLiveRegion-3"
+          role="status"
+          style="position: fixed; top: 0px; left: 0px; width: 1px; height: 1px; margin: -1px; border: 0px; padding: 0px; overflow: hidden; clip-path: inset(100%); white-space: nowrap;"
+        />
+        <div
+          class="space-y-1"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            + Add a part
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            Start from a template…
+          </button>
+          <div
+            class="space-y-1"
+          >
+            <button
+              class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+              type="button"
+            >
+              Save as template…
+            </button>
+          </div>
+        </div>
+      </nav>
+      <div
+        class="space-y-6"
+      >
+        <section
+          aria-label="Draws editor"
+          class="space-y-4"
+        >
+          <header>
+            <p
+              class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            >
+              Draws
+               · 
+              <span
+                class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+                data-authority-standing="record-only"
+              >
+                record only
+              </span>
+            </p>
+            <h2
+              class="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]"
+            >
+              Draws
+            </h2>
+          </header>
+          <div
+            class="border border-[var(--doc-ink-border)] px-4 py-3"
+          >
+            <p
+              class="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            >
+              Draws
+            </p>
+            <p
+              class="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
+            >
+              This part opens in a later release. It stays on the agreement exactly as it is, and the client sees it in place.
+            </p>
+          </div>
+          <p
+            class="text-[11px] leading-relaxed text-[var(--text-muted)]"
+          >
+            This is recorded on the agreement. It does not create billing authority yet.
+          </p>
+        </section>
+      </div>
+      <aside
+        class="space-y-6"
+      >
+        <section
+          aria-label="Agreement readiness"
+          class="border-t border-[var(--doc-ink-border)] pt-4"
+        >
+          <p
+            class="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+          >
+            0
+             of 
+            1
+             parts need attention
+          </p>
+          <ul
+            class="mt-3 space-y-1.5 text-[12px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            <li>
+              This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+            </li>
+          </ul>
+        </section>
+        <div
+          class="hidden min-[1180px]:block"
+        >
+          <div
+            class="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5"
+          >
+            <p
+              class="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            >
+              The client's copy · live
+            </p>
+            <div>
+              Agreement preview
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`the composed room with design-build off leaves the pricing basis in the read-only card, as Wave 2 shipped 1`] = `
+<div>
+  <p
+    data-testid="room-count"
+  >
+    0 of 1 parts need attention
+  </p>
+  <button>
+    Review & send
+  </button>
+  <div
+    class="mx-auto max-w-[1240px] px-6 py-7 sm:px-8"
+  >
+    <header
+      class="border-b border-[var(--doc-ink-border)] pb-5"
+    >
+      <p
+        class="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]"
+      >
+        Yes to the designer · professional services only
+      </p>
+      <div
+        class="mt-1 flex flex-wrap items-end justify-between gap-4"
+      >
+        <div>
+          <h1
+            class="font-heading text-[1.65rem] text-[var(--color-charcoal)]"
+          >
+            Halvorsen design agreement
+          </h1>
+          <p
+            class="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            Compose the parts this agreement is made of. Furnishings and purchasing stay outside it.
+          </p>
+        </div>
+        <div
+          class="flex flex-wrap items-center gap-3"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Preview client copy
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Return to the seven facets
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-[var(--accent-primary)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] px-[1.6rem] py-[0.7rem]"
+            disabled=""
+            type="button"
+          >
+            Saved
+          </button>
+        </div>
+      </div>
+      <div
+        class="mt-4 max-w-sm"
+      >
+        <p
+          class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+        >
+          Client account
+        </p>
+        <div
+          data-testid="client-picker"
+        />
+      </div>
+    </header>
+    <div
+      class="grid gap-9 pt-7 min-[1180px]:grid-cols-[260px_minmax(0,1fr)_320px]"
+    >
+      <nav
+        aria-label="Agreement parts"
+        class="space-y-3"
+      >
+        <ul
+          class="border-t border-[var(--doc-ink-border)]"
+        >
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-2"
+                aria-disabled="false"
+                aria-label="Reorder Pricing basis"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                aria-current="true"
+                class="flex-1 text-left text-[var(--color-charcoal)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  Pricing basis
+                   · 
+                  <span
+                    class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)] text-[10.5px] tracking-[0.1em]"
+                    data-authority-standing="record-only"
+                  >
+                    record only
+                  </span>
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Pricing basis
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Pricing basis"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <div
+          id="DndDescribedBy-2"
+          style="display: none;"
+        >
+          
+    To pick up a draggable item, press the space bar.
+    While dragging, use the arrow keys to move the item.
+    Press space again to drop the item in its new position, or press escape to cancel.
+  
+        </div>
+        <div
+          aria-atomic="true"
+          aria-live="assertive"
+          id="DndLiveRegion-2"
+          role="status"
+          style="position: fixed; top: 0px; left: 0px; width: 1px; height: 1px; margin: -1px; border: 0px; padding: 0px; overflow: hidden; clip-path: inset(100%); white-space: nowrap;"
+        />
+        <div
+          class="space-y-1"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            + Add a part
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            Start from a template…
+          </button>
+          <div
+            class="space-y-1"
+          >
+            <button
+              class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+              type="button"
+            >
+              Save as template…
+            </button>
+          </div>
+        </div>
+      </nav>
+      <div
+        class="space-y-6"
+      >
+        <section
+          aria-label="Pricing basis editor"
+          class="space-y-4"
+        >
+          <header>
+            <p
+              class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            >
+              Pricing basis
+               · 
+              <span
+                class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+                data-authority-standing="record-only"
+              >
+                record only
+              </span>
+            </p>
+            <h2
+              class="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]"
+            >
+              Pricing basis
+            </h2>
+          </header>
+          <div
+            class="border border-[var(--doc-ink-border)] px-4 py-3"
+          >
+            <p
+              class="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            >
+              Pricing basis
+            </p>
+            <p
+              class="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
+            >
+              This part opens in a later release. It stays on the agreement exactly as it is, and the client sees it in place.
+            </p>
+          </div>
+          <p
+            class="text-[11px] leading-relaxed text-[var(--text-muted)]"
+          >
+            This is recorded on the agreement. It does not create billing authority yet.
+          </p>
+        </section>
+      </div>
+      <aside
+        class="space-y-6"
+      >
+        <section
+          aria-label="Agreement readiness"
+          class="border-t border-[var(--doc-ink-border)] pt-4"
+        >
+          <p
+            class="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+          >
+            0
+             of 
+            1
+             parts need attention
+          </p>
+          <ul
+            class="mt-3 space-y-1.5 text-[12px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            <li>
+              This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+            </li>
+          </ul>
+        </section>
+        <div
+          class="hidden min-[1180px]:block"
+        >
+          <div
+            class="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5"
+          >
+            <p
+              class="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            >
+              The client's copy · live
+            </p>
+            <div>
+              Agreement preview
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`the composed room with design-build off renders a part hidden from the client exactly as Wave 2 shipped 1`] = `
+<div>
+  <p
+    data-testid="room-count"
+  >
+    0 of 1 parts need attention
+  </p>
+  <button>
+    Review & send
+  </button>
+  <div
+    class="mx-auto max-w-[1240px] px-6 py-7 sm:px-8"
+  >
+    <header
+      class="border-b border-[var(--doc-ink-border)] pb-5"
+    >
+      <p
+        class="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]"
+      >
+        Yes to the designer · professional services only
+      </p>
+      <div
+        class="mt-1 flex flex-wrap items-end justify-between gap-4"
+      >
+        <div>
+          <h1
+            class="font-heading text-[1.65rem] text-[var(--color-charcoal)]"
+          >
+            Halvorsen design agreement
+          </h1>
+          <p
+            class="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            Compose the parts this agreement is made of. Furnishings and purchasing stay outside it.
+          </p>
+        </div>
+        <div
+          class="flex flex-wrap items-center gap-3"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Preview client copy
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Return to the seven facets
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-[var(--accent-primary)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] px-[1.6rem] py-[0.7rem]"
+            disabled=""
+            type="button"
+          >
+            Saved
+          </button>
+        </div>
+      </div>
+      <div
+        class="mt-4 max-w-sm"
+      >
+        <p
+          class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+        >
+          Client account
+        </p>
+        <div
+          data-testid="client-picker"
+        />
+      </div>
+    </header>
+    <div
+      class="grid gap-9 pt-7 min-[1180px]:grid-cols-[260px_minmax(0,1fr)_320px]"
+    >
+      <nav
+        aria-label="Agreement parts"
+        class="space-y-3"
+      >
+        <ul
+          class="border-t border-[var(--doc-ink-border)]"
+        >
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-1"
+                aria-disabled="false"
+                aria-label="Reorder Studio note"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                aria-current="true"
+                class="flex-1 text-left text-[var(--color-charcoal)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  Clause
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Studio note
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Studio note"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <div
+          id="DndDescribedBy-1"
+          style="display: none;"
+        >
+          
+    To pick up a draggable item, press the space bar.
+    While dragging, use the arrow keys to move the item.
+    Press space again to drop the item in its new position, or press escape to cancel.
+  
+        </div>
+        <div
+          aria-atomic="true"
+          aria-live="assertive"
+          id="DndLiveRegion-1"
+          role="status"
+          style="position: fixed; top: 0px; left: 0px; width: 1px; height: 1px; margin: -1px; border: 0px; padding: 0px; overflow: hidden; clip-path: inset(100%); white-space: nowrap;"
+        />
+        <div
+          class="space-y-1"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            + Add a part
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            Start from a template…
+          </button>
+          <div
+            class="space-y-1"
+          >
+            <button
+              class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+              type="button"
+            >
+              Save as template…
+            </button>
+          </div>
+        </div>
+      </nav>
+      <div
+        class="space-y-6"
+      >
+        <section
+          aria-label="Studio note editor"
+          class="space-y-4"
+        >
+          <header>
+            <p
+              class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            >
+              Clause
+            </p>
+            <h2
+              class="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]"
+            >
+              Studio note
+            </h2>
+          </header>
+          <label
+            class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+          >
+            Body
+            <textarea
+              class="flex w-full rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-[0.85rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] disabled:opacity-50 mt-2 min-h-40 normal-case tracking-normal"
+              placeholder="The language the client reads and signs."
+              style="font-family: var(--font-body);"
+            >
+              Our own note.
+            </textarea>
+          </label>
+        </section>
+      </div>
+      <aside
+        class="space-y-6"
+      >
+        <section
+          aria-label="Agreement readiness"
+          class="border-t border-[var(--doc-ink-border)] pt-4"
+        >
+          <p
+            class="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+          >
+            0
+             of 
+            1
+             parts need attention
+          </p>
+          <ul
+            class="mt-3 space-y-1.5 text-[12px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            <li>
+              This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+            </li>
+          </ul>
+        </section>
+        <div
+          class="hidden min-[1180px]:block"
+        >
+          <div
+            class="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5"
+          >
+            <p
+              class="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            >
+              The client's copy · live
+            </p>
+            <div>
+              Agreement preview
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`the composed room with design-build off renders the rail and the standard parts exactly as Wave 2 shipped 1`] = `
+<div>
+  <p
+    data-testid="room-count"
+  >
+    0 of 5 parts need attention
+  </p>
+  <button>
+    Review & send
+  </button>
+  <div
+    class="mx-auto max-w-[1240px] px-6 py-7 sm:px-8"
+  >
+    <header
+      class="border-b border-[var(--doc-ink-border)] pb-5"
+    >
+      <p
+        class="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]"
+      >
+        Yes to the designer · professional services only
+      </p>
+      <div
+        class="mt-1 flex flex-wrap items-end justify-between gap-4"
+      >
+        <div>
+          <h1
+            class="font-heading text-[1.65rem] text-[var(--color-charcoal)]"
+          >
+            Halvorsen design agreement
+          </h1>
+          <p
+            class="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
+          >
+            Compose the parts this agreement is made of. Furnishings and purchasing stay outside it.
+          </p>
+        </div>
+        <div
+          class="flex flex-wrap items-center gap-3"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Preview client copy
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-[1.6rem] py-[0.7rem]"
+            type="button"
+          >
+            Return to the seven facets
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-[var(--accent-primary)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] px-[1.6rem] py-[0.7rem]"
+            disabled=""
+            type="button"
+          >
+            Saved
+          </button>
+        </div>
+      </div>
+      <div
+        class="mt-4 max-w-sm"
+      >
+        <p
+          class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+        >
+          Client account
+        </p>
+        <div
+          data-testid="client-picker"
+        />
+      </div>
+    </header>
+    <div
+      class="grid gap-9 pt-7 min-[1180px]:grid-cols-[260px_minmax(0,1fr)_320px]"
+    >
+      <nav
+        aria-label="Agreement parts"
+        class="space-y-3"
+      >
+        <ul
+          class="border-t border-[var(--doc-ink-border)]"
+        >
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-0"
+                aria-disabled="false"
+                aria-label="Reorder Services"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                aria-current="true"
+                class="flex-1 text-left text-[var(--color-charcoal)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  Clause
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Services
+                  <span
+                    aria-label="Required"
+                    class="ml-1.5 text-[var(--color-clay-ink)]"
+                    title="Required"
+                  >
+                    ·
+                  </span>
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Services"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-0"
+                aria-disabled="false"
+                aria-label="Reorder Deliverables"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                class="flex-1 text-left text-[var(--color-mocha)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  List
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Deliverables
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Deliverables"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-0"
+                aria-disabled="false"
+                aria-label="Reorder Role rates"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                class="flex-1 text-left text-[var(--color-mocha)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  Role rates
+                   · 
+                  <span
+                    class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] text-[10.5px] tracking-[0.1em]"
+                    data-authority-standing="authority"
+                  >
+                    creates authority
+                  </span>
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Role rates
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Role rates"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-0"
+                aria-disabled="false"
+                aria-label="Reorder Ceiling"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                class="flex-1 text-left text-[var(--color-mocha)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  Ceiling
+                   · 
+                  <span
+                    class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] text-[10.5px] tracking-[0.1em]"
+                    data-authority-standing="authority"
+                  >
+                    creates authority
+                  </span>
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Ceiling
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Ceiling"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+          <li
+            class="border-b border-[var(--doc-ink-border)]"
+          >
+            <div
+              class="flex items-center gap-2 py-2"
+            >
+              <button
+                aria-describedby="DndDescribedBy-0"
+                aria-disabled="false"
+                aria-label="Reorder Terms"
+                aria-roledescription="sortable"
+                class="cursor-grab px-1 font-mono text-[12px] text-[var(--text-faint)] disabled:cursor-default"
+                role="button"
+                tabindex="0"
+                type="button"
+              >
+                ⠿
+              </button>
+              <button
+                class="flex-1 text-left text-[var(--color-mocha)]"
+                type="button"
+              >
+                <span
+                  class="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                >
+                  Clause
+                </span>
+                <span
+                  class="block text-[13px]"
+                >
+                  Terms
+                  <span
+                    aria-label="Required"
+                    class="ml-1.5 text-[var(--color-clay-ink)]"
+                    title="Required"
+                  >
+                    ·
+                  </span>
+                </span>
+              </button>
+              <div
+                class="relative"
+              >
+                <button
+                  aria-expanded="false"
+                  aria-label="Part options for Terms"
+                  class="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <div
+          id="DndDescribedBy-0"
+          style="display: none;"
+        >
+          
+    To pick up a draggable item, press the space bar.
+    While dragging, use the arrow keys to move the item.
+    Press space again to drop the item in its new position, or press escape to cancel.
+  
+        </div>
+        <div
+          aria-atomic="true"
+          aria-live="assertive"
+          id="DndLiveRegion-0"
+          role="status"
+          style="position: fixed; top: 0px; left: 0px; width: 1px; height: 1px; margin: -1px; border: 0px; padding: 0px; overflow: hidden; clip-path: inset(100%); white-space: nowrap;"
+        />
+        <div
+          class="space-y-1"
+        >
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            + Add a part
+          </button>
+          <button
+            class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+            type="button"
+          >
+            Start from a template…
+          </button>
+          <div
+            class="space-y-1"
+          >
+            <button
+              class="type-btn-text inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[3px] cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-1 bg-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] px-4 py-[0.45rem] text-[0.78rem]"
+              type="button"
+            >
+              Save as template…
+            </button>
+          </div>
+        </div>
+      </nav>
+      <div
+        class="space-y-6"
+      >
+        <section
+          aria-label="Services editor"
+          class="space-y-4"
+        >
+          <header>
+            <p
+              class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            >
+              Clause
+            </p>
+            <h2
+              class="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]"
+            >
+              Services
+            </h2>
+          </header>
+          <label
+            class="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+          >
+            Body
+            <textarea
+              class="flex w-full rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-[0.85rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] disabled:opacity-50 mt-2 min-h-40 normal-case tracking-normal"
+              placeholder="The language the client reads and signs."
+              style="font-family: var(--font-body);"
+            >
+              Interior design services.
+            </textarea>
+          </label>
+        </section>
+      </div>
+      <aside
+        class="space-y-6"
+      >
+        <section
+          aria-label="Agreement readiness"
+          class="border-t border-[var(--doc-ink-border)] pt-4"
+        >
+          <p
+            class="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+          >
+            0
+             of 
+            5
+             parts need attention
+          </p>
+        </section>
+        <div
+          class="hidden min-[1180px]:block"
+        >
+          <div
+            class="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5"
+          >
+            <p
+              class="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            >
+              The client's copy · live
+            </p>
+            <div>
+              Agreement preview
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+`;

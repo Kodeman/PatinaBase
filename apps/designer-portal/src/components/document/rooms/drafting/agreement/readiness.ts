@@ -18,8 +18,21 @@
  * untouched and still serves the flag-off room.
  */
 
-import type { AgreementPart } from "@patina/types";
+import { DESIGN_BUILD_COPY, type AgreementPart } from "@patina/types";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
+import {
+  contractSumCents,
+  readAllowances,
+  readDraws,
+  readPricingBasis,
+  readSubMarkupBps,
+  readSupervision,
+  unbackedAllowanceLine,
+  validateAllowances,
+  validateDrawSet,
+  validateNoDoubleCount,
+  validatePricingBasis,
+} from "@/lib/document/design-build";
 import {
   duplicateMoneyVariants,
   FEE_BASIS_BLOCKER,
@@ -83,19 +96,69 @@ export const BLANK_ROLE_BLOCKER = "Every role on the rate card needs a name.";
 export const HIDDEN_FEE_BLOCKER =
   "This fee is hidden from your client, so it cannot bill.";
 
+/**
+ * R48 (W3R2-01) — the two turnkey parts that state the money are never hidden.
+ *
+ * R39's visibility act is general. Applied to the pricing basis it took the
+ * guaranteed maximum price, the schedule of values, the cost basis and the fee
+ * off the client's projection while the draw schedule went on billing against
+ * them, and R33's sentence could not fire because the fee set below does not
+ * carry `pricing_basis`. A draw schedule is the same kind of term: what she
+ * pays, and when.
+ *
+ * `upsert_agreement_parts` and `send_commercial_document` (00578) refuse both;
+ * this is the room saying so where the designer hid it.
+ */
+export const HIDDEN_TURNKEY_MONEY_BLOCKER =
+  "Your client signs the price and the draws, so this part cannot be hidden from her.";
+
+/** The turnkey class's own floor (R4, carried): a pricing basis is the typed
+ *  money part, and a draw schedule is additionally required. */
+export const TURNKEY_PRICING_BASIS_BLOCKER =
+  "A design-build agreement needs a pricing basis.";
+export const TURNKEY_DRAWS_BLOCKER =
+  "A design-build agreement needs a draw schedule.";
+
+/** R10 — the attestation gate holds at send, not only at template selection.
+ *  An attestation can expire between composing and sending. */
+export const TURNKEY_ATTESTATION_BLOCKER =
+  "This studio's licensing attestation is not current. Update it in Account → Studio.";
+
+/** R11 — a notice counsel has not cleared cannot travel with an agreement. */
+export function heldNoticeBlocker(state: string): string {
+  return `The ${state} notice is ${DESIGN_BUILD_COPY.noticeHeldForCounsel.toLowerCase()} and cannot be sent yet. Remove it from this agreement.`;
+}
+
 /** The blocker that is about the client account rather than the agreement.
  *  Excluded from the attention count, exactly as the seven-facet room
  *  excludes it today. */
 const CLIENT_LINK_BLOCKER = "Link a client with an email address.";
 
+/**
+ * What the room knows about the turnkey class, when it is one. Absent — every
+ * agreement Waves 1 and 2 compose — none of the design-build questions are
+ * asked at all, and this function is the one Wave 2 shipped.
+ */
+export interface TurnkeyReadinessInput {
+  /** A live `studio_license_attestations` row (R10). The send refuses without
+   *  one, so the room holds on it rather than letting the studio find out at
+   *  the door. */
+  attestationLive: boolean;
+  /** The jurisdictions counsel HAS cleared. Everything else is held (R11) and
+   *  an attachment naming one cannot be sent. */
+  enabledJurisdictions: readonly string[];
+}
+
 export function assessAgreementReadiness({
   document,
   parts,
   recipientEmail,
+  turnkey,
 }: {
   document: CommercialDocument;
   parts: AgreementPart[];
   recipientEmail: string | null | undefined;
+  turnkey?: TurnkeyReadinessInput;
 }): AgreementReadiness {
   const blockers: AgreementBlocker[] = [];
   const notes: string[] = [];
@@ -105,7 +168,8 @@ export function assessAgreementReadiness({
   // R-1 / R-2 — the document itself, unchanged from the flag-off wording.
   if (
     document.kind !== "design_services" &&
-    document.kind !== "service_addendum"
+    document.kind !== "service_addendum" &&
+    document.kind !== "design_build"
   ) {
     add(
       null,
@@ -279,6 +343,127 @@ export function assessAgreementReadiness({
     add(part.id, HIDDEN_FEE_BLOCKER);
   }
 
+  // R48 — and the turnkey class's own money parts, asked on the document's
+  // KIND rather than on the flag. The flag-off room must be the stricter side,
+  // never the looser: a hidden price is a hidden price whether or not
+  // `design-build` has reached this member.
+  if (document.kind === "design_build") {
+    for (const part of parts) {
+      if (part.clientVisible === false && part.kind === "schedule") {
+        if (part.variant === "pricing_basis" || part.variant === "draws") {
+          add(part.id, HIDDEN_TURNKEY_MONEY_BLOCKER);
+        }
+      }
+    }
+  }
+
+  // ── The turnkey class's own floor (R4, carried; build sheet §3 PART 11).
+  //
+  // A design-build agreement carries no rate card, so it never reaches the
+  // fee/ceiling pair below. Its typed money part is the pricing basis, its
+  // draw schedule is additionally required, and both are validated by the
+  // same functions `send_commercial_document` calls — so the room asks the
+  // question the send is going to ask.
+  //
+  // `turnkeyFloor` is the whole gate, and the SAME gate the class-fee
+  // exemption below reads. The composer supplies `turnkey` only when
+  // `design-build` resolves on, so with the flag off a `design_build`
+  // document falls all the way back to the pre-Wave-3 floor — including
+  // "This agreement names no fee." — rather than sailing through with no
+  // money question asked at all. That is the rollback path the fail-closed
+  // flag exists for, and it must be the stricter side, never the looser.
+  const isTurnkey = document.kind === "design_build";
+  const turnkeyFloor = isTurnkey && turnkey ? turnkey : null;
+  if (turnkeyFloor) {
+    const pricingBasisPart =
+      parts.find(
+        (part) => part.kind === "schedule" && part.variant === "pricing_basis",
+      ) ?? null;
+    const drawsPart =
+      parts.find(
+        (part) => part.kind === "schedule" && part.variant === "draws",
+      ) ?? null;
+    const allowancesPart =
+      parts.find(
+        (part) => part.kind === "schedule" && part.variant === "allowances",
+      ) ?? null;
+
+    if (!pricingBasisPart) add(null, TURNKEY_PRICING_BASIS_BLOCKER);
+    if (!drawsPart) add(null, TURNKEY_DRAWS_BLOCKER);
+
+    const basis = readPricingBasis(pricingBasisPart?.payload ?? {});
+    if (pricingBasisPart) {
+      const refusal = validatePricingBasis(basis);
+      if (refusal) add(pricingBasisPart.id, refusal);
+    }
+    if (drawsPart) {
+      const refusal = validateDrawSet(
+        pricingBasisPart ? contractSumCents(basis) : null,
+        readDraws(drawsPart.payload ?? {}),
+      );
+      if (refusal) add(drawsPart.id, refusal);
+    }
+    if (allowancesPart) {
+      const allowances = readAllowances(allowancesPart.payload ?? {});
+      const refusal = validateAllowances(allowances, basis);
+      if (refusal) add(allowancesPart.id, refusal);
+      // Advisory, never a blocker — the database asks allowance → line only,
+      // and the room does not refuse a send the server would accept.
+      const orphan = unbackedAllowanceLine(allowances, basis);
+      if (orphan) notes.push(orphan);
+    }
+
+    // R49 (W3R2-04) — §4.3, and the refusal is about a PAIR, so it is reported
+    // on BOTH halves of the pair and named in the rail besides.
+    //
+    // It used to be reported on the supervision clause alone. Part-scoped
+    // sentences render only inside the open editor, so a designer typing a
+    // markup into the pricing basis watched the attention count move by one
+    // and was told nothing — while `upsert_agreement_parts` and
+    // `send_commercial_document` (00578) were both already refusing the pair.
+    //
+    // Read over every clause that CARRIES a supervision fee, not the seeded
+    // `patina.supervision_fee` key alone: the clause can arrive renamed from
+    // the Library, and the database reads the payloads.
+    const supervisionParts = parts.filter((part) => {
+      if (part.kind !== "clause") return false;
+      const supervision = readSupervision(part.payload ?? {});
+      return (
+        (supervision.supervisionFeeCents ?? 0) > 0 ||
+        (supervision.supervisionFeeBps ?? 0) > 0
+      );
+    });
+    const doubleCount = validateNoDoubleCount({
+      supervision: supervisionParts.length > 0
+        ? readSupervision(supervisionParts[0].payload ?? {})
+        : null,
+      subMarkupBps: readSubMarkupBps(pricingBasisPart?.payload ?? {}),
+    });
+    if (doubleCount) {
+      // The rail's own line, so the panel says it without an editor open…
+      add(null, doubleCount);
+      // …and the row marks on both parts that have to change for it to go.
+      if (pricingBasisPart) add(pricingBasisPart.id, doubleCount);
+      for (const part of supervisionParts) add(part.id, doubleCount);
+    }
+
+    // R10 — the gate holds at send too. An attestation that expired between
+    // composing and sending locks the agreement, and the room says so rather
+    // than letting the send fail with a database sentence.
+    if (!turnkeyFloor.attestationLive) add(null, TURNKEY_ATTESTATION_BLOCKER);
+
+    // R11 — a notice counsel has not cleared must not reach a client.
+    const cleared = new Set(turnkeyFloor.enabledJurisdictions);
+    for (const part of parts) {
+      if (part.kind !== "attachment") continue;
+      const jurisdiction = (part.payload ?? {}).jurisdiction;
+      if (typeof jurisdiction !== "string" || !jurisdiction) continue;
+      if (!cleared.has(jurisdiction)) {
+        add(part.id, heldNoticeBlocker(jurisdiction));
+      }
+    }
+  }
+
   // R-5 — the class floor. An agreement that bills has to name a fee
   // somewhere typed; prose never carries money (R5).
   const namesAFee = clientFacing.some(
@@ -293,7 +478,13 @@ export function assessAgreementReadiness({
   // Flat fee row she is looking at reads as the room losing her work. The
   // hidden-fee sentence above already says the true thing — the fee is there
   // and cannot bill — so it stands alone and this one steps aside.
-  if (!namesAFee && hiddenFees.length === 0) {
+  //
+  // The turnkey class is exempt exactly when its own floor was asked: it
+  // carries no rate card, no flat fee and no per-phase fee, and its typed
+  // money part is the pricing basis, asked above. Exempting it on its KIND
+  // alone would leave a `design_build` document with the turnkey block
+  // skipped — the flag off — carrying no money question at all.
+  if (!turnkeyFloor && !namesAFee && hiddenFees.length === 0) {
     add(
       null,
       "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",

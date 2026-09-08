@@ -16,7 +16,32 @@
 
 import { commercialDocumentExperience } from './commercial-documents';
 
-export type DraftingEditability = 'editable' | 'issued' | 'readonly';
+export type DraftingEditability =
+  | 'editable'
+  | 'ledger'
+  | 'issued'
+  | 'readonly';
+
+/**
+ * W3R1-01 — THE TURNKEY PRIME KEEPS ITS ROOM AFTER IT LEAVES THE STUDIO.
+ *
+ * A design-build agreement's draw ledger, its lien-waiver exchange and its
+ * Trade Agreements strip are mounted in the Contract Room and nowhere else,
+ * and all three only come into existence once the agreement is sent (the
+ * ledger is materialized at send) or executed (a Trade Agreement needs the
+ * project countersign creates). Evicting the room the moment the document
+ * leaves `draft` therefore left the studio with no door at all: draw two
+ * could not be issued, no Trade Agreement could be composed, and no lien
+ * waiver could be attached to a draw.
+ *
+ * `ledger` is `issued` plus a room. The parts stay frozen (R6) — the composer
+ * reads `document.state !== 'draft'` as read-only on its own — so nothing
+ * about the paper can move; what opens is the machine state hung off it.
+ *
+ * The three states below and no others: a `superseded`, `declined` or
+ * `expired` turnkey prime has a ledger nobody may act on.
+ */
+const LEDGER_STATES = ['sent', 'client_signed', 'executed'];
 
 export interface DraftingEditabilityInput {
   /** `proposals.document_kind`. */
@@ -35,7 +60,12 @@ export function draftingEditability({
   const experience = commercialDocumentExperience(documentKind);
   if (experience === 'commercial_readonly') return 'readonly';
   if (experience === 'design_services') {
-    return (commercialState ?? 'draft') === 'draft' ? 'editable' : 'issued';
+    const state = commercialState ?? 'draft';
+    if (state === 'draft') return 'editable';
+    if (documentKind === 'design_build' && LEDGER_STATES.includes(state)) {
+      return 'ledger';
+    }
+    return 'issued';
   }
   return status === 'draft' ? 'editable' : 'issued';
 }

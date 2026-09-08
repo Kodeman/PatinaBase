@@ -33,6 +33,7 @@ import {
   signLabelFor,
   type ConsentPart,
 } from './consent-copy';
+import { DepositOffer, type DepositOfferModel } from './deposit-offer';
 import { DoorActs } from './door-acts';
 
 /* ── THE DOOR ────────────────────────────────────────────────────────────────
@@ -95,6 +96,22 @@ export interface DoorProposal extends ThresholdProposal {
    * the house ledger leaves its figure out.
    */
   houseless?: boolean;
+  /**
+   * R47 — the designer whose studio sent this paper. Carried on the paper so a
+   * HOUSELESS door can hand it to `DoorActs`: with no project there is no
+   * project thread, and a question about a paper that comes before the house
+   * must reach the studio that sent it rather than an unrelated project's
+   * thread.
+   */
+  designerId?: string | null;
+  /**
+   * R50 (W3R2-02) — the Threshold already knows, from the proposals list, that
+   * this paper carries her signature; the door would otherwise have to wait for
+   * its own bundle to find out, and in that window it drew the block that asks
+   * for a name she has already given. The DATE still comes from the bundle's
+   * signature row — this only says that one exists.
+   */
+  signedAlready?: boolean;
 }
 
 export interface DoorGateProps {
@@ -115,6 +132,13 @@ export interface DoorGateProps {
    * invalidation both already take null — the ask simply has no thread.
    */
   projectId: string | null;
+  /**
+   * R30 — the designer whose studio sent this paper. Only the household door
+   * has to supply it: with no project there is no project thread, and this is
+   * what lets "Ask a question" reach the studio anyway. A project-bound door
+   * leaves it null and asks in the project's thread as it always has.
+   */
+  designerId?: string | null;
   /**
    * Fired the moment the signature lands, BEFORE the refetch that takes the
    * paper out of the open papers. The Threshold answers it by keeping this
@@ -137,6 +161,7 @@ export function DoorGate({
   proposal,
   note,
   projectId,
+  designerId = null,
   onSigned,
   first = true,
   studioName,
@@ -159,6 +184,23 @@ export function DoorGate({
   const [declined, setDeclined] = useState(false);
   const [deliveryPending, setDeliveryPending] = useState(false);
   const [replay, setReplay] = useState<string | null>(null);
+  /**
+   * P13 — what the sign route offered once the signature was already
+   * recorded. Null until then, null when the route could not mint the
+   * invoice, and null on every kind of paper but a turnkey prime. It takes no
+   * part in `ready`, in the act's `disabled`, or in any preflight.
+   *
+   * IT IS A MOMENT, NOT A FIXTURE (ruled round 1 — client-notes.md §11, walk
+   * step 13 amended). This is the visit in which she signed; on the next one
+   * the paper is a record and the deposit is a LETTER, standing in her
+   * letterbox with its own `/pay/<token>` act, which is the surface that owns
+   * money. Nothing is blocked either way, and a second "Your deposit is
+   * ready" printed permanently over a signed paper would be the same ask
+   * repeated at her. Re-minting the sentence here on a later visit would need
+   * the draw ledger to carry its invoice's id (PART 12, backend) — named in
+   * the notes rather than guessed at from a title match.
+   */
+  const [depositOffer, setDepositOffer] = useState<DepositOfferModel | null>(null);
   const [doorState, setDoorState] = useState<DoorState>('shut');
   const [swingHeight, setSwingHeight] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -203,6 +245,37 @@ export function DoorGate({
     proposal.kind ?? bundle.data?.document?.kind ?? null;
   const kind: CommercialDocumentKind = resolvedKind ?? 'legacy';
   const isFurnishings = kind === 'furnishings_authorization';
+
+  /* ── R50 (W3R2-02) — THE RECEIPT SURVIVES ──────────────────────────────────
+     The post-signature region used to live entirely in this component's memory:
+     `signedAt` was set by the sign call and `depositOffer` came back in its
+     response, so a reload took the receipt, KEEP A COPY, the deposit offer and
+     the pay link with it. The walk signed, reloaded, and read "Nothing waits
+     for your name" over a paper carrying her signature and an open first draw.
+
+     Both halves are state, so both are read as state. The signature is the
+     bundle's own client row; the offer is the deposit draw's live invoice and
+     its link, re-derived by the bundle RPC (00578) and answered null the moment
+     that invoice is settled. In-session values still win — they are the same
+     facts, arriving a beat before the refetch that carries them. */
+  const bundleSignature =
+    bundle.data?.signatures?.find((row) => row.party === 'client') ?? null;
+  const bundleSignedAt = parseSourceDate(bundleSignature?.signedAt ?? null);
+  const standingSignedAt = signedAt ?? bundleSignedAt;
+  // What the door knows before its own bundle answers (the paper) and after
+  // (the signature row). Either one means she is not being asked again.
+  const arrivedSigned = proposal.signedAlready === true || bundleSignedAt !== null;
+  const bundleOffer = bundle.data?.designBuild?.depositOffer ?? null;
+  const standingOffer: DepositOfferModel | null =
+    depositOffer ??
+    (bundleOffer
+      ? {
+          invoiceId: bundleOffer.invoiceId,
+          amountCents: bundleOffer.amountCents,
+          label: bundleOffer.label,
+          payPath: `/pay/${encodeURIComponent(bundleOffer.payToken)}`,
+        }
+      : null);
 
   const items = isFurnishings ? (bundle.data?.furnishings?.items ?? []) : [];
   // The Making's fallback, verbatim: a trade scope carries no deposit percent,
@@ -275,6 +348,7 @@ export function DoorGate({
         error?: string;
         projectId?: string | null;
         notificationDelivery?: { state?: string };
+        depositOffer?: DepositOfferModel | null;
       };
       if (!response.ok) throw new Error(refusalSentence(body.error));
 
@@ -309,6 +383,14 @@ export function DoorGate({
       }
       window.requestAnimationFrame(() => setReceiptInked(true));
       onSigned?.();
+
+      // P13 / R15 — THE MONEY IS MENTIONED LAST, AND ONLY AFTER THE SIGNATURE
+      // IS COMPLETE AND VISIBLE. The receipt has inked and the Threshold has
+      // been told to keep this door standing before the offer exists at all.
+      // The route already returns `null` here whenever it could not mint the
+      // invoice, and `DepositOffer` renders nothing for a null — so a billing
+      // failure is silence on a page that otherwise reads exactly the same.
+      setDepositOffer(body.depositOffer ?? null);
 
       // W2-01. THE INVALIDATION GOES LAST, AND IT WAITS FOR THE LEAF.
       //
@@ -383,8 +465,8 @@ export function DoorGate({
   // moment the route answers is that the studio holds her name and a copy is
   // hers — the same sentence the phone's seal says.
   const holder = studioName?.trim() || 'Your studio';
-  const receipt = signedAt
-    ? `${proposal.title} · signed ${DAY_MONTH.format(signedAt)} · ${holder} has your signature. You’ll have a copy.`
+  const receipt = standingSignedAt
+    ? `${proposal.title} · signed ${DAY_MONTH.format(standingSignedAt)} · ${holder} has your signature. You’ll have a copy.`
     : null;
 
   // The document's own total is authoritative: Σ clientLineTotalCents
@@ -416,7 +498,7 @@ export function DoorGate({
       data-threshold-unit="door"
       // A door that has been signed is no longer asking for her hand, so it
       // stops claiming the ink that "since yesterday" reserves for open asks.
-      {...(signedAt ? {} : { 'data-never-dim': '' })}
+      {...(standingSignedAt || arrivedSigned ? {} : { 'data-never-dim': '' })}
       aria-labelledby={`door-title-${fieldId}`}
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
@@ -428,7 +510,7 @@ export function DoorGate({
           {proposal.title}
         </h2>
         <p className="max-w-[34ch] text-[15px] leading-normal text-[var(--text-body)] sm:text-right">
-          {signedAt
+          {standingSignedAt || arrivedSigned
             ? 'Open. It opened on your name.'
             : declined
               ? 'Shut. You declined it.'
@@ -442,7 +524,7 @@ export function DoorGate({
           not to this house, so it stands on every door she has and says which
           it is; without the line the same paper on three doorsteps reads as
           three papers. */}
-      {proposal.houseless && !signedAt && (
+      {proposal.houseless && !standingSignedAt && !arrivedSigned && (
         <p
           data-testid="door-houseless"
           className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]"
@@ -481,6 +563,17 @@ export function DoorGate({
         </div>
       )}
 
+      {/* P13 — the offer stands in the post-signature region, under the
+          receipt and the copy she keeps: the signature is finished and said so
+          before any money is named. Null renders nothing at all. */}
+      {standingSignedAt && (
+        <DepositOffer
+          offer={standingOffer}
+          drawCount={bundle.data?.designBuild?.draws.length ?? null}
+          currency={bundle.data?.serviceTerms?.currency ?? 'USD'}
+        />
+      )}
+
       {deliveryPending && (
         <div data-testid="door-delivery-pending" className="mt-2">
           <p role="status" className="max-w-[56ch] text-[15px] leading-relaxed text-[var(--text-body)]">
@@ -504,7 +597,11 @@ export function DoorGate({
         </div>
       )}
 
-      {doorState !== 'open' && (
+      {/* A door she signed on an earlier visit opens on arrival: the leaf is
+          the block that asks for her name, and it may not ask again. An
+          in-session signature keeps the leaf until the swing finishes, which is
+          what `signedAt` distinguishes. */}
+      {doorState !== 'open' && !(arrivedSigned && !signedAt) && (
         <div
           ref={doorwayRef}
           data-testid="door-way"
@@ -765,6 +862,7 @@ export function DoorGate({
               <DoorActs
                 proposalId={proposal.id}
                 projectId={projectId}
+                studioProfileId={designerId}
                 title={proposal.title}
                 kind={resolvedKind}
                 validUntil={proposal.validUntil ?? null}

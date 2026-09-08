@@ -37,6 +37,7 @@ const TRANSITIONS = new Set<CommercialTransition>([
   'trade_scope_executed',
   'trade_scope_accepted',
   'trade_draw_ready',
+  'agreement_draw_ready',
 ]);
 
 const corsHeaders = {
@@ -281,6 +282,37 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // The design-build prime's own draw ledger (agreement_draw_invoices). Same
+  // shape as the trade-scope draw lookup above and scoped the same way — by
+  // (id, proposal_id) — so a forged or cross-proposal eventId resolves nothing.
+  let agreementDrawRow: any = null;
+  let agreementDrawInvoiceRow: any = null;
+  if (transition === 'agreement_draw_ready' && eventId) {
+    const { data: drawRow, error: drawError } = await admin
+      .from('agreement_draw_invoices')
+      .select('id, invoice_id')
+      .eq('id', eventId)
+      .eq('proposal_id', documentId)
+      .maybeSingle();
+    if (drawError) {
+      console.error('commercial-document-notify: agreement draw lookup failed', drawError);
+      return json({ error: 'lookup_failed' }, 500);
+    }
+    agreementDrawRow = drawRow;
+    if ((drawRow as any)?.invoice_id) {
+      const { data: drawInvoice, error: drawInvoiceError } = await admin
+        .from('invoices')
+        .select('id, status')
+        .eq('id', (drawRow as any).invoice_id)
+        .maybeSingle();
+      if (drawInvoiceError) {
+        console.error('commercial-document-notify: agreement draw invoice lookup failed', drawInvoiceError);
+        return json({ error: 'lookup_failed' }, 500);
+      }
+      agreementDrawInvoiceRow = drawInvoice;
+    }
+  }
+
   const signatures = new Set((signatureRows ?? []).map((row: any) => row.party_role));
   const evidence: CommercialTransitionEvidence = {
     clientSignature: signatures.has('client'),
@@ -317,6 +349,12 @@ Deno.serve(async (req: Request) => {
       ? {
           id: String((tradeScopeDrawRow as any).id),
           invoiceStatus: tradeScopeDrawInvoiceRow?.status ?? null,
+        }
+      : null,
+    agreementDraw: agreementDrawRow
+      ? {
+          id: String((agreementDrawRow as any).id),
+          invoiceStatus: agreementDrawInvoiceRow?.status ?? null,
         }
       : null,
   };
@@ -390,7 +428,8 @@ Deno.serve(async (req: Request) => {
         ? `${DESIGNER_PORTAL_URL}/doc/${documentId}`
         : transition === 'budget_published'
           ? clientProjectLink(CLIENT_PORTAL_URL, proposal.project_id, 'ledger')
-          : transition === 'deposit_ready' || transition === 'trade_draw_ready'
+          : transition === 'deposit_ready' || transition === 'trade_draw_ready' ||
+              transition === 'agreement_draw_ready'
             ? clientProjectLink(CLIENT_PORTAL_URL, proposal.project_id, 'letterbox')
             : `${CLIENT_PORTAL_URL}/proposals/${documentId}`;
     const signerName = transition === 'trade_scope_accepted'

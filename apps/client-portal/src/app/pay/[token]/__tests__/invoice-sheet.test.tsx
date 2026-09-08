@@ -673,7 +673,109 @@ describe("the act", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(
-      "Unable to open the payment page just now.",
+      "The payment page could not open. Try again.",
+    );
+    expect(screen.getByTestId("pay-act")).not.toBeDisabled();
+  });
+
+  /* W3R3-02 — THE TILL NEVER PRINTS A PROVIDER ERROR KEY.
+     The round-3 walk pressed "Pay $8,418.40" against a stack with no Stripe
+     keys and the homeowner was shown
+     "…Try again in a moment. (stripe_not_configured)". The code belongs in the
+     log. Pinned on the exact code the walk saw. */
+  it("W3R3-02: the payer never reads the provider's error code", async () => {
+    const logged = jest.spyOn(console, "error").mockImplementation(() => {});
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "stripe_not_configured" }),
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "The payment page could not open. Try again.",
+    );
+    expect(alert.textContent).not.toContain("stripe_not_configured");
+    expect(alert.textContent).not.toContain("(");
+    expect(logged).toHaveBeenCalledWith(
+      "[pay] checkout refused:",
+      "stripe_not_configured",
+    );
+    expect(screen.getByTestId("pay-act")).not.toBeDisabled();
+    logged.mockRestore();
+  });
+
+  /* W3R1-07 — THE WALK'S OWN 503, EXACTLY AS THE ROUTE RELAYS IT.
+     The web walk clicked "Pay $8,418.40" on a live deposit link against a
+     stack whose edge runtime was stopped. Kong answered
+     `503 {"message":"name resolution failed"}` and `/pay/<token>/checkout`
+     relays a refusal VERBATIM with the function's own status — so the body
+     carries NO `error` key at all, which is a shape none of the cases above
+     covers. The walk reported the click as changing nothing on the page.
+
+     Pinned here because the one button in the programme that moves money may
+     not fail in silence: an unrecognised body must still reach
+     `refusalSentence`, print the honest line, and leave the act takeable. */
+  it("W3R1-07: says so when the till answers with no error code at all", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ message: "name resolution failed" }),
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "The payment page could not open. Try again.",
+    );
+    expect(screen.getByTestId("pay-act")).not.toBeDisabled();
+  });
+
+  it("W3R1-07: says so when the till answers with no body at all", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new Error("not json");
+      },
+    }) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "The payment page could not open. Try again.",
+    );
+    expect(screen.getByTestId("pay-act")).not.toBeDisabled();
+  });
+
+  it("W3R1-07: says so when the request never reaches the till", async () => {
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(
+        new Error("Failed to fetch"),
+      ) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("pay-act"));
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "The payment page could not open. Try again.",
     );
     expect(screen.getByTestId("pay-act")).not.toBeDisabled();
   });

@@ -23,11 +23,18 @@
  * in `service-agreement-preview.tsx`, and they are the same on both paths.
  */
 
+import { Fragment } from "react";
 import {
   AGREEMENT_PART_COPY,
+  DESIGN_BUILD_PAPER_COPY,
   agreementCadenceText,
   agreementDepositLine,
   agreementRetainerActivation,
+  designBuildAllowanceRule,
+  designBuildBasisSentence,
+  designBuildContractSumLabel,
+  designBuildFeeRowLabel,
+  designBuildMoney,
   type AgreementPart,
 } from "@patina/types";
 import {
@@ -37,6 +44,15 @@ import {
   readPhases,
   readRoles,
 } from "../rooms/drafting/agreement/part-kinds";
+import {
+  contractSumCents,
+  costBasisCents,
+  feeCents,
+  readAllowances,
+  readDraws,
+  readPricingBasis,
+  scheduleOfValues,
+} from "@/lib/document/design-build";
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat("en-US", {
@@ -87,6 +103,198 @@ function NotYetSet() {
   );
 }
 
+/* ── THE TURNKEY LEAVES (W3R1-04) ────────────────────────────────────────────
+   A design-build agreement prices a whole job, divides it into a schedule of
+   values and is paid in draws. Its three money parts fell to
+   "Recorded with your agreement." here while the homeowner read a guaranteed
+   maximum price, a schedule of values, four draws and three allowances — the
+   studio's live preview was not the paper it was sending, which is what R27
+   forbids.
+
+   Every sentence and every figure below comes from `@patina/types`, which
+   `apps/client-portal/src/components/commercial/design-build-body.tsx` reads
+   too; the readings come from `@/lib/document/design-build`, whose arithmetic
+   `_agreement_schedule_of_values` mirrors. So the three renderers — this one,
+   the homeowner's and the SQL keepsake's — say one thing.
+
+   The DRAWS leaf prints the studio's AUTHORED draws (label and share), which
+   is the paper as it is being sent. The homeowner's copy shows the same rows
+   until the ledger is materialized at send, and after that it shows the
+   ledger's own cents; this preview has no ledger, and inventing figures for
+   one it cannot read would be the drift again in the other direction. ──── */
+
+function TurnkeyRow({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+}) {
+  return (
+    <div className="py-2">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="text-[12px] text-[var(--text-body)]">{label}</span>
+        <strong className="font-mono text-[11px] font-medium text-[var(--color-charcoal)]">
+          {value}
+        </strong>
+      </div>
+      {note && (
+        <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--text-muted)]">
+          {note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TurnkeyTable({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="divide-y divide-[var(--doc-ink-border)] border-y border-[var(--doc-ink-border)]">
+      {children}
+    </div>
+  );
+}
+
+function PricingBasisLeaf({
+  part,
+  currency,
+}: {
+  part: AgreementPart;
+  currency: string;
+}) {
+  const basis = readPricingBasis(part.payload ?? {});
+  const sentence = basis.basis ? designBuildBasisSentence(basis.basis) : null;
+  const cost = costBasisCents(basis);
+  const fee = feeCents(basis);
+  const sum = contractSumCents(basis);
+  return (
+    <>
+      {sentence && (
+        <p className="text-[12.5px] leading-[1.75] text-[var(--text-body)]">
+          {sentence}
+        </p>
+      )}
+      {(cost > 0 || fee > 0) && (
+        <TurnkeyTable>
+          {cost > 0 && (
+            <TurnkeyRow
+              label={DESIGN_BUILD_PAPER_COPY.costBasisLabel}
+              value={designBuildMoney(cost, currency)}
+            />
+          )}
+          {basis.feeBps !== null && fee > 0 && (
+            <TurnkeyRow
+              label={designBuildFeeRowLabel(basis.feeBps)}
+              value={designBuildMoney(fee, currency)}
+            />
+          )}
+        </TurnkeyTable>
+      )}
+      {sum === null || sum <= 0 ? (
+        <NotYetSet />
+      ) : (
+        <div className="mt-3">
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            {designBuildContractSumLabel(basis.basis ?? "")}
+          </p>
+          <p className="mt-1 font-heading text-[1.05rem] text-[var(--color-charcoal)]">
+            {designBuildMoney(sum, currency)}
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** The schedule of values hangs off the pricing basis it comes from, exactly
+ *  as it does on the homeowner's page — its own section, not a part. */
+function ScheduleOfValuesSection({
+  part,
+  currency,
+}: {
+  part: AgreementPart;
+  currency: string;
+}) {
+  const basis = readPricingBasis(part.payload ?? {});
+  const lines = scheduleOfValues(basis);
+  if (lines.length === 0) return null;
+  const total = lines.reduce((sum, line) => sum + line.cents, 0);
+  return (
+    <section data-schedule-of-values>
+      <PartHeading>
+        {DESIGN_BUILD_PAPER_COPY.scheduleOfValuesTitle}
+      </PartHeading>
+      <TurnkeyTable>
+        {lines.map((line) => (
+          <TurnkeyRow
+            key={line.id}
+            label={line.label}
+            value={designBuildMoney(line.cents, currency)}
+          />
+        ))}
+      </TurnkeyTable>
+      <div className="mt-2 flex items-baseline justify-between gap-4 border-b border-current pb-1.5">
+        <span className="text-[12px] text-[var(--text-body)]">
+          {DESIGN_BUILD_PAPER_COPY.scheduleOfValuesTotalLabel}
+        </span>
+        <strong className="font-mono text-[11px] font-medium text-[var(--color-charcoal)]">
+          {designBuildMoney(total, currency)}
+        </strong>
+      </div>
+    </section>
+  );
+}
+
+function DrawsLeaf({ part }: { part: AgreementPart }) {
+  const { draws } = readDraws(part.payload ?? {});
+  const authored = draws.filter((draw) => draw.label.trim());
+  if (authored.length === 0) return <RecordedLine />;
+  return (
+    <TurnkeyTable>
+      {authored.map((draw) => (
+        <TurnkeyRow
+          key={draw.key || draw.label}
+          label={draw.label}
+          value={`${draw.pct}%`}
+        />
+      ))}
+    </TurnkeyTable>
+  );
+}
+
+function AllowancesLeaf({
+  part,
+  currency,
+}: {
+  part: AgreementPart;
+  currency: string;
+}) {
+  const { allowances } = readAllowances(part.payload ?? {});
+  const named = allowances.filter((allowance) => allowance.label.trim());
+  if (named.length === 0) return null;
+  return (
+    <TurnkeyTable>
+      {named.map((allowance) => (
+        <TurnkeyRow
+          key={allowance.id}
+          label={allowance.label}
+          value={
+            allowance.amountCents > 0
+              ? designBuildMoney(allowance.amountCents, currency)
+              : AGREEMENT_PART_COPY.notYetSet
+          }
+          note={designBuildAllowanceRule(
+            allowance.overageRule,
+            allowance.underageRule,
+          )}
+        />
+      ))}
+    </TurnkeyTable>
+  );
+}
+
 /**
  * The body under a part's heading, or `null` when the part draws nothing at
  * all — a clause nobody has written yet, an empty list. The caller drops the
@@ -95,8 +303,23 @@ function NotYetSet() {
 function renderPartBody(
   part: AgreementPart,
   currency: string,
+  turnkey: boolean,
 ): React.ReactNode | null {
   const payload = part.payload ?? {};
+
+  // W3R1-04 — the three money parts a design-build agreement is priced by.
+  // Off the turnkey class they are unreachable (no other document kind
+  // carries these variants), so this branch changes nothing for a services
+  // agreement or an addendum.
+  if (turnkey && part.kind === "schedule") {
+    if (part.variant === "pricing_basis") {
+      return <PricingBasisLeaf part={part} currency={currency} />;
+    }
+    if (part.variant === "draws") return <DrawsLeaf part={part} />;
+    if (part.variant === "allowances") {
+      return AllowancesLeaf({ part, currency });
+    }
+  }
 
   if (part.kind === "clause") {
     const body = readBody(payload);
@@ -318,9 +541,14 @@ function AttachmentLeaf({
 export function AgreementPartsBody({
   parts,
   currency,
+  turnkey = false,
 }: {
   parts: AgreementPart[];
   currency: string;
+  /** W3R1-04 — the document is a `design_build` prime, so its three money
+   *  parts draw the paper the homeowner reads rather than one recorded line
+   *  apiece, and the schedule of values hangs off the pricing basis. */
+  turnkey?: boolean;
 }) {
   const visible = parts
     .filter((part) => part.clientVisible !== false)
@@ -336,13 +564,22 @@ export function AgreementPartsBody({
   return (
     <>
       {sections.map((part) => {
-        const body = renderPartBody(part, currency);
-        if (body === null) return null;
+        const body = renderPartBody(part, currency, turnkey);
+        const isBasis =
+          turnkey && part.kind === "schedule" && part.variant === "pricing_basis";
+        if (body === null && !isBasis) return null;
         return (
-          <section key={part.id} data-part-key={part.partKey}>
-            <PartHeading>{part.title}</PartHeading>
-            {body}
-          </section>
+          <Fragment key={part.id}>
+            {body !== null && (
+              <section data-part-key={part.partKey}>
+                <PartHeading>{part.title}</PartHeading>
+                {body}
+              </section>
+            )}
+            {isBasis && (
+              <ScheduleOfValuesSection part={part} currency={currency} />
+            )}
+          </Fragment>
         );
       })}
       {attachments.map((part, index) => (

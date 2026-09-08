@@ -184,8 +184,7 @@ exports[`the composed room with agreement-library off leaves a record-only varia
             <p
               class="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
             >
-              schedule
-               · cost_plus
+              Cost plus
             </p>
             <p
               class="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
