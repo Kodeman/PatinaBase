@@ -190,7 +190,7 @@ function OriginDoor({
    So a failed read says so, in the house's own idiom, and offers the read
    again. It is not an error surface: nothing has gone wrong with her paper,
    and the sentence says as much. ─────────────────────────────────────────── */
-function PapersUnread({ onRetry }: { onRetry: () => void }) {
+export function PapersUnread({ onRetry }: { onRetry: () => void }) {
   return (
     <div data-testid="papers-unread" className="mt-6 max-w-[52ch]">
       <p className="text-[17px] leading-[1.62] text-[var(--text-primary)]">

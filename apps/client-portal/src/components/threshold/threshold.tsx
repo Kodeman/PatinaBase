@@ -66,6 +66,7 @@ import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
 import { ApprovalAsk, ApprovalRecords, useDoorstepApprovals } from './approval-ask';
 import { KIND_LABEL } from './consent-copy';
+import { PapersUnread } from './letterbox-door';
 import { Letters, MuteLetters, WriteBack } from './correspondence';
 import { DetailsSheet } from './details-sheet';
 import { DoorGate, type DoorProposal } from './door-gate';
@@ -483,11 +484,30 @@ export function Threshold({
     ...signatureGates.map((paper) => [paper.id, paper] as const),
   ]);
 
+  /* W3R1-02 — AND THE SAME PAPER, ONCE SHE HAS SIGNED IT.
+     An origin agreement is `project_id NULL` until countersign creates the
+     project, so the houseless rule above is what makes it reachable while it
+     waits for her name. At `client_signed` the paper leaves `pending` for
+     `accepted` — and this filter, which is project-scoped, dropped it from
+     every house she owns. The walk signed a design-build prime, reloaded, and
+     found the door, the house and THE PAPERS all empty over a paper carrying
+     her signature.
+
+     So `accepted` reads the same rule `pending` does: a project-less origin
+     paper stands on every house's doorstep as its receipt, until the
+     countersign that creates its project files it under one.
+
+     The date is `executedAt`, which is null through this whole window
+     (`proposals.signed_at` is written at countersign alone, R30's round-2
+     amendment) — a receipt with no date sorts last in Previously and states
+     nothing untrue, which is the right answer until the studio signs. */
   const instrumentReceipts: ThresholdReceipt[] = accepted.flatMap(
     (proposal) => {
       const commercial = commercialSummaryFromProposal(proposal);
-      if (commercial.projectId !== projectId || commercial.kind === "legacy")
-        return [];
+      if (commercial.kind === "legacy") return [];
+      const houseless =
+        commercial.projectId === null && isOriginKind(commercial.kind);
+      if (!houseless && commercial.projectId !== projectId) return [];
       const kindLabel = KIND_LABEL[commercial.kind] ?? "Document";
       return [
         {
@@ -662,9 +682,22 @@ export function Threshold({
   // a failing request; nothing bounds a hanging one.
   const heldTooLong = useHoldCeiling(!hydrated || loading || model.pending);
 
+  /* W3R1-05 — A FAILED READ IS NOT AN EMPTY DOORSTEP.
+     `useClientProposals` inherits the app's `retry: 2`; after the third
+     failure React Query drops `isPending` and settles with no data, so the
+     house went on to print "Nothing waits for your name." over papers it had
+     simply been unable to read — and offered no retry anywhere. The walk
+     aborted the RPC three times and met exactly that.
+
+     R30 · N2 already ruled this for the household door, and
+     `letterbox-door.tsx` already draws the sentence and the act. The house
+     reads the same rule from the same component: the doorstep's claim steps
+     aside, and the notice below says what the page actually knows. */
+  const papersUnread = proposalsQuery.isError;
+
   // ── the doorstep's sentence ────────────────────────────────────────────────
   const standing =
-    hydrated && !loading
+    hydrated && !loading && !papersUnread
       ? thresholdStanding({
           doors: model.marks.filter((mark) => mark.kind === "door").length,
           walls: model.marks.filter((mark) => mark.kind === "wall").length,
@@ -1063,6 +1096,9 @@ export function Threshold({
         >
           The approvals could not be read just now. Please refresh before taking action.
         </p>
+      )}
+      {papersUnread && (
+        <PapersUnread onRetry={() => void proposalsQuery.refetch()} />
       )}
       {doorstepAsks.map((approval) => (
         <ApprovalAsk

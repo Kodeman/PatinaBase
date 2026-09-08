@@ -1158,6 +1158,79 @@ describe('Threshold — the doorstep’s own asks', () => {
       expect(screen.getByTestId('door-houseless')).toBeInTheDocument();
     });
 
+    /* W3R1-02 — AND THE SAME PAPER AFTER SHE HAS SIGNED IT.
+       At `client_signed` the paper leaves `pending` for `accepted`, and the
+       receipts filter was project-scoped: the walk signed a houseless
+       design-build prime, reloaded, and found the door, the house and THE
+       PAPERS all empty over a paper carrying her own signature. It stands as
+       its receipt on every house's doorstep until countersign gives it one. */
+    it('keeps a signed, project-less prime in the record on every house', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...ORIGIN_AGREEMENT,
+            id: 'prop-turnkey',
+            title: 'Halvorsen kitchen and mudroom',
+            document_kind: 'design_build',
+            commercial_state: 'client_signed',
+            status: 'accepted',
+          } as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      // No door — she has signed it, and the receipt is what stands.
+      expect(container.querySelector('#door-door-prop-turnkey')).toBeNull();
+      expect(document.querySelector('#previously')).toHaveTextContent(
+        'Design-build agreement · Halvorsen kitchen and mudroom',
+      );
+    });
+
+    it('leaves a signed addendum with no project off the record, as before', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...ORIGIN_AGREEMENT,
+            id: 'prop-addendum',
+            title: 'A change to the work',
+            document_kind: 'service_addendum',
+            commercial_state: 'client_signed',
+            status: 'accepted',
+          } as unknown as Proposal,
+        ]),
+      );
+
+      renderThreshold();
+
+      expect(document.querySelector('#previously')?.textContent ?? '').not.toContain(
+        'A change to the work',
+      );
+    });
+
+    it('leaves a signed paper belonging to ANOTHER house off this one', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...SIGNED_AGREEMENT,
+            id: 'prop-elsewhere',
+            title: 'Another house’s agreement',
+            project_id: 'project-elsewhere',
+          } as unknown as Proposal,
+        ]),
+      );
+
+      renderThreshold();
+
+      expect(document.querySelector('#previously')?.textContent ?? '').not.toContain(
+        'Another house’s agreement',
+      );
+    });
+
     /* R47 — A QUESTION FROM THE ORIGIN DOOR FILES TO THE AGREEMENT'S STUDIO.
        A houseless paper stands on the doorstep of every house she owns, so
        handing its acts the house she happens to be reading would file a
@@ -1478,6 +1551,48 @@ describe('Threshold — never reverse', () => {
     expect(screen.queryByTestId('house-ledger-overage')).not.toBeInTheDocument();
     expect(screen.queryByText(/past its target/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId('room-band-ledger')).not.toBeInTheDocument();
+  });
+
+  /* W3R1-05 — A FAILED READ IS NOT AN EMPTY DOORSTEP.
+     `useClientProposals` inherits `retry: 2`; after the third failure React
+     Query drops `isPending`, so the house settled and printed "Nothing waits
+     for your name." over papers it had simply been unable to read — with no
+     error, no retry and no degraded state anywhere. R30 · N2 already ruled
+     this for the household door; the house reads the same rule now. */
+  it('never says nothing waits for her name over papers it could not read', () => {
+    proposalsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch: jest.fn(),
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('papers-unread')).toHaveTextContent(
+      'Your papers could not be drawn just now. Nothing on them has changed.',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Try again' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Nothing waits for your name.')).not.toBeInTheDocument();
+  });
+
+  it('asks for the read again when the retry is taken', () => {
+    const refetch = jest.fn();
+    proposalsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch,
+    });
+
+    renderThreshold();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(refetch).toHaveBeenCalled();
   });
 
   it('holds the doorplate up throughout — the house is always named', () => {
