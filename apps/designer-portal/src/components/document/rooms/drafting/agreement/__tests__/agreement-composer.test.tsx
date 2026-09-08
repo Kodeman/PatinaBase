@@ -756,9 +756,12 @@ describe("AgreementComposer · resilience", () => {
     render(
       <AgreementComposer proposal={proposal} bundle={bundleWith([wormhole])} />,
     );
-    expect(
-      screen.getByText("wormhole · quantum", { exact: false }),
-    ).toBeInTheDocument();
+    // W3R1-08 — the card names the part the way the paper does. The raw
+    // `kind · variant` it used to print is a database key, which the binding
+    // vocabulary forbids anywhere a designer reads; `PartEditor`'s own header
+    // above it says what kind of part this is, in words.
+    expect(screen.getAllByText("Wormhole").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/quantum/)).not.toBeInTheDocument();
     expect(
       screen.getByText(/This part opens in a later release/),
     ).toBeInTheDocument();

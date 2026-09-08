@@ -645,6 +645,7 @@ export function AgreementComposer({
   };
 
   const reviewAndSend = async () => {
+    if (readOnly) return;
     if (dirty && !(await persist())) return;
     setSendOpen(true);
   };
@@ -696,7 +697,10 @@ export function AgreementComposer({
           actionKey="review-design-agreement"
           variant="primary"
           trailing="→"
-          disabled={refusedAtSave}
+          // W3R1-08 — a room that can be neither edited nor completed does not
+          // offer to send. Flag-off the editors are not mounted; past draft
+          // the parts are frozen and the paper is already gone.
+          disabled={refusedAtSave || readOnly}
           onClick={() => void reviewAndSend()}
         >
           Review &amp; send
@@ -787,7 +791,13 @@ export function AgreementComposer({
           )}
           {readOnly && (
             <p className="mt-2 text-[11px] italic text-[var(--text-muted)]">
-              This agreement has left the studio. Its parts are fixed as sent.
+              {turnkeyFrozen
+                ? // W3R1-08 — a turnkey DRAFT with `design-build` off has not
+                  // left the studio, and the frozen-document sentence said it
+                  // had. What is true is that the class's editors are not
+                  // mounted for this reader, so nothing here can be typed.
+                  "This is a design-build agreement, and it does not open for you yet. Its parts are shown as they stand."
+                : "This agreement has left the studio. Its parts are fixed as sent."}
             </p>
           )}
         </header>

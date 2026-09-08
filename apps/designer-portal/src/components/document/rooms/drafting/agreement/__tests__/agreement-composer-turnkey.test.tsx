@@ -496,4 +496,38 @@ describe("a design-build agreement with the flag off", () => {
       screen.queryByRole("button", { name: "+ Add an allowance" }),
     ).toBeNull();
   });
+
+  it("W3R1-08: says why it is frozen without claiming the paper has been sent", () => {
+    // The walk met a never-sent turnkey DRAFT reading "This agreement has left
+    // the studio. Its parts are fixed as sent." — the frozen-document sentence
+    // reused as the unsupported-class fallback, over a document still in the
+    // studio's own hands.
+    designBuildOn = false;
+    renderRoom(turnkeyParts());
+    expect(
+      screen.getByText(
+        "This is a design-build agreement, and it does not open for you yet. Its parts are shown as they stand.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/This agreement has left the studio/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("W3R1-08: names the part it cannot open, never its database variant", () => {
+    designBuildOn = false;
+    renderRoom(turnkeyParts());
+    openPart("Pricing basis");
+    // The eyebrow is uppercased by its class, so a raw variant read
+    // "SCHEDULE · PRICING_BASIS" on the studio's screen.
+    expect(screen.queryByText(/pricing_basis/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^schedule$/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Pricing basis").length).toBeGreaterThan(0);
+  });
+
+  it("W3R1-08: does not offer to send a room it will not let anyone finish", () => {
+    designBuildOn = false;
+    renderRoom(turnkeyParts());
+    expect(screen.getByRole("button", { name: "Review & send" })).toBeDisabled();
+  });
 });

@@ -215,8 +215,7 @@ exports[`the composed room with design-build off leaves the allowances in the re
             <p
               class="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
             >
-              schedule
-               · allowances
+              Allowances
             </p>
             <p
               class="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
@@ -491,8 +490,7 @@ exports[`the composed room with design-build off leaves the draws in the read-on
             <p
               class="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
             >
-              schedule
-               · draws
+              Draws
             </p>
             <p
               class="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]"
@@ -767,8 +765,7 @@ exports[`the composed room with design-build off leaves the pricing basis in the
             <p
               class="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
             >
-              schedule
-               · pricing_basis
+              Pricing basis
             </p>
             <p
               class="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]"

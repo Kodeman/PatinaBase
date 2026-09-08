@@ -632,14 +632,21 @@ function AttachmentEditor({ payload, onChange, readOnly }: EditorProps) {
   );
 }
 
-/** Every kind Wave 1 does not open. Its title, what it is, and one sentence —
- *  never raw JSON, and never a throw. */
+/** Every kind this build does not open: the part named by its title, and one
+ *  sentence — never raw JSON, and never a throw.
+ *
+ *  W3R1-08 — and never a database key either. The eyebrow printed
+ *  `{kind} · {variant}` through an `uppercase` class, so a flag-off turnkey
+ *  draft met the designer with "SCHEDULE · PRICING_BASIS" — a column value
+ *  uppercased into the studio's face, which the binding vocabulary forbids.
+ *  The card names the part the way the paper does. (`PartEditor`'s own header
+ *  sits directly above this and already prints `partKindLabel`, so the card is
+ *  not the place the reader learns what kind of part it is.) */
 export function UnsupportedPartCard({ part }: { part: AgreementPart }) {
   return (
     <div className="border border-[var(--doc-ink-border)] px-4 py-3">
       <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-        {part.kind}
-        {part.variant ? ` · ${part.variant}` : ""}
+        {part.title}
       </p>
       <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
         This part opens in a later release. It stays on the agreement exactly as
