@@ -6,10 +6,7 @@ import { useInvoiceLink, type Invoice } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
 import { invoiceLinkPath } from '@patina/utils';
 
-import {
-  ScoredAction,
-  type ScoredActionVariant,
-} from '@/components/threshold/instruments/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import { clientEvents } from '@/lib/analytics/events';
 import {
@@ -108,12 +105,6 @@ function Drawing({ full }: { full: boolean }) {
     </svg>
   );
 }
-
-/**
- * TODO(H4): drop the cast once `ScoredActionVariant` carries `'terminal'` —
- * H4 adds the tier and its CSS; the integration lane removes this line.
- */
-const TERMINAL = 'terminal' as ScoredActionVariant;
 
 export function Letterbox({
   invoice: soonestDue,
@@ -311,7 +302,7 @@ export function Letterbox({
                 surfaceKey="the_threshold"
                 // Money moves here, so the act takes the terminal tier and
                 // carries the figure it is for. H4 defines the variant.
-                variant={TERMINAL}
+                variant="terminal"
                 href={invoiceLinkPath(invoiceLink.token)}
                 // Never warmed by scrolling past: a prefetch that ever renders
                 // would record a view and spend the pay page's rate-limit

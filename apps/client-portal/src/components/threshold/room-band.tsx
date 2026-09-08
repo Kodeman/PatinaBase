@@ -21,6 +21,7 @@ import {
   usePhoneDrawing,
 } from '@/components/threshold/plan-key';
 import type { ClientSelection } from '@/lib/commercial-documents';
+import { legalDate } from '@/lib/threshold/dates';
 import {
   DAY_MONTH,
   parseSourceDate,
@@ -277,13 +278,6 @@ function EmptyRoom({ leadRoomName }: { leadRoomName: string | null }) {
 
 // ── the studio's concept render ──────────────────────────────────────────────
 
-/** "11 September 2026". H6 folds this into `lib/threshold/dates.ts`. */
-const LEGAL_DATE = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-
 const CONCEPT_URL_TTL_S = 3600;
 
 /**
@@ -336,11 +330,10 @@ export function conceptCaption(
   render: RoomConceptRender,
   studioName: string | null | undefined,
 ): string | null {
-  const uploaded = parseSourceDate(render.uploadedAt);
   const parts = [
     render.caption,
     studioName?.trim() ? `uploaded by ${studioName.trim()}` : null,
-    uploaded ? LEGAL_DATE.format(uploaded) : null,
+    legalDate(render.uploadedAt),
   ].filter((part): part is string => !!part);
   return parts.length > 0 ? parts.join(' · ') : null;
 }
