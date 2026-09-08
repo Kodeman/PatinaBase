@@ -178,13 +178,13 @@ describe('SpineToll', () => {
 
     const { unmount } = render(<SpineToll {...INVOICE_4} today={today} />);
     expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'A toll on the line · due August 15',
+      'A toll on the line · due 15 August',
     );
     unmount();
 
     render(<SpineToll {...INVOICE_4} dueDate="2027-02-10" today={today} />);
     expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'due February 10, 2027',
+      'due 10 February 2027',
     );
   });
 
@@ -204,7 +204,7 @@ describe('SpineToll', () => {
     render(<SpineToll {...INVOICE_4} />);
     expect(screen.getByText('Invoice No. 4')).toBeInTheDocument();
     expect(screen.getByTestId('spine-toll-due')).toHaveTextContent(
-      'A toll on the line · due August 15',
+      'A toll on the line · due 15 August',
     );
   });
 

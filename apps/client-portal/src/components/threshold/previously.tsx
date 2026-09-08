@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
 import type { PreviouslyEntry, PreviouslyState } from '@/lib/threshold/derive';
 
 import { STAMP_DIALS } from './instruments/stamp';
@@ -18,8 +19,6 @@ import { InstrumentReading } from './instrument-reading';
    the model's to decide: `deriveThreshold` reads a note's own lifecycle for
    it, so a note the client answered says Answered and one still open says
    Standing. This file only spells the four words. ────────────────────────── */
-
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 /**
  * The four words, and the one of them that is a stamp.

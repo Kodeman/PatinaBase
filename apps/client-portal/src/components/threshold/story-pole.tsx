@@ -13,6 +13,10 @@ import {
   type splitSpinePhases,
 } from '@/components/threshold/instruments/making-spine';
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import {
+  DAY_MONTH_FORMAT as DAY_MONTH,
+  MONTH_NAME_FORMAT as LONG_MONTH,
+} from '@/lib/threshold/dates';
 
 /* ── The story pole ─────────────────────────────────────────────────────────
    A carpenter's story pole is marked once and then never re-marked: the
@@ -36,9 +40,6 @@ import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 /** The mock's brass. Lane 4 declares --threshold-accent once on the page root. */
 const ACCENT = 'var(--threshold-accent, #8A5F19)';
 
-const LONG_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
-/** "12 October" — the day the pole speaks a week by. */
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 /**
  * The chapter's name, resolved per phase rather than taken off the spine.

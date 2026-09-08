@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 
 import { invoiceBalanceCents } from '@patina/shared';
 
+import { dayMonth, legalDate } from '@/lib/threshold/dates';
+
 import { parseSpineDate } from './making-spine';
 import { ScoredAction } from './scored-action';
 import { moneyInWords } from './standing-sentence';
@@ -21,17 +23,6 @@ import { moneyInWords } from './standing-sentence';
    Past due is stated, never shouted: the house rule is that money is never red
    on a client surface. An overdue toll reads in exactly the same ink as one
    due next week — the date does the telling. ─────────────────────────────── */
-
-/** "August 15" — the surface's own date idiom, matching the spine's columns. */
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-});
-const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-  year: 'numeric',
-});
 
 export interface SpineTollProps {
   /** The invoice this toll is. Also where the act leads. */
@@ -66,13 +57,11 @@ export interface SpineTollProps {
   children?: ReactNode;
 }
 
-/** "due August 15", and the year too, once it is not this year. */
+/** "due 15 August", and the year too, once it is not this year. */
 function formatDue(dueDate: string, today?: Date): string | null {
   const due = parseSpineDate(dueDate);
   if (!due) return null;
-  return today && today.getFullYear() !== due.getFullYear()
-    ? LONG_MONTH_DAY_YEAR.format(due)
-    : LONG_MONTH_DAY.format(due);
+  return today && today.getFullYear() !== due.getFullYear() ? legalDate(due) : dayMonth(due);
 }
 
 export function SpineToll({
@@ -94,7 +83,7 @@ export function SpineToll({
     amount_paid_cents: paidCents,
   });
 
-  // The deck writes "A toll on the line · due August 15" — long month, no
+  // The deck writes "A toll on the line · due 15 August" — day and month, no
   // year. `formatInvoiceDate`'s abbreviated month-with-year is the
   // invoice-list idiom, and it disagreed with the very date column this row
   // sits in.

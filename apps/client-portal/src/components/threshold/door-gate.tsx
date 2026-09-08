@@ -17,6 +17,7 @@ import {
   useClientCommercialDocument,
 } from '@/hooks/use-commercial-client';
 import { makingEvents, proposalClientEvents } from '@/lib/analytics/events';
+import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
 import {
   parseSourceDate,
   type NoteModel,
@@ -68,7 +69,6 @@ import { DoorActs } from './door-acts';
 const SWING_MS = 520;
 
 /** "5 August" — the deck's own date idiom. */
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 function capitalize(text: string): string {
   return text.length === 0 ? text : `${text[0].toUpperCase()}${text.slice(1)}`;

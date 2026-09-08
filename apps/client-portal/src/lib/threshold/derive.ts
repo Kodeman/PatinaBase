@@ -19,6 +19,8 @@ import type { Invoice } from '@patina/supabase';
 import type { FFEStageKey } from '@patina/types';
 import { invoiceBalanceCents } from '@patina/shared';
 
+import { DAY_MONTH_FORMAT, parseSourceDate } from './dates';
+
 // The ledger rollup owns which invoices count at all (drafts are pre-issue,
 // voids are cancelled). Imported rather than restated so the ledger and the
 // letterbox can never disagree about what is open.
@@ -189,6 +191,19 @@ export interface HouseLedgerModel {
    * the client has no way to resolve.
    */
   owedCents: number | null;
+  /**
+   * Σ settled across those same open invoices — the middle term of the
+   * reconciling sentence, and the reason "$0.00 paid" is a fact rather than a
+   * placeholder. Null when nothing is open, where there is no arithmetic to
+   * reconcile at all.
+   */
+  paidCents: number | null;
+  /**
+   * The number on the paper, when the house owes on exactly one letter and it
+   * carries one. Null past that: a sentence that names a number the client
+   * cannot find among several open letters names the wrong thing.
+   */
+  owedInvoiceNumber: string | null;
   /** How many invoices that total is spread across. */
   owedInvoiceCount: number;
   /**
@@ -260,8 +275,6 @@ export interface ThresholdModel {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
-
 /**
  * A date off the database, as a Date the page can format.
  *
@@ -272,21 +285,14 @@ const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
  * read UTC midnight instead, and every client west of Greenwich would be told
  * the day before. A full timestamptz is a real instant and keeps its zone; the
  * page then formats it on the client's own wall clock.
+ *
+ * It lives in `dates.ts` now, beside the two idioms that print what it reads,
+ * and is re-exported here because the surface imports it from this module.
  */
-export function parseSourceDate(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const dateOnly = DATE_ONLY.exec(value);
-  const parsed = dateOnly
-    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-    : new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
+export { parseSourceDate } from './dates';
 
 /** "19 June" — the house's date idiom, read the same way everywhere. */
-export const DAY_MONTH = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'long',
-});
+export const DAY_MONTH = DAY_MONTH_FORMAT;
 
 function parseMoment(value: string | null | undefined): number | null {
   return parseSourceDate(value)?.getTime() ?? null;
@@ -549,11 +555,15 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   const liveAuthorized = positive(input.liveAuthorizedTotalCents);
   const bandsAgreed = bands.reduce((sum, band) => sum + band.agreedCents, 0);
 
+  const openRollup = openInvoices.length > 0 ? computeInvoiceRollup(openInvoices) : null;
+
   const ledger: HouseLedgerModel = {
     plannedCents: planTotal ?? roomTargetTotal,
     agreedCents: liveAuthorized ?? (bandsAgreed > 0 ? bandsAgreed : null),
-    owedCents:
-      openInvoices.length > 0 ? computeInvoiceRollup(openInvoices).outstandingCents : null,
+    owedCents: openRollup ? openRollup.outstandingCents : null,
+    paidCents: openRollup ? openRollup.paidCents : null,
+    owedInvoiceNumber:
+      openInvoices.length === 1 ? (openInvoices[0].invoice_number?.trim() || null) : null,
     owedInvoiceCount: openInvoices.length,
     owedStudioCount: openInvoices.filter((invoice) => invoice.project_id === null).length,
     owedDueDate: openInvoices[0]?.due_date ?? null,

@@ -18,6 +18,7 @@ import {
   useRecordProjectReviewFeedback,
 } from "@/hooks/use-commercial-client";
 import { useAuth } from "@/hooks/use-auth";
+import { DAY_MONTH_FORMAT as DAY_MONTH } from "@/lib/threshold/dates";
 import { refusalSentence } from "@/lib/threshold/refusal";
 import {
   reviewVerdictFromLabel,
@@ -49,10 +50,6 @@ import {
    it off the URL once, in place of the route param the old page took. A
    client who never opens that link never sees this ask, exactly as before. */
 
-const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "long",
-});
 const MIN_BODY = 30;
 const STARS = [1, 2, 3, 4, 5] as const;
 

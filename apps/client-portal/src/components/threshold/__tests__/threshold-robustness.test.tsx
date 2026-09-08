@@ -48,6 +48,8 @@ function ledger(overrides: Partial<HouseLedgerModel> = {}): HouseLedgerModel {
     plannedCents: 8_500_000,
     agreedCents: 6_140_000,
     owedCents: 912_500,
+    paidCents: 0,
+    owedInvoiceNumber: null,
     owedInvoiceCount: 1,
     owedStudioCount: 0,
     owedDueDate: '2026-08-15',
@@ -115,49 +117,49 @@ describe('the story pole on a project with no phase rows', () => {
 
 // (b) ────────────────────────────────────────────────────────────────────────
 
-describe('the owed row’s due date', () => {
-  it('names the day the open invoice falls due, beside its figure', () => {
+describe('the owed figure’s due date', () => {
+  it('names the day the open invoice falls due, under the figure', () => {
     render(<HouseLedger ledger={ledger()} />);
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125 · due 15 August');
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125');
+    expect(screen.getByTestId('house-ledger-owed-due')).toHaveTextContent('due 15 August');
   });
 
   it('names the day as the SOONEST when the figure spans several invoices', () => {
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedDatedCount: 3 })} />);
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      '$9,125 · soonest due 15 August',
+    expect(screen.getByTestId('house-ledger-owed-due')).toHaveTextContent(
+      'soonest due 15 August',
     );
   });
 
   it('does not put the whole sum on one day when only one invoice is dated', () => {
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedDatedCount: 1 })} />);
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      '$9,125 · soonest due 15 August',
+    expect(screen.getByTestId('house-ledger-owed-due')).toHaveTextContent(
+      'soonest due 15 August',
     );
   });
 
   it('spells the year out once the day is not in this one', () => {
     render(<HouseLedger ledger={ledger()} today={new Date(2027, 0, 4)} />);
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      '$9,125 · due 15 August 2026',
+    expect(screen.getByTestId('house-ledger-owed-due')).toHaveTextContent(
+      'due 15 August 2026',
     );
   });
 
   it('prints the figure alone when no invoice carries a due date', () => {
     render(<HouseLedger ledger={ledger({ owedDueDate: null })} />);
 
-    const owed = screen.getByTestId('house-ledger-owed');
-    expect(owed).toHaveTextContent('$9,125');
-    expect(owed).not.toHaveTextContent('due');
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125');
+    expect(screen.queryByTestId('house-ledger-owed-due')).not.toBeInTheDocument();
   });
 
   it('reads a date-only column as that calendar day, not the day before', () => {
     render(<HouseLedger ledger={ledger({ owedDueDate: '2026-08-01' })} />);
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('due 1 August');
+    expect(screen.getByTestId('house-ledger-owed-due')).toHaveTextContent('due 1 August');
   });
 });
 

@@ -25,8 +25,8 @@ import {
   moneyInWords,
 } from "@/components/threshold/instruments/standing-sentence";
 import { useAuth } from "@/hooks/use-auth";
+import { DAY_MONTH_FORMAT as DAY_MONTH } from "@/lib/threshold/dates";
 import { refusalSentence } from "@/lib/threshold/refusal";
-
 
 /* ── SCOPE CHANGE ─────────────────────────────────────────────────────────────
    Absorbs `/projects/[id]/scope-change/new` (raise a request) and
@@ -49,10 +49,6 @@ import { refusalSentence } from "@/lib/threshold/refusal";
    read from the row's own timestamps so it survives a reload rather than
    living only in a component's local state). */
 
-const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "long",
-});
 const MIN_DESCRIPTION = 10;
 const PENDING_STATUSES = new Set(["draft", "sent", "viewed"]);
 

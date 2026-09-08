@@ -11,6 +11,7 @@ import {
   type PhaseSlug,
 } from '@patina/types';
 
+import { MONTH_NAME_FORMAT, dayMonth, legalDate } from '@/lib/threshold/dates';
 import type { MilestoneDetail } from '@/types/project';
 
 /* ── The Spine ───────────────────────────────────────────────────────────────
@@ -46,21 +47,6 @@ const QUIET_INK = 'var(--border-default)';
 const DASHED_RULE =
   'repeating-linear-gradient(180deg, currentColor 0 5px, transparent 5px 11px)';
 
-const SHORT_DATE = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-});
-const SHORT_DATE_WITH_YEAR = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-});
-const LONG_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
-
 // ─── dates ───────────────────────────────────────────────────────────────────
 
 /**
@@ -79,12 +65,12 @@ export function parseSpineDate(value: string | null | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/** `MAR 12` — and the year too, once it is not this year. */
+/** `12 March` — and the year too, once it is not this year. */
 export function formatSpineDate(date: Date, today?: Date): string {
   if (today && today.getFullYear() !== date.getFullYear()) {
-    return SHORT_DATE_WITH_YEAR.format(date);
+    return legalDate(date) ?? '';
   }
-  return SHORT_DATE.format(date);
+  return dayMonth(date) ?? '';
 }
 
 /**
@@ -253,8 +239,8 @@ function phaseSpan(phase: SpinePhase): string | undefined {
   const from = parseSpineDate(phase.startDate);
   const to = parseSpineDate(phase.targetDate);
   if (!from || !to) return undefined;
-  const opens = LONG_MONTH.format(from);
-  const closes = LONG_MONTH.format(to);
+  const opens = MONTH_NAME_FORMAT.format(from);
+  const closes = MONTH_NAME_FORMAT.format(to);
   if (opens === closes && from.getFullYear() === to.getFullYear()) return undefined;
   return `${opens} through ${closes}`;
 }
@@ -677,7 +663,7 @@ export function SpineHorizon({ date, today }: SpineHorizonProps) {
     >
       <p className="m-0 font-heading text-[14px] italic leading-[1.6] text-[var(--text-body)]">
         If nothing changes, we walk through your finished rooms the week of{' '}
-        {LONG_MONTH_DAY.format(week)}.
+        {dayMonth(week)}.
       </p>
     </div>
   );

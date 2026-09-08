@@ -119,11 +119,11 @@ describe('MakingSpine — the settled past', () => {
 
     // Client phase labels, not the designer's vocabulary.
     expect(receipts[0]).toHaveTextContent('Discovery closed');
-    expect(receipts[0]).toHaveTextContent('Mar 12');
+    expect(receipts[0]).toHaveTextContent('12 March');
     expect(receipts[1]).toHaveTextContent('Design closed');
-    expect(receipts[1]).toHaveTextContent('May 30');
+    expect(receipts[1]).toHaveTextContent('30 May');
     expect(receipts[2]).toHaveTextContent('Design Refinement closed');
-    expect(receipts[2]).toHaveTextContent('Jun 19');
+    expect(receipts[2]).toHaveTextContent('19 June');
   });
 
   it('never prints the studio’s own phase naming on the client’s receipt', () => {
@@ -133,10 +133,10 @@ describe('MakingSpine — the settled past', () => {
     // "Construction Documentation". A receipt reading "Design closed ·
     // Schematic Design" hands AIA-practice terms to a homeowner.
     expect(screen.getAllByTestId('spine-receipt')[1].textContent).toBe(
-      'May 30Design closed',
+      '30 MayDesign closed',
     );
     expect(screen.getAllByTestId('spine-receipt')[0].textContent).toBe(
-      'Mar 12Discovery closed',
+      '12 MarchDiscovery closed',
     );
   });
 
@@ -209,7 +209,7 @@ describe('MakingSpine — the marker', () => {
     const marker = screen.getByTestId('spine-marker');
     expect(marker).toHaveTextContent('You are here');
     expect(marker).toHaveTextContent('Procurement — the open chapter, July through September.');
-    expect(marker).toHaveTextContent('Aug 5');
+    expect(marker).toHaveTextContent('5 August');
     expect(ink(marker)).toBe('var(--phase-procurement)');
   });
 
@@ -274,10 +274,10 @@ describe('MakingSpine — the marker', () => {
     const { rerender } = render(<MakingSpine milestones={VALE_PHASES} />);
     const marker = screen.getByTestId('spine-marker');
     expect(marker).toHaveTextContent('Today');
-    expect(marker).not.toHaveTextContent('Aug 5');
+    expect(marker).not.toHaveTextContent('5 August');
 
     rerender(<MakingSpine milestones={VALE_PHASES} today={TODAY} />);
-    expect(screen.getByTestId('spine-marker')).toHaveTextContent('Aug 5');
+    expect(screen.getByTestId('spine-marker')).toHaveTextContent('5 August');
   });
 });
 
@@ -289,9 +289,9 @@ describe('MakingSpine — the sketched future', () => {
     expect(future).toHaveLength(2);
     // 15 October 2026 is a Thursday; its week opens Monday the 12th.
     expect(future[0]).toHaveTextContent('Week of');
-    expect(future[0]).toHaveTextContent('Oct 12');
+    expect(future[0]).toHaveTextContent('12 October');
     expect(future[0]).toHaveTextContent('Installation');
-    expect(future[1]).toHaveTextContent('Oct 26');
+    expect(future[1]).toHaveTextContent('26 October');
     expect(future[1]).toHaveTextContent('Completion');
   });
 
@@ -432,7 +432,7 @@ describe('MakingSpine — the horizon foot', () => {
     );
 
     expect(screen.getByTestId('spine-horizon')).toHaveTextContent(
-      'If nothing changes, we walk through your finished rooms the week of October 12.',
+      'If nothing changes, we walk through your finished rooms the week of 12 October.',
     );
   });
 
@@ -463,7 +463,7 @@ describe('the exported pieces on their own', () => {
     );
 
     const row = screen.getByTestId('spine-receipt');
-    expect(row).toHaveTextContent('Jun 19');
+    expect(row).toHaveTextContent('19 June');
     expect(row).toHaveTextContent('Design Refinement closed');
     expect(row).toHaveTextContent('14 selections agreed');
     expect(ink(row)).toBe('var(--phase-refinement)');
@@ -478,7 +478,7 @@ describe('the exported pieces on their own', () => {
     render(
       <SpineFuture date="2027-02-10" lead="Installation" today={TODAY} />,
     );
-    expect(screen.getByTestId('spine-future')).toHaveTextContent('Feb 8, 2027');
+    expect(screen.getByTestId('spine-future')).toHaveTextContent('8 February 2027');
   });
 });
 
