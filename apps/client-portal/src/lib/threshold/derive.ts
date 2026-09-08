@@ -191,6 +191,19 @@ export interface HouseLedgerModel {
    * the client has no way to resolve.
    */
   owedCents: number | null;
+  /**
+   * Σ settled across those same open invoices — the middle term of the
+   * reconciling sentence, and the reason "$0.00 paid" is a fact rather than a
+   * placeholder. Null when nothing is open, where there is no arithmetic to
+   * reconcile at all.
+   */
+  paidCents: number | null;
+  /**
+   * The number on the paper, when the house owes on exactly one letter and it
+   * carries one. Null past that: a sentence that names a number the client
+   * cannot find among several open letters names the wrong thing.
+   */
+  owedInvoiceNumber: string | null;
   /** How many invoices that total is spread across. */
   owedInvoiceCount: number;
   /**
@@ -542,11 +555,15 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
   const liveAuthorized = positive(input.liveAuthorizedTotalCents);
   const bandsAgreed = bands.reduce((sum, band) => sum + band.agreedCents, 0);
 
+  const openRollup = openInvoices.length > 0 ? computeInvoiceRollup(openInvoices) : null;
+
   const ledger: HouseLedgerModel = {
     plannedCents: planTotal ?? roomTargetTotal,
     agreedCents: liveAuthorized ?? (bandsAgreed > 0 ? bandsAgreed : null),
-    owedCents:
-      openInvoices.length > 0 ? computeInvoiceRollup(openInvoices).outstandingCents : null,
+    owedCents: openRollup ? openRollup.outstandingCents : null,
+    paidCents: openRollup ? openRollup.paidCents : null,
+    owedInvoiceNumber:
+      openInvoices.length === 1 ? (openInvoices[0].invoice_number?.trim() || null) : null,
     owedInvoiceCount: openInvoices.length,
     owedStudioCount: openInvoices.filter((invoice) => invoice.project_id === null).length,
     owedDueDate: openInvoices[0]?.due_date ?? null,

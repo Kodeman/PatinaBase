@@ -6,7 +6,10 @@ import { useInvoiceLink, type Invoice } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
 import { invoiceLinkPath } from '@patina/utils';
 
-import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import {
+  ScoredAction,
+  type ScoredActionVariant,
+} from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import { clientEvents } from '@/lib/analytics/events';
 import {
@@ -105,6 +108,12 @@ function Drawing({ full }: { full: boolean }) {
     </svg>
   );
 }
+
+/**
+ * TODO(H4): drop the cast once `ScoredActionVariant` carries `'terminal'` —
+ * H4 adds the tier and its CSS; the integration lane removes this line.
+ */
+const TERMINAL = 'terminal' as ScoredActionVariant;
 
 export function Letterbox({
   invoice: soonestDue,
@@ -242,7 +251,17 @@ export function Letterbox({
         </p>
       )}
 
-      <Drawing full={invoice !== null} />
+      <figure className="m-0" data-testid="letterbox-figure">
+        <Drawing full={invoice !== null} />
+        {invoice && (
+          <figcaption
+            data-testid="letterbox-gloss"
+            className="t-meta mb-2 text-[var(--text-muted)]"
+          >
+            Invoice
+          </figcaption>
+        )}
+      </figure>
 
       {invoice ? (
         <>
@@ -262,29 +281,44 @@ export function Letterbox({
               {regarding}
             </p>
           )}
+          {/* Every figure on the line is set in the money step, so the three
+              of them read as one column of arithmetic rather than as three
+              numbers inside a sentence. */}
           <p
             data-testid="letterbox-body"
             className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
           >
-            {`${invoice.number ?? 'Invoice'} · ${moneyInWords(invoice.totalCents)} total · ${moneyInWords(
-              invoice.paidCents,
-            )} paid. Balance ${moneyInWords(invoice.balanceCents)}${due ? `, due ${due}` : ''}.`}
+            {`${invoice.number ?? 'Invoice'} · `}
+            <span className="t-money">{moneyInWords(invoice.totalCents)}</span>
+            {' total · '}
+            <span className="t-money">{moneyInWords(invoice.paidCents)}</span>
+            {' paid. Balance '}
+            <span className="t-money">{moneyInWords(invoice.balanceCents)}</span>
+            {due ? `, due ${due}` : ''}.
           </p>
 
-          <div className="mt-3.5 flex flex-wrap items-baseline gap-x-4">
+          {invoiceLink && (
+            <p data-testid="letterbox-consequence" className="consequence mt-3.5">
+              This opens payment. Nothing is charged until you choose how to pay.
+            </p>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-4">
             {invoiceLink && (
               <ScoredAction
                 actionKey="invoice_open_link"
                 regionKey="letterbox"
                 surfaceKey="the_threshold"
-                variant="primary"
+                // Money moves here, so the act takes the terminal tier and
+                // carries the figure it is for. H4 defines the variant.
+                variant={TERMINAL}
                 href={invoiceLinkPath(invoiceLink.token)}
                 // Never warmed by scrolling past: a prefetch that ever renders
                 // would record a view and spend the pay page's rate-limit
                 // budget on a letter nobody opened.
                 prefetch={false}
               >
-                Open the invoice
+                {`Pay ${moneyInWords(invoice.balanceCents)}`}
               </ScoredAction>
             )}
             <ScoredAction

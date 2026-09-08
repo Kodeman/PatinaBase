@@ -2241,26 +2241,26 @@ describe("Threshold — the studio's own letters", () => {
   });
 
   // The letter is summed into this house's owed figure because it stands in
-  // this house's letterbox. The row has to say which of that money was never
-  // drawn against the house at all.
-  it('discloses the studio letter on the owed row it is summed into', () => {
+  // this house's letterbox. The reconciling sentence has to say which of that
+  // money was never drawn against the house at all.
+  it('discloses the studio letter in the sentence it is summed into', () => {
     clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
 
     renderThreshold();
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      'Owed across two open invoices, one from the studio',
+    expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
+      'owed across two open invoices, one from the studio',
     );
   });
 
-  it('leaves the owed row alone in a house that has not adopted them', () => {
+  it('leaves the sentence alone in a house that has not adopted them', () => {
     clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
 
     renderThreshold(MILESTONES, [{ id: 'proj-ash', name: 'The Ash cottage' }]);
 
-    const row = screen.getByTestId('house-ledger-owed');
-    expect(row).toHaveTextContent('Owed on the open invoice');
-    expect(row).not.toHaveTextContent('studio');
+    const sentence = screen.getByTestId('house-ledger-reconcile');
+    expect(sentence).toHaveTextContent('owed on');
+    expect(sentence).not.toHaveTextContent('studio');
   });
 
   it('never mistakes a house invoice for a studio one', () => {

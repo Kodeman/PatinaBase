@@ -600,8 +600,54 @@ describe('Letterbox — one letter, half out of the slot', () => {
   it('offers the invoice its own address, above the settle-in-place', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    const open = screen.getByRole('link', { name: 'Open the invoice' });
+    const open = screen.getByRole('link', { name: 'Pay $9,125' });
     expect(open).toHaveAttribute('href', `/pay/${LINK_TOKEN}`);
+  });
+
+  /* PP-2 · R139 — money moves here, so the act carries the figure it is for
+     and says what pressing it does before it is pressed. */
+  it('carries the amount in the label, under a sentence that says what it does', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    const pay = screen.getByRole('link', { name: 'Pay $9,125' });
+    const consequence = screen.getByTestId('letterbox-consequence');
+    expect(consequence).toHaveTextContent(
+      'This opens payment. Nothing is charged until you choose how to pay.',
+    );
+    expect(consequence.compareDocumentPosition(pay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('says nothing about payment when the letter has no address to open', () => {
+    (useInvoiceLink as jest.Mock).mockReturnValue({ data: null });
+
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.queryByTestId('letterbox-consequence')).not.toBeInTheDocument();
+  });
+
+  it('glosses the drawing plainly, and leaves an empty slot unglossed', () => {
+    const { unmount } = render(<Letterbox invoice={invoice()} today={TODAY} />);
+    expect(screen.getByTestId('letterbox-gloss')).toHaveTextContent('Invoice');
+    unmount();
+
+    render(<Letterbox invoice={null} />);
+    expect(screen.queryByTestId('letterbox-gloss')).not.toBeInTheDocument();
+  });
+
+  it('sets every figure on the line in the money step', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(
+      [...screen.getByTestId('letterbox-body').querySelectorAll('.t-money')].map(
+        (node) => node.textContent,
+      ),
+    ).toEqual(['$18,250', '$9,125', '$9,125']);
+  });
+
+  it('keeps the balance structurally exempt from any dimming pass', () => {
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    expect(screen.getByTestId('letterbox')).toHaveAttribute('data-never-dim');
   });
 
   /* F6: Next prefetches a `Link` as it scrolls into view, and the pay page
@@ -611,7 +657,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
   it('never warms the pay page by scrolling past it', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    expect(screen.getByRole('link', { name: 'Open the invoice' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Pay $9,125' })).toHaveAttribute(
       'data-prefetch',
       'false',
     );
@@ -621,7 +667,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     const user = userEvent.setup();
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    expect(screen.getByRole('link', { name: 'Open the invoice' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Pay $9,125' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
 
     const toggle = screen.getByRole('button', { name: 'Open the letterbox' });
@@ -636,7 +682,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
 
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    expect(screen.queryByRole('link', { name: 'Open the invoice' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Pay / })).not.toBeInTheDocument();
     // The existing acts are untouched by a missing link.
     expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open the letterbox' })).toBeInTheDocument();
