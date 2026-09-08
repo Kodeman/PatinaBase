@@ -467,7 +467,7 @@ export function RoomBand({ band, projectId, children }: RoomBandProps) {
                       type="button"
                       aria-expanded={lifted}
                       aria-controls={`record-${piece.id}`}
-                      aria-label={`${piece.name} — ${lifted ? 'close' : 'open'} its record`}
+                      aria-label={`${lifted ? 'Close details' : 'View details'} — ${piece.name}`}
                       onClick={() => setLiftedId(lifted ? null : piece.id)}
                       className="absolute inset-0 h-full w-full"
                     />
