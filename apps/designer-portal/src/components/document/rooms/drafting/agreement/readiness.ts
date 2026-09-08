@@ -96,6 +96,22 @@ export const BLANK_ROLE_BLOCKER = "Every role on the rate card needs a name.";
 export const HIDDEN_FEE_BLOCKER =
   "This fee is hidden from your client, so it cannot bill.";
 
+/**
+ * R48 (W3R2-01) — the two turnkey parts that state the money are never hidden.
+ *
+ * R39's visibility act is general. Applied to the pricing basis it took the
+ * guaranteed maximum price, the schedule of values, the cost basis and the fee
+ * off the client's projection while the draw schedule went on billing against
+ * them, and R33's sentence could not fire because the fee set below does not
+ * carry `pricing_basis`. A draw schedule is the same kind of term: what she
+ * pays, and when.
+ *
+ * `upsert_agreement_parts` and `send_commercial_document` (00578) refuse both;
+ * this is the room saying so where the designer hid it.
+ */
+export const HIDDEN_TURNKEY_MONEY_BLOCKER =
+  "Your client signs the price and the draws, so this part cannot be hidden from her.";
+
 /** The turnkey class's own floor (R4, carried): a pricing basis is the typed
  *  money part, and a draw schedule is additionally required. */
 export const TURNKEY_PRICING_BASIS_BLOCKER =
@@ -327,6 +343,20 @@ export function assessAgreementReadiness({
     add(part.id, HIDDEN_FEE_BLOCKER);
   }
 
+  // R48 — and the turnkey class's own money parts, asked on the document's
+  // KIND rather than on the flag. The flag-off room must be the stricter side,
+  // never the looser: a hidden price is a hidden price whether or not
+  // `design-build` has reached this member.
+  if (document.kind === "design_build") {
+    for (const part of parts) {
+      if (part.clientVisible === false && part.kind === "schedule") {
+        if (part.variant === "pricing_basis" || part.variant === "draws") {
+          add(part.id, HIDDEN_TURNKEY_MONEY_BLOCKER);
+        }
+      }
+    }
+  }
+
   // ── The turnkey class's own floor (R4, carried; build sheet §3 PART 11).
   //
   // A design-build agreement carries no rate card, so it never reaches the
@@ -383,21 +413,39 @@ export function assessAgreementReadiness({
       if (orphan) notes.push(orphan);
     }
 
-    // §4.3 — supervision is paid once. The refusal is about a PAIR, so it is
-    // reported on the part the designer is most likely looking at when it
-    // fires: the supervision clause.
-    const supervisionPart =
-      parts.find(
-        (part) =>
-          part.kind === "clause" && part.partKey === "patina.supervision_fee",
-      ) ?? null;
+    // R49 (W3R2-04) — §4.3, and the refusal is about a PAIR, so it is reported
+    // on BOTH halves of the pair and named in the rail besides.
+    //
+    // It used to be reported on the supervision clause alone. Part-scoped
+    // sentences render only inside the open editor, so a designer typing a
+    // markup into the pricing basis watched the attention count move by one
+    // and was told nothing — while `upsert_agreement_parts` and
+    // `send_commercial_document` (00578) were both already refusing the pair.
+    //
+    // Read over every clause that CARRIES a supervision fee, not the seeded
+    // `patina.supervision_fee` key alone: the clause can arrive renamed from
+    // the Library, and the database reads the payloads.
+    const supervisionParts = parts.filter((part) => {
+      if (part.kind !== "clause") return false;
+      const supervision = readSupervision(part.payload ?? {});
+      return (
+        (supervision.supervisionFeeCents ?? 0) > 0 ||
+        (supervision.supervisionFeeBps ?? 0) > 0
+      );
+    });
     const doubleCount = validateNoDoubleCount({
-      supervision: supervisionPart
-        ? readSupervision(supervisionPart.payload ?? {})
+      supervision: supervisionParts.length > 0
+        ? readSupervision(supervisionParts[0].payload ?? {})
         : null,
       subMarkupBps: readSubMarkupBps(pricingBasisPart?.payload ?? {}),
     });
-    if (doubleCount) add(supervisionPart?.id ?? null, doubleCount);
+    if (doubleCount) {
+      // The rail's own line, so the panel says it without an editor open…
+      add(null, doubleCount);
+      // …and the row marks on both parts that have to change for it to go.
+      if (pricingBasisPart) add(pricingBasisPart.id, doubleCount);
+      for (const part of supervisionParts) add(part.id, doubleCount);
+    }
 
     // R10 — the gate holds at send too. An attestation that expired between
     // composing and sending locks the agreement, and the room says so rather

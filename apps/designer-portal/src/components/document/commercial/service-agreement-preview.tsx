@@ -2,6 +2,7 @@
 
 import { DESIGN_BUILD_PAPER_COPY, type AgreementPart } from "@patina/types";
 import { AgreementPartsBody } from "./agreement-parts-body";
+import { redactPartsForClient } from "@/lib/document/design-build";
 import {
   buildServiceAgreementPreview,
   commercialStatusView,
@@ -61,6 +62,12 @@ export function ServiceAgreementPreview({
   // money parts in between draw a guaranteed maximum price, a schedule of
   // values, the draws and the allowances (agreement-parts-body.tsx).
   const turnkey = document.kind === "design_build";
+  // R51 (W3R2-03) — the studio previews THE PAPER, run through the same
+  // redaction the client bundle applies (`_agreement_redact_client_payload`,
+  // 00578). Without it a closed-book preview printed the cost basis and the
+  // fee that the homeowner's own copy does not carry, and the two documents
+  // disagreed about the same agreement minutes apart.
+  const clientParts = turnkey ? redactPartsForClient(parts ?? []) : (parts ?? []);
   const preview = buildServiceAgreementPreview({
     document,
     terms,
@@ -117,7 +124,7 @@ export function ServiceAgreementPreview({
         // R8 — the designer's order, filtered to the client-visible parts.
         // The Core above and below this branch is untouched.
         <AgreementPartsBody
-          parts={parts ?? []}
+          parts={clientParts}
           currency={preview.currency}
           turnkey={turnkey}
         />

@@ -35,6 +35,7 @@ import {
 } from "@patina/supabase";
 import {
   AGREEMENT_PART_COPY,
+  DESIGN_BUILD_COPY,
   type AgreementPart,
   type AgreementTemplate,
 } from "@patina/types";
@@ -292,6 +293,10 @@ export function AgreementComposer({
     proposal.client?.full_name ?? proposal.client_name ?? undefined;
 
   const turnkeyOn = designBuildOn && document.kind === "design_build";
+  // W3R2-06 — the room's chrome reads the KIND, never the flag: a frozen
+  // turnkey draft is still a turnkey draft, and must not wear a services
+  // promise it does not keep.
+  const isTurnkeyKind = document.kind === "design_build";
 
   const readiness = useMemo(
     () =>
@@ -690,7 +695,11 @@ export function AgreementComposer({
 
   return (
     <RoomShell
-      title="The Contract Room · Design Agreement"
+      title={
+        isTurnkeyKind
+          ? DESIGN_BUILD_COPY.roomTitle
+          : "The Contract Room · Design Agreement"
+      }
       count={`${needAttention} of ${parts.length} parts need attention`}
       action={
         <DocumentAction
@@ -710,7 +719,12 @@ export function AgreementComposer({
       <div className="mx-auto max-w-[1240px] px-6 py-7 sm:px-8">
         <header className="border-b border-[var(--doc-ink-border)] pb-5">
           <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
-            Yes to the designer · professional services only
+            {/* W3R2-06 — keyed off the document's KIND, not the flag: a
+                design-build engagement never carries the services promise,
+                whether or not `design-build` has reached this member. */}
+            {isTurnkeyKind
+              ? DESIGN_BUILD_COPY.roomEyebrow
+              : "Yes to the designer · professional services only"}
           </p>
           <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -718,8 +732,9 @@ export function AgreementComposer({
                 {document.title}
               </h1>
               <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-                Compose the parts this agreement is made of. Furnishings and
-                purchasing stay outside it.
+                {isTurnkeyKind
+                  ? DESIGN_BUILD_COPY.roomSubtitle
+                  : "Compose the parts this agreement is made of. Furnishings and purchasing stay outside it."}
               </p>
             </div>
             {/* The three acts wrap on a narrow phone: unwrapped they measured
@@ -852,7 +867,18 @@ export function AgreementComposer({
                   blockers={blockersForPart(readiness, selected.id)}
                   turnkey={turnkeyContext}
                   onToggleClientVisible={
-                    designBuildOn && !readOnly
+                    // R48 (W3R2-01) — the act does not exist on the two parts
+                    // that state the money. The database refuses both
+                    // (`upsert_agreement_parts`, `send_commercial_document`,
+                    // 00578) and readiness says so; withholding the toggle is
+                    // what keeps the room from offering the refusal at all.
+                    designBuildOn &&
+                    !readOnly &&
+                    !(
+                      selected.kind === "schedule" &&
+                      (selected.variant === "pricing_basis" ||
+                        selected.variant === "draws")
+                    )
                       ? (hidden) => setClientVisible(selected.id, !hidden)
                       : undefined
                   }
@@ -882,13 +908,15 @@ export function AgreementComposer({
                 // Both of these are blockers ON a part, so the rail marks the
                 // row; they are also the only blockers that hold Save, so the
                 // panel says why in the same sentence.
-                ...duplicates.map((duplicate) =>
-                  duplicateMoneyBlocker(duplicate.label),
-                ),
-                ...(unnamedRoles.length > 0 ? [BLANK_ROLE_BLOCKER] : []),
-                ...documentBlockers(readiness).map(
-                  (blocker) => blocker.message,
-                ),
+                ...new Set([
+                  ...duplicates.map((duplicate) =>
+                    duplicateMoneyBlocker(duplicate.label),
+                  ),
+                  ...(unnamedRoles.length > 0 ? [BLANK_ROLE_BLOCKER] : []),
+                  ...documentBlockers(readiness).map(
+                    (blocker) => blocker.message,
+                  ),
+                ]),
               ]}
               notes={readiness.notes}
             />
@@ -988,7 +1016,12 @@ export function AgreementComposer({
         recipientName={recipientName}
         readinessOverride={{
           ready: readiness.ready,
-          blockers: readiness.blockers.map((blocker) => blocker.message),
+          // R49 — a blocker about a PAIR is filed against the rail and both
+          // parts, so the sheet would otherwise print one sentence three
+          // times. The sheet lists reasons, not rows.
+          blockers: [
+            ...new Set(readiness.blockers.map((blocker) => blocker.message)),
+          ],
           notes: readiness.notes,
         }}
       />

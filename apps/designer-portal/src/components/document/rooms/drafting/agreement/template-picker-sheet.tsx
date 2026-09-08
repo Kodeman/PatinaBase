@@ -183,7 +183,14 @@ export function TemplatePickerSheet({
                     </span>
                     <span className="block text-[13px]">{template.title}</span>
                     <span className="block text-[11.5px] italic text-[var(--text-muted)]">
-                      {template.parts.map((entry) => entry.title).join(" · ")}
+                      {/* W3R2-15 — the same predicate materialization uses
+                          (00578: `NOT COALESCE(enabled, true)` skips the
+                          entry). The line named Flow-down over a template
+                          that lays out ten parts without it. */}
+                      {template.parts
+                        .filter((entry) => entry.enabled !== false)
+                        .map((entry) => entry.title)
+                        .join(" · ")}
                     </span>
                   </button>
                   {locked && (

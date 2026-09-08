@@ -11,7 +11,7 @@
 import { render, screen } from "@testing-library/react";
 import { DESIGN_BUILD_COPY, type AgreementPart } from "@patina/types";
 import { PartEditor } from "../part-editor";
-import { assessAgreementReadiness } from "../readiness";
+import { assessAgreementReadiness, documentBlockers } from "../readiness";
 import { TURNKEY_PART_KEYS, type TurnkeyContext } from "../turnkey/context";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 
@@ -196,13 +196,46 @@ describe("the no-double-count validation", () => {
     expect(readiness.blockers.map((blocker) => blocker.message)).toContain(
       DESIGN_BUILD_COPY.noDoubleCount,
     );
-    // Reported on the supervision clause, so the rail marks the row the
-    // designer is most likely looking at when it fires.
+    // R49 (W3R2-04) — the refusal is about a PAIR, so it is filed three ways:
+    // once against no part at all, which is what puts it in the readiness rail
+    // where the walk found nothing said; and once against each of the two
+    // parts that have to change for it to go, so both rows mark and both
+    // editors print it.
+    const filed = readiness.blockers
+      .filter((blocker) => blocker.message === DESIGN_BUILD_COPY.noDoubleCount)
+      .map((blocker) => blocker.partId);
+    expect(filed).toContain(null);
+    expect(filed).toContain(parts[0].id);
+    expect(filed).toContain(parts[2].id);
     expect(
-      readiness.blockers.find(
-        (blocker) => blocker.message === DESIGN_BUILD_COPY.noDoubleCount,
-      )?.partId,
-    ).toBe(parts[2].id);
+      documentBlockers(readiness).map((blocker) => blocker.message),
+    ).toContain(DESIGN_BUILD_COPY.noDoubleCount);
+  });
+
+  // R49 — read over the payloads, not the seeded key: a supervision clause
+  // that arrived renamed from the Library still counts, and the database
+  // (`_validate_no_double_count`) reads it the same way.
+  it("counts a supervision clause the studio renamed", () => {
+    const renamed = {
+      ...supervision(250_000),
+      partKey: "studio.oversight",
+      title: "Oversight",
+    };
+    const parts = [pricingBasis(1500), draws, renamed];
+    const readiness = assessAgreementReadiness({
+      document,
+      parts,
+      recipientEmail: "halvorsen@example.com",
+      turnkey: { attestationLive: true, enabledJurisdictions: [] },
+    });
+    expect(readiness.ready).toBe(false);
+    expect(
+      readiness.blockers
+        .filter(
+          (blocker) => blocker.message === DESIGN_BUILD_COPY.noDoubleCount,
+        )
+        .map((blocker) => blocker.partId),
+    ).toContain(renamed.id);
   });
 
   it("goes green the moment the markup is cleared", () => {

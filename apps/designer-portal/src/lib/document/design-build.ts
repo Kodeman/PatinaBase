@@ -33,6 +33,7 @@ import {
   DESIGN_BUILD_COPY,
   PRICING_BASIS_KINDS,
   SUB_DISCLOSURE_MODES,
+  type AgreementPart,
   type DesignBuildAllowance,
   type DesignBuildAllowancesPayload,
   type DesignBuildCostLine,
@@ -130,6 +131,9 @@ export function readPricingBasis(
     fixedCents: readInt(payload.fixedCents),
     scheduleOfValues: readScheduleOfValuesLines(payload),
     subDisclosure,
+    // Present only on the REDACTED payload the client is handed; absent on the
+    // authored row, where the sum is derived from the fields above.
+    contractSumCents: readInt(payload.contractSumCents),
   };
 }
 
@@ -275,6 +279,16 @@ export function feeCents(basis: DesignBuildPricingBasisPayload): number {
 export function contractSumCents(
   basis: DesignBuildPricingBasisPayload,
 ): number | null {
+  // R51 — the redacted projection carries the sum EXPLICITLY, because it has
+  // no cost lines left to derive one from (`_agreement_redact_client_payload`,
+  // 00578). The client's own body reads it the same way.
+  if (
+    typeof basis.contractSumCents === "number" &&
+    Number.isFinite(basis.contractSumCents) &&
+    basis.contractSumCents > 0
+  ) {
+    return basis.contractSumCents;
+  }
   switch (basis.basis) {
     case "fixed":
       return basis.fixedCents;
@@ -716,4 +730,73 @@ export function readSubMarkupBps(
   payload: Record<string, unknown>,
 ): number | null {
   return readInt(payload.subMarkupBps);
+}
+
+/**
+ * THE PAPER THE STUDIO IS SENDING, not the row it authored (R51 · W3R2-03).
+ *
+ * The TypeScript twin of `_agreement_redact_client_payload` (00578), so the
+ * studio's live preview and the homeowner's door render one document. Before
+ * this the preview read the authored parts straight through: under a closed
+ * book it printed "Cost basis $71,300 · Fee 18% $12,834" over a paper that
+ * carried the guaranteed maximum price alone, and a studio that chose closed
+ * book precisely to keep its costs off the page was shown them still on it.
+ *
+ * Two moves, in the SQL's own order:
+ *   · the parts the studio hid never cross (R8) — the bundle RPC filters on
+ *     `client_visible` and this is the same edge;
+ *   · under anything but `open_book` the pricing basis loses `costLines`,
+ *     `costBasisCents`, `feeBps` and `subMarkupBps`, and gains the two derived
+ *     keys — `contractSumCents`, no longer derivable once the cost lines are
+ *     gone, and `scheduleOfValues`, the studio's own client-facing division.
+ *
+ * Under `open_book` the payload crosses whole: that is what the clause elected.
+ * The disclosure is resolved exactly as `_agreement_sub_disclosure` resolves
+ * it — the sub-disclosure clause's `mode` first, the pricing basis' own
+ * `subDisclosure` second.
+ *
+ * The studio's cost view is not lost; it lives in the pricing-basis EDITOR,
+ * which reads the authored part.
+ */
+export function redactPartsForClient(
+  parts: readonly AgreementPart[],
+): AgreementPart[] {
+  const visible = parts.filter((part) => part.clientVisible !== false);
+
+  const clauseMode =
+    visible
+      .filter((part) => part.kind === "clause")
+      .map((part) => readSubDisclosure(part.payload ?? {}).mode)
+      .find((mode) => mode !== null) ?? null;
+
+  return visible.map((part) => {
+    if (part.kind !== "schedule" || part.variant !== "pricing_basis") {
+      return part;
+    }
+    const payload = part.payload ?? {};
+    const basis = readPricingBasis(payload);
+    const mode = clauseMode ?? basis.subDisclosure;
+    const projected = {
+      ...payload,
+      // The disclosure is ONE answer for the whole contract, and the clause is
+      // where the composer writes it. Carrying the resolved mode onto the
+      // projection is what lets a renderer that reads only the pricing basis —
+      // `agreement-parts-body.tsx` — draw the schedule the clause elected.
+      subDisclosure: mode,
+      contractSumCents: contractSumCents(basis),
+      scheduleOfValues: scheduleOfValues(basis, mode).map((line) => ({
+        id: line.id,
+        label: line.label,
+        cents: line.cents,
+      })),
+    } as Record<string, unknown>;
+    if (mode === "open_book") {
+      return { ...part, payload: projected };
+    }
+    delete projected.costLines;
+    delete projected.costBasisCents;
+    delete projected.feeBps;
+    delete projected.subMarkupBps;
+    return { ...part, payload: projected };
+  });
 }

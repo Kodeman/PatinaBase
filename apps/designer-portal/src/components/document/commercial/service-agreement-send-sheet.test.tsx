@@ -94,11 +94,40 @@ describe("ServiceAgreementSendSheet", () => {
         "No furnishings deposit set — authorizations will default to 50%.",
       ).length,
     ).toBeGreaterThan(0);
-    // Never a hard blocker: "Ready to send" still shows, and the send act
-    // is enabled — everything else on this fixture is complete.
-    expect(screen.getByText(/Ready to send/)).toBeInTheDocument();
+    // Never a hard blocker: the send act is enabled — everything else on this
+    // fixture is complete.
     expect(
       screen.getByRole("button", { name: /send agreement/i }),
     ).toBeEnabled();
+    // W3R2-17 — but the sheet does not say "every contractual facet is
+    // present" in the same breath as a caution about a facet that is not. A
+    // sheet carrying a note carries the note alone.
+    expect(screen.queryByText(/Ready to send/)).not.toBeInTheDocument();
+  });
+
+  // W3R2-05 — the sheet describes the paper it is sending.
+  it("speaks the turnkey class's own terms, and names no furnishings deposit", () => {
+    render(
+      <ServiceAgreementSendSheet
+        open
+        onClose={jest.fn()}
+        document={{ ...document, kind: "design_build" }}
+        terms={terms}
+        rates={[]}
+        recipientEmail="sarah@example.com"
+        recipientName="Sarah"
+      />,
+    );
+
+    expect(
+      screen.getByText(/the price, the schedule of values, the draw schedule/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/services, rates, retainer policy/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Furnishings deposit/i)).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText(/Design-build agreement/i).length,
+    ).toBeGreaterThan(0);
   });
 });

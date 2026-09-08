@@ -38,9 +38,6 @@ export const WAIVER_LABELS: Record<LienWaiverType, string> = {
   unconditional_final: "Unconditional · final",
 };
 
-export const NO_DRAWS_YET =
-  "The draw ledger opens when this agreement is sent.";
-
 export function LienWaiverAttachments({
   proposalId,
   studioId,
@@ -63,13 +60,10 @@ export function LienWaiverAttachments({
   );
   const [note, setNote] = useState<string | null>(null);
 
-  if (draws.length === 0) {
-    return (
-      <p className="text-[11.5px] italic text-[var(--text-muted)]">
-        {NO_DRAWS_YET}
-      </p>
-    );
-  }
+  // W3R2-14 — nothing. `DrawLedger` stands directly above this in the rail and
+  // already says "The draw ledger opens when this agreement is sent."; a
+  // second copy of the sentence printed the same fact twice in one column.
+  if (draws.length === 0) return null;
 
   const submit = async (draw: AgreementDraw) => {
     const contact = (contacts.data ?? []).find((row) => row.id === contactId);

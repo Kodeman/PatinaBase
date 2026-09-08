@@ -760,3 +760,77 @@ describe("W3R1-04 · the turnkey preview reads as the homeowner's paper", () => 
     ).not.toBeInTheDocument();
   });
 });
+
+/* ── R51 · W3R2-03 — THE STUDIO PREVIEWS THE REDACTED PAPER ──────────────────
+   W3R1-04 routed the preview through the design-build body but not through the
+   client's PROJECTION. The walk read the same document minutes apart: the
+   studio's rail and its /doc preview both printed "Cost basis $71,300 · Fee
+   18% $12,834 · GUARANTEED MAXIMUM PRICE $84,134"; the homeowner's own copy of
+   that paper printed the guaranteed maximum price and nothing else. The door
+   is right (R41); the preview was not.
+
+   `redactPartsForClient` is the TypeScript twin of
+   `_agreement_redact_client_payload` (00578), and these cases pin both halves
+   of what it does — and that an OPEN book, which elected disclosure, still
+   shows everything. ── */
+
+describe("R51 · the studio previews the paper, not the row", () => {
+  const previewOf = (parts: AgreementPart[]) =>
+    render(
+      <ServiceAgreementPreview
+        document={TURNKEY_DOCUMENT}
+        terms={terms}
+        rates={[]}
+        signatures={[]}
+        parts={parts}
+      />,
+    );
+
+  it("drops the cost basis and the fee under a closed book, and keeps the price", () => {
+    previewOf(HALVORSEN_PARTS());
+    expect(screen.getByText("Guaranteed maximum price")).toBeInTheDocument();
+    // Twice, as ever: the contract sum, and the schedule of values' total.
+    expect(screen.getAllByText("$84,134")).toHaveLength(2);
+    expect(screen.queryByText("Cost basis")).not.toBeInTheDocument();
+    expect(screen.queryByText("$71,300")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fee 18%")).not.toBeInTheDocument();
+    expect(screen.queryByText("$12,834")).not.toBeInTheDocument();
+  });
+
+  it("keeps the studio's own schedule of values, which is what she reads instead", () => {
+    previewOf(HALVORSEN_PARTS());
+    expect(
+      screen.getByRole("heading", { name: "Schedule of values" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Kitchen")).toBeInTheDocument();
+    expect(screen.getByText("$64,000")).toBeInTheDocument();
+    expect(screen.getByText("Mudroom")).toBeInTheDocument();
+    expect(screen.getByText("$20,134")).toBeInTheDocument();
+  });
+
+  it("withholds nothing under an open book — that is what the clause elected", () => {
+    const openBook = HALVORSEN_PARTS().map((entry) =>
+      entry.variant === "pricing_basis"
+        ? {
+            ...entry,
+            payload: { ...entry.payload, subDisclosure: "open_book" },
+          }
+        : entry,
+    );
+    previewOf(openBook);
+    expect(screen.getByText("Cost basis")).toBeInTheDocument();
+    expect(screen.getByText("$71,300")).toBeInTheDocument();
+    expect(screen.getByText("Fee 18%")).toBeInTheDocument();
+  });
+
+  it("never draws a part the studio hid from its client", () => {
+    const hidden = HALVORSEN_PARTS().map((entry) =>
+      entry.variant === "allowances"
+        ? { ...entry, clientVisible: false }
+        : entry,
+    );
+    previewOf(hidden);
+    expect(screen.queryByText("Tile allowance")).not.toBeInTheDocument();
+    expect(screen.getByText("Deposit at signing")).toBeInTheDocument();
+  });
+});

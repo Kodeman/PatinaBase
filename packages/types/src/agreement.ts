@@ -173,6 +173,14 @@ export interface AgreementTemplatePartEntry {
   payload: Record<string, unknown>;
   required?: boolean;
   clientVisible?: boolean;
+  /**
+   * On file and nothing more (W3R2-15). `materialize_agreement_template`
+   * (00578) skips an entry marked `enabled: false`, which is how the
+   * flow-down clause ships dark. Absent means enabled, exactly as the SQL
+   * reads it — so every surface that LISTS a template's parts must apply the
+   * same predicate, or it names a part the composition will not contain.
+   */
+  enabled?: boolean;
 }
 
 /** `public.agreement_templates` (W2) — the Library's Template object (R7).
@@ -364,6 +372,16 @@ export interface DesignBuildPricingBasisPayload {
    */
   scheduleOfValues: DesignBuildScheduleOfValuesLine[];
   subDisclosure: SubDisclosureMode | null;
+  /**
+   * R41/R51 — the contract sum, carried EXPLICITLY on the projection the
+   * client is handed. `_agreement_redact_client_payload` (00578) drops
+   * `costLines`, `costBasisCents`, `feeBps` and `subMarkupBps` under anything
+   * but an open book, so a cost-plus total is no longer derivable there and
+   * has to be stated. Absent (undefined) on the AUTHORED row, where the sum
+   * is derived from the basis' own fields — reading it is how a renderer
+   * tells a redacted payload from a written one.
+   */
+  contractSumCents?: number | null;
 }
 
 /** One draw of a design-build draw schedule. `key` is stable and studio-set;
@@ -459,6 +477,19 @@ export const DESIGN_BUILD_COPY = {
   hiddenFromClient: 'Hidden from your client',
   hiddenFromClientHelp:
     'This part stays on the agreement and off the copy your client reads.',
+  /**
+   * W3R2-06 — the Contract Room's own chrome for the turnkey class.
+   *
+   * The services room says "professional services only" and "Furnishings and
+   * purchasing stay outside it". Both are FALSE over a design-build
+   * engagement, whose ten parts are the price, the draws, the allowances, the
+   * trades and their supervision — so the class carries its own three lines
+   * rather than reading a services promise it does not keep.
+   */
+  roomTitle: 'The Contract Room · Design-Build Agreement',
+  roomEyebrow: 'Yes to the studio · design and construction',
+  roomSubtitle:
+    'Compose the parts this agreement is made of. The price, the draws and the trades are inside it.',
 } as const;
 
 /** Where a lien waiver sits in the exchange: conditional on payment or
