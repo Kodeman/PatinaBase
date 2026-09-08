@@ -38,6 +38,11 @@ jest.mock('@/hooks/use-desk-engagements', () => ({
     refetch: jest.fn(),
   }),
 }));
+// The roster's day's line reads project_notes; this suite mounts no
+// QueryClient, so the read is stubbed like every other Desk feed here.
+jest.mock('@/hooks/use-answered-notes', () => ({
+  useAnsweredNotes: () => ({ data: [] }),
+}));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'me', name: 'Leah' } }) }));
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 jest.mock('@/hooks/use-feature-flag', () => ({
