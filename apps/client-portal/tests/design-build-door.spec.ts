@@ -2,6 +2,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
+import { HALVORSEN_DESIGN_BUILD_CONSENT } from '../src/components/threshold/consent-copy';
+
 /**
  * Wave 3, P13 / R15 — SIGN, THEN OFFER. Never gate.
  *
@@ -115,6 +117,9 @@ const COST_LINES = [
   { id: 'lighting', label: 'Lighting allowance', category: 'allowance', basisCents: 280_000 },
 ];
 
+/** The cost lines, summed — and `GMP_CENTS` is this plus the 18% fee. */
+const COST_BASIS_CENTS = COST_LINES.reduce((sum, line) => sum + line.basisCents, 0);
+
 const PARTS = [
   {
     kind: 'schedule',
@@ -126,6 +131,12 @@ const PARTS = [
     payload: {
       basis: 'cost_plus_gmp',
       feeBps: 1800,
+      // The sum of COST_LINES, to the cent. `_validate_pricing_basis_payload`
+      // refuses a pricing basis whose stated cost basis does not equal the
+      // lines beneath it, so the fixture states it rather than leaving the
+      // send door to guess ("The cost basis must equal the cost lines beneath
+      // it, to the cent.").
+      costBasisCents: COST_BASIS_CENTS,
       gmpCents: GMP_CENTS,
       subDisclosure: 'closed_book',
       costLines: COST_LINES,
@@ -336,8 +347,13 @@ test.describe('P13 — the deposit is offered after the signature, never before'
 
     // The paper reads as a turnkey paper: the price, the draws, the trades.
     await expect(page.getByTestId('door-consent-line')).toContainText('design-build terms');
-    await expect(page.getByTestId('door-consent-line')).toContainText(
-      'the guaranteed maximum price',
+    // The words BOTH halves say. The door renders `composeConsentLine` and the
+    // signature row keeps `compose_agreement_consent`'s; this is the exported
+    // pin (`HALVORSEN_DESIGN_BUILD_CONSENT`) the SQL test asserts against too,
+    // so a browser reading a different sentence than the database filed is a
+    // failure here rather than a discovery later (round 2, N1).
+    await expect(page.getByTestId('door-consent-line')).toHaveText(
+      HALVORSEN_DESIGN_BUILD_CONSENT,
     );
     // Never the generic fallback — that sentence is what a missed branch
     // looks like on the signing surface.

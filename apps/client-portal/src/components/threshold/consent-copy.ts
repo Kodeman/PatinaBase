@@ -245,36 +245,89 @@ function consentFragment(part: ConsentPart): string | null {
    byte-for-byte.
    ────────────────────────────────────────────────────────────────────────── */
 /**
- * EXPORTED SO THE INTEGRATION GATE CAN PIN BOTH HALVES (round 1, F3). The SQL
- * composer's `design_build` arm must walk these variants in this order; the
- * sign route files the DATABASE's sentence while the door renders this one, so
- * a divergence means a homeowner ticks one sentence and signs another.
+ * THE VARIANTS THE TURNKEY SENTENCE IS MADE OF, IN THE ORDER IT SAYS THEM.
+ *
+ * The SQL half — `public.compose_agreement_consent(uuid)`'s `design_build`
+ * arm — reads exactly these three parts, one query each, in exactly this
+ * order, and has NO retainer arm and NO ceiling arm: a turnkey prime's money
+ * is the basis, the draws and the allowances, and anything else the studio
+ * hangs on the paper is consented to by the paper rather than named a second
+ * time in the sentence. This list used to carry `retainer` and `ceiling`; the
+ * SQL never did, so the door said a term the filed sentence omitted.
+ *
+ * The door renders THIS sentence; the sign route files the DATABASE's
+ * (`sign/route.ts` reads `p_consent.consentSentence` off the bundle) and the
+ * record prints that one back to her (R36). Anything the two halves do not
+ * share reaches a homeowner as one sentence ticked and a different one kept.
  */
 export const DESIGN_BUILD_VARIANT_ORDER: readonly string[] = [
   'pricing_basis',
   'draws',
   'allowances',
-  'retainer',
-  'ceiling',
 ];
 
-/** The price a pricing basis sets, in the basis's own words. */
-const PRICING_BASIS_FRAGMENT: Record<string, string> = {
-  cost_plus_gmp: 'the guaranteed maximum price',
-  tm_nte: 'the not-to-exceed price',
-  fixed: 'the fixed contract price',
+/**
+ * The price a pricing basis sets, in the basis's own words — the SQL arm's
+ * `CASE COALESCE(v_basis->>'basis', '')`, byte for byte.
+ */
+export const DESIGN_BUILD_BASIS_FRAGMENT: Record<string, string> = {
+  fixed: 'the fixed contract sum',
   cost_plus: 'the cost-plus pricing basis',
+  cost_plus_gmp: 'the cost-plus pricing basis and its guaranteed maximum price',
+  tm_nte: 'the time-and-materials basis and its not-to-exceed amount',
 };
+
+/**
+ * The SQL CASE's `ELSE`. Unreachable in BOTH halves and carried anyway so the
+ * two CASEs are one CASE: a basis outside the four names no contract sum, and
+ * the fragment is only ever said when that sum is above zero.
+ */
+const UNNAMED_BASIS_FRAGMENT = 'the pricing basis';
+
+/** `public._agreement_is_int(jsonb)` — a JSON number with nothing after the point. */
+function consentInt(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/**
+ * `public._agreement_contract_sum_cents(jsonb)` written a second time.
+ *
+ * The SQL arm says the basis fragment only when this is above zero — not when
+ * the basis string is merely recognized — so an UNPRICED basis says nothing on
+ * either side. `costBasisCents` is read off the payload rather than summed
+ * from the cost lines because that is what the SQL reads; the two must agree
+ * on the same input, not on the same intention.
+ *
+ * Postgres `round()` on a positive numeric and `Math.round` on a positive
+ * number agree, and `feeBps` is validated to 0–5000, so the cost-plus arm
+ * cannot part company with the database over a half-cent.
+ */
+function designBuildContractSumCents(payload: Record<string, unknown>): number | null {
+  const basis = typeof payload.basis === 'string' ? payload.basis.trim() : '';
+  if (basis === 'fixed') return consentInt(payload.fixedCents);
+  if (basis === 'cost_plus_gmp') return consentInt(payload.gmpCents);
+  if (basis === 'tm_nte') return consentInt(payload.nteCents);
+  if (basis === 'cost_plus') {
+    const costBasisCents = consentInt(payload.costBasisCents);
+    const feeBps = consentInt(payload.feeBps);
+    if (costBasisCents === null || feeBps === null) return null;
+    return costBasisCents + Math.round((costBasisCents * feeBps) / 10000);
+  }
+  return null;
+}
 
 function designBuildFragments(part: ConsentPart): string[] {
   switch (part.variant) {
     case 'pricing_basis': {
-      const basis = part.payload.basis;
-      const priced = typeof basis === 'string' ? PRICING_BASIS_FRAGMENT[basis] : undefined;
-      const hasCostLines = consentRows(part.payload.costLines).length > 0;
+      const sum = designBuildContractSumCents(part.payload);
+      if (sum === null || sum <= 0) return [];
+      const basis = typeof part.payload.basis === 'string' ? part.payload.basis : '';
       return [
-        ...(priced ? [priced] : []),
-        ...(hasCostLines ? ['the schedule of values'] : []),
+        DESIGN_BUILD_BASIS_FRAGMENT[basis] ?? UNNAMED_BASIS_FRAGMENT,
+        // Nested inside the priced branch exactly as the SQL nests it: a
+        // schedule of values is the breakdown OF a contract sum, and a paper
+        // that names no sum names no schedule of values either.
+        ...(consentRows(part.payload.costLines).length > 0 ? ['the schedule of values'] : []),
       ];
     }
     case 'draws': {
@@ -288,16 +341,30 @@ function designBuildFragments(part: ConsentPart): string[] {
       ];
     }
     case 'allowances':
-      return consentRows(part.payload.allowances).length > 0 ? ['the allowances'] : [];
-    default: {
-      // A retainer or a ceiling the studio chose to add to a turnkey prime
-      // consents to exactly what it consents to on a services agreement —
-      // one implementation of that rule, not two.
-      const shared = consentFragment(part);
-      return shared ? [shared] : [];
-    }
+      return consentRows(part.payload.allowances).length > 0
+        ? ['the allowances and what happens if they run over']
+        : [];
+    default:
+      // The SQL arm has no other arm. A retainer or a ceiling the studio hangs
+      // on a turnkey prime is on the paper and consented to by the paper; it is
+      // not named in this sentence, on either side.
+      return [];
   }
 }
+
+/**
+ * THE PIN, AND THE ONLY LITERAL EITHER HALF MAY BE COMPARED AGAINST.
+ *
+ * The Halvorsen kitchen and mudroom (`source/fixtures.json`): a cost-plus
+ * basis with a guaranteed maximum, seven cost lines behind a schedule of
+ * values, four draws at 5% retainage, three allowances. The SQL half asserts
+ * this exact string off the signature row it filed
+ * (`supabase/tests/commercial/design_build_test.sql`, T13) and the jest half
+ * asserts `composeConsentLine` returns it. Two implementations, one sentence:
+ * either one moving turns the other red.
+ */
+export const HALVORSEN_DESIGN_BUILD_CONSENT =
+  'I agree to these design-build terms, the cost-plus pricing basis and its guaranteed maximum price, the schedule of values, the draw schedule, the retainage withheld from each draw, and the allowances and what happens if they run over, and understand my signature alone does not authorize work until the studio countersigns.';
 
 /** A, "A and B", "A, B, and C" — the door's own list grammar. */
 function oxford(items: readonly string[]): string {
@@ -386,14 +453,15 @@ const SUMMARY_FRAGMENT: Record<string, string> = {
   // Wave 3 — the turnkey class's own terms, under the same rule: presence is
   // decided once, in the fragment functions, so the summary can never name a
   // term the consent line beneath it leaves out.
-  'the guaranteed maximum price': 'guaranteed maximum price',
-  'the not-to-exceed price': 'not-to-exceed price',
-  'the fixed contract price': 'fixed contract price',
+  'the cost-plus pricing basis and its guaranteed maximum price': 'guaranteed maximum price',
+  'the time-and-materials basis and its not-to-exceed amount': 'not-to-exceed amount',
+  'the fixed contract sum': 'fixed contract sum',
   'the cost-plus pricing basis': 'cost-plus pricing basis',
+  'the pricing basis': 'pricing basis',
   'the schedule of values': 'schedule of values',
   'the draw schedule': 'draw schedule',
   'the retainage withheld from each draw': 'retainage',
-  'the allowances': 'allowances',
+  'the allowances and what happens if they run over': 'allowances',
 };
 
 /**
