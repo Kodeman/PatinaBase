@@ -434,6 +434,10 @@ BEGIN
       -- server action and holds no role of their own).
       ('public.issue_agreement_draw_invoice(uuid,text)', 'authenticated'),
       ('public.issue_agreement_draw_invoice(uuid,text)', 'service_role'),
+      (
+        'public.record_agreement_draw_lien_waiver(uuid,text,uuid,date,integer,text,timestamptz)',
+        'authenticated'
+      ),
       ('public.studio_has_live_license_attestation(uuid)', 'authenticated'),
       ('public.create_trade_agreement(uuid,uuid,jsonb)', 'authenticated'),
       ('public.send_trade_agreement(uuid)', 'authenticated'),
@@ -920,7 +924,12 @@ BEGIN
       'public.sign_trade_agreement_by_token(text,text,text)',
       'public._trade_agreement_fingerprint(uuid)',
       'public.guard_trade_agreement_authored()',
-      'public.guard_trade_agreement_signature_immutable()'
+      'public.guard_trade_agreement_signature_immutable()',
+      'public.record_agreement_draw_lien_waiver(uuid,text,uuid,date,integer,text,timestamptz)',
+      'public._agreement_money_to_the_cent(numeric)',
+      'public._agreement_schedule_of_values(jsonb,text)',
+      'public._agreement_redact_client_payload(text,text,jsonb,text)',
+      'public._render_agreement_snapshot_html(uuid)'
     ]::text[]) AS item(signature)
     WHERE to_regprocedure(item.signature) IS NULL
        OR has_function_privilege('anon', item.signature, 'EXECUTE')
@@ -936,10 +945,27 @@ BEGIN
       'public._agreement_parts_json(uuid)',
       'public._agreement_design_build_part(uuid,text)',
       'public._agreement_sub_disclosure(uuid)',
-      'public._agreement_design_build_subs(uuid,text)'
+      'public._agreement_design_build_subs(uuid,text)',
+      -- The keepsake's renderer is nobody's to call: it composes the page the
+      -- homeowner keeps, and it is reached only from the countersign impl.
+      'public._render_agreement_snapshot_html(uuid)'
     ]::text[]) AS item(signature)
     WHERE has_function_privilege('authenticated', item.signature, 'EXECUTE')
   ), 'a service-only or private Wave 3 RPC widened to authenticated';
+
+  -- P12's waiver door, and the ONLY writer of agreement_draw_lien_waivers:
+  -- the studio calls it, and the table itself takes no INSERT from a browser
+  -- role at all (M3 — "no wave writes business tables outside definer RPCs").
+  ASSERT has_function_privilege(
+           'authenticated',
+           'public.record_agreement_draw_lien_waiver(uuid,text,uuid,date,integer,text,timestamptz)',
+           'EXECUTE'),
+    'the studio records a lien waiver through its RPC';
+  ASSERT NOT has_table_privilege(
+           'authenticated', 'public.agreement_draw_lien_waivers', 'INSERT')
+     AND NOT has_table_privilege(
+           'authenticated', 'public.agreement_draw_invoices', 'INSERT'),
+    'neither draw ledger takes a direct write from a browser role';
 
   -- The credential table is unreachable from a browser role, in both
   -- directions: RLS is on with zero policies AND the grant is absent.

@@ -2404,7 +2404,8 @@ BEGIN
     'public.send_trade_agreement(uuid)',
     'public.void_trade_agreement(uuid,text)',
     'public.list_trade_agreements(uuid)',
-    'public.studio_has_live_license_attestation(uuid)'
+    'public.studio_has_live_license_attestation(uuid)',
+    'public.record_agreement_draw_lien_waiver(uuid,text,uuid,date,integer,text,timestamptz)'
   ] LOOP
     ASSERT to_regprocedure(v_sig) IS NOT NULL, format('%s must exist', v_sig);
     ASSERT has_function_privilege('authenticated', v_sig, 'EXECUTE'),

@@ -1145,6 +1145,286 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- (T16) WHAT A CLOSED BOOK CLOSES (B3, RC-4). The pricing basis is the one
+--       part R22 will not let the studio hide — a turnkey prime that names no
+--       fee cannot be signed — so the disclosure the clause elected has to be
+--       kept at the edge she reads through, and nowhere else will do.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_bundle jsonb;
+  v_basis jsonb;
+  v_sov jsonb;
+  v_open jsonb;
+  v_total bigint;
+BEGIN
+  ASSERT public._agreement_sub_disclosure('a8300000-0000-4000-8000-000000000001')
+         = 'closed_book',
+    'T16: the Halvorsen paper is closed book';
+
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle(
+    'a8300000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+
+  SELECT part INTO v_basis
+  FROM jsonb_array_elements(v_bundle->'parts') AS e(part)
+  WHERE part->>'variant' = 'pricing_basis';
+  ASSERT v_basis IS NOT NULL, 'T16: the homeowner reads the pricing basis (R22)';
+
+  -- The four keys that hand a trade's bid to the homeowner, and through her to
+  -- anyone she forwards her copy to.
+  ASSERT NOT (v_basis->'payload' ? 'costLines'),
+    format('T16: the trades AT COST must not cross a closed book: %s',
+           v_basis->'payload'->'costLines');
+  ASSERT NOT (v_basis->'payload' ? 'feeBps'),
+    'T16: nor the multiplier that inverts the schedule';
+  ASSERT NOT (v_basis->'payload' ? 'costBasisCents'),
+    'T16: nor the cost basis';
+  ASSERT NOT (v_basis->'payload' ? 'subMarkupBps'),
+    'T16: nor the markup on the trades';
+
+  -- What she gets instead: her own number, and the schedule derived from it.
+  ASSERT (v_basis->'payload'->>'contractSumCents')::bigint = pg_temp.m('gmp'),
+    'T16: the contract sum is HERS and travels explicitly';
+  v_sov := v_basis->'payload'->'scheduleOfValues';
+  ASSERT jsonb_array_length(v_sov) = 7,
+    format('T16: seven pro-rated lines, got %s', jsonb_array_length(v_sov));
+  ASSERT (v_sov->0->>'cents')::bigint = pg_temp.m('sov_cabinetry'),
+    format('T16: pro-rated to the walk''s own table, got %s', v_sov->0->>'cents');
+  SELECT sum((line->>'cents')::bigint) INTO v_total
+  FROM jsonb_array_elements(v_sov) AS e(line);
+  ASSERT v_total = pg_temp.m('gmp'),
+    format('T16: the column sums to the contract price, got %s', v_total);
+
+  -- The studio's own row is untouched: this is a projection, not a deletion.
+  ASSERT (SELECT payload ? 'costLines' FROM public.proposal_agreement_parts
+          WHERE proposal_id = 'a8300000-0000-4000-8000-000000000001'
+            AND variant = 'pricing_basis'),
+    'T16: the studio keeps its cost lines — only the client edge redacts';
+
+  -- OPEN BOOK WITHHOLDS NOTHING. That is what the clause elects.
+  v_open := public._agreement_redact_client_payload(
+    'schedule', 'pricing_basis', pg_temp.pricing_basis(), 'open_book');
+  ASSERT v_open ? 'costLines' AND v_open ? 'feeBps',
+    'T16: open book is open';
+  ASSERT jsonb_array_length(v_open->'scheduleOfValues') = 8,
+    'T16: seven trades at cost and the fee as its own line';
+  ASSERT (SELECT (line->>'cents')::bigint
+          FROM jsonb_array_elements(v_open->'scheduleOfValues') AS e(line)
+          WHERE line->>'id' = '__fee') = pg_temp.m('fee'),
+    'T16: and the fee line IS the fee';
+
+  -- Fail closed: a clause and a payload that disagree is not an open book.
+  ASSERT NOT (public._agreement_redact_client_payload(
+    'schedule', 'pricing_basis', pg_temp.pricing_basis(), 'conflict')
+    ? 'costLines'),
+    'T16: anything that is not open_book closes the book';
+
+  -- And every other part crosses byte for byte.
+  ASSERT (SELECT part->'payload' FROM jsonb_array_elements(v_bundle->'parts')
+            AS e(part) WHERE part->>'variant' = 'draws')
+         = (SELECT payload FROM public.proposal_agreement_parts
+            WHERE proposal_id = 'a8300000-0000-4000-8000-000000000001'
+              AND variant = 'draws'),
+    'T16: the draw schedule is hers in full — the redaction is one part wide';
+
+  RAISE NOTICE 'PASS T16: a closed book closes, an open one does not, and only the pricing basis is touched';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (T17) THE KEEPSAKE (B1, B2, R12). What she keeps is the page she signed —
+--       so it carries the sum, the schedule, the draws and the retainage, and
+--       it does not tell her the construction contract she signed authorized
+--       design services only.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_html text;
+  v_services text;
+BEGIN
+  SELECT html INTO v_html FROM public.agreement_execution_snapshots
+  WHERE proposal_id = 'a8300000-0000-4000-8000-000000000001';
+  ASSERT v_html IS NOT NULL, 'T17: countersigning freezes a copy';
+
+  -- B1 — the three turnkey parts printed FIGURES, not the record-only line.
+  ASSERT position('<h2>Pricing basis</h2><p>Recorded with your agreement.</p>'
+                  IN v_html) = 0,
+    'T17: the pricing basis is not "recorded with your agreement"';
+  ASSERT position('<h2>Draw schedule</h2><p>Recorded with your agreement.</p>'
+                  IN v_html) = 0,
+    'T17: nor the draw schedule';
+  ASSERT position('<h2>Allowances</h2><p>Recorded with your agreement.</p>'
+                  IN v_html) = 0,
+    'T17: nor the allowances';
+
+  ASSERT position('Guaranteed maximum price' IN v_html) > 0,
+    'T17: the keepsake names what the sum is';
+  ASSERT position('$84,134' IN v_html) > 0, 'T17: and prints it';
+  ASSERT position('<h2>Schedule of values</h2>' IN v_html) > 0,
+    'T17: the schedule of values is on the page she signed';
+  ASSERT position('$44,840' IN v_html) > 0,
+    'T17: pro-rated, to the same cent the door printed';
+  ASSERT position('$8,413.40' IN v_html) > 0,
+    'T17: the deposit draw, TO THE CENT — _agreement_money would have said $8,413';
+  ASSERT position('$23,978.19' IN v_html) > 0, 'T17: the rough-in net';
+  ASSERT position('$3,786.03 is held back across the draws' IN v_html) > 0,
+    'T17: and what is held back, in the client body''s own words';
+  ASSERT position('Anything over this amount needs a change order first.'
+                  IN v_html) > 0,
+    'T17: an allowance says what happens when it runs over';
+  ASSERT position('$4,000' IN v_html) > 0, 'T17: and how much it is';
+
+  -- B3 again, on the durable record: a closed book stays closed in the copy
+  -- she keeps for the life of the project.
+  ASSERT position('Cost basis' IN v_html) = 0,
+    'T17: the keepsake obeys the same disclosure the door did';
+  ASSERT position('Fee 18%' IN v_html) = 0, 'T17: including the multiplier';
+
+  -- B2 — the boundary belongs to the class.
+  v_services := 'This agreement authorizes design services only.';
+  ASSERT position(v_services IN v_html) = 0,
+    'T17: a turnkey prime does not authorize design services only — that sentence is FALSE here';
+  ASSERT position('This agreement covers the work described above, at the price shown.'
+                  IN v_html) > 0,
+    'T17: it closes with its own boundary, verbatim from design-build-body.tsx';
+
+  -- And the services keepsake still closes the way it always did. The second
+  -- turnkey agreement (T14) proves nothing about that, so read a composed
+  -- design-services body's renderer output directly.
+  ASSERT position('ATTACHMENT' IN v_html) >= 0, 'T17: attachments still letter';
+
+  RAISE NOTICE 'PASS T17: the keepsake carries the money and closes with the right sentence';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (T18) THE SEEDED FLOW-DOWN CLAUSE IS ON FILE AND DARK (B4, R16).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_entry jsonb;
+  v_count integer;
+BEGIN
+  SELECT entry INTO v_entry
+  FROM public.agreement_templates t,
+       LATERAL jsonb_array_elements(t.parts) AS e(entry)
+  WHERE t.template_key = 'patina.design_build'
+    AND entry->>'partKey' = 'patina.flow_down';
+  ASSERT v_entry IS NOT NULL,
+    'T18: the flow-down wording exists, in one place, for counsel to read';
+  ASSERT (v_entry->>'enabled')::boolean IS FALSE,
+    'T18: and it ships DISABLED, like the six notices';
+  ASSERT char_length(btrim(COALESCE(v_entry->'payload'->>'body', ''))) > 80,
+    'T18: a seeded clause with no body is nothing for counsel to review';
+  ASSERT (v_entry->>'clientVisible')::boolean IS FALSE,
+    'T18: it is studio-to-trade wording, never the homeowner''s paper';
+
+  -- It composes into nothing. The rail still lays out ten.
+  PERFORM pg_temp.assume_user('a8000000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.mint_draft('a8300000-0000-4000-8000-000000000007',
+                             'The flow-down draft');
+  v_count := public.materialize_agreement_template(
+    'a8300000-0000-4000-8000-000000000007', 'patina.design_build');
+  ASSERT v_count = 10,
+    format('T18: a disabled entry composes into nothing — ten parts, got %s',
+           v_count);
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.proposal_agreement_parts
+    WHERE part_key = 'patina.flow_down'),
+    'T18: no agreement anywhere carries it';
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE 'PASS T18: the flow-down clause is seeded, dark, and composes into nothing';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (T19) THE LIEN WAIVER HAS A DOOR (M3, P12). The table is not writable from a
+--       browser; the RPC validates the vocabulary and snapshots the trade.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_draw uuid;
+  v_result jsonb;
+  v_err text;
+  v_bundle jsonb;
+BEGIN
+  ASSERT NOT has_table_privilege('authenticated',
+                                 'public.agreement_draw_lien_waivers', 'INSERT'),
+    'T19: no wave writes a business table outside a definer RPC';
+  ASSERT has_table_privilege('authenticated',
+                             'public.agreement_draw_lien_waivers', 'SELECT'),
+    'T19: the studio still reads its own ledger';
+
+  SELECT id INTO v_draw FROM public.agreement_draw_invoices
+  WHERE proposal_id = 'a8300000-0000-4000-8000-000000000001'
+    AND draw_key = 'rough_in';
+
+  INSERT INTO public.studio_contacts (
+    id, organization_id, entity_kind, contact_kind, full_name, company_name
+  ) VALUES (
+    'a8600000-0000-4000-8000-000000000001',
+    'a8100000-0000-4000-8000-000000000001', 'company', 'trade',
+    NULL, 'Halloran Cabinetry');
+
+  -- A vocabulary nobody uses is refused, in the studio's own words.
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000001');
+  BEGIN
+    PERFORM public.record_agreement_draw_lien_waiver(v_draw, 'sort of waived');
+    RAISE EXCEPTION 'T19: an unknown waiver type must be refused';
+  EXCEPTION WHEN check_violation THEN
+    GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
+  END;
+  ASSERT v_err = 'a lien waiver is conditional or unconditional, on progress or final',
+    format('T19: %L', v_err);
+
+  v_result := public.record_agreement_draw_lien_waiver(
+    v_draw, 'conditional_progress', 'a8600000-0000-4000-8000-000000000001',
+    DATE '2028-08-31', 200000);
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_result->>'waiverType' = 'conditional_progress',
+    format('T19: the exchange is recorded: %s', v_result);
+  ASSERT v_result->>'contactDisplayName' = 'Halloran Cabinetry',
+    'T19: the trade''s name is SNAPSHOTTED — the record outlives the roster row';
+  ASSERT v_result->>'receivedAt' IS NOT NULL,
+    'T19: recording an exchange means it happened';
+  ASSERT (SELECT recorded_by FROM public.agreement_draw_lien_waivers
+          WHERE id = (v_result->>'id')::uuid)
+         = 'a8000000-0000-4000-8000-000000000001',
+    'T19: the recorder is the session, never a column the caller filled in';
+
+  -- A stranger cannot record one, and is told nothing about whether it exists.
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000009');
+  BEGIN
+    PERFORM public.record_agreement_draw_lien_waiver(v_draw, 'conditional_final');
+    RAISE EXCEPTION 'T19: an outsider must be refused';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- And it reaches the homeowner as a type and a date, and nothing else.
+  PERFORM pg_temp.assume_role('a8000000-0000-4000-8000-000000000004');
+  v_bundle := public.get_client_commercial_document_bundle(
+    'a8300000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+  ASSERT (SELECT draw->'lienWaiver'->>'type'
+          FROM jsonb_array_elements(v_bundle->'designBuild'->'draws') AS e(draw)
+          WHERE draw->>'drawKey' = 'rough_in') = 'conditional_progress',
+    'T19: the homeowner learns the waiver was received';
+  ASSERT (SELECT NOT (draw->'lienWaiver' ? 'amountCents')
+          FROM jsonb_array_elements(v_bundle->'designBuild'->'draws') AS e(draw)
+          WHERE draw->>'drawKey' = 'rough_in'),
+    'T19: and never its amount, its paper, or the trade''s own storage path';
+
+  RAISE NOTICE 'PASS T19: the waiver is recorded through one door, validated, and projected as two fields';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- (T12) ACL — anon holds EXECUTE on none of the wave's new functions, and each
 --       grantee tuple is exactly what the migration wrote.
 --       Shape copied from 00571_studio_invoices.sql:1050-1080.
@@ -1166,7 +1446,14 @@ INSERT INTO _db_acl VALUES
   ('public._agreement_design_build_part(uuid,text)',   ARRAY[]::text[]),
   ('public._agreement_sub_disclosure(uuid)',           ARRAY[]::text[]),
   ('public._agreement_design_build_subs(uuid,text)',   ARRAY[]::text[]),
-  ('public.guard_agreement_draw_ledger()',             ARRAY[]::text[]);
+  ('public.guard_agreement_draw_ledger()',             ARRAY[]::text[]),
+  ('public._agreement_money_to_the_cent(numeric)',     ARRAY['authenticated','service_role']),
+  ('public._agreement_schedule_of_values(jsonb,text)', ARRAY['authenticated','service_role']),
+  ('public._agreement_redact_client_payload(text,text,jsonb,text)',
+                                                       ARRAY['authenticated','service_role']),
+  ('public.record_agreement_draw_lien_waiver(uuid,text,uuid,date,integer,text,timestamptz)',
+                                                       ARRAY['authenticated']),
+  ('public._render_agreement_snapshot_html(uuid)',     ARRAY[]::text[]);
 
 DO $$
 DECLARE r record;

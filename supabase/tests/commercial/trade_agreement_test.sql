@@ -11,8 +11,11 @@
 --       token is revoked in the SAME transaction as the signature.
 --   A2  A replay is idempotent, not an error: the original receipt, the
 --       original signed_at, no second row, no moved fingerprint.
---   A3  Dead links are indistinguishable: six misses, six NULLs, no error and
---       no leak.
+--   A3  Dead links are indistinguishable: garbage, an unknown hash, an expired
+--       token, a draft agreement, a voided one and a link superseded by a
+--       re-mint all resolve to nothing, with no error and no leak. The single
+--       exception is the token a signature spent, which comes back read-only
+--       as the settled receipt the sub reloads into (M2, §4.5, walk 16).
 --   A4  RLS — a sub token reads only its own agreement, and anon and a foreign
 --       authenticated user read ZERO rows from all three tables directly.
 --   A5  The sub cannot see the bid ledger or the client's money: the DTO's key
@@ -314,6 +317,11 @@ BEGIN
   ASSERT (SELECT status FROM public.studio_trade_agreement_tokens
           WHERE agreement_id = v_a) = 'revoked',
     'A1: a signed agreement''s link is spent, in the same transaction';
+  -- M2: and the row remembers that its own signature is what spent it, which
+  -- is the whole difference between a receipt and a dead link.
+  ASSERT (SELECT spent_at FROM public.studio_trade_agreement_tokens
+          WHERE agreement_id = v_a) IS NOT NULL,
+    'A1: the spending signature stamps spent_at, in that same transaction';
 
   RAISE NOTICE 'PASS A1: create, send, mint, resolve, sign — and the link is spent';
 END $$;
@@ -366,6 +374,10 @@ DECLARE
   v_token_a text := (SELECT value FROM _ta_state WHERE label = 'token_a');
   v_draft uuid;
   v_draft_token text;
+  v_receipt jsonb;
+  v_c uuid;
+  v_old_token text;
+  v_new_token text;
 BEGIN
   PERFORM pg_temp.assume_role('a9000000-0000-4000-8000-000000000001');
   v_draft := public.create_trade_agreement(
@@ -380,9 +392,19 @@ BEGIN
   -- (2) a valid-format hash nobody minted
   ASSERT public.resolve_trade_agreement_link(repeat('a', 64)) IS NULL,
     'A3(2): a well-formed unknown token';
-  -- (3) a revoked token (agreement A's, spent by the signature)
-  ASSERT public.resolve_trade_agreement_link(v_token_a) IS NULL,
-    'A3(3): a revoked token resolves to nothing, not to a "this link was used" page';
+  -- (3) M2 — THE ONE REVOKED TOKEN THAT IS NOT A DEAD LINK. Agreement A's
+  -- token was spent by its own signature, and the sub who just signed reloads
+  -- their page: they get the settled receipt, not a 404. Nothing new crosses —
+  -- the same thirteen keys, the same price, and state now reads 'signed'.
+  v_receipt := public.resolve_trade_agreement_link(v_token_a);
+  ASSERT v_receipt IS NOT NULL,
+    'A3(3): a token spent by its OWN signature still resolves — the settled receipt (§4.5, walk 16)';
+  ASSERT v_receipt->>'state' = 'signed',
+    format('A3(3): and it resolves as signed: %s', v_receipt->>'state');
+  ASSERT v_receipt->'existingSignature'->>'signedName' = 'Ingrid Halloran',
+    'A3(3): carrying the signature that spent it';
+  ASSERT NOT (v_receipt ? 'clientPriceCents') AND NOT (v_receipt ? 'projectName'),
+    'A3(3): and still nothing of the client';
   -- (4) an expired token
   UPDATE public.studio_trade_agreement_tokens
   SET expires_at = now() - interval '1 day' WHERE agreement_id = v_b;
@@ -407,7 +429,28 @@ BEGIN
     'A3(6): a voided agreement''s link is dead';
   PERFORM pg_temp.reset_role();
 
-  RAISE NOTICE 'PASS A3: six kinds of dead link, six NULLs, no error and no leak';
+  -- (7) M2's other half — RC-1 still holds for every revocation that is
+  -- somebody else's decision. A re-mint supersedes the live link on a SENT
+  -- agreement; the superseded one carries no spent_at and is dead, even though
+  -- its agreement is perfectly alive and its successor resolves.
+  PERFORM pg_temp.assume_role('a9000000-0000-4000-8000-000000000001');
+  v_c := public.create_trade_agreement(
+    'a9400000-0000-4000-8000-000000000001',
+    'a9500000-0000-4000-8000-000000000002',
+    pg_temp.payload('Re-minted', 'The link is replaced before anyone signs.',
+                    250000));
+  PERFORM public.send_trade_agreement(v_c);
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_service();
+  SELECT token INTO v_old_token FROM public.mint_trade_agreement_token(v_c);
+  SELECT token INTO v_new_token FROM public.mint_trade_agreement_token(v_c);
+  ASSERT public.resolve_trade_agreement_link(v_old_token) IS NULL,
+    'A3(7): a link superseded by a re-mint is dead — an administrative revoke is not a receipt';
+  ASSERT public.resolve_trade_agreement_link(v_new_token) IS NOT NULL,
+    'A3(7): while the link that replaced it resolves';
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE 'PASS A3: seven kinds of link, and only the one a signature spent comes back';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
