@@ -1158,12 +1158,18 @@ describe('Threshold — the doorstep’s own asks', () => {
       expect(screen.getByTestId('door-houseless')).toBeInTheDocument();
     });
 
-    /* W3R1-02 — AND THE SAME PAPER AFTER SHE HAS SIGNED IT.
+    /* W3R1-02, then R50 — AND THE SAME PAPER AFTER SHE HAS SIGNED IT.
        At `client_signed` the paper leaves `pending` for `accepted`, and the
        receipts filter was project-scoped: the walk signed a houseless
        design-build prime, reloaded, and found the door, the house and THE
-       PAPERS all empty over a paper carrying her own signature. It stands as
-       its receipt on every house's doorstep until countersign gives it one. */
+       PAPERS all empty over a paper carrying her own signature. Round 1 gave
+       it a receipt row; round 2 (W3R2-02) found the DOOR still gone — and with
+       it the post-signature region: KEEP A COPY, the deposit offer and the pay
+       link, none of which stands anywhere else on the page.
+
+       So the door stands too, until the countersign that gives the paper a
+       project. It is not asking: `signedAlready` is what tells it so before
+       its own bundle answers. */
     it('keeps a signed, project-less prime in the record on every house', () => {
       proposalsMock.mockReturnValue(
         settled([
@@ -1182,8 +1188,14 @@ describe('Threshold — the doorstep’s own asks', () => {
 
       const { container } = renderThreshold();
 
-      // No door — she has signed it, and the receipt is what stands.
-      expect(container.querySelector('#door-door-prop-turnkey')).toBeNull();
+      // R50 — the door stands, opened on her name, and it does not ask again.
+      const door = container.querySelector('#door-door-prop-turnkey');
+      expect(door).not.toBeNull();
+      expect(door).toHaveTextContent('Open. It opened on your name.');
+      expect(
+        (door as HTMLElement).querySelector('[data-testid="door-sign-name"]'),
+      ).toBeNull();
+      // W3R1-02's receipt row stands with it.
       expect(document.querySelector('#previously')).toHaveTextContent(
         'Design-build agreement · Halvorsen kitchen and mudroom',
       );

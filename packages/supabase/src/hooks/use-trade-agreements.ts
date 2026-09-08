@@ -231,7 +231,15 @@ async function tradeAgreementSendFailureMessage(
       'No email on file for this trade — add one to their contact and try again.'
     );
   }
-  if (detail) return detail;
+  // W3R2-09 — `detail` is the PROVIDER's sentence, and the walk watched it
+  // print `RESEND_API_KEY environment variable is required` into the studio's
+  // composer. A studio can do nothing with an environment-variable name, and
+  // the paper is recorded either way: the row reaches `sent` before the letter
+  // is attempted, so what is untrue is only the delivery. Say that, and leave
+  // the provider's words in the function's log where they are useful.
+  if (code === 'send_failed') {
+    return 'The agreement is recorded. The message could not be sent. Try again.';
+  }
   return 'The Trade Agreement could not be sent. Check the trade’s email and try again.';
 }
 

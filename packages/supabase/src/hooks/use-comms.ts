@@ -822,6 +822,37 @@ export function useStartDirectThread() {
   });
 }
 
+/**
+ * R47 (W3R2-11) — the thread a question asked at an ORIGIN agreement's door
+ * lands in, keyed by that agreement.
+ *
+ * An origin paper is bound to no project until the studio countersigns, so
+ * there is no project thread to ask in. Wave 3 answered that with
+ * `rpc_start_direct_thread`, which was right about WHO and silent about WHAT:
+ * the row landed with `proposal_id` NULL, and a second origin agreement from
+ * the same studio would have folded into the first one's thread. R47 words it
+ * "keyed by proposal when no project exists; never another project's thread",
+ * and `rpc_start_agreement_thread` (00578) is that thread — it resolves the
+ * designer off the paper itself, so the browser names no counterpart.
+ */
+export function useStartAgreementThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (proposalId: string): Promise<string> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('rpc_start_agreement_thread', {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+      if (!data) throw new Error('RPC returned no thread id');
+      return data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['comms', 'threads'] });
+    },
+  });
+}
+
 export function useStartProjectThread() {
   const qc = useQueryClient();
   return useMutation({

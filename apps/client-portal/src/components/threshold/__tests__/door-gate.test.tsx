@@ -1060,4 +1060,87 @@ describe('DoorGate — the composed agreement', () => {
       );
     });
   });
+
+  /* ── R50 · W3R2-02 — THE RECEIPT SURVIVES A RELOAD ───────────────────────
+     Everything above is about the visit she signed in, and that visit was all
+     the post-signature region ever had: `signedAt` and the offer both lived in
+     this component's memory, so a reload took the receipt, KEEP A COPY, the
+     deposit offer and the pay link with it. The walk reloaded and read
+     "Nothing waits for your name."
+
+     These cases are the door on the NEXT visit: no signature made here, no
+     fetch, the bundle alone. ─────────────────────────────────────────────── */
+  describe('a paper she signed on an earlier visit', () => {
+    function signedBundle(depositOffer: unknown) {
+      bundleMock.mockReturnValue({
+        isLoading: false,
+        isError: false,
+        data: {
+          document: { kind: 'design_build' },
+          furnishings: null,
+          tradeScope: null,
+          parts: [],
+          serviceTerms: { currency: 'USD' },
+          signatures: [
+            {
+              party: 'client',
+              signerName: 'Harper Vale',
+              signedAt: '2026-09-08T15:04:00.000Z',
+              documentFingerprint: 'abc',
+            },
+          ],
+          designBuild: {
+            draws: [0, 1, 2, 3, 4].map((n) => ({ drawKey: `d${n}` })),
+            retainageHeldCents: 378603,
+            subs: [],
+            depositOffer,
+          },
+        },
+      });
+    }
+
+    it('stands open on her name, with the receipt and the copy she keeps', () => {
+      signedBundle(null);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.getByText('Open. It opened on your name.')).toBeInTheDocument();
+      expect(screen.getByTestId('door-receipt')).toHaveTextContent(
+        'has your signature',
+      );
+      expect(screen.getByTestId('door-keep-a-copy')).toBeInTheDocument();
+    });
+
+    it('re-derives the deposit offer from the row, not from this session', () => {
+      signedBundle({
+        invoiceId: 'inv-deposit',
+        amountCents: 841340,
+        label: 'Deposit at signing',
+        payToken: 'b'.repeat(64),
+      });
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.getByTestId('deposit-offer')).toHaveTextContent('$8,413.40');
+      expect(screen.getByRole('link', { name: 'Pay the deposit' })).toHaveAttribute(
+        'href',
+        `/pay/${'b'.repeat(64)}`,
+      );
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('offers nothing once the bundle says the deposit is settled', () => {
+      signedBundle(null);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.queryByTestId('deposit-offer')).not.toBeInTheDocument();
+      expect(screen.getByTestId('door-receipt')).toBeInTheDocument();
+    });
+
+    it('never asks for a name she has already given', () => {
+      signedBundle(null);
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.queryByLabelText('Type your full name')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('door-acts-stub')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -8,7 +8,7 @@ import { act as act_, fireEvent, render, screen, waitFor } from '@testing-librar
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useStartProjectThread: jest.fn(),
-  useStartDirectThread: jest.fn(),
+  useStartAgreementThread: jest.fn(),
   useSendMessage: jest.fn(),
   useRequestProposalChange: jest.fn(),
   useDeclineProposal: jest.fn(),
@@ -41,7 +41,7 @@ import {
   useDeclineProposal,
   useRequestProposalChange,
   useSendMessage,
-  useStartDirectThread,
+  useStartAgreementThread,
   useStartProjectThread,
 } from '@patina/supabase';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
@@ -49,7 +49,7 @@ import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { DoorActs } from '../door-acts';
 
 const startThreadMock = useStartProjectThread as jest.Mock;
-const startDirectThreadMock = useStartDirectThread as jest.Mock;
+const startAgreementThreadMock = useStartAgreementThread as jest.Mock;
 const sendMessageMock = useSendMessage as jest.Mock;
 const requestChangeMock = useRequestProposalChange as jest.Mock;
 const declineProposalMock = useDeclineProposal as jest.Mock;
@@ -60,7 +60,7 @@ function mutation(mutateAsync: jest.Mock, isPending = false) {
 }
 
 let startThread: jest.Mock;
-let startDirectThread: jest.Mock;
+let startAgreementThread: jest.Mock;
 let sendMessage: jest.Mock;
 let requestChange: jest.Mock;
 let declineProposal: jest.Mock;
@@ -87,14 +87,14 @@ function type(testId: string, value: string) {
 describe('DoorActs', () => {
   beforeEach(() => {
     startThread = jest.fn().mockResolvedValue('thread-9');
-    startDirectThread = jest.fn().mockResolvedValue('thread-direct-3');
+    startAgreementThread = jest.fn().mockResolvedValue('thread-agreement-3');
     sendMessage = jest.fn().mockResolvedValue({ id: 'msg-1' });
     requestChange = jest.fn().mockResolvedValue(undefined);
     declineProposal = jest.fn().mockResolvedValue(undefined);
     declineDocument = jest.fn().mockResolvedValue(undefined);
 
     startThreadMock.mockReturnValue(mutation(startThread));
-    startDirectThreadMock.mockReturnValue(mutation(startDirectThread));
+    startAgreementThreadMock.mockReturnValue(mutation(startAgreementThread));
     sendMessageMock.mockReturnValue(mutation(sendMessage));
     requestChangeMock.mockReturnValue(mutation(requestChange));
     declineProposalMock.mockReturnValue(mutation(declineProposal));
@@ -296,12 +296,14 @@ describe('DoorActs', () => {
     fireEvent.click(act('Send'));
 
     await waitFor(() => {
-      expect(startDirectThread).toHaveBeenCalledWith('designer-nora');
+      // R47 (W3R2-11) — keyed by THE PAPER, not by the counterpart: the RPC
+      // resolves the designer off the agreement itself.
+      expect(startAgreementThread).toHaveBeenCalledWith('prop-7');
     });
     // Never the project rail: there is no project on this paper.
     expect(startThread).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith({
-      threadId: 'thread-direct-3',
+      threadId: 'thread-agreement-3',
       body: 'About Design services agreement\n\nWhen would we start?',
     });
     expect(await screen.findByTestId('door-acts-receipt')).toHaveTextContent(
@@ -320,11 +322,11 @@ describe('DoorActs', () => {
     await waitFor(() => {
       expect(startThread).toHaveBeenCalledWith('proj-1');
     });
-    expect(startDirectThread).not.toHaveBeenCalled();
+    expect(startAgreementThread).not.toHaveBeenCalled();
   });
 
   it('says it refused the direct ask in its own words', async () => {
-    startDirectThread.mockRejectedValue(new Error('no relationship with that counterpart'));
+    startAgreementThread.mockRejectedValue(new Error('no relationship with that counterpart'));
     renderActs({ projectId: null, studioProfileId: 'designer-nora' });
     fireEvent.click(act('Ask a question'));
     type('door-ask-question', 'When would we start?');

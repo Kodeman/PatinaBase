@@ -237,10 +237,28 @@ export interface DesignBuildSubIdentity {
   awardedPriceCents: number | null;
 }
 
+/**
+ * R50 (W3R2-02) — the deposit offer, RE-DERIVED from the row rather than
+ * remembered from the sign response.
+ *
+ * `get_client_commercial_document_bundle` (00578) reads the deposit draw's own
+ * live invoice and its active link token, and answers null the moment that
+ * invoice is settled or voided: a paid deposit is not an offer. Null is also
+ * what a bundle from a database this build is ahead of answers, and the door
+ * renders nothing for it — the same silence a failed mint has always had.
+ */
+export interface DesignBuildDepositOffer {
+  invoiceId: string;
+  amountCents: number;
+  label: string;
+  payToken: string;
+}
+
 export interface DesignBuildLedger {
   draws: DesignBuildDrawEntry[];
   retainageHeldCents: number;
   subs: DesignBuildSubIdentity[];
+  depositOffer: DesignBuildDepositOffer | null;
 }
 
 /**
@@ -645,6 +663,24 @@ function adaptTradeScopeProgress(value: unknown): TradeScopeProgress {
   };
 }
 
+/** R50 — every field or nothing: a half-read offer would print a link that
+ *  goes nowhere, or a figure with no way to pay it. */
+function adaptDesignBuildDepositOffer(
+  value: unknown,
+): DesignBuildDepositOffer | null {
+  const row = record(value);
+  const invoiceId = text(first(row, 'invoiceId', 'invoice_id'));
+  const payToken = text(first(row, 'payToken', 'pay_token'));
+  const amountCents = number(first(row, 'amountCents', 'amount_cents'));
+  if (!invoiceId || !payToken || amountCents <= 0) return null;
+  return {
+    invoiceId,
+    amountCents,
+    label: text(first(row, 'label'), 'Deposit'),
+    payToken,
+  };
+}
+
 function adaptDesignBuildDraws(value: unknown): DesignBuildDrawEntry[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -907,6 +943,9 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         first(designBuildRaw, 'retainageHeldCents', 'retainage_held_cents'),
       ),
       subs: adaptDesignBuildSubs(first(designBuildRaw, 'subs')),
+      depositOffer: adaptDesignBuildDepositOffer(
+        first(designBuildRaw, 'depositOffer', 'deposit_offer'),
+      ),
     },
   };
 }

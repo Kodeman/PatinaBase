@@ -1368,6 +1368,7 @@ export {
   useQuickReplies,
   useUpsertQuickReply,
   useDeleteQuickReply,
+  useStartAgreementThread,
   useStartDirectThread,
   useStartProjectThread,
   useStartVendorBrief,

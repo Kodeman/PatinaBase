@@ -477,9 +477,63 @@ export function Threshold({
       },
     ];
   });
+  /* R50 (W3R2-02) — THE DOOR THAT OPENED ON HER NAME STANDS ON THE NEXT VISIT.
+     `sealedDoors` above is this visit's memory, and memory is what the walk
+     found missing: after a reload the receipt, KEEP A COPY, the deposit offer
+     and the pay link were all gone, on this house and on every other, over a
+     paper carrying her signature and an open first draw.
+
+     A signed paper is state, so it is read as state. An agreement she has
+     signed and the studio has not yet countersigned still stands at its door —
+     the same houseless rule `pending` and the receipt row take (R30, W3R1-02)
+     — and `DoorGate` reads the signature and the deposit offer off the bundle,
+     so what it draws is the receipt rather than a second ask. Once the studio
+     countersigns, the paper is `executed`, its project exists, and it is a
+     record in Previously; the door is done. */
+  const standingSignedDoors: { mark: ThresholdMark; paper: DoorProposal }[] =
+    accepted.flatMap((proposal) => {
+      const commercial = commercialSummaryFromProposal(proposal);
+      if (commercial.kind === 'legacy') return [];
+      if (commercial.state !== 'client_signed') return [];
+      const houseless =
+        commercial.projectId === null && isOriginKind(commercial.kind);
+      if (!houseless && commercial.projectId !== projectId) return [];
+      return [
+        {
+          mark: {
+            id: `door:${proposal.id}`,
+            kind: 'door' as const,
+            // Its own doorstep, not a room: an origin paper belongs to the
+            // household, and `heaviestRoom` answers null for one anyway.
+            roomId: houseless ? null : null,
+            label: proposal.title,
+            anchor: 'doorstep',
+            proposalId: proposal.id,
+            amountCents: 0,
+          },
+          paper: {
+            id: proposal.id,
+            title: proposal.title,
+            totalAmountCents:
+              typeof proposal.total_amount === 'number' ? proposal.total_amount : 0,
+            sentAt: commercial.sentAt,
+            updatedAt: proposal.updated_at ?? null,
+            kind: commercial.kind,
+            validUntil: proposal.valid_until ?? null,
+            houseless,
+            designerId: proposal.designer_id ?? null,
+            // The list already says so; the door need not wait for its own
+            // bundle to stop asking for her name.
+            signedAlready: true,
+          },
+        },
+      ];
+    });
+
   // A sealed door's paper is gone from the open papers; the door is still
   // drawn from it, so the lookup keeps it. A live paper always wins.
   const paperById = new Map<string, DoorProposal>([
+    ...standingSignedDoors.map((door) => [door.paper.id, door.paper] as const),
     ...sealedDoors.map((door) => [door.paper.id, door.paper] as const),
     ...signatureGates.map((paper) => [paper.id, paper] as const),
   ]);
@@ -733,7 +787,17 @@ export function Threshold({
   const sealedMarks = sealedDoors
     .filter((door) => !openDoorIds.has(door.mark.id))
     .map((door) => door.mark);
-  const doorMarks = [...openDoorMarks, ...sealedMarks];
+  // R50 — and the ones the SERVER says she has signed, for every visit after
+  // the one she signed in. `sealedMarks` wins on id, so a door sealed this
+  // visit keeps the mark (and the mounted component) it was shut in.
+  const heldIds = new Set([
+    ...openDoorIds,
+    ...sealedMarks.map((mark) => mark.id),
+  ]);
+  const standingMarks = standingSignedDoors
+    .filter((door) => !heldIds.has(door.mark.id))
+    .map((door) => door.mark);
+  const doorMarks = [...openDoorMarks, ...sealedMarks, ...standingMarks];
   const wallMarks = model.marks.filter((mark) => mark.kind === 'wall');
   // The first door that will actually RENDER: `renderDoor` answers null for a
   // mark whose paper is missing, and a pin or a `#door` anchor on a door that

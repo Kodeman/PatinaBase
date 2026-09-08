@@ -7,7 +7,7 @@ import {
   useDeclineProposal,
   useRequestProposalChange,
   useSendMessage,
-  useStartDirectThread,
+  useStartAgreementThread,
   useStartProjectThread,
 } from '@patina/supabase';
 
@@ -45,10 +45,13 @@ import { InstrumentReading } from './instrument-reading';
    no project yet.
 
    So the question goes to the studio ON THE AGREEMENT instead:
-   `rpc_start_direct_thread` opens (or finds) the direct thread between the
-   homeowner and that agreement's own designer, which the roster row or the
-   live lead behind every sent agreement already authorizes. The letter is the
-   same letter, named after the same paper; only the thread it lands in
+   `rpc_start_agreement_thread` (00578) opens (or finds) the direct thread
+   between the homeowner and that agreement's own designer, KEYED BY THE PAPER
+   on `comms_threads.proposal_id` (R47). The RPC resolves the designer off the
+   agreement itself and admits only the client it was sent to, so the browser
+   names no counterpart and a second origin agreement from the same studio
+   opens its own thread rather than folding into the first one's. The letter is
+   the same letter, named after the same paper; only the thread it lands in
    differs. With neither a project nor a designer to address, the act is still
    withheld — the rule is intact, its scope was simply wrong.
 
@@ -111,7 +114,7 @@ export function DoorActs({
   const panelId = `door-acts-${useId().replace(/:/g, '')}`;
 
   const startThread = useStartProjectThread();
-  const startDirectThread = useStartDirectThread();
+  const startAgreementThread = useStartAgreementThread();
   const sendMessage = useSendMessage();
   const requestChange = useRequestProposalChange();
   const declineLegacy = useDeclineProposal();
@@ -142,7 +145,7 @@ export function DoorActs({
   const isLegacy = kind === 'legacy';
   const expired = hasPassed(validUntil);
   const asking =
-    startThread.isPending || startDirectThread.isPending || sendMessage.isPending;
+    startThread.isPending || startAgreementThread.isPending || sendMessage.isPending;
   /** A project thread, or the studio's own — either is a thread to ask in. */
   const canAsk = projectId !== null || studioProfileId !== null;
   const declining = declineLegacy.isPending || declineDocument.isPending;
@@ -170,13 +173,16 @@ export function DoorActs({
     }
     askLatch.current = true;
     try {
-      // The project's thread where there is a project; the studio's own where
-      // the paper comes before the house. Both return a thread id and the
-      // letter below is identical either way — it names the paper it is about,
-      // so the studio reads it in context whichever thread it lands in.
+      // The project's thread where there is a project; THIS AGREEMENT'S OWN
+      // where the paper comes before the house (R47, W3R2-11). The second one
+      // is a direct thread between the homeowner and the studio's designer,
+      // keyed by the paper on `comms_threads.proposal_id`, so a second origin
+      // agreement from the same studio opens its own thread rather than
+      // folding into the first one's — and neither can ever be another
+      // project's. The letter below is identical either way.
       const threadId = projectId
         ? await startThread.mutateAsync(projectId)
-        : await startDirectThread.mutateAsync(studioProfileId as string);
+        : await startAgreementThread.mutateAsync(proposalId);
       const named = title.trim();
       await sendMessage.mutateAsync({
         threadId,

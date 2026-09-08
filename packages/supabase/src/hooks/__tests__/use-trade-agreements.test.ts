@@ -250,6 +250,31 @@ describe('useSendTradeAgreement', () => {
     );
   });
 
+  /* W3R2-09 — the studio is told what happened, and never told the name of an
+     environment variable. The walk watched `RESEND_API_KEY environment
+     variable is required` print into the composer under a row that had already
+     reached `sent`: the paper WAS recorded, only the letter did not go. */
+  it('maps a dispatch failure to a studio sentence, and prints no provider detail', async () => {
+    invoke.mockResolvedValue({
+      data: null,
+      error: {
+        context: {
+          json: async () => ({
+            error: 'send_failed',
+            detail: 'RESEND_API_KEY environment variable is required',
+          }),
+        },
+      },
+    });
+    const config = useSendTradeAgreement('project-1') as any;
+    await expect(config.mutationFn('ta-1')).rejects.toThrow(
+      'The agreement is recorded. The message could not be sent. Try again.',
+    );
+    await expect(config.mutationFn('ta-1')).rejects.not.toThrow(
+      /RESEND_API_KEY/,
+    );
+  });
+
   it('never surfaces the raw SDK string when there is no JSON body', async () => {
     invoke.mockResolvedValue({
       data: null,

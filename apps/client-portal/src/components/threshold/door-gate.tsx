@@ -104,6 +104,14 @@ export interface DoorProposal extends ThresholdProposal {
    * thread.
    */
   designerId?: string | null;
+  /**
+   * R50 (W3R2-02) — the Threshold already knows, from the proposals list, that
+   * this paper carries her signature; the door would otherwise have to wait for
+   * its own bundle to find out, and in that window it drew the block that asks
+   * for a name she has already given. The DATE still comes from the bundle's
+   * signature row — this only says that one exists.
+   */
+  signedAlready?: boolean;
 }
 
 export interface DoorGateProps {
@@ -237,6 +245,37 @@ export function DoorGate({
     proposal.kind ?? bundle.data?.document?.kind ?? null;
   const kind: CommercialDocumentKind = resolvedKind ?? 'legacy';
   const isFurnishings = kind === 'furnishings_authorization';
+
+  /* ── R50 (W3R2-02) — THE RECEIPT SURVIVES ──────────────────────────────────
+     The post-signature region used to live entirely in this component's memory:
+     `signedAt` was set by the sign call and `depositOffer` came back in its
+     response, so a reload took the receipt, KEEP A COPY, the deposit offer and
+     the pay link with it. The walk signed, reloaded, and read "Nothing waits
+     for your name" over a paper carrying her signature and an open first draw.
+
+     Both halves are state, so both are read as state. The signature is the
+     bundle's own client row; the offer is the deposit draw's live invoice and
+     its link, re-derived by the bundle RPC (00578) and answered null the moment
+     that invoice is settled. In-session values still win — they are the same
+     facts, arriving a beat before the refetch that carries them. */
+  const bundleSignature =
+    bundle.data?.signatures?.find((row) => row.party === 'client') ?? null;
+  const bundleSignedAt = parseSourceDate(bundleSignature?.signedAt ?? null);
+  const standingSignedAt = signedAt ?? bundleSignedAt;
+  // What the door knows before its own bundle answers (the paper) and after
+  // (the signature row). Either one means she is not being asked again.
+  const arrivedSigned = proposal.signedAlready === true || bundleSignedAt !== null;
+  const bundleOffer = bundle.data?.designBuild?.depositOffer ?? null;
+  const standingOffer: DepositOfferModel | null =
+    depositOffer ??
+    (bundleOffer
+      ? {
+          invoiceId: bundleOffer.invoiceId,
+          amountCents: bundleOffer.amountCents,
+          label: bundleOffer.label,
+          payPath: `/pay/${encodeURIComponent(bundleOffer.payToken)}`,
+        }
+      : null);
 
   const items = isFurnishings ? (bundle.data?.furnishings?.items ?? []) : [];
   // The Making's fallback, verbatim: a trade scope carries no deposit percent,
@@ -426,8 +465,8 @@ export function DoorGate({
   // moment the route answers is that the studio holds her name and a copy is
   // hers — the same sentence the phone's seal says.
   const holder = studioName?.trim() || 'Your studio';
-  const receipt = signedAt
-    ? `${proposal.title} · signed ${DAY_MONTH.format(signedAt)} · ${holder} has your signature. You’ll have a copy.`
+  const receipt = standingSignedAt
+    ? `${proposal.title} · signed ${DAY_MONTH.format(standingSignedAt)} · ${holder} has your signature. You’ll have a copy.`
     : null;
 
   // The document's own total is authoritative: Σ clientLineTotalCents
@@ -459,7 +498,7 @@ export function DoorGate({
       data-threshold-unit="door"
       // A door that has been signed is no longer asking for her hand, so it
       // stops claiming the ink that "since yesterday" reserves for open asks.
-      {...(signedAt ? {} : { 'data-never-dim': '' })}
+      {...(standingSignedAt || arrivedSigned ? {} : { 'data-never-dim': '' })}
       aria-labelledby={`door-title-${fieldId}`}
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
@@ -471,7 +510,7 @@ export function DoorGate({
           {proposal.title}
         </h2>
         <p className="max-w-[34ch] text-[15px] leading-normal text-[var(--text-body)] sm:text-right">
-          {signedAt
+          {standingSignedAt || arrivedSigned
             ? 'Open. It opened on your name.'
             : declined
               ? 'Shut. You declined it.'
@@ -485,7 +524,7 @@ export function DoorGate({
           not to this house, so it stands on every door she has and says which
           it is; without the line the same paper on three doorsteps reads as
           three papers. */}
-      {proposal.houseless && !signedAt && (
+      {proposal.houseless && !standingSignedAt && !arrivedSigned && (
         <p
           data-testid="door-houseless"
           className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]"
@@ -527,9 +566,9 @@ export function DoorGate({
       {/* P13 — the offer stands in the post-signature region, under the
           receipt and the copy she keeps: the signature is finished and said so
           before any money is named. Null renders nothing at all. */}
-      {signedAt && (
+      {standingSignedAt && (
         <DepositOffer
-          offer={depositOffer}
+          offer={standingOffer}
           drawCount={bundle.data?.designBuild?.draws.length ?? null}
           currency={bundle.data?.serviceTerms?.currency ?? 'USD'}
         />
@@ -558,7 +597,11 @@ export function DoorGate({
         </div>
       )}
 
-      {doorState !== 'open' && (
+      {/* A door she signed on an earlier visit opens on arrival: the leaf is
+          the block that asks for her name, and it may not ask again. An
+          in-session signature keeps the leaf until the swing finishes, which is
+          what `signedAt` distinguishes. */}
+      {doorState !== 'open' && !(arrivedSigned && !signedAt) && (
         <div
           ref={doorwayRef}
           data-testid="door-way"
