@@ -183,6 +183,30 @@ function roomTargetCents(
     : null;
 }
 
+/** A column that is present and is a string, or nothing. */
+function text(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+/**
+ * The four concept-render columns 00580 put on `project_rooms` (R142). They
+ * arrive on the room rows themselves — `useProjectRooms` selects `*`, and the
+ * threshold RPC carries no rooms payload — so this is the only place they are
+ * read. `deriveThreshold` decides whether the shape amounts to a render.
+ */
+function toConceptRender(record: Record<string, unknown>) {
+  const url = text(record.concept_render_url);
+  if (!url) return null;
+  return {
+    url,
+    caption: text(record.concept_render_caption),
+    uploadedAt: text(record.concept_render_uploaded_at),
+    uploadedBy: text(record.concept_render_uploaded_by),
+  };
+}
+
 function toThresholdRoom(
   row: unknown,
   targets: Map<string, number>,
@@ -202,6 +226,7 @@ function toThresholdRoom(
     sortOrder: typeof record.sort_order === "number" ? record.sort_order : 0,
     floorAreaSqft: typeof area === "number" ? area : null,
     targetCents: roomTargetCents(record, name, targets),
+    conceptRender: toConceptRender(record),
   };
 }
 
@@ -892,6 +917,12 @@ export function Threshold({
   const onDoorstep = (mark: ThresholdMark) =>
     mark.roomId === null || !banded.has(mark.roomId);
 
+  // The room the work has actually started in, for the bands that have nothing
+  // on their floor yet. Null while nothing has been agreed anywhere — an empty
+  // room then says only that it is empty, which is all the house knows.
+  const leadRoomName =
+    model.bands.find((band) => band.pieces.length > 0)?.name ?? null;
+
   const doorstepGates: ReactNode[] = [
     ...doorMarks.filter(onDoorstep).map(renderDoor),
     ...wallMarks.filter(onDoorstep).map(renderWall),
@@ -1349,7 +1380,13 @@ export function Threshold({
           )}
 
           {model.bands.map((band) => (
-            <RoomBand key={band.roomId} band={band} projectId={projectId}>
+            <RoomBand
+              key={band.roomId}
+              band={band}
+              projectId={projectId}
+              studioName={studioName}
+              leadRoomName={leadRoomName}
+            >
               {/* ONE array, keyed by mark: a door that has just been signed
                   leaves `band.marks` (the band's own sentence may not go on
                   saying a door waits on her name) and arrives from

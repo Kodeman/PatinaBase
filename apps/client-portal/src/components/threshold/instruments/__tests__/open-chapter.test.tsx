@@ -256,7 +256,7 @@ describe('TrackingRow', () => {
     );
   });
 
-  it('draws a quiet placeholder block instead of a gap when there is no image', () => {
+  it('draws a silhouette of the piece instead of a gap when there is no image', () => {
     render(<TrackingRow {...CREDENZA} imageUrl={null} />);
     expect(screen.queryByTestId('tracking-row-thumb')).not.toBeInTheDocument();
     expect(screen.getByTestId('tracking-row-thumb-placeholder')).toBeInTheDocument();
@@ -292,9 +292,13 @@ describe('TrackingRow', () => {
     expect(states).toEqual(['passed', 'passed', 'current', 'ahead', 'ahead', 'ahead']);
   });
 
-  it('labels the current stop and announces the position to a screen reader', () => {
+  /* PP-4 — the stage word prints ONCE on the row. The 9px label that used to
+     sit at the end of the spine is gone; the stamp carries the word, and the
+     spine still announces the position to a screen reader. */
+  it('names the stop in the stamp and announces the position to a screen reader', () => {
     render(<TrackingRow {...CREDENZA} />);
-    expect(screen.getByTestId('tracking-row-stop-label')).toHaveTextContent('In production');
+    expect(screen.getByTestId('tracking-row-stamp')).toHaveTextContent('In production');
+    expect(screen.queryByTestId('tracking-row-stop-label')).not.toBeInTheDocument();
     expect(screen.getByText('In production — stop 3 of 6')).toBeInTheDocument();
   });
 

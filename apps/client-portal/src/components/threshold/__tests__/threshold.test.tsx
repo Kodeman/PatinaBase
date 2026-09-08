@@ -108,6 +108,10 @@ jest.mock('@patina/supabase', () => ({
   useInvoicePaymentOptions: jest.fn(),
   useStartCheckout: jest.fn(),
   useNotifyCheckIntent: jest.fn(),
+  // 00580 — the room band signs its own concept render out of the private
+  // `room-renders` bucket, so the browser client is part of this boundary too.
+  ROOM_RENDERS_BUCKET: 'room-renders',
+  createBrowserClient: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-commercial-client', () => ({
@@ -254,6 +258,8 @@ const invoicesMock = useProjectInvoices as jest.Mock;
 const clientInvoicesMock = useClientInvoices as jest.Mock;
 const proposalsMock = useClientSafeProposals as jest.Mock;
 const roomsMock = useProjectRooms as jest.Mock;
+const browserClientMock = jest.requireMock('@patina/supabase')
+  .createBrowserClient as jest.Mock;
 const notesMock = useProjectNotes as jest.Mock;
 const ordersMock = useDirectOrders as jest.Mock;
 const partiesMock = useProjectParties as jest.Mock;
@@ -1490,6 +1496,68 @@ describe('Threshold — a room’s target', () => {
       'The house stands at $61,400 agreed.',
     );
     expect(screen.getByTestId('house-ledger-top')).not.toHaveTextContent('planned');
+  });
+});
+
+/* W1 HAND-OFF — the four concept-render columns 00580 put on `project_rooms`
+   ride the ROOM ROWS, not the threshold RPC (which carries no rooms payload).
+   `useProjectRooms` selects `*`, so they arrive already; `toThresholdRoom` is
+   the only place they are read, and `derive.ts` turns them into
+   `RoomBandModel.conceptRender`. */
+describe('Threshold — the room’s concept render (00580)', () => {
+  const RENDERED_ROOMS = [
+    {
+      ...ROOMS[0],
+      concept_render_url: 'proj-x/room-library/library.jpg',
+      concept_render_caption: 'The library, looking north',
+      concept_render_uploaded_at: '2026-09-03T10:00:00Z',
+      concept_render_uploaded_by: 'user-9',
+    },
+    ROOMS[1],
+  ];
+
+  function signsWith(signedUrl: string) {
+    const createSignedUrl = jest.fn().mockResolvedValue({ data: { signedUrl }, error: null });
+    browserClientMock.mockReturnValue({
+      storage: { from: jest.fn(() => ({ createSignedUrl })) },
+    });
+    return createSignedUrl;
+  }
+
+  it('carries the four columns from the room row onto the band', async () => {
+    const createSignedUrl = signsWith('https://strata.test/signed/library.jpg');
+    roomsMock.mockReturnValue(settled(RENDERED_ROOMS));
+
+    renderThreshold();
+
+    const plate = await screen.findByTestId('room-band-concept-image');
+    expect(plate).toHaveAttribute('src', 'https://strata.test/signed/library.jpg');
+    expect(createSignedUrl).toHaveBeenCalledWith('proj-x/room-library/library.jpg', 3600);
+
+    // The caption composes the studio's own caption, the studio (from
+    // `useStudioIdentity`) and the upload date, in the house's date idiom.
+    expect(screen.getByTestId('room-band-concept-caption')).toHaveTextContent(
+      'The library, looking north · uploaded by Quist Interiors · 3 September 2026',
+    );
+
+    // Exactly one room carries a render; the other band prints no slot.
+    expect(screen.getAllByTestId('room-band-concept')).toHaveLength(1);
+  });
+
+  it('leaves every band without a slot when no room carries a render', () => {
+    renderThreshold();
+    expect(screen.queryByTestId('room-band-concept')).not.toBeInTheDocument();
+  });
+
+  it('treats a blank column as no render at all', () => {
+    roomsMock.mockReturnValue(
+      settled([{ ...ROOMS[0], concept_render_url: '   ' }, ROOMS[1]]),
+    );
+
+    renderThreshold();
+
+    expect(screen.queryByTestId('room-band-concept')).not.toBeInTheDocument();
+    expect(browserClientMock).not.toHaveBeenCalled();
   });
 });
 
