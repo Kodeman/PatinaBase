@@ -151,6 +151,14 @@
 --        pair by design.
 --   R45  every function this file adds pins its search_path.
 --
+-- Web walk round 1, applied in place (still unapplied on Strata):
+--   W3R1-06  the seeded patina.notice_of_cancellation leaf is
+--            `clientVisible: false` (PART 13) — its body is counsel's and is
+--            empty, and it was reaching the homeowner as a blank ATTACHMENT A
+--            with a required "I received this"; and send_commercial_document
+--            refuses ANY client-visible attachment that asks to be
+--            acknowledged and carries no wording.
+--
 -- Every value widened below lives in a TEXT CHECK constraint, not a Postgres
 -- ENUM type (verified: proposals.document_kind 00423:93-101,
 -- project_commercial_documents.document_kind 00423:110-133,
@@ -7198,6 +7206,24 @@ BEGIN
         USING ERRCODE = 'check_violation';
     END IF;
 
+    -- R11's other half — AN ATTESTATION OF RECEIPT NEEDS SOMETHING RECEIVED.
+    -- An attachment on the homeowner's copy that asks her to tick "I received
+    -- this" must carry the words she is attesting she received; the tick is
+    -- recorded onto her signature row by `part_key`, and a leaf whose wording
+    -- is still with counsel would put an empty document into that record.
+    IF EXISTS (
+      SELECT 1
+      FROM public.proposal_agreement_parts ap
+      WHERE ap.proposal_id = p_proposal_id
+        AND ap.kind = 'attachment'
+        AND ap.client_visible
+        AND (ap.payload->'acknowledgeRequired') = 'true'::jsonb
+        AND NULLIF(btrim(COALESCE(ap.payload->>'body', '')), '') IS NULL
+    ) THEN
+      RAISE EXCEPTION 'an attachment your client must confirm she received needs its wording first'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
     v_contract_sum := public._agreement_contract_sum_cents(v_pricing_basis);
     SELECT COALESCE(sum(row.gross_cents), 0) INTO v_draw_gross
     FROM public._agreement_draw_rows(v_draws, v_contract_sum) AS row
@@ -8494,11 +8520,21 @@ INSERT INTO public.agreement_templates (
       'partKey', 'patina.terms', 'kind', 'clause', 'variant', NULL,
       'title', 'Terms', 'required', true, 'clientVisible', true,
       'payload', jsonb_build_object('body', '')),
+    -- R11 — THE NOTICE IS COUNSEL'S, AND ITS BODY IS NOT WRITTEN YET. The
+    -- wording of a right-to-cancel notice is jurisdictional and held for
+    -- counsel review, so the seeded leaf carries an EMPTY body. Client-visible,
+    -- it reached the homeowner as `ATTACHMENT A · NOTICE OF CANCELLATION` over
+    -- blank paper with a required "I received this" tick — an attestation of
+    -- receipt of a document that does not exist, recorded onto her signature
+    -- row. It ships studio-side only: the leaf stays on the rail (the template
+    -- still lays out ten parts), and the real notice is a SEPARATE part the
+    -- jurisdiction panel attaches once counsel enables a state, carrying that
+    -- state's wording and `clientVisible: true` of its own.
     jsonb_build_object(
       'partKey', 'patina.notice_of_cancellation', 'kind', 'attachment',
       'variant', NULL,
       'title', 'Notice of cancellation', 'required', false,
-      'clientVisible', true,
+      'clientVisible', false,
       'payload', jsonb_build_object(
         'title', 'Notice of cancellation', 'body', '',
         'jurisdiction', NULL, 'acknowledgeRequired', true)),

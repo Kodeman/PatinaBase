@@ -1626,6 +1626,72 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- (T21) W3R1-06 — AN ATTESTATION OF RECEIPT NEEDS SOMETHING RECEIVED.
+--       The seeded notice-of-cancellation leaf carries no body (R11 holds the
+--       wording for counsel), so it never stands on the homeowner's copy; and
+--       no client-visible attachment may ask her to confirm receipt of nothing.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE
+  v_entry jsonb;
+  v_count integer;
+  v_err text;
+BEGIN
+  SELECT entry INTO v_entry
+  FROM public.agreement_templates t,
+       LATERAL jsonb_array_elements(t.parts) AS e(entry)
+  WHERE t.template_key = 'patina.design_build'
+    AND entry->>'partKey' = 'patina.notice_of_cancellation';
+  ASSERT v_entry IS NOT NULL, 'T21: the leaf is still seeded';
+  ASSERT btrim(COALESCE(v_entry->'payload'->>'body', '')) = '',
+    'T21: its wording is counsel''s, and counsel has not written it';
+  ASSERT (v_entry->>'clientVisible')::boolean IS FALSE,
+    'T21: so it never reaches the homeowner''s copy';
+
+  PERFORM pg_temp.assume_user('a8000000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.mint_draft('a8300000-0000-4000-8000-000000000008',
+                             'The blank-attachment draft');
+  v_count := public.materialize_agreement_template(
+    'a8300000-0000-4000-8000-000000000008', 'patina.design_build');
+  ASSERT v_count = 10,
+    format('T21: the rail still lays out ten parts, got %s', v_count);
+  ASSERT NOT (SELECT client_visible FROM public.proposal_agreement_parts
+              WHERE proposal_id = 'a8300000-0000-4000-8000-000000000008'
+                AND part_key = 'patina.notice_of_cancellation'),
+    'T21: and the composed part is studio-side only';
+
+  -- The other half of the rule: an attachment the DESIGNER wrote, asking for a
+  -- confirmation of receipt over blank paper, is refused at the send door.
+  PERFORM public.upsert_agreement_parts(
+    'a8300000-0000-4000-8000-000000000008',
+    pg_temp.turnkey_parts(NULL, NULL, jsonb_build_array(
+      jsonb_build_object('kind', 'attachment',
+        'partKey', 'patina.notice_of_cancellation',
+        'title', 'Notice of cancellation', 'clientVisible', true,
+        'payload', jsonb_build_object('title', 'Notice of cancellation',
+          'body', '', 'acknowledgeRequired', true)))), NULL);
+  v_err := pg_temp.send_err('a8300000-0000-4000-8000-000000000008');
+  ASSERT v_err = 'an attachment your client must confirm she received needs its wording first',
+    format('T21(send): %L', v_err);
+
+  -- Studio-side, the same blank leaf travels: nothing is asked of her.
+  PERFORM public.upsert_agreement_parts(
+    'a8300000-0000-4000-8000-000000000008',
+    pg_temp.turnkey_parts(NULL, NULL, jsonb_build_array(
+      jsonb_build_object('kind', 'attachment',
+        'partKey', 'patina.notice_of_cancellation',
+        'title', 'Notice of cancellation', 'clientVisible', false,
+        'payload', jsonb_build_object('title', 'Notice of cancellation',
+          'body', '', 'acknowledgeRequired', true)))), NULL);
+  v_err := pg_temp.send_err('a8300000-0000-4000-8000-000000000008');
+  ASSERT v_err IS NULL, format('T21(studio-side): %L', v_err);
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE 'PASS T21: no homeowner attests receipt of a document that does not exist';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- (T12) ACL — anon holds EXECUTE on none of the wave's new functions, and each
 --       grantee tuple is exactly what the migration wrote.
 --       Shape copied from 00571_studio_invoices.sql:1050-1080.
