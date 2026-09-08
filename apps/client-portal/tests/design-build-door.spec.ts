@@ -347,6 +347,19 @@ test.describe('P13 — the deposit is offered after the signature, never before'
 
     // The paper reads as a turnkey paper: the price, the draws, the trades.
     await expect(page.getByTestId('door-consent-line')).toContainText('design-build terms');
+
+    // R41 — THE SCHEDULE OF VALUES IS ON THE PAGE. The bundle redacts a
+    // closed-book pricing basis before it crosses, so a door that read
+    // `costLines` rendered nothing here in production while the keepsake and
+    // the consent sentence both named a schedule. Assert the section, its
+    // disclosure and its total, and assert no trade's own cost is printed.
+    const sov = page.getByTestId('design-build-sov');
+    await expect(sov).toBeVisible({ timeout: 30_000 });
+    await expect(sov).toHaveAttribute('data-disclosure', 'closed_book');
+    await expect(page.getByTestId('design-build-sov-total')).toContainText('$84,134');
+    await expect(page.getByTestId('design-build-contract-sum')).toContainText('$84,134');
+    await expect(sov.getByTestId('design-build-sov-line').first()).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('$38,000');
     // The words BOTH halves say. The door renders `composeConsentLine` and the
     // signature row keeps `compose_agreement_consent`'s; this is the exported
     // pin (`HALVORSEN_DESIGN_BUILD_CONSENT`) the SQL test asserts against too,

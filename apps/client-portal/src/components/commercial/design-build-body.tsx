@@ -132,9 +132,34 @@ export interface PricingBasisReading {
   /** Null when the studio has written no price yet (R21). */
   contractSumCents: number | null;
   feeCents: number | null;
+  /**
+   * R41 — the schedule of values the BUNDLE projected, in the disclosure the
+   * clause elected. Null only for a payload that carried no projection at all;
+   * every payload `get_client_commercial_document_bundle` sends carries one.
+   */
+  scheduleOfValues: ScheduleOfValuesLine[] | null;
   subDisclosure: string;
 }
 
+/**
+ * R41 — THE DOOR READS THE PROJECTION.
+ *
+ * `get_client_commercial_document_bundle` runs a turnkey pricing basis through
+ * `_agreement_redact_client_payload` before it crosses to the homeowner. Under
+ * anything but open book — which is the shipping default and the fail-closed
+ * mode — the cost lines, the fee, the sub markup and the cost basis stay
+ * behind, and `contractSumCents` and `scheduleOfValues` are projected in their
+ * place. A reader that derived from `costLines` therefore read an empty array
+ * on every production closed-book paper: the schedule of values vanished from
+ * the page and a plain cost-plus prime printed "Not yet set" over a contract
+ * sum the database had stated.
+ *
+ * So the projected keys are read FIRST, in both modes, and the local
+ * derivation survives only for a payload that carries no projection (a
+ * fixture, or a studio-side preview reading the authored row). The keepsake
+ * (`_render_agreement_snapshot_html`) prints the same projected array, so the
+ * door and the record cannot say different things about one paper.
+ */
 export function readPricingBasis(part: CommercialAgreementPart): PricingBasisReading {
   const payload = part.payload;
   const basis = payloadText(payload.basis);
@@ -160,7 +185,23 @@ export function readPricingBasis(part: CommercialAgreementPart): PricingBasisRea
     feeBps !== null && costBasisCents > 0
       ? Math.round((costBasisCents * (10000 + feeBps)) / 10000)
       : null;
-  const contractSumCents = stated !== null && stated > 0 ? stated : derived;
+  const projectedSum = payloadCents(payload.contractSumCents);
+  const contractSumCents =
+    projectedSum !== null && projectedSum > 0
+      ? projectedSum
+      : stated !== null && stated > 0
+        ? stated
+        : derived;
+
+  const projectedLines = Array.isArray(payload.scheduleOfValues)
+    ? payloadRows(payload.scheduleOfValues)
+        .map((line, index) => ({
+          id: payloadText(line.id) || `${part.id}-sov-${index}`,
+          label: payloadText(line.label),
+          cents: payloadCents(line.cents) ?? 0,
+        }))
+        .filter((line) => line.label.length > 0)
+    : null;
 
   return {
     basis,
@@ -170,6 +211,7 @@ export function readPricingBasis(part: CommercialAgreementPart): PricingBasisRea
     contractSumCents,
     feeCents:
       contractSumCents !== null && costBasisCents > 0 ? contractSumCents - costBasisCents : null,
+    scheduleOfValues: projectedLines,
     subDisclosure: payloadText(payload.subDisclosure) || 'closed_book',
   };
 }
@@ -191,6 +233,10 @@ export function readPricingBasis(part: CommercialAgreementPart): PricingBasisRea
  * anywhere on this page.
  */
 export function scheduleOfValues(reading: PricingBasisReading): ScheduleOfValuesLine[] {
+  // R41 — the projected array wins in BOTH disclosures: it is what the bundle
+  // sent, what the keepsake prints and what the consent sentence names.
+  if (reading.scheduleOfValues !== null) return reading.scheduleOfValues;
+
   const { costLines, costBasisCents, contractSumCents } = reading;
   if (costLines.length === 0 || costBasisCents <= 0 || contractSumCents === null) return [];
 

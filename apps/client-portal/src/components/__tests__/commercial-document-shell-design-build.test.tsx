@@ -45,7 +45,14 @@ function part(
   return { variant: null, payload: {}, required: false, ...overrides };
 }
 
-function pricingBasis(subDisclosure: 'open_book' | 'closed_book'): CommercialAgreementPart {
+/**
+ * THE ROW THE STUDIO AUTHORS — `proposal_agreement_parts.payload`, with the
+ * cost lines, the fee and the cost basis on it. No client surface is ever
+ * handed this; the composer and the derivation tests read it.
+ */
+function authoredPricingBasis(
+  subDisclosure: 'open_book' | 'closed_book',
+): CommercialAgreementPart {
   return part({
     id: 'p1',
     position: 1,
@@ -57,6 +64,7 @@ function pricingBasis(subDisclosure: 'open_book' | 'closed_book'): CommercialAgr
     payload: {
       basis: 'cost_plus_gmp',
       feeBps: 1800,
+      costBasisCents: 7_130_000,
       gmpCents: GMP_CENTS,
       nteCents: null,
       fixedCents: null,
@@ -64,6 +72,55 @@ function pricingBasis(subDisclosure: 'open_book' | 'closed_book'): CommercialAgr
       costLines: COST_LINES,
     },
   });
+}
+
+/**
+ * R41 — THE PRODUCTION SHAPE. What `get_client_commercial_document_bundle`
+ * actually sends, having run the authored row through
+ * `_agreement_redact_client_payload`: `contractSumCents` and
+ * `scheduleOfValues` projected in both disclosures, and — under anything but
+ * open book, which is the shipping default — the cost lines, the fee, the sub
+ * markup and the cost basis withheld.
+ *
+ * Every render assertion below reads this, because a fixture that carried the
+ * authored row proved the door against a shape production cannot produce.
+ */
+function pricingBasis(
+  subDisclosure: 'open_book' | 'closed_book',
+): CommercialAgreementPart {
+  const authored = authoredPricingBasis(subDisclosure);
+  const scheduleOfValues =
+    subDisclosure === 'open_book'
+      ? [
+          ...COST_LINES.map((line) => ({
+            id: line.id,
+            label: line.label,
+            cents: line.basisCents,
+          })),
+          { id: '__fee', label: 'Design and construction fee', cents: 1_283_400 },
+        ]
+      : COST_LINES.map((line, index) => ({
+          id: line.id,
+          label: line.label,
+          cents: EXPECTED_SOV_CENTS[index],
+        }));
+
+  const projected = {
+    ...authored.payload,
+    contractSumCents: GMP_CENTS,
+    scheduleOfValues,
+  };
+  if (subDisclosure === 'open_book') {
+    return { ...authored, payload: projected };
+  }
+  const {
+    costLines: _costLines,
+    feeBps: _feeBps,
+    costBasisCents: _costBasisCents,
+    subMarkupBps: _subMarkupBps,
+    ...redacted
+  } = projected;
+  return { ...authored, payload: redacted };
 }
 
 const DRAWS_PART = part({
@@ -228,14 +285,14 @@ function bundle(
 
 describe('the schedule of values is derived, to the cent', () => {
   it('pro-rates the fee across every line under closed book, and sums to the price', () => {
-    const lines = scheduleOfValues(readPricingBasis(pricingBasis('closed_book')));
+    const lines = scheduleOfValues(readPricingBasis(authoredPricingBasis('closed_book')));
 
     expect(lines.map((line) => line.cents)).toEqual(EXPECTED_SOV_CENTS);
     expect(lines.reduce((sum, line) => sum + line.cents, 0)).toBe(GMP_CENTS);
   });
 
   it('shows the trades at cost and the fee as its own line under open book', () => {
-    const lines = scheduleOfValues(readPricingBasis(pricingBasis('open_book')));
+    const lines = scheduleOfValues(readPricingBasis(authoredPricingBasis('open_book')));
 
     expect(lines.map((line) => line.cents)).toEqual([
       ...COST_LINES.map((line) => line.basisCents),
@@ -339,15 +396,44 @@ describe('the turnkey paper, as the homeowner reads it', () => {
     ]);
   });
 
-  it('prints the price, the fee and the cost basis to the cent', () => {
+  it('prints the price the bundle projected, to the cent', () => {
     render(<CommercialDocumentShell bundle={bundle()} />);
 
     expect(screen.getByTestId('design-build-contract-sum')).toHaveTextContent(
       'Guaranteed maximum price',
     );
     expect(screen.getByTestId('design-build-contract-sum')).toHaveTextContent('$84,134');
-    expect(screen.getByText('Cost basis')).toBeInTheDocument();
-    expect(screen.getByText('Fee 18%')).toBeInTheDocument();
+  });
+
+  /* R41 — a plain cost-plus prime names no ceiling, so once the redaction has
+     taken the cost basis and the fee the projected `contractSumCents` is the
+     only price the payload carries. Reading it is the difference between the
+     paper's own number and "Not yet set" over a priced construction contract. */
+  it('prints a plain cost-plus price from the projection alone', () => {
+    const projectedOnly = part({
+      id: 'p1',
+      position: 1,
+      partKey: 'patina.pricing_basis',
+      kind: 'schedule',
+      variant: 'pricing_basis',
+      title: 'Pricing basis',
+      required: true,
+      payload: {
+        basis: 'cost_plus',
+        subDisclosure: 'closed_book',
+        contractSumCents: GMP_CENTS,
+        scheduleOfValues: [{ id: 'construction', label: 'Construction', cents: GMP_CENTS }],
+      },
+    });
+    render(
+      <CommercialDocumentShell
+        bundle={bundle('closed_book', { parts: [projectedOnly, TERMS_CLAUSE] })}
+      />,
+    );
+
+    expect(screen.getByTestId('design-build-contract-sum')).toHaveTextContent('$84,134');
+    expect(screen.queryByText('Not yet set')).not.toBeInTheDocument();
+    expect(screen.getByTestId('design-build-sov-total')).toHaveTextContent('$84,134');
   });
 
   it('draws the schedule of values, pro-rated, summing to the price', () => {
@@ -388,18 +474,24 @@ describe('the turnkey paper, as the homeowner reads it', () => {
     expect(screen.getByTestId('design-build-subs')).toHaveTextContent('Vance Electric');
   });
 
-  /* The other half of the same ruling, pinned so a later reader cannot mistake
-     the page for a sealed one: the cost basis and the fee are on it, on
-     purpose, because they are terms of a cost-plus agreement. If the ruling
-     ever flips, this test is the one that fails first. */
-  it('states the cost basis and the fee of a cost-plus prime, in both modes', () => {
-    for (const mode of ['closed_book', 'open_book'] as const) {
-      const view = render(<CommercialDocumentShell bundle={bundle(mode)} />);
-      expect(screen.getByText('Cost basis')).toBeInTheDocument();
-      expect(screen.getByText('$71,300')).toBeInTheDocument();
-      expect(screen.getByText('Fee 18%')).toBeInTheDocument();
-      view.unmount();
-    }
+  /* The other half of the same ruling, re-pinned against the shape the RPC
+     sends. An open book states the cost basis and the fee, because that is
+     what the clause elected; a closed book states neither, because
+     `_agreement_redact_client_payload` never sends them — and the keepsake
+     asserts the same absence (`design_build_test.sql`, T17: "the keepsake
+     obeys the same disclosure the door did"). If the disclosure rule ever
+     flips, this test is the one that fails first. */
+  it('states the cost basis and the fee under open book, and neither under closed', () => {
+    const open = render(<CommercialDocumentShell bundle={bundle('open_book')} />);
+    expect(screen.getByText('Cost basis')).toBeInTheDocument();
+    expect(screen.getByText('$71,300')).toBeInTheDocument();
+    expect(screen.getByText('Fee 18%')).toBeInTheDocument();
+    open.unmount();
+
+    render(<CommercialDocumentShell bundle={bundle('closed_book')} />);
+    expect(screen.queryByText('Cost basis')).not.toBeInTheDocument();
+    expect(screen.queryByText('$71,300')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fee 18%')).not.toBeInTheDocument();
   });
 
   it('discloses the awarded prices under open book, and only those', () => {
