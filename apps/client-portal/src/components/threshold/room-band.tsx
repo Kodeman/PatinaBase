@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+
+import { ROOM_RENDERS_BUCKET, createBrowserClient } from '@patina/supabase';
 
 import {
   GOODS_JOURNEY_STAGES,
@@ -19,7 +21,12 @@ import {
   usePhoneDrawing,
 } from '@/components/threshold/plan-key';
 import type { ClientSelection } from '@/lib/commercial-documents';
-import { DAY_MONTH, parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
+import {
+  DAY_MONTH,
+  parseSourceDate,
+  type RoomBandModel,
+  type RoomConceptRender,
+} from '@/lib/threshold/derive';
 
 /* ── THE ROOM BAND ───────────────────────────────────────────────────────────
    One room of the house, read as a sheet from a drawing set: a lintel that
@@ -268,6 +275,122 @@ function EmptyRoom({ leadRoomName }: { leadRoomName: string | null }) {
   );
 }
 
+// ── the studio's concept render ──────────────────────────────────────────────
+
+/** "11 September 2026". H6 folds this into `lib/threshold/dates.ts`. */
+const LEGAL_DATE = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+const CONCEPT_URL_TTL_S = 3600;
+
+/**
+ * `conceptRender.url` is an OBJECT PATH in the private `room-renders` bucket
+ * (00580), so it has to be signed before it can be drawn. A path that will not
+ * sign renders nothing at all: an empty frame captioned "Concept" is a claim
+ * with nothing behind it, and a broken-image glyph is the one mark on this
+ * page nobody chose to put there.
+ */
+function useSignedConceptRender(path: string): string | null {
+  // Held WITH the path it was signed for, so a band repointed at a new render
+  // draws nothing rather than the old image, without the effect having to
+  // clear state synchronously on its way in.
+  const [signed, setSigned] = useState<{ path: string; url: string } | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const supabase = createBrowserClient() as unknown as {
+          storage: {
+            from: (bucket: string) => {
+              createSignedUrl: (
+                path: string,
+                ttl: number,
+              ) => Promise<{ data: { signedUrl?: string } | null; error: unknown }>;
+            };
+          };
+        };
+        const { data, error } = await supabase.storage
+          .from(ROOM_RENDERS_BUCKET)
+          .createSignedUrl(path, CONCEPT_URL_TTL_S);
+        if (live && !error && typeof data?.signedUrl === 'string') {
+          setSigned({ path, url: data.signedUrl });
+        }
+      } catch {
+        // A render that will not sign is a render the page does not print.
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [path]);
+
+  return signed?.path === path ? signed.url : null;
+}
+
+/** "{caption} · uploaded by {studio} · {legalDate}", minus whatever is absent. */
+export function conceptCaption(
+  render: RoomConceptRender,
+  studioName: string | null | undefined,
+): string | null {
+  const uploaded = parseSourceDate(render.uploadedAt);
+  const parts = [
+    render.caption,
+    studioName?.trim() ? `uploaded by ${studioName.trim()}` : null,
+    uploaded ? LEGAL_DATE.format(uploaded) : null,
+  ].filter((part): part is string => !!part);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/**
+ * PP-7: the one image source this page has. A 3:2 plate at the band's full
+ * measure, above the drawing, labelled ON the image — a label that can be
+ * cropped off is not a label — and captioned beneath. The drawing stays.
+ */
+function ConceptRenderPlate({
+  render,
+  roomName,
+  studioName,
+}: {
+  render: RoomConceptRender;
+  roomName: string;
+  studioName: string | null | undefined;
+}) {
+  const src = useSignedConceptRender(render.url);
+  if (!src) return null;
+  const caption = conceptCaption(render, studioName);
+
+  return (
+    <figure data-testid="room-band-concept" className="mt-6">
+      <div className="relative">
+        <img
+          src={src}
+          alt={`Concept render of ${roomName}`}
+          data-testid="room-band-concept-image"
+          className="block aspect-[3/2] w-full rounded-[3px] border border-[var(--border-default)] object-cover"
+        />
+        <span
+          data-testid="room-band-concept-label"
+          className="t-body-sm absolute left-0 top-0 bg-[var(--paper-doc)] px-3 py-1.5 text-[var(--ink)]"
+        >
+          Concept &middot; not installed
+        </span>
+      </div>
+      {caption && (
+        <figcaption
+          data-testid="room-band-concept-caption"
+          className="t-meta mt-3 text-[var(--ink-subtle)]"
+        >
+          {caption}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
 // ── the sentences ────────────────────────────────────────────────────────────
 
 /**
@@ -447,6 +570,14 @@ export function RoomBand({
       </div>
 
       <div className="pt-1.5">
+        {band.conceptRender && (
+          <ConceptRenderPlate
+            render={band.conceptRender}
+            roomName={band.name}
+            studioName={studioName}
+          />
+        )}
+
         {empty ? (
           <EmptyRoom leadRoomName={leadRoomName ?? null} />
         ) : (

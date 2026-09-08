@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { FFEStageKey } from '@patina/types';
 
 import { PLAN_PHONE_CONTENT_PX } from '../plan-key';
@@ -6,6 +6,30 @@ import type { ClientSelection } from '@/lib/commercial-documents';
 import type { RoomBandModel, ThresholdMark } from '@/lib/threshold/derive';
 
 import { RoomBand } from '../room-band';
+
+/* The band signs its concept render itself — the column holds an object path
+   in the PRIVATE `room-renders` bucket, not a URL that resolves. */
+const createSignedUrl = jest.fn();
+jest.mock('@patina/supabase', () => ({
+  __esModule: true,
+  ROOM_RENDERS_BUCKET: 'room-renders',
+  createBrowserClient: jest.fn(),
+}));
+
+const supabaseMock = jest.requireMock('@patina/supabase') as {
+  createBrowserClient: jest.Mock;
+};
+
+function signsWith(signedUrl: string | null) {
+  createSignedUrl.mockResolvedValue(
+    signedUrl
+      ? { data: { signedUrl }, error: null }
+      : { data: null, error: { message: 'no' } },
+  );
+  supabaseMock.createBrowserClient.mockReturnValue({
+    storage: { from: jest.fn(() => ({ createSignedUrl })) },
+  });
+}
 
 /** The phone the eleven-pixel floor exists for. `jest.setup.js` installs
  *  `matchMedia` as a writable-but-not-configurable property, so it is assigned
@@ -18,6 +42,13 @@ function readingOnAPhone(phone: boolean) {
     removeEventListener: jest.fn(),
   })) as unknown as typeof window.matchMedia;
 }
+
+const CONCEPT = {
+  url: 'proj-1/room-library/study.jpg',
+  caption: 'The library, looking north',
+  uploadedAt: '2026-09-03T10:00:00Z',
+  uploadedBy: 'user-9',
+};
 
 // ── Fixtures — the library & lounge, 5 August 2026 ──────────────────────────
 
@@ -368,6 +399,86 @@ describe('RoomBand', () => {
       expect(right).toBeLessThanOrEqual(width);
     }
     expect(screen.getByTestId('room-band-floor')).toHaveAttribute('x2', String(width - 56));
+  });
+
+  /* PP-7 — THE STUDIO'S CONCEPT RENDER, LABELLED ON THE IMAGE. */
+  describe('the concept render slot', () => {
+    it('renders no slot at all when the room carries no render', () => {
+      render(<RoomBand band={band()} projectId="proj-1" />);
+      expect(screen.queryByTestId('room-band-concept')).not.toBeInTheDocument();
+    });
+
+    it('draws a signed 3:2 plate above the drawing, labelled on the image', async () => {
+      signsWith('https://strata.test/signed/study.jpg');
+      render(
+        <RoomBand band={band({ conceptRender: CONCEPT })} projectId="proj-1" studioName="Quist Interiors" />,
+      );
+
+      const figure = await screen.findByTestId('room-band-concept');
+      const image = screen.getByTestId('room-band-concept-image');
+      expect(image).toHaveAttribute('src', 'https://strata.test/signed/study.jpg');
+      expect(image.className).toContain('aspect-[3/2]');
+      expect(createSignedUrl).toHaveBeenCalledWith('proj-1/room-library/study.jpg', 3600);
+
+      // The label lives INSIDE the plate — a label that can be cropped off is
+      // not a label — and takes the 14px step, never a caption's 12px.
+      const label = screen.getByTestId('room-band-concept-label');
+      expect(figure).toContainElement(label);
+      expect(label).toHaveTextContent('Concept · not installed');
+      expect(label.className).toContain('t-body-sm');
+
+      // The drawing stays beneath it.
+      expect(screen.getByTestId('room-band-drawing')).toBeInTheDocument();
+    });
+
+    it('composes the caption from the render, the studio and a legal date', async () => {
+      signsWith('https://strata.test/signed/study.jpg');
+      render(
+        <RoomBand band={band({ conceptRender: CONCEPT })} projectId="proj-1" studioName="Quist Interiors" />,
+      );
+
+      expect(await screen.findByTestId('room-band-concept-caption')).toHaveTextContent(
+        'The library, looking north · uploaded by Quist Interiors · 3 September 2026',
+      );
+    });
+
+    it('drops the clauses it has no column for rather than guessing them', async () => {
+      signsWith('https://strata.test/signed/study.jpg');
+      render(
+        <RoomBand
+          band={band({ conceptRender: { ...CONCEPT, caption: null, uploadedAt: null } })}
+          projectId="proj-1"
+          studioName="Quist Interiors"
+        />,
+      );
+
+      expect(await screen.findByTestId('room-band-concept-caption')).toHaveTextContent(
+        'uploaded by Quist Interiors',
+      );
+      expect(screen.getByTestId('room-band-concept-caption')).not.toHaveTextContent('·');
+    });
+
+    it('prints nothing at all when the object path will not sign', async () => {
+      signsWith(null);
+      render(<RoomBand band={band({ conceptRender: CONCEPT })} projectId="proj-1" />);
+
+      await waitFor(() => expect(createSignedUrl).toHaveBeenCalled());
+      expect(screen.queryByTestId('room-band-concept')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Concept/)).not.toBeInTheDocument();
+    });
+
+    it('stands above the sentence in a room that is still empty', async () => {
+      signsWith('https://strata.test/signed/study.jpg');
+      render(
+        <RoomBand
+          band={band({ conceptRender: CONCEPT, pieces: [], agreedCents: 0, marks: [] })}
+          projectId="proj-1"
+        />,
+      );
+
+      expect(await screen.findByTestId('room-band-concept')).toBeInTheDocument();
+      expect(screen.getByTestId('room-band-empty')).toHaveTextContent('Nothing stands here yet.');
+    });
   });
 
   it('hosts room-scoped gates in its children slot', () => {
