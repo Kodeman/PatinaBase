@@ -97,6 +97,13 @@ export interface RosterLine {
   engagementId: string;
   /** Playfair. */
   name: string;
+  /** The job's own stage. Carried on the line, not only on its group, because
+   *  the By person facet regroups the same lines away from their stage and the
+   *  row's wash still belongs to the stage the job is in. */
+  stage: SectionKey;
+  /** `document_state.designer_id` — a `profiles.id`, which is the same id
+   *  `organization_members.user_id` holds. Null = nobody is assigned. */
+  designerId: string | null;
   /** Inter — the client and the state, in one run (M1 draws a place; the row
    *  carries no location column, so the name stands in its position). */
   state: string;
@@ -262,6 +269,8 @@ export function deriveDeskRoster(
       line: {
         engagementId: row.engagement_id,
         name: row.title,
+        stage: row.active_section,
+        designerId: row.designer_id,
         state,
         overdueText:
           overdue.isOverdue && need
@@ -327,4 +336,157 @@ export function deriveDeskRoster(
     heading: `Every job · ${liveCount} live · ${overdueNames.length} overdue`,
     overdueLine: overdueSentence(overdueNames),
   };
+}
+
+/* ── The two facets (IA-11 / IA-12) ─────────────────────────────────────────
+   Facets, not a density toggle: neither one changes what a row looks like or
+   how much padding it carries. "Only what needs me" narrows the population;
+   "By person" regroups it. They compose, and with both off the roster is
+   exactly the stage-grouped roster `deriveDeskRoster` returned. ───────────── */
+
+/** The empty result of "Only what needs me" — never an empty list. */
+export const NOTHING_NEEDS_YOU = 'Nothing needs your hand today.';
+
+/** A row needs a hand when it carries a mark. `deriveDeskRoster` already
+ *  writes that mark from the need model (URGENT_NEED_KINDS above is its
+ *  red-letter half; a quiet need is still a need), so the facet reads the
+ *  same fact the margin does rather than deriving a second one. */
+export function rosterLineNeedsAHand(line: RosterLine): boolean {
+  return line.mark !== null;
+}
+
+/** Narrows every group to its marked rows and drops the groups left empty. */
+export function filterRosterToNeeds(
+  groups: readonly RosterGroup[],
+): RosterGroup[] {
+  return groups
+    .map((group) => {
+      const lines = group.lines.filter(rosterLineNeedsAHand);
+      return { ...group, count: lines.length, lines };
+    })
+    .filter((group) => group.count > 0);
+}
+
+/** A member of the studio, as the roster needs them: an id to match
+ *  `designer_id` against and a name to print. */
+export interface RosterPerson {
+  id: string;
+  name: string;
+  isPrincipal: boolean;
+}
+
+/** The structural shape of an `organization_members` row with its profile —
+ *  the roster reads these four fields off the list `desk/page.tsx` already
+ *  fetched, and the derivation stays free of the data layer. */
+export interface RosterMember {
+  user_id: string;
+  role: string;
+  status: string;
+  profiles: {
+    full_name: string | null;
+    display_name: string | null;
+  } | null;
+}
+
+/** A person group. Keyed by person, never by stage: people are not stages and
+ *  take no stage pigment. */
+export interface RosterPersonGroup {
+  key: string;
+  label: string;
+  count: number;
+  lines: RosterLine[];
+}
+
+function memberName(member: RosterMember): string | null {
+  const name = (
+    member.profiles?.full_name ||
+    member.profiles?.display_name ||
+    ''
+  ).trim();
+  return name || null;
+}
+
+/**
+ * The people the roster can group by: every member of the studio we can name,
+ * the principal first and the rest alphabetically. A member with no name on
+ * their profile is left out — an unnamed plate says nothing.
+ */
+export function deriveRosterPeople(
+  members: readonly RosterMember[],
+): RosterPerson[] {
+  const people: RosterPerson[] = [];
+  const seen = new Set<string>();
+
+  for (const member of members) {
+    if (member.status !== 'active' && member.status !== 'invited') continue;
+    if (seen.has(member.user_id)) continue;
+    const name = memberName(member);
+    if (!name) continue;
+    seen.add(member.user_id);
+    people.push({
+      id: member.user_id,
+      name,
+      isPrincipal: member.role === 'owner',
+    });
+  }
+
+  const principalIndex = people.findIndex((person) => person.isPrincipal);
+  const rest = people
+    .filter((_, index) => index !== principalIndex)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return principalIndex === -1
+    ? rest
+    : [people[principalIndex], ...rest];
+}
+
+/**
+ * Regroups the roster's lines by the person who carries the job.
+ *
+ * A row with no `designerId` — and a row whose `designerId` names nobody on
+ * this list — groups under the principal rather than vanishing: the head's
+ * live count is the roster's own contract, and a row the facet cannot place is
+ * still a row the studio owns.
+ */
+export function groupRosterByPerson(
+  groups: readonly RosterGroup[],
+  people: readonly RosterPerson[],
+): RosterPersonGroup[] {
+  if (people.length === 0) return [];
+
+  const principal = people.find((person) => person.isPrincipal) ?? people[0];
+  const known = new Set(people.map((person) => person.id));
+  const linesByPerson = new Map<string, RosterLine[]>(
+    people.map((person) => [person.id, []]),
+  );
+
+  for (const group of groups) {
+    for (const line of group.lines) {
+      const id =
+        line.designerId && known.has(line.designerId)
+          ? line.designerId
+          : principal.id;
+      linesByPerson.get(id)!.push(line);
+    }
+  }
+
+  return people
+    .map((person) => ({
+      key: `person-${person.id}`,
+      label: person.name,
+      count: linesByPerson.get(person.id)!.length,
+      lines: linesByPerson.get(person.id)!,
+    }))
+    .filter((group) => group.count > 0);
+}
+
+/** The head sentence says which facets are on, in words. The count clauses in
+ *  front of it are the whole roster's, not the filtered view's. */
+export function facetHeading(
+  heading: string,
+  facets: { needsMe: boolean; byPerson: boolean },
+): string {
+  let sentence = heading;
+  if (facets.needsMe) sentence += ' · showing what needs you';
+  if (facets.byPerson) sentence += ' · by person';
+  return sentence;
 }

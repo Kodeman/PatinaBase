@@ -8,9 +8,16 @@ import type {
 } from '@/lib/document/desk-derivation';
 import {
   deriveDeskRoster,
+  deriveRosterPeople,
+  facetHeading,
+  filterRosterToNeeds,
+  groupRosterByPerson,
+  NOTHING_NEEDS_YOU,
   OPEN_THE_JOB,
   ROSTER_STAGE_ORDER,
+  rosterLineNeedsAHand,
   type DeskRosterInput,
+  type RosterMember,
 } from '@/lib/document/desk-roster-derivation';
 
 const NOW = new Date('2026-08-25T12:00:00Z');
@@ -455,5 +462,239 @@ describe('deriveDeskRoster — eleven jobs', () => {
 
     expect(roster.groups[0].lines).toHaveLength(11);
     expect(roster.heading).toBe('Every job · 11 live · 0 overdue');
+  });
+});
+
+describe('the roster line carries its stage and its designer', () => {
+  it('writes the job’s own section and designer_id onto the line', () => {
+    const r = deriveDeskRoster(
+      input({
+        live: [
+          row('a', 'install', { designer_id: 'user-anneke' }),
+          row('b', 'brief', { designer_id: null }),
+        ],
+      }),
+      NOW,
+    );
+
+    const lines = r.groups.flatMap((g) => g.lines);
+    expect(
+      lines.map((l) => [l.engagementId, l.stage, l.designerId]),
+    ).toEqual([
+      ['b', 'brief', null],
+      ['a', 'install', 'user-anneke'],
+    ]);
+  });
+});
+
+describe('rosterLineNeedsAHand / filterRosterToNeeds (IA-11)', () => {
+  function marked() {
+    return deriveDeskRoster(
+      input({
+        live: [row('needy', 'project'), row('quiet', 'project')],
+        folders: [folder(row('needy', 'project'))],
+      }),
+      NOW,
+    );
+  }
+
+  it('counts every marked row as needing a hand, quiet marks included', () => {
+    const [needy, quiet] = marked().groups[0].lines;
+    expect(needy.mark).not.toBeNull();
+    expect(rosterLineNeedsAHand(needy)).toBe(true);
+    expect(quiet.mark).toBeNull();
+    expect(rosterLineNeedsAHand(quiet)).toBe(false);
+  });
+
+  it('keeps only the marked rows and recounts the group', () => {
+    const filtered = filterRosterToNeeds(marked().groups);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].count).toBe(1);
+    expect(filtered[0].lines.map((l) => l.engagementId)).toEqual(['needy']);
+  });
+
+  it('drops a group left with nothing in it', () => {
+    const r = deriveDeskRoster(
+      input({
+        live: [row('a', 'project'), row('b', 'install')],
+        folders: [folder(row('a', 'project'))],
+      }),
+      NOW,
+    );
+
+    expect(r.groups.map((g) => g.key)).toEqual(['project', 'install']);
+    expect(filterRosterToNeeds(r.groups).map((g) => g.key)).toEqual([
+      'project',
+    ]);
+  });
+
+  it('returns nothing at all when nothing is marked', () => {
+    const r = deriveDeskRoster(input({ live: [row('a', 'project')] }), NOW);
+    expect(filterRosterToNeeds(r.groups)).toEqual([]);
+  });
+});
+
+describe('deriveRosterPeople (IA-12)', () => {
+  function member(over: Partial<RosterMember> = {}): RosterMember {
+    return {
+      user_id: 'user-leah',
+      role: 'owner',
+      status: 'active',
+      profiles: { full_name: 'Leah Hartwell', display_name: null },
+      ...over,
+    };
+  }
+
+  it('puts the principal first and the rest in alphabetical order', () => {
+    const people = deriveRosterPeople([
+      member({
+        user_id: 'c',
+        role: 'member',
+        profiles: { full_name: 'Colin Brandt', display_name: null },
+      }),
+      member({
+        user_id: 'a',
+        role: 'member',
+        profiles: { full_name: 'Anneke Sund', display_name: null },
+      }),
+      member(),
+    ]);
+
+    expect(people.map((p) => p.name)).toEqual([
+      'Leah Hartwell',
+      'Anneke Sund',
+      'Colin Brandt',
+    ]);
+    expect(people.map((p) => p.isPrincipal)).toEqual([true, false, false]);
+  });
+
+  it('falls back to the display name, and leaves an unnamed member out', () => {
+    const people = deriveRosterPeople([
+      member({
+        user_id: 'd',
+        role: 'member',
+        profiles: { full_name: null, display_name: 'Dana' },
+      }),
+      member({
+        user_id: 'e',
+        role: 'member',
+        profiles: { full_name: null, display_name: null },
+      }),
+      member({ user_id: 'f', role: 'member', profiles: null }),
+    ]);
+
+    expect(people.map((p) => p.name)).toEqual(['Dana']);
+  });
+
+  it('leaves out a member who has left the studio', () => {
+    const people = deriveRosterPeople([
+      member({
+        user_id: 'g',
+        role: 'member',
+        status: 'removed',
+        profiles: { full_name: 'Gone Away', display_name: null },
+      }),
+      member(),
+    ]);
+
+    expect(people.map((p) => p.name)).toEqual(['Leah Hartwell']);
+  });
+});
+
+describe('groupRosterByPerson (IA-12)', () => {
+  const PEOPLE = [
+    { id: 'leah', name: 'Leah Hartwell', isPrincipal: true },
+    { id: 'anneke', name: 'Anneke Sund', isPrincipal: false },
+  ];
+
+  function grouped(live: DocumentStateRow[]) {
+    return groupRosterByPerson(
+      deriveDeskRoster(input({ live }), NOW).groups,
+      PEOPLE,
+    );
+  }
+
+  it('groups the roster by designer_id, principal first', () => {
+    const groups = grouped([
+      row('a', 'project', { designer_id: 'anneke' }),
+      row('b', 'install', { designer_id: 'leah' }),
+    ]);
+
+    expect(groups.map((g) => [g.key, g.label, g.count])).toEqual([
+      ['person-leah', 'Leah Hartwell', 1],
+      ['person-anneke', 'Anneke Sund', 1],
+    ]);
+    expect(groups[0].lines.map((l) => l.engagementId)).toEqual(['b']);
+  });
+
+  it('puts an unassigned row under the principal', () => {
+    const groups = grouped([row('a', 'project', { designer_id: null })]);
+
+    expect(groups.map((g) => g.label)).toEqual(['Leah Hartwell']);
+    expect(groups[0].lines.map((l) => l.engagementId)).toEqual(['a']);
+  });
+
+  it('never loses a row whose designer is nobody on the list', () => {
+    const groups = grouped([row('a', 'project', { designer_id: 'stranger' })]);
+
+    expect(groups.map((g) => g.label)).toEqual(['Leah Hartwell']);
+    expect(groups[0].count).toBe(1);
+  });
+
+  it('prints no plate for a person carrying nothing', () => {
+    const groups = grouped([row('a', 'project', { designer_id: 'leah' })]);
+    expect(groups.map((g) => g.label)).toEqual(['Leah Hartwell']);
+  });
+
+  it('groups nothing when the studio has no one to name', () => {
+    expect(
+      groupRosterByPerson(
+        deriveDeskRoster(input({ live: [row('a', 'project')] }), NOW).groups,
+        [],
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps every live row: the person groups total the roster’s own count', () => {
+    const r = deriveDeskRoster(
+      input({
+        live: [
+          row('a', 'project', { designer_id: 'anneke' }),
+          row('b', 'install', { designer_id: null }),
+          row('c', 'brief', { designer_id: 'stranger' }),
+        ],
+      }),
+      NOW,
+    );
+    const groups = groupRosterByPerson(r.groups, PEOPLE);
+
+    expect(groups.reduce((n, g) => n + g.count, 0)).toBe(r.liveCount);
+  });
+});
+
+describe('facetHeading (IA-11 / IA-12)', () => {
+  const HEAD = 'Every job · 16 live · 1 overdue';
+
+  it('says nothing extra with no facet on', () => {
+    expect(facetHeading(HEAD, { needsMe: false, byPerson: false })).toBe(HEAD);
+  });
+
+  it('names each facet, and both together, in words', () => {
+    expect(facetHeading(HEAD, { needsMe: true, byPerson: false })).toBe(
+      `${HEAD} · showing what needs you`,
+    );
+    expect(facetHeading(HEAD, { needsMe: false, byPerson: true })).toBe(
+      `${HEAD} · by person`,
+    );
+    expect(facetHeading(HEAD, { needsMe: true, byPerson: true })).toBe(
+      `${HEAD} · showing what needs you · by person`,
+    );
+  });
+});
+
+describe('the empty facet sentence', () => {
+  it('is a sentence, not an empty list', () => {
+    expect(NOTHING_NEEDS_YOU).toBe('Nothing needs your hand today.');
   });
 });

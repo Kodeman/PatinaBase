@@ -430,7 +430,7 @@ export default function DeskPage() {
               ))}
             </div>
           ) : (
-            <DeskRoster roster={roster} />
+            <DeskRoster roster={roster} studioMembers={studioMembers} />
           )}
 
           {/* D5 — the recents strip returns (B2-L2 deleted it along with the
