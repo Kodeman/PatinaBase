@@ -83,8 +83,8 @@ describe('GroundFloor — Path A order', () => {
 
     const lines = screen.getAllByTestId('ahead-line').map((node) => node.textContent);
     expect(lines).toEqual([
-      'Installation · the week of October 12',
-      'Completion · the week of October 26',
+      'Installation · the week of 12 October',
+      'Completion · the week of 26 October',
     ]);
   });
 

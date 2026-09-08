@@ -13,6 +13,7 @@ import {
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
+import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
 import { hasPassed } from '@/lib/threshold/expiry';
 import { refusalSentence } from '@/lib/threshold/refusal';
 
@@ -67,9 +68,6 @@ import { InstrumentReading } from './instrument-reading';
    finish a sentence she has already typed. The letter names the paper it is
    about: standing in the thread, the old flow supplied that context by where
    the client was; a letter has to carry it. ────────────────────────────── */
-
-/** "5 August" — the deck's own date idiom, as the door itself dates things. */
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 const REASON_MAX = 1000;
 const FEEDBACK_MAX = 1000;

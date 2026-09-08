@@ -7,6 +7,7 @@ import { invoiceBalanceCents } from '@patina/shared';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+import { dayMonth, legalDate } from '@/lib/threshold/dates';
 import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
 import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
 
@@ -33,20 +34,13 @@ import { Settlement } from './settlement';
    the slot: a money line she can act on may never leave her to assume the
    work is hers. ─────────────────────────────────────────────────────────── */
 
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
-const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-  year: 'numeric',
-});
-
 /** "12 June" in the surface's own idiom, and the year too once it is not this one. */
 function longDate(value: string | null | undefined, today?: Date): string | null {
   const date = parseSourceDate(value);
   if (!date) return null;
   return today && today.getFullYear() !== date.getFullYear()
-    ? LONG_MONTH_DAY_YEAR.format(date)
-    : LONG_MONTH_DAY.format(date);
+    ? legalDate(date)
+    : dayMonth(date);
 }
 
 /** Still owed: the house may be asked for money on it. */

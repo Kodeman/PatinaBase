@@ -257,26 +257,26 @@ describe('DoorGate', () => {
 
   it('arms the act only once a name is typed and the line is ticked', () => {
     renderGate();
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
 
     fireEvent.change(screen.getByLabelText('Type your full name'), {
       target: { value: 'Harper Vale' },
     });
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
 
     fireEvent.click(screen.getByRole('checkbox'));
-    expect(signAction()).toBeEnabled();
+    expect(signAction()).not.toHaveAttribute('aria-disabled');
 
     fireEvent.change(screen.getByLabelText('Type your full name'), {
       target: { value: 'H' },
     });
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('is not armed by whitespace alone', () => {
     renderGate();
     signWith('   ');
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('does not offer the act before the paper is drawn', () => {
@@ -284,7 +284,7 @@ describe('DoorGate', () => {
     renderGate();
 
     signWith();
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('door-hint')).toHaveTextContent('Drawing this paper.');
   });
 
@@ -293,7 +293,7 @@ describe('DoorGate', () => {
     renderGate();
 
     signWith();
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('door-hint')).toHaveTextContent('could not be drawn');
   });
 
@@ -315,6 +315,42 @@ describe('DoorGate', () => {
     expect(screen.getByTestId('door-hint')).toHaveTextContent(
       'Type your full name and tick the line to sign.',
     );
+  });
+
+  it('is the terminal tier, and says what signing does in every state', () => {
+    renderGate();
+    const said =
+      'Signing records your name on this paper and returns it to Quist Interiors. ' +
+      'The deposit of $3,445.00 becomes payable; signing does not pay it.';
+
+    expect(signAction()).toHaveClass('da-terminal');
+    // unavailable — nothing typed, nothing ticked
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('door-consequence')).toHaveTextContent(said);
+
+    // and armed
+    signWith();
+    expect(screen.getByTestId('door-consequence')).toHaveTextContent(said);
+  });
+
+  it('sends an unmet activation to the rule rather than nowhere', () => {
+    renderGate();
+    fireEvent.click(signAction());
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(screen.getByTestId('door-sign-name')).toHaveFocus();
+    expect(screen.getByTestId('gate_sign-status')).toHaveTextContent(
+      'Type your full name and tick the line to sign.',
+    );
+  });
+
+  it('takes the act and its sentence away once the paper is signed', async () => {
+    renderGate();
+    signWith();
+    await holdSign();
+
+    expect(screen.queryByRole('button', { name: /^Sign/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('door-consequence')).not.toBeInTheDocument();
   });
 
   it('takes the signature on a hold, never on a tap', async () => {
@@ -449,7 +485,7 @@ describe('DoorGate', () => {
 
     expect(screen.getByLabelText('Type your full name')).toBeDisabled();
     expect(screen.getByRole('checkbox')).toBeDisabled();
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('door-hint')).toHaveTextContent(
       'This paper is past its date. Ask your studio to reissue it.',
     );
@@ -462,7 +498,7 @@ describe('DoorGate', () => {
     expect(screen.getByText('Shut. You declined it.')).toBeInTheDocument();
     expect(screen.getByLabelText('Type your full name')).toBeDisabled();
     expect(screen.getByRole('checkbox')).toBeDisabled();
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('door-hint')).toHaveTextContent(
       'You declined this paper. Your studio has been told.',
     );
@@ -651,7 +687,7 @@ describe('DoorGate', () => {
 
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByTestId('door-leaf')).toBeInTheDocument();
-    expect(signAction()).toBeEnabled();
+    expect(signAction()).not.toHaveAttribute('aria-disabled');
   });
 
   it('never prints a bare "AI" anywhere on the leaf', () => {
@@ -894,14 +930,14 @@ describe('DoorGate — the composed agreement', () => {
     });
     fireEvent.click(screen.getByLabelText(PER_PHASE_LINE));
 
-    expect(signAction()).toBeDisabled();
+    expect(signAction()).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('door-hint')).toHaveTextContent(
       'Tick each attachment you received, type your full name, and tick the line to sign.',
     );
 
     fireEvent.click(screen.getByLabelText('I received the lead-paint notice.'));
 
-    expect(signAction()).not.toBeDisabled();
+    expect(signAction()).not.toHaveAttribute('aria-disabled');
     expect(screen.getByTestId('door-hint')).toHaveTextContent('Ready when you are.');
   });
 
@@ -1043,9 +1079,9 @@ describe('DoorGate — the composed agreement', () => {
       answerWith(OFFER);
       renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
 
-      expect(signAction()).toBeDisabled();
+      expect(signAction()).toHaveAttribute('aria-disabled', 'true');
       signWith();
-      expect(signAction()).toBeEnabled();
+      expect(signAction()).not.toHaveAttribute('aria-disabled');
       expect(screen.queryByTestId('deposit-offer')).not.toBeInTheDocument();
     });
 

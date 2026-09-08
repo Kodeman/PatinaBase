@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 
+import { legalDate } from '@/lib/threshold/dates';
+
 import { SIGNATURE_NOTICE } from '../consent-copy';
 
 /* ── THE RULED LINE (P-18) ───────────────────────────────────────────────────
@@ -29,14 +31,8 @@ export function signatureIsComplete(value: string): boolean {
 }
 
 /** "5 September 2026" — a date a signature is dated with, year included. */
-const SIGNED_ON = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-
 export function signedOnLabel(on: Date): string {
-  return SIGNED_ON.format(on);
+  return legalDate(on) ?? '';
 }
 
 export interface SignatureLineProps {

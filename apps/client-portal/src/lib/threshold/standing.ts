@@ -10,6 +10,8 @@
 
 import { countInWords, joinClauses, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 
+import { dayMonth, legalDate } from './dates';
+
 const MONTHS = [
   'January',
   'February',
@@ -160,7 +162,7 @@ export function houseOverageLine(bands: OverageBand[]): string | null {
 
 /** "19 June" — the day a thing happened, the way the deck's own line prints it. */
 function dayAndMonth(date: Date): string {
-  return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+  return dayMonth(date) ?? '';
 }
 
 /** The one line of history the doorstep carries. Null when there is none. */
@@ -260,7 +262,7 @@ export function owedDueLine(
   if (!due || Number.isNaN(due.getTime())) return null;
   const day =
     today && today.getFullYear() !== due.getFullYear()
-      ? `${dayAndMonth(due)} ${due.getFullYear()}`
+      ? (legalDate(due) ?? '')
       : dayAndMonth(due);
   // Neither "due" nor "first due" is true of a partly-dated set: a bare "due"
   // against a sum of three says the whole balance falls that day, and "first

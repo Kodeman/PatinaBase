@@ -24,6 +24,7 @@ import {
 import type { ProjectApprovalReview, ProjectNote } from "@patina/supabase";
 import { getFieldTradeLabel } from "@patina/types";
 
+import { Colophon } from '@/components/threshold/instruments/colophon';
 import { openChapterOf } from '@/components/threshold/instruments/making-spine';
 import { monthAndYear } from '@/components/threshold/instruments/standing-sentence';
 import { clientEvents } from '@/lib/analytics/events';
@@ -71,9 +72,10 @@ import { Letters, MuteLetters, WriteBack } from './correspondence';
 import { DetailsSheet } from './details-sheet';
 import { DoorGate, type DoorProposal } from './door-gate';
 import { Doorplate } from './doorplate';
-import { Doorstep } from './doorstep';
+import { Doorstep, hasChangedBlock } from './doorstep';
 import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
+import { LandmarkLedger } from './landmark-ledger';
 import { Letterbox } from './letterbox';
 import { Mat, type MatPaper, type MatPerson } from './mat';
 import type { OtherHouse } from './other-houses';
@@ -181,6 +183,30 @@ function roomTargetCents(
     : null;
 }
 
+/** A column that is present and is a string, or nothing. */
+function text(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+/**
+ * The four concept-render columns 00580 put on `project_rooms` (R142). They
+ * arrive on the room rows themselves — `useProjectRooms` selects `*`, and the
+ * threshold RPC carries no rooms payload — so this is the only place they are
+ * read. `deriveThreshold` decides whether the shape amounts to a render.
+ */
+function toConceptRender(record: Record<string, unknown>) {
+  const url = text(record.concept_render_url);
+  if (!url) return null;
+  return {
+    url,
+    caption: text(record.concept_render_caption),
+    uploadedAt: text(record.concept_render_uploaded_at),
+    uploadedBy: text(record.concept_render_uploaded_by),
+  };
+}
+
 function toThresholdRoom(
   row: unknown,
   targets: Map<string, number>,
@@ -200,6 +226,7 @@ function toThresholdRoom(
     sortOrder: typeof record.sort_order === "number" ? record.sort_order : 0,
     floorAreaSqft: typeof area === "number" ? area : null,
     targetCents: roomTargetCents(record, name, targets),
+    conceptRender: toConceptRender(record),
   };
 }
 
@@ -820,6 +847,18 @@ export function Threshold({
   const firstWallId =
     wallMarks.find((mark) => selectionById.has(mark.id.replace(/^wall:/, '')))?.id ?? null;
 
+  /**
+   * The first ask that actually draws, by its own element id — the landmark
+   * ledger's "What needs you" and the pole's gate section both point here.
+   * `firstWallId`/`firstDoorId` are already the ids of gates whose paper is
+   * present, so an anchor named here is always on the page; a house with
+   * nothing asking gets no gate section and no landmark at all.
+   */
+  const firstGateAnchor = firstWallId ? "wall" : firstDoorId ? "door" : null;
+  const whatNeedsYou =
+    firstGateAnchor ??
+    (doorstepAsks[0] ? `approval-${doorstepAsks[0].decisionId}` : null);
+
   /** The gate's own element id, which is `door`/`wall` only for the first one. */
   const gateAnchor = (mark: ThresholdMark): string => {
     const first = mark.kind === "door" ? firstDoorId : firstWallId;
@@ -877,6 +916,12 @@ export function Threshold({
   const banded = new Set(model.bands.map((band) => band.roomId));
   const onDoorstep = (mark: ThresholdMark) =>
     mark.roomId === null || !banded.has(mark.roomId);
+
+  // The room the work has actually started in, for the bands that have nothing
+  // on their floor yet. Null while nothing has been agreed anywhere — an empty
+  // room then says only that it is empty, which is all the house knows.
+  const leadRoomName =
+    model.bands.find((band) => band.pieces.length > 0)?.name ?? null;
 
   const doorstepGates: ReactNode[] = [
     ...doorMarks.filter(onDoorstep).map(renderDoor),
@@ -997,20 +1042,37 @@ export function Threshold({
   ];
 
   const mat = (
-    <Mat
-      people={people}
-      papers={papers}
-      otherHouses={otherHouses}
-      onOpenDetails={() => setDetailsOpen((open) => !open)}
-      detailsOpen={detailsOpen}
-      onSignOut={() => void signOut()}
-      correspondence={
-        <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
-      }
-      onOpenPapers={() => setPapersOpen(true)}
-      papersOpen={papersOpen}
-      extraActs={<RequestChangeAct projectId={projectId} projectStatus={project.status} />}
-    />
+    <>
+      <Mat
+        people={people}
+        papers={papers}
+        otherHouses={otherHouses}
+        onOpenDetails={() => setDetailsOpen((open) => !open)}
+        detailsOpen={detailsOpen}
+        onSignOut={() => void signOut()}
+        correspondence={
+          <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
+        }
+        onOpenPapers={() => setPapersOpen(true)}
+        papersOpen={papersOpen}
+        extraActs={<RequestChangeAct projectId={projectId} projectStatus={project.status} />}
+      />
+      {/* House sheet §A8 — the colophon is page furniture on every
+          client-facing surface, mounted directly after the mat. Absence is
+          silence: the identity query is not in the page's `loading` gate, so
+          `studioName` can still be null here on first paint — the rule above
+          the colophon is gated on the same condition Colophon itself checks,
+          so a resolved-but-empty studio name never leaves a bare hairline
+          standing over nothing. */}
+      {studioName?.trim() && (
+        <>
+          <hr className="border-[var(--border-subtle)]" />
+          <div className="mt-6 pb-12">
+            <Colophon studioName={studioName} />
+          </div>
+        </>
+      )}
+    </>
   );
 
   // A review request, a direct order or a capture filed against no house at
@@ -1201,6 +1263,14 @@ export function Threshold({
     />
   );
 
+  /**
+   * The same three terms the hold below reads, named so the landmark ledger
+   * can answer them. While the house is silent nothing under the doorstep has
+   * drawn, and an index of five names over a page holding its place would be
+   * five links to nowhere.
+   */
+  const houseHasSpoken = hydrated && !loading && !model.pending;
+
   let body: ReactNode;
 
   // NEVER REVERSE. The house speaks only once every source it speaks FROM has
@@ -1253,7 +1323,18 @@ export function Threshold({
   } else {
     const sections = [
       { id: "doorstep", label: "You stand at the doorstep" },
-      { id: "key", label: "The whole house" },
+      // The money and the ask, in the order the page prints them. Without
+      // these two the caret could land on every part of the house except the
+      // two the page is actually about.
+      ...(model.groundFloor ? [] : [{ id: "letterbox", label: "The letterbox" }]),
+      ...(firstGateAnchor
+        ? [{ id: firstGateAnchor, label: "What needs you" }]
+        : []),
+      // The key is skipped when the rooms did not read, so the array skips it
+      // too: this array is also the story pole's set of ids that are ON the
+      // page, and a chapter allowed to link at an id that never renders is
+      // IA-21's own failure.
+      ...(roomsUnread ? [] : [{ id: "key", label: "The whole house" }]),
       ...model.bands.map((band) => ({ id: band.anchor, label: band.name })),
       ...(road ? [{ id: "road", label: "The road" }] : []),
       ...(model.note ? [{ id: "note", label: "The note" }] : []),
@@ -1273,7 +1354,11 @@ export function Threshold({
       // falls to one column, which puts the pole under the doorplate.
       <div className="grid items-start gap-[clamp(20px,3vw,44px)] [grid-template-columns:170px_minmax(0,1fr)] max-[860px]:gap-0 max-[860px]:[grid-template-columns:minmax(0,1fr)]">
         <div className="sticky top-[14px] self-start max-[860px]:static">
-          <StoryPole phases={phases} sections={sections} />
+          <StoryPole
+            phases={phases}
+            sections={sections}
+            firstBandAnchor={model.bands[0]?.anchor ?? null}
+          />
         </div>
 
         <div className="min-w-0">
@@ -1295,7 +1380,13 @@ export function Threshold({
           )}
 
           {model.bands.map((band) => (
-            <RoomBand key={band.roomId} band={band} projectId={projectId}>
+            <RoomBand
+              key={band.roomId}
+              band={band}
+              projectId={projectId}
+              studioName={studioName}
+              leadRoomName={leadRoomName}
+            >
               {/* ONE array, keyed by mark: a door that has just been signed
                   leaves `band.marks` (the band's own sentence may not go on
                   saying a door waits on her name) and arrives from
@@ -1339,6 +1430,23 @@ export function Threshold({
   return (
     <div className="min-w-0" data-testid="the-threshold" style={ACCENT_STYLE}>
       {doorplate}
+      {/* Under the doorplate and OUTSIDE the since-yesterday dimming: an index
+          that faded with the page would be an index of nothing. Every landmark
+          is answered from what the branches below actually drew. */}
+      <LandmarkLedger
+        whereWeAre={houseHasSpoken}
+        whatChanged={
+          houseHasSpoken &&
+          hasChangedBlock({
+            showSince,
+            changedCount: model.changed.size,
+            readingMark: readingMarkLine(parseSourceDate(previousReadAt)),
+          })
+        }
+        whatYouOwe={houseHasSpoken && !(model.groundFloor && roomsUnread)}
+        whatNeedsYou={houseHasSpoken ? whatNeedsYou : null}
+        thePapers={houseHasSpoken}
+      />
       <SinceYesterday active={sinceActive} changed={model.changed}>
         {body}
       </SinceYesterday>

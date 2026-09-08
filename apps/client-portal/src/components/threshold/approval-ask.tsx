@@ -33,6 +33,7 @@ import {
   isClientActionableProjectApproval,
   isProjectApprovalAwaitingStudioIssue,
 } from '@/lib/client-attention';
+import { DAY_MONTH_FORMAT as DAY_MONTH, dayMonth } from '@/lib/threshold/dates';
 import { parseSourceDate } from '@/lib/threshold/derive';
 import { isPastDueRefusal, refusalSentence } from '@/lib/threshold/refusal';
 
@@ -50,8 +51,6 @@ import { isPastDueRefusal, refusalSentence } from '@/lib/threshold/refusal';
    before it is taken.
    ────────────────────────────────────────────────────────────────────────── */
 
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 const LETTER_DATE = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'long',
@@ -273,7 +272,7 @@ export function successionLine(
   if (!outcome) return null;
   const at = parseSourceDate(predecessor?.respondedAt);
   if (!at) return null;
-  return `Edition ${edition} replaces the edition you ${OUTCOME_IN_PAST[outcome]} on ${LONG_MONTH_DAY.format(
+  return `Edition ${edition} replaces the edition you ${OUTCOME_IN_PAST[outcome]} on ${DAY_MONTH.format(
     at,
   )}.`;
 }
@@ -315,7 +314,7 @@ export function revisionAct(
  * it second.
  */
 export function dueLine(due: Date, isOverdue: boolean): string {
-  const day = `Due ${LONG_MONTH_DAY.format(due)}`;
+  const day = `Due ${DAY_MONTH.format(due)}`;
   return isOverdue ? `${day} · past its date` : day;
 }
 
@@ -408,7 +407,7 @@ function ArtifactPlate({ approval }: { approval: ProjectApprovalReview }) {
         </p>
         <p className="mt-0.5 text-[15px] leading-normal text-[var(--text-body)]">
           {`Edition ${approval.artifactVersion}`}
-          {issued ? ` · Issued ${LONG_MONTH_DAY.format(issued)}` : ''}
+          {issued ? ` · Issued ${dayMonth(issued) ?? ''}` : ''}
         </p>
       </figcaption>
     </figure>

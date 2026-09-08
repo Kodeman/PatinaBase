@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
+import { formatCurrency } from '@patina/shared';
 
 import { HoldAction } from '@/components/threshold/instruments/scored-action';
 import {
@@ -16,6 +17,7 @@ import {
 } from '@/hooks/use-commercial-client';
 import { makingEvents } from '@/lib/analytics/events';
 import type { ClientSelection } from '@/lib/commercial-documents';
+import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
 import type { ThresholdMark } from '@/lib/threshold/derive';
 import { refusalSentence } from '@/lib/threshold/refusal';
 
@@ -35,8 +37,6 @@ import { KIND_LABEL } from './consent-copy';
    are deliberately not the same — the gate's accent, because off the spine
    there is no `useSpineInk` chapter colour to continue and SpineGate's own
    default is the honest reading; and the drawing, which is new. ─────────── */
-
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 function capitalize(text: string): string {
   return text.length === 0 ? text : `${text[0].toUpperCase()}${text.slice(1)}`;
@@ -150,6 +150,28 @@ export function WallGate({
       .filter((clause): clause is string => clause !== null)
       .join(' ') || null;
 
+  /* THE CONSEQUENCE SENTENCE (R141, sheet §A6). What the act does, to whom,
+     for how much — and what it does not do. Composed from the draws and the
+     party this gate already reads; nothing is invented, and a fact that is
+     missing simply drops its clause rather than being guessed at. */
+  const gatedAmount =
+    gatedDraw && gatedDraw.amountCents > 0 ? gatedDraw.amountCents : null;
+  const currency = bundle.data?.tradeScope?.currency ?? 'USD';
+  const releaseFigure = gatedAmount === null ? null : formatCurrency(gatedAmount, currency);
+  const consequence = [
+    releaseFigure === null
+      ? 'Accepting records that this work is finished.'
+      : party === null
+        ? `Accepting releases ${releaseFigure} for the finished work.`
+        : `Accepting releases ${releaseFigure} to ${party} for the finished work.`,
+    'It does not close the project or change your invoice.',
+  ].join(' ');
+
+  const actLabel =
+    releaseFigure === null
+      ? 'Accept the finished work'
+      : `Accept the finished work · ${releaseFigure}`;
+
   async function onAccept() {
     if (inFlight.current) return;
     const name = signedName.trim();
@@ -253,6 +275,13 @@ export function WallGate({
             act={
               proposalId ? (
                 <div>
+                  {/* Accepting finished work releases a draw: a terminal act,
+                      so it is held rather than tapped (R1), and it is the
+                      filled tier (R139). The sentence stands over the whole
+                      ask, in every state, armed or not. */}
+                  <p data-testid="wall-consequence" className="consequence">
+                    {consequence}
+                  </p>
                   {/* The same ruled line the doors sign on, dated, with the
                       electronic-signature sentence printed once. */}
                   <SignatureLine
@@ -263,13 +292,11 @@ export function WallGate({
                     disabled={accept.isPending}
                     describedBy={hintId}
                   />
-                  {/* Accepting finished work releases a draw: a terminal act,
-                      so it is held rather than tapped (R1). */}
                   <HoldAction
                     actionKey="gate_accept"
                     regionKey="gate"
-                    variant="primary"
-                    verb="accept the finished work"
+                    variant="terminal"
+                    verb="accept"
                     wrapperClassName="mt-3"
                     loading={accept.isPending}
                     loadingLabel="Accepting"
@@ -277,10 +304,12 @@ export function WallGate({
                     // no one spends a hold to be told what she was never armed
                     // to do. The sentence below stays as the backstop.
                     disabled={!signatureIsComplete(signedName)}
+                    unmetReason="Type your full name to accept."
+                    unmetFocusId={nameId}
                     aria-describedby={hintId}
                     onHold={onAccept}
                   >
-                    Accept the finished work
+                    {actLabel}
                   </HoldAction>
                   <p
                     id={hintId}

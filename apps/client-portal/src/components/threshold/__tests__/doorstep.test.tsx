@@ -120,3 +120,115 @@ describe('Doorstep — where she stands', () => {
     expect(screen.getByTestId('ledger-slot')).toBeInTheDocument();
   });
 });
+
+describe('Doorstep — the since block carries #changed', () => {
+  it('names the block the landmark ledger points at', () => {
+    render(<Doorstep {...step()} />);
+
+    const block = screen.getByTestId('doorstep-changed-block');
+    expect(block).toHaveAttribute('id', 'changed');
+    // A new id beside the old ones — the section is still #doorstep.
+    expect(screen.getByTestId('doorstep')).toHaveAttribute('id', 'doorstep');
+  });
+
+  it('renders no block, and so no #changed, when there is nothing to put in it', () => {
+    const { container } = render(
+      <Doorstep
+        {...step({ showSince: false, changedCount: 0, readingMark: null })}
+      />,
+    );
+
+    expect(screen.queryByTestId('doorstep-changed-block')).not.toBeInTheDocument();
+    expect(container.querySelector('#changed')).toBeNull();
+  });
+
+  it('draws the block for a reading mark alone', () => {
+    render(
+      <Doorstep
+        {...step({
+          showSince: false,
+          changedCount: 0,
+          readingMark: 'Read here on the fourth of August.',
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId('doorstep-changed-block')).toHaveAttribute('id', 'changed');
+  });
+});
+
+describe('Doorstep — a sentence that names a thing links to it', () => {
+  it('links finished work to the wall it stands on', () => {
+    render(
+      <Doorstep
+        {...step({ sentence: 'Finished work waits for your acceptance.' })}
+      />,
+    );
+
+    const object = screen.getByTestId('doorstep-sentence-object');
+    expect(object).toHaveAttribute('href', '#wall');
+    expect(object).toHaveTextContent('Finished work');
+    expect(screen.getByTestId('doorstep-sentence')).toHaveTextContent(
+      'Finished work waits for your acceptance.',
+    );
+  });
+
+  it('links the papers to the door that holds them', () => {
+    render(
+      <Doorstep
+        {...step({ sentence: 'Two papers wait for your name. Installation comes next.' })}
+      />,
+    );
+
+    const object = screen.getByTestId('doorstep-sentence-object');
+    expect(object).toHaveAttribute('href', '#door');
+    expect(object).toHaveTextContent('Two papers');
+  });
+
+  it('links the papers when the count outruns the words and comes back a numeral', () => {
+    render(
+      <Doorstep
+        {...step({ sentence: '13 papers wait for your name. Installation comes next.' })}
+      />,
+    );
+
+    const object = screen.getByTestId('doorstep-sentence-object');
+    expect(object).toHaveAttribute('href', '#door');
+    expect(object).toHaveTextContent('13 papers');
+  });
+
+  it('links an open balance to the letterbox', () => {
+    render(
+      <Doorstep
+        {...step({ sentence: 'It is the fifth of August. A balance of $9,125.00 stands open.' })}
+      />,
+    );
+
+    const object = screen.getByTestId('doorstep-sentence-object');
+    expect(object).toHaveAttribute('href', '#letterbox');
+    expect(object).toHaveTextContent('A balance of $9,125.00');
+  });
+
+  it('takes the object the sentence names first, and only that one', () => {
+    render(
+      <Doorstep
+        {...step({
+          sentence:
+            'One paper waits for your name, and a balance of $9,125.00 stands open.',
+        })}
+      />,
+    );
+
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.getByTestId('doorstep-sentence-object')).toHaveAttribute('href', '#door');
+  });
+
+  it('links nothing when the sentence names nothing on the page', () => {
+    render(<Doorstep {...step({ sentence: 'Nothing waits on you today.' })} />);
+
+    expect(screen.queryByTestId('doorstep-sentence-object')).not.toBeInTheDocument();
+    expect(screen.getByTestId('doorstep-sentence')).toHaveTextContent(
+      'Nothing waits on you today.',
+    );
+  });
+});

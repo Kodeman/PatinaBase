@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 
 import { parseSpineDate, startOfWeek, type SpinePhase } from '@/components/threshold/instruments/making-spine';
+import { dayMonth } from '@/lib/threshold/dates';
 
 /* ── THE GROUND FLOOR ───────────────────────────────────────────────────────
    Path A, "The Attendance": the house a project has before it has rooms.
@@ -18,15 +19,15 @@ import { parseSpineDate, startOfWeek, type SpinePhase } from '@/components/thres
    is the one thing the two paths must not disagree about. A slot with nothing
    in it renders nothing; absence is silence here too. ───────────────────── */
 
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
-
 /**
  * A target date softened to the week it lands in — the studio promises weeks,
  * not days, so the line ahead promises weeks too.
  */
 function weekInWords(date: string | null | undefined): string | null {
   const target = parseSpineDate(date);
-  return target ? `the week of ${LONG_MONTH_DAY.format(startOfWeek(target))}` : null;
+  if (!target) return null;
+  const week = dayMonth(startOfWeek(target));
+  return week ? `the week of ${week}` : null;
 }
 
 export interface GroundFloorProps {

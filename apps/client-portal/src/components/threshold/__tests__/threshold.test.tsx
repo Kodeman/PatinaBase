@@ -108,6 +108,10 @@ jest.mock('@patina/supabase', () => ({
   useInvoicePaymentOptions: jest.fn(),
   useStartCheckout: jest.fn(),
   useNotifyCheckIntent: jest.fn(),
+  // 00580 — the room band signs its own concept render out of the private
+  // `room-renders` bucket, so the browser client is part of this boundary too.
+  ROOM_RENDERS_BUCKET: 'room-renders',
+  createBrowserClient: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-commercial-client', () => ({
@@ -254,6 +258,8 @@ const invoicesMock = useProjectInvoices as jest.Mock;
 const clientInvoicesMock = useClientInvoices as jest.Mock;
 const proposalsMock = useClientSafeProposals as jest.Mock;
 const roomsMock = useProjectRooms as jest.Mock;
+const browserClientMock = jest.requireMock('@patina/supabase')
+  .createBrowserClient as jest.Mock;
 const notesMock = useProjectNotes as jest.Mock;
 const ordersMock = useDirectOrders as jest.Mock;
 const partiesMock = useProjectParties as jest.Mock;
@@ -773,7 +779,7 @@ describe('Threshold — the five facts', () => {
     );
     // 4 · the balance and the day it falls due
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent(
-      'Balance $9,125, due August 15',
+      'Balance $9,125, due 15 August',
     );
     // 5 · the chapter the house stands in
     expect(screen.getByTestId('doorplate-sub')).toHaveTextContent('Procurement');
@@ -968,7 +974,7 @@ describe('Threshold — the doorstep’s own asks', () => {
     // nothing — an edition is never dated with a day nobody recorded.
     expect(plate).toHaveTextContent('Edition 3');
     expect(plate).not.toHaveTextContent('Issued');
-    expect(gate).toHaveTextContent('Due August 20');
+    expect(gate).toHaveTextContent('Due 20 August');
     // The ask is answered where it stands — no link off the page.
     expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /respond/i })).not.toBeInTheDocument();
@@ -1308,8 +1314,29 @@ describe('Threshold — the acts the house owes', () => {
     authMock.mockReturnValue({ user: { name: 'Harper Vale' }, signOut });
     renderThreshold();
 
-    fireEvent.click(screen.getByRole('button', { name: /leave the house/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes with the colophon when the studio has a name', () => {
+    renderThreshold();
+
+    expect(
+      screen.getByText('Prepared by Quist Interiors · Sent through Patina'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders no orphan hairline when the studio name is absent', () => {
+    // The identity query is not in the page's `loading` gate, so a null (or
+    // still-resolving) name is a real, reachable state here — the rule above
+    // the colophon must disappear with it rather than standing over nothing.
+    identityMock.mockReturnValue(settled({ name: null, source: 'studio' }));
+    const { container } = renderThreshold();
+
+    expect(
+      screen.queryByText(/Prepared by .* · Sent through Patina/),
+    ).not.toBeInTheDocument();
+    expect(container.querySelectorAll('hr')).toHaveLength(0);
   });
 
   it('names the papers on the mat, each pointing at its own section', () => {
@@ -1469,6 +1496,68 @@ describe('Threshold — a room’s target', () => {
       'The house stands at $61,400 agreed.',
     );
     expect(screen.getByTestId('house-ledger-top')).not.toHaveTextContent('planned');
+  });
+});
+
+/* W1 HAND-OFF — the four concept-render columns 00580 put on `project_rooms`
+   ride the ROOM ROWS, not the threshold RPC (which carries no rooms payload).
+   `useProjectRooms` selects `*`, so they arrive already; `toThresholdRoom` is
+   the only place they are read, and `derive.ts` turns them into
+   `RoomBandModel.conceptRender`. */
+describe('Threshold — the room’s concept render (00580)', () => {
+  const RENDERED_ROOMS = [
+    {
+      ...ROOMS[0],
+      concept_render_url: 'proj-x/room-library/library.jpg',
+      concept_render_caption: 'The library, looking north',
+      concept_render_uploaded_at: '2026-09-03T10:00:00Z',
+      concept_render_uploaded_by: 'user-9',
+    },
+    ROOMS[1],
+  ];
+
+  function signsWith(signedUrl: string) {
+    const createSignedUrl = jest.fn().mockResolvedValue({ data: { signedUrl }, error: null });
+    browserClientMock.mockReturnValue({
+      storage: { from: jest.fn(() => ({ createSignedUrl })) },
+    });
+    return createSignedUrl;
+  }
+
+  it('carries the four columns from the room row onto the band', async () => {
+    const createSignedUrl = signsWith('https://strata.test/signed/library.jpg');
+    roomsMock.mockReturnValue(settled(RENDERED_ROOMS));
+
+    renderThreshold();
+
+    const plate = await screen.findByTestId('room-band-concept-image');
+    expect(plate).toHaveAttribute('src', 'https://strata.test/signed/library.jpg');
+    expect(createSignedUrl).toHaveBeenCalledWith('proj-x/room-library/library.jpg', 3600);
+
+    // The caption composes the studio's own caption, the studio (from
+    // `useStudioIdentity`) and the upload date, in the house's date idiom.
+    expect(screen.getByTestId('room-band-concept-caption')).toHaveTextContent(
+      'The library, looking north · uploaded by Quist Interiors · 3 September 2026',
+    );
+
+    // Exactly one room carries a render; the other band prints no slot.
+    expect(screen.getAllByTestId('room-band-concept')).toHaveLength(1);
+  });
+
+  it('leaves every band without a slot when no room carries a render', () => {
+    renderThreshold();
+    expect(screen.queryByTestId('room-band-concept')).not.toBeInTheDocument();
+  });
+
+  it('treats a blank column as no render at all', () => {
+    roomsMock.mockReturnValue(
+      settled([{ ...ROOMS[0], concept_render_url: '   ' }, ROOMS[1]]),
+    );
+
+    renderThreshold();
+
+    expect(screen.queryByTestId('room-band-concept')).not.toBeInTheDocument();
+    expect(browserClientMock).not.toHaveBeenCalled();
   });
 });
 
@@ -2241,26 +2330,26 @@ describe("Threshold — the studio's own letters", () => {
   });
 
   // The letter is summed into this house's owed figure because it stands in
-  // this house's letterbox. The row has to say which of that money was never
-  // drawn against the house at all.
-  it('discloses the studio letter on the owed row it is summed into', () => {
+  // this house's letterbox. The reconciling sentence has to say which of that
+  // money was never drawn against the house at all.
+  it('discloses the studio letter in the sentence it is summed into', () => {
     clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
 
     renderThreshold();
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent(
-      'Owed across two open invoices, one from the studio',
+    expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
+      'owed across two open invoices, one from the studio',
     );
   });
 
-  it('leaves the owed row alone in a house that has not adopted them', () => {
+  it('leaves the sentence alone in a house that has not adopted them', () => {
     clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
 
     renderThreshold(MILESTONES, [{ id: 'proj-ash', name: 'The Ash cottage' }]);
 
-    const row = screen.getByTestId('house-ledger-owed');
-    expect(row).toHaveTextContent('Owed on the open invoice');
-    expect(row).not.toHaveTextContent('studio');
+    const sentence = screen.getByTestId('house-ledger-reconcile');
+    expect(sentence).toHaveTextContent('owed on');
+    expect(sentence).not.toHaveTextContent('studio');
   });
 
   it('never mistakes a house invoice for a studio one', () => {
@@ -3027,5 +3116,145 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     expect(within(ashDoor).getByTestId('door-receipt')).toHaveTextContent(
       'The Ash Studio has your signature.',
     );
+  });
+});
+
+describe('Threshold — the landmark ledger and the story pole’s sections', () => {
+  /** The landmarks as rendered: [label, href]. */
+  function landmarks(container: HTMLElement): Array<[string, string | null]> {
+    return Array.from(
+      container.querySelectorAll('[data-testid="landmark-ledger"] a'),
+    ).map((link) => [link.textContent?.trim() ?? '', link.getAttribute('href')]);
+  }
+
+  it('strikes the ledger directly under the doorplate, above the doorstep', () => {
+    const { container } = renderThreshold();
+
+    const ledger = screen.getByTestId('landmark-ledger');
+    const doorplate = container.querySelector('#doorplate')!;
+    const doorstep = container.querySelector('#doorstep')!;
+
+    expect(doorplate.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(ledger.compareDocumentPosition(doorstep) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
+  it('points every landmark at an id that is actually on the page', () => {
+    const { container } = renderThreshold();
+
+    const struck = landmarks(container);
+    expect(struck.length).toBeGreaterThan(0);
+    for (const [, href] of struck) {
+      expect(container.querySelector(href!)).not.toBeNull();
+    }
+  });
+
+  it('sends "What needs you" to the first gate that drew, and keeps the money undimmable', () => {
+    const { container } = renderThreshold();
+
+    expect(landmarks(container)).toEqual(
+      expect.arrayContaining([
+        ['Where we are', '#doorstep'],
+        ['What you owe', '#letterbox'],
+        ['What needs you', '#wall'],
+        ['The papers', '#mat-papers'],
+      ]),
+    );
+    expect(
+      container.querySelector('[data-testid="landmark-ledger"] a[href="#letterbox"]'),
+    ).toHaveAttribute('data-never-dim');
+  });
+
+  it('gives the house holding its place no landmarks at all', () => {
+    roomsMock.mockReturnValue({ data: undefined, isPending: true, isLoading: true, isError: false });
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+    expect(screen.queryByTestId('landmark-ledger')).not.toBeInTheDocument();
+  });
+
+  it('renames no anchor — the id set the redirect map holds is unchanged', () => {
+    const { container } = renderThreshold();
+
+    for (const id of [
+      'doorstep',
+      'key',
+      'letterbox',
+      'wall',
+      'door',
+      'road',
+      'note',
+      'previously',
+      'mat',
+      'mat-papers',
+      'ledger',
+    ]) {
+      expect(container.querySelector(`#${id}`)).not.toBeNull();
+    }
+  });
+
+  it('sends the pole’s Installation to the first room band, not to the key', () => {
+    const { container } = renderThreshold();
+
+    const installation = screen.getByTestId('story-pole-link-ph-5');
+    expect(installation).toHaveAttribute('href', `#room-${LIBRARY}`);
+    expect(container.querySelector(`#room-${LIBRARY}`)).not.toBeNull();
+
+    for (const link of Array.from(
+      container.querySelectorAll('[data-testid="story-pole"] a'),
+    )) {
+      expect(link.getAttribute('href')).not.toBe('#key');
+    }
+  });
+
+  it('draws no chapter link at a key a house whose rooms failed never prints', () => {
+    roomsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+    });
+    const { container } = renderThreshold();
+
+    expect(screen.getByTestId('threshold-rooms-error')).toBeInTheDocument();
+    expect(container.querySelector('#key')).toBeNull();
+
+    for (const link of Array.from(
+      container.querySelectorAll('[data-testid="story-pole"] a'),
+    )) {
+      expect(container.querySelector(link.getAttribute('href')!)).not.toBeNull();
+    }
+  });
+
+  it('gives the caret the money and the ask to land on', () => {
+    const observed: string[] = [];
+    const original = window.IntersectionObserver;
+    Object.defineProperty(window, 'IntersectionObserver', {
+      writable: true,
+      configurable: true,
+      value: class {
+        unobserve = jest.fn();
+        disconnect = jest.fn();
+        constructor(_callback: unknown) {}
+        observe(node: Element) {
+          observed.push(node.id);
+        }
+      },
+    });
+
+    try {
+      renderThreshold();
+      expect(observed).toContain('letterbox');
+      expect(observed).toContain('wall');
+      expect(observed).toContain('doorstep');
+      expect(observed).toContain('mat');
+    } finally {
+      Object.defineProperty(window, 'IntersectionObserver', {
+        writable: true,
+        configurable: true,
+        value: original,
+      });
+    }
   });
 });

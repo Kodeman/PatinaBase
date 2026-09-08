@@ -57,7 +57,7 @@ describe('TradeAgreementSignature', () => {
 
   it('stays unarmed until there is a name, and says nothing about it', () => {
     render(<TradeAgreementSignature token={token} existingSignature={null} />);
-    expect(act_()).toBeDisabled();
+    expect(act_()).toHaveAttribute('aria-disabled', 'true');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -69,7 +69,7 @@ describe('TradeAgreementSignature', () => {
     });
     render(<TradeAgreementSignature token={token} existingSignature={null} />);
     fireEvent.change(nameField(), { target: { value: 'Dana Hall' } });
-    expect(act_()).toBeEnabled();
+    expect(act_()).not.toHaveAttribute('aria-disabled');
 
     await hold();
 

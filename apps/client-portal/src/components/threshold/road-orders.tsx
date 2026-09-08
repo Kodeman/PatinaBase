@@ -12,6 +12,7 @@ import {
   useCheckoutConfirmation,
   useCheckoutReturn,
 } from '@/lib/threshold/checkout-return';
+import { dayMonth, legalDate } from '@/lib/threshold/dates';
 import { parseSourceDate } from '@/lib/threshold/derive';
 import type { ClosedOrderModel, RoadOrderModel } from '@/lib/threshold/road-orders';
 import { refusalSentence } from '@/lib/threshold/refusal';
@@ -29,19 +30,12 @@ import { refusalSentence } from '@/lib/threshold/refusal';
    Pieces that are not coming — refunded, cancelled — stand at the end with
    their word and the day they were raised. ──────────────────────────────── */
 
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
-const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-  year: 'numeric',
-});
-
 function longDate(value: string | null, today?: Date): string | null {
   const date = parseSourceDate(value);
   if (!date) return null;
   return today && today.getFullYear() !== date.getFullYear()
-    ? LONG_MONTH_DAY_YEAR.format(date)
-    : LONG_MONTH_DAY.format(date);
+    ? legalDate(date)
+    : dayMonth(date);
 }
 
 export interface RoadOrdersProps {

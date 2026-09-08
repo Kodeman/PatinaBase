@@ -1,5 +1,7 @@
 'use client';
 
+import { Fragment } from 'react';
+
 import {
   countInWords,
   moneyInWords,
@@ -8,7 +10,14 @@ import { parseSourceDate, type HouseLedgerModel } from '@/lib/threshold/derive';
 import { owedDueLine } from '@/lib/threshold/standing';
 
 /* ── The house ledger ───────────────────────────────────────────────────────
-   Where the house stands in money, on the doorstep, in four lines.
+   Where the house stands in money, on the doorstep.
+
+   THE OWED FIGURE IS THE ANNOUNCED FIGURE (PP-2 / R140). What she is on the
+   hook for is set at the display step with the day it falls due beneath it,
+   and one sentence under that reconciles the three figures — agreed, paid,
+   owed — so the block adds up on its own line instead of leaving her to. The
+   sentence that says where the house stands is true and stays, but it stands
+   below the obligation, not above it.
 
    Every figure keeps its sentence. A number on its own is a dashboard tile,
    and a homeowner reading "$1,440" with no words is being handed a fact she
@@ -33,12 +42,15 @@ export interface HouseLedgerProps {
   today?: Date;
 }
 
+interface ReconcileClause {
+  figure: string;
+  words: string;
+}
+
 interface LedgerRow {
-  key: 'owed' | 'held' | 'awaiting';
+  key: 'held' | 'awaiting';
   words: string;
   cents: number;
-  /** What the figure carries after it, when the row has a day to name. */
-  due?: string | null;
 }
 
 function figure(cents: number | null | undefined): cents is number {
@@ -55,11 +67,10 @@ function figure(cents: number | null | undefined): cents is number {
  * that money is her house's. P-24's rule holds across every arm: `countInWords`
  * is the surface's one speller, words to twelve, figures past it.
  */
-function owedWords(count: number, studioCount: number): string {
+function owedWords(count: number, studioCount: number, number: string | null): string {
   if (studioCount <= 0) {
-    return count > 1
-      ? `Owed across ${countInWords(count)} open invoices`
-      : 'Owed on the open invoice';
+    if (count > 1) return `Owed across ${countInWords(count)} open invoices`;
+    return number ? `Owed on ${number}` : 'Owed on the open invoice';
   }
   if (studioCount >= count) {
     return count > 1
@@ -74,6 +85,35 @@ function owedWords(count: number, studioCount: number): string {
  * is known, because this sentence is the column: beside the letterbox's
  * drawing a ledger of one row and no sentence reads as a half-empty page.
  */
+/**
+ * The one sentence the three figures reconcile in: "$11,100 agreed · $0 paid ·
+ * $4,060 owed on INV-2026-0301." Every clause it can say truthfully, and no
+ * clause it cannot — a house with nothing open owes nothing and says nothing.
+ *
+ * `owedWords` keeps its own S1 clause here: money owed on a letter drawn
+ * against no house is still said to be from the studio and not for this house.
+ */
+function reconcileClauses(ledger: HouseLedgerModel): ReconcileClause[] | null {
+  if (!figure(ledger.owedCents)) return null;
+  const clauses: ReconcileClause[] = [];
+  if (figure(ledger.agreedCents)) {
+    clauses.push({ figure: moneyInWords(ledger.agreedCents), words: 'agreed' });
+  }
+  if (typeof ledger.paidCents === 'number' && Number.isFinite(ledger.paidCents)) {
+    clauses.push({ figure: moneyInWords(ledger.paidCents), words: 'paid' });
+  }
+  const owed = owedWords(
+    ledger.owedInvoiceCount,
+    ledger.owedStudioCount,
+    ledger.owedInvoiceNumber,
+  );
+  clauses.push({
+    figure: moneyInWords(ledger.owedCents),
+    words: `${owed.charAt(0).toLowerCase()}${owed.slice(1)}`,
+  });
+  return clauses;
+}
+
 function standsSentence(ledger: HouseLedgerModel): string | null {
   const agreed = figure(ledger.agreedCents) ? ledger.agreedCents : null;
   const planned = figure(ledger.plannedCents) ? ledger.plannedCents : null;
@@ -89,19 +129,16 @@ function standsSentence(ledger: HouseLedgerModel): string | null {
 
 export function HouseLedger({ ledger, today }: HouseLedgerProps) {
   const stands = standsSentence(ledger);
+  const owed = figure(ledger.owedCents) ? ledger.owedCents : null;
+  const owedDue = owedDueLine(
+    parseSourceDate(ledger.owedDueDate),
+    ledger.owedDatedCount,
+    today,
+    ledger.owedInvoiceCount,
+  );
+  const reconcile = reconcileClauses(ledger);
 
   const rows: LedgerRow[] = [
-    {
-      key: 'owed' as const,
-      words: owedWords(ledger.owedInvoiceCount, ledger.owedStudioCount),
-      cents: ledger.owedCents,
-      due: owedDueLine(
-        parseSourceDate(ledger.owedDueDate),
-        ledger.owedDatedCount,
-        today,
-        ledger.owedInvoiceCount,
-      ),
-    },
     { key: 'held' as const, words: 'Held on finished work', cents: ledger.heldCents },
     { key: 'awaiting' as const, words: 'Awaiting your name', cents: ledger.awaitingCents },
   ].flatMap((row) => (figure(row.cents) ? [{ ...row, cents: row.cents }] : []));
@@ -113,10 +150,38 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
       data-testid="house-ledger"
       className="border-t border-[var(--border-default)] pt-3"
     >
+      {owed !== null && (
+        <p data-testid="house-ledger-owed" className="t-d2 text-[var(--text-primary)]">
+          {moneyInWords(owed)}
+        </p>
+      )}
+
+      {owed !== null && owedDue && (
+        <p data-testid="house-ledger-owed-due" className="t-meta pt-[10px] text-[var(--text-muted)]">
+          {owedDue}
+        </p>
+      )}
+
+      {reconcile && (
+        <p
+          data-testid="house-ledger-reconcile"
+          className="t-body max-w-[56ch] pt-[10px] text-[var(--text-body)]"
+        >
+          {reconcile.map((clause, index) => (
+            <Fragment key={clause.words}>
+              {index > 0 ? ' · ' : ''}
+              <span className="t-money">{clause.figure}</span>
+              {` ${clause.words}`}
+            </Fragment>
+          ))}
+          .
+        </p>
+      )}
+
       {stands && (
         <p
           data-testid="house-ledger-top"
-          className="font-heading pb-[10px] text-[clamp(1.05rem,1.6vw,1.3rem)] leading-[1.35] tracking-[-0.01em] text-[var(--text-primary)]"
+          className="t-body-sm pt-[10px] pb-[10px] text-[var(--text-body)]"
         >
           {stands}
         </p>
@@ -130,11 +195,8 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
           className="flex justify-between gap-[14px] border-b border-[var(--border-subtle)] py-1.5 text-[15px] leading-[1.5] text-[var(--text-body)]"
         >
           <span data-ledger-words>{row.words}</span>
-          <span
-            data-ledger-figure
-            className="font-mono text-[13.5px] tabular-nums text-[var(--text-primary)]"
-          >
-            {row.due ? `${moneyInWords(row.cents)} · ${row.due}` : moneyInWords(row.cents)}
+          <span data-ledger-figure className="t-money text-[var(--text-primary)]">
+            {moneyInWords(row.cents)}
           </span>
         </div>
       ))}

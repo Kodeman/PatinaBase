@@ -35,8 +35,10 @@ import {
 export const PLAN_PHONE_TYPE = 17;
 /** A 390px phone, less the sheet's own clamp(14px,4vw,26px) gutters. */
 export const PLAN_PHONE_CONTENT_PX = 358;
-/** The reading floor the crop exists to hold. */
-const TYPE_FLOOR_PX = 11;
+/** The reading floor the crop exists to hold. Exported because a second
+ *  drawing on this page — the room band's footprints — holds the same floor,
+ *  and two copies of the arithmetic would drift. */
+export const TYPE_FLOOR_PX = 11;
 /** The widest viewBox `PLAN_PHONE_TYPE` still renders at the floor. */
 const PHONE_MAX_VIEWBOX = Math.floor((PLAN_PHONE_TYPE * PLAN_PHONE_CONTENT_PX) / TYPE_FLOOR_PX);
 
@@ -73,6 +75,16 @@ function isPhoneOnServer(): boolean {
   return false;
 }
 
+/**
+ * True while the page is being read on a phone. Exported so the room band's
+ * drawing crops on the SAME signal this one does — one media query, one
+ * subscription idiom, and no chance of the two drawings disagreeing about
+ * which measure they are being read at.
+ */
+export function usePhoneDrawing(): boolean {
+  return useSyncExternalStore(subscribeToPhone, isPhone, isPhoneOnServer);
+}
+
 export interface PlanKeyProps {
   geometry: PlanKeyGeometry;
   marks: ThresholdMark[];
@@ -101,7 +113,7 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
   // The crop is an ATTRIBUTE, so CSS cannot do it — the mock swaps it in
   // script for the same reason (`cropDrawings`). The type bump rides along
   // rather than living in a second stylesheet that could disagree.
-  const phone = useSyncExternalStore(subscribeToPhone, isPhone, isPhoneOnServer);
+  const phone = usePhoneDrawing();
   const phoneViewBox = planPhoneViewBox(geometry.viewBox);
   const type = phone ? PLAN_PHONE_TYPE : LEADER_TYPE;
 
