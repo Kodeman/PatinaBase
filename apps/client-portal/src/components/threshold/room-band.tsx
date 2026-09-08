@@ -384,7 +384,7 @@ export function RoomBand({ band, projectId, children }: RoomBandProps) {
       data-dimmable=""
       data-project-id={projectId}
       aria-labelledby={headingId}
-      className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
+      className="material-room relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
       <div
         data-testid="room-band-lintel"
@@ -430,11 +430,11 @@ export function RoomBand({ band, projectId, children }: RoomBandProps) {
                   key={piece.id}
                   data-threshold-piece={piece.id}
                   data-lifted={lifted ? 'true' : undefined}
-                  className={
+                  className={'material-piece ' + (
                     lifted
                       ? 'transition-transform duration-200 -translate-y-[2px] motion-reduce:transform-none motion-reduce:transition-none'
                       : 'transition-transform duration-200 motion-reduce:transition-none'
-                  }
+                  )}
                 >
                   {/* The control is a sibling of the row, not its parent: a
                       <button> takes phrasing content, and TrackingRow draws
@@ -460,11 +460,14 @@ export function RoomBand({ band, projectId, children }: RoomBandProps) {
                         {detail}
                       </span>
                     )}
+                    <span className="material-piece-affordance" aria-hidden="true">
+                      {lifted ? 'Close details −' : 'View details +'}
+                    </span>
                     <button
                       type="button"
                       aria-expanded={lifted}
                       aria-controls={`record-${piece.id}`}
-                      aria-label={`${piece.name} — ${lifted ? 'close' : 'open'} its record`}
+                      aria-label={`${lifted ? 'Close details' : 'View details'} — ${piece.name}`}
                       onClick={() => setLiftedId(lifted ? null : piece.id)}
                       className="absolute inset-0 h-full w-full"
                     />

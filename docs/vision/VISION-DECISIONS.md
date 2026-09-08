@@ -136,3 +136,35 @@ working tools. Nothing here licenses tabs, badges, shadows, or engagement chrome
 `docs/superpowers/plans/2026-09-04-client-page-completion.md`; `docs/design/the-client-page/README.md`).
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · last id = V8*
+
+---
+
+## Authorized for branch implementation and review — 2026-09-07
+
+### V9 · Material presence on the web client page — 2026-09-07
+
+**Source:** Kody requested an agent team and a new branch to deliver the client
+portal look and feel from the September 7 HTML design proposal, then obtain
+feedback on its functionality and design. This authorizes implementation and
+review, not a production deployment or a designer-portal redesign.
+
+**Scoped decision:** The homeowner-facing web page may use larger truthful
+project/product imagery, bounded primary actions, subtle surface elevation,
+readable labeled states, and local image/plan controls. These are exceptions to
+the inherited blanket visual restrictions and Scored Ink styling for this
+client-page implementation. They do not relax the studio Document's
+restrictions or authorize navigation zones, a new global header, synthetic
+activity, or engagement mechanics.
+
+The continuous house page, existing anchors, project switching in the mat,
+real financial totals, and existing approval, signature and payment contracts
+remain authoritative. The proposal's fictional projects, generated room and
+example approval consequences are not application data or business rules.
+Missing images must receive a useful factual fallback, never a stock or
+generated image presented as the client's actual home.
+
+Implementation contract and review criteria:
+[`../design/the-client-page/material-presence.md`](../design/the-client-page/material-presence.md).
+Production status remains unchanged until a separately requested deployment.
+
+*Entries add: V9 · last id = V9*

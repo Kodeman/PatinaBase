@@ -74,6 +74,7 @@ import { Doorplate } from './doorplate';
 import { Doorstep } from './doorstep';
 import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
+import { HousePreview } from './house-preview';
 import { Letterbox } from './letterbox';
 import { Mat, type MatPaper, type MatPerson } from './mat';
 import type { OtherHouse } from './other-houses';
@@ -1279,6 +1280,7 @@ export function Threshold({
         <div className="min-w-0">
           {doorstep}
           {asks}
+          {!roomsUnread && <HousePreview bands={model.bands} />}
           {roomsUnread ? (
             <p
               data-testid="threshold-rooms-error"
@@ -1337,7 +1339,7 @@ export function Threshold({
   }
 
   return (
-    <div className="min-w-0" data-testid="the-threshold" style={ACCENT_STYLE}>
+    <div className="threshold-material min-w-0" data-testid="the-threshold" style={ACCENT_STYLE}>
       {doorplate}
       <SinceYesterday active={sinceActive} changed={model.changed}>
         {body}

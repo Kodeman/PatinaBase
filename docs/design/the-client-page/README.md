@@ -1,5 +1,11 @@
 # The Client Page — two paths for the homeowner's page
 
+**September 7 review branch:** Kody authorized the client material-presence
+redesign for implementation and review, not production deployment. See
+[`material-presence.md`](./material-presence.md) and VISION-DECISIONS **V9** for
+the scoped imagery, action and surface exceptions. The shipped Threshold
+status below still describes production.
+
 **Status: shipped, no flag — 4 September 2026.** Path B · The Threshold is
 ruled and built. Kody's ruling of 2026-09-04 (`docs/design/the-document/DECISIONS.md`
 **R135**; `docs/vision/VISION-DECISIONS.md` **V8**) sent it to every client on

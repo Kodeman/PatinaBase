@@ -955,6 +955,16 @@ function renderWithApprovals(
 }
 
 describe('Threshold — the doorstep’s own asks', () => {
+  it('keeps money and pending approvals before the gallery, with rooms after it', () => {
+    renderWithApprovals([PHASE_APPROVAL]);
+    const gallery = screen.getByTestId('house-preview');
+    for (const prior of [screen.getByTestId('house-ledger'), screen.getByTestId('letterbox'), screen.getByTestId('doorstep-approval')]) {
+      expect(prior.compareDocumentPosition(gallery) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(screen.getByTestId('doorstep')).not.toContainElement(gallery);
+    expect(gallery.compareDocumentPosition(document.querySelector(`#room-${LIBRARY}`)!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('stands a phase approval on the doorstep, with its own act', () => {
     renderWithApprovals([PHASE_APPROVAL]);
 
